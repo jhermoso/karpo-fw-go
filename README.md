@@ -5,14 +5,16 @@
 
 Framework base en Go para la plataforma **Karpo**.
 
-Diseñado bajo principios de **Clean Architecture**, **Inversión de Dependencias (DIP)** y **bajo consumo de recursos** (< 30 MB por servicio), optimizado para ser la base de microservicios de dominio (slices/publishers) e interactuar con herramientas de generación y Low-Code asistidas por LLMs.
+Diseñado bajo principios de **Domain-Driven Design (DDD)**, **Clean Architecture**, **Inversión de Dependencias (DIP)** y **bajo consumo de recursos** (< 30 MB por servicio), optimizado para ser la base de microservicios de dominio (slices/publishers) e interactuar con herramientas de generación y Low-Code asistidas por LLMs.
 
 ---
 
 ## 🏛️ Filosofía y Arquitectura
 
-1. **Aislamiento por Paquete (sin sobrecarga de proyectos)**:
-   A diferencia del ecosistema tradicional .NET (donde cada adaptador requería un `.csproj` independiente), en Go el compilador prohíbe ciclos de importación y compila únicamente los paquetes efectivamente utilizados. Cada vertical del framework expone sus contratos e implementaciones en paquetes aislados dentro de un único módulo.
+1. **Aislamiento por Capas y Paquetes**:
+   A diferencia del ecosistema tradicional .NET (donde cada capa y adaptador requería un `.csproj` independiente), en Go el compilador prohíbe ciclos de importación y compila únicamente los paquetes efectivamente utilizados.
+   - **`pkg/domain` (Capa de Dominio - Patrones Tácticos)**: Sin dependencias externas. Contiene `Entity`, `ValueObject`, `AggregateRoot` y `Specification`.
+   - **`pkg/application` (Capa de Aplicación - Patrones Estratégicos/CQRS)**: Orquesta casos de uso mediante `Command`, `Query`, `CommandHandler`, `QueryHandler` y un `Mediator` con *Pipeline Behaviors* (equivalente a MediatR de C#).
 2. **Result Pattern en lugar de excepciones**:
    Toda operación con posibilidad de fallo se modela de forma determinista mediante `result.Result[T]`, eliminando costes de desenrollado de pila (*stack unwinding*) y garantizando seguridad en tiempo de compilación.
 3. **Persistencia orientada a Grafos con consultas tipo LINQ (`ent`)**:
@@ -24,14 +26,16 @@ Diseñado bajo principios de **Clean Architecture**, **Inversión de Dependencia
 
 ## 📦 Catálogo de Verticales del Framework
 
-| Vertical | Contrato Principal | Implementaciones / Adaptadores |
-| :--- | :--- | :--- |
-| **`pkg/result`** | `Result[T]` | `Ok[T]`, `Fail[T]`, combinadores funcionales `Map`, `FlatMap` |
-| **`pkg/time`** | `Clock` | `real` (reloj de sistema), `fake` (reloj congelable/desplazable para tests) |
-| **`pkg/log`** | `Logger` | `vanilla` (envoltorio estructurado sobre `log/slog` nativo de Go) |
-| **`pkg/cache`** | `Cache[K, V]` | `memory` (caché thread-safe con soporte de expiración TTL) |
-| **`pkg/events`** | `Event`, `Dispatcher` | `inprocess` (despachador en memoria con soporte de comodines y cancelación) |
-| **`pkg/persistence`** | `Repository[ID, T]`, `UnitOfWork` | `memory` (repositorio genérico en memoria), `ent` (ORM de grafos y consultas tipadas) |
+| Capa | Paquete | Patrones / Contratos | Implementaciones / Adaptadores |
+| :--- | :--- | :--- | :--- |
+| **Dominio (Táctico)** | **`pkg/domain`** | `Entity[ID]`, `ValueObject[T]`, `AggregateRoot[ID]`, `Specification[T]` | `BaseEntity[ID]`, `BaseAggregateRoot[ID]`, especificaciones compuestas (`And`, `Or`, `Not`) |
+| **Aplicación (Estratégico)** | **`pkg/application`** | `Command[R]`, `Query[R]`, `CommandHandler`, `QueryHandler`, `Mediator`, `PipelineBehavior` | Despachador en memoria tipado, cadena de interceptores/middleware |
+| **Sustrato Funcional** | **`pkg/result`** | `Result[T]` | `Ok[T]`, `Fail[T]`, combinadores funcionales `Map`, `FlatMap` |
+| **Plataforma** | **`pkg/time`** | `Clock` | `real` (reloj de sistema), `fake` (reloj congelable/desplazable para tests) |
+| **Plataforma** | **`pkg/log`** | `Logger` | `vanilla` (envoltorio estructurado sobre `log/slog` nativo de Go) |
+| **Plataforma** | **`pkg/cache`** | `Cache[K, V]` | `memory` (caché thread-safe con soporte de expiración TTL) |
+| **Plataforma** | **`pkg/events`** | `Event`, `Dispatcher` | `inprocess` (despachador en memoria con soporte de comodines y cancelación) |
+| **Persistencia** | **`pkg/persistence`** | `Repository[ID, T]`, `UnitOfWork` | `memory` (repositorio genérico en memoria), `ent` (ORM de grafos y consultas tipadas) |
 
 ---
 
@@ -52,16 +56,27 @@ go test ./... -cover
 go generate ./...
 ```
 
-### Ejemplo de Consulta Tipo LINQ con `ent`
+### Ejemplo: Despacho CQRS con Mediador y Pipeline
 ```go
-// Equivalente a: db.Parties.Where(p => p.TaxId == taxId && p.IsActive).Include(p => p.Contacts).First()
-foundParty, err := client.Party.Query().
-    Where(
-        party.TaxID("B12345678"),
-        party.IsActive(true),
-    ).
-    WithContacts().
-    Only(ctx)
+m := application.NewMediator()
+
+// Middleware de Logging / Auditoría
+m.Use(func(ctx context.Context, req any, next application.NextFunc) (any, error) {
+    log.Printf("Executing request: %T", req)
+    res, err := next(ctx)
+    log.Printf("Finished request: %T", req)
+    return res, err
+})
+
+// Registrar Command Handler
+application.RegisterCommandHandler(m, application.CommandHandlerFunc[CreatePartyCommand, string](
+    func(ctx context.Context, cmd CreatePartyCommand) result.Result[string] {
+        return result.Ok("Party created successfully")
+    },
+))
+
+// Ejecutar comando
+res := application.Send[string](ctx, m, CreatePartyCommand{TaxID: "B12345678"})
 ```
 
 ---
