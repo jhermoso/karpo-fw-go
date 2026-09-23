@@ -9,36 +9,46 @@ Diseñado bajo principios de **Domain-Driven Design (DDD)**, **Clean Architectur
 
 ---
 
-## 🏛️ Filosofía y Arquitectura por Capas
+## 🏛️ Jerarquía Estricta de Capas
 
-El framework estructura los patrones en paquetes independientes que garantizan la pureza del modelo y la regla de dependencias:
+El framework organiza el código respetando la regla de dependencias unidireccional de Clean Architecture:
+
+$$\text{Distribution (Transporte / API)} \longrightarrow \text{Application (Casos de Uso)} \longrightarrow \text{Domain (Reglas Puras)}$$
 
 ```
 Karpo.Fw.Go/
 ├── pkg/
-│   ├── domain/           # CAPA DE DOMINIO (Patrones Tácticos y Contratos DIP)
+│   ├── distribution/     # 1. CAPA DE DISTRIBUCIÓN (Transporte HTTP, API, Middleware)
+│   │   ├── server.go          # Servidor HTTP con Graceful Shutdown
+│   │   ├── endpoint.go        # EndpointModule (registro modular de rutas)
+│   │   ├── middleware.go      # Recovery, RequestLogging, TenantActorContext, CORS
+│   │   ├── response.go        # WriteResult (serialización de Result[T] a ProblemDetails RFC 7807)
+│   │   ├── context.go         # Extracción y propagación de TenantID, ActorID, OrgID
+│   │   └── health.go          # Chequeos de salud liveness (/healthz) y readiness (/readyz)
+│   │
+│   ├── application/      # 2. CAPA DE APLICACIÓN (Casos de Uso y Orquestación)
+│   │   ├── cqrs.go            # Command[R], Query[R], CommandHandler, QueryHandler
+│   │   ├── mediator.go        # Mediador tipado en memoria (equivalente a MediatR)
+│   │   ├── behavior.go        # PipelineBehavior (logging, validación, métricas)
+│   │   ├── orchestrator.go    # Orchestrator[ID, T] (coordina repo + mutación + eventos)
+│   │   └── dto.go             # DTO, ReadDTO, CommandDTO
+│   │
+│   ├── domain/           # 3. CAPA DE DOMINIO (Patrones Tácticos y Contratos DIP - Núcleo)
 │   │   ├── entity.go          # Entity[ID], BaseEntity[ID] (igualdad por Id)
 │   │   ├── value_object.go    # ValueObject[T] (igualdad estructural)
 │   │   ├── aggregate.go       # AggregateRoot[ID], BaseAggregateRoot[ID]
-│   │   ├── service.go         # DomainService (lógica que abarca múltiples entidades)
-│   │   ├── specification.go   # Specification[T], PagedSpecification[T], PageRequest
+│   │   ├── service.go         # DomainService (lógica sin estado que abarca múltiples entidades)
+│   │   ├── specification.go   # Specification, PagedSpecification, PageRequest, PagedResult
 │   │   ├── factory.go         # Factory[T] (creación y reconstitución compleja)
 │   │   └── repository.go      # ReadRepository, WriteRepository, Repository, UnitOfWork
-│   │
-│   ├── application/      # CAPA DE APLICACIÓN (Patrones Estratégicos y Orquestación)
-│   │   ├── cqrs.go            # Command[R], Query[R], CommandHandler, QueryHandler
-│   │   ├── mediator.go        # Mediador tipado en memoria (equivalente a MediatR)
-│   │   ├── behavior.go        # PipelineBehavior (logging, validación, transacciones)
-│   │   ├── orchestrator.go    # Orchestrator[ID, T] (coordina repo + mutación + outbox/eventos)
-│   │   └── dto.go             # DTO, ReadDTO, CommandDTO
 │   │
 │   ├── persistence/      # CAPA DE INFRAESTRUCTURA (Adaptadores de Persistencia)
 │   │   ├── memory/            # Repositorio en memoria para tests y desarrollo
 │   │   └── ent/               # Adaptador ORM de grafos con consultas tipo LINQ
 │   │
 │   └── testing/          # CAPA DE TESTING (Unitario, Integración y Arquitectura)
-│       ├── archtest/          # Guardián de reglas de arquitectura (Domain Purity)
-│       └── testkit/           # Arnés de pruebas unitarias e integración
+│       ├── archtest/          # Guardián de reglas de arquitectura (AST parser)
+│       └── testkit/           # Arnés de pruebas unitarias e integración (fakes, db harness)
 ```
 
 ---
@@ -46,24 +56,9 @@ Karpo.Fw.Go/
 ## 🛡️ Guardián de Arquitectura (`archtest`)
 
 Al igual que en Karpo C#, el framework cuenta con una suite de pruebas de arquitectura automáticas ([`pkg/testing/archtest`](pkg/testing/archtest)) que se ejecutan en cada `go test`:
-1. **Regla de Pureza de Dominio**: Analiza el AST de Go para certificar que ningún archivo de `pkg/domain` importa `application`, `persistence`, `net/http` ni librerías de infraestructura.
-2. **Regla de Frontera de Aplicación**: Certifica que `pkg/application` no importa implementaciones de base de datos ni adaptadores de persistencia.
-
----
-
-## 📦 Catálogo de Verticales del Framework
-
-| Capa | Paquete | Patrones / Contratos | Implementaciones / Adaptadores |
-| :--- | :--- | :--- | :--- |
-| **Dominio (Táctico)** | **`pkg/domain`** | `Entity[ID]`, `ValueObject[T]`, `AggregateRoot[ID]`, `DomainService`, `Specification[T]`, `Factory[T]`, `ReadRepository[ID, T]`, `WriteRepository[ID, T]`, `Repository[ID, T]`, `UnitOfWork` | `BaseEntity[ID]`, `BaseAggregateRoot[ID]`, `BaseDomainService`, especificaciones compuestas y paginadas |
-| **Aplicación (Estratégico)** | **`pkg/application`** | `Command[R]`, `Query[R]`, `CommandHandler`, `QueryHandler`, `Mediator`, `PipelineBehavior`, `Orchestrator[ID, T]`, `DTO` | Despachador en memoria tipado, cadena de interceptores/middleware, orquestador de ciclo de vida del agregado |
-| **Testing** | **`pkg/testing`** | Reglas de Arquitectura (*ArchTest*), Harness de pruebas | Verificador AST de fronteras, arnés de fakes y repositorios mock |
-| **Sustrato Funcional** | **`pkg/result`** | `Result[T]` | `Ok[T]`, `Fail[T]`, combinadores funcionales `Map`, `FlatMap` |
-| **Plataforma** | **`pkg/time`** | `Clock` | `real` (reloj de sistema), `fake` (reloj congelable/desplazable para tests) |
-| **Plataforma** | **`pkg/log`** | `Logger` | `vanilla` (envoltorio estructurado sobre `log/slog` nativo de Go) |
-| **Plataforma** | **`pkg/cache`** | `Cache[K, V]` | `memory` (caché thread-safe con soporte de expiración TTL) |
-| **Plataforma** | **`pkg/events`** | `Event`, `Dispatcher` | `inprocess` (despachador en memoria con soporte de comodines y cancelación) |
-| **Persistencia** | **`pkg/persistence`** | Adaptadores de `domain.Repository` | `memory` (repositorio genérico en memoria), `ent` (ORM de grafos y consultas tipadas) |
+1. **Regla de Pureza de Dominio**: El Dominio no puede importar Aplicación, Distribución ni Infraestructura.
+2. **Regla de Frontera de Aplicación**: La Aplicación no puede importar Distribución ni adaptadores de base de datos concretos.
+3. **Regla de Aislamiento de Distribución**: La Distribución no puede importar adaptadores concretos de base de datos (opera exclusivamente contra la capa de Aplicación).
 
 ---
 
