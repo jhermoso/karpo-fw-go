@@ -9,18 +9,45 @@ Diseñado bajo principios de **Domain-Driven Design (DDD)**, **Clean Architectur
 
 ---
 
-## 🏛️ Filosofía y Arquitectura
+## 🏛️ Filosofía y Arquitectura por Capas
 
-1. **Aislamiento por Capas y Paquetes**:
-   A diferencia del ecosistema tradicional .NET (donde cada capa y adaptador requería un `.csproj` independiente), en Go el compilador prohíbe ciclos de importación y compila únicamente los paquetes efectivamente utilizados.
-   - **`pkg/domain` (Capa de Dominio - Patrones Tácticos)**: Sin dependencias externas. Contiene `Entity`, `ValueObject`, `AggregateRoot` y `Specification`.
-   - **`pkg/application` (Capa de Aplicación - Patrones Estratégicos/CQRS)**: Orquesta casos de uso mediante `Command`, `Query`, `CommandHandler`, `QueryHandler` y un `Mediator` con *Pipeline Behaviors* (equivalente a MediatR de C#).
-2. **Result Pattern en lugar de excepciones**:
-   Toda operación con posibilidad de fallo se modela de forma determinista mediante `result.Result[T]`, eliminando costes de desenrollado de pila (*stack unwinding*) y garantizando seguridad en tiempo de compilación.
-3. **Persistencia orientada a Grafos con consultas tipo LINQ (`ent`)**:
-   Soporte integrado para **ent** (entgo.io). Las entidades se modelan como nodos y aristas de un grafo, permitiendo consultas fluidas 100% tipadas en tiempo de compilación, carga perezosa/ansiosa de relaciones (`WithContacts()`) y filtrado reverso sin escribir SQL manual ni sufrir sobrecarga de reflexión.
-4. **Determinismo y Testabilidad**:
-   Contratos puros para tiempo (`time.Clock`), registro (`log.Logger`), caché (`cache.Cache`) y eventos (`events.Dispatcher`), permitiendo pruebas unitarias e integración 100% deterministas (relojes congelables, buses en memoria sin dependencias externas).
+El framework estructura los patrones en paquetes independientes que garantizan la pureza del modelo y la regla de dependencias:
+
+```
+Karpo.Fw.Go/
+├── pkg/
+│   ├── domain/           # CAPA DE DOMINIO (Patrones Tácticos y Contratos DIP)
+│   │   ├── entity.go          # Entity[ID], BaseEntity[ID] (igualdad por Id)
+│   │   ├── value_object.go    # ValueObject[T] (igualdad estructural)
+│   │   ├── aggregate.go       # AggregateRoot[ID], BaseAggregateRoot[ID]
+│   │   ├── service.go         # DomainService (lógica que abarca múltiples entidades)
+│   │   ├── specification.go   # Specification[T], PagedSpecification[T], PageRequest
+│   │   ├── factory.go         # Factory[T] (creación y reconstitución compleja)
+│   │   └── repository.go      # ReadRepository, WriteRepository, Repository, UnitOfWork
+│   │
+│   ├── application/      # CAPA DE APLICACIÓN (Patrones Estratégicos y Orquestación)
+│   │   ├── cqrs.go            # Command[R], Query[R], CommandHandler, QueryHandler
+│   │   ├── mediator.go        # Mediador tipado en memoria (equivalente a MediatR)
+│   │   ├── behavior.go        # PipelineBehavior (logging, validación, transacciones)
+│   │   ├── orchestrator.go    # Orchestrator[ID, T] (coordina repo + mutación + outbox/eventos)
+│   │   └── dto.go             # DTO, ReadDTO, CommandDTO
+│   │
+│   ├── persistence/      # CAPA DE INFRAESTRUCTURA (Adaptadores de Persistencia)
+│   │   ├── memory/            # Repositorio en memoria para tests y desarrollo
+│   │   └── ent/               # Adaptador ORM de grafos con consultas tipo LINQ
+│   │
+│   └── testing/          # CAPA DE TESTING (Unitario, Integración y Arquitectura)
+│       ├── archtest/          # Guardián de reglas de arquitectura (Domain Purity)
+│       └── testkit/           # Arnés de pruebas unitarias e integración
+```
+
+---
+
+## 🛡️ Guardián de Arquitectura (`archtest`)
+
+Al igual que en Karpo C#, el framework cuenta con una suite de pruebas de arquitectura automáticas ([`pkg/testing/archtest`](pkg/testing/archtest)) que se ejecutan en cada `go test`:
+1. **Regla de Pureza de Dominio**: Analiza el AST de Go para certificar que ningún archivo de `pkg/domain` importa `application`, `persistence`, `net/http` ni librerías de infraestructura.
+2. **Regla de Frontera de Aplicación**: Certifica que `pkg/application` no importa implementaciones de base de datos ni adaptadores de persistencia.
 
 ---
 
@@ -28,14 +55,15 @@ Diseñado bajo principios de **Domain-Driven Design (DDD)**, **Clean Architectur
 
 | Capa | Paquete | Patrones / Contratos | Implementaciones / Adaptadores |
 | :--- | :--- | :--- | :--- |
-| **Dominio (Táctico)** | **`pkg/domain`** | `Entity[ID]`, `ValueObject[T]`, `AggregateRoot[ID]`, `Specification[T]` | `BaseEntity[ID]`, `BaseAggregateRoot[ID]`, especificaciones compuestas (`And`, `Or`, `Not`) |
-| **Aplicación (Estratégico)** | **`pkg/application`** | `Command[R]`, `Query[R]`, `CommandHandler`, `QueryHandler`, `Mediator`, `PipelineBehavior` | Despachador en memoria tipado, cadena de interceptores/middleware |
+| **Dominio (Táctico)** | **`pkg/domain`** | `Entity[ID]`, `ValueObject[T]`, `AggregateRoot[ID]`, `DomainService`, `Specification[T]`, `Factory[T]`, `ReadRepository[ID, T]`, `WriteRepository[ID, T]`, `Repository[ID, T]`, `UnitOfWork` | `BaseEntity[ID]`, `BaseAggregateRoot[ID]`, `BaseDomainService`, especificaciones compuestas y paginadas |
+| **Aplicación (Estratégico)** | **`pkg/application`** | `Command[R]`, `Query[R]`, `CommandHandler`, `QueryHandler`, `Mediator`, `PipelineBehavior`, `Orchestrator[ID, T]`, `DTO` | Despachador en memoria tipado, cadena de interceptores/middleware, orquestador de ciclo de vida del agregado |
+| **Testing** | **`pkg/testing`** | Reglas de Arquitectura (*ArchTest*), Harness de pruebas | Verificador AST de fronteras, arnés de fakes y repositorios mock |
 | **Sustrato Funcional** | **`pkg/result`** | `Result[T]` | `Ok[T]`, `Fail[T]`, combinadores funcionales `Map`, `FlatMap` |
 | **Plataforma** | **`pkg/time`** | `Clock` | `real` (reloj de sistema), `fake` (reloj congelable/desplazable para tests) |
 | **Plataforma** | **`pkg/log`** | `Logger` | `vanilla` (envoltorio estructurado sobre `log/slog` nativo de Go) |
 | **Plataforma** | **`pkg/cache`** | `Cache[K, V]` | `memory` (caché thread-safe con soporte de expiración TTL) |
 | **Plataforma** | **`pkg/events`** | `Event`, `Dispatcher` | `inprocess` (despachador en memoria con soporte de comodines y cancelación) |
-| **Persistencia** | **`pkg/persistence`** | `Repository[ID, T]`, `UnitOfWork` | `memory` (repositorio genérico en memoria), `ent` (ORM de grafos y consultas tipadas) |
+| **Persistencia** | **`pkg/persistence`** | Adaptadores de `domain.Repository` | `memory` (repositorio genérico en memoria), `ent` (ORM de grafos y consultas tipadas) |
 
 ---
 
@@ -46,7 +74,7 @@ Diseñado bajo principios de **Domain-Driven Design (DDD)**, **Clean Architectur
 
 ### Compilar y Probar
 ```powershell
-# Ejecutar todas las pruebas unitarias
+# Ejecutar todas las pruebas unitarias y de arquitectura
 go test ./... -v
 
 # Verificar cobertura de código
@@ -54,29 +82,6 @@ go test ./... -cover
 
 # Regenerar esquemas de ent (si se modifican los modelos en pkg/persistence/ent/schema)
 go generate ./...
-```
-
-### Ejemplo: Despacho CQRS con Mediador y Pipeline
-```go
-m := application.NewMediator()
-
-// Middleware de Logging / Auditoría
-m.Use(func(ctx context.Context, req any, next application.NextFunc) (any, error) {
-    log.Printf("Executing request: %T", req)
-    res, err := next(ctx)
-    log.Printf("Finished request: %T", req)
-    return res, err
-})
-
-// Registrar Command Handler
-application.RegisterCommandHandler(m, application.CommandHandlerFunc[CreatePartyCommand, string](
-    func(ctx context.Context, cmd CreatePartyCommand) result.Result[string] {
-        return result.Ok("Party created successfully")
-    },
-))
-
-// Ejecutar comando
-res := application.Send[string](ctx, m, CreatePartyCommand{TaxID: "B12345678"})
 ```
 
 ---

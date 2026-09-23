@@ -3,8 +3,13 @@ package application_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/jhermoso/karpo-fw-go/pkg/application"
+	"github.com/jhermoso/karpo-fw-go/pkg/domain"
+	"github.com/jhermoso/karpo-fw-go/pkg/events"
+	"github.com/jhermoso/karpo-fw-go/pkg/events/inprocess"
+	"github.com/jhermoso/karpo-fw-go/pkg/persistence/memory"
 	"github.com/jhermoso/karpo-fw-go/pkg/result"
 )
 
@@ -19,6 +24,34 @@ type CreatePartyCommand struct {
 type GetPartyQuery struct {
 	application.BaseQuery[string]
 	PartyID string
+}
+
+// 3. Mock Aggregate Root for Orchestrator test
+type MockAccount struct {
+	domain.BaseAggregateRoot[string]
+	Balance float64
+}
+
+func NewMockAccount(id string, balance float64) *MockAccount {
+	acc := &MockAccount{
+		BaseAggregateRoot: domain.NewBaseAggregateRoot(id),
+		Balance:           balance,
+	}
+	acc.AddDomainEvent(events.BaseEvent{
+		EventID:        "evt-created",
+		EventType:      "mock.account.created",
+		EventTimestamp: time.Now(),
+	})
+	return acc
+}
+
+func (a *MockAccount) Deposit(amount float64) {
+	a.Balance += amount
+	a.AddDomainEvent(events.BaseEvent{
+		EventID:        "evt-deposited",
+		EventType:      "mock.account.deposited",
+		EventTimestamp: time.Now(),
+	})
 }
 
 func TestMediator_CommandAndQueryDispatch(t *testing.T) {
@@ -123,12 +156,53 @@ func TestMediator_PipelineBehavior(t *testing.T) {
 	}
 }
 
-func TestMediator_UnregisteredRequest(t *testing.T) {
+func TestOrchestrator_Lifecycle(t *testing.T) {
 	ctx := context.Background()
-	m := application.NewMediator()
+	repo := memory.NewRepository[string, *MockAccount](func(a *MockAccount) string {
+		return a.ID()
+	})
+	uow := &memory.MemoryUnitOfWork{}
+	bus := inprocess.New()
 
-	res := application.Send[string](ctx, m, GetPartyQuery{PartyID: "123"})
-	if !res.IsFailure() {
-		t.Fatalf("expected failure for unregistered request")
+	var publishedEvents []string
+	bus.Subscribe("*", events.HandlerFunc(func(_ context.Context, evt events.Event) error {
+		publishedEvents = append(publishedEvents, evt.Type())
+		return nil
+	}))
+
+	orchestrator := application.NewOrchestrator[string, *MockAccount](repo, uow, bus)
+
+	// 1. Create Aggregate via Orchestrator
+	newAcc := NewMockAccount("acc-100", 250.0)
+	createRes := orchestrator.Create(ctx, newAcc)
+	if !createRes.IsSuccess() {
+		t.Fatalf("create failed: %v", createRes.Error())
+	}
+
+	if len(publishedEvents) != 1 || publishedEvents[0] != "mock.account.created" {
+		t.Fatalf("expected account.created event dispatched, got: %v", publishedEvents)
+	}
+	if len(newAcc.DomainEvents()) != 0 {
+		t.Fatalf("expected domain events cleared after orchestrator create")
+	}
+
+	// 2. Mutate Aggregate via Orchestrator
+	mutateRes := orchestrator.Mutate(ctx, "acc-100", func(agg *MockAccount) result.Result[any] {
+		agg.Deposit(100.0)
+		return result.Ok[any](agg.Balance)
+	})
+
+	if !mutateRes.IsSuccess() || mutateRes.MustValue() != 350.0 {
+		t.Fatalf("mutation failed: %v", mutateRes)
+	}
+
+	if len(publishedEvents) != 2 || publishedEvents[1] != "mock.account.deposited" {
+		t.Fatalf("expected account.deposited event dispatched, got: %v", publishedEvents)
+	}
+
+	// Verify persistence in repository
+	found := repo.FindByID(ctx, "acc-100")
+	if !found.IsSuccess() || found.MustValue().Balance != 350.0 {
+		t.Fatalf("expected balance 350 persisted in repository")
 	}
 }

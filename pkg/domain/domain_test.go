@@ -1,11 +1,13 @@
 package domain_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/events"
+	"github.com/jhermoso/karpo-fw-go/pkg/result"
 )
 
 // 1. Value Object Example: Money
@@ -42,6 +44,20 @@ func NewAccount(id string, initial Money) *Account {
 		EventPayload:   id,
 	})
 	return acc
+}
+
+// 4. Domain Service Example: TransferService
+type TransferService struct {
+	domain.BaseDomainService
+}
+
+func (s *TransferService) Transfer(from, to *Account, amount Money) result.Result[bool] {
+	if from.Balance.Amount < amount.Amount {
+		return result.FailMsg[bool]("insufficient funds")
+	}
+	from.Balance.Amount -= amount.Amount
+	to.Balance.Amount += amount.Amount
+	return result.Ok(true)
 }
 
 func TestValueObject_Equality(t *testing.T) {
@@ -113,5 +129,61 @@ func TestSpecification_Composition(t *testing.T) {
 	}
 	if specialDiscount.IsSatisfiedBy(30) {
 		t.Errorf("expected 30 not to receive special discount")
+	}
+}
+
+func TestDomainService_Transfer(t *testing.T) {
+	svc := &TransferService{}
+	accA := NewAccount("A", Money{Amount: 200, Currency: "EUR"})
+	accB := NewAccount("B", Money{Amount: 50, Currency: "EUR"})
+
+	res := svc.Transfer(accA, accB, Money{Amount: 100, Currency: "EUR"})
+	if !res.IsSuccess() {
+		t.Fatalf("transfer failed: %v", res.Error())
+	}
+	if accA.Balance.Amount != 100 || accB.Balance.Amount != 150 {
+		t.Errorf("balances incorrect after transfer: A=%v, B=%v", accA.Balance.Amount, accB.Balance.Amount)
+	}
+
+	resFail := svc.Transfer(accA, accB, Money{Amount: 500, Currency: "EUR"})
+	if !resFail.IsFailure() {
+		t.Fatalf("expected transfer failure with insufficient funds")
+	}
+}
+
+func TestFactory_Create(t *testing.T) {
+	factory := domain.FactoryFunc[*Account, struct {
+		ID      string
+		Initial float64
+	}](func(_ context.Context, p struct {
+		ID      string
+		Initial float64
+	}) result.Result[*Account] {
+		if p.ID == "" {
+			return result.FailMsg[*Account]("id is required")
+		}
+		return result.Ok(NewAccount(p.ID, Money{Amount: p.Initial, Currency: "EUR"}))
+	})
+
+	ctx := context.Background()
+	accRes := factory.Create(ctx, struct {
+		ID      string
+		Initial float64
+	}{ID: "acc-10", Initial: 100})
+
+	if !accRes.IsSuccess() || accRes.MustValue().ID() != "acc-10" {
+		t.Fatalf("expected successful factory creation")
+	}
+}
+
+func TestPagedResult_Calculation(t *testing.T) {
+	items := []int{1, 2, 3, 4, 5}
+	paged := domain.NewPagedResult(items, 45, 1, 10)
+
+	if paged.TotalPages != 5 {
+		t.Errorf("expected 5 total pages for 45 items with pageSize 10, got %d", paged.TotalPages)
+	}
+	if len(paged.Items) != 5 {
+		t.Errorf("expected 5 items")
 	}
 }

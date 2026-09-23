@@ -5,6 +5,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence"
 	"github.com/jhermoso/karpo-fw-go/pkg/result"
 )
@@ -46,6 +47,63 @@ func (r *Repository[ID, T]) FindAll(_ context.Context) result.Result[[]T] {
 	return result.Ok(items)
 }
 
+func (r *Repository[ID, T]) FindMatching(_ context.Context, spec domain.Specification[T]) result.Result[[]T] {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	matches := make([]T, 0)
+	for _, v := range r.store {
+		if spec == nil || spec.IsSatisfiedBy(v) {
+			matches = append(matches, v)
+		}
+	}
+	return result.Ok(matches)
+}
+
+func (r *Repository[ID, T]) FindPaged(ctx context.Context, spec domain.Specification[T], pageReq domain.PageRequest) result.Result[domain.PagedResult[T]] {
+	allRes := r.FindMatching(ctx, spec)
+	if allRes.IsFailure() {
+		return result.Fail[domain.PagedResult[T]](allRes.Error())
+	}
+	matches := allRes.MustValue()
+	totalCount := len(matches)
+
+	pageSize := pageReq.PageSize
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+	pageNumber := pageReq.PageNumber
+	if pageNumber <= 0 {
+		pageNumber = 1
+	}
+
+	start := (pageNumber - 1) * pageSize
+	if start >= totalCount {
+		return result.Ok(domain.NewPagedResult([]T{}, totalCount, pageNumber, pageSize))
+	}
+
+	end := start + pageSize
+	if end > totalCount {
+		end = totalCount
+	}
+
+	pagedItems := matches[start:end]
+	return result.Ok(domain.NewPagedResult(pagedItems, totalCount, pageNumber, pageSize))
+}
+
+func (r *Repository[ID, T]) Count(_ context.Context, spec domain.Specification[T]) result.Result[int] {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	count := 0
+	for _, v := range r.store {
+		if spec == nil || spec.IsSatisfiedBy(v) {
+			count++
+		}
+	}
+	return result.Ok(count)
+}
+
 func (r *Repository[ID, T]) Save(_ context.Context, entity T) result.Result[T] {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -74,4 +132,8 @@ func (u *MemoryUnitOfWork) Do(ctx context.Context, fn func(ctx context.Context) 
 }
 
 var _ persistence.Repository[string, any] = (*Repository[string, any])(nil)
+var _ domain.ReadRepository[string, any] = (*Repository[string, any])(nil)
+var _ domain.WriteRepository[string, any] = (*Repository[string, any])(nil)
+var _ domain.Repository[string, any] = (*Repository[string, any])(nil)
 var _ persistence.UnitOfWork = (*MemoryUnitOfWork)(nil)
+var _ domain.UnitOfWork = (*MemoryUnitOfWork)(nil)
