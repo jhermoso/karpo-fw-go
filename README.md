@@ -81,6 +81,13 @@ go generate ./...
 
 ---
 
+## 🗺️ Roadmap & Backlog
+
+Para ver las tareas planificadas, ideas de extensiones y próximos hitos del proyecto, consulta [BACKLOG.md](BACKLOG.md).
+
+---
+
 ## 📄 Licencia
 
 Este proyecto está licenciado bajo la **GNU General Public License v2.0** (GPL-2.0). Consulta el archivo [LICENSE](LICENSE) para más detalles.
+
