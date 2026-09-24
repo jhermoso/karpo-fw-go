@@ -83,4 +83,4 @@ go generate ./...
 
 ## 📄 Licencia
 
-Este proyecto está licenciado bajo la **GNU General Public License v2.0** (GPL-2.0), la misma licencia que el kernel de Linux. Consulta el archivo [LICENSE](LICENSE) para más detalles.
+Este proyecto está licenciado bajo la **GNU General Public License v2.0** (GPL-2.0). Consulta el archivo [LICENSE](LICENSE) para más detalles.
