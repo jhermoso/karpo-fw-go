@@ -1,0 +1,114 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Unit, architecture and SQLite (race)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l pkg examples integration)
+          if [ -n "$unformatted" ]; then
+            echo "Files not formatted with gofmt:"; echo "$unformatted"; exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test -race
+        run: go test -race -count=1 ./...
+
+  integration:
+    name: Integration (PostgreSQL, SQL Server, Oracle, MySQL)
+    runs-on: ubuntu-latest
+    needs: test
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: karpo
+          POSTGRES_PASSWORD: karpo
+          POSTGRES_DB: karpo
+        ports: ["55433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U karpo"
+          --health-interval 5s --health-retries 30
+
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: "Karpo_2026!"
+          MSSQL_PID: Developer
+        ports: ["51433:1433"]
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P 'Karpo_2026!' -Q 'SELECT 1' || exit 1"
+          --health-interval 10s --health-retries 30
+
+      oracle:
+        image: gvenzl/oracle-free:23-slim-faststart
+        env:
+          ORACLE_PASSWORD: karpo
+          APP_USER: karpo
+          APP_USER_PASSWORD: karpo
+        ports: ["51521:1521"]
+        options: >-
+          --health-cmd healthcheck.sh
+          --health-interval 10s --health-retries 60
+
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: karpo
+          MYSQL_DATABASE: karpo
+          MYSQL_USER: karpo
+          MYSQL_PASSWORD: karpo
+        ports: ["53306:3306"]
+        options: >-
+          --health-cmd "mysqladmin ping -h localhost -pkarpo"
+          --health-interval 5s --health-retries 30
+
+    env:
+      KARPO_PG_DSN: postgres://karpo:karpo@localhost:55433/karpo?sslmode=disable
+      KARPO_MSSQL_DSN: sqlserver://sa:Karpo_2026!@localhost:51433?database=master
+      KARPO_ORACLE_DSN: oracle://karpo:karpo@localhost:51521/FREEPDB1
+      KARPO_MYSQL_DSN: karpo:karpo@tcp(localhost:53306)/karpo?parseTime=true&loc=UTC
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: integration/go.mod
+          cache-dependency-path: integration/go.sum
+
+      - name: go vet
+        working-directory: integration
+        run: go vet ./...
+
+      - name: Integration suite on real servers
+        working-directory: integration
+        run: |
+          go test -count=1 -v ./... | tee integration.log
+          # Every engine must actually run: a missing DSN or server would only skip.
+          if grep -q -- "--- SKIP" integration.log; then
+            echo "Some engines were skipped"; exit 1
+          fi
