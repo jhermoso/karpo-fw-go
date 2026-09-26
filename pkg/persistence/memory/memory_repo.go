@@ -1,139 +1,232 @@
-// Package memory provides an in-memory repository implementation for testing and development.
 package memory
 
 import (
 	"context"
+	"reflect"
+	"slices"
+	"strings"
 	"sync"
 
 	"github.com/jhermoso/karpo-fw-go/pkg/domain"
-	"github.com/jhermoso/karpo-fw-go/pkg/persistence"
-	"github.com/jhermoso/karpo-fw-go/pkg/result"
+	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
 )
 
-// Repository is a thread-safe in-memory generic repository.
-type Repository[ID comparable, T any] struct {
-	mu     sync.RWMutex
-	store  map[ID]T
-	idFunc func(T) ID
+type entry[T any] struct {
+	agg     T
+	version int64
 }
 
-// NewRepository creates a new generic in-memory repository.
-func NewRepository[ID comparable, T any](idFunc func(T) ID) *Repository[ID, T] {
+// Repository is a thread-safe in-memory implementation of domain.Repository.
+type Repository[ID domain.Identifier, T domain.AggregateRoot[ID]] struct {
+	store *Store
+	kind  string
+	clone func(T) T
+
+	mu   sync.RWMutex
+	rows map[ID]entry[T]
+}
+
+// RepoOption configures a memory Repository.
+type RepoOption[T any] func(*repoOptions[T])
+
+type repoOptions[T any] struct {
+	clone func(T) T
+}
+
+// WithClone sets the function used to isolate stored aggregates from callers; it must return a
+// deep copy. By default the repository makes a shallow copy of the aggregate struct, which is
+// enough when aggregates replace (rather than mutate in place) their slices, maps and pointers.
+func WithClone[T any](fn func(T) T) RepoOption[T] {
+	return func(o *repoOptions[T]) { o.clone = fn }
+}
+
+// NewRepository creates a repository on store.
+func NewRepository[ID domain.Identifier, T domain.AggregateRoot[ID]](store *Store, opts ...RepoOption[T]) *Repository[ID, T] {
+	var o repoOptions[T]
+	for _, opt := range opts {
+		opt(&o)
+	}
+	if o.clone == nil {
+		o.clone = shallowClone[T]
+	}
 	return &Repository[ID, T]{
-		store:  make(map[ID]T),
-		idFunc: idFunc,
+		store: store,
+		kind:  strings.TrimPrefix(reflect.TypeFor[T]().String(), "*"),
+		clone: o.clone,
+		rows:  make(map[ID]entry[T]),
 	}
 }
 
-func (r *Repository[ID, T]) FindByID(_ context.Context, id ID) result.Result[T] {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	entity, found := r.store[id]
-	if !found {
-		return result.FailMsg[T]("entity with id '%v' not found", id)
+// shallowClone copies the struct pointed to by an aggregate pointer (including unexported
+// fields); non-pointer aggregates are returned as is.
+func shallowClone[T any](t T) T {
+	v := reflect.ValueOf(t)
+	if v.Kind() != reflect.Pointer || v.IsNil() || v.Elem().Kind() != reflect.Struct {
+		return t
 	}
-	return result.Ok(entity)
+	c := reflect.New(v.Elem().Type())
+	c.Elem().Set(v.Elem())
+	return c.Interface().(T)
 }
 
-func (r *Repository[ID, T]) FindAll(_ context.Context) result.Result[[]T] {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	items := make([]T, 0, len(r.store))
-	for _, v := range r.store {
-		items = append(items, v)
+func (r *Repository[ID, T]) check(ctx context.Context) error {
+	if r.store.closed.Load() {
+		return ErrClosed
 	}
-	return result.Ok(items)
+	return ctx.Err()
 }
 
-func (r *Repository[ID, T]) FindMatching(_ context.Context, spec domain.Specification[T]) result.Result[[]T] {
+// Get loads an aggregate by identity.
+func (r *Repository[ID, T]) Get(ctx context.Context, id ID) (T, error) {
+	var zero T
+	if err := r.check(ctx); err != nil {
+		return zero, err
+	}
 	r.mu.RLock()
-	defer r.mu.RUnlock()
+	e, ok := r.rows[id]
+	r.mu.RUnlock()
+	if !ok {
+		return zero, domain.NotFound(r.kind, id)
+	}
+	out := r.clone(e.agg)
+	domain.MarkPersisted(out, e.version)
+	return out, nil
+}
 
-	matches := make([]T, 0)
-	for _, v := range r.store {
-		if spec == nil || spec.IsSatisfiedBy(v) {
-			matches = append(matches, v)
+// Save inserts or updates agg with optimistic concurrency.
+func (r *Repository[ID, T]) Save(ctx context.Context, agg T) error {
+	if err := r.check(ctx); err != nil {
+		return err
+	}
+	id, v := agg.ID(), agg.Version()
+
+	r.mu.Lock()
+	prev, exists := r.rows[id]
+	switch {
+	case v == 0 && exists:
+		r.mu.Unlock()
+		return domain.Conflict(r.kind, id, v, "identity already exists")
+	case v != 0 && !exists:
+		r.mu.Unlock()
+		return domain.Conflict(r.kind, id, v, "aggregate no longer exists")
+	case v != 0 && prev.version != v:
+		r.mu.Unlock()
+		return domain.Conflict(r.kind, id, v, "stale version")
+	}
+	domain.MarkPersisted(agg, v+1)
+	stored := r.clone(agg)
+	stored.ClearEvents() // pending events belong to the caller's instance, never to the store
+	r.rows[id] = entry[T]{agg: stored, version: v + 1}
+	r.mu.Unlock()
+
+	r.store.onRollback(ctx, func() {
+		r.mu.Lock()
+		if exists {
+			r.rows[id] = prev
+		} else {
+			delete(r.rows, id)
+		}
+		r.mu.Unlock()
+		domain.MarkPersisted(agg, v)
+	})
+	return nil
+}
+
+// Delete removes agg with optimistic concurrency.
+func (r *Repository[ID, T]) Delete(ctx context.Context, agg T) error {
+	if err := r.check(ctx); err != nil {
+		return err
+	}
+	id, v := agg.ID(), agg.Version()
+
+	r.mu.Lock()
+	prev, exists := r.rows[id]
+	switch {
+	case !exists:
+		r.mu.Unlock()
+		return domain.NotFound(r.kind, id)
+	case prev.version != v:
+		r.mu.Unlock()
+		return domain.Conflict(r.kind, id, v, "stale version")
+	}
+	delete(r.rows, id)
+	r.mu.Unlock()
+
+	r.store.onRollback(ctx, func() {
+		r.mu.Lock()
+		r.rows[id] = prev
+		r.mu.Unlock()
+	})
+	return nil
+}
+
+func (r *Repository[ID, T]) matching(s spec.Specification[T], order []spec.Order[T]) []T {
+	r.mu.RLock()
+	out := make([]T, 0, len(r.rows))
+	for _, e := range r.rows {
+		if s == nil || s.IsSatisfiedBy(e.agg) {
+			c := r.clone(e.agg)
+			domain.MarkPersisted(c, e.version)
+			out = append(out, c)
 		}
 	}
-	return result.Ok(matches)
+	r.mu.RUnlock()
+	slices.SortFunc(out, func(a, b T) int {
+		if c := spec.CompareAll(order, a, b); c != 0 {
+			return c
+		}
+		return strings.Compare(a.ID().String(), b.ID().String())
+	})
+	return out
 }
 
-func (r *Repository[ID, T]) FindPaged(ctx context.Context, spec domain.Specification[T], pageReq domain.PageRequest) result.Result[domain.PagedResult[T]] {
-	allRes := r.FindMatching(ctx, spec)
-	if allRes.IsFailure() {
-		return result.Fail[domain.PagedResult[T]](allRes.Error())
+// Find returns the aggregates satisfying s, sorted by order then identity.
+func (r *Repository[ID, T]) Find(ctx context.Context, s spec.Specification[T], order ...spec.Order[T]) ([]T, error) {
+	if err := r.check(ctx); err != nil {
+		return nil, err
 	}
-	matches := allRes.MustValue()
-	totalCount := len(matches)
-
-	pageSize := pageReq.PageSize
-	if pageSize <= 0 {
-		pageSize = 20
-	}
-	pageNumber := pageReq.PageNumber
-	if pageNumber <= 0 {
-		pageNumber = 1
-	}
-
-	start := (pageNumber - 1) * pageSize
-	if start >= totalCount {
-		return result.Ok(domain.NewPagedResult([]T{}, totalCount, pageNumber, pageSize))
-	}
-
-	end := start + pageSize
-	if end > totalCount {
-		end = totalCount
-	}
-
-	pagedItems := matches[start:end]
-	return result.Ok(domain.NewPagedResult(pagedItems, totalCount, pageNumber, pageSize))
+	return r.matching(s, order), nil
 }
 
-func (r *Repository[ID, T]) Count(_ context.Context, spec domain.Specification[T]) result.Result[int] {
+// FindPage returns one page of matches.
+func (r *Repository[ID, T]) FindPage(ctx context.Context, s spec.Specification[T], page domain.PageRequest[T]) (domain.Page[T], error) {
+	if err := r.check(ctx); err != nil {
+		return domain.Page[T]{}, err
+	}
+	page = page.Normalize()
+	all := r.matching(s, page.Sort)
+	start := min(page.Offset(), len(all))
+	end := min(start+page.Size, len(all))
+	return domain.NewPage(all[start:end], int64(len(all)), page.Number, page.Size), nil
+}
+
+// Count returns the number of matches.
+func (r *Repository[ID, T]) Count(ctx context.Context, s spec.Specification[T]) (int64, error) {
+	if err := r.check(ctx); err != nil {
+		return 0, err
+	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-
-	count := 0
-	for _, v := range r.store {
-		if spec == nil || spec.IsSatisfiedBy(v) {
-			count++
+	var n int64
+	for _, e := range r.rows {
+		if s == nil || s.IsSatisfiedBy(e.agg) {
+			n++
 		}
 	}
-	return result.Ok(count)
+	return n, nil
 }
 
-func (r *Repository[ID, T]) Save(_ context.Context, entity T) result.Result[T] {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	id := r.idFunc(entity)
-	r.store[id] = entity
-	return result.Ok(entity)
-}
-
-func (r *Repository[ID, T]) Delete(_ context.Context, id ID) result.Result[bool] {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	if _, found := r.store[id]; !found {
-		return result.FailMsg[bool]("entity with id '%v' not found", id)
+// Exists reports whether any aggregate matches.
+func (r *Repository[ID, T]) Exists(ctx context.Context, s spec.Specification[T]) (bool, error) {
+	if err := r.check(ctx); err != nil {
+		return false, err
 	}
-	delete(r.store, id)
-	return result.Ok(true)
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, e := range r.rows {
+		if s == nil || s.IsSatisfiedBy(e.agg) {
+			return true, nil
+		}
+	}
+	return false, nil
 }
-
-// MemoryUnitOfWork is a no-op UnitOfWork for in-memory operations.
-type MemoryUnitOfWork struct{}
-
-func (u *MemoryUnitOfWork) Do(ctx context.Context, fn func(ctx context.Context) error) error {
-	return fn(ctx)
-}
-
-var _ persistence.Repository[string, any] = (*Repository[string, any])(nil)
-var _ domain.ReadRepository[string, any] = (*Repository[string, any])(nil)
-var _ domain.WriteRepository[string, any] = (*Repository[string, any])(nil)
-var _ domain.Repository[string, any] = (*Repository[string, any])(nil)
-var _ persistence.UnitOfWork = (*MemoryUnitOfWork)(nil)
-var _ domain.UnitOfWork = (*MemoryUnitOfWork)(nil)
