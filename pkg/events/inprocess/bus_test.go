@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/jhermoso/karpo-fw-go/pkg/application"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/events"
 	"github.com/jhermoso/karpo-fw-go/pkg/events/inprocess"
@@ -51,12 +52,12 @@ func TestBus_TypedSubscribeAndUnsubscribe(t *testing.T) {
 func TestBus_WildcardAndJoinedErrors(t *testing.T) {
 	bus := inprocess.New()
 	var wildcard int
-	bus.Subscribe(events.Wildcard, events.HandlerFunc(func(context.Context, events.Event) error {
+	bus.Subscribe(events.Wildcard, application.EventHandlerFunc(func(context.Context, events.Event) error {
 		wildcard++
 		return nil
 	}))
 	boom := errors.New("handler failed")
-	bus.Subscribe("order.placed", events.HandlerFunc(func(context.Context, events.Event) error { return boom }))
+	bus.Subscribe("order.placed", application.EventHandlerFunc(func(context.Context, events.Event) error { return boom }))
 
 	err := bus.Publish(context.Background(), orderPlaced{})
 	if !errors.Is(err, boom) || wildcard != 1 {
@@ -68,7 +69,7 @@ func TestBus_ContextCancelled(t *testing.T) {
 	bus := inprocess.New()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	bus.Subscribe("order.placed", events.HandlerFunc(func(context.Context, events.Event) error { return nil }))
+	bus.Subscribe("order.placed", application.EventHandlerFunc(func(context.Context, events.Event) error { return nil }))
 	if err := bus.Publish(ctx, orderPlaced{}); !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected context.Canceled, got %v", err)
 	}

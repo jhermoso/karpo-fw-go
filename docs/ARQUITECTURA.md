@@ -19,10 +19,10 @@ framework es:
 | `abstract` + métodos `*Internal` (template method) | **composición**: tipo genérico + estrategia inyectada | `sqlrepo.Repository` + `Mapping` + `Dialect` |
 | `virtual` / hooks | funciones o interfaces inyectadas | `Mapping.Hydrate`, `CustomSQL` |
 | restricciones `where T : ...` | restricciones de tipos genéricos | `ID domain.Identifier`, `T domain.AggregateRoot[ID]` |
-| algoritmos genéricos | **funciones libres genéricas** | `spec.And`, `application.Execute`, `domain.SameIdentity` |
+| algoritmos genéricos | **funciones libres genéricas** | `spec.And`, `orchestration.Execute`, `domain.SameIdentity` |
 | excepciones | errores tipados que envuelven centinelas | `domain.NotFound`, `errors.Is(err, domain.ErrConflict)` |
 | `Expression<Func<T,bool>>` | **árbol de expresión** propio (datos) | `spec.Expr` |
-| MediatR / decoradores de handlers | handlers tipados + middleware genérico | `application.Chain`, `Transactional`, `Idempotent` |
+| MediatR / decoradores de handlers | handlers tipados + middleware genérico | `application.Chain`, `pipeline.Transactional`, `pipeline.Idempotent` |
 
 > **Trampa del embebido**: una struct embebida nunca ve los métodos de la struct que la contiene
 > (no hay despacho dinámico). Por eso ninguna "clase base" del framework llama a hooks
@@ -44,10 +44,10 @@ framework es:
 | `IValidationResult`, `IError`, excepciones de dominio | `domain.Validation`, `ValidationError`, `RuleViolationError`, centinelas |
 | `IClock` | `domain.Clock` + `domain.SetClock` |
 | `ICommandHandler`, `IQueryHandler` | `application.Handler[In,Out]` (`CommandHandler`, `QueryHandler`) |
-| `IdempotencyCommandHandlerDecorator`, `IIdempotencyStore` | `application.Idempotent`, `application.IdempotencyStore` |
-| `OrchestratorService` | `application.Orchestrator` + `application.Execute` |
-| `OutboxEvent` | `application.Outbox`, `OutboxStore`, `OutboxRelay` |
-| `IBoundedContext` | `application.Module` + `application.Host` |
+| `IdempotencyCommandHandlerDecorator`, `IIdempotencyStore` | `pipeline.Idempotent`, `application.IdempotencyStore` |
+| `OrchestratorService` | `orchestration.Orchestrator` + `orchestration.Execute` |
+| `OutboxEvent` | `application.OutboxStore` (contrato), `outbox.Recorder`, `outbox.Relay` |
+| `IBoundedContext` | `application.Module` (contrato) + `hosting.Host` |
 | `IDtoMapper` | `application.Mapper`, `domain.MapPage` |
 
 ---
@@ -219,12 +219,34 @@ motor, CDC, o un proceso de backfill antes del `Swap`).
 
 ## 6. Capa de aplicación
 
+### Contratos e implementaciones separados
+Igual que en Karpo C# (`Fw.Domain.Contracts`, `Fw.Application.Contracts`), los contratos viven
+separados de las implementaciones, pero en Go la unidad de dependencia es el **paquete**
+(importar un paquete no arrastra nada más), así que la separación se hace por paquetes y la
+garantiza `archtest`:
+
+| Contratos (solo stdlib + otros contratos) | Implementaciones |
+|---|---|
+| `pkg/domain`, `pkg/domain/spec` — tácticos + bloques puros | adaptadores en `pkg/persistence/...` |
+| `pkg/application` — handlers, middleware, puertos, módulos | `pipeline`, `orchestration`, `outbox`, `hosting` |
+| `pkg/log`, `pkg/cache`, `pkg/time` | `log/vanilla`, `cache/memory`, `time/real`, `time/fake` |
+
+"Contrato" no significa "solo interfaces": igual que `Fw.Domain.Contracts` contiene `Entity`,
+`ValueObject` o `Specification`, los paquetes de contratos incluyen los bloques puros que las
+interfaces necesitan (la interfaz sellada `AggregateRoot` exige a `BaseAggregateRoot` en su
+mismo paquete). Lo que nunca contienen es E/S, dependencias de terceros ni implementaciones con
+comportamiento propio.
+
+Si más adelante hace falta versionar los contratos a otro ritmo (p. ej. ErpKernel o el generador
+en otros repositorios), estos paquetes se pueden promover a un módulo Go `contracts` sin cambiar
+su código.
+
 - **Handlers tipados** (`Handler[In,Out]`) y **middleware genérico** (`Chain`): `Validating`,
   `Transactional`, `RetryOnConflict`, `Idempotent`, `Logging`. Sin mediador por reflexión: el
   compilador comprueba cada par comando → resultado.
 - **Orchestrator**: carga el agregado **dentro** de la transacción, ejecuta el comportamiento,
   guarda con concurrencia optimista y registra los eventos **en la misma transacción**
-  (outbox). `application.Execute` devuelve un resultado tipado.
+  (outbox). `orchestration.Execute` devuelve un resultado tipado.
 - **Outbox + Relay**: entrega *at-least-once* con reintentos, `correlation_id` y `causation_id`.
   Los eventos se deserializan con `events.Registry` y se suscriben con tipo
   (`events.Subscribe[E]`).
@@ -235,12 +257,17 @@ motor, CDC, o un proceso de backfill antes del `Swap`).
 
 ## 7. Guardián de arquitectura
 
-`pkg/testing/archtest` verifica en cada `go test`:
-1. **Dominio puro** (lista blanca): solo biblioteca estándar y el propio árbol `pkg/domain`.
-2. **Aplicación**: sin distribución, sin persistencia, sin `database/sql`, sin terceros.
-3. **Distribución**: no alcanza la persistencia.
-4. **Persistencia**: agnóstica de drivers (sin dependencias de terceros).
-5. **Eventos**: independientes de aplicación y persistencia.
+`pkg/testing/archtest` verifica en cada `go test` (listas blancas con patrones al estilo Go:
+`std`, `ruta/...`, `ruta`):
+1. **Contratos de dominio puros**: solo biblioteca estándar y el propio árbol `pkg/domain`.
+2. **Contratos de aplicación** (`pkg/application`, `log`, `cache`, `time`): solo contratos; nunca
+   sus propias implementaciones ni adaptadores.
+3. **Implementaciones de aplicación** (`pipeline`, `orchestration`, `outbox`, `hosting`): solo
+   dependen de contratos.
+4. **Distribución**: no alcanza la persistencia.
+5. **Persistencia**: agnóstica de drivers, sin terceros, sin distribución ni implementaciones de
+   aplicación.
+6. **Eventos**: implementan contratos de aplicación y no dependen de nada más.
 
 Los contextos delimitados pueden reutilizarlo (ver `examples/parties/parties_test.go`).
 

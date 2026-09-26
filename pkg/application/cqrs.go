@@ -1,6 +1,15 @@
-// Package application implements the application layer: use-case handlers (CQRS), cross-cutting
-// middleware (transactions, validation, logging, idempotency, retries), the aggregate
-// Orchestrator, the transactional outbox and bounded-context modules.
+// Package application holds the CONTRACTS of the application layer (the Go counterpart of
+// Paranoia.Karpo.Fw.Application.Contracts): use-case handlers (CQRS) and their middleware type,
+// the ports the layer depends on (event publishing and recording, outbox store, idempotency
+// store, event decoding), bounded-context modules and the request context keys.
+//
+// It contains no implementation with behaviour of its own; the architecture tests enforce that
+// it imports only the standard library and other contract packages. Implementations live in:
+//
+//	application/pipeline       Validating, Transactional, RetryOnConflict, Idempotent, Logging
+//	application/orchestration  Orchestrator, Execute
+//	application/outbox         Recorder (EventRecorder over an OutboxStore), Relay
+//	application/hosting        Host (module lifecycle)
 //
 // Design choice versus the C# framework: there is no reflection-based mediator. Handlers are
 // plain typed values injected where they are used and decorated with generic middleware

@@ -1,8 +1,9 @@
-// Package events provides domain event dispatching, typed subscriptions and a type registry used
-// to decode serialized events (outbox relay, message brokers).
+// Package events provides typed subscriptions and the event type Registry used to decode
+// serialized events (outbox relay, message brokers). It implements application.EventDecoder.
 //
-// The event contract itself (domain.Event) lives in the domain layer; this package only moves
-// events around.
+// Contracts live elsewhere: domain.Event in the domain layer and application.Dispatcher /
+// application.EventHandler in the application contracts. events/inprocess is an in-memory
+// Dispatcher.
 package events
 
 import (
@@ -12,33 +13,15 @@ import (
 	"reflect"
 	"sync"
 
+	"github.com/jhermoso/karpo-fw-go/pkg/application"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
 // Event aliases domain.Event for convenience.
 type Event = domain.Event
 
-// Wildcard subscribes a handler to every event type.
-const Wildcard = "*"
-
-// Handler handles a domain event.
-type Handler interface {
-	Handle(ctx context.Context, evt Event) error
-}
-
-// HandlerFunc adapts a function into a Handler.
-type HandlerFunc func(ctx context.Context, evt Event) error
-
-// Handle calls fn.
-func (fn HandlerFunc) Handle(ctx context.Context, evt Event) error { return fn(ctx, evt) }
-
-// Dispatcher publishes events to subscribers.
-type Dispatcher interface {
-	// Publish delivers evt to every handler subscribed to evt.EventType() and to Wildcard.
-	Publish(ctx context.Context, evt Event) error
-	// Subscribe registers a handler for an event type and returns an unsubscribe function.
-	Subscribe(eventType string, h Handler) (unsubscribe func())
-}
+// Wildcard subscribes a handler to every event type (application.WildcardEventType).
+const Wildcard = application.WildcardEventType
 
 // TypeOf returns the event type name declared by the value type E.
 // Events must be value types whose EventType method works on the zero value.
@@ -53,8 +36,8 @@ func TypeOf[E Event]() string {
 // Subscribe registers a typed handler: fn only receives events of concrete type E.
 //
 //	events.Subscribe(bus, func(ctx context.Context, e parties.PartyRegistered) error { ... })
-func Subscribe[E Event](d Dispatcher, fn func(ctx context.Context, evt E) error) (unsubscribe func()) {
-	return d.Subscribe(TypeOf[E](), HandlerFunc(func(ctx context.Context, evt Event) error {
+func Subscribe[E Event](d application.Dispatcher, fn func(ctx context.Context, evt E) error) (unsubscribe func()) {
+	return d.Subscribe(TypeOf[E](), application.EventHandlerFunc(func(ctx context.Context, evt Event) error {
 		typed, ok := evt.(E)
 		if !ok {
 			return fmt.Errorf("events: handler for %s received %T", TypeOf[E](), evt)
@@ -103,3 +86,5 @@ func (r *Registry) Decode(eventType string, payload []byte) (Event, error) {
 func Encode(evt Event) ([]byte, error) {
 	return json.Marshal(evt)
 }
+
+var _ application.EventDecoder = (*Registry)(nil)
