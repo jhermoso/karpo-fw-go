@@ -115,6 +115,46 @@ func AssertTreeOnlyImports(t *testing.T, packageDir string, allowStdlib bool, al
 	}
 }
 
+// Std is the pattern matching every standard library import in AssertOnlyImports.
+const Std = "std"
+
+// Matches reports whether an import path matches a pattern: "std" (standard library),
+// "path/..." (path and all its sub-packages) or an exact package path.
+func Matches(pattern, path string) bool {
+	switch {
+	case pattern == Std:
+		return IsStdlib(path)
+	case strings.HasSuffix(pattern, "/..."):
+		root := strings.TrimSuffix(pattern, "/...")
+		return path == root || strings.HasPrefix(path, root+"/")
+	default:
+		return path == pattern
+	}
+}
+
+// AssertOnlyImports fails when the package in dir (and its sub-packages when recursive)
+// imports anything not matching one of the patterns (see Matches). It is the allow-list rule
+// used to keep contract packages free of implementations.
+func AssertOnlyImports(t *testing.T, dir string, recursive bool, patterns ...string) {
+	t.Helper()
+	imps, err := Imports(dir, recursive)
+	if err != nil {
+		t.Fatalf("archtest: %v", err)
+	}
+	for _, imp := range imps {
+		ok := false
+		for _, p := range patterns {
+			if Matches(p, imp.Path) {
+				ok = true
+				break
+			}
+		}
+		if !ok {
+			t.Errorf("architecture violation: %s imports %q, allowed: %v", rel(dir, imp.File), imp.Path, patterns)
+		}
+	}
+}
+
 // AssertNoThirdParty fails when packageDir (recursively) imports any non-standard, non-module path.
 func AssertNoThirdParty(t *testing.T, packageDir, modulePath string) {
 	t.Helper()

@@ -1,4 +1,4 @@
-// Package inprocess provides an in-memory implementation of events.Dispatcher.
+// Package inprocess provides an in-memory implementation of application.Dispatcher.
 package inprocess
 
 import (
@@ -6,12 +6,13 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/jhermoso/karpo-fw-go/pkg/events"
+	"github.com/jhermoso/karpo-fw-go/pkg/application"
+	"github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
 type subscription struct {
 	id      uint64
-	handler events.Handler
+	handler application.EventHandler
 }
 
 // Bus is a thread-safe in-memory event dispatcher. Handlers run synchronously in the
@@ -22,16 +23,13 @@ type Bus struct {
 	subscribers map[string][]subscription
 }
 
-// InProcessBus is kept as an alias for backwards compatibility.
-type InProcessBus = Bus
-
 // New creates a new Bus.
 func New() *Bus {
 	return &Bus{subscribers: make(map[string][]subscription)}
 }
 
-// Subscribe registers a handler for an event type (or events.Wildcard).
-func (b *Bus) Subscribe(eventType string, handler events.Handler) func() {
+// Subscribe registers a handler for an event type (or application.WildcardEventType).
+func (b *Bus) Subscribe(eventType string, handler application.EventHandler) func() {
 	b.mu.Lock()
 	b.counter++
 	subID := b.counter
@@ -52,14 +50,14 @@ func (b *Bus) Subscribe(eventType string, handler events.Handler) func() {
 }
 
 // Publish runs every handler subscribed to evt.EventType() and to the wildcard.
-func (b *Bus) Publish(ctx context.Context, evt events.Event) error {
+func (b *Bus) Publish(ctx context.Context, evt domain.Event) error {
 	if evt == nil {
 		return errors.New("inprocess: cannot publish nil event")
 	}
 
 	b.mu.RLock()
 	subs := append([]subscription(nil), b.subscribers[evt.EventType()]...)
-	subs = append(subs, b.subscribers[events.Wildcard]...)
+	subs = append(subs, b.subscribers[application.WildcardEventType]...)
 	b.mu.RUnlock()
 
 	var errs []error
@@ -74,4 +72,4 @@ func (b *Bus) Publish(ctx context.Context, evt events.Event) error {
 	return errors.Join(errs...)
 }
 
-var _ events.Dispatcher = (*Bus)(nil)
+var _ application.Dispatcher = (*Bus)(nil)

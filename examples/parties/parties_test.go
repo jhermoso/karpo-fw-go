@@ -20,6 +20,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/examples/parties/domain"
 	"github.com/jhermoso/karpo-fw-go/examples/parties/infrastructure"
 	"github.com/jhermoso/karpo-fw-go/pkg/application"
+	appoutbox "github.com/jhermoso/karpo-fw-go/pkg/application/outbox"
 	"github.com/jhermoso/karpo-fw-go/pkg/distribution"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/events"
@@ -43,7 +44,7 @@ func compose(t *testing.T) *env {
 	sw := hotswap.New(memory.NewStore("memory"))
 	repo := hotswap.Repository(sw, infrastructure.RepositoryFactory)
 	outbox := hotswap.Outbox(sw, infrastructure.OutboxFactory)
-	svc := papp.NewService(repo, sw, application.NewOutbox(outbox), memory.NewIdempotencyStore())
+	svc := papp.NewService(repo, sw, appoutbox.NewRecorder(outbox), memory.NewIdempotencyStore())
 
 	mux := http.NewServeMux()
 	pdist.NewModule(svc).RegisterRoutes(mux)
@@ -218,7 +219,7 @@ func TestParties_EndToEnd_WithLiveDatabaseSwap(t *testing.T) {
 		return nil
 	})
 	events.Subscribe(bus, func(context.Context, domain.PartyRenamed) error { renamed++; return nil })
-	relay := application.NewOutboxRelay(e.outbox, reg, bus)
+	relay := appoutbox.NewRelay(e.outbox, reg, bus)
 	n, err := relay.RelayOnce(ctx)
 	if err != nil {
 		t.Fatal(err)

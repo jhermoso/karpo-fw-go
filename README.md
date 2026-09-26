@@ -21,7 +21,7 @@ Puntos clave:
 - **Batería de conformidad**: toda implementación del repositorio debe demostrar que cada
   especificación devuelve en la base de datos exactamente lo mismo que en memoria.
 
-📖 Diseño completo: [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md)
+📖 Diseño completo: [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) · Inventario de patrones: [docs/INVENTARIO-PATRONES.md](docs/INVENTARIO-PATRONES.md)
 
 ---
 
@@ -31,7 +31,7 @@ $$\text{Distribution} \longrightarrow \text{Application} \longrightarrow \text{D
 
 ```
 pkg/
-├── domain/               # DOMINIO (puro: solo biblioteca estándar)
+├── domain/               # CONTRATOS DE DOMINIO (= Fw.Domain.Contracts; puro: solo biblioteca estándar)
 │   ├── identifier.go     # Identifier, UUID v7 monótono, LongID, UUIDBacked/LongBacked
 │   ├── entity.go         # Entity[ID], BaseEntity, SameIdentity
 │   ├── aggregate.go      # AggregateRoot[ID] (sellada), BaseAggregateRoot: versión + eventos
@@ -43,17 +43,21 @@ pkg/
 │   ├── page.go           # PageRequest[T], Page[T]
 │   └── spec/             # Especificaciones: árbol de expresión + campos tipados
 │
-├── application/          # APLICACIÓN
+├── application/          # CONTRATOS DE APLICACIÓN (= Fw.Application.Contracts)
 │   ├── cqrs.go           # Handler[In,Out], Middleware, Chain
-│   ├── behavior.go       # Validating, Transactional, RetryOnConflict, Logging
-│   ├── idempotency.go    # Idempotent + IdempotencyStore
-│   ├── orchestrator.go   # Orchestrator + Execute (carga→comportamiento→guardado→eventos)
-│   ├── outbox.go         # Outbox transaccional + OutboxRelay
-│   ├── module.go         # Module/Host (bounded contexts con dependencias)
-│   └── context.go, dto.go
+│   ├── ports.go          # Publisher, Dispatcher, EventHandler, EventRecorder, EventDecoder,
+│   │                     # OutboxStore/OutboxMessage, IdempotencyStore, Validatable...
+│   ├── module.go         # Module, Starter, Stopper (bounded contexts)
+│   ├── context.go, dto.go
+│   │   ── implementaciones ──
+│   ├── pipeline/         # Validating, Transactional, RetryOnConflict, Idempotent, Logging
+│   ├── orchestration/    # Orchestrator + Execute (carga→comportamiento→guardado→eventos)
+│   ├── outbox/           # Recorder (outbox transaccional) + Relay
+│   └── hosting/          # Host (ciclo de vida de módulos por dependencias)
 │
+├── log/, cache/, time/   # contratos transversales (implementaciones en subpaquetes)
 ├── distribution/         # DISTRIBUCIÓN (HTTP, RFC 9457, correlación, health)
-├── events/               # Dispatcher, suscripción tipada, Registry; inprocess/
+├── events/               # Registry + suscripción tipada; inprocess/ (Dispatcher en memoria)
 │
 ├── persistence/          # ADAPTADORES
 │   ├── memory/           # Repositorio, UoW con rollback, outbox, idempotencia en memoria
@@ -63,7 +67,7 @@ pkg/
 │   └── hotswap/          # Cambio de backend en caliente
 │
 └── testing/
-    ├── archtest/         # Guardián de arquitectura (listas blancas de imports)
+    ├── archtest/         # Guardián de arquitectura (contratos solo importan contratos)
     ├── repotest/         # Batería de conformidad del contrato de repositorio
     └── testkit/          # Arnés: reloj falso, bus, store y outbox en memoria
 

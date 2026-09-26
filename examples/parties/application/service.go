@@ -8,6 +8,8 @@ import (
 
 	"github.com/jhermoso/karpo-fw-go/examples/parties/domain"
 	app "github.com/jhermoso/karpo-fw-go/pkg/application"
+	"github.com/jhermoso/karpo-fw-go/pkg/application/orchestration"
+	"github.com/jhermoso/karpo-fw-go/pkg/application/pipeline"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
 )
@@ -121,11 +123,11 @@ type Service struct {
 
 // NewService wires the use cases. recorder is optional (outbox).
 func NewService(repo domain.Repository, uow fw.UnitOfWork, recorder app.EventRecorder, idem app.IdempotencyStore) *Service {
-	var opts []app.OrchestratorOption
+	var opts []orchestration.Option
 	if recorder != nil {
-		opts = append(opts, app.WithOutbox(recorder))
+		opts = append(opts, orchestration.WithOutbox(recorder))
 	}
-	orch := app.NewOrchestrator[domain.PartyID, *domain.Party](repo, uow, opts...)
+	orch := orchestration.New[domain.PartyID, *domain.Party](repo, uow, opts...)
 
 	register := app.HandlerFunc[RegisterParty, PartyDTO](func(ctx context.Context, c RegisterParty) (PartyDTO, error) {
 		taxID, err := domain.NewTaxID(c.TaxID)
@@ -184,13 +186,13 @@ func NewService(repo domain.Repository, uow fw.UnitOfWork, recorder app.EventRec
 
 	return &Service{
 		Register: app.Chain[RegisterParty, PartyDTO](register,
-			app.Idempotent[RegisterParty, PartyDTO](idem, 24*time.Hour),
-			app.Validating[RegisterParty, PartyDTO](),
-			app.Transactional[RegisterParty, PartyDTO](uow)),
+			pipeline.Idempotent[RegisterParty, PartyDTO](idem, 24*time.Hour),
+			pipeline.Validating[RegisterParty, PartyDTO](),
+			pipeline.Transactional[RegisterParty, PartyDTO](uow)),
 		Rename: app.Chain[RenameParty, PartyDTO](rename,
-			app.RetryOnConflict[RenameParty, PartyDTO](3, 10*time.Millisecond)),
+			pipeline.RetryOnConflict[RenameParty, PartyDTO](3, 10*time.Millisecond)),
 		AddContact: app.Chain[AddContact, PartyDTO](addContact,
-			app.RetryOnConflict[AddContact, PartyDTO](3, 10*time.Millisecond)),
+			pipeline.RetryOnConflict[AddContact, PartyDTO](3, 10*time.Millisecond)),
 		Get:    get,
 		Search: search,
 	}

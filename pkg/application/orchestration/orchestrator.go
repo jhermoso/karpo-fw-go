@@ -1,23 +1,16 @@
-package application
+// Package orchestration implements the aggregate Orchestrator (the Go counterpart of the C#
+// OrchestratorService): load -> behaviour -> save with optimistic concurrency -> record events,
+// all inside one unit of work.
+package orchestration
 
 import (
 	"context"
 	"errors"
 	"fmt"
 
+	"github.com/jhermoso/karpo-fw-go/pkg/application"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
-
-// EventRecorder durably records domain events inside the current unit of work
-// (typically the transactional outbox, see Outbox).
-type EventRecorder interface {
-	Record(ctx context.Context, events []domain.Event) error
-}
-
-// Publisher delivers a domain event to subscribers. events.Dispatcher satisfies it.
-type Publisher interface {
-	Publish(ctx context.Context, evt domain.Event) error
-}
 
 // ErrEventsNotPublished reports that the state change was committed but some events could not be
 // published in-process after the commit. The operation itself succeeded; use the outbox when
@@ -32,35 +25,35 @@ var ErrEventsNotPublished = errors.New("state committed but events not published
 type Orchestrator[ID domain.Identifier, T domain.AggregateRoot[ID]] struct {
 	repo      domain.Repository[ID, T]
 	uow       domain.UnitOfWork
-	recorder  EventRecorder
-	publisher Publisher
+	recorder  application.EventRecorder
+	publisher application.Publisher
 }
 
-// OrchestratorOption configures an Orchestrator.
-type OrchestratorOption func(*orchestratorConfig)
+// Option configures an Orchestrator.
+type Option func(*config)
 
-type orchestratorConfig struct {
-	recorder  EventRecorder
-	publisher Publisher
+type config struct {
+	recorder  application.EventRecorder
+	publisher application.Publisher
 }
 
 // WithOutbox records the aggregate's events through r inside the same unit of work as the state
 // change (at-least-once delivery via an OutboxRelay).
-func WithOutbox(r EventRecorder) OrchestratorOption {
-	return func(c *orchestratorConfig) { c.recorder = r }
+func WithOutbox(r application.EventRecorder) Option {
+	return func(c *config) { c.recorder = r }
 }
 
 // WithPublisher publishes the aggregate's events in-process after a successful commit
 // (best effort: failures return ErrEventsNotPublished but the state stays committed).
-func WithPublisher(p Publisher) OrchestratorOption {
-	return func(c *orchestratorConfig) { c.publisher = p }
+func WithPublisher(p application.Publisher) Option {
+	return func(c *config) { c.publisher = p }
 }
 
-// NewOrchestrator creates an Orchestrator.
-func NewOrchestrator[ID domain.Identifier, T domain.AggregateRoot[ID]](
-	repo domain.Repository[ID, T], uow domain.UnitOfWork, opts ...OrchestratorOption,
+// New creates an Orchestrator.
+func New[ID domain.Identifier, T domain.AggregateRoot[ID]](
+	repo domain.Repository[ID, T], uow domain.UnitOfWork, opts ...Option,
 ) *Orchestrator[ID, T] {
-	var cfg orchestratorConfig
+	var cfg config
 	for _, opt := range opts {
 		opt(&cfg)
 	}
