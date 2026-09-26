@@ -1,53 +1,40 @@
-// Package application defines strategic application layer abstractions.
-// It provides CQRS primitives (Commands, Queries, Handlers) and an in-process Mediator with Pipeline Behaviors.
+// Package application implements the application layer: use-case handlers (CQRS), cross-cutting
+// middleware (transactions, validation, logging, idempotency, retries), the aggregate
+// Orchestrator, the transactional outbox and bounded-context modules.
+//
+// Design choice versus the C# framework: there is no reflection-based mediator. Handlers are
+// plain typed values injected where they are used and decorated with generic middleware
+// (the same approach as the C# IdempotencyCommandHandlerDecorator), so every
+// command -> result pairing is checked by the compiler.
 package application
 
-import (
-	"context"
+import "context"
 
-	"github.com/jhermoso/karpo-fw-go/pkg/result"
-)
-
-// Command represents an action intended to mutate domain state.
-type Command[TResult any] interface {
-	isCommand()
+// Handler executes a use case: In is the command or query, Out its result.
+type Handler[In, Out any] interface {
+	Handle(ctx context.Context, in In) (Out, error)
 }
 
-// BaseCommand is a convenience struct to embed in concrete command structs.
-type BaseCommand[TResult any] struct{}
+// HandlerFunc adapts a function into a Handler.
+type HandlerFunc[In, Out any] func(ctx context.Context, in In) (Out, error)
 
-func (BaseCommand[TResult]) isCommand() {}
+// Handle calls fn.
+func (fn HandlerFunc[In, Out]) Handle(ctx context.Context, in In) (Out, error) { return fn(ctx, in) }
 
-// CommandHandler processes a specific command type and returns a typed Result.
-type CommandHandler[TCommand any, TResult any] interface {
-	Handle(ctx context.Context, cmd TCommand) result.Result[TResult]
-}
+// CommandHandler handles a command (state change). Use Transactional middleware on it.
+type CommandHandler[C, R any] = Handler[C, R]
 
-// CommandHandlerFunc allows using a function as a CommandHandler.
-type CommandHandlerFunc[TCommand any, TResult any] func(ctx context.Context, cmd TCommand) result.Result[TResult]
+// QueryHandler handles a query (no side effects).
+type QueryHandler[Q, R any] = Handler[Q, R]
 
-func (fn CommandHandlerFunc[TCommand, TResult]) Handle(ctx context.Context, cmd TCommand) result.Result[TResult] {
-	return fn(ctx, cmd)
-}
+// Middleware decorates a handler with a cross-cutting concern (the Go equivalent of a
+// MediatR pipeline behavior or a C# handler decorator), preserving static types.
+type Middleware[In, Out any] func(next Handler[In, Out]) Handler[In, Out]
 
-// Query represents a request to retrieve data without side effects.
-type Query[TResult any] interface {
-	isQuery()
-}
-
-// BaseQuery is a convenience struct to embed in concrete query structs.
-type BaseQuery[TResult any] struct{}
-
-func (BaseQuery[TResult]) isQuery() {}
-
-// QueryHandler processes a specific query type and returns a typed Result.
-type QueryHandler[TQuery any, TResult any] interface {
-	Handle(ctx context.Context, query TQuery) result.Result[TResult]
-}
-
-// QueryHandlerFunc allows using a function as a QueryHandler.
-type QueryHandlerFunc[TQuery any, TResult any] func(ctx context.Context, query TQuery) result.Result[TResult]
-
-func (fn QueryHandlerFunc[TQuery, TResult]) Handle(ctx context.Context, query TQuery) result.Result[TResult] {
-	return fn(ctx, query)
+// Chain wraps h with middlewares; the first middleware is the outermost one.
+func Chain[In, Out any](h Handler[In, Out], middlewares ...Middleware[In, Out]) Handler[In, Out] {
+	for i := len(middlewares) - 1; i >= 0; i-- {
+		h = middlewares[i](h)
+	}
+	return h
 }

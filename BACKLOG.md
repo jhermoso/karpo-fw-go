@@ -22,12 +22,28 @@ Registro de tareas pendientes, ideas de tooling y mejoras para el ecosistema Kar
 ## 🚀 Migración y Servicios (Roadmap)
 
 ### 2. Bounded Context Piloto: `Karpo.Parties` en Go
-- Implementar el primer servicio de negocio real migrado desde C#:
-  - Agregado `Party` y Value Objects (`TaxId`, `PartyName`, `Address`, etc.).
-  - Contratos de repositorio (`domain.ReadRepository`, `domain.WriteRepository`).
-  - Casos de uso / CQRS (`CreatePartyCommand`, `GetPartyByIdQuery`).
-  - Persistencia con `ent` y SQLite/PostgreSQL.
-  - Endpoints HTTP usando `pkg/distribution`.
+- ✅ Ejemplo de referencia en `examples/parties` (agregado con hijos, VOs, eventos,
+  especificaciones de colección y custom, CQRS, outbox, HTTP, cambio en caliente).
+- Pendiente: portar el modelo real de `ErpKernel.Parties` / `ErpDetail.Parties` (PartyRole,
+  jerarquía de roles, vigencias) sobre el mismo patrón y compartir tablas con el C# en
+  SQL Server/Oracle (`oracle.WithDotNetGUIDs`, `UNIQUEIDENTIFIER`).
+- ~~Persistencia con `ent`~~: descartado; `ent` no soporta Oracle ni SQL Server. Sustituido por
+  `pkg/persistence/sqlrepo` (agnóstico, un dialecto por motor).
+
+### 2b. Framework: siguientes pasos
+- **Migraciones de esquema** por dialecto (equivalente a `IDatabaseSchemaManager`): hoy el DDL
+  vive en cada contexto (`infrastructure.Schema`).
+- **Componentes transversales de `BusinessEntity`** (auditable, activable, autorizable,
+  trazable) como piezas componibles, no como clase base.
+- **Lenguaje ubicuo común** (`Name`, `Email`, `ValidPeriod`, `Percentage`, `Actor`,
+  `UTCDateTime`...) en un paquete `pkg/domain/ubiquitous`.
+- **Outbox multi-instancia**: `SELECT ... FOR UPDATE SKIP LOCKED` (PostgreSQL/Oracle/MySQL) y
+  `READPAST` (SQL Server) para varios relays en paralelo.
+- **Idempotencia persistente** (`sqlrepo` store) para despliegues con varias réplicas.
+- **Herramienta de backfill/dual-write** para acompañar a `hotswap.Swap` cuando haya que mover
+  datos entre motores.
+- **Filtros HTTP → especificaciones** (lista blanca de campos) para búsquedas genéricas.
+- **CI en Linux** con `go test -race` (en Windows no hay compilador C) y `integration/run.ps1`.
 
 ### 3. PoC Frontend: Evaluación de Stack Ligero (Svelte 5 / SolidJS)
 - Prototipar la interfaz de listado y ficha de `Parties`.

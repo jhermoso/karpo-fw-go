@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/jhermoso/karpo-fw-go/pkg/application"
+	"github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/log"
 )
 
@@ -100,13 +102,31 @@ func TenantActorContext() Middleware {
 	}
 }
 
+// CorrelationHeader carries the correlation id of a business flow across services.
+const CorrelationHeader = "X-Correlation-ID"
+
+// Correlation propagates X-Correlation-ID (generating one when absent) into the application
+// context, so logs and outbox messages of the whole flow share it, and echoes it in the response.
+func Correlation() Middleware {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			id := r.Header.Get(CorrelationHeader)
+			if id == "" {
+				id = domain.NewUUID().String()
+			}
+			w.Header().Set(CorrelationHeader, id)
+			next.ServeHTTP(w, r.WithContext(application.WithCorrelationID(r.Context(), id)))
+		})
+	}
+}
+
 // CORS provides standard permissive Cross-Origin Resource Sharing headers for API endpoints.
 func CORS() Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Access-Control-Allow-Origin", "*")
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Tenant-ID, X-Actor-ID, X-Organization-ID")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Tenant-ID, X-Actor-ID, X-Organization-ID, X-Correlation-ID")
 
 			if r.Method == http.MethodOptions {
 				w.WriteHeader(http.StatusNoContent)
