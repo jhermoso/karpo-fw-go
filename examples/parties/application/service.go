@@ -30,6 +30,8 @@ type PartyDTO struct {
 	Active       bool           `json:"active"`
 	RegisteredAt time.Time      `json:"registeredAt"`
 	Version      int64          `json:"version"`
+	CreatedBy    string         `json:"createdBy,omitempty"`
+	ModifiedBy   string         `json:"modifiedBy,omitempty"`
 	Contacts     []ContactDTO   `json:"contacts"`
 }
 
@@ -41,7 +43,8 @@ func ToDTO(p *domain.Party) PartyDTO {
 	}
 	return PartyDTO{
 		ID: p.ID(), Type: string(p.Type()), LegalName: p.LegalName(), TaxID: p.TaxID().String(),
-		Active: p.Active(), RegisteredAt: p.RegisteredAt(), Version: p.Version(), Contacts: contacts,
+		Active: p.IsActive(), RegisteredAt: p.RegisteredAt(), Version: p.Version(), Contacts: contacts,
+		CreatedBy: p.CreatedBy().Name, ModifiedBy: p.ModifiedBy().Name,
 	}
 }
 
@@ -121,11 +124,14 @@ type Service struct {
 	Search     app.QueryHandler[SearchParties, fw.Page[PartyDTO]]
 }
 
-// NewService wires the use cases. recorder is optional (outbox).
-func NewService(repo domain.Repository, uow fw.UnitOfWork, recorder app.EventRecorder, idem app.IdempotencyStore) *Service {
+// NewService wires the use cases. recorder (outbox) and audit are optional.
+func NewService(repo domain.Repository, uow fw.UnitOfWork, recorder app.EventRecorder, idem app.IdempotencyStore, audit app.AuditLog) *Service {
 	var opts []orchestration.Option
 	if recorder != nil {
 		opts = append(opts, orchestration.WithOutbox(recorder))
+	}
+	if audit != nil {
+		opts = append(opts, orchestration.WithAuditLog(audit))
 	}
 	orch := orchestration.New[domain.PartyID, *domain.Party](repo, uow, opts...)
 

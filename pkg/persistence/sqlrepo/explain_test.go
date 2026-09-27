@@ -4,9 +4,12 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
+	"github.com/jhermoso/karpo-fw-go/pkg/domain/traits"
+	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/mysql"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/oracle"
@@ -136,5 +139,22 @@ func TestMapping_RejectsUnsafeIdentifiers(t *testing.T) {
 func TestEscapeLike(t *testing.T) {
 	if got := sqlrepo.EscapeLike(`50%_off[x]\`); got != `50\%\_off\[x]\\` {
 		t.Fatalf("unexpected escape: %s", got)
+	}
+}
+
+func TestAuditStampValues_ZeroStampIsNull(t *testing.T) {
+	vals := sqlrepo.AuditStampValues(nil, traits.AuditStamp{})
+	for _, c := range sqlrepo.AuditColumns {
+		if v, ok := vals[c]; !ok || v != nil {
+			t.Fatalf("column %s of an unstamped aggregate must be NULL, got %#v", c, v)
+		}
+	}
+	ana, _ := vocab.NewActor(domain.NewUUID(), "Ana")
+	vals = sqlrepo.AuditStampValues(nil, traits.AuditStamp{CreatedAt: time.Now(), CreatedBy: ana})
+	if vals["created_by_id"] != ana.PartyID.String() || vals["created_by_name"] != "Ana" || vals["modified_at"] != nil {
+		t.Fatalf("stamp values: %#v", vals)
+	}
+	if vals = sqlrepo.AuditStampValues(nil, traits.AuditStamp{CreatedAt: time.Now(), CreatedBy: vocab.SystemActor}); vals["created_by_id"] != nil || vals["created_by_name"] != "System" {
+		t.Fatalf("the system actor has no party id: %#v", vals)
 	}
 }

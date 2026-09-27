@@ -10,6 +10,7 @@ import (
 	"time"
 
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
+	"github.com/jhermoso/karpo-fw-go/pkg/domain/traits"
 )
 
 // Kind is the stable aggregate type name.
@@ -68,20 +69,22 @@ type Contact struct {
 	Primary bool
 }
 
-// Party is the aggregate root.
+// Party is the aggregate root. Cross-cutting traits are composed, not inherited: activation
+// (on/off) and the audit stamp (created/modified by, stamped by the application layer).
 type Party struct {
 	fw.BaseAggregateRoot[PartyID]
+	traits.Activation
+	traits.Audited
 	partyType    PartyType
 	legalName    string
 	taxID        TaxID
-	active       bool
 	registeredAt time.Time
 	contacts     []Contact
 }
 
 // Register creates a new active party and raises PartyRegistered.
 func Register(id PartyID, t PartyType, legalName string, taxID TaxID) (*Party, error) {
-	p, err := Reconstitute(id, t, legalName, taxID, true, fw.Now(), nil)
+	p, err := Reconstitute(id, t, legalName, taxID, true, fw.Now(), traits.AuditStamp{}, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +93,8 @@ func Register(id PartyID, t PartyType, legalName string, taxID TaxID) (*Party, e
 }
 
 // Reconstitute rebuilds a party from persisted state (no events, invariants re-checked).
-func Reconstitute(id PartyID, t PartyType, legalName string, taxID TaxID, active bool, registeredAt time.Time, contacts []Contact) (*Party, error) {
+func Reconstitute(id PartyID, t PartyType, legalName string, taxID TaxID, active bool, registeredAt time.Time,
+	audit traits.AuditStamp, contacts []Contact) (*Party, error) {
 	base, err := fw.NewBaseAggregateRoot(Kind, id)
 	if err != nil {
 		return nil, err
@@ -103,8 +107,9 @@ func Reconstitute(id PartyID, t PartyType, legalName string, taxID TaxID, active
 		return nil, err
 	}
 	return &Party{
-		BaseAggregateRoot: base, partyType: t, legalName: strings.TrimSpace(legalName), taxID: taxID,
-		active: active, registeredAt: registeredAt.UTC(), contacts: slices.Clone(contacts),
+		BaseAggregateRoot: base, Activation: traits.RestoredActivation(active), Audited: traits.RestoredAudit(audit),
+		partyType: t, legalName: strings.TrimSpace(legalName), taxID: taxID,
+		registeredAt: registeredAt.UTC(), contacts: slices.Clone(contacts),
 	}, nil
 }
 
@@ -116,9 +121,6 @@ func (p *Party) LegalName() string { return p.legalName }
 
 // TaxID returns the tax identifier.
 func (p *Party) TaxID() TaxID { return p.taxID }
-
-// Active reports whether the party is active.
-func (p *Party) Active() bool { return p.active }
 
 // RegisteredAt returns the registration instant.
 func (p *Party) RegisteredAt() time.Time { return p.registeredAt }
@@ -134,7 +136,7 @@ func (p *Party) Rename(name string) error {
 		v.Add("legalName", "required", "legal name is required")
 		return v.Err()
 	}
-	if !p.active {
+	if !p.IsActive() {
 		return fw.Violation("parties.inactive", "an inactive party cannot be renamed")
 	}
 	if name == p.legalName {
@@ -176,8 +178,22 @@ func (p *Party) AddContact(c Contact) error {
 
 // Deactivate marks the party inactive.
 func (p *Party) Deactivate() {
-	if p.active {
-		p.active = false
+	if p.Activation.Deactivate() {
 		p.Raise(PartyDeactivated{EventMeta: p.NewEventMeta()})
+	}
+}
+
+// AuditSnapshot implements traits.Snapshotter: the fields whose changes are audited.
+func (p *Party) AuditSnapshot() map[string]any {
+	contacts := make([]string, len(p.contacts))
+	for i, c := range p.contacts {
+		contacts[i] = string(c.Kind) + ":" + c.Value
+	}
+	return map[string]any{
+		"type":      string(p.partyType),
+		"legalName": p.legalName,
+		"taxId":     p.taxID.String(),
+		"active":    p.IsActive(),
+		"contacts":  strings.Join(contacts, ","),
 	}
 }

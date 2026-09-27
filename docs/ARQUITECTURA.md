@@ -34,6 +34,8 @@ framework es:
 |---|---|
 | `IBaseIdentifier<T>`, `ILongIdentifier<T>`, `ICommonBackedIdentifier` | `domain.Identifier`, `domain.UUID`, `domain.LongID`, `domain.UUIDBacked`, `domain.LongBacked` |
 | `Entity<TEntity,TId>` | `domain.BaseEntity[ID]` + `domain.SameIdentity` |
+| `BusinessEntity` y sus «adjetivos» | composición de `pkg/domain/traits` (ver `RASGOS-TRANSVERSALES.md`) |
+| `AuditLogEntry` + auditoría de `EfUnitOfWork` | `application.AuditLog`, escrito por `orchestration.WithAuditLog` |
 | `EntityRootAggregate`, `IHasDomainEvents` | `domain.AggregateRoot[ID]` (sellada) + `domain.BaseAggregateRoot[ID]` |
 | `ValueObject<T>` | structs comparables con constructor validador (`value_object.go`) |
 | `IDomainEvent`, `DomainEvent<,>` | `domain.Event` + `domain.EventMeta` embebible |

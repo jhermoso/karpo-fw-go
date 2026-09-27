@@ -25,8 +25,8 @@ Leyenda: ✅ hecho · 🟡 parcial · ❌ falta · — no aplica en Go (decisió
 | Unit of Work | ✅ | ✅ memoria, SQL, hotswap | |
 | Errores / validación | ✅ taxonomía + `Validation` | ✅ | ❌ reglas por configuración (`IEntityConfigRulesProvider`) |
 | Clock | ✅ `Clock` | ✅ real / fake | |
-| Rasgos transversales (`IAuditable`, `IAuditableHashChained`, `IAuthorizable`, `ITraceable`, `IActivable`/`IToggleable`, `IExpirable`/`ITimeScoped`/`IHistoriable`, `ICodificable`, `INamed`, `IDescriptable`, `IComentable`, `IRegulated`, `IAccountable`, `INotificable`) | ❌ | ❌ | base de `BusinessEntity`; en Go como componentes componibles |
-| Extensibilidad (`BusinessEntityExtensible`, `TypeRef`) | ❌ | ❌ | |
+| Rasgos transversales | ✅ `pkg/domain/traits` | ✅ | Componibles en lugar de `BusinessEntity`; evaluados en `RASGOS-TRANSVERSALES.md` (autorización, traza y log retirados de la entidad) |
+| Extensibilidad (`BusinessEntityExtensible`, `TypeRef`) | — | — | Retirada (0 usos); pendiente: atributos extendidos declarativos |
 | Lenguaje ubicuo común | ✅ `pkg/domain/vocab` | ✅ | Evaluado término a término en `LENGUAJE-UBICUO.md`; 🟡 `PostalCode` pendiente de `Address` |
 
 ## 2. Estratégicos
@@ -58,7 +58,7 @@ Leyenda: ✅ hecho · 🟡 parcial · ❌ falta · — no aplica en Go (decisió
 | Workflow (definiciones, instancias, pasos, motor) | ❌ | ❌ | contexto completo del Fw |
 | Gestión de esquema / migraciones (`IDatabaseSchemaManager`) | ❌ | ❌ | |
 | Importación y referencias legadas (`ImportRun`, `LegacyReference`) | ❌ | ❌ | |
-| Log de auditoría (`AuditLogEntry`) | ❌ | ❌ | |
+| Log de auditoría (`AuditLogEntry`) | ✅ `application.AuditLog` | ✅ memoria, SQL ×5, hotswap; escrito por el orquestador | ❌ almacén a prueba de manipulación |
 | Log | ✅ `log.Logger` | ✅ `log/vanilla` | |
 | Caché | ✅ `cache.Cache` | ✅ `cache/memory` | ❌ `CatalogCache`, repositorio con caché |
 | Observabilidad (trazas, métricas) | ❌ | ❌ | |
@@ -68,7 +68,7 @@ Leyenda: ✅ hecho · 🟡 parcial · ❌ falta · — no aplica en Go (decisió
 ## 4. Prioridad propuesta antes de Parties
 
 1. ~~Lenguaje ubicuo común~~ ✅ (`pkg/domain/vocab`).
-2. Rasgos transversales componibles (auditable, activable, vigencia...).
+2. ~~Rasgos transversales componibles~~ ✅ (`pkg/domain/traits` + `application.AuditLog`).
 3. Contratos de autorización y actor en contexto.
 4. Eventos de integración.
 5. Gestión de esquema / migraciones por dialecto.

@@ -23,16 +23,16 @@ import (
 func PartyMapping() sqlrepo.Mapping[domain.PartyID, *domain.Party] {
 	return sqlrepo.Mapping[domain.PartyID, *domain.Party]{
 		Table:   "parties",
-		Columns: []string{"party_type", "legal_name", "tax_id", "active", "registered_at"},
+		Columns: sqlrepo.WithAuditColumns("party_type", "legal_name", "tax_id", "active", "registered_at"),
 		Fields:  map[string]string{"type": "party_type"},
 		Dehydrate: func(p *domain.Party) (sqlrepo.Values, error) {
-			return sqlrepo.Values{
+			return sqlrepo.AuditStampValues(sqlrepo.Values{
 				"party_type":    p.Type(),
 				"legal_name":    p.LegalName(),
 				"tax_id":        p.TaxID().String(),
-				"active":        p.Active(),
+				"active":        p.IsActive(),
 				"registered_at": p.RegisteredAt(),
-			}, nil
+			}, p.AuditStamp()), nil
 		},
 		Hydrate: func(row *sqlrepo.Row, children sqlrepo.ChildRows) (*domain.Party, error) {
 			taxID, err := domain.NewTaxID(row.String("tax_id"))
@@ -46,7 +46,7 @@ func PartyMapping() sqlrepo.Mapping[domain.PartyID, *domain.Party] {
 				})
 			}
 			return domain.Reconstitute(domain.PartyID{UUID: row.UUID("id")}, domain.PartyType(row.String("party_type")),
-				row.String("legal_name"), taxID, row.Bool("active"), row.Time("registered_at"), contacts)
+				row.String("legal_name"), taxID, row.Bool("active"), row.Time("registered_at"), row.AuditStamp(), contacts)
 		},
 		Children: []sqlrepo.Child[*domain.Party]{{
 			Name:       "contacts",
@@ -81,50 +81,50 @@ func PartyMapping() sqlrepo.Mapping[domain.PartyID, *domain.Party] {
 	}
 }
 
-// Schema returns the DDL of the Parties tables (plus the outbox) for a dialect.
+// Schema returns the DDL of the Parties tables (plus the outbox and the audit log) for a dialect.
 func Schema(dialect string) []string {
 	var ddl, outbox []string
 	switch dialect {
 	case "sqlite":
 		ddl = []string{
 			`CREATE TABLE IF NOT EXISTS parties (id TEXT PRIMARY KEY, version INTEGER NOT NULL, party_type TEXT NOT NULL,
-				legal_name TEXT NOT NULL, tax_id TEXT NOT NULL UNIQUE, active INTEGER NOT NULL, registered_at TEXT NOT NULL)`,
+				legal_name TEXT NOT NULL, tax_id TEXT NOT NULL UNIQUE, active INTEGER NOT NULL, registered_at TEXT NOT NULL, created_at TEXT, created_by_id TEXT, created_by_name TEXT, modified_at TEXT, modified_by_id TEXT, modified_by_name TEXT)`,
 			`CREATE TABLE IF NOT EXISTS party_contacts (party_id TEXT NOT NULL REFERENCES parties(id), pos INTEGER NOT NULL,
 				kind TEXT NOT NULL, value TEXT NOT NULL, is_primary INTEGER NOT NULL, PRIMARY KEY (party_id, pos))`,
 		}
-		outbox = sqlite.OutboxDDL("")
+		outbox = append(sqlite.OutboxDDL(""), sqlite.AuditDDL("")...)
 	case "postgres":
 		ddl = []string{
 			`CREATE TABLE IF NOT EXISTS parties (id UUID PRIMARY KEY, version BIGINT NOT NULL, party_type VARCHAR(20) NOT NULL,
-				legal_name VARCHAR(300) NOT NULL, tax_id VARCHAR(20) NOT NULL UNIQUE, active BOOLEAN NOT NULL, registered_at TIMESTAMPTZ NOT NULL)`,
+				legal_name VARCHAR(300) NOT NULL, tax_id VARCHAR(20) NOT NULL UNIQUE, active BOOLEAN NOT NULL, registered_at TIMESTAMPTZ NOT NULL, created_at TIMESTAMPTZ, created_by_id VARCHAR(64), created_by_name VARCHAR(200), modified_at TIMESTAMPTZ, modified_by_id VARCHAR(64), modified_by_name VARCHAR(200))`,
 			`CREATE TABLE IF NOT EXISTS party_contacts (party_id UUID NOT NULL REFERENCES parties(id), pos INTEGER NOT NULL,
 				kind VARCHAR(20) NOT NULL, value VARCHAR(300) NOT NULL, is_primary BOOLEAN NOT NULL, PRIMARY KEY (party_id, pos))`,
 		}
-		outbox = postgres.OutboxDDL("")
+		outbox = append(postgres.OutboxDDL(""), postgres.AuditDDL("")...)
 	case "sqlserver":
 		ddl = []string{
 			`CREATE TABLE parties (id UNIQUEIDENTIFIER PRIMARY KEY, version BIGINT NOT NULL, party_type NVARCHAR(20) NOT NULL,
-				legal_name NVARCHAR(300) NOT NULL, tax_id NVARCHAR(20) NOT NULL UNIQUE, active BIT NOT NULL, registered_at DATETIME2(7) NOT NULL)`,
+				legal_name NVARCHAR(300) NOT NULL, tax_id NVARCHAR(20) NOT NULL UNIQUE, active BIT NOT NULL, registered_at DATETIME2(7) NOT NULL, created_at DATETIME2(7) NULL, created_by_id NVARCHAR(64) NULL, created_by_name NVARCHAR(200) NULL, modified_at DATETIME2(7) NULL, modified_by_id NVARCHAR(64) NULL, modified_by_name NVARCHAR(200) NULL)`,
 			`CREATE TABLE party_contacts (party_id UNIQUEIDENTIFIER NOT NULL REFERENCES parties(id), pos INT NOT NULL,
 				kind NVARCHAR(20) NOT NULL, value NVARCHAR(300) NOT NULL, is_primary BIT NOT NULL, PRIMARY KEY (party_id, pos))`,
 		}
-		outbox = sqlserver.OutboxDDL("")
+		outbox = append(sqlserver.OutboxDDL(""), sqlserver.AuditDDL("")...)
 	case "oracle":
 		ddl = []string{
 			`CREATE TABLE parties (id RAW(16) PRIMARY KEY, version NUMBER(19) NOT NULL, party_type VARCHAR2(20) NOT NULL,
-				legal_name VARCHAR2(300) NOT NULL, tax_id VARCHAR2(20) NOT NULL UNIQUE, active NUMBER(1) NOT NULL, registered_at TIMESTAMP(6) WITH TIME ZONE NOT NULL)`,
+				legal_name VARCHAR2(300) NOT NULL, tax_id VARCHAR2(20) NOT NULL UNIQUE, active NUMBER(1) NOT NULL, registered_at TIMESTAMP(6) WITH TIME ZONE NOT NULL, created_at TIMESTAMP(6) WITH TIME ZONE, created_by_id VARCHAR2(64), created_by_name VARCHAR2(200), modified_at TIMESTAMP(6) WITH TIME ZONE, modified_by_id VARCHAR2(64), modified_by_name VARCHAR2(200))`,
 			`CREATE TABLE party_contacts (party_id RAW(16) NOT NULL REFERENCES parties(id), pos NUMBER(10) NOT NULL,
 				kind VARCHAR2(20) NOT NULL, value VARCHAR2(300) NOT NULL, is_primary NUMBER(1) NOT NULL, PRIMARY KEY (party_id, pos))`,
 		}
-		outbox = oracle.OutboxDDL("")
+		outbox = append(oracle.OutboxDDL(""), oracle.AuditDDL("")...)
 	case "mysql":
 		ddl = []string{
 			`CREATE TABLE IF NOT EXISTS parties (id CHAR(36) PRIMARY KEY, version BIGINT NOT NULL, party_type VARCHAR(20) NOT NULL,
-				legal_name VARCHAR(300) NOT NULL, tax_id VARCHAR(20) NOT NULL UNIQUE, active BOOLEAN NOT NULL, registered_at DATETIME(6) NOT NULL)`,
+				legal_name VARCHAR(300) NOT NULL, tax_id VARCHAR(20) NOT NULL UNIQUE, active BOOLEAN NOT NULL, registered_at DATETIME(6) NOT NULL, created_at DATETIME(6), created_by_id VARCHAR(64), created_by_name VARCHAR(200), modified_at DATETIME(6), modified_by_id VARCHAR(64), modified_by_name VARCHAR(200))`,
 			`CREATE TABLE IF NOT EXISTS party_contacts (party_id CHAR(36) NOT NULL, pos INT NOT NULL, kind VARCHAR(20) NOT NULL,
 				value VARCHAR(300) NOT NULL, is_primary BOOLEAN NOT NULL, PRIMARY KEY (party_id, pos), FOREIGN KEY (party_id) REFERENCES parties(id))`,
 		}
-		outbox = mysql.OutboxDDL("")
+		outbox = append(mysql.OutboxDDL(""), mysql.AuditDDL("")...)
 	}
 	return append(ddl, outbox...)
 }
@@ -150,6 +150,17 @@ func RepositoryFactory(b hotswap.Backend) (domain.Repository, error) {
 		return sqlrepo.NewRepository(db, PartyMapping())
 	case *memory.Store:
 		return memory.NewRepository[domain.PartyID, *domain.Party](db), nil
+	}
+	return nil, fmt.Errorf("parties: unsupported backend %T", b)
+}
+
+// AuditLogFactory builds the audit log for any backend (hot-swap factory).
+func AuditLogFactory(b hotswap.Backend) (application.AuditLog, error) {
+	switch db := b.(type) {
+	case *sqlrepo.DB:
+		return sqlrepo.NewAuditLog(db, "")
+	case *memory.Store:
+		return memory.NewAuditLog(db), nil
 	}
 	return nil, fmt.Errorf("parties: unsupported backend %T", b)
 }

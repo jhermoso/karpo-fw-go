@@ -33,10 +33,13 @@ Registro de tareas pendientes, ideas de tooling y mejoras para el ecosistema Kar
 ### 2b. Framework: siguientes pasos
 - **Migraciones de esquema** por dialecto (equivalente a `IDatabaseSchemaManager`): hoy el DDL
   vive en cada contexto (`infrastructure.Schema`).
-- **Componentes transversales de `BusinessEntity`** (auditable, activable, autorizable,
-  trazable) como piezas componibles, no como clase base.
-- **Lenguaje ubicuo común** (`Name`, `Email`, `ValidPeriod`, `Percentage`, `Actor`,
-  `UTCDateTime`...) en un paquete `pkg/domain/ubiquitous`.
+- ~~Componentes transversales de `BusinessEntity`~~ ✅ `pkg/domain/traits`.
+- **Almacén de auditoría a prueba de manipulación** (cadena de hashes verificable) como
+  implementación de `application.AuditLog`.
+- **Atributos extendidos declarativos** (campos personalizados por cliente, persistidos como
+  JSON con esquema) en lugar del `IExtensible` basado en delegados.
+- **Cifrado de campos** en el mapeo de persistencia (sustituto de `EncryptedAttribute`).
+- ~~Lenguaje ubicuo común~~ ✅ `pkg/domain/vocab`.
 - **Outbox multi-instancia**: `SELECT ... FOR UPDATE SKIP LOCKED` (PostgreSQL/Oracle/MySQL) y
   `READPAST` (SQL Server) para varios relays en paralelo.
 - **Idempotencia persistente** (`sqlrepo` store) para despliegues con varias réplicas.

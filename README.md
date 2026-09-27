@@ -21,7 +21,7 @@ Puntos clave:
 - **Batería de conformidad**: toda implementación del repositorio debe demostrar que cada
   especificación devuelve en la base de datos exactamente lo mismo que en memoria.
 
-📖 Diseño completo: [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) · Inventario de patrones: [docs/INVENTARIO-PATRONES.md](docs/INVENTARIO-PATRONES.md) · Lenguaje ubicuo: [docs/LENGUAJE-UBICUO.md](docs/LENGUAJE-UBICUO.md)
+📖 Diseño completo: [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) · Inventario de patrones: [docs/INVENTARIO-PATRONES.md](docs/INVENTARIO-PATRONES.md) · Lenguaje ubicuo: [docs/LENGUAJE-UBICUO.md](docs/LENGUAJE-UBICUO.md) · Rasgos: [docs/RASGOS-TRANSVERSALES.md](docs/RASGOS-TRANSVERSALES.md)
 
 ---
 
@@ -42,8 +42,9 @@ pkg/
 │   ├── repository.go     # ReadRepository / WriteRepository / Repository / UnitOfWork
 │   ├── page.go           # PageRequest[T], Page[T]
 │   ├── spec/             # Especificaciones: árbol de expresión + campos tipados
-│   └── vocab/            # Lenguaje ubicuo común: Name, Email, Phone, URL, Date, ValidPeriod,
-│                         # Decimal, Money, Percentage, CountryCode, CurrencyCode, Tag, Actor...
+│   ├── vocab/            # Lenguaje ubicuo común: Name, Email, Phone, URL, Date, ValidPeriod,
+│   │                     # Decimal, Money, Percentage, CountryCode, CurrencyCode, Tag, Actor...
+│   └── traits/           # Rasgos componibles: Activation, Validity, Audited, TestFlag, Snapshotter...
 │
 ├── application/          # CONTRATOS DE APLICACIÓN (= Fw.Application.Contracts)
 │   ├── cqrs.go           # Handler[In,Out], Middleware, Chain

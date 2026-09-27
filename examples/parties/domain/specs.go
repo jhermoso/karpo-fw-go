@@ -17,7 +17,7 @@ var (
 	FieldType         = spec.Comparable[*Party, PartyType]("type", (*Party).Type)
 	FieldLegalName    = spec.Text[*Party]("legal_name", (*Party).LegalName)
 	FieldTaxID        = spec.Text[*Party]("tax_id", func(p *Party) string { return p.TaxID().String() })
-	FieldActive       = spec.Comparable[*Party, bool]("active", (*Party).Active)
+	FieldActive       = spec.Comparable[*Party, bool]("active", (*Party).IsActive)
 	FieldRegisteredAt = spec.Time[*Party]("registered_at", (*Party).RegisteredAt)
 	FieldContacts     = spec.Collection[*Party, Contact]("contacts", (*Party).Contacts)
 

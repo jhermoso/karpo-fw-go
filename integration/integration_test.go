@@ -29,6 +29,8 @@ import (
 	parties "github.com/jhermoso/karpo-fw-go/examples/parties/domain"
 	"github.com/jhermoso/karpo-fw-go/examples/parties/infrastructure"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
+	"github.com/jhermoso/karpo-fw-go/pkg/domain/traits"
+	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/mysql"
@@ -83,13 +85,23 @@ func TestConformance(t *testing.T) {
 	}
 }
 
+// TestAuditLog checks the SQL audit log on every engine.
+func TestAuditLog(t *testing.T) {
+	for _, e := range engines {
+		if e.name == "oracle-dotnet-guids" {
+			continue
+		}
+		t.Run(e.name, func(t *testing.T) { sqlconformance.RunAuditLog(t, open(t, e)) })
+	}
+}
+
 // TestParties runs the Parties mapping (child table, custom COUNT specification) on every engine.
 func TestParties(t *testing.T) {
 	for _, e := range engines {
 		t.Run(e.name, func(t *testing.T) {
 			db := open(t, e)
 			ctx := context.Background()
-			for _, s := range []string{"DROP TABLE party_contacts", "DROP TABLE parties", "DROP TABLE outbox_messages"} {
+			for _, s := range []string{"DROP TABLE party_contacts", "DROP TABLE parties", "DROP TABLE outbox_messages", "DROP TABLE audit_log"} {
 				_, _ = db.ExecContext(ctx, s)
 			}
 			for _, s := range infrastructure.Schema(e.dialect.Name()) {
@@ -106,8 +118,23 @@ func TestParties(t *testing.T) {
 			}
 			_ = p.AddContact(parties.Contact{Kind: parties.Email, Value: "info@acme.test", Primary: true})
 			_ = p.AddContact(parties.Contact{Kind: parties.Phone, Value: "555"})
+			ana, _ := vocab.NewActor(fw.NewUUID(), "Ana")
+			created := time.Date(2026, 9, 27, 8, 0, 0, 0, time.UTC)
+			traits.Stamp(p, ana, created)
 			if err := repo.Save(ctx, p); err != nil {
 				t.Fatal(err)
+			}
+			traits.Stamp(p, vocab.SystemActor, created.Add(time.Hour))
+			if err := repo.Save(ctx, p); err != nil {
+				t.Fatal(err)
+			}
+			reloaded, err := repo.Get(ctx, p.ID())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := reloaded.AuditStamp(); got.CreatedBy != ana || !got.CreatedAt.Equal(created) ||
+				got.ModifiedBy != vocab.SystemActor || !got.ModifiedAt.Equal(created.Add(time.Hour)) {
+				t.Fatalf("audit stamp round trip: %+v", got)
 			}
 			dup, _ := parties.Register(parties.NewPartyID(), parties.Organization, "Copy", tax)
 			if err := repo.Save(ctx, dup); err == nil {
@@ -191,7 +218,7 @@ func TestHotSwapAcrossEngines(t *testing.T) {
 func resetParties(t *testing.T, db *sqlrepo.DB) {
 	t.Helper()
 	ctx := context.Background()
-	for _, s := range []string{"DROP TABLE party_contacts", "DROP TABLE parties", "DROP TABLE outbox_messages"} {
+	for _, s := range []string{"DROP TABLE party_contacts", "DROP TABLE parties", "DROP TABLE outbox_messages", "DROP TABLE audit_log"} {
 		_, _ = db.ExecContext(ctx, s)
 	}
 	for _, s := range infrastructure.Schema(db.Dialect().Name()) {

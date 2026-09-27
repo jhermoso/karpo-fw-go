@@ -37,21 +37,31 @@ type env struct {
 	srv    *httptest.Server
 	sw     *hotswap.Switch
 	outbox application.OutboxStore
+	audit  application.AuditLog
 }
+
+// Actors sent by the (trusted) gateway headers.
+var (
+	anaID  = fw.NewUUID()
+	luisID = fw.NewUUID()
+	asAna  = map[string]string{distribution.ActorHeader: anaID.String(), distribution.ActorNameHeader: "Ana", distribution.ChannelHeader: "web"}
+	asLuis = map[string]string{distribution.ActorHeader: luisID.String(), distribution.ActorNameHeader: "Luis", distribution.ChannelHeader: "api"}
+)
 
 // compose is the composition root: the only place that knows concrete technologies.
 func compose(t *testing.T) *env {
 	sw := hotswap.New(memory.NewStore("memory"))
 	repo := hotswap.Repository(sw, infrastructure.RepositoryFactory)
 	outbox := hotswap.Outbox(sw, infrastructure.OutboxFactory)
-	svc := papp.NewService(repo, sw, appoutbox.NewRecorder(outbox), memory.NewIdempotencyStore())
+	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
+	svc := papp.NewService(repo, sw, appoutbox.NewRecorder(outbox), memory.NewIdempotencyStore(), audit)
 
 	mux := http.NewServeMux()
 	pdist.NewModule(svc).RegisterRoutes(mux)
-	srv := httptest.NewServer(distribution.Chain(mux, distribution.Correlation()))
+	srv := httptest.NewServer(distribution.Chain(mux, distribution.Correlation(), distribution.TenantActorContext()))
 	t.Cleanup(srv.Close)
 	t.Cleanup(func() { _ = sw.Close(context.Background()) })
-	return &env{t: t, srv: srv, sw: sw, outbox: outbox}
+	return &env{t: t, srv: srv, sw: sw, outbox: outbox, audit: audit}
 }
 
 func (e *env) do(method, path string, body any, headers map[string]string) (int, []byte) {
@@ -61,6 +71,9 @@ func (e *env) do(method, path string, body any, headers map[string]string) (int,
 		_ = json.NewEncoder(&buf).Encode(body)
 	}
 	req, _ := http.NewRequest(method, e.srv.URL+path, &buf)
+	if headers == nil {
+		headers = asAna
+	}
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}
@@ -136,8 +149,24 @@ func (e *env) scenario(prefix string) {
 	if status, body := e.do("POST", "/parties/"+globex.ID.String()+"/contacts", map[string]any{"kind": "phone", "value": "555", "primary": true}, nil); status != http.StatusOK {
 		t.Fatalf("add contact: %d %s", status, body)
 	}
-	if status, body := e.do("PUT", "/parties/"+globex.ID.String()+"/legal-name", map[string]string{"legalName": prefix + " Globex Corporation"}, nil); status != http.StatusOK {
-		t.Fatalf("rename: %d %s", status, body)
+	status, body = e.do("PUT", "/parties/"+globex.ID.String()+"/legal-name", map[string]string{"legalName": prefix + " Globex Corporation"}, asLuis)
+	var renamedDTO papp.PartyDTO
+	_ = json.Unmarshal(body, &renamedDTO)
+	if status != http.StatusOK || renamedDTO.CreatedBy != "Ana" || renamedDTO.ModifiedBy != "Luis" {
+		t.Fatalf("rename must be stamped with the header actor: %d %s", status, body)
+	}
+
+	// The audit log recorded every change of Globex in the same transactions: who, channel,
+	// changed fields and raised events.
+	trail, err := e.audit.Trail(context.Background(), domain.Kind, globex.ID.String())
+	if err != nil || len(trail) != 3 {
+		t.Fatalf("audit trail: %d records, %v", len(trail), err)
+	}
+	rename := trail[2]
+	if trail[0].Operation != application.AuditCreated || trail[0].Actor.PartyID != anaID || trail[0].Channel != "web" ||
+		rename.Actor.Name != "Luis" || rename.Channel != "api" || len(rename.Changes) != 1 || rename.Changes[0].Field != "legalName" ||
+		len(rename.Events) != 1 || rename.Events[0] != "parties.party_renamed" {
+		t.Fatalf("unexpected audit trail: %+v", trail)
 	}
 
 	status, body = e.do("GET", "/parties/"+acme.ID.String(), nil, nil)

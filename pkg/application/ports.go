@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/jhermoso/karpo-fw-go/pkg/domain"
+	"github.com/jhermoso/karpo-fw-go/pkg/domain/traits"
+	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
 // Validatable is implemented by commands/queries that can check their own input.
@@ -101,4 +103,41 @@ type IdempotencyStore interface {
 // (equivalent to the C# IIdempotentCommand).
 type IdempotencyKeyed interface {
 	IdempotencyKey() string
+}
+
+// ---------------------------------------------------------------------------------------------
+// Audit log
+// ---------------------------------------------------------------------------------------------
+
+// Audit operations.
+const (
+	AuditCreated = "created"
+	AuditUpdated = "updated"
+	AuditDeleted = "deleted"
+)
+
+// AuditRecord is one entry of the audit log: who changed which aggregate, how, when, through
+// which channel or import run, which fields changed and which events it raised.
+type AuditRecord struct {
+	ID               string               `json:"id"`
+	AggregateType    string               `json:"aggregateType"`
+	AggregateID      string               `json:"aggregateId"`
+	AggregateVersion int64                `json:"aggregateVersion"`
+	Operation        string               `json:"operation"`
+	Actor            vocab.Actor          `json:"actor"`
+	Channel          string               `json:"channel,omitempty"`
+	Import           *ImportProvenance    `json:"import,omitempty"`
+	CorrelationID    string               `json:"correlationId,omitempty"`
+	At               time.Time            `json:"at"`
+	Changes          []traits.FieldChange `json:"changes,omitempty"`
+	Events           []string             `json:"events,omitempty"`
+}
+
+// AuditLog stores audit records. Append must join the unit of work in ctx, so the record
+// commits atomically with the state change (implementations: persistence/sqlrepo,
+// persistence/memory).
+type AuditLog interface {
+	Append(ctx context.Context, records ...AuditRecord) error
+	// Trail returns the records of one aggregate, oldest first.
+	Trail(ctx context.Context, aggregateType, aggregateID string) ([]AuditRecord, error)
 }

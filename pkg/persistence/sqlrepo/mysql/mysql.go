@@ -71,4 +71,19 @@ func OutboxDDL(table string) []string {
 	}
 }
 
+// AuditDDL returns the statements creating the audit log table.
+func AuditDDL(table string) []string {
+	if table == "" {
+		table = sqlrepo.DefaultAuditTable
+	}
+	return []string{
+		fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s` ("+`
+	id VARCHAR(64) NOT NULL PRIMARY KEY, aggregate_type VARCHAR(200) NOT NULL, aggregate_id VARCHAR(64) NOT NULL,
+	aggregate_version BIGINT NOT NULL, operation VARCHAR(20) NOT NULL, actor_id VARCHAR(64), actor_name VARCHAR(200),
+	channel VARCHAR(20), import_source VARCHAR(200), import_run_id VARCHAR(64), import_file VARCHAR(500),
+	correlation_id VARCHAR(64), occurred_at DATETIME(6) NOT NULL, changes LONGTEXT, events VARCHAR(2000),
+	INDEX ix_trail (aggregate_type, aggregate_id, occurred_at))`, table),
+	}
+}
+
 var _ sqlrepo.Dialect = Dialect{}
