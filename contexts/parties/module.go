@@ -23,6 +23,9 @@ type Module struct {
 	Outbox            application.OutboxStore // domain events, inside Parties
 	IntegrationOutbox application.OutboxStore // Published Language
 	Audit             application.AuditLog
+	// Consumer receives the integration events Parties reacts to (hr.employee-terminated.v1):
+	// subscribe it to the transport.
+	Consumer *messaging.Consumer
 }
 
 // Option configures the composition.
@@ -57,8 +60,10 @@ func Compose(sw *hotswap.Switch, idem application.IdempotencyStore, opts ...Opti
 	svc := papp.NewService(deps)
 	dir := papp.Directory{Parties: parties}
 	orgs := papp.Organizations{Parties: parties, Relationships: relationships, Catalogs: infrastructure.SwappableCatalogs(sw)}
+	consumer := messaging.NewConsumer(contracts.Source, hotswap.Inbox(sw, infrastructure.InboxFactory), sw)
+	papp.Subscribe(consumer, svc, relationships)
 	return &Module{Service: svc, Directory: dir, Organizations: orgs, HTTP: pdist.NewModule(svc, dir),
-		Outbox: domainOutbox, IntegrationOutbox: integrationOutbox, Audit: audit}
+		Outbox: domainOutbox, IntegrationOutbox: integrationOutbox, Audit: audit, Consumer: consumer}
 }
 
 // Relay forwards the Published Language to a transport (at-least-once).

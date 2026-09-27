@@ -21,6 +21,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
+	"github.com/jhermoso/karpo-fw-go/pkg/messaging/inprocess"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 )
@@ -181,6 +182,22 @@ func TestHRContext(t *testing.T) {
 			if err != nil || len(staff[ana.ID]) != 1 || staff[ana.ID][0].Contract == nil || staff[ana.ID][0].Contract.WeeklyHours != "37.5" ||
 				len(staff[bea.ID]) != 1 || staff[bea.ID][0].Contract != nil {
 				t.Fatalf("staff: %+v %v", staff, err)
+			}
+			// Parties reacts to hr.employee-terminated.v1 through its inbox (decision 4 of docs/RRHH.md).
+			broker := inprocess.NewBroker()
+			broker.Subscribe("parties", pm.Consumer)
+			for {
+				n, err := hm.Relay(broker).RelayOnce(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if n == 0 {
+					break
+				}
+			}
+			orgs, err := pm.Organizations.InternalOrganizations(ctx, []string{ana.ID, bea.ID})
+			if err != nil || len(orgs[ana.ID]) != 0 || len(orgs[bea.ID]) != 1 {
+				t.Fatalf("affiliations after the termination: %+v %v", orgs, err)
 			}
 			wcID, _ := hdomain.ParseWorkCenterID(wc.ID)
 			if closed, err := svc.CloseWorkCenter.Handle(cctx, happ.CloseWorkCenter{ID: wcID, On: today}); err != nil || closed.Closed != today.String() || closed.Headquarters {
