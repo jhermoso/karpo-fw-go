@@ -49,6 +49,7 @@ type PartyDTO struct {
 	Identifications []IdentificationDTO `json:"identifications"`
 	Contacts        []ContactDTO        `json:"contacts"`
 	Classifications []ClassificationDTO `json:"classifications"`
+	FacilityRoles   []FacilityRoleDTO   `json:"facilityRoles"`
 	Version         int64               `json:"version"`
 	CreatedBy       string              `json:"createdBy,omitempty"`
 	ModifiedBy      string              `json:"modifiedBy,omitempty"`
@@ -169,6 +170,7 @@ func ToDTO(p *domain.Party, names Names) PartyDTO {
 		}
 		d.Contacts = append(d.Contacts, cd)
 	}
+	d.FacilityRoles = facilityRoleDTOs(p)
 	for _, c := range p.Classifications() {
 		cd := ClassificationDTO{ID: c.ID.String(), Type: c.Type.String(), From: c.Period.From(), Active: c.Period.IsActiveAt(now)}
 		if t, ok := c.Period.To(); ok {

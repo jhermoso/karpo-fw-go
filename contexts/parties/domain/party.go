@@ -72,6 +72,7 @@ type Party struct {
 	contacts        []Contact
 	classifications []Classification
 	affiliations    []Affiliation
+	facilityRoles   []FacilityRole
 	shared          bool
 }
 
@@ -123,6 +124,7 @@ type PartyState struct {
 	Contacts     []Contact
 	Classes      []Classification
 	Affiliations []Affiliation
+	Facilities   []FacilityRole
 	Shared       bool
 	Active       bool
 	Test         bool
@@ -150,6 +152,7 @@ func Reconstitute(id PartyID, s PartyState) (*Party, error) {
 	p.contacts = slices.Clone(s.Contacts)
 	p.classifications = slices.Clone(s.Classes)
 	p.affiliations = slices.Clone(s.Affiliations)
+	p.facilityRoles = slices.Clone(s.Facilities)
 	p.shared = s.Shared
 	p.Activation = traits.RestoredActivation(s.Active)
 	p.Audited = traits.RestoredAudit(s.Audit)

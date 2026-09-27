@@ -142,6 +142,7 @@ type SearchParties struct {
 	Role           string // role type id: parties playing it (or a role below it) now
 	Document       string // identification number
 	Organization   string // internal organization id: parties affiliated with it now
+	Facility       string // facility id: parties with a role at it now
 	Classification string // classification type id: parties classified so now
 	ActiveOnly     bool
 	Page, Size     int

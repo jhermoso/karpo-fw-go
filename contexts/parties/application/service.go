@@ -26,6 +26,8 @@ type Deps struct {
 	Idempotency   app.IdempotencyStore
 	// Addresses validates postal addresses against the Geography context (optional).
 	Addresses AddressChecker
+	// FacilityDirectory resolves facilities of the Facilities context (optional).
+	FacilityDirectory FacilityDirectory
 }
 
 // AddressChecker validates the geographic part of a postal address and completes its Geography
@@ -55,6 +57,8 @@ type Service struct {
 	EndContact            app.CommandHandler[EndContact, PartyDTO]
 	Classify              app.CommandHandler[Classify, PartyDTO]
 	EndClassification     app.CommandHandler[EndClassification, PartyDTO]
+	AssignFacilityRole    app.CommandHandler[AssignFacilityRole, PartyDTO]
+	EndFacilityRole       app.CommandHandler[EndFacilityRole, PartyDTO]
 
 	Get                     app.QueryHandler[GetParty, PartyDTO]
 	Search                  app.QueryHandler[SearchParties, fw.Page[PartyDTO]]
@@ -64,6 +68,7 @@ type Service struct {
 	ListRelationshipTypes   app.QueryHandler[ListRelationshipTypes, []RelationshipTypeDTO]
 	DocumentOptions         app.QueryHandler[DocumentOptions, []DocumentOptionDTO]
 	ListClassificationTypes app.QueryHandler[ListClassificationTypes, []ClassificationTypeDTO]
+	ListFacilityRoleTypes   app.QueryHandler[ListFacilityRoleTypes, []domain.FacilityRoleType]
 }
 
 type (
@@ -317,6 +322,13 @@ func NewService(d Deps) *Service {
 			}
 			parts = append(parts, domain.ClassifiedAt(now, typ))
 		}
+		if q.Facility != "" {
+			at, err := facilitySpec(q.Facility)
+			if err != nil {
+				return fw.Page[PartyDTO]{}, err
+			}
+			parts = append(parts, at)
+		}
 		if q.Organization != "" {
 			org, err := domain.ParsePartyID(q.Organization)
 			if err != nil {
@@ -410,6 +422,7 @@ func NewService(d Deps) *Service {
 	})
 
 	addPhase2(svc, s)
+	addFacilityRoles(svc, s)
 	return svc
 }
 

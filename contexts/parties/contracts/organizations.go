@@ -50,3 +50,31 @@ type OrganizationHierarchy interface {
 type InternalOrganizationCatalog interface {
 	All(ctx context.Context) ([]PartyRef, error)
 }
+
+// PartyFacilityRoleAssignedV1 is published when a party starts playing a role at a facility
+// (RRHH: the work center of an employee).
+type PartyFacilityRoleAssignedV1 struct {
+	PartyID  string    `json:"partyId"`
+	RoleID   string    `json:"roleId"`
+	Facility string    `json:"facility"`
+	RoleType string    `json:"roleType"`
+	From     time.Time `json:"from"`
+}
+
+// IntegrationEventType implements application.IntegrationEvent.
+func (PartyFacilityRoleAssignedV1) IntegrationEventType() string {
+	return "parties.party-facility-role-assigned.v1"
+}
+
+// PartyFacilityRoleEndedV1 is published when a facility role ends.
+type PartyFacilityRoleEndedV1 struct {
+	PartyID  string    `json:"partyId"`
+	RoleID   string    `json:"roleId"`
+	Facility string    `json:"facility"`
+	At       time.Time `json:"at"`
+}
+
+// IntegrationEventType implements application.IntegrationEvent.
+func (PartyFacilityRoleEndedV1) IntegrationEventType() string {
+	return "parties.party-facility-role-ended.v1"
+}

@@ -241,5 +241,5 @@ Pendiente:
 | ~~2~~ | ✅ Identificaciones, contactos y clasificaciones (sección 4) |
 | ~~3~~ | ✅ Organización interna y ámbito (sección 5) |
 | ~~4~~ | ✅ Contexto Geografía y referencia ([GEOGRAFIA.md](GEOGRAFIA.md)) (si se aprueba la separación) con su semilla de 32.000 filas desde `040-Data/schema` |
-| 5 | Contexto Instalaciones (tras las tres decisiones de la sección 2) |
+| ~~5~~ | ✅ Contexto Instalaciones ([INSTALACIONES.md](INSTALACIONES.md)) |
 | — | Clientes, empleados y extensiones de ErpDetail, cada uno en el contexto que le corresponda (Ventas, RRHH, Nómina, Fiscal), no en Parties |
