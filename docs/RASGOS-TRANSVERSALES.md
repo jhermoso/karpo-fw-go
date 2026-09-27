@@ -67,6 +67,8 @@ La auditoría que sí funciona la escribe **`EfUnitOfWork`** a partir del change
 | 24 | `IExtensible`, `TypeRef`, `DomainTypeDiscoveryService`, aprobación | 0 | 1 | 2 | 1 | 1 | **25** | Retirar (pendiente: atributos extendidos declarativos) |
 | 25 | Atributos de formato (`PascalCase`, `CamelCase`...) y sus validadores | 0 | 1 | 2 | 1 | 1 | **25** | Retirar |
 
+> Nota (2026-09-27, ADR 0010 del C#): en C# `IInternalLogger`/`LoggerBase` son la infraestructura de log del Fw y se mantienen; `ILogable` queda reducido a un log por entidad guardada en `EfUnitOfWork`. En Go la decisión no cambia: el log es `pkg/log` y no forma parte de la entidad.
+
 ## Defectos encontrados (justifican la columna C)
 
 - **La auditoría de la entidad siempre registra `Actor.System`.** `CreateAuditComponent` fija

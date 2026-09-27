@@ -252,3 +252,62 @@ func (db *DB) Update(ctx context.Context, table string, set, where Values) (int6
 	}
 	return res.RowsAffected()
 }
+
+// maxBatchParams keeps every batch under the smallest parameter limit (SQL Server: 2100).
+const maxBatchParams = 2000
+
+// InsertMany inserts rows (values in columns order) in batches with the dialect's value binding,
+// joining the unit of work in ctx: multi-row VALUES, or INSERT ALL on Oracle (valid before 23ai).
+// Meant for seeds and data migrations of reference data.
+func (db *DB) InsertMany(ctx context.Context, table string, columns []string, rows [][]any) error {
+	if err := checkIdent("table", table); err != nil {
+		return err
+	}
+	cols := make([]string, len(columns))
+	for i, c := range columns {
+		if err := checkIdent("column", c); err != nil {
+			return err
+		}
+		cols[i] = db.d.Quote(c)
+	}
+	if len(cols) == 0 {
+		return fmt.Errorf("sqlrepo: insert into %s needs columns", table)
+	}
+	per := max(1, min(500, maxBatchParams/len(cols)))
+	colList := strings.Join(cols, ", ")
+	for start := 0; start < len(rows); start += per {
+		batch := rows[start:min(start+per, len(rows))]
+		b := &Builder{d: db.d}
+		tuples := make([]string, len(batch))
+		for i, row := range batch {
+			if len(row) != len(cols) {
+				return fmt.Errorf("sqlrepo: insert into %s: row %d has %d values for %d columns", table, start+i, len(row), len(cols))
+			}
+			phs := make([]string, len(row))
+			for j, v := range row {
+				ph, err := b.Arg(v)
+				if err != nil {
+					return err
+				}
+				phs[j] = ph
+			}
+			tuples[i] = "(" + strings.Join(phs, ", ") + ")"
+		}
+		var query string
+		if db.d.Name() == "oracle" {
+			var sb strings.Builder
+			sb.WriteString("INSERT ALL")
+			for _, t := range tuples {
+				fmt.Fprintf(&sb, " INTO %s (%s) VALUES %s", db.d.Quote(table), colList, t)
+			}
+			sb.WriteString(" SELECT 1 FROM DUAL")
+			query = sb.String()
+		} else {
+			query = fmt.Sprintf("INSERT INTO %s (%s) VALUES %s", db.d.Quote(table), colList, strings.Join(tuples, ", "))
+		}
+		if _, err := db.executor(ctx).ExecContext(ctx, query, b.args...); err != nil {
+			return fmt.Errorf("sqlrepo: insert into %s: %w", table, err)
+		}
+	}
+	return nil
+}
