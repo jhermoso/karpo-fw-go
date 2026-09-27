@@ -315,3 +315,39 @@ func TestActorAndFactReference(t *testing.T) {
 type fixed time.Time
 
 func (f fixed) Now() time.Time { return time.Time(f) }
+
+func TestDescriptionAndRemark(t *testing.T) {
+	d, err := vocab.NewDescription("  IVA   general ")
+	if err != nil || d.String() != "IVA general" {
+		t.Fatalf("description: %q %v", d, err)
+	}
+	if _, err := vocab.NewDescription("ok"); err != nil {
+		t.Fatal("no arbitrary 3-character minimum")
+	}
+	_, err = vocab.NewDescription(string(make([]rune, 201)))
+	isValidation(t, err)
+	var r vocab.Remark
+	if !r.IsZero() || r.String() != "" {
+		t.Fatal("an absent remark has no default text")
+	}
+}
+
+func TestRegionAndRegulation(t *testing.T) {
+	md := vocab.MustRegionCode("es-md")
+	if md.String() != "ES-MD" || md.Country() != vocab.Spain {
+		t.Fatalf("region: %s", md)
+	}
+	for _, bad := range []string{"ES", "XX-01", "ES-TOOLONG", "ES-M!"} {
+		_, err := vocab.NewRegionCode(bad)
+		isValidation(t, err)
+	}
+	src, err := vocab.NewRegulationSource(vocab.MustName("Ley 37/1992 del IVA"), []vocab.CountryCode{vocab.Spain},
+		[]vocab.RegionCode{md}, false, vocab.Description{})
+	if err != nil || !src.AppliesIn(vocab.Spain) || !src.AppliesInRegion(md) || src.AppliesInRegion(vocab.MustRegionCode("ES-CT")) {
+		t.Fatalf("regulation scope: %+v %v", src, err)
+	}
+	_, err = vocab.NewRegulationSource(vocab.MustName("Política interna"), nil, nil, true, vocab.Description{})
+	isValidation(t, err)
+	_, err = vocab.NewRegulationSource(vocab.MustName("x"), []vocab.CountryCode{vocab.MustCountryCode("PT")}, []vocab.RegionCode{md}, false, vocab.Description{})
+	isValidation(t, err)
+}

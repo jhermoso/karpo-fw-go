@@ -8,6 +8,7 @@ import (
 
 	"github.com/jhermoso/karpo-fw-go/pkg/application"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain"
+	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 	"github.com/jhermoso/karpo-fw-go/pkg/log"
 )
 
@@ -81,20 +82,47 @@ func RequestLogging(logger log.Logger) Middleware {
 	}
 }
 
-// TenantActorContext extracts X-Tenant-ID, X-Actor-ID, and X-Organization-ID headers into the request context.
+// Headers read by TenantActorContext.
+const (
+	TenantHeader       = "X-Tenant-ID"
+	ActorHeader        = "X-Actor-ID"
+	ActorNameHeader    = "X-Actor-Name"
+	OrganizationHeader = "X-Organization-ID"
+	ChannelHeader      = "X-Channel"
+)
+
+// TenantActorContext extracts X-Tenant-ID, X-Actor-ID and X-Organization-ID into the request
+// context. When X-Actor-ID is a UUID it also sets the application actor (application.WithActor,
+// named by X-Actor-Name), which the Orchestrator uses to stamp audit data; X-Channel sets the
+// operation channel (web, mobile, device, api).
+//
+// These headers must come from a trusted gateway that authenticated the caller: this
+// middleware does not authenticate anybody.
 func TenantActorContext() Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
 
-			if tenant := r.Header.Get("X-Tenant-ID"); tenant != "" {
+			if tenant := r.Header.Get(TenantHeader); tenant != "" {
 				ctx = WithTenantID(ctx, tenant)
 			}
-			if actor := r.Header.Get("X-Actor-ID"); actor != "" {
+			if actor := r.Header.Get(ActorHeader); actor != "" {
 				ctx = WithActorID(ctx, actor)
+				if id, err := domain.ParseUUID(actor); err == nil {
+					name := r.Header.Get(ActorNameHeader)
+					if name == "" {
+						name = actor
+					}
+					if a, err := vocab.NewActor(id, name); err == nil {
+						ctx = application.WithActor(ctx, a)
+					}
+				}
 			}
-			if org := r.Header.Get("X-Organization-ID"); org != "" {
+			if org := r.Header.Get(OrganizationHeader); org != "" {
 				ctx = WithOrganizationID(ctx, org)
+			}
+			if ch := r.Header.Get(ChannelHeader); ch != "" {
+				ctx = application.WithChannel(ctx, ch)
 			}
 
 			next.ServeHTTP(w, r.WithContext(ctx))
@@ -126,7 +154,7 @@ func CORS() Middleware {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Access-Control-Allow-Origin", "*")
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Tenant-ID, X-Actor-ID, X-Organization-ID, X-Correlation-ID")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Tenant-ID, X-Actor-ID, X-Actor-Name, X-Organization-ID, X-Channel, X-Correlation-ID, Idempotency-Key")
 
 			if r.Method == http.MethodOptions {
 				w.WriteHeader(http.StatusNoContent)

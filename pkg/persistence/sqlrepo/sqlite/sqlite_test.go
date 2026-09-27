@@ -29,3 +29,7 @@ func openTemp(t *testing.T) *sqlrepo.DB {
 func TestRepositoryConformance(t *testing.T) {
 	sqlconformance.Run(t, openTemp(t))
 }
+
+func TestAuditLogConformance(t *testing.T) {
+	sqlconformance.RunAuditLog(t, openTemp(t))
+}

@@ -230,3 +230,38 @@ func TestFactoryFunc(t *testing.T) {
 type fixedClock time.Time
 
 func (c fixedClock) Now() time.Time { return time.Time(c) }
+
+func TestValidators(t *testing.T) {
+	notEmpty := domain.ValidatorFunc[string](func(s string) error {
+		if s == "" {
+			var v domain.Validation
+			v.Add("value", "required", "required")
+			return v.Err()
+		}
+		return nil
+	})
+	short := domain.ValidatorFunc[string](func(s string) error {
+		if len(s) > 3 {
+			var v domain.Validation
+			v.Add("value", "length", "too long")
+			return v.Err()
+		}
+		return nil
+	})
+	forbidden := domain.ValidatorFunc[string](func(s string) error {
+		if s == "root" {
+			return domain.Violation("user.reserved", "reserved name")
+		}
+		return nil
+	})
+	if err := domain.ValidateAll("ab", notEmpty, short, forbidden); err != nil {
+		t.Fatal(err)
+	}
+	var ve *domain.ValidationError
+	if err := domain.ValidateAll("abcd", notEmpty, short); !errors.As(err, &ve) || len(ve.Errors) != 1 {
+		t.Fatalf("expected merged field errors, got %v", err)
+	}
+	if err := domain.ValidateAll("root", notEmpty, forbidden); !errors.Is(err, domain.ErrRuleViolation) {
+		t.Fatalf("rule violations are returned as is, got %v", err)
+	}
+}

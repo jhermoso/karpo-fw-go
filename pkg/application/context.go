@@ -2,7 +2,9 @@ package application
 
 import (
 	"context"
+	"strings"
 
+	"github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
@@ -12,7 +14,54 @@ const (
 	correlationKey ctxKey = iota
 	causationKey
 	actorKey
+	channelKey
+	importKey
 )
+
+// Operation channels (C# OperationChannel).
+const (
+	ChannelWeb    = "web"
+	ChannelMobile = "mobile"
+	ChannelDevice = "device"
+	ChannelAPI    = "api"
+)
+
+// WithChannel stores the channel the operation came from; unknown values are ignored.
+func WithChannel(ctx context.Context, channel string) context.Context {
+	switch c := strings.ToLower(strings.TrimSpace(channel)); c {
+	case ChannelWeb, ChannelMobile, ChannelDevice, ChannelAPI:
+		return context.WithValue(ctx, channelKey, c)
+	}
+	return ctx
+}
+
+// Channel returns the channel stored in ctx, or "".
+func Channel(ctx context.Context) string {
+	c, _ := ctx.Value(channelKey).(string)
+	return c
+}
+
+// ImportProvenance identifies a data import run (C# ImportProvenance): every change made while
+// it is in the context is attributed to that run in the audit log.
+type ImportProvenance struct {
+	SourceKey  string      `json:"sourceKey"`
+	RunID      domain.UUID `json:"runId"`
+	SourceFile string      `json:"sourceFile,omitempty"`
+}
+
+// WithImportProvenance marks ctx as part of an import run (C# ImportContext.BeginRun).
+func WithImportProvenance(ctx context.Context, p ImportProvenance) context.Context {
+	if p.RunID.IsZero() {
+		p.RunID = domain.NewUUID()
+	}
+	return context.WithValue(ctx, importKey, p)
+}
+
+// ImportProvenanceFrom returns the import run in ctx, if any.
+func ImportProvenanceFrom(ctx context.Context) (ImportProvenance, bool) {
+	p, ok := ctx.Value(importKey).(ImportProvenance)
+	return p, ok
+}
 
 // WithActor stores the actor performing the current request (the Go counterpart of the C#
 // ActorContext.Begin, which used ambient AsyncLocal state).

@@ -111,7 +111,29 @@ func (o *outbox) MarkFailed(ctx context.Context, id string, cause error) error {
 	return o.b.With(ctx, func(ctx context.Context, x application.OutboxStore) error { return x.MarkFailed(ctx, id, cause) })
 }
 
+// AuditLog returns an application.AuditLog that follows the Switch.
+func AuditLog(s *Switch, factory func(Backend) (application.AuditLog, error)) application.AuditLog {
+	return &auditLog{b: Bind(s, factory)}
+}
+
+type auditLog struct {
+	b *Binding[application.AuditLog]
+}
+
+func (a *auditLog) Append(ctx context.Context, records ...application.AuditRecord) error {
+	return a.b.With(ctx, func(ctx context.Context, x application.AuditLog) error { return x.Append(ctx, records...) })
+}
+
+func (a *auditLog) Trail(ctx context.Context, aggregateType, aggregateID string) (out []application.AuditRecord, err error) {
+	err = a.b.With(ctx, func(ctx context.Context, x application.AuditLog) error {
+		out, err = x.Trail(ctx, aggregateType, aggregateID)
+		return err
+	})
+	return out, err
+}
+
 var (
+	_ application.AuditLog    = (*auditLog)(nil)
 	_ domain.UnitOfWork       = (*Switch)(nil)
 	_ application.OutboxStore = (*outbox)(nil)
 )
