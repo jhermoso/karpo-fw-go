@@ -19,6 +19,9 @@ type RelationshipType struct {
 	Description string
 	FromRole    RoleTypeID
 	ToRole      RoleTypeID
+	// Hierarchical types relate a child (From) to its parent (To): a party has one current
+	// parent per type and the hierarchy has no cycles (organization rollups).
+	Hierarchical bool
 }
 
 // Relationship links two parties playing the roles its type requires, during a period

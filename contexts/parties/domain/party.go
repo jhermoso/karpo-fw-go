@@ -41,7 +41,8 @@ func (d PersonDetails) validate() error {
 
 // OrganizationDetails are the data of an organization.
 type OrganizationDetails struct {
-	Name OrganizationName
+	Name      OrganizationName
+	LegalForm LegalForm
 }
 
 // PartyRole is a role played by a party during a period (child entity of Party).
@@ -70,6 +71,8 @@ type Party struct {
 	identifications []Identification
 	contacts        []Contact
 	classifications []Classification
+	affiliations    []Affiliation
+	shared          bool
 }
 
 // RegisterPerson creates a person.
@@ -119,6 +122,8 @@ type PartyState struct {
 	Identities   []Identification
 	Contacts     []Contact
 	Classes      []Classification
+	Affiliations []Affiliation
+	Shared       bool
 	Active       bool
 	Test         bool
 	Audit        traits.AuditStamp
@@ -144,6 +149,8 @@ func Reconstitute(id PartyID, s PartyState) (*Party, error) {
 	p.identifications = slices.Clone(s.Identities)
 	p.contacts = slices.Clone(s.Contacts)
 	p.classifications = slices.Clone(s.Classes)
+	p.affiliations = slices.Clone(s.Affiliations)
+	p.shared = s.Shared
 	p.Activation = traits.RestoredActivation(s.Active)
 	p.Audited = traits.RestoredAudit(s.Audit)
 	p.TestFlag = traits.RestoredTestFlag(s.Test)
@@ -336,6 +343,12 @@ func (p *Party) AuditSnapshot() map[string]any {
 			classes = append(classes, c.Type.String())
 		}
 	}
+	var orgs []string
+	for _, o := range p.OrganizationsAt(now) {
+		orgs = append(orgs, o.String())
+	}
+	s["organizations"] = strings.Join(orgs, ",")
+	s["shared"] = p.shared
 	s["roles"] = strings.Join(roles, ",")
 	s["classifications"] = strings.Join(classes, ",")
 	s["identifications"] = strings.Join(docs, ",")
@@ -347,6 +360,7 @@ func (p *Party) AuditSnapshot() map[string]any {
 	} else {
 		s["legalName"] = p.organization.Name.Legal()
 		s["tradeName"] = p.organization.Name.Trade()
+		s["legalForm"] = string(p.organization.LegalForm)
 	}
 	return s
 }

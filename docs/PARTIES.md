@@ -193,12 +193,53 @@ Pendiente de esta fase:
 - La validación del código postal contra Geografía, que llegará con ese contexto (hoy se guardan
   sus Ids).
 
-## 5. Siguientes fases
+## 5. Fase 3 (hecha): organizaciones internas y ámbito
+
+| Tema | C# | Go |
+|---|---|---|
+| Visibilidad (P1) | Filtros por `IOrganizationScopeProvider` repartidos en 159 ficheros; la pertenencia se calculaba al consultar, recorriendo relaciones con un mapa fijo de «lado empresa» (solo 5 tipos) | **Afiliaciones**: cuando una relación toca una organización interna, la otra party queda afiliada a ella en la misma transacción. «Visible para mi ámbito» es una especificación sobre un solo agregado (`VisibleTo`, que se traduce a `EXISTS` en SQL): la propia organización, las parties compartidas o las afiliadas vigentes. Se aplica a cualquier tipo de relación, como dice P1 |
+| Fuera de ámbito | — | **404 uniforme** en lectura, escritura y compartición; 403 cuando la party es visible pero el acceso es de solo lectura. Para escribir hace falta acceso completo (`Full`) en la propia organización o en una de sus afiliaciones |
+| Alta | Una party nueva sin relación era invisible para quien la creaba | El alta lleva una **afiliación**: organización y tipo de relación, obligatoria salvo para el administrador global. La party recibe el rol de su lado del tipo, y la relación y la afiliación se crean en la misma transacción (como el alta rápida de cliente del C#) |
+| «Public Catalog» | Tipo de party 9 | `Party.Share`: visible para todas las organizaciones y editable solo por el administrador global |
+| Formas jurídicas | Tipos de party 3 a 8 | `OrganizationDetails.LegalForm`: `corporation`, `government-agency`, `non-profit`, `partnership`, `sole-proprietorship` o `team` |
+| Jerarquía | `OrganizationRollup` con el catálogo Department → Division, mientras `IOrganizationHierarchy` bajaba desde las organizaciones legales; se filtraba por `IsActive` y no por la vigencia; se cargaban **todas** las organizaciones legales para hacer una intersección | Tipos de relación **jerárquicos**. Rollup = unidad organizativa → organización, con un padre vigente, sin ciclos y un máximo de 10 niveles. Los recorridos hacen una consulta por nivel y usan la vigencia |
+| Puertos | `IPartyOrganizationMembership`, `IOrganizationHierarchy`, `IInternalOrganizationCatalog` | `contracts.Membership`, `contracts.OrganizationHierarchy` (`Descendants`, `InternalOrganizationOf`) y `contracts.InternalOrganizationCatalog`, implementados por `application.Organizations` |
+
+Lenguaje publicado nuevo: `party-affiliated.v1` y `party-affiliation-ended.v1`.
+
+Rutas:
+
+- `PUT /api/parties/{id}/legal-form` y `PUT /api/parties/{id}/shared`;
+- `GET /api/internal-organizations`;
+- `GET /api/parties?organization=…`;
+- el alta acepta `affiliation`.
+
+Framework: `sqlrepo.DB.Update` para las migraciones de datos; `ALTER TABLE … ADD` con la sintaxis de
+cada motor, comprobado en los cinco.
+
+Validado:
+
+- en el test HTTP de extremo a extremo (memoria y SQLite), con cinco perfiles: administrador global,
+  lector, acceso completo, solo lectura con permisos de escritura, y ajeno;
+- en la integración de los cinco motores: búsqueda con ámbito, 404 fuera de ámbito, alta con
+  afiliación, ciclo rechazado, forma jurídica, descendientes, organización interna de una unidad y
+  pertenencia.
+
+Pendiente:
+
+- `IncludeSubsidiaries` sigue sin ampliar el ámbito (P2 v1): cuando se decida, `Descendants` ya lo
+  permite.
+- Las afiliaciones dependen de que la contraparte juegue Internal Organization **al establecer** la
+  relación: si una organización pasa a ser interna más tarde, hay que recalcular (tarea de
+  mantenimiento pendiente).
+- P3 (`OrganizationAdmin` con ámbito) pertenece al contexto Security.
+
+## 6. Siguientes fases
 
 | Fase | Contenido |
 |---|---|
 | ~~2~~ | ✅ Identificaciones, contactos y clasificaciones (sección 4) |
-| 3 | Organización interna y ámbito: `IPartyOrganizationMembership`, `IOrganizationHierarchy`, `IInternalOrganizationCatalog`, rollups; visibilidad P1 (`PartyRelationship` + permiso) |
+| ~~3~~ | ✅ Organización interna y ámbito (sección 5) |
 | 4 | Contexto Geografía y referencia (si se aprueba la separación) con su semilla de 32.000 filas desde `040-Data/schema` |
 | 5 | Contexto Instalaciones (tras las tres decisiones de la sección 2) |
 | — | Clientes, empleados y extensiones de ErpDetail, cada uno en el contexto que le corresponda (Ventas, RRHH, Nómina, Fiscal), no en Parties |

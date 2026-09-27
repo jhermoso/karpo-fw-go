@@ -35,11 +35,29 @@ import (
 )
 
 type env struct {
-	t             *testing.T
-	srv           *httptest.Server
-	sw            *hotswap.Switch
-	mod           *parties.Module
-	admin, reader string
+	t   *testing.T
+	srv *httptest.Server
+	sw  *hotswap.Switch
+	mod *parties.Module
+	dir *authorization.MemoryDirectory
+	ids map[string]fw.UUID
+	// admin is a global administrator; the others work in an organization scope: reader
+	// (read-only), clerk (full), viewer (read-only grant, write permissions), outsider (full
+	// on another organization).
+	admin, reader, clerk, viewer, outsider string
+}
+
+var allPerms = []authz.Permission{papp.PermPartyRead, papp.PermPartyCreate, papp.PermPartyUpdate, papp.PermRoleAssign,
+	papp.PermRelationshipRead, papp.PermRelationshipCreate, papp.PermRelationshipEnd}
+
+// grant gives a user access to organizations (the security directory is read on every request).
+func (e *env) grant(user string, level authz.AccessLevel, orgs ...string) {
+	s, _, _ := e.dir.Subject(context.Background(), e.ids[user])
+	for _, o := range orgs {
+		id, _ := fw.ParseUUID(o)
+		s.Grants = append(s.Grants, authz.Grant{OrganizationID: id, Level: level})
+	}
+	e.dir.Put(e.ids[user], s)
 }
 
 // compose is the composition root of the test host: JWT authentication, the authorization
@@ -47,10 +65,15 @@ type env struct {
 func compose(t *testing.T) *env {
 	jwt, _ := jwtauth.New(jwtauth.Config{Secret: []byte("parties-test")})
 	dir := authorization.NewMemoryDirectory()
-	adminID, readerID := fw.NewUUID(), fw.NewUUID()
-	dir.Put(adminID, authz.Subject{Active: true, Permissions: []authz.Permission{papp.PermPartyRead, papp.PermPartyCreate,
-		papp.PermPartyUpdate, papp.PermRoleAssign, papp.PermRelationshipRead, papp.PermRelationshipCreate, papp.PermRelationshipEnd}})
-	dir.Put(readerID, authz.Subject{Active: true, Permissions: []authz.Permission{papp.PermPartyRead, papp.PermRelationshipRead}})
+	ids := map[string]fw.UUID{}
+	for _, u := range []string{"admin", "reader", "clerk", "viewer", "outsider"} {
+		ids[u] = fw.NewUUID()
+	}
+	dir.Put(ids["admin"], authz.Subject{Active: true, Roles: []string{authorization.DefaultGlobalAdminRole}})
+	dir.Put(ids["reader"], authz.Subject{Active: true, Permissions: []authz.Permission{papp.PermPartyRead, papp.PermRelationshipRead}})
+	for _, u := range []string{"clerk", "viewer", "outsider"} {
+		dir.Put(ids[u], authz.Subject{Active: true, Permissions: allPerms})
+	}
 	token := func(sub fw.UUID, name string) string {
 		s, _ := jwt.Issue(jwtauth.Claims{Subject: sub.String(), Username: name, PartyID: fw.NewUUID().String(),
 			ExpiresAt: fw.Now().Add(time.Hour).Unix()})
@@ -65,7 +88,9 @@ func compose(t *testing.T) *env {
 		distribution.Authorize(jwt, authorization.NewResolver(dir, authorization.Options{}))))
 	t.Cleanup(srv.Close)
 	t.Cleanup(func() { _ = sw.Close(context.Background()) })
-	return &env{t: t, srv: srv, sw: sw, mod: mod, admin: token(adminID, "ana.admin"), reader: token(readerID, "rita.reader")}
+	return &env{t: t, srv: srv, sw: sw, mod: mod, dir: dir, ids: ids, admin: token(ids["admin"], "ana.admin"),
+		reader: token(ids["reader"], "rita.reader"), clerk: token(ids["clerk"], "carl.clerk"),
+		viewer: token(ids["viewer"], "vera.viewer"), outsider: token(ids["outsider"], "otto.outsider")}
 }
 
 func (e *env) do(method, path, auth string, body any, out any) int {
@@ -107,6 +132,7 @@ func (e *env) scenario(prefix string) (acme, ana papp.PartyDTO) {
 		"tradeName": prefix + " Acme", "roles": []string{domain.RoleInternalOrganization.String()}}, &acme), 201, "register acme")
 	e.must(e.do("POST", "/api/persons", e.admin, map[string]any{"givenName": "Ana", "firstSurname": prefix + " García",
 		"secondSurname": "López", "gender": "female", "birthDate": "1990-05-17", "roles": []string{domain.RoleEmployee.String()}}, &ana), 201, "register ana")
+	e.grant("reader", authz.ReadOnly, acme.ID)
 	if ana.Name != "Ana "+prefix+" García López" || acme.Name != prefix+" Acme" || len(ana.Roles) != 1 || ana.Roles[0].Name != "Employee" {
 		e.t.Fatalf("registered: %+v %+v", ana, acme)
 	}
@@ -164,7 +190,105 @@ func (e *env) scenario(prefix string) (acme, ana papp.PartyDTO) {
 		e.t.Fatalf("directory: %+v", refs)
 	}
 	e.phase2(acme, ana)
+	e.phase3(acme, ana)
 	return acme, ana
+}
+
+// phase3 covers organization scope (decision P1), registration inside the scope, the
+// organization hierarchy and the ports for other contexts.
+func (e *env) phase3(acme, ana papp.PartyDTO) {
+	e.t.Helper()
+	ctx := context.Background()
+	var globex, pedro, got papp.PartyDTO
+	e.must(e.do("POST", "/api/organizations", e.admin, map[string]any{"legalName": "Globex " + acme.ID[:8], "legalForm": "corporation",
+		"roles": []string{domain.RoleInternalOrganization.String()}}, &globex), 201, "register globex")
+	if globex.Organization.LegalForm != "corporation" {
+		e.t.Fatalf("legal form: %+v", globex.Organization)
+	}
+	e.grant("clerk", authz.Full, acme.ID)
+	e.grant("viewer", authz.ReadOnly, acme.ID)
+	e.grant("outsider", authz.Full, globex.ID)
+
+	// Registration inside the scope: the customer role comes with the relationship.
+	e.must(e.do("POST", "/api/persons", e.clerk, map[string]any{"givenName": "Pedro", "firstSurname": "Ruiz"}, nil), 400, "affiliation required")
+	e.must(e.do("POST", "/api/persons", e.clerk, map[string]any{"givenName": "Pedro", "firstSurname": "Ruiz",
+		"affiliation": map[string]any{"organization": globex.ID, "relationshipType": domain.RelCustomer.String()}}, nil), 404, "globex is out of scope")
+	e.must(e.do("POST", "/api/persons", e.clerk, map[string]any{"givenName": "Pedro", "firstSurname": "Ruiz",
+		"affiliation": map[string]any{"organization": acme.ID, "relationshipType": domain.RelCustomer.String()}}, &pedro), 201, "register in scope")
+	if len(pedro.Organizations) != 1 || pedro.Organizations[0] != acme.ID || len(pedro.Roles) != 1 || pedro.Roles[0].Name != "Customer" {
+		e.t.Fatalf("pedro: %+v", pedro)
+	}
+
+	// Visibility: 404 out of scope, 403 read-only.
+	e.must(e.do("GET", "/api/parties/"+pedro.ID, e.outsider, nil, nil), 404, "outsider cannot see pedro")
+	e.must(e.do("GET", "/api/parties/"+pedro.ID, e.reader, nil, &got), 200, "reader sees pedro through acme")
+	e.must(e.do("PUT", "/api/parties/"+pedro.ID+"/name", e.viewer, map[string]any{"givenName": "Pedro", "firstSurname": "Ruiz", "secondSurname": "Gil"}, nil),
+		403, "a read-only grant cannot write")
+	e.must(e.do("PUT", "/api/parties/"+pedro.ID+"/name", e.clerk, map[string]any{"givenName": "Pedro", "firstSurname": "Ruiz", "secondSurname": "Gil"}, nil),
+		200, "a full grant writes")
+	var page fw.Page[papp.PartyDTO]
+	e.must(e.do("GET", "/api/parties?q=Pedro", e.outsider, nil, &page), 200, "outsider search")
+	if page.Total != 0 {
+		e.t.Fatalf("the outsider must not find pedro: %+v", page)
+	}
+	e.must(e.do("GET", "/api/parties?organization="+acme.ID+"&kind=person", e.clerk, nil, &page), 200, "members of acme")
+	if page.Total != 2 { // ana (employee, customer) and pedro
+		e.t.Fatalf("acme members: %d", page.Total)
+	}
+
+	// A party without relationships is only for global administrators, unless it is shared.
+	var loner papp.PartyDTO
+	e.must(e.do("POST", "/api/organizations", e.admin, map[string]any{"legalName": "Banco Común " + acme.ID[:8],
+		"roles": []string{domain.RoleFinancialInstitution.String()}}, &loner), 201, "register a bank")
+	e.must(e.do("GET", "/api/parties/"+loner.ID, e.reader, nil, nil), 404, "unrelated party")
+	e.must(e.do("PUT", "/api/parties/"+loner.ID+"/shared", e.clerk, map[string]any{"shared": true}, nil), 404, "only admins share")
+	e.must(e.do("PUT", "/api/parties/"+loner.ID+"/shared", e.admin, map[string]any{"shared": true}, nil), 200, "share the bank")
+	e.must(e.do("GET", "/api/parties/"+loner.ID, e.outsider, nil, nil), 200, "a shared party is visible to everyone")
+	e.must(e.do("PUT", "/api/parties/"+loner.ID+"/name", e.clerk, map[string]any{"legalName": "Nope"}, nil), 403, "shared parties are read-only")
+
+	// Hierarchy: Madrid office -> Sales division -> Acme.
+	var sales, madrid papp.PartyDTO
+	e.must(e.do("POST", "/api/organizations", e.admin, map[string]any{"legalName": "Acme Sales " + acme.ID[:8],
+		"roles": []string{domain.RoleDivision.String()}}, &sales), 201, "sales")
+	e.must(e.do("POST", "/api/organizations", e.admin, map[string]any{"legalName": "Acme Madrid " + acme.ID[:8],
+		"roles": []string{domain.RoleDepartment.String()}}, &madrid), 201, "madrid")
+	rollup := func(child, parent string) int {
+		return e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelOrganizationRollup.String(),
+			"fromParty": child, "toParty": parent}, nil)
+	}
+	e.must(rollup(sales.ID, acme.ID), 201, "sales under acme")
+	e.must(rollup(madrid.ID, sales.ID), 201, "madrid under sales")
+	e.must(rollup(madrid.ID, acme.ID), 422, "one parent")
+	e.must(rollup(sales.ID, madrid.ID), 422, "no cycles")
+	e.must(rollup(ana.ID, acme.ID), 422, "a person is not an organization unit")
+
+	orgs := e.mod.Organizations
+	desc, err := orgs.Descendants(ctx, []string{acme.ID})
+	if err != nil || len(desc) != 3 {
+		e.t.Fatalf("descendants: %v %v", desc, err)
+	}
+	legal, err := orgs.InternalOrganizationOf(ctx, []string{madrid.ID, pedro.ID})
+	if err != nil || legal[madrid.ID].ID != acme.ID || len(legal) != 1 {
+		e.t.Fatalf("internal organization of: %+v %v", legal, err)
+	}
+	member, err := orgs.InternalOrganizations(ctx, []string{pedro.ID, loner.ID})
+	if err != nil || len(member[pedro.ID]) != 1 || member[pedro.ID][0] != acme.ID || len(member[loner.ID]) != 0 {
+		e.t.Fatalf("membership: %+v %v", member, err)
+	}
+	var internal []papp.PartyDTO
+	e.must(e.do("GET", "/api/internal-organizations", e.clerk, nil, &internal), 200, "internal organizations")
+	if len(internal) != 1 || internal[0].ID != acme.ID {
+		e.t.Fatalf("the clerk's internal organizations: %+v", internal)
+	}
+
+	// Ending the relationship ends the visibility.
+	var rels []papp.RelationshipDTO
+	e.must(e.do("GET", "/api/parties/"+pedro.ID+"/relationships", e.clerk, nil, &rels), 200, "pedro's relationships")
+	if len(rels) != 1 {
+		e.t.Fatalf("relationships: %+v", rels)
+	}
+	e.must(e.do("POST", "/api/party-relationships/"+rels[0].ID+"/terminate", e.clerk, nil, nil), 200, "end the customer relationship")
+	e.must(e.do("GET", "/api/parties/"+pedro.ID, e.clerk, nil, nil), 404, "pedro left acme's scope")
 }
 
 // phase2 covers identifications, contacts and classifications through HTTP.
@@ -289,7 +413,7 @@ func TestParties_EndToEnd_MemoryThenSQLite(t *testing.T) {
 	if _, err := e.mod.Relay(broker).RelayOnce(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if len(seen) != 3 || roles != 2 {
+	if len(seen) != 8 || roles != 2 {
 		t.Fatalf("published: %v, roles %d", seen, roles)
 	}
 }

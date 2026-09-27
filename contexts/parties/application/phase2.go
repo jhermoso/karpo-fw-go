@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/parties/domain"
-	"github.com/jhermoso/karpo-fw-go/pkg/application/orchestration"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/pipeline"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
@@ -193,8 +192,8 @@ func parsePurposes(ps []string) ([]domain.Purpose, error) {
 }
 
 // addPhase2 wires identifications, contacts and classifications.
-func addPhase2(svc *Service, s service, parties *orchestration.Orchestrator[domain.PartyID, *domain.Party],
-	updateParty func(context.Context, domain.PartyID, func(*domain.Party, *domain.Catalog) error) (PartyDTO, error)) {
+func addPhase2(svc *Service, s service) {
+	updateParty := s.updateParty
 	retry, backoff := 3, 10*time.Millisecond
 
 	svc.AddIdentification = chain(PermPartyUpdate, func(ctx context.Context, c AddIdentification) (PartyDTO, error) {
@@ -211,6 +210,8 @@ func addPhase2(svc *Service, s service, parties *orchestration.Orchestrator[doma
 			return PartyDTO{}, err
 		}
 		// A document identifies one party: the C# only offered a lookup by value.
+		// Every party counts, visible or not: a document identifies one party in the whole
+		// installation (decision P1: the base identity is shared).
 		taken, err := s.Parties.Exists(ctx, spec.And(domain.HoldsDocument(d.Type, d.Country.String(), number), spec.Not(domain.WithIDs(c.PartyID))))
 		if err != nil {
 			return PartyDTO{}, err

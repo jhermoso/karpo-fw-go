@@ -194,8 +194,14 @@ func RunMigrations(t *testing.T, db *sqlrepo.DB) {
 	if err := sm.Verify(ctx); err != nil {
 		t.Fatalf("a go migration keeps a stable checksum: %v", err)
 	}
+	if n, err := db.Update(ctx, "t_mig_seed", sqlrepo.Values{"name": "two"}, sqlrepo.Values{"id": int64(2)}); err != nil || n != 1 {
+		t.Fatalf("update: %d %v", n, err)
+	}
+	if _, err := db.Update(ctx, "t_mig_seed", sqlrepo.Values{"name": "x"}, nil); err == nil {
+		t.Fatal("an update without condition is refused")
+	}
 	rows, err := db.Select(ctx, "t_mig_seed", []string{"id", "name"}, "id")
-	if err != nil || len(rows) != 2 || rows[1].Int64("id") != 2 || rows[1].String("name") != "dos" {
+	if err != nil || len(rows) != 2 || rows[1].Int64("id") != 2 || rows[1].String("name") != "two" {
 		t.Fatalf("select: %v %v", rows, err)
 	}
 

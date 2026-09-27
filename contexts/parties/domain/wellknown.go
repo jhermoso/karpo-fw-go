@@ -5,6 +5,9 @@
 //   - Salesperson and Collaborator, used by relationship types but absent from the C#
 //     hierarchy, hang from Person and from the root;
 //   - DepartmentAssignment (…0002-000000000012) is declared in C# without a catalog row.
+//   - Organization Rollup relates any organization unit to any organization and is hierarchical
+//     (one parent, no cycles). The C# row said Department -> Division, yet the C#
+//     IOrganizationHierarchy walked rollups down from the legal organizations.
 
 package domain
 
@@ -127,7 +130,8 @@ func WellKnownRelationshipTypes() []RelationshipType {
 		{ID: RelCustomer, Name: vocab.MustName("Customer Relationship"), Description: "Customer buys from an internal organization", FromRole: RoleCustomer, ToRole: RoleInternalOrganization},
 		{ID: RelSupplier, Name: vocab.MustName("Supplier Relationship"), Description: "Internal organization buys from a supplier", FromRole: RoleInternalOrganization, ToRole: RoleSupplier},
 		{ID: RelPartnership, Name: vocab.MustName("Partnership"), Description: "Symmetric partnership between organizations", FromRole: RolePartner, ToRole: RolePartner},
-		{ID: RelOrganizationRollup, Name: vocab.MustName("Organization Rollup"), Description: "Department belongs to a division", FromRole: RoleDepartment, ToRole: RoleDivision},
+		{ID: RelOrganizationRollup, Name: vocab.MustName("Organization Rollup"), Description: "An organization unit belongs to its parent organization",
+			FromRole: RoleOrganizationUnitCategory, ToRole: RoleOrganizationCategory, Hierarchical: true},
 		{ID: RelFamily, Name: vocab.MustName("Family Relationship"), Description: "Symmetric family relationship between persons", FromRole: RoleFamilyMember, ToRole: RoleFamilyMember},
 		{ID: RelOwnership, Name: vocab.MustName("Ownership"), Description: "Shareholder owns shares in an internal organization", FromRole: RoleShareholder, ToRole: RoleInternalOrganization},
 		{ID: RelAgent, Name: vocab.MustName("Agent Relationship"), Description: "Agent acts on behalf of a customer", FromRole: RoleAgent, ToRole: RoleCustomer},

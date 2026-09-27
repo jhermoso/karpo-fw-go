@@ -47,6 +47,7 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /api/parties/directory/resolve", distribution.RequirePermission(papp.PermPartyRead, http.HandlerFunc(m.resolve)))
 	mux.Handle("GET /api/parties/directory/search-ids", distribution.RequirePermission(papp.PermPartyRead, http.HandlerFunc(m.searchIDs)))
 	m.registerPhase2(mux)
+	m.registerPhase3(mux)
 }
 
 func decode(r *http.Request, v any) error {
@@ -118,7 +119,7 @@ func (m *Module) search(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	atoi := func(k string) int { n, _ := strconv.Atoi(q.Get(k)); return n }
 	page, err := m.svc.Search.Handle(r.Context(), papp.SearchParties{Text: q.Get("q"), Kind: q.Get("kind"), Role: q.Get("role"),
-		Document: q.Get("document"), Classification: q.Get("classification"),
+		Document: q.Get("document"), Classification: q.Get("classification"), Organization: q.Get("organization"),
 		ActiveOnly: q.Get("active") == "true", Page: atoi("page"), Size: atoi("size")})
 	distribution.Respond(w, r, page, err, http.StatusOK)
 }
