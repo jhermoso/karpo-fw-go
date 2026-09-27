@@ -97,7 +97,7 @@ contexts/fiscal/
   - las bandejas de salida, la auditoría y `fiscal_inbox`.
   - **Sin semilla:** C# no tenía datos legales y aquí no se inventan.
 
-## Decisiones propuestas (pendientes de confirmar)
+## Decisiones (aprobadas por Javier el 2026-09-28)
 
 1. **Catálogo de tipos común**, no por empresa. En C# era por organización porque venía de Sage.
    La importación deduplicará por impuesto, territorio, código y vigencia.
@@ -143,7 +143,7 @@ contexts/fiscal/
 
 ## Pendiente
 
-- Confirmar las decisiones 1–5.
+- Cálculo de impuestos por país y por sector: ver el punto 6 de [BACKLOG.md](../BACKLOG.md).
 - Contexto Facturación (impuestos por línea con `Rates`) y, sobre él, el 303, el 390, el 347, el
   349, los libros registro, SII y Verifactu.
 - Fichero AEAT del 111 y del 190 (decisión 3).
