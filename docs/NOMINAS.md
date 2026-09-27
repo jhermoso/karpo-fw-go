@@ -113,7 +113,7 @@ contexts/payroll/
   - El bruto y el neto se guardan también en la cabecera para informes; al leer, se recalculan
     desde las líneas.
 
-## Decisiones propuestas (pendientes de confirmar)
+## Decisiones (aprobadas por Javier el 2026-09-27)
 
 1. **Sin motor de cálculo por ahora.** Nóminas registra, valida, totaliza, aprueba y publica, pero
    no calcula cotizaciones ni retenciones. El motor necesita tablas legales que cambian cada año:
@@ -170,7 +170,6 @@ contexts/payroll/
 
 ## Pendiente
 
-- Confirmar las decisiones 1–5.
 - Fase 2: motor de cálculo (decisión 1).
 - Contexto Fiscal (modelos 111 y 190), Contabilidad (asiento de nóminas) y Tesorería (remesa SEPA
   con `Remittance`).
