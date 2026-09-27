@@ -62,9 +62,22 @@ Registro de tareas pendientes, ideas de tooling y mejoras para el ecosistema Kar
 
 Decisión de Javier (2026-09-28): el cálculo se estructura **por país** (cada jurisdicción tiene
 sus impuestos, reglas, modelos y sistemas de envío) y dentro de cada país **por régimen o
-sector**. Hoy (fase 1 de Fiscal, ver [docs/FISCAL.md](docs/FISCAL.md)) solo existen el catálogo
-de tipos con vigencia, los tratamientos y la consulta `Rates.RateOn`; **nada calcula el IVA**
-(tampoco en C#).
+sector**. En C# nada calculaba el IVA.
+
+**Hecho** (ver [docs/FISCAL.md](docs/FISCAL.md) y [docs/FACTURACION.md](docs/FACTURACION.md)):
+- Fiscal, independiente del país:
+  - catálogo de tipos con vigencia y tratamientos;
+  - `Rates.RateOn`;
+  - el puerto `TaxEngine`, que resuelve la jurisdicción según el país del vendedor;
+  - la interfaz `Jurisdiction` con `Assessment`, `Breakdown` y `RateBook`.
+- Jurisdicción **España** (`contexts/fiscal/jurisdictions/es`), solo el **régimen general**:
+  - base por tipo agregada en el documento y cuota por tipo al céntimo;
+  - exentas y no sujetas por tratamiento;
+  - recargo de equivalencia a petición del documento;
+  - IGIC en Canarias e IPSI en Ceuta y Melilla con sus tipos del catálogo;
+  - bases negativas (rectificativas por diferencias).
+- Facturación congela el desglose al emitir y lo publica en `billing.invoice-issued.v1`.
+
 
 **Estructura propuesta**
 - **Núcleo de Fiscal, independiente del país:**
@@ -90,10 +103,8 @@ de tipos con vigencia, los tratamientos y la consulta `Rates.RateOn`; **nada cal
   al `VatGroupId` de `ProductCommercialProfile`, que en C# no tenía clave foránea.
 
 **España (primera jurisdicción): lo que queda**
-- Cálculo básico:
-  - base por tipo;
-  - cuota por tipo, redondeada al céntimo sobre la base agregada de la factura (no por línea);
-  - descuentos en factura y pronto pago;
+- Cálculo básico (lo hecho está arriba):
+  - descuentos globales en factura y pronto pago (el descuento por línea ya existe);
   - suplidos fuera de la base (art. 78);
   - anticipos;
   - portes;
@@ -103,8 +114,8 @@ de tipos con vigencia, los tratamientos y la consulta `Rates.RateOn`; **nada cal
   - IGIC de Canarias (tipos propios y AIEM);
   - IPSI de Ceuta y Melilla;
   - territorios forales (País Vasco y Navarra: normativa y modelos propios, TicketBAI).
-- Recargo de equivalencia (comercio minorista): se aplica según el régimen del cliente, con
-  sus tipos ligados al tipo de IVA.
+- Recargo de equivalencia (comercio minorista): el cálculo ya existe. Falta que el régimen
+  venga del perfil comercial del cliente en lugar del documento.
 - Inversión del sujeto pasivo:
   - construcción y rehabilitación;
   - chatarra y residuos;

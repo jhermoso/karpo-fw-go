@@ -12,6 +12,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/contexts/fiscal/contracts"
 	"github.com/jhermoso/karpo-fw-go/contexts/fiscal/domain"
 	"github.com/jhermoso/karpo-fw-go/contexts/fiscal/infrastructure"
+	"github.com/jhermoso/karpo-fw-go/contexts/fiscal/jurisdictions/es"
 	"github.com/jhermoso/karpo-fw-go/pkg/application"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/messaging"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/outbox"
@@ -22,8 +23,10 @@ import (
 
 // Module is the composed context.
 type Module struct {
-	Service           *fapp.Service
-	Rates             contracts.Rates
+	Service *fapp.Service
+	Rates   contracts.Rates
+	// TaxEngine calculates indirect taxes with the jurisdiction of the seller (Spain today).
+	TaxEngine         contracts.TaxEngine
 	IntegrationOutbox application.OutboxStore
 	Audit             application.AuditLog
 	// Consumer receives the Payroll events that feed the withholding forms: subscribe it to the
@@ -35,11 +38,12 @@ type Module struct {
 func Compose(sw *hotswap.Switch, identities domain.Identities) *Module {
 	rates := hotswap.Repository(sw, infrastructure.TaxRateRepositoryFactory)
 	withholdings := hotswap.Repository(sw, infrastructure.WithholdingRepositoryFactory)
+	treatments := hotswap.Repository(sw, infrastructure.TreatmentRepositoryFactory)
+	taxpayers := hotswap.Repository(sw, infrastructure.TaxpayerRepositoryFactory)
 	integration := hotswap.Outbox(sw, infrastructure.IntegrationOutboxFactory)
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
 	svc := fapp.NewService(fapp.Deps{
-		Rates: rates, Treatments: hotswap.Repository(sw, infrastructure.TreatmentRepositoryFactory),
-		Taxpayers: hotswap.Repository(sw, infrastructure.TaxpayerRepositoryFactory), Filings: hotswap.Repository(sw, infrastructure.FilingRepositoryFactory),
+		Rates: rates, Treatments: treatments, Taxpayers: taxpayers, Filings: hotswap.Repository(sw, infrastructure.FilingRepositoryFactory),
 		Counters: hotswap.Repository(sw, infrastructure.CounterRepositoryFactory), Withholdings: withholdings, Identities: identities,
 		UoW: sw, Audit: audit,
 		Recorder: outbox.Recorders(outbox.NewRecorder(hotswap.Outbox(sw, infrastructure.OutboxFactory)),
@@ -47,7 +51,8 @@ func Compose(sw *hotswap.Switch, identities domain.Identities) *Module {
 	})
 	consumer := messaging.NewConsumer(contracts.Source, hotswap.Inbox(sw, infrastructure.InboxFactory), sw)
 	fapp.Subscribe(consumer, withholdings)
-	return &Module{Service: svc, Rates: fapp.RateLookup{Rates: rates}, IntegrationOutbox: integration, Audit: audit, Consumer: consumer}
+	return &Module{Service: svc, Rates: fapp.RateLookup{Rates: rates}, TaxEngine: fapp.NewEngine(taxpayers, rates, treatments, es.Spain{}),
+		IntegrationOutbox: integration, Audit: audit, Consumer: consumer}
 }
 
 // Relay forwards the Published Language to a transport.
