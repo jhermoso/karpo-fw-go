@@ -21,7 +21,7 @@ Puntos clave:
 - **Batería de conformidad**: toda implementación del repositorio debe demostrar que cada
   especificación devuelve en la base de datos exactamente lo mismo que en memoria.
 
-📖 Diseño completo: [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) · Inventario de patrones: [docs/INVENTARIO-PATRONES.md](docs/INVENTARIO-PATRONES.md) · Lenguaje ubicuo: [docs/LENGUAJE-UBICUO.md](docs/LENGUAJE-UBICUO.md) · Rasgos: [docs/RASGOS-TRANSVERSALES.md](docs/RASGOS-TRANSVERSALES.md) · Autorización: [docs/AUTORIZACION.md](docs/AUTORIZACION.md) · Integración: [docs/EVENTOS-INTEGRACION.md](docs/EVENTOS-INTEGRACION.md)
+📖 Diseño completo: [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) · Inventario de patrones: [docs/INVENTARIO-PATRONES.md](docs/INVENTARIO-PATRONES.md) · Lenguaje ubicuo: [docs/LENGUAJE-UBICUO.md](docs/LENGUAJE-UBICUO.md) · Rasgos: [docs/RASGOS-TRANSVERSALES.md](docs/RASGOS-TRANSVERSALES.md) · Autorización: [docs/AUTORIZACION.md](docs/AUTORIZACION.md) · Integración: [docs/EVENTOS-INTEGRACION.md](docs/EVENTOS-INTEGRACION.md) · Esquema: [docs/ESQUEMA-MIGRACIONES.md](docs/ESQUEMA-MIGRACIONES.md)
 
 ---
 
@@ -52,6 +52,7 @@ pkg/
 │   │                     # OutboxStore/OutboxMessage, IdempotencyStore, Validatable...
 │   ├── module.go         # Module, Starter, Stopper (bounded contexts)
 │   ├── integration.go    # IntegrationEvent, Envelope, Translator, MessageSender/Handler, InboxStore
+│   ├── schema.go         # SchemaMigrator (Status, Migrate, Verify)
 │   ├── context.go, dto.go
 │   ├── authz/            # Contrato de autorización v1: Context, Grant, Permission, Resolver...
 │   │   ── implementaciones ──
@@ -70,7 +71,7 @@ pkg/
 │
 ├── persistence/          # ADAPTADORES
 │   ├── memory/           # Repositorio, UoW con rollback, outbox, idempotencia en memoria
-│   ├── sqlrepo/          # Repositorio SQL genérico + traductor de especificaciones
+│   ├── sqlrepo/          # Repositorio SQL genérico + traductor de especificaciones + Migrator
 │   │   ├── sqlite/ postgres/ sqlserver/ oracle/ mysql/   # un dialecto por motor
 │   │   └── sqlconformance/                                # conformidad para dialectos
 │   └── hotswap/          # Cambio de backend en caliente

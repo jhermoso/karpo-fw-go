@@ -56,7 +56,7 @@ Leyenda: ✅ hecho · 🟡 parcial · ❌ falta · — no aplica en Go (decisió
 | Proyecciones / modelos de lectura (`IAggregateProjection`) | ❌ | ❌ | |
 | Autorización (`AuthorizationContext`, resolvers, `OrganizationAccessLevel`, `PermissionCodes`, `ICurrentActorResolver`) | ✅ `application/authz` | ✅ `authorization`, `pipeline.RequirePermission`, `distribution.Authorize`, `jwtauth` | Evaluado en `AUTORIZACION.md`; ❌ modo `Http`, `Directory` de Security |
 | Workflow (definiciones, instancias, pasos, motor) | ❌ | ❌ | contexto completo del Fw |
-| Gestión de esquema / migraciones (`IDatabaseSchemaManager`) | ❌ | ❌ | |
+| Gestión de esquema / migraciones (`IDatabaseSchemaManager`) | ✅ `application.SchemaMigrator` | ✅ `sqlrepo.Migrator` (5 motores, bloqueo, checksum, dirty) | Evaluado en `ESQUEMA-MIGRACIONES.md`; ❌ comando `karpo migrate` |
 | Importación y referencias legadas (`ImportRun`, `LegacyReference`) | ❌ | ❌ | |
 | Log de auditoría (`AuditLogEntry`) | ✅ `application.AuditLog` | ✅ memoria, SQL ×5, hotswap; escrito por el orquestador | ❌ almacén a prueba de manipulación |
 | Log | ✅ `log.Logger` | ✅ `log/vanilla` | |
@@ -71,6 +71,6 @@ Leyenda: ✅ hecho · 🟡 parcial · ❌ falta · — no aplica en Go (decisió
 2. ~~Rasgos transversales componibles~~ ✅ (`pkg/domain/traits` + `application.AuditLog`).
 3. ~~Contratos de autorización y actor en contexto~~ ✅ (`application/authz` + `authorization`).
 4. ~~Eventos de integración~~ ✅ (`application/messaging` + inbox).
-5. Gestión de esquema / migraciones por dialecto.
+5. ~~Gestión de esquema / migraciones por dialecto~~ ✅ (`sqlrepo.Migrator`).
 
 Pueden esperar a un segundo contexto que los necesite: Workflow, ACL, adaptador de broker.

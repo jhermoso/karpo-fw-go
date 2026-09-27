@@ -37,3 +37,7 @@ func TestAuditLogConformance(t *testing.T) {
 func TestInboxConformance(t *testing.T) {
 	sqlconformance.RunInbox(t, openTemp(t))
 }
+
+func TestMigratorConformance(t *testing.T) {
+	sqlconformance.RunMigrations(t, openTemp(t))
+}
