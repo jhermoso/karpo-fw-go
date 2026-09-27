@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
@@ -58,6 +59,8 @@ func Problem(r *http.Request, err error) ProblemDetails {
 		p.Status, p.Title, p.Detail = http.StatusUnauthorized, "Unauthorized", ""
 	case errors.Is(err, domain.ErrForbidden):
 		p.Status, p.Title, p.Detail = http.StatusForbidden, "Forbidden", ""
+	case errors.Is(err, authz.ErrIndeterminate):
+		p.Status, p.Title, p.Detail = http.StatusServiceUnavailable, "Service Unavailable", "authorization could not be determined"
 	case errors.Is(err, domain.ErrUnsupported):
 		p.Status, p.Title, p.Detail = http.StatusNotImplemented, "Not Implemented", err.Error()
 	}

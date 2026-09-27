@@ -21,7 +21,7 @@ Puntos clave:
 - **Batería de conformidad**: toda implementación del repositorio debe demostrar que cada
   especificación devuelve en la base de datos exactamente lo mismo que en memoria.
 
-📖 Diseño completo: [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) · Inventario de patrones: [docs/INVENTARIO-PATRONES.md](docs/INVENTARIO-PATRONES.md) · Lenguaje ubicuo: [docs/LENGUAJE-UBICUO.md](docs/LENGUAJE-UBICUO.md) · Rasgos: [docs/RASGOS-TRANSVERSALES.md](docs/RASGOS-TRANSVERSALES.md)
+📖 Diseño completo: [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) · Inventario de patrones: [docs/INVENTARIO-PATRONES.md](docs/INVENTARIO-PATRONES.md) · Lenguaje ubicuo: [docs/LENGUAJE-UBICUO.md](docs/LENGUAJE-UBICUO.md) · Rasgos: [docs/RASGOS-TRANSVERSALES.md](docs/RASGOS-TRANSVERSALES.md) · Autorización: [docs/AUTORIZACION.md](docs/AUTORIZACION.md)
 
 ---
 
@@ -52,14 +52,17 @@ pkg/
 │   │                     # OutboxStore/OutboxMessage, IdempotencyStore, Validatable...
 │   ├── module.go         # Module, Starter, Stopper (bounded contexts)
 │   ├── context.go, dto.go
+│   ├── authz/            # Contrato de autorización v1: Context, Grant, Permission, Resolver...
 │   │   ── implementaciones ──
 │   ├── pipeline/         # Validating, Transactional, RetryOnConflict, Idempotent, Logging
 │   ├── orchestration/    # Orchestrator + Execute (carga→comportamiento→guardado→eventos)
 │   ├── outbox/           # Recorder (outbox transaccional) + Relay
-│   └── hosting/          # Host (ciclo de vida de módulos por dependencias)
+│   ├── hosting/          # Host (ciclo de vida de módulos por dependencias)
+│   └── authorization/    # Resolver genérico sobre authz.Directory + directorio en memoria
 │
 ├── log/, cache/, time/   # contratos transversales (implementaciones en subpaquetes)
-├── distribution/         # DISTRIBUCIÓN (HTTP, RFC 9457, correlación, health)
+├── distribution/         # DISTRIBUCIÓN (HTTP, RFC 9457, correlación, health, Authorize)
+│   └── jwtauth/          # Autenticación JWT HS256 (solo biblioteca estándar)
 ├── events/               # Registry + suscripción tipada; inprocess/ (Dispatcher en memoria)
 │
 ├── persistence/          # ADAPTADORES

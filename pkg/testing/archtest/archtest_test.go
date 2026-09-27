@@ -27,11 +27,12 @@ func root(t *testing.T, parts ...string) string {
 // library and on other contract packages.
 var contracts = []string{
 	archtest.Std,
-	module + "/pkg/domain/...",  // tactical contracts + pure building blocks (Fw.Domain.Contracts)
-	module + "/pkg/application", // application contracts and ports (Fw.Application.Contracts)
-	module + "/pkg/log",         // logging contract
-	module + "/pkg/cache",       // cache contract
-	module + "/pkg/time",        // clock contract
+	module + "/pkg/domain/...",        // tactical contracts + pure building blocks (Fw.Domain.Contracts)
+	module + "/pkg/application",       // application contracts and ports (Fw.Application.Contracts)
+	module + "/pkg/application/authz", // authorization contracts (Fw.Application.Contracts/Authorization)
+	module + "/pkg/log",               // logging contract
+	module + "/pkg/cache",             // cache contract
+	module + "/pkg/time",              // clock contract
 }
 
 // Rule 1: the domain contracts are pure: standard library, the domain tree and the approved
@@ -47,6 +48,7 @@ func TestDomainContracts_ArePure(t *testing.T) {
 // implementations (pipeline, orchestration, outbox, hosting) nor on adapters.
 func TestApplicationContracts_DependOnContractsOnly(t *testing.T) {
 	archtest.AssertOnlyImports(t, root(t, "pkg", "application"), false, contracts...)
+	archtest.AssertOnlyImports(t, root(t, "pkg", "application", "authz"), false, contracts...)
 	for _, c := range []string{"log", "cache", "time"} {
 		archtest.AssertOnlyImports(t, root(t, "pkg", c), false, contracts...)
 	}
@@ -55,7 +57,7 @@ func TestApplicationContracts_DependOnContractsOnly(t *testing.T) {
 // Rule 3: application implementations depend on contracts only: never on persistence adapters,
 // the transport layer, database packages or third-party code.
 func TestApplicationImplementations_DependOnContractsOnly(t *testing.T) {
-	for _, pkg := range []string{"pipeline", "orchestration", "outbox", "hosting"} {
+	for _, pkg := range []string{"pipeline", "orchestration", "outbox", "hosting", "authorization"} {
 		archtest.AssertOnlyImports(t, root(t, "pkg", "application", pkg), true, contracts...)
 	}
 }
@@ -71,6 +73,7 @@ func TestPersistence_IsDriverAgnostic(t *testing.T) {
 	archtest.AssertTreeDoesNotImport(t, root(t, "pkg", "persistence"), []string{
 		"/pkg/distribution", "net/http",
 		"/pkg/application/pipeline", "/pkg/application/orchestration", "/pkg/application/outbox", "/pkg/application/hosting",
+		"/pkg/application/authorization",
 	})
 	archtest.AssertOnlyImports(t, root(t, "pkg", "persistence"), true, archtest.Std, decimalLib, module+"/...")
 }
