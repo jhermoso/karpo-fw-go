@@ -226,7 +226,17 @@ func TestParties_EndToEnd_WithLiveDatabaseSwap(t *testing.T) {
 	raw.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = raw.Close() })
 	db := sqlite.Open(raw, sqlrepo.WithName("sqlite"))
+	migrator, err := infrastructure.Migrator(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := migrator.Verify(ctx); !errors.Is(err, application.ErrSchemaOutdated) {
+		t.Fatalf("a new database must be refused before migrating: %v", err)
+	}
 	if err := infrastructure.Migrate(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	if err := migrator.Verify(ctx); err != nil { // gate: never swap to an outdated schema
 		t.Fatal(err)
 	}
 	if err := e.sw.Swap(ctx, db); err != nil {

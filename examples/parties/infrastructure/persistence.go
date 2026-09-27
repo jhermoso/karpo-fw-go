@@ -130,16 +130,31 @@ func Schema(dialect string) []string {
 	return append(ddl, outbox...)
 }
 
-// Migrate creates the schema on db.
-func Migrate(ctx context.Context, db *sqlrepo.DB) error {
-	stmts := Schema(db.Dialect().Name())
-	if len(stmts) == 0 {
-		return fmt.Errorf("parties: no schema for dialect %q", db.Dialect().Name())
+// Migrations is the versioned schema of the Parties bounded context. Version 1 is the initial
+// schema of every engine; later changes are new migrations, never edits of an applied one.
+func Migrations() sqlrepo.MigrationSet {
+	initial := map[string][]string{}
+	for _, d := range []string{"sqlite", "postgres", "sqlserver", "oracle", "mysql"} {
+		initial[d] = Schema(d)
 	}
-	for _, s := range stmts {
-		if _, err := db.ExecContext(ctx, s); err != nil {
-			return fmt.Errorf("parties: migrate: %w", err)
-		}
+	return sqlrepo.MigrationSet{Context: "parties", Migrations: []sqlrepo.Migration{
+		{Version: 1, Name: "initial schema", Up: initial},
+	}}
+}
+
+// Migrator returns the schema migrator of Parties on db.
+func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
+	return sqlrepo.NewMigrator(db, []sqlrepo.MigrationSet{Migrations()})
+}
+
+// Migrate applies the pending Parties migrations on db.
+func Migrate(ctx context.Context, db *sqlrepo.DB) error {
+	m, err := Migrator(db)
+	if err != nil {
+		return err
+	}
+	if _, err := m.Migrate(ctx); err != nil {
+		return fmt.Errorf("parties: migrate: %w", err)
 	}
 	return nil
 }

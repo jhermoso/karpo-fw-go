@@ -15,9 +15,9 @@ package integration
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -28,6 +28,7 @@ import (
 
 	parties "github.com/jhermoso/karpo-fw-go/examples/parties/domain"
 	"github.com/jhermoso/karpo-fw-go/examples/parties/infrastructure"
+	"github.com/jhermoso/karpo-fw-go/pkg/application"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/traits"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
@@ -95,6 +96,16 @@ func TestAuditLog(t *testing.T) {
 	}
 }
 
+// TestMigrations checks the schema migrator on every engine.
+func TestMigrations(t *testing.T) {
+	for _, e := range engines {
+		if e.name == "oracle-dotnet-guids" {
+			continue
+		}
+		t.Run(e.name, func(t *testing.T) { sqlconformance.RunMigrations(t, open(t, e)) })
+	}
+}
+
 // TestInbox checks the SQL inbox on every engine.
 func TestInbox(t *testing.T) {
 	for _, e := range engines {
@@ -111,14 +122,7 @@ func TestParties(t *testing.T) {
 		t.Run(e.name, func(t *testing.T) {
 			db := open(t, e)
 			ctx := context.Background()
-			for _, s := range []string{"DROP TABLE party_contacts", "DROP TABLE parties", "DROP TABLE outbox_messages", "DROP TABLE parties_integration_outbox", "DROP TABLE audit_log"} {
-				_, _ = db.ExecContext(ctx, s)
-			}
-			for _, s := range infrastructure.Schema(e.dialect.Name()) {
-				if _, err := db.ExecContext(ctx, s); err != nil && !strings.Contains(err.Error(), "already exists") {
-					t.Fatalf("schema: %v\n%s", err, s)
-				}
-			}
+			resetParties(t, db)
 			repo := sqlrepo.MustRepository(db, infrastructure.PartyMapping())
 
 			tax, _ := parties.NewTaxID("B12345678")
@@ -228,12 +232,21 @@ func TestHotSwapAcrossEngines(t *testing.T) {
 func resetParties(t *testing.T, db *sqlrepo.DB) {
 	t.Helper()
 	ctx := context.Background()
-	for _, s := range []string{"DROP TABLE party_contacts", "DROP TABLE parties", "DROP TABLE outbox_messages", "DROP TABLE parties_integration_outbox", "DROP TABLE audit_log"} {
+	for _, s := range []string{"DROP TABLE party_contacts", "DROP TABLE parties", "DROP TABLE outbox_messages",
+		"DROP TABLE parties_integration_outbox", "DROP TABLE audit_log", "DROP TABLE schema_migrations", "DROP TABLE schema_migrations_lock"} {
 		_, _ = db.ExecContext(ctx, s)
 	}
-	for _, s := range infrastructure.Schema(db.Dialect().Name()) {
-		if _, err := db.ExecContext(ctx, s); err != nil {
-			t.Fatalf("schema: %v\n%s", err, s)
-		}
+	m, err := infrastructure.Migrator(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Verify(ctx); !errors.Is(err, application.ErrSchemaOutdated) {
+		t.Fatalf("an empty database must be outdated: %v", err)
+	}
+	if err := infrastructure.Migrate(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Verify(ctx); err != nil {
+		t.Fatal(err)
 	}
 }
