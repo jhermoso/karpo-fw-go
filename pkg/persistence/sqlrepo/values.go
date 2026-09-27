@@ -21,6 +21,8 @@ func toDriver(d Dialect, v any) (any, error) {
 		return d.UUIDValue(x.BaseUUID()), nil
 	case domain.LongBacked:
 		return x.BaseLong(), nil
+	case domain.DateBacked:
+		return d.DateValue(x.BaseDate()), nil
 	case bool:
 		return d.BoolValue(x), nil
 	case time.Time:

@@ -10,6 +10,7 @@ import (
 
 	"github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
+	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
 // Harness provides fresh backends to the suite.
@@ -53,7 +54,8 @@ func mustWidget(t *testing.T, name string, price int64, active bool, color *stri
 func assertSame(t *testing.T, want, got *Widget) {
 	t.Helper()
 	if want.ID() != got.ID() || want.Name() != got.Name() || want.Price() != got.Price() ||
-		want.Active() != got.Active() || !want.CreatedAt().Equal(got.CreatedAt()) {
+		want.Active() != got.Active() || !want.CreatedAt().Equal(got.CreatedAt()) ||
+		!want.Weight().Equal(got.Weight()) || want.Launch() != got.Launch() {
 		t.Fatalf("aggregate mismatch:\nwant %+v\ngot  %+v", want, got)
 	}
 	if (want.Color() == nil) != (got.Color() == nil) || (want.Color() != nil && *want.Color() != *got.Color()) {
@@ -358,6 +360,12 @@ func testSpecs(t *testing.T, h Harness) {
 		{"not", FieldActive.Eq(true).Not()},
 		{"double not", FieldActive.Eq(true).Not().Not()},
 		{"nested", spec.And(spec.Or(FieldColor.Eq("red"), FieldColor.IsNull()), spec.Not(FieldParts.Any(PartName.Eq("bolt"))))},
+		{"decimal gt", FieldWeight.Gt(vocab.MustDecimal("50.25"))},
+		{"decimal eq other scale", FieldWeight.Eq(vocab.MustDecimal("37.5000"))},
+		{"decimal between", FieldWeight.Between(vocab.MustDecimal("25"), vocab.MustDecimal("100"))},
+		{"date before", FieldLaunch.Lt(vocab.MustDate(2025, 1, 5))},
+		{"date eq", FieldLaunch.Eq(vocab.MustDate(2025, 1, 8))},
+		{"date between", FieldLaunch.Between(vocab.MustDate(2025, 1, 3), vocab.MustDate(2025, 1, 6))},
 		{"custom", Premium(500)},
 		{"custom negated combined", Premium(500).Not().And(FieldPrice.Gt(300))},
 		{"custom inside or", Premium(1000).Or(FieldName.Eq("Alpha"))},
@@ -437,6 +445,25 @@ func testPaging(t *testing.T, h Harness) {
 			t.Fatalf("time ordering broken at %d", i)
 		}
 	}
+	byWeight, err := repo.Find(ctx, nil, FieldWeight.Desc())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 1; i < len(byWeight); i++ {
+		if byWeight[i-1].Weight().LessThan(byWeight[i].Weight()) {
+			t.Fatalf("decimal ordering broken at %d", i)
+		}
+	}
+	byLaunch, err := repo.Find(ctx, nil, FieldLaunch.Asc())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 1; i < len(byLaunch); i++ {
+		if byLaunch[i-1].Launch().After(byLaunch[i].Launch()) {
+			t.Fatalf("date ordering broken at %d", i)
+		}
+	}
+
 	byName, err := repo.Find(ctx, FieldActive.Eq(false), FieldName.Asc())
 	if err != nil {
 		t.Fatal(err)

@@ -45,6 +45,14 @@ func (Dialect) BoolValue(b bool) any {
 	return int64(0)
 }
 
+// DateValue binds a civil date as ISO text "YYYY-MM-DD" (lexicographic order is chronological).
+func (Dialect) DateValue(y int, m time.Month, d int) any {
+	return fmt.Sprintf("%04d-%02d-%02d", y, m, d)
+}
+
+// DateExpr returns the placeholder unchanged.
+func (Dialect) DateExpr(ph string) string { return ph }
+
 func (Dialect) IsUniqueViolation(err error) bool {
 	return sqlrepo.ErrorContains(err, "UNIQUE constraint failed", "PRIMARY KEY constraint failed", "(1555)", "(2067)")
 }

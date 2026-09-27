@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/jhermoso/karpo-fw-go/pkg/domain"
+	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
+	"github.com/shopspring/decimal"
 )
 
 // Row gives dialect-independent, typed access to a scanned row. Conversions are lenient
@@ -220,4 +222,51 @@ func stringOf(v any) string {
 	}
 	s, _ := v.(string)
 	return s
+}
+
+// Decimal returns an exact numeric column (zero for NULL). Drivers deliver NUMERIC/DECIMAL as
+// text, bytes or, for some engines, float64/int64; text is parsed exactly.
+func (r *Row) Decimal(col string) vocab.Decimal {
+	switch x := r.Raw(col).(type) {
+	case nil:
+		return decimal.Zero
+	case string, []byte:
+		d, err := decimal.NewFromString(strings.TrimSpace(stringOf(x)))
+		if err != nil {
+			r.fail(col, err)
+		}
+		return d
+	case int64:
+		return decimal.NewFromInt(x)
+	case float64:
+		return decimal.NewFromFloat(x)
+	case float32:
+		return decimal.NewFromFloat32(x)
+	default:
+		r.fail(col, fmt.Errorf("cannot convert %T to decimal", x))
+		return decimal.Zero
+	}
+}
+
+// Date returns a civil date column (zero Date for NULL). DATE values are read in the location
+// the driver reports, without converting to UTC, so the calendar day never shifts.
+func (r *Row) Date(col string) vocab.Date {
+	switch x := r.Raw(col).(type) {
+	case nil:
+		return vocab.Date{}
+	case time.Time:
+		return vocab.DateOf(x)
+	case []byte, string:
+		s := strings.TrimSpace(stringOf(x))
+		if len(s) >= 10 {
+			if d, err := vocab.ParseDate(s[:10]); err == nil {
+				return d
+			}
+		}
+		r.fail(col, fmt.Errorf("cannot parse date %q", s))
+		return vocab.Date{}
+	default:
+		r.fail(col, fmt.Errorf("cannot convert %T to date", x))
+		return vocab.Date{}
+	}
 }

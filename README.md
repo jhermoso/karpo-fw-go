@@ -21,7 +21,7 @@ Puntos clave:
 - **Batería de conformidad**: toda implementación del repositorio debe demostrar que cada
   especificación devuelve en la base de datos exactamente lo mismo que en memoria.
 
-📖 Diseño completo: [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) · Inventario de patrones: [docs/INVENTARIO-PATRONES.md](docs/INVENTARIO-PATRONES.md)
+📖 Diseño completo: [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) · Inventario de patrones: [docs/INVENTARIO-PATRONES.md](docs/INVENTARIO-PATRONES.md) · Lenguaje ubicuo: [docs/LENGUAJE-UBICUO.md](docs/LENGUAJE-UBICUO.md)
 
 ---
 
@@ -41,7 +41,9 @@ pkg/
 │   ├── factory.go        # Factory[T,P]
 │   ├── repository.go     # ReadRepository / WriteRepository / Repository / UnitOfWork
 │   ├── page.go           # PageRequest[T], Page[T]
-│   └── spec/             # Especificaciones: árbol de expresión + campos tipados
+│   ├── spec/             # Especificaciones: árbol de expresión + campos tipados
+│   └── vocab/            # Lenguaje ubicuo común: Name, Email, Phone, URL, Date, ValidPeriod,
+│                         # Decimal, Money, Percentage, CountryCode, CurrencyCode, Tag, Actor...
 │
 ├── application/          # CONTRATOS DE APLICACIÓN (= Fw.Application.Contracts)
 │   ├── cqrs.go           # Handler[In,Out], Middleware, Chain

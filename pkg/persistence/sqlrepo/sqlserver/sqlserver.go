@@ -51,6 +51,14 @@ func (Dialect) ParseUUID(v any) (domain.UUID, error) {
 	return sqlrepo.ParseUUIDDefault(v)
 }
 
+// DateValue binds a civil date as midnight UTC into a DATE column.
+func (Dialect) DateValue(y int, m time.Month, d int) any {
+	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
+}
+
+// DateExpr returns the placeholder unchanged.
+func (Dialect) DateExpr(ph string) string { return ph }
+
 func (Dialect) IsUniqueViolation(err error) bool {
 	return sqlrepo.ErrorContains(err, "Error 2627", "Error 2601", "Violation of PRIMARY KEY", "Violation of UNIQUE KEY", "Cannot insert duplicate key")
 }

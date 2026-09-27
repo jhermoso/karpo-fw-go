@@ -9,6 +9,10 @@ import (
 
 const module = "github.com/jhermoso/karpo-fw-go"
 
+// decimalLib is the only third-party package allowed in the domain: Go has no decimal type and
+// floating point is not acceptable for amounts (decision recorded in docs/LENGUAJE-UBICUO.md).
+const decimalLib = "github.com/shopspring/decimal"
+
 func root(t *testing.T, parts ...string) string {
 	t.Helper()
 	r, err := archtest.FindProjectRoot(".")
@@ -30,9 +34,12 @@ var contracts = []string{
 	module + "/pkg/time",        // clock contract
 }
 
-// Rule 1: the domain contracts are pure: standard library and the domain tree only.
+// Rule 1: the domain contracts are pure: standard library, the domain tree and the approved
+// decimal library only. The core packages (domain, spec) stay standard-library only.
 func TestDomainContracts_ArePure(t *testing.T) {
-	archtest.AssertOnlyImports(t, root(t, "pkg", "domain"), true, archtest.Std, module+"/pkg/domain/...")
+	archtest.AssertOnlyImports(t, root(t, "pkg", "domain"), true, archtest.Std, decimalLib, module+"/pkg/domain/...")
+	archtest.AssertOnlyImports(t, root(t, "pkg", "domain"), false, archtest.Std, module+"/pkg/domain/...")
+	archtest.AssertOnlyImports(t, root(t, "pkg", "domain", "spec"), false, archtest.Std, module+"/pkg/domain/...")
 	archtest.AssertTreeDoesNotImport(t, root(t, "pkg", "domain"), []string{"database/sql", "net/http", "unsafe"})
 }
 
@@ -65,7 +72,7 @@ func TestPersistence_IsDriverAgnostic(t *testing.T) {
 		"/pkg/distribution", "net/http",
 		"/pkg/application/pipeline", "/pkg/application/orchestration", "/pkg/application/outbox", "/pkg/application/hosting",
 	})
-	archtest.AssertNoThirdParty(t, root(t, "pkg", "persistence"), module)
+	archtest.AssertOnlyImports(t, root(t, "pkg", "persistence"), true, archtest.Std, decimalLib, module+"/...")
 }
 
 // Rule 6: event infrastructure implements application contracts and depends on nothing else.
