@@ -19,6 +19,7 @@ type Module struct {
 	Service           *papp.Service
 	Directory         contracts.Directory
 	Organizations     papp.Organizations // Membership, OrganizationHierarchy, InternalOrganizationCatalog
+	TaxIdentities     contracts.TaxIdentities
 	HTTP              *pdist.Module
 	Outbox            application.OutboxStore // domain events, inside Parties
 	IntegrationOutbox application.OutboxStore // Published Language
@@ -62,7 +63,7 @@ func Compose(sw *hotswap.Switch, idem application.IdempotencyStore, opts ...Opti
 	orgs := papp.Organizations{Parties: parties, Relationships: relationships, Catalogs: infrastructure.SwappableCatalogs(sw)}
 	consumer := messaging.NewConsumer(contracts.Source, hotswap.Inbox(sw, infrastructure.InboxFactory), sw)
 	papp.Subscribe(consumer, svc, relationships)
-	return &Module{Service: svc, Directory: dir, Organizations: orgs, HTTP: pdist.NewModule(svc, dir),
+	return &Module{Service: svc, Directory: dir, Organizations: orgs, TaxIdentities: papp.TaxIdentities{Parties: parties}, HTTP: pdist.NewModule(svc, dir),
 		Outbox: domainOutbox, IntegrationOutbox: integrationOutbox, Audit: audit, Consumer: consumer}
 }
 

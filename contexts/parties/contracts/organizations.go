@@ -78,3 +78,21 @@ type PartyFacilityRoleEndedV1 struct {
 func (PartyFacilityRoleEndedV1) IntegrationEventType() string {
 	return "parties.party-facility-role-ended.v1"
 }
+
+// TaxIdentity is the fiscal identification of a party: its tax number (NIF, or the national or
+// foreigner identity number of a person) and the province of its fiscal address (the first two
+// digits of the Spanish postal code), as the tax forms need them.
+type TaxIdentity struct {
+	PartyID      string `json:"partyId"`
+	Name         string `json:"name"`
+	Country      string `json:"country,omitempty"`
+	Number       string `json:"number,omitempty"`
+	DocumentType string `json:"documentType,omitempty"` // TXID | NIDN | ARNU
+	Province     string `json:"province,omitempty"`
+}
+
+// TaxIdentities resolves tax identities in batches (at most MaxDirectoryBatch ids). Missing
+// parties are absent; a party without a tax document has an empty Number.
+type TaxIdentities interface {
+	TaxIdentities(ctx context.Context, partyIDs []string) (map[string]TaxIdentity, error)
+}
