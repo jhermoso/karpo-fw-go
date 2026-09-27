@@ -158,4 +158,4 @@ contexts/hr/
   pendiente que la reafiliación en Parties.
 - Importar los datos de C#: el rol `Employee`, `LaborContract` y `WorkCenter`, con estos casos
   de uso.
-- Contexto Nóminas, consumidor de `Staff` y de los eventos v1.
+- ~~Contexto Nóminas~~: hecho en [NOMINAS.md](NOMINAS.md); consume `Staff` por el adaptador `HRStaff`.
