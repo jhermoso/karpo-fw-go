@@ -27,12 +27,15 @@ type Deps struct {
 }
 
 // Service exposes the Parties use cases as decorated, statically typed handlers. Every handler
-// requires its permission in the authorization context of ctx, whatever the entry point.
+// requires its permission in the authorization context of ctx, whatever the entry point, and
+// works inside the caller's organization scope (see scope).
 type Service struct {
 	RegisterPerson        app.CommandHandler[RegisterPerson, PartyDTO]
 	RegisterOrganization  app.CommandHandler[RegisterOrganization, PartyDTO]
 	Rename                app.CommandHandler[RenameParty, PartyDTO]
 	SetActive             app.CommandHandler[SetPartyActive, PartyDTO]
+	SetLegalForm          app.CommandHandler[SetLegalForm, PartyDTO]
+	SetShared             app.CommandHandler[SetShared, PartyDTO]
 	AssignRole            app.CommandHandler[AssignRole, PartyDTO]
 	EndRole               app.CommandHandler[EndRole, PartyDTO]
 	EstablishRelationship app.CommandHandler[EstablishRelationship, RelationshipDTO]
@@ -48,13 +51,23 @@ type Service struct {
 	Get                     app.QueryHandler[GetParty, PartyDTO]
 	Search                  app.QueryHandler[SearchParties, fw.Page[PartyDTO]]
 	Relationships           app.QueryHandler[PartyRelationships, []RelationshipDTO]
+	InternalOrganizations   app.QueryHandler[ListInternalOrganizations, []PartyDTO]
 	ListRoleTypes           app.QueryHandler[ListRoleTypes, []RoleTypeDTO]
 	ListRelationshipTypes   app.QueryHandler[ListRelationshipTypes, []RelationshipTypeDTO]
 	DocumentOptions         app.QueryHandler[DocumentOptions, []DocumentOptionDTO]
 	ListClassificationTypes app.QueryHandler[ListClassificationTypes, []ClassificationTypeDTO]
 }
 
-type service struct{ Deps }
+type (
+	partyOrchestrator        = orchestration.Orchestrator[domain.PartyID, *domain.Party]
+	relationshipOrchestrator = orchestration.Orchestrator[domain.RelationshipID, *domain.Relationship]
+)
+
+type service struct {
+	Deps
+	parties       *partyOrchestrator
+	relationships *relationshipOrchestrator
+}
 
 func (s service) roleCatalog(ctx context.Context) (*domain.Catalog, error) {
 	types, err := s.Catalogs.RoleTypes(ctx)
@@ -76,6 +89,25 @@ func (s service) relationshipTypes(ctx context.Context) (map[domain.Relationship
 	return out, nil
 }
 
+// updateParty loads a party in scope, checks the caller may write it, applies fn and saves.
+func (s service) updateParty(ctx context.Context, id domain.PartyID, fn func(*domain.Party, *domain.Catalog) error) (PartyDTO, error) {
+	n, err := s.names(ctx)
+	if err != nil {
+		return PartyDTO{}, err
+	}
+	sc := scopeOf(ctx)
+	p, err := s.parties.Update(ctx, id, func(_ context.Context, p *domain.Party) error {
+		if err := sc.writable(p); err != nil {
+			return err
+		}
+		return fn(p, n.Roles)
+	})
+	if err != nil {
+		return PartyDTO{}, err
+	}
+	return n.dto(p), nil
+}
+
 // NewService wires the use cases.
 func NewService(d Deps) *Service {
 	var opts []orchestration.Option
@@ -85,57 +117,19 @@ func NewService(d Deps) *Service {
 	if d.Audit != nil {
 		opts = append(opts, orchestration.WithAuditLog(d.Audit))
 	}
-	parties := orchestration.New[domain.PartyID, *domain.Party](d.Parties, d.UoW, opts...)
-	relationships := orchestration.New[domain.RelationshipID, *domain.Relationship](d.Relationships, d.UoW, opts...)
-	s := service{d}
-
-	register := func(ctx context.Context, build func(domain.PartyID) (*domain.Party, error), roles []string) (PartyDTO, error) {
-		cat, err := s.roleCatalog(ctx)
-		if err != nil {
-			return PartyDTO{}, err
-		}
-		p, err := build(domain.NewPartyID())
-		if err != nil {
-			return PartyDTO{}, err
-		}
-		now := fw.Now()
-		for _, r := range roles {
-			id, err := parseRoleType(r)
-			if err != nil {
-				return PartyDTO{}, err
-			}
-			if _, err := p.AssignRole(cat, id, now); err != nil {
-				return PartyDTO{}, err
-			}
-		}
-		if err := parties.Create(ctx, p); err != nil {
-			return PartyDTO{}, err
-		}
-		return ToDTO(p, Names{Roles: cat}), nil
-	}
-
-	updateParty := func(ctx context.Context, id domain.PartyID, fn func(*domain.Party, *domain.Catalog) error) (PartyDTO, error) {
-		n, err := s.names(ctx)
-		if err != nil {
-			return PartyDTO{}, err
-		}
-		p, err := parties.Update(ctx, id, func(_ context.Context, p *domain.Party) error { return fn(p, n.Roles) })
-		if err != nil {
-			return PartyDTO{}, err
-		}
-		return n.dto(p), nil
-	}
+	s := service{Deps: d,
+		parties:       orchestration.New[domain.PartyID, *domain.Party](d.Parties, d.UoW, opts...),
+		relationships: orchestration.New[domain.RelationshipID, *domain.Relationship](d.Relationships, d.UoW, opts...)}
 
 	svc := &Service{}
-	retry := 3
-	backoff := 10 * time.Millisecond
+	retry, backoff := 3, 10*time.Millisecond
 
 	svc.RegisterPerson = chain(PermPartyCreate, func(ctx context.Context, c RegisterPerson) (PartyDTO, error) {
 		details, err := c.details()
 		if err != nil {
 			return PartyDTO{}, err
 		}
-		return register(ctx, func(id domain.PartyID) (*domain.Party, error) { return domain.RegisterPerson(id, details) }, c.Roles)
+		return s.register(ctx, func(id domain.PartyID) (*domain.Party, error) { return domain.RegisterPerson(id, details) }, c.Roles, c.Affiliation)
 	}, idempotent[RegisterPerson, PartyDTO](d.Idempotency), pipeline.Transactional[RegisterPerson, PartyDTO](d.UoW))
 
 	svc.RegisterOrganization = chain(PermPartyCreate, func(ctx context.Context, c RegisterOrganization) (PartyDTO, error) {
@@ -143,13 +137,17 @@ func NewService(d Deps) *Service {
 		if err != nil {
 			return PartyDTO{}, err
 		}
-		return register(ctx, func(id domain.PartyID) (*domain.Party, error) {
-			return domain.RegisterOrganization(id, domain.OrganizationDetails{Name: name})
-		}, c.Roles)
+		form, err := domain.ParseLegalForm(c.LegalForm)
+		if err != nil {
+			return PartyDTO{}, err
+		}
+		return s.register(ctx, func(id domain.PartyID) (*domain.Party, error) {
+			return domain.RegisterOrganization(id, domain.OrganizationDetails{Name: name, LegalForm: form})
+		}, c.Roles, c.Affiliation)
 	}, idempotent[RegisterOrganization, PartyDTO](d.Idempotency), pipeline.Transactional[RegisterOrganization, PartyDTO](d.UoW))
 
 	svc.Rename = chain(PermPartyUpdate, func(ctx context.Context, c RenameParty) (PartyDTO, error) {
-		return updateParty(ctx, c.ID, func(p *domain.Party, _ *domain.Catalog) error {
+		return s.updateParty(ctx, c.ID, func(p *domain.Party, _ *domain.Catalog) error {
 			if p.Kind() == domain.KindPerson {
 				n, err := domain.NewPersonalName(c.GivenName, c.FirstSurname, c.SecondSurname)
 				if err != nil {
@@ -166,7 +164,7 @@ func NewService(d Deps) *Service {
 	}, pipeline.RetryOnConflict[RenameParty, PartyDTO](retry, backoff))
 
 	svc.SetActive = chain(PermPartyUpdate, func(ctx context.Context, c SetPartyActive) (PartyDTO, error) {
-		return updateParty(ctx, c.ID, func(p *domain.Party, _ *domain.Catalog) error {
+		return s.updateParty(ctx, c.ID, func(p *domain.Party, _ *domain.Catalog) error {
 			if c.Active {
 				p.Activate()
 			} else {
@@ -176,19 +174,38 @@ func NewService(d Deps) *Service {
 		})
 	}, pipeline.RetryOnConflict[SetPartyActive, PartyDTO](retry, backoff))
 
+	svc.SetLegalForm = chain(PermPartyUpdate, func(ctx context.Context, c SetLegalForm) (PartyDTO, error) {
+		f, err := domain.ParseLegalForm(c.LegalForm)
+		if err != nil {
+			return PartyDTO{}, err
+		}
+		return s.updateParty(ctx, c.ID, func(p *domain.Party, _ *domain.Catalog) error { return p.SetLegalForm(f) })
+	}, pipeline.RetryOnConflict[SetLegalForm, PartyDTO](retry, backoff))
+
+	// Only global administrators decide which parties every organization sees.
+	svc.SetShared = chain(PermPartyUpdate, func(ctx context.Context, c SetShared) (PartyDTO, error) {
+		if sc := scopeOf(ctx); !sc.global {
+			if _, err := sc.visible(d.Parties.Get(ctx, c.ID)); err != nil {
+				return PartyDTO{}, err // out of scope: uniform 404
+			}
+			return PartyDTO{}, fw.ErrForbidden
+		}
+		return s.updateParty(ctx, c.ID, func(p *domain.Party, _ *domain.Catalog) error { p.Share(c.Shared); return nil })
+	}, pipeline.RetryOnConflict[SetShared, PartyDTO](retry, backoff))
+
 	svc.AssignRole = chain(PermRoleAssign, func(ctx context.Context, c AssignRole) (PartyDTO, error) {
 		role, err := parseRoleType(c.RoleType)
 		if err != nil {
 			return PartyDTO{}, err
 		}
-		return updateParty(ctx, c.PartyID, func(p *domain.Party, cat *domain.Catalog) error {
+		return s.updateParty(ctx, c.PartyID, func(p *domain.Party, cat *domain.Catalog) error {
 			_, err := p.AssignRole(cat, role, nowOr(c.From))
 			return err
 		})
 	}, pipeline.RetryOnConflict[AssignRole, PartyDTO](retry, backoff))
 
 	svc.EndRole = chain(PermRoleAssign, func(ctx context.Context, c EndRole) (PartyDTO, error) {
-		return updateParty(ctx, c.PartyID, func(p *domain.Party, _ *domain.Catalog) error {
+		return s.updateParty(ctx, c.PartyID, func(p *domain.Party, _ *domain.Catalog) error {
 			return p.EndRole(c.RoleID, nowOr(c.At))
 		})
 	}, pipeline.RetryOnConflict[EndRole, PartyDTO](retry, backoff))
@@ -204,10 +221,6 @@ func NewService(d Deps) *Service {
 		if err := v.Err(); err != nil {
 			return RelationshipDTO{}, err
 		}
-		cat, err := s.roleCatalog(ctx)
-		if err != nil {
-			return RelationshipDTO{}, err
-		}
 		types, err := s.relationshipTypes(ctx)
 		if err != nil {
 			return RelationshipDTO{}, err
@@ -217,25 +230,20 @@ func NewService(d Deps) *Service {
 			v.Add("type", "unknown", "unknown relationship type")
 			return RelationshipDTO{}, v.Err()
 		}
-		from, err := d.Parties.Get(ctx, fromID)
+		sc := scopeOf(ctx)
+		from, err := sc.visible(d.Parties.Get(ctx, fromID))
 		if err != nil {
 			return RelationshipDTO{}, err
 		}
-		to, err := d.Parties.Get(ctx, toID)
+		to, err := sc.visible(d.Parties.Get(ctx, toID))
 		if err != nil {
 			return RelationshipDTO{}, err
 		}
-		since := nowOr(c.Since)
-		if dup, err := d.Relationships.Exists(ctx, domain.SameRelationship(rt, fromID, toID, since)); err != nil {
-			return RelationshipDTO{}, err
-		} else if dup {
-			return RelationshipDTO{}, fw.Violation("parties.duplicate_relationship", "the parties already have this relationship in that period")
+		if !sc.canRelate(from, to) {
+			return RelationshipDTO{}, fw.ErrForbidden
 		}
-		r, err := domain.Establish(domain.NewRelationshipID(), rt, from, to, cat, since, strings.TrimSpace(c.Remark))
+		r, err := s.establish(ctx, rt, from, to, nowOr(c.Since), strings.TrimSpace(c.Remark))
 		if err != nil {
-			return RelationshipDTO{}, err
-		}
-		if err := relationships.Create(ctx, r); err != nil {
 			return RelationshipDTO{}, err
 		}
 		return RelationshipToDTO(r, types), nil
@@ -246,19 +254,19 @@ func NewService(d Deps) *Service {
 		if err != nil {
 			return RelationshipDTO{}, err
 		}
-		r, err := relationships.Update(ctx, c.ID, func(_ context.Context, r *domain.Relationship) error { return r.Terminate(nowOr(c.At)) })
+		r, err := s.terminate(ctx, c.ID, nowOr(c.At))
 		if err != nil {
 			return RelationshipDTO{}, err
 		}
 		return RelationshipToDTO(r, types), nil
-	}, pipeline.RetryOnConflict[TerminateRelationship, RelationshipDTO](retry, backoff))
+	}, pipeline.Transactional[TerminateRelationship, RelationshipDTO](d.UoW))
 
 	svc.Get = chain(PermPartyRead, func(ctx context.Context, q GetParty) (PartyDTO, error) {
 		n, err := s.names(ctx)
 		if err != nil {
 			return PartyDTO{}, err
 		}
-		p, err := d.Parties.Get(ctx, q.ID)
+		p, err := scopeOf(ctx).visible(d.Parties.Get(ctx, q.ID))
 		if err != nil {
 			return PartyDTO{}, err
 		}
@@ -270,8 +278,8 @@ func NewService(d Deps) *Service {
 		if err != nil {
 			return fw.Page[PartyDTO]{}, err
 		}
-		cat := n.Roles
-		parts := []spec.Specification[*domain.Party]{}
+		now := fw.Now()
+		parts := []spec.Specification[*domain.Party]{scopeOf(ctx).parties(now)}
 		if t := strings.TrimSpace(q.Text); t != "" {
 			parts = append(parts, domain.NameContains(t))
 		}
@@ -286,7 +294,7 @@ func NewService(d Deps) *Service {
 			if err != nil {
 				return fw.Page[PartyDTO]{}, err
 			}
-			parts = append(parts, domain.PlaysAt(fw.Now(), cat.Descendants(role)...))
+			parts = append(parts, domain.PlaysAt(now, n.Roles.Descendants(role)...))
 		}
 		if doc := strings.TrimSpace(q.Document); doc != "" {
 			parts = append(parts, domain.WithDocumentNumber(vocab.NormalizeDocumentNumber(doc)).Or(
@@ -299,7 +307,16 @@ func NewService(d Deps) *Service {
 				v.Add("classification", "format", "classification must be a classification id")
 				return fw.Page[PartyDTO]{}, v.Err()
 			}
-			parts = append(parts, domain.ClassifiedAt(fw.Now(), typ))
+			parts = append(parts, domain.ClassifiedAt(now, typ))
+		}
+		if q.Organization != "" {
+			org, err := domain.ParsePartyID(q.Organization)
+			if err != nil {
+				var v fw.Validation
+				v.Add("organization", "format", "organization must be a party id")
+				return fw.Page[PartyDTO]{}, v.Err()
+			}
+			parts = append(parts, domain.AffiliatedAt(now, org))
 		}
 		page, err := d.Parties.FindPage(ctx, spec.And(parts...), fw.NewPageRequest(q.Page, q.Size, domain.FieldName.Asc()))
 		if err != nil {
@@ -313,7 +330,11 @@ func NewService(d Deps) *Service {
 		if err != nil {
 			return nil, err
 		}
-		where := domain.Involving(q.PartyID)
+		sc := scopeOf(ctx)
+		if _, err := sc.visible(d.Parties.Get(ctx, q.PartyID)); err != nil {
+			return nil, err
+		}
+		where := domain.Involving(q.PartyID).And(sc.relationships())
 		if q.ActiveOnly {
 			where = where.And(domain.ActiveAt(fw.Now()))
 		}
@@ -324,6 +345,28 @@ func NewService(d Deps) *Service {
 		out := make([]RelationshipDTO, len(rs))
 		for i, r := range rs {
 			out[i] = RelationshipToDTO(r, types)
+		}
+		return out, nil
+	})
+
+	svc.InternalOrganizations = chain(PermPartyRead, func(ctx context.Context, _ ListInternalOrganizations) ([]PartyDTO, error) {
+		n, err := s.names(ctx)
+		if err != nil {
+			return nil, err
+		}
+		now := fw.Now()
+		sc := scopeOf(ctx)
+		where := domain.PlaysAt(now, domain.RoleInternalOrganization)
+		if !sc.global {
+			where = where.And(domain.WithIDs(sc.orgs...))
+		}
+		ps, err := d.Parties.Find(ctx, where, domain.FieldName.Asc())
+		if err != nil {
+			return nil, err
+		}
+		out := make([]PartyDTO, len(ps))
+		for i, p := range ps {
+			out[i] = n.dto(p)
 		}
 		return out, nil
 	})
@@ -353,11 +396,12 @@ func NewService(d Deps) *Service {
 		out := make([]RelationshipTypeDTO, len(types))
 		for i, t := range types {
 			out[i] = RelationshipTypeDTO{ID: t.ID.String(), Name: t.Name.String(), Description: t.Description,
-				FromRole: t.FromRole.String(), ToRole: t.ToRole.String()}
+				FromRole: t.FromRole.String(), ToRole: t.ToRole.String(), Hierarchical: t.Hierarchical}
 		}
 		return out, nil
 	})
-	addPhase2(svc, s, parties, updateParty)
+
+	addPhase2(svc, s)
 	return svc
 }
 

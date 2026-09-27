@@ -46,6 +46,16 @@ var (
 	FieldTest   = spec.Comparable("test", (*Party).IsTest)
 	FieldRoles  = spec.Collection("roles", (*Party).Roles)
 
+	FieldShared       = spec.Comparable("shared", (*Party).IsShared)
+	FieldAffiliations = spec.Collection("affiliations", (*Party).Affiliations)
+	AffFieldOrg       = spec.Comparable("organization", func(a Affiliation) PartyID { return a.Organization })
+	AffFieldFrom      = spec.Time("valid_from", func(a Affiliation) time.Time { return a.Period.From() })
+	AffFieldUntil     = spec.OptionalTime("valid_to", func(a Affiliation) *time.Time {
+		if t, ok := a.Period.To(); ok {
+			return &t
+		}
+		return nil
+	})
 	FieldIdentifications = spec.Collection("identifications", (*Party).Identifications)
 	FieldClassifications = spec.Collection("classifications", (*Party).Classifications)
 
@@ -69,6 +79,27 @@ var (
 
 // WithIDs matches the given parties.
 func WithIDs(ids ...PartyID) spec.Spec[*Party] { return FieldID.In(ids...) }
+
+// VisibleTo matches the parties an organization scope may see at t (decision P1): the
+// organizations themselves, shared catalog entries, and parties with an active affiliation to
+// one of them.
+func VisibleTo(orgs []PartyID, t time.Time) spec.Spec[*Party] {
+	return spec.Or(WithIDs(orgs...), FieldShared.Eq(true), AffiliatedAt(t, orgs...))
+}
+
+// AffiliatedAt matches parties affiliated with any of the organizations at t.
+func AffiliatedAt(t time.Time, orgs ...PartyID) spec.Spec[*Party] {
+	return FieldAffiliations.Any(spec.And(
+		AffFieldOrg.In(orgs...),
+		AffFieldFrom.AtOrBefore(t),
+		AffFieldUntil.IsNull().Or(AffFieldUntil.After(t)),
+	))
+}
+
+// OwnedBy matches the relationships where one side is one of the organizations.
+func OwnedBy(orgs []PartyID) spec.Spec[*Relationship] {
+	return RelFieldFrom.In(orgs...).Or(RelFieldTo.In(orgs...))
+}
 
 // HoldsDocument matches parties holding the document (the duplicate check across parties).
 func HoldsDocument(t DocumentTypeID, country string, number string) spec.Spec[*Party] {

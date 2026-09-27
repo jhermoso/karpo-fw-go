@@ -21,6 +21,7 @@ type PersonDTO struct {
 type OrganizationDTO struct {
 	LegalName string `json:"legalName"`
 	TradeName string `json:"tradeName,omitempty"`
+	LegalForm string `json:"legalForm,omitempty"`
 }
 
 // RoleDTO is a role played by a party.
@@ -42,6 +43,8 @@ type PartyDTO struct {
 	Organization    *OrganizationDTO    `json:"organization,omitempty"`
 	Active          bool                `json:"active"`
 	Test            bool                `json:"test,omitempty"`
+	Shared          bool                `json:"shared,omitempty"`
+	Organizations   []string            `json:"organizations"` // internal organizations it is affiliated with now
 	Roles           []RoleDTO           `json:"roles"`
 	Identifications []IdentificationDTO `json:"identifications"`
 	Contacts        []ContactDTO        `json:"contacts"`
@@ -109,9 +112,13 @@ func ToDTO(p *domain.Party, names Names) PartyDTO {
 		}
 	} else {
 		n := p.Organization().Name
-		d.Organization = &OrganizationDTO{LegalName: n.Legal(), TradeName: n.Trade()}
+		d.Organization = &OrganizationDTO{LegalName: n.Legal(), TradeName: n.Trade(), LegalForm: string(p.Organization().LegalForm)}
 	}
 	now := fw.Now()
+	d.Shared, d.Organizations = p.IsShared(), []string{}
+	for _, o := range p.OrganizationsAt(now) {
+		d.Organizations = append(d.Organizations, o.String())
+	}
 	for _, r := range p.Roles() {
 		rd := RoleDTO{ID: r.ID.String(), RoleType: r.RoleType.String(), From: r.Period.From(), Active: r.IsActiveAt(now)}
 		if t, ok := r.Period.To(); ok {
@@ -216,9 +223,10 @@ type RoleTypeDTO struct {
 
 // RelationshipTypeDTO is an entry of the relationship type catalog.
 type RelationshipTypeDTO struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
-	FromRole    string `json:"fromRole"`
-	ToRole      string `json:"toRole"`
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Description  string `json:"description,omitempty"`
+	FromRole     string `json:"fromRole"`
+	ToRole       string `json:"toRole"`
+	Hierarchical bool   `json:"hierarchical,omitempty"`
 }

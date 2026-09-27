@@ -83,6 +83,37 @@ type RelationshipTerminated struct {
 // EventType implements domain.Event.
 func (RelationshipTerminated) EventType() string { return "parties.relationship_terminated" }
 
+// PartyAffiliated is raised when a party becomes affiliated with an internal organization.
+type PartyAffiliated struct {
+	fw.EventMeta
+	Organization string    `json:"organization"`
+	Relationship string    `json:"relationship"`
+	From         time.Time `json:"from"`
+}
+
+// EventType implements domain.Event.
+func (PartyAffiliated) EventType() string { return "parties.party_affiliated" }
+
+// PartyAffiliationEnded is raised when an affiliation ends.
+type PartyAffiliationEnded struct {
+	fw.EventMeta
+	Organization string    `json:"organization"`
+	Relationship string    `json:"relationship"`
+	At           time.Time `json:"at"`
+}
+
+// EventType implements domain.Event.
+func (PartyAffiliationEnded) EventType() string { return "parties.party_affiliation_ended" }
+
+// PartySharingChanged is raised when a party becomes, or stops being, a shared catalog entry.
+type PartySharingChanged struct {
+	fw.EventMeta
+	Shared bool `json:"shared"`
+}
+
+// EventType implements domain.Event.
+func (PartySharingChanged) EventType() string { return "parties.party_sharing_changed" }
+
 // IdentificationAdded is raised when a party gets an identity document.
 type IdentificationAdded struct {
 	fw.EventMeta

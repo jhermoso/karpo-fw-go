@@ -64,6 +64,12 @@ func Publications(r *messaging.Recorder) *messaging.Recorder {
 	messaging.On(r, func(_ context.Context, e domain.PartyClassificationEnded) ([]app.IntegrationEvent, error) {
 		return one(contracts.PartyClassificationEndedV1{PartyID: e.AggregateID, ClassificationID: e.ClassificationID, Type: e.Type, At: e.At})
 	})
+	messaging.On(r, func(_ context.Context, e domain.PartyAffiliated) ([]app.IntegrationEvent, error) {
+		return one(contracts.PartyAffiliatedV1{PartyID: e.AggregateID, Organization: e.Organization, RelationshipID: e.Relationship, From: e.From})
+	})
+	messaging.On(r, func(_ context.Context, e domain.PartyAffiliationEnded) ([]app.IntegrationEvent, error) {
+		return one(contracts.PartyAffiliationEndedV1{PartyID: e.AggregateID, Organization: e.Organization, RelationshipID: e.Relationship, At: e.At})
+	})
 	return r
 }
 

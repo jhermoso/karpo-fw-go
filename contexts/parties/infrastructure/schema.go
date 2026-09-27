@@ -34,14 +34,19 @@ const (
 var Dialects = []string{"sqlite", "postgres", "sqlserver", "oracle", "mysql"}
 
 var logical = map[string]map[string]string{
-	"sqlite":    {"uuid": "TEXT", "str": "TEXT", "bool": "INTEGER", "ts": "TEXT", "date": "TEXT", "bigint": "INTEGER"},
-	"postgres":  {"uuid": "UUID", "str": "VARCHAR(%s)", "bool": "BOOLEAN", "ts": "TIMESTAMPTZ", "date": "DATE", "bigint": "BIGINT"},
-	"sqlserver": {"uuid": "UNIQUEIDENTIFIER", "str": "NVARCHAR(%s)", "bool": "BIT", "ts": "DATETIME2(7)", "date": "DATE", "bigint": "BIGINT"},
-	"oracle":    {"uuid": "RAW(16)", "str": "VARCHAR2(%s)", "bool": "NUMBER(1)", "ts": "TIMESTAMP(6) WITH TIME ZONE", "date": "DATE", "bigint": "NUMBER(19)"},
-	"mysql":     {"uuid": "CHAR(36)", "str": "VARCHAR(%s)", "bool": "BOOLEAN", "ts": "DATETIME(6)", "date": "DATE", "bigint": "BIGINT"},
+	"sqlite": {"uuid": "TEXT", "str": "TEXT", "bool": "INTEGER", "ts": "TEXT", "date": "TEXT", "bigint": "INTEGER",
+		"false": "0", "add": "ADD COLUMN %s", "addEnd": ""},
+	"postgres": {"uuid": "UUID", "str": "VARCHAR(%s)", "bool": "BOOLEAN", "ts": "TIMESTAMPTZ", "date": "DATE", "bigint": "BIGINT",
+		"false": "FALSE", "add": "ADD COLUMN %s", "addEnd": ""},
+	"sqlserver": {"uuid": "UNIQUEIDENTIFIER", "str": "NVARCHAR(%s)", "bool": "BIT", "ts": "DATETIME2(7)", "date": "DATE", "bigint": "BIGINT",
+		"false": "0", "add": "ADD %s", "addEnd": ""},
+	"oracle": {"uuid": "RAW(16)", "str": "VARCHAR2(%s)", "bool": "NUMBER(1)", "ts": "TIMESTAMP(6) WITH TIME ZONE", "date": "DATE",
+		"bigint": "NUMBER(19)", "false": "0", "add": "ADD (%s", "addEnd": ")"},
+	"mysql": {"uuid": "CHAR(36)", "str": "VARCHAR(%s)", "bool": "BOOLEAN", "ts": "DATETIME(6)", "date": "DATE", "bigint": "BIGINT",
+		"false": "FALSE", "add": "ADD COLUMN %s", "addEnd": ""},
 }
 
-var placeholder = regexp.MustCompile(`\{(\w+)(?::(\d+))?\}`)
+var placeholder = regexp.MustCompile(`\{(\w+)(?::([\w ]+))?\}`)
 
 // render replaces {uuid}, {str:N}, {bool}, {ts}, {date} and {bigint} with the dialect's types.
 // Optional text columns are nullable everywhere: Oracle stores "" as NULL.
@@ -112,6 +117,18 @@ var phase2DDL = []string{
 	`CREATE INDEX ix_party_classifications_type ON party_classifications (class_type)`,
 }
 
+// phase3DDL adds legal forms, shared catalog entries, affiliations (visibility, decision P1)
+// and hierarchical relationship types. {add:x} renders the dialect's ADD COLUMN clause.
+var phase3DDL = []string{
+	`ALTER TABLE parties {add:legal_form} {str:30}{addEnd}`,
+	`ALTER TABLE parties {add:shared} {bool} DEFAULT {false} NOT NULL{addEnd}`,
+	`ALTER TABLE relationship_types {add:hierarchical} {bool} DEFAULT {false} NOT NULL{addEnd}`,
+	`CREATE TABLE party_affiliations (party_id {uuid} NOT NULL, relationship_id {uuid} NOT NULL, organization {uuid} NOT NULL,
+	valid_from {ts} NOT NULL, valid_to {ts}, PRIMARY KEY (party_id, relationship_id),
+	FOREIGN KEY (party_id) REFERENCES parties (id), FOREIGN KEY (organization) REFERENCES parties (id))`,
+	`CREATE INDEX ix_party_affiliations_org ON party_affiliations (organization)`,
+}
+
 // technicalDDL returns the outboxes and audit log of the context for a dialect.
 func technicalDDL(dialect string) []string {
 	switch dialect {
@@ -134,7 +151,11 @@ func Migrations() sqlrepo.MigrationSet {
 	initial := map[string][]string{}
 	technical := map[string][]string{}
 	phase2 := map[string][]string{}
+	phase3 := map[string][]string{}
 	for _, d := range Dialects {
+		for _, s := range phase3DDL {
+			phase3[d] = append(phase3[d], render(d, s))
+		}
 		for _, s := range initialDDL {
 			initial[d] = append(initial[d], render(d, s))
 		}
@@ -149,6 +170,8 @@ func Migrations() sqlrepo.MigrationSet {
 		{Version: 3, Name: "well-known role and relationship types", Run: seedCatalogs},
 		{Version: 4, Name: "identifications, contacts and classifications", Up: phase2},
 		{Version: 5, Name: "document types, country document rules and classification types", Run: seedPhase2},
+		{Version: 6, Name: "legal forms, shared parties, affiliations and hierarchical relationships", Up: phase3},
+		{Version: 7, Name: "organization rollup: any unit to any organization, hierarchical", Run: generalizeRollup},
 	}}
 }
 
@@ -166,6 +189,9 @@ func seedCatalogs(ctx context.Context, db *sqlrepo.DB) error {
 		}
 	}
 	for _, t := range domain.WellKnownRelationshipTypes() {
+		if t.ID == domain.RelOrganizationRollup { // seeded as in C#; migration 7 generalizes it
+			t.FromRole, t.ToRole, t.Description = domain.RoleDepartment, domain.RoleDivision, "Department belongs to a division"
+		}
 		if err := db.Insert(ctx, "relationship_types", sqlrepo.Values{"id": t.ID, "name": t.Name.String(),
 			"description": t.Description, "from_role": t.FromRole, "to_role": t.ToRole}); err != nil {
 			return fmt.Errorf("seeding relationship type %s: %w", t.Name, err)
@@ -218,6 +244,19 @@ func seedPhase2(ctx context.Context, db *sqlrepo.DB) error {
 	return nil
 }
 
+// generalizeRollup updates the seeded Organization Rollup type (see domain.WellKnownRelationshipTypes).
+func generalizeRollup(ctx context.Context, db *sqlrepo.DB) error {
+	for _, t := range domain.WellKnownRelationshipTypes() {
+		if t.ID != domain.RelOrganizationRollup {
+			continue
+		}
+		_, err := db.Update(ctx, "relationship_types", sqlrepo.Values{"from_role": t.FromRole, "to_role": t.ToRole,
+			"description": t.Description, "hierarchical": t.Hierarchical}, sqlrepo.Values{"id": t.ID})
+		return err
+	}
+	return nil
+}
+
 // Migrator returns the schema migrator of Parties on db.
 func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 	return sqlrepo.NewMigrator(db, []sqlrepo.MigrationSet{Migrations()})
@@ -225,7 +264,7 @@ func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 
 // DropAll removes every table of the context (tests only).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
-	for _, t := range []string{"party_relationships", "party_roles", "party_identifications", "party_contacts",
+	for _, t := range []string{"party_relationships", "party_roles", "party_identifications", "party_contacts", "party_affiliations",
 		"party_classifications", "parties", "relationship_types", "role_types", "country_document_rules",
 		"document_types", "classification_types",
 		TablePartiesOutbox, TableIntegrationOutbox, TableAuditLog, sqlrepo.DefaultMigrationsTable, sqlrepo.DefaultMigrationsLock} {

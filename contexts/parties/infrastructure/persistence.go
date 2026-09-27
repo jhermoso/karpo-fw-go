@@ -22,9 +22,10 @@ func PartyMapping() sqlrepo.Mapping[domain.PartyID, *domain.Party] {
 	return sqlrepo.Mapping[domain.PartyID, *domain.Party]{
 		Table: "parties",
 		Columns: sqlrepo.WithAuditColumns("kind", "name", "given_name", "first_surname", "second_surname", "gender",
-			"birth_date", "marital_status", "legal_name", "trade_name", "active", "test"),
+			"birth_date", "marital_status", "legal_name", "trade_name", "legal_form", "active", "test", "shared"),
 		Dehydrate: func(p *domain.Party) (sqlrepo.Values, error) {
 			v := sqlrepo.Values{"kind": p.Kind(), "name": p.Name(), "active": p.IsActive(), "test": p.IsTest(),
+				"shared": p.IsShared(), "legal_form": nil,
 				"given_name": nil, "first_surname": nil, "second_surname": nil, "gender": nil, "birth_date": nil,
 				"marital_status": nil, "legal_name": nil, "trade_name": nil}
 			if p.Kind() == domain.KindPerson {
@@ -37,12 +38,13 @@ func PartyMapping() sqlrepo.Mapping[domain.PartyID, *domain.Party] {
 			} else {
 				n := p.Organization().Name
 				v["legal_name"], v["trade_name"] = n.Legal(), nullable(n.Trade())
+				v["legal_form"] = nullable(string(p.Organization().LegalForm))
 			}
 			return sqlrepo.AuditStampValues(v, p.AuditStamp()), nil
 		},
 		Hydrate: func(row *sqlrepo.Row, children sqlrepo.ChildRows) (*domain.Party, error) {
 			s := domain.PartyState{Kind: domain.Kind(row.String("kind")), Active: row.Bool("active"),
-				Test: row.Bool("test"), Audit: row.AuditStamp()}
+				Test: row.Bool("test"), Shared: row.Bool("shared"), Audit: row.AuditStamp()}
 			switch s.Kind {
 			case domain.KindPerson:
 				n, err := domain.NewPersonalName(row.String("given_name"), row.String("first_surname"), row.String("second_surname"))
@@ -63,7 +65,11 @@ func PartyMapping() sqlrepo.Mapping[domain.PartyID, *domain.Party] {
 				if err != nil {
 					return nil, err
 				}
-				s.Organization = domain.OrganizationDetails{Name: n}
+				form, err := domain.ParseLegalForm(row.String("legal_form"))
+				if err != nil {
+					return nil, err
+				}
+				s.Organization = domain.OrganizationDetails{Name: n, LegalForm: form}
 			}
 			for _, c := range children.Of("identifications") {
 				country, err := vocab.NewCountryCode(c.String("country"))
@@ -84,6 +90,14 @@ func PartyMapping() sqlrepo.Mapping[domain.PartyID, *domain.Party] {
 					return nil, err
 				}
 				s.Contacts = append(s.Contacts, contact)
+			}
+			for _, c := range children.Of("affiliations") {
+				period, err := vocab.NewValidPeriod(c.Time("valid_from"), c.NullTime("valid_to"))
+				if err != nil {
+					return nil, err
+				}
+				s.Affiliations = append(s.Affiliations, domain.Affiliation{Organization: domain.PartyID{UUID: c.UUID("organization")},
+					Relationship: domain.RelationshipID{UUID: c.UUID("relationship_id")}, Period: period})
 			}
 			for _, c := range children.Of("classifications") {
 				period, err := vocab.NewValidPeriod(c.Time("valid_from"), c.NullTime("valid_to"))
@@ -122,6 +136,24 @@ func PartyMapping() sqlrepo.Mapping[domain.PartyID, *domain.Party] {
 			return domain.Reconstitute(domain.PartyID{UUID: row.UUID("id")}, s)
 		},
 		Children: []sqlrepo.Child[*domain.Party]{{
+			Name:       "affiliations",
+			Table:      "party_affiliations",
+			ForeignKey: "party_id",
+			Columns:    []string{"relationship_id", "organization", "valid_from", "valid_to"},
+			OrderBy:    []string{"valid_from", "relationship_id"},
+			Dehydrate: func(p *domain.Party) ([]sqlrepo.Values, error) {
+				out := []sqlrepo.Values{}
+				for _, a := range p.Affiliations() {
+					var to any
+					if t, ok := a.Period.To(); ok {
+						to = t
+					}
+					out = append(out, sqlrepo.Values{"relationship_id": a.Relationship, "organization": a.Organization,
+						"valid_from": a.Period.From(), "valid_to": to})
+				}
+				return out, nil
+			},
+		}, {
 			Name:       "identifications",
 			Table:      "party_identifications",
 			ForeignKey: "party_id",
@@ -327,7 +359,7 @@ func (c SQLCatalogs) RoleTypes(ctx context.Context) ([]domain.RoleType, error) {
 
 // RelationshipTypes implements domain.Catalogs.
 func (c SQLCatalogs) RelationshipTypes(ctx context.Context) ([]domain.RelationshipType, error) {
-	rows, err := c.db.Select(ctx, "relationship_types", []string{"id", "name", "description", "from_role", "to_role"}, "name")
+	rows, err := c.db.Select(ctx, "relationship_types", []string{"id", "name", "description", "from_role", "to_role", "hierarchical"}, "name")
 	if err != nil {
 		return nil, err
 	}
@@ -338,7 +370,8 @@ func (c SQLCatalogs) RelationshipTypes(ctx context.Context) ([]domain.Relationsh
 			return nil, err
 		}
 		t := domain.RelationshipType{ID: domain.RelationshipTypeID{UUID: r.UUID("id")}, Name: name, Description: r.String("description"),
-			FromRole: domain.RoleTypeID{UUID: r.UUID("from_role")}, ToRole: domain.RoleTypeID{UUID: r.UUID("to_role")}}
+			FromRole: domain.RoleTypeID{UUID: r.UUID("from_role")}, ToRole: domain.RoleTypeID{UUID: r.UUID("to_role")},
+			Hierarchical: r.Bool("hierarchical")}
 		if err := r.Err(); err != nil {
 			return nil, err
 		}

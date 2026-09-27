@@ -122,7 +122,7 @@ func TestPartiesContext(t *testing.T) {
 				t.Fatalf("directory: %+v %v", refs, err)
 			}
 			trail, err := mod.Audit.Trail(ctx, domain.PartyKind, ana.ID)
-			if err != nil || len(trail) != 2 {
+			if err != nil || len(trail) != 4 { // registered, role, affiliated by the employment, affiliation ended
 				t.Fatalf("audit: %d %v", len(trail), err)
 			}
 			// Phase 2: identifications, contacts and classifications.
@@ -171,6 +171,53 @@ func TestPartiesContext(t *testing.T) {
 			byClass, err := svc.Search.Handle(ctx, papp.SearchParties{Classification: domain.ClassCorporate.String()})
 			if err != nil || byClass.Total != 1 || byClass.Items[0].ID != acme.ID {
 				t.Fatalf("search by classification: %+v %v", byClass, err)
+			}
+
+			// Phase 3: organization scope (P1), registration in scope, hierarchy and ports.
+			clerk, _ := authz.NewContext(authz.Context{Subject: fw.NewUUID(), SubjectName: "clerk", Kind: authz.Service,
+				Permissions: []authz.Permission{authz.Wildcard}, Grants: []authz.Grant{{OrganizationID: acmeID.UUID, Level: authz.Full}}})
+			clerkCtx := authz.WithContext(context.Background(), clerk)
+			pedro, err := svc.RegisterPerson.Handle(clerkCtx, papp.RegisterPerson{GivenName: "Pedro", FirstSurname: "Ruiz",
+				Affiliation: &papp.NewAffiliation{Organization: acme.ID, RelationshipType: domain.RelCustomer.String()}})
+			if err != nil || len(pedro.Organizations) != 1 || pedro.Organizations[0] != acme.ID {
+				t.Fatalf("register in scope: %+v %v", pedro, err)
+			}
+			seen, err := svc.Search.Handle(clerkCtx, papp.SearchParties{Kind: "person"})
+			if err != nil || seen.Total != 1 || seen.Items[0].ID != pedro.ID { // ana's employment was terminated; luis never related
+				names := []string{}
+				for _, p := range seen.Items {
+					names = append(names, p.Name)
+				}
+				t.Fatalf("scoped search (affiliations in SQL): %v %v", names, err)
+			}
+			if _, err := svc.Get.Handle(clerkCtx, papp.GetParty{ID: luisID}); !errors.Is(err, fw.ErrNotFound) {
+				t.Fatalf("out of scope must be not found: %v", err)
+			}
+			sales, err := svc.RegisterOrganization.Handle(ctx, papp.RegisterOrganization{LegalName: "Acme Sales", LegalForm: "corporation",
+				Roles: []string{domain.RoleDivision.String()}})
+			if err != nil || sales.Organization.LegalForm != "corporation" {
+				t.Fatalf("legal form round trip: %+v %v", sales, err)
+			}
+			madrid, _ := svc.RegisterOrganization.Handle(ctx, papp.RegisterOrganization{LegalName: "Acme Madrid", Roles: []string{domain.RoleDepartment.String()}})
+			for _, pair := range [][2]string{{sales.ID, acme.ID}, {madrid.ID, sales.ID}} {
+				if _, err := svc.EstablishRelationship.Handle(ctx, papp.EstablishRelationship{Type: domain.RelOrganizationRollup.String(), From: pair[0], To: pair[1]}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := svc.EstablishRelationship.Handle(ctx, papp.EstablishRelationship{Type: domain.RelOrganizationRollup.String(), From: sales.ID, To: madrid.ID}); !errors.Is(err, fw.ErrRuleViolation) {
+				t.Fatalf("cycle: %v", err)
+			}
+			desc, err := mod.Organizations.Descendants(ctx, []string{acme.ID})
+			if err != nil || len(desc) != 3 {
+				t.Fatalf("descendants: %v %v", desc, err)
+			}
+			of, err := mod.Organizations.InternalOrganizationOf(ctx, []string{madrid.ID})
+			if err != nil || of[madrid.ID].ID != acme.ID {
+				t.Fatalf("internal organization of: %+v %v", of, err)
+			}
+			member, err := mod.Organizations.InternalOrganizations(ctx, []string{pedro.ID, luis.ID})
+			if err != nil || len(member[pedro.ID]) != 1 || len(member[luis.ID]) != 0 {
+				t.Fatalf("membership: %+v %v", member, err)
 			}
 
 			pending, err := mod.IntegrationOutbox.Pending(ctx, 100, 10)

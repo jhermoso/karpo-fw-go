@@ -207,3 +207,48 @@ func (db *DB) Select(ctx context.Context, table string, columns []string, orderB
 	}
 	return scanAll(db.d, rows, columns)
 }
+
+// Update sets columns of the rows of table matching every where column (equality), with the
+// dialect's value binding, joining the unit of work in ctx. It returns the rows affected.
+// Meant for data migrations; aggregates are saved through repositories.
+func (db *DB) Update(ctx context.Context, table string, set, where Values) (int64, error) {
+	if err := checkIdent("table", table); err != nil {
+		return 0, err
+	}
+	if len(set) == 0 || len(where) == 0 {
+		return 0, fmt.Errorf("sqlrepo: update %s needs columns to set and a condition", table)
+	}
+	b := &Builder{d: db.d}
+	part := func(v Values, sep string) (string, error) {
+		cols := make([]string, 0, len(v))
+		for c := range v {
+			if err := checkIdent("column", c); err != nil {
+				return "", err
+			}
+			cols = append(cols, c)
+		}
+		slices.Sort(cols)
+		out := make([]string, len(cols))
+		for i, c := range cols {
+			ph, err := b.Arg(v[c])
+			if err != nil {
+				return "", err
+			}
+			out[i] = db.d.Quote(c) + " = " + ph
+		}
+		return strings.Join(out, sep), nil
+	}
+	s, err := part(set, ", ")
+	if err != nil {
+		return 0, err
+	}
+	w, err := part(where, " AND ")
+	if err != nil {
+		return 0, err
+	}
+	res, err := db.executor(ctx).ExecContext(ctx, fmt.Sprintf("UPDATE %s SET %s WHERE %s", db.d.Quote(table), s, w), b.args...)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}

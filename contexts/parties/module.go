@@ -18,6 +18,7 @@ import (
 type Module struct {
 	Service           *papp.Service
 	Directory         contracts.Directory
+	Organizations     papp.Organizations // Membership, OrganizationHierarchy, InternalOrganizationCatalog
 	HTTP              *pdist.Module
 	Outbox            application.OutboxStore // domain events, inside Parties
 	IntegrationOutbox application.OutboxStore // Published Language
@@ -40,7 +41,8 @@ func Compose(sw *hotswap.Switch, idem application.IdempotencyStore) *Module {
 		UoW: sw, Recorder: recorder, Audit: audit, Idempotency: idem,
 	})
 	dir := papp.Directory{Parties: parties}
-	return &Module{Service: svc, Directory: dir, HTTP: pdist.NewModule(svc, dir),
+	orgs := papp.Organizations{Parties: parties, Relationships: relationships, Catalogs: infrastructure.SwappableCatalogs(sw)}
+	return &Module{Service: svc, Directory: dir, Organizations: orgs, HTTP: pdist.NewModule(svc, dir),
 		Outbox: domainOutbox, IntegrationOutbox: integrationOutbox, Audit: audit}
 }
 

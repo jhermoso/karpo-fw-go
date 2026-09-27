@@ -25,14 +25,15 @@ var (
 
 // RegisterPerson registers a person, optionally with initial roles (the C# CreatePartyWithRole).
 type RegisterPerson struct {
-	GivenName     string   `json:"givenName"`
-	FirstSurname  string   `json:"firstSurname"`
-	SecondSurname string   `json:"secondSurname,omitempty"`
-	Gender        string   `json:"gender,omitempty"`
-	BirthDate     string   `json:"birthDate,omitempty"` // YYYY-MM-DD
-	MaritalStatus string   `json:"maritalStatus,omitempty"`
-	Roles         []string `json:"roles,omitempty"`
-	RequestID     string   `json:"-"` // Idempotency-Key
+	GivenName     string          `json:"givenName"`
+	FirstSurname  string          `json:"firstSurname"`
+	SecondSurname string          `json:"secondSurname,omitempty"`
+	Gender        string          `json:"gender,omitempty"`
+	BirthDate     string          `json:"birthDate,omitempty"` // YYYY-MM-DD
+	MaritalStatus string          `json:"maritalStatus,omitempty"`
+	Roles         []string        `json:"roles,omitempty"`
+	Affiliation   *NewAffiliation `json:"affiliation,omitempty"` // required unless global administrator
+	RequestID     string          `json:"-"`                     // Idempotency-Key
 }
 
 // IdempotencyKey implements application.IdempotencyKeyed.
@@ -57,11 +58,29 @@ func (c RegisterPerson) details() (domain.PersonDetails, error) {
 
 // RegisterOrganization registers an organization, optionally with initial roles.
 type RegisterOrganization struct {
-	LegalName string   `json:"legalName"`
-	TradeName string   `json:"tradeName,omitempty"`
-	Roles     []string `json:"roles,omitempty"`
-	RequestID string   `json:"-"`
+	LegalName   string          `json:"legalName"`
+	TradeName   string          `json:"tradeName,omitempty"`
+	LegalForm   string          `json:"legalForm,omitempty"`
+	Roles       []string        `json:"roles,omitempty"`
+	Affiliation *NewAffiliation `json:"affiliation,omitempty"`
+	RequestID   string          `json:"-"`
 }
+
+// SetLegalForm changes the legal form of an organization.
+type SetLegalForm struct {
+	ID        domain.PartyID `json:"-"`
+	LegalForm string         `json:"legalForm"`
+}
+
+// SetShared makes a party a shared catalog entry visible to every organization (global
+// administrators only).
+type SetShared struct {
+	ID     domain.PartyID `json:"-"`
+	Shared bool           `json:"shared"`
+}
+
+// ListInternalOrganizations lists the internal organizations of the caller's scope.
+type ListInternalOrganizations struct{}
 
 // IdempotencyKey implements application.IdempotencyKeyed.
 func (c RegisterOrganization) IdempotencyKey() string { return c.RequestID }
@@ -122,6 +141,7 @@ type SearchParties struct {
 	Kind           string
 	Role           string // role type id: parties playing it (or a role below it) now
 	Document       string // identification number
+	Organization   string // internal organization id: parties affiliated with it now
 	Classification string // classification type id: parties classified so now
 	ActiveOnly     bool
 	Page, Size     int
