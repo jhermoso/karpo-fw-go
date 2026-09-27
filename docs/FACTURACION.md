@@ -102,7 +102,7 @@ contexts/fiscal/
     `bil_invoice_taxes`;
   - las bandejas de salida y la auditoría.
 
-## Decisiones propuestas (pendientes de confirmar)
+## Decisiones (aprobadas por Javier el 2026-09-28)
 
 1. **Las series viven en Facturación**, no en un contexto Documents genérico. La numeración sin
    huecos exige tomar el número en la misma transacción que la emisión. Si más adelante hay
@@ -151,7 +151,6 @@ contexts/fiscal/
 
 ## Pendiente
 
-- Confirmar las decisiones 1–5.
 - Todo el cálculo de impuestos que falta, por país y por sector: punto 6 de
   [BACKLOG.md](../BACKLOG.md).
 - Facturación a demanda desde Pedidos y Envíos (enlaces facturados, precios del pedido).
