@@ -398,3 +398,23 @@ func TestCheckDigits(t *testing.T) {
 		t.Fatal("FR SPI")
 	}
 }
+
+func TestIBAN(t *testing.T) {
+	for _, s := range []string{"ES91 2100 0418 4502 0005 1332", "DE89370400440532013000", "GB82 WEST 1234 5698 7654 32", "fr1420041010050500013m02606"} {
+		i, err := vocab.NewIBAN(s)
+		if err != nil {
+			t.Errorf("%s: %v", s, err)
+		}
+		if i.Formatted()[4] != ' ' {
+			t.Errorf("formatted %q", i.Formatted())
+		}
+	}
+	if i, _ := vocab.NewIBAN("ES91 2100 0418 4502 0005 1332"); i.String() != "ES9121000418450200051332" || i.Country() != "ES" {
+		t.Fatal("normalized form")
+	}
+	for _, s := range []string{"ES92 2100 0418 4502 0005 1332", "ES9", "12912100041845020005133X", "ES91-2100"} {
+		if _, err := vocab.NewIBAN(s); err == nil {
+			t.Errorf("%s must be invalid", s)
+		}
+	}
+}

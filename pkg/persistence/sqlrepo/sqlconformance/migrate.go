@@ -3,6 +3,7 @@ package sqlconformance
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -200,9 +201,24 @@ func RunMigrations(t *testing.T, db *sqlrepo.DB) {
 	if _, err := db.Update(ctx, "t_mig_seed", sqlrepo.Values{"name": "x"}, nil); err == nil {
 		t.Fatal("an update without condition is refused")
 	}
+	// InsertMany: more rows than one batch and more parameters than SQL Server's limit.
+	var many [][]any
+	for i := range 1234 {
+		many = append(many, []any{int64(1000 + i), fmt.Sprintf("n%04d", i)})
+	}
+	if err := db.Do(ctx, func(ctx context.Context) error { return db.InsertMany(ctx, "t_mig_seed", []string{"id", "name"}, many) }); err != nil {
+		t.Fatalf("insert many: %v", err)
+	}
+	if n := count("t_mig_seed"); n != 2+1234 {
+		t.Fatalf("insert many count: %d", n)
+	}
+	if err := db.InsertMany(ctx, "t_mig_seed", []string{"id", "name"}, [][]any{{int64(1)}}); err == nil {
+		t.Fatal("a row with missing values is refused")
+	}
 	rows, err := db.Select(ctx, "t_mig_seed", []string{"id", "name"}, "id")
-	if err != nil || len(rows) != 2 || rows[1].Int64("id") != 2 || rows[1].String("name") != "two" {
-		t.Fatalf("select: %v %v", rows, err)
+	if err != nil || len(rows) != 2+1234 || rows[1].Int64("id") != 2 || rows[1].String("name") != "two" ||
+		rows[len(rows)-1].String("name") != "n1233" {
+		t.Fatalf("select: %d rows, %v", len(rows), err)
 	}
 
 	if _, err := sqlrepo.NewMigrator(db, []sqlrepo.MigrationSet{{Context: "x", Migrations: []sqlrepo.Migration{v2, v1}}}); err == nil {

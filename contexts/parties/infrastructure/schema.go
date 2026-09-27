@@ -6,9 +6,7 @@ package infrastructure
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"slices"
-	"strings"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/parties/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
@@ -31,36 +29,9 @@ const (
 )
 
 // Dialects the context supports.
-var Dialects = []string{"sqlite", "postgres", "sqlserver", "oracle", "mysql"}
+var Dialects = sqlrepo.Dialects
 
-var logical = map[string]map[string]string{
-	"sqlite": {"uuid": "TEXT", "str": "TEXT", "bool": "INTEGER", "ts": "TEXT", "date": "TEXT", "bigint": "INTEGER",
-		"false": "0", "add": "ADD COLUMN %s", "addEnd": ""},
-	"postgres": {"uuid": "UUID", "str": "VARCHAR(%s)", "bool": "BOOLEAN", "ts": "TIMESTAMPTZ", "date": "DATE", "bigint": "BIGINT",
-		"false": "FALSE", "add": "ADD COLUMN %s", "addEnd": ""},
-	"sqlserver": {"uuid": "UNIQUEIDENTIFIER", "str": "NVARCHAR(%s)", "bool": "BIT", "ts": "DATETIME2(7)", "date": "DATE", "bigint": "BIGINT",
-		"false": "0", "add": "ADD %s", "addEnd": ""},
-	"oracle": {"uuid": "RAW(16)", "str": "VARCHAR2(%s)", "bool": "NUMBER(1)", "ts": "TIMESTAMP(6) WITH TIME ZONE", "date": "DATE",
-		"bigint": "NUMBER(19)", "false": "0", "add": "ADD (%s", "addEnd": ")"},
-	"mysql": {"uuid": "CHAR(36)", "str": "VARCHAR(%s)", "bool": "BOOLEAN", "ts": "DATETIME(6)", "date": "DATE", "bigint": "BIGINT",
-		"false": "FALSE", "add": "ADD COLUMN %s", "addEnd": ""},
-}
-
-var placeholder = regexp.MustCompile(`\{(\w+)(?::([\w ]+))?\}`)
-
-// render replaces {uuid}, {str:N}, {bool}, {ts}, {date} and {bigint} with the dialect's types.
-// Optional text columns are nullable everywhere: Oracle stores "" as NULL.
-func render(dialect, ddl string) string {
-	types := logical[dialect]
-	return placeholder.ReplaceAllStringFunc(ddl, func(m string) string {
-		p := placeholder.FindStringSubmatch(m)
-		t := types[p[1]]
-		if strings.Contains(t, "%s") {
-			t = fmt.Sprintf(t, p[2])
-		}
-		return t
-	})
-}
+func render(dialect, ddl string) string { return sqlrepo.RenderDDL(dialect, ddl) }
 
 const auditCols = `created_at {ts}, created_by_id {str:64}, created_by_name {str:200},
 	modified_at {ts}, modified_by_id {str:64}, modified_by_name {str:200}`

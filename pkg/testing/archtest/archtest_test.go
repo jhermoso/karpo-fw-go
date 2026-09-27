@@ -1,7 +1,9 @@
 package archtest_test
 
 import (
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/jhermoso/karpo-fw-go/pkg/testing/archtest"
@@ -111,6 +113,38 @@ func TestMatchesAndImports(t *testing.T) {
 	for _, imp := range imps {
 		if imp.Path == module+"/pkg/testing/archtest" {
 			t.Fatal("test files must be ignored")
+		}
+	}
+}
+
+// Rule 7: bounded contexts talk through contracts. A context may import another one only through
+// its contracts package (Published Language and Open Host Service), and never in its domain.
+func TestContexts_DependOnEachOtherThroughContracts(t *testing.T) {
+	dirs, err := os.ReadDir(root(t, "contexts"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range dirs {
+		if !d.IsDir() {
+			continue
+		}
+		name := d.Name()
+		imps, err := archtest.Imports(root(t, "contexts", name), true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, imp := range imps {
+			rest, ok := strings.CutPrefix(imp.Path, module+"/contexts/")
+			if !ok {
+				continue
+			}
+			other, sub, _ := strings.Cut(rest, "/")
+			if other == name {
+				continue
+			}
+			if sub != "contracts" || strings.Contains(filepath.ToSlash(imp.File), "/domain/") {
+				t.Errorf("%s imports %s: contexts may only use other contexts' contracts, outside their domain", imp.File, imp.Path)
+			}
 		}
 	}
 }

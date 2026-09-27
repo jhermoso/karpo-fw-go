@@ -24,6 +24,14 @@ type Deps struct {
 	Recorder      app.EventRecorder
 	Audit         app.AuditLog
 	Idempotency   app.IdempotencyStore
+	// Addresses validates postal addresses against the Geography context (optional).
+	Addresses AddressChecker
+}
+
+// AddressChecker validates the geographic part of a postal address and completes its Geography
+// references (the port Parties owns; an adapter implements it over the Geography contracts).
+type AddressChecker interface {
+	CheckAddress(ctx context.Context, a domain.PostalAddress) (domain.PostalAddress, error)
 }
 
 // Service exposes the Parties use cases as decorated, statically typed handlers. Every handler

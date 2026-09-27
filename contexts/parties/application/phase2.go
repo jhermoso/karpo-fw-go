@@ -234,6 +234,11 @@ func addPhase2(svc *Service, s service) {
 		if err != nil {
 			return PartyDTO{}, err
 		}
+		if d.Kind == domain.ContactPostal && s.Addresses != nil {
+			if d.Address, err = s.Addresses.CheckAddress(ctx, d.Address); err != nil {
+				return PartyDTO{}, err
+			}
+		}
 		return updateParty(ctx, c.PartyID, func(p *domain.Party, _ *domain.Catalog) error {
 			_, err := p.AddContact(d, nowOr(c.From))
 			return err

@@ -25,8 +25,14 @@ type Module struct {
 	Audit             application.AuditLog
 }
 
+// Option configures the composition.
+type Option func(*papp.Deps)
+
+// WithAddressChecker validates postal addresses with the Geography context.
+func WithAddressChecker(c papp.AddressChecker) Option { return func(d *papp.Deps) { d.Addresses = c } }
+
 // Compose builds the context on sw. idem may be nil.
-func Compose(sw *hotswap.Switch, idem application.IdempotencyStore) *Module {
+func Compose(sw *hotswap.Switch, idem application.IdempotencyStore, opts ...Option) *Module {
 	parties := hotswap.Repository(sw, infrastructure.PartyRepositoryFactory)
 	relationships := hotswap.Repository(sw, infrastructure.RelationshipRepositoryFactory)
 	domainOutbox := hotswap.Outbox(sw, infrastructure.OutboxFactory)
@@ -36,10 +42,14 @@ func Compose(sw *hotswap.Switch, idem application.IdempotencyStore) *Module {
 		outbox.NewRecorder(domainOutbox),
 		papp.Publications(messaging.NewRecorder(contracts.Source, integrationOutbox)),
 	)
-	svc := papp.NewService(papp.Deps{
+	deps := papp.Deps{
 		Parties: parties, Relationships: relationships, Catalogs: infrastructure.SwappableCatalogs(sw),
 		UoW: sw, Recorder: recorder, Audit: audit, Idempotency: idem,
-	})
+	}
+	for _, o := range opts {
+		o(&deps)
+	}
+	svc := papp.NewService(deps)
 	dir := papp.Directory{Parties: parties}
 	orgs := papp.Organizations{Parties: parties, Relationships: relationships, Catalogs: infrastructure.SwappableCatalogs(sw)}
 	return &Module{Service: svc, Directory: dir, Organizations: orgs, HTTP: pdist.NewModule(svc, dir),
