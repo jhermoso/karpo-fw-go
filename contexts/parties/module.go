@@ -31,6 +31,11 @@ type Option func(*papp.Deps)
 // WithAddressChecker validates postal addresses with the Geography context.
 func WithAddressChecker(c papp.AddressChecker) Option { return func(d *papp.Deps) { d.Addresses = c } }
 
+// WithFacilityDirectory resolves facilities with the Facilities context (facility roles).
+func WithFacilityDirectory(f papp.FacilityDirectory) Option {
+	return func(d *papp.Deps) { d.FacilityDirectory = f }
+}
+
 // Compose builds the context on sw. idem may be nil.
 func Compose(sw *hotswap.Switch, idem application.IdempotencyStore, opts ...Option) *Module {
 	parties := hotswap.Repository(sw, infrastructure.PartyRepositoryFactory)

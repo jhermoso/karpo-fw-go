@@ -91,6 +91,20 @@ func PartyMapping() sqlrepo.Mapping[domain.PartyID, *domain.Party] {
 				}
 				s.Contacts = append(s.Contacts, contact)
 			}
+			for _, c := range children.Of("facility_roles") {
+				period, err := vocab.NewValidPeriod(c.Time("valid_from"), c.NullTime("valid_to"))
+				if err != nil {
+					return nil, err
+				}
+				s.Facilities = append(s.Facilities, domain.FacilityRole{ID: domain.FacilityRoleID{UUID: c.UUID("id")},
+					Facility: c.UUID("facility"), RoleType: domain.FacilityRoleTypeID{UUID: c.UUID("role_type")}, Period: period})
+			}
+			slices.SortFunc(s.Facilities, func(a, b domain.FacilityRole) int {
+				if c := a.Period.From().Compare(b.Period.From()); c != 0 {
+					return c
+				}
+				return bytes.Compare(a.ID.Bytes(), b.ID.Bytes())
+			})
 			for _, c := range children.Of("affiliations") {
 				period, err := vocab.NewValidPeriod(c.Time("valid_from"), c.NullTime("valid_to"))
 				if err != nil {
@@ -136,6 +150,24 @@ func PartyMapping() sqlrepo.Mapping[domain.PartyID, *domain.Party] {
 			return domain.Reconstitute(domain.PartyID{UUID: row.UUID("id")}, s)
 		},
 		Children: []sqlrepo.Child[*domain.Party]{{
+			Name:       "facility_roles",
+			Table:      "party_facility_roles",
+			ForeignKey: "party_id",
+			Columns:    []string{"id", "facility", "role_type", "valid_from", "valid_to"},
+			OrderBy:    []string{"valid_from", "id"},
+			Dehydrate: func(p *domain.Party) ([]sqlrepo.Values, error) {
+				out := []sqlrepo.Values{}
+				for _, r := range p.FacilityRoles() {
+					var to any
+					if t, ok := r.Period.To(); ok {
+						to = t
+					}
+					out = append(out, sqlrepo.Values{"id": r.ID, "facility": r.Facility, "role_type": r.RoleType,
+						"valid_from": r.Period.From(), "valid_to": to})
+				}
+				return out, nil
+			},
+		}, {
 			Name:       "affiliations",
 			Table:      "party_affiliations",
 			ForeignKey: "party_id",
@@ -465,6 +497,23 @@ func (c SQLCatalogs) ClassificationTypes(ctx context.Context) ([]domain.Classifi
 	return append(families, leaves...), nil
 }
 
+// FacilityRoleTypes implements domain.Catalogs.
+func (c SQLCatalogs) FacilityRoleTypes(ctx context.Context) ([]domain.FacilityRoleType, error) {
+	rows, err := c.db.Select(ctx, "facility_role_types", []string{"id", "name", "description", "active"}, "name")
+	if err != nil {
+		return nil, err
+	}
+	out := make([]domain.FacilityRoleType, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, domain.FacilityRoleType{ID: domain.FacilityRoleTypeID{UUID: r.UUID("id")}, Name: r.String("name"),
+			Description: r.String("description"), Active: r.Bool("active")})
+		if err := r.Err(); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
 // WellKnownCatalogs serves the seed catalogs from memory (in-memory backend and tests).
 type WellKnownCatalogs struct{}
 
@@ -491,6 +540,11 @@ func (WellKnownCatalogs) CountryDocumentRules(context.Context) ([]domain.Country
 // ClassificationTypes implements domain.Catalogs.
 func (WellKnownCatalogs) ClassificationTypes(context.Context) ([]domain.ClassificationType, error) {
 	return domain.WellKnownClassificationTypes(), nil
+}
+
+// FacilityRoleTypes implements domain.Catalogs.
+func (WellKnownCatalogs) FacilityRoleTypes(context.Context) ([]domain.FacilityRoleType, error) {
+	return domain.WellKnownFacilityRoleTypes(), nil
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -563,6 +617,11 @@ func (c swappableCatalogs) CountryDocumentRules(ctx context.Context) (out []doma
 
 func (c swappableCatalogs) ClassificationTypes(ctx context.Context) (out []domain.ClassificationType, err error) {
 	err = c.b.With(ctx, func(ctx context.Context, x domain.Catalogs) error { out, err = x.ClassificationTypes(ctx); return err })
+	return out, err
+}
+
+func (c swappableCatalogs) FacilityRoleTypes(ctx context.Context) (out []domain.FacilityRoleType, err error) {
+	err = c.b.With(ctx, func(ctx context.Context, x domain.Catalogs) error { out, err = x.FacilityRoleTypes(ctx); return err })
 	return out, err
 }
 

@@ -24,6 +24,7 @@ type Catalogs interface {
 	DocumentTypes(ctx context.Context) ([]DocumentType, error)
 	CountryDocumentRules(ctx context.Context) ([]CountryDocumentRule, error)
 	ClassificationTypes(ctx context.Context) ([]ClassificationType, error)
+	FacilityRoleTypes(ctx context.Context) ([]FacilityRoleType, error)
 }
 
 // ---------------------------------------------------------------------------------------------

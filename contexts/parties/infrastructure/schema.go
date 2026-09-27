@@ -143,6 +143,19 @@ func Migrations() sqlrepo.MigrationSet {
 		{Version: 5, Name: "document types, country document rules and classification types", Run: seedPhase2},
 		{Version: 6, Name: "legal forms, shared parties, affiliations and hierarchical relationships", Up: phase3},
 		{Version: 7, Name: "organization rollup: any unit to any organization, hierarchical", Run: generalizeRollup},
+		{Version: 8, Name: "facility roles (the party side of Facilities)", Up: sqlrepo.RenderDDLAll(
+			`CREATE TABLE facility_role_types (id {uuid} NOT NULL PRIMARY KEY, name {str:100} NOT NULL, description {str:500}, active {bool} NOT NULL)`,
+			`CREATE TABLE party_facility_roles (party_id {uuid} NOT NULL, id {uuid} NOT NULL, facility {uuid} NOT NULL, role_type {uuid} NOT NULL,
+	valid_from {ts} NOT NULL, valid_to {ts}, PRIMARY KEY (party_id, id), FOREIGN KEY (party_id) REFERENCES parties (id),
+	FOREIGN KEY (role_type) REFERENCES facility_role_types (id))`,
+			`CREATE INDEX ix_party_facility_roles_facility ON party_facility_roles (facility)`)},
+		{Version: 9, Name: "facility role types", Run: func(ctx context.Context, db *sqlrepo.DB) error {
+			var rows [][]any
+			for _, t := range domain.WellKnownFacilityRoleTypes() {
+				rows = append(rows, []any{t.ID, t.Name, t.Description, t.Active})
+			}
+			return db.InsertMany(ctx, "facility_role_types", []string{"id", "name", "description", "active"}, rows)
+		}},
 	}}
 }
 
@@ -236,6 +249,7 @@ func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 // DropAll removes every table of the context (tests only).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
 	for _, t := range []string{"party_relationships", "party_roles", "party_identifications", "party_contacts", "party_affiliations",
+		"party_facility_roles", "facility_role_types",
 		"party_classifications", "parties", "relationship_types", "role_types", "country_document_rules",
 		"document_types", "classification_types",
 		TablePartiesOutbox, TableIntegrationOutbox, TableAuditLog, sqlrepo.DefaultMigrationsTable, sqlrepo.DefaultMigrationsLock} {

@@ -119,7 +119,7 @@ func (m *Module) search(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	atoi := func(k string) int { n, _ := strconv.Atoi(q.Get(k)); return n }
 	page, err := m.svc.Search.Handle(r.Context(), papp.SearchParties{Text: q.Get("q"), Kind: q.Get("kind"), Role: q.Get("role"),
-		Document: q.Get("document"), Classification: q.Get("classification"), Organization: q.Get("organization"),
+		Document: q.Get("document"), Classification: q.Get("classification"), Organization: q.Get("organization"), Facility: q.Get("facility"),
 		ActiveOnly: q.Get("active") == "true", Page: atoi("page"), Size: atoi("size")})
 	distribution.Respond(w, r, page, err, http.StatusOK)
 }
