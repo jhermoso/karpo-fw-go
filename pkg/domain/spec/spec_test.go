@@ -130,3 +130,23 @@ func TestOrder_TypedComparison(t *testing.T) {
 		t.Fatalf("unexpected order %+v", o)
 	}
 }
+
+func TestOptionalTime(t *testing.T) {
+	type period struct{ end *time.Time }
+	f := spec.OptionalTime("end", func(p period) *time.Time { return p.end })
+	now := time.Date(2026, 9, 27, 12, 0, 0, 0, time.UTC)
+	past, future := now.Add(-time.Hour), now.Add(time.Hour)
+	open, ended, ending := period{}, period{&past}, period{&future}
+	current := f.IsNull().Or(f.After(now))
+	for _, c := range []struct {
+		p    period
+		want bool
+	}{{open, true}, {ended, false}, {ending, true}} {
+		if current.IsSatisfiedBy(c.p) != c.want {
+			t.Errorf("%v: want %v", c.p.end, c.want)
+		}
+	}
+	if f.Before(now).IsSatisfiedBy(open) || !f.AtOrBefore(past).IsSatisfiedBy(ended) || !f.AtOrAfter(future).IsSatisfiedBy(ending) || !f.IsNotNull().IsSatisfiedBy(ended) {
+		t.Fatal("null never matches a comparison")
+	}
+}

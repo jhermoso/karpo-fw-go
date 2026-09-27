@@ -4,6 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"slices"
+	"strings"
 )
 
 // DB binds a *sql.DB to a Dialect and provides the unit of work shared by every repository and
@@ -136,4 +139,71 @@ func (db *DB) ExecContext(ctx context.Context, query string, args ...any) (sql.R
 // (read models / query handlers that bypass aggregates).
 func (db *DB) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
 	return db.executor(ctx).QueryContext(ctx, query, args...)
+}
+
+// Insert inserts one row into table with the dialect's value binding (UUIDs, booleans, dates,
+// decimals...), joining the unit of work in ctx. Meant for seeds and data migrations
+// (Migration.Run); aggregates are saved through repositories.
+func (db *DB) Insert(ctx context.Context, table string, v Values) error {
+	if err := checkIdent("table", table); err != nil {
+		return err
+	}
+	cols := make([]string, 0, len(v))
+	for c := range v {
+		if err := checkIdent("column", c); err != nil {
+			return err
+		}
+		cols = append(cols, c)
+	}
+	slices.Sort(cols)
+	b := &Builder{d: db.d}
+	quoted := make([]string, len(cols))
+	phs := make([]string, len(cols))
+	for i, c := range cols {
+		quoted[i] = db.d.Quote(c)
+		ph, err := b.Arg(v[c])
+		if err != nil {
+			return err
+		}
+		phs[i] = ph
+	}
+	_, err := db.executor(ctx).ExecContext(ctx, fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
+		db.d.Quote(table), strings.Join(quoted, ", "), strings.Join(phs, ", ")), b.args...)
+	return err
+}
+
+// Select reads whole tables such as small catalogs: SELECT columns FROM table ORDER BY orderBy,
+// returned as typed rows. It joins the unit of work in ctx. Queries over aggregates go through
+// repositories and specifications.
+func (db *DB) Select(ctx context.Context, table string, columns []string, orderBy ...string) ([]*Row, error) {
+	if err := checkIdent("table", table); err != nil {
+		return nil, err
+	}
+	quote := func(cs []string) ([]string, error) {
+		out := make([]string, len(cs))
+		for i, c := range cs {
+			if err := checkIdent("column", c); err != nil {
+				return nil, err
+			}
+			out[i] = db.d.Quote(c)
+		}
+		return out, nil
+	}
+	sel, err := quote(columns)
+	if err != nil {
+		return nil, err
+	}
+	ord, err := quote(orderBy)
+	if err != nil {
+		return nil, err
+	}
+	query := fmt.Sprintf("SELECT %s FROM %s", strings.Join(sel, ", "), db.d.Quote(table))
+	if len(ord) > 0 {
+		query += " ORDER BY " + strings.Join(ord, ", ")
+	}
+	rows, err := db.executor(ctx).QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("sqlrepo: select %s: %w", table, err)
+	}
+	return scanAll(db.d, rows, columns)
 }

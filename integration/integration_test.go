@@ -232,10 +232,7 @@ func TestHotSwapAcrossEngines(t *testing.T) {
 func resetParties(t *testing.T, db *sqlrepo.DB) {
 	t.Helper()
 	ctx := context.Background()
-	for _, s := range []string{"DROP TABLE party_contacts", "DROP TABLE parties", "DROP TABLE outbox_messages",
-		"DROP TABLE parties_integration_outbox", "DROP TABLE audit_log", "DROP TABLE schema_migrations", "DROP TABLE schema_migrations_lock"} {
-		_, _ = db.ExecContext(ctx, s)
-	}
+	dropPartiesTables(ctx, db)
 	m, err := infrastructure.Migrator(db)
 	if err != nil {
 		t.Fatal(err)
@@ -248,5 +245,15 @@ func resetParties(t *testing.T, db *sqlrepo.DB) {
 	}
 	if err := m.Verify(ctx); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// dropPartiesTables removes the tables of both the framework example and the Parties context
+// (they share names on the integration databases), children first.
+func dropPartiesTables(ctx context.Context, db *sqlrepo.DB) {
+	for _, t := range []string{"party_relationships", "party_roles", "party_contacts", "parties", "relationship_types",
+		"role_types", "outbox_messages", "parties_integration_outbox", "parties_outbox", "audit_log", "parties_audit_log",
+		"schema_migrations", "schema_migrations_lock"} {
+		_, _ = db.ExecContext(ctx, "DROP TABLE "+t)
 	}
 }
