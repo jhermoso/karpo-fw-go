@@ -171,7 +171,7 @@ contexts/payroll/
 ## Pendiente
 
 - Fase 2: motor de cálculo (decisión 1).
-- Contexto Fiscal (modelos 111 y 190), Contabilidad (asiento de nóminas) y Tesorería (remesa SEPA
+- ~~Contexto Fiscal (modelos 111 y 190)~~: hecho en [FISCAL.md](FISCAL.md). Contabilidad (asiento de nóminas) y Tesorería (remesa SEPA
   con `Remittance`).
 - Representantes de la CCC y seguros sociales (RLC/RNT/SILTRA).
 - Catálogo de regímenes de la SS y de claves y subclaves del 190.

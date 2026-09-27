@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"fmt"
 	"slices"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/parties/contracts"
@@ -183,6 +184,77 @@ func (o Organizations) All(ctx context.Context) ([]contracts.PartyRef, error) {
 	out := make([]contracts.PartyRef, len(ps))
 	for i, p := range ps {
 		out[i] = contracts.PartyRef{ID: p.ID().String(), Name: p.Name(), Active: p.IsActive()}
+	}
+	return out, nil
+}
+
+// TaxIdentities implements contracts.TaxIdentities over the identifications and postal contacts
+// of the parties (one query per batch; it serves contexts, not users).
+type TaxIdentities struct{ Parties domain.PartyRepository }
+
+var _ contracts.TaxIdentities = TaxIdentities{}
+
+// taxDocuments are the documents that identify a party for tax purposes, most specific first.
+var taxDocuments = []struct {
+	id   domain.DocumentTypeID
+	code string
+}{
+	{domain.MustDocumentTypeID("c0000000-0004-0000-0000-000000000003"), "TXID"},
+	{domain.MustDocumentTypeID("c0000000-0004-0000-0000-000000000002"), "NIDN"},
+	{domain.MustDocumentTypeID("c0000000-0004-0000-0000-000000000006"), "ARNU"},
+}
+
+// TaxIdentities implements contracts.TaxIdentities: the primary tax document if there is one,
+// otherwise TXID, then NIDN, then ARNU; the province of the current Spanish postal contact,
+// billing first.
+func (t TaxIdentities) TaxIdentities(ctx context.Context, partyIDs []string) (map[string]contracts.TaxIdentity, error) {
+	if len(partyIDs) > contracts.MaxDirectoryBatch {
+		return nil, fmt.Errorf("%w: at most %d ids per call", fw.ErrValidation, contracts.MaxDirectoryBatch)
+	}
+	out := map[string]contracts.TaxIdentity{}
+	ids := parseIDs(partyIDs)
+	if len(ids) == 0 {
+		return out, nil
+	}
+	ps, err := t.Parties.Find(ctx, domain.WithIDs(ids...))
+	if err != nil {
+		return nil, err
+	}
+	now := fw.Now()
+	for _, p := range ps {
+		ti := contracts.TaxIdentity{PartyID: p.ID().String(), Name: p.Name()}
+		rank := func(i domain.Identification) int {
+			for k, d := range taxDocuments {
+				if d.id == i.Type {
+					if i.Primary {
+						return k
+					}
+					return k + len(taxDocuments)
+				}
+			}
+			return -1
+		}
+		best := -1
+		for _, i := range p.Identifications() {
+			if r := rank(i); r >= 0 && (best < 0 || r < best) {
+				best = r
+				ti.Country, ti.Number, ti.DocumentType = i.Country.String(), i.Number, taxDocuments[r%len(taxDocuments)].code
+			}
+		}
+		for _, purpose := range []domain.Purpose{domain.PurposeBilling, domain.PurposeDefault, ""} {
+			if ti.Province != "" {
+				break
+			}
+			for _, c := range p.Contacts() {
+				a := c.Address
+				if c.Kind == domain.ContactPostal && c.IsActiveAt(now) && a.Country.String() == "ES" && len(a.PostalCode) == 5 &&
+					(purpose == "" || c.Has(purpose)) {
+					ti.Province = a.PostalCode[:2]
+					break
+				}
+			}
+		}
+		out[ti.PartyID] = ti
 	}
 	return out, nil
 }

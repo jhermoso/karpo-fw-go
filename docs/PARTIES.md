@@ -238,6 +238,10 @@ Reacciones a otros contextos (primer consumidor de Parties, decisión 4 de [RRHH
 `hr.employee-terminated.v1` termina la relación `Employment` y la afiliación, a través de la
 bandeja de entrada `parties_inbox` (migración 10) y de `Module.Consumer`.
 
+Contrato `TaxIdentities` (para Fiscal): documento fiscal (el principal, o TXID > NIDN > ARNU) y
+provincia del contacto postal español vigente (facturación primero), por lotes. Ver
+[FISCAL.md](FISCAL.md).
+
 ## 6. Siguientes fases
 
 | Fase | Contenido |
