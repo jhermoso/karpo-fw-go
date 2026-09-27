@@ -63,7 +63,7 @@ En Parties:
 
 ## Pendiente
 
-- El `WorkCenter` de RRHH (decisión 3) se hará al portar RRHH: referenciará `FacilityID` y usará
-  `party-facility-role-assigned.v1`.
+- ~~El `WorkCenter` de RRHH (decisión 3)~~: hecho en [RRHH.md](RRHH.md). Referencia `FacilityID`,
+  validado con el directorio de Instalaciones (existe, está activa y es del empleador).
 - La importación de las instalaciones de cada cliente (Sage, Personio) debe crear las instalaciones
   y los roles con estos casos de uso.
