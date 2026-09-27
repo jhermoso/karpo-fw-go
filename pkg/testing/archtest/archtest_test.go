@@ -60,6 +60,8 @@ func TestApplicationImplementations_DependOnContractsOnly(t *testing.T) {
 	for _, pkg := range []string{"pipeline", "orchestration", "outbox", "hosting", "authorization"} {
 		archtest.AssertOnlyImports(t, root(t, "pkg", "application", pkg), true, contracts...)
 	}
+	// messaging reuses the relay engine of outbox (a sibling implementation, never an adapter).
+	archtest.AssertOnlyImports(t, root(t, "pkg", "application", "messaging"), false, append(contracts, module+"/pkg/application/outbox")...)
 }
 
 // Rule 4: the distribution layer talks to the application, never to persistence adapters.
@@ -73,14 +75,16 @@ func TestPersistence_IsDriverAgnostic(t *testing.T) {
 	archtest.AssertTreeDoesNotImport(t, root(t, "pkg", "persistence"), []string{
 		"/pkg/distribution", "net/http",
 		"/pkg/application/pipeline", "/pkg/application/orchestration", "/pkg/application/outbox", "/pkg/application/hosting",
-		"/pkg/application/authorization",
+		"/pkg/application/authorization", "/pkg/application/messaging", "/pkg/messaging",
 	})
 	archtest.AssertOnlyImports(t, root(t, "pkg", "persistence"), true, archtest.Std, decimalLib, module+"/...")
 }
 
-// Rule 6: event infrastructure implements application contracts and depends on nothing else.
+// Rule 6: event infrastructure and message transports implement application contracts and
+// depend on nothing else.
 func TestEvents_DependOnContractsOnly(t *testing.T) {
 	archtest.AssertOnlyImports(t, root(t, "pkg", "events"), true, append(contracts, module+"/pkg/events/...")...)
+	archtest.AssertOnlyImports(t, root(t, "pkg", "messaging"), false, append(contracts, module+"/pkg/messaging/...")...)
 }
 
 func TestMatchesAndImports(t *testing.T) {

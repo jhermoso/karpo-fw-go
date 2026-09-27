@@ -33,3 +33,7 @@ func TestRepositoryConformance(t *testing.T) {
 func TestAuditLogConformance(t *testing.T) {
 	sqlconformance.RunAuditLog(t, openTemp(t))
 }
+
+func TestInboxConformance(t *testing.T) {
+	sqlconformance.RunInbox(t, openTemp(t))
+}

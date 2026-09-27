@@ -6,6 +6,7 @@ package infrastructure
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/jhermoso/karpo-fw-go/examples/parties/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/application"
@@ -92,7 +93,7 @@ func Schema(dialect string) []string {
 			`CREATE TABLE IF NOT EXISTS party_contacts (party_id TEXT NOT NULL REFERENCES parties(id), pos INTEGER NOT NULL,
 				kind TEXT NOT NULL, value TEXT NOT NULL, is_primary INTEGER NOT NULL, PRIMARY KEY (party_id, pos))`,
 		}
-		outbox = append(sqlite.OutboxDDL(""), sqlite.AuditDDL("")...)
+		outbox = slices.Concat(sqlite.OutboxDDL(""), sqlite.OutboxDDL(IntegrationOutboxTable), sqlite.AuditDDL(""))
 	case "postgres":
 		ddl = []string{
 			`CREATE TABLE IF NOT EXISTS parties (id UUID PRIMARY KEY, version BIGINT NOT NULL, party_type VARCHAR(20) NOT NULL,
@@ -100,7 +101,7 @@ func Schema(dialect string) []string {
 			`CREATE TABLE IF NOT EXISTS party_contacts (party_id UUID NOT NULL REFERENCES parties(id), pos INTEGER NOT NULL,
 				kind VARCHAR(20) NOT NULL, value VARCHAR(300) NOT NULL, is_primary BOOLEAN NOT NULL, PRIMARY KEY (party_id, pos))`,
 		}
-		outbox = append(postgres.OutboxDDL(""), postgres.AuditDDL("")...)
+		outbox = slices.Concat(postgres.OutboxDDL(""), postgres.OutboxDDL(IntegrationOutboxTable), postgres.AuditDDL(""))
 	case "sqlserver":
 		ddl = []string{
 			`CREATE TABLE parties (id UNIQUEIDENTIFIER PRIMARY KEY, version BIGINT NOT NULL, party_type NVARCHAR(20) NOT NULL,
@@ -108,7 +109,7 @@ func Schema(dialect string) []string {
 			`CREATE TABLE party_contacts (party_id UNIQUEIDENTIFIER NOT NULL REFERENCES parties(id), pos INT NOT NULL,
 				kind NVARCHAR(20) NOT NULL, value NVARCHAR(300) NOT NULL, is_primary BIT NOT NULL, PRIMARY KEY (party_id, pos))`,
 		}
-		outbox = append(sqlserver.OutboxDDL(""), sqlserver.AuditDDL("")...)
+		outbox = slices.Concat(sqlserver.OutboxDDL(""), sqlserver.OutboxDDL(IntegrationOutboxTable), sqlserver.AuditDDL(""))
 	case "oracle":
 		ddl = []string{
 			`CREATE TABLE parties (id RAW(16) PRIMARY KEY, version NUMBER(19) NOT NULL, party_type VARCHAR2(20) NOT NULL,
@@ -116,7 +117,7 @@ func Schema(dialect string) []string {
 			`CREATE TABLE party_contacts (party_id RAW(16) NOT NULL REFERENCES parties(id), pos NUMBER(10) NOT NULL,
 				kind VARCHAR2(20) NOT NULL, value VARCHAR2(300) NOT NULL, is_primary NUMBER(1) NOT NULL, PRIMARY KEY (party_id, pos))`,
 		}
-		outbox = append(oracle.OutboxDDL(""), oracle.AuditDDL("")...)
+		outbox = slices.Concat(oracle.OutboxDDL(""), oracle.OutboxDDL(IntegrationOutboxTable), oracle.AuditDDL(""))
 	case "mysql":
 		ddl = []string{
 			`CREATE TABLE IF NOT EXISTS parties (id CHAR(36) PRIMARY KEY, version BIGINT NOT NULL, party_type VARCHAR(20) NOT NULL,
@@ -124,7 +125,7 @@ func Schema(dialect string) []string {
 			`CREATE TABLE IF NOT EXISTS party_contacts (party_id CHAR(36) NOT NULL, pos INT NOT NULL, kind VARCHAR(20) NOT NULL,
 				value VARCHAR(300) NOT NULL, is_primary BOOLEAN NOT NULL, PRIMARY KEY (party_id, pos), FOREIGN KEY (party_id) REFERENCES parties(id))`,
 		}
-		outbox = append(mysql.OutboxDDL(""), mysql.AuditDDL("")...)
+		outbox = slices.Concat(mysql.OutboxDDL(""), mysql.OutboxDDL(IntegrationOutboxTable), mysql.AuditDDL(""))
 	}
 	return append(ddl, outbox...)
 }
@@ -161,6 +162,21 @@ func AuditLogFactory(b hotswap.Backend) (application.AuditLog, error) {
 		return sqlrepo.NewAuditLog(db, "")
 	case *memory.Store:
 		return memory.NewAuditLog(db), nil
+	}
+	return nil, fmt.Errorf("parties: unsupported backend %T", b)
+}
+
+// IntegrationOutboxTable holds the integration events of Parties (its Published Language),
+// separate from the domain event outbox so each relay drains only its own messages.
+const IntegrationOutboxTable = "parties_integration_outbox"
+
+// IntegrationOutboxFactory builds the integration outbox store for any backend.
+func IntegrationOutboxFactory(b hotswap.Backend) (application.OutboxStore, error) {
+	switch db := b.(type) {
+	case *sqlrepo.DB:
+		return sqlrepo.NewOutbox(db, IntegrationOutboxTable)
+	case *memory.Store:
+		return memory.NewOutbox(db), nil
 	}
 	return nil, fmt.Errorf("parties: unsupported backend %T", b)
 }

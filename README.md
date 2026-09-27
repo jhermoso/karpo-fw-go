@@ -21,7 +21,7 @@ Puntos clave:
 - **Batería de conformidad**: toda implementación del repositorio debe demostrar que cada
   especificación devuelve en la base de datos exactamente lo mismo que en memoria.
 
-📖 Diseño completo: [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) · Inventario de patrones: [docs/INVENTARIO-PATRONES.md](docs/INVENTARIO-PATRONES.md) · Lenguaje ubicuo: [docs/LENGUAJE-UBICUO.md](docs/LENGUAJE-UBICUO.md) · Rasgos: [docs/RASGOS-TRANSVERSALES.md](docs/RASGOS-TRANSVERSALES.md) · Autorización: [docs/AUTORIZACION.md](docs/AUTORIZACION.md)
+📖 Diseño completo: [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) · Inventario de patrones: [docs/INVENTARIO-PATRONES.md](docs/INVENTARIO-PATRONES.md) · Lenguaje ubicuo: [docs/LENGUAJE-UBICUO.md](docs/LENGUAJE-UBICUO.md) · Rasgos: [docs/RASGOS-TRANSVERSALES.md](docs/RASGOS-TRANSVERSALES.md) · Autorización: [docs/AUTORIZACION.md](docs/AUTORIZACION.md) · Integración: [docs/EVENTOS-INTEGRACION.md](docs/EVENTOS-INTEGRACION.md)
 
 ---
 
@@ -51,6 +51,7 @@ pkg/
 │   ├── ports.go          # Publisher, Dispatcher, EventHandler, EventRecorder, EventDecoder,
 │   │                     # OutboxStore/OutboxMessage, IdempotencyStore, Validatable...
 │   ├── module.go         # Module, Starter, Stopper (bounded contexts)
+│   ├── integration.go    # IntegrationEvent, Envelope, Translator, MessageSender/Handler, InboxStore
 │   ├── context.go, dto.go
 │   ├── authz/            # Contrato de autorización v1: Context, Grant, Permission, Resolver...
 │   │   ── implementaciones ──
@@ -58,12 +59,14 @@ pkg/
 │   ├── orchestration/    # Orchestrator + Execute (carga→comportamiento→guardado→eventos)
 │   ├── outbox/           # Recorder (outbox transaccional) + Relay
 │   ├── hosting/          # Host (ciclo de vida de módulos por dependencias)
-│   └── authorization/    # Resolver genérico sobre authz.Directory + directorio en memoria
+│   ├── authorization/    # Resolver genérico sobre authz.Directory + directorio en memoria
+│   └── messaging/        # Eventos de integración: Recorder (traducción), Relay, Consumer (inbox)
 │
 ├── log/, cache/, time/   # contratos transversales (implementaciones en subpaquetes)
 ├── distribution/         # DISTRIBUCIÓN (HTTP, RFC 9457, correlación, health, Authorize)
 │   └── jwtauth/          # Autenticación JWT HS256 (solo biblioteca estándar)
 ├── events/               # Registry + suscripción tipada; inprocess/ (Dispatcher en memoria)
+├── messaging/inprocess/  # Transporte de eventos de integración en memoria (monolito modular)
 │
 ├── persistence/          # ADAPTADORES
 │   ├── memory/           # Repositorio, UoW con rollback, outbox, idempotencia en memoria

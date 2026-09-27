@@ -158,3 +158,15 @@ func AuditDDL(table string) []string {
 }
 
 var _ sqlrepo.Dialect = Dialect{}
+
+// InboxDDL returns the statements creating the inbox table (consumer, message id).
+func InboxDDL(table string) []string {
+	if table == "" {
+		table = sqlrepo.DefaultInboxTable
+	}
+	return []string{
+		fmt.Sprintf(`CREATE TABLE %s (
+	consumer VARCHAR2(100) NOT NULL, message_id VARCHAR2(64) NOT NULL, processed_at TIMESTAMP(6) WITH TIME ZONE NOT NULL,
+	CONSTRAINT pk_%s PRIMARY KEY (consumer, message_id))`, table, table),
+	}
+}

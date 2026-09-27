@@ -36,6 +36,7 @@ framework es:
 | `Entity<TEntity,TId>` | `domain.BaseEntity[ID]` + `domain.SameIdentity` |
 | `BusinessEntity` y sus «adjetivos» | composición de `pkg/domain/traits` (ver `RASGOS-TRANSVERSALES.md`) |
 | `AuthorizationContext`, `IAuthorizationContextResolver`, `RequirePermission`, `IOrganizationScopeProvider` | `authz.Context`, `authz.Resolver`, `pipeline.RequirePermission`, `authz.ScopeSpec`/`RequireWrite` (ver `AUTORIZACION.md`) |
+| `OutboxEvent` + `OutboxBackgroundService` (eventos de dominio relanzados en proceso) | `outbox` para dominio; `messaging` + `InboxStore` para eventos de integración (ver `EVENTOS-INTEGRACION.md`) |
 | `AuditLogEntry` + auditoría de `EfUnitOfWork` | `application.AuditLog`, escrito por `orchestration.WithAuditLog` |
 | `EntityRootAggregate`, `IHasDomainEvents` | `domain.AggregateRoot[ID]` (sellada) + `domain.BaseAggregateRoot[ID]` |
 | `ValueObject<T>` | structs comparables con constructor validador (`value_object.go`) |
