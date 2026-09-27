@@ -645,6 +645,17 @@ func outboxFor(b hotswap.Backend, table string) (application.OutboxStore, error)
 	return nil, unsupported(b)
 }
 
+// InboxFactory builds the inbox of the integration events Parties consumes.
+func InboxFactory(b hotswap.Backend) (application.InboxStore, error) {
+	switch db := b.(type) {
+	case *sqlrepo.DB:
+		return sqlrepo.NewInbox(db, TableInbox)
+	case *memory.Store:
+		return memory.NewInbox(db), nil
+	}
+	return nil, unsupported(b)
+}
+
 // AuditLogFactory builds the audit log.
 func AuditLogFactory(b hotswap.Backend) (application.AuditLog, error) {
 	switch db := b.(type) {

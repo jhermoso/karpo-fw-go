@@ -26,6 +26,7 @@ const (
 	TablePartiesOutbox     = "parties_outbox"
 	TableIntegrationOutbox = "parties_integration_outbox"
 	TableAuditLog          = "parties_audit_log"
+	TableInbox             = "parties_inbox"
 )
 
 // Dialects the context supports.
@@ -117,10 +118,28 @@ func technicalDDL(dialect string) []string {
 	return nil
 }
 
+// inboxDDL returns the inbox of the context (the integration events it consumes) for a dialect.
+func inboxDDL(dialect string) []string {
+	switch dialect {
+	case "sqlite":
+		return sqlite.InboxDDL(TableInbox)
+	case "postgres":
+		return postgres.InboxDDL(TableInbox)
+	case "sqlserver":
+		return sqlserver.InboxDDL(TableInbox)
+	case "oracle":
+		return oracle.InboxDDL(TableInbox)
+	case "mysql":
+		return mysql.InboxDDL(TableInbox)
+	}
+	return nil
+}
+
 // Migrations is the versioned schema of the Parties context.
 func Migrations() sqlrepo.MigrationSet {
 	initial := map[string][]string{}
 	technical := map[string][]string{}
+	inbox := map[string][]string{}
 	phase2 := map[string][]string{}
 	phase3 := map[string][]string{}
 	for _, d := range Dialects {
@@ -134,6 +153,7 @@ func Migrations() sqlrepo.MigrationSet {
 			phase2[d] = append(phase2[d], render(d, s))
 		}
 		technical[d] = technicalDDL(d)
+		inbox[d] = inboxDDL(d)
 	}
 	return sqlrepo.MigrationSet{Context: Context, Migrations: []sqlrepo.Migration{
 		{Version: 1, Name: "parties, roles and relationships", Up: initial},
@@ -156,6 +176,7 @@ func Migrations() sqlrepo.MigrationSet {
 			}
 			return db.InsertMany(ctx, "facility_role_types", []string{"id", "name", "description", "active"}, rows)
 		}},
+		{Version: 10, Name: "inbox (integration events consumed from HR)", Up: inbox},
 	}}
 }
 

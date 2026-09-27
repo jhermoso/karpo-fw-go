@@ -234,6 +234,10 @@ Pendiente:
   mantenimiento pendiente).
 - P3 (`OrganizationAdmin` con ámbito) pertenece al contexto Security.
 
+Reacciones a otros contextos (primer consumidor de Parties, decisión 4 de [RRHH.md](RRHH.md)):
+`hr.employee-terminated.v1` termina la relación `Employment` y la afiliación, a través de la
+bandeja de entrada `parties_inbox` (migración 10) y de `Module.Consumer`.
+
 ## 6. Siguientes fases
 
 | Fase | Contenido |

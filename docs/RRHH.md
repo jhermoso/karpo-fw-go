@@ -100,7 +100,7 @@ contexts/hr/
   - Las horas y los decimales se guardan como texto exacto.
   - Los hijos se ordenan en Go, por el orden GUID de SQL Server.
 
-## Decisiones propuestas (pendientes de confirmar)
+## Decisiones (aprobadas por Javier el 2026-09-27)
 
 1. **`Employment` vive en RRHH** y absorbe los campos de RRHH del rol `Employee`. Parties conserva
    la persona, el rol y la relación `Employment` (afiliación). Contratar exige que la persona esté
@@ -109,9 +109,14 @@ contexts/hr/
    convenios de empresa llevan su organización y solo los ve su ámbito.
 3. **Nóminas queda fuera:** `RateType`, `DeductionType`, las cuentas de nómina y de la Seguridad
    Social, Mod190 y la parte retributiva de `EmployeeProfile`.
-4. **La baja no termina la afiliación en Parties.** La propuesta es que Parties consuma
-   `hr.employee-terminated.v1` y cierre la relación `Employment`. Así se evita una llamada
-   síncrona entre contextos.
+4. **Parties cierra la afiliación al recibir `hr.employee-terminated.v1`**, sin llamada síncrona
+   entre contextos. Está hecho:
+   - Parties tiene su bandeja de entrada (`parties_inbox`, migración 10) y un consumidor
+     (`Module.Consumer`) con su propia copia del contrato (`application.EmployeeTerminated`).
+   - La relación `Employment` entre la persona y el empleador termina al final del último día
+     trabajado; si la afiliación empezó después, termina al recibir el hecho.
+   - Actúa un actor de servicio con solo `Parties.Relationship.End`. Las reentregas no hacen nada.
+   - Con la afiliación termina la visibilidad de la persona para el empleador.
 5. **`WorkSchedule` se aplaza** hasta tener un consumidor (control horario o Nóminas).
 
 ## Validación
@@ -135,16 +140,17 @@ contexts/hr/
   - `Staff` con el contrato principal;
   - un centro con contratos vigentes no se cierra;
   - la baja cierra los contratos y deja el puesto vacante;
-  - eventos v1 consumidos con inbox, y auditoría con el actor.
+  - eventos v1 consumidos con inbox, y auditoría con el actor;
+  - Parties cierra la afiliación de Ana (y la persona deja de ser visible para Acme), no la de Bea.
 - **Integración** en PostgreSQL, SQL Server, Oracle y MySQL, con los cuatro contextos migrados en
   la misma base:
   - catálogos sembrados, ida y vuelta de fechas civiles y horas decimales;
   - EXISTS y NOT EXISTS sobre los hijos;
-  - organigrama, baja en cascada, `Staff` y cierre del centro.
+  - organigrama, baja en cascada, `Staff` y cierre del centro;
+  - la reacción de Parties a través de `parties_inbox`.
 
 ## Pendiente
 
-- Confirmar las decisiones 1–5.
 - Casos de uso para los convenios de empresa (ahora solo hay semilla) y para `WorkSchedule`.
 - Catálogos para los códigos que siguen siendo texto libre acotado: tipo de contrato, causa de
   baja, categoría y grupo salarial.

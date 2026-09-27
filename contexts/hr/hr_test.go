@@ -324,6 +324,7 @@ func (h *host) scenario(tag string) {
 		return nil
 	})
 	broker.Subscribe("payroll", payroll)
+	broker.Subscribe("parties", h.parties.Consumer)
 	for {
 		n, err := h.hr.Relay(broker).RelayOnce(context.Background())
 		if err != nil {
@@ -338,6 +339,12 @@ func (h *host) scenario(tag string) {
 			t.Fatalf("published %v, missing %s", seen, k)
 		}
 	}
+	// Parties reacted: the Employment affiliation of Ana with Acme ended, Bea's did not.
+	orgs, err := h.parties.Organizations.InternalOrganizations(context.Background(), []string{ana.ID, bea.ID})
+	if err != nil || slices.Contains(orgs[ana.ID], acme.ID) || !slices.Contains(orgs[bea.ID], acme.ID) {
+		t.Fatalf("affiliations after the termination: %+v %v", orgs, err)
+	}
+	h.must(h.do("GET", "/api/parties/"+ana.ID, "clerk", nil, nil), 404, "ana is no longer visible to acme")
 	trail, err := h.hr.Audit.Trail(context.Background(), hdomain.EmploymentKind, anaJob.ID)
 	if err != nil || len(trail) != 3 || trail[2].Actor.Name != "clerk" {
 		t.Fatalf("audit: %+v %v", trail, err)
