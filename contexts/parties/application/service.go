@@ -12,6 +12,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/application/pipeline"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
+	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
 // Deps are the ports the use cases need; Recorder, Audit and Idempotency are optional.
@@ -36,12 +37,21 @@ type Service struct {
 	EndRole               app.CommandHandler[EndRole, PartyDTO]
 	EstablishRelationship app.CommandHandler[EstablishRelationship, RelationshipDTO]
 	TerminateRelationship app.CommandHandler[TerminateRelationship, RelationshipDTO]
+	AddIdentification     app.CommandHandler[AddIdentification, PartyDTO]
+	RemoveIdentification  app.CommandHandler[RemoveIdentification, PartyDTO]
+	AddContact            app.CommandHandler[AddContact, PartyDTO]
+	SetContactPurposes    app.CommandHandler[SetContactPurposes, PartyDTO]
+	EndContact            app.CommandHandler[EndContact, PartyDTO]
+	Classify              app.CommandHandler[Classify, PartyDTO]
+	EndClassification     app.CommandHandler[EndClassification, PartyDTO]
 
-	Get                   app.QueryHandler[GetParty, PartyDTO]
-	Search                app.QueryHandler[SearchParties, fw.Page[PartyDTO]]
-	Relationships         app.QueryHandler[PartyRelationships, []RelationshipDTO]
-	ListRoleTypes         app.QueryHandler[ListRoleTypes, []RoleTypeDTO]
-	ListRelationshipTypes app.QueryHandler[ListRelationshipTypes, []RelationshipTypeDTO]
+	Get                     app.QueryHandler[GetParty, PartyDTO]
+	Search                  app.QueryHandler[SearchParties, fw.Page[PartyDTO]]
+	Relationships           app.QueryHandler[PartyRelationships, []RelationshipDTO]
+	ListRoleTypes           app.QueryHandler[ListRoleTypes, []RoleTypeDTO]
+	ListRelationshipTypes   app.QueryHandler[ListRelationshipTypes, []RelationshipTypeDTO]
+	DocumentOptions         app.QueryHandler[DocumentOptions, []DocumentOptionDTO]
+	ListClassificationTypes app.QueryHandler[ListClassificationTypes, []ClassificationTypeDTO]
 }
 
 type service struct{ Deps }
@@ -101,19 +111,19 @@ func NewService(d Deps) *Service {
 		if err := parties.Create(ctx, p); err != nil {
 			return PartyDTO{}, err
 		}
-		return ToDTO(p, cat), nil
+		return ToDTO(p, Names{Roles: cat}), nil
 	}
 
 	updateParty := func(ctx context.Context, id domain.PartyID, fn func(*domain.Party, *domain.Catalog) error) (PartyDTO, error) {
-		cat, err := s.roleCatalog(ctx)
+		n, err := s.names(ctx)
 		if err != nil {
 			return PartyDTO{}, err
 		}
-		p, err := parties.Update(ctx, id, func(_ context.Context, p *domain.Party) error { return fn(p, cat) })
+		p, err := parties.Update(ctx, id, func(_ context.Context, p *domain.Party) error { return fn(p, n.Roles) })
 		if err != nil {
 			return PartyDTO{}, err
 		}
-		return ToDTO(p, cat), nil
+		return n.dto(p), nil
 	}
 
 	svc := &Service{}
@@ -244,7 +254,7 @@ func NewService(d Deps) *Service {
 	}, pipeline.RetryOnConflict[TerminateRelationship, RelationshipDTO](retry, backoff))
 
 	svc.Get = chain(PermPartyRead, func(ctx context.Context, q GetParty) (PartyDTO, error) {
-		cat, err := s.roleCatalog(ctx)
+		n, err := s.names(ctx)
 		if err != nil {
 			return PartyDTO{}, err
 		}
@@ -252,14 +262,15 @@ func NewService(d Deps) *Service {
 		if err != nil {
 			return PartyDTO{}, err
 		}
-		return ToDTO(p, cat), nil
+		return n.dto(p), nil
 	})
 
 	svc.Search = chain(PermPartyRead, func(ctx context.Context, q SearchParties) (fw.Page[PartyDTO], error) {
-		cat, err := s.roleCatalog(ctx)
+		n, err := s.names(ctx)
 		if err != nil {
 			return fw.Page[PartyDTO]{}, err
 		}
+		cat := n.Roles
 		parts := []spec.Specification[*domain.Party]{}
 		if t := strings.TrimSpace(q.Text); t != "" {
 			parts = append(parts, domain.NameContains(t))
@@ -277,11 +288,24 @@ func NewService(d Deps) *Service {
 			}
 			parts = append(parts, domain.PlaysAt(fw.Now(), cat.Descendants(role)...))
 		}
+		if doc := strings.TrimSpace(q.Document); doc != "" {
+			parts = append(parts, domain.WithDocumentNumber(vocab.NormalizeDocumentNumber(doc)).Or(
+				domain.WithDocumentNumber(strings.ToUpper(strings.Join(strings.Fields(doc), "")))))
+		}
+		if q.Classification != "" {
+			typ, err := domain.ParseClassificationTypeID(q.Classification)
+			if err != nil {
+				var v fw.Validation
+				v.Add("classification", "format", "classification must be a classification id")
+				return fw.Page[PartyDTO]{}, v.Err()
+			}
+			parts = append(parts, domain.ClassifiedAt(fw.Now(), typ))
+		}
 		page, err := d.Parties.FindPage(ctx, spec.And(parts...), fw.NewPageRequest(q.Page, q.Size, domain.FieldName.Asc()))
 		if err != nil {
 			return fw.Page[PartyDTO]{}, err
 		}
-		return fw.MapPage(page, func(p *domain.Party) PartyDTO { return ToDTO(p, cat) }), nil
+		return fw.MapPage(page, n.dto), nil
 	})
 
 	svc.Relationships = chain(PermRelationshipRead, func(ctx context.Context, q PartyRelationships) ([]RelationshipDTO, error) {
@@ -333,8 +357,28 @@ func NewService(d Deps) *Service {
 		}
 		return out, nil
 	})
+	addPhase2(svc, s, parties, updateParty)
 	return svc
 }
+
+// names loads the catalogs that name the parts of a party in its DTO.
+func (s service) names(ctx context.Context) (Names, error) {
+	cat, err := s.roleCatalog(ctx)
+	if err != nil {
+		return Names{}, err
+	}
+	docs, err := s.documentPolicy(ctx)
+	if err != nil {
+		return Names{}, err
+	}
+	classes, err := s.classificationCatalog(ctx)
+	if err != nil {
+		return Names{}, err
+	}
+	return Names{Roles: cat, Documents: docs, Classifications: classes}, nil
+}
+
+func (n Names) dto(p *domain.Party) PartyDTO { return ToDTO(p, n) }
 
 // chain decorates a handler: permission first, then the given middleware.
 func chain[In, Out any](p authz.Permission, fn func(context.Context, In) (Out, error), mw ...app.Middleware[In, Out]) app.Handler[In, Out] {

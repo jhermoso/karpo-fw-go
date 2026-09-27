@@ -163,7 +163,62 @@ func (e *env) scenario(prefix string) (acme, ana papp.PartyDTO) {
 	if len(refs) != 2 {
 		e.t.Fatalf("directory: %+v", refs)
 	}
+	e.phase2(acme, ana)
 	return acme, ana
+}
+
+// phase2 covers identifications, contacts and classifications through HTTP.
+func (e *env) phase2(acme, ana papp.PartyDTO) {
+	e.t.Helper()
+	var opts []papp.DocumentOptionDTO
+	e.must(e.do("GET", "/api/catalogs/document-types?country=ES", e.reader, nil, &opts), 200, "document options")
+	if len(opts) != 5 || opts[0].Code != "NIDN" || !opts[0].Default {
+		e.t.Fatalf("ES options: %+v", opts)
+	}
+	var got papp.PartyDTO
+	e.must(e.do("POST", "/api/parties/"+ana.ID+"/identifications", e.admin, map[string]any{"documentType": domain.DocNationalID.String(),
+		"country": "ES", "number": "12345678-z"}, &got), 200, "add DNI")
+	if len(got.Identifications) != 1 || got.Identifications[0].Number != "12345678Z" || !got.Identifications[0].Primary || got.Identifications[0].Code != "NIDN" {
+		e.t.Fatalf("identification: %+v", got.Identifications)
+	}
+	e.must(e.do("POST", "/api/parties/"+ana.ID+"/identifications", e.admin, map[string]any{"documentType": domain.DocNationalID.String(),
+		"country": "ES", "number": "12345678A"}, nil), 400, "wrong check letter")
+	var luis papp.PartyDTO
+	e.must(e.do("POST", "/api/persons", e.admin, map[string]any{"givenName": "Luis", "firstSurname": "Pérez"}, &luis), 201, "register luis")
+	e.must(e.do("POST", "/api/parties/"+luis.ID+"/identifications", e.admin, map[string]any{"documentType": domain.DocNationalID.String(),
+		"country": "ES", "number": "12345678Z"}, nil), 422, "a document identifies one party")
+	e.must(e.do("POST", "/api/parties/"+acme.ID+"/identifications", e.admin, map[string]any{"documentType": domain.DocTaxID.String(),
+		"country": "ES", "number": "B12345674"}, nil), 200, "acme tax id")
+
+	e.must(e.do("POST", "/api/parties/"+ana.ID+"/contacts", e.admin, map[string]any{"kind": "email", "value": "Ana@Example.com",
+		"purposes": []string{"default"}}, &got), 200, "email")
+	e.must(e.do("POST", "/api/parties/"+ana.ID+"/contacts", e.admin, map[string]any{"kind": "postal", "purposes": []string{"billing", "home"},
+		"address": map[string]any{"streetType": "CL", "line1": "Mayor 1", "postalCode": "28013", "locality": "Madrid", "country": "ES"}}, &got), 200, "address")
+	e.must(e.do("POST", "/api/parties/"+ana.ID+"/contacts", e.admin, map[string]any{"kind": "email", "value": "ana@example.com"}, nil), 422, "duplicate e-mail")
+	if len(got.Contacts) != 2 || got.Contacts[0].Value != "ana@example.com" || got.Contacts[1].Address == nil || got.Contacts[1].Address.Locality != "Madrid" {
+		e.t.Fatalf("contacts: %+v", got.Contacts)
+	}
+	e.must(e.do("POST", "/api/parties/"+ana.ID+"/contacts/"+got.Contacts[0].ID+"/end", e.admin, nil, &got), 200, "end e-mail")
+	if got.Contacts[0].Active || len(got.Contacts[0].Purposes) != 0 {
+		e.t.Fatalf("ended contact: %+v", got.Contacts[0])
+	}
+
+	e.must(e.do("POST", "/api/parties/"+acme.ID+"/classifications", e.admin, map[string]any{"classification": domain.ClassCorporate.String()}, &got), 200, "segment")
+	e.must(e.do("POST", "/api/parties/"+acme.ID+"/classifications", e.admin, map[string]any{"classification": domain.ClassRetail.String()}, nil), 422, "one segment")
+	e.must(e.do("POST", "/api/parties/"+ana.ID+"/classifications", e.admin, map[string]any{"classification": domain.ClassSizeMicro.String()}, nil), 422, "persons have no size")
+	if len(got.Classifications) != 1 || got.Classifications[0].Name != "Corporate" {
+		e.t.Fatalf("classifications: %+v", got.Classifications)
+	}
+
+	var page fw.Page[papp.PartyDTO]
+	e.must(e.do("GET", "/api/parties?document=12345678-Z", e.reader, nil, &page), 200, "search by document")
+	if page.Total != 1 || page.Items[0].ID != ana.ID {
+		e.t.Fatalf("by document: %+v", page)
+	}
+	e.must(e.do("GET", "/api/parties?classification="+domain.ClassCorporate.String(), e.reader, nil, &page), 200, "search by classification")
+	if page.Total != 1 || page.Items[0].ID != acme.ID {
+		e.t.Fatalf("by classification: %+v", page)
+	}
 }
 
 func TestParties_EndToEnd_MemoryThenSQLite(t *testing.T) {
@@ -212,7 +267,7 @@ func TestParties_EndToEnd_MemoryThenSQLite(t *testing.T) {
 
 	// Audit trail and Published Language, both committed with the changes.
 	trail, err := e.mod.Audit.Trail(ctx, domain.PartyKind, acme.ID)
-	if err != nil || len(trail) != 2 || trail[1].Actor.Name != "ana.admin" {
+	if err != nil || len(trail) != 4 || trail[1].Actor.Name != "ana.admin" || len(trail[3].Changes) != 1 || trail[3].Changes[0].Field != "classifications" {
 		t.Fatalf("audit: %+v %v", trail, err)
 	}
 	broker := inprocess.NewBroker()
@@ -234,7 +289,7 @@ func TestParties_EndToEnd_MemoryThenSQLite(t *testing.T) {
 	if _, err := e.mod.Relay(broker).RelayOnce(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if len(seen) != 2 || roles != 2 {
+	if len(seen) != 3 || roles != 2 {
 		t.Fatalf("published: %v, roles %d", seen, roles)
 	}
 }

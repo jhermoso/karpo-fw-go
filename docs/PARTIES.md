@@ -72,7 +72,7 @@ Excepciones:
   sustituirlo por un puerto.
 - **RRHH `WorkCenter` duplica la instalación**, con la dirección guardada como texto.
 
-Decisiones pendientes (recomendación entre paréntesis):
+Decisiones (**aprobadas por Javier el 2026-09-27**: las tres recomendaciones, y el contexto «Geografía y referencia»):
 
 1. **¿De quién es `PartyFacility`?** (Recomiendo **Parties**, que referencia `FacilityID`, igual
    que `PartyContactMechanism`. Así la comprobación de ámbito por organización no se mueve.)
@@ -161,11 +161,43 @@ contexts/parties/
   - relación duplicada y terminada;
   - directorio, auditoría y outbox de integración.
 
-## 4. Siguientes fases
+## 4. Fase 2 (hecha): identificaciones, contactos y clasificaciones
+
+| Tema | C# | Go |
+|---|---|---|
+| Identificaciones | Agregado aparte; **solo marcaba** un «estado de formato» (válido, inválido, desconocido) después de guardar; sin control de duplicados entre parties; `RequiresIssuingAuthority` sin campo donde guardar la autoridad | Hijas de Party. `DocumentPolicy` (7 tipos + 31 reglas por país, mismos GUID) **rechaza** los números inválidos: longitud, patrón y dígito de control. Hay un único documento principal; la autoridad emisora y las fechas de expedición y caducidad se guardan; un documento identifica a una sola party (comprobación en la aplicación + índice único) |
+| Dígitos de control | 11 algoritmos en la capa de aplicación | `vocab.ValidCheckDigit` (clave igual a la columna `ChecksumKey`): ES DNI, NIE y CIF, PT, IT, FR, DE, NL, BE, EL y HR, más NIF y NSS españoles. Un catálogo que nombre un algoritmo desconocido falla al cargarse |
+| Forma canónica | Recorte y mayúsculas | Sin espacios, y sin separadores salvo que el formato del país los exija (el signo de siglo finlandés): `12345678-z` es `12345678Z` |
+| Contactos | `ContactMechanism` (TPH) + `PartyContactMechanism` + `PartyContactMechanismPurpose` **sin enlazar entre sí**; tres modelos de teléfono coexistiendo | Contacto hijo de Party: correo electrónico, teléfono y fax (E.164), web y dirección postal como objeto valor con Ids de Geografía (decisión del mapa de contextos). Propósitos (`default`, `billing`, `shipping`, `home`, `work`) con un titular vigente por tipo; sin duplicados vigentes; vigencia; `nonSolicitation` |
+| Clasificaciones | `party_type` mezclaba tipos heredados (Person, Organization, Corporation… = subclases o formas jurídicas; «Public Catalog» = visibilidad) con las familias de clasificación | Solo las 5 familias y 22 hojas (mismos GUID). Aplicabilidad por familia (el tamaño y el sector, solo a organizaciones); **familias exclusivas** (segmento, tamaño, AML): una hoja vigente a la vez; AML inactiva hasta que la active cumplimiento normativo. Los tipos 1–9 quedan fuera: la forma jurídica y la visibilidad se tratarán en la fase 3 |
+
+Lenguaje publicado nuevo (v1): `party-identification-added` y `-removed`, `party-contact-added`,
+`-purposes-changed` y `-ended`, `party-classified` y `party-classification-ended`.
+
+Rutas:
+
+- `POST` y `DELETE /api/parties/{id}/identifications`;
+- `POST /api/parties/{id}/contacts`, `…/purposes` y `…/end`;
+- `POST /api/parties/{id}/classifications` y `…/end`;
+- `GET /api/catalogs/document-types?country=ES` y `GET /api/catalogs/party-classifications`;
+- `GET /api/parties?document=…&classification=…`.
+
+Hallazgo de motor: SQL Server ordena `UNIQUEIDENTIFIER` por grupos de bytes, así que `ORDER BY id`
+no es cronológico con UUID v7. Parties ordena sus hijos en Go al hidratar, para que todos los motores
+devuelvan lo mismo.
+
+Pendiente de esta fase:
+
+- Características (`PartyCharacteristic`): no hay tipos sembrados en C#.
+- `ValidContactMechanismRole`.
+- La validación del código postal contra Geografía, que llegará con ese contexto (hoy se guardan
+  sus Ids).
+
+## 5. Siguientes fases
 
 | Fase | Contenido |
 |---|---|
-| 2 | Identificaciones (tipos de documento + `CountryDocumentRule` con `vocab.Identification`), contactos (correo electrónico, teléfono, dirección postal con Ids de Geografía) y clasificaciones y características |
+| ~~2~~ | ✅ Identificaciones, contactos y clasificaciones (sección 4) |
 | 3 | Organización interna y ámbito: `IPartyOrganizationMembership`, `IOrganizationHierarchy`, `IInternalOrganizationCatalog`, rollups; visibilidad P1 (`PartyRelationship` + permiso) |
 | 4 | Contexto Geografía y referencia (si se aprueba la separación) con su semilla de 32.000 filas desde `040-Data/schema` |
 | 5 | Contexto Instalaciones (tras las tres decisiones de la sección 2) |

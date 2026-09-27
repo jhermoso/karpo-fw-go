@@ -3,6 +3,7 @@ package vocab_test
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -350,4 +351,50 @@ func TestRegionAndRegulation(t *testing.T) {
 	isValidation(t, err)
 	_, err = vocab.NewRegulationSource(vocab.MustName("x"), []vocab.CountryCode{vocab.MustCountryCode("PT")}, []vocab.RegionCode{md}, false, vocab.Description{})
 	isValidation(t, err)
+}
+
+func TestCheckDigits(t *testing.T) {
+	valid := map[string][]string{
+		"ES_DNI_MOD23":   {"12345678Z", "00000000T"},
+		"ES_NIE_MOD23":   {"X1234567L", "Y0000000Z"},
+		"ES_CIF":         {"B12345674", "A58818501"},
+		"PT_NIF_MOD11":   {"123456789", "501964843"},
+		"IT_CF":          {"RSSMRA85T10A562S"},
+		"DE_IDNR":        {"65929970489"},
+		"NL_BSN_MOD11":   {"111222333", "123456782"},
+		"BE_NN_MOD97":    {"85.07.30-033.28", "17073003384"},
+		"EL_AFM_MOD11":   {"090000045"},
+		"HR_OIB_ISO7064": {"69435151530", "94577403194"},
+	}
+	invalid := map[string][]string{
+		"ES_DNI_MOD23":   {"12345678A"},
+		"PT_NIF_MOD11":   {"123456780"},
+		"IT_CF":          {"RSSMRA85T10A562T"},
+		"DE_IDNR":        {"12345678903"}, // passes ISO 7064 but no digit repeats
+		"NL_BSN_MOD11":   {"111222334"},
+		"BE_NN_MOD97":    {"85073003329"},
+		"EL_AFM_MOD11":   {"090000046"},
+		"HR_OIB_ISO7064": {"69435151531"},
+	}
+	for key, ns := range valid {
+		for _, n := range ns {
+			if ok, known := vocab.ValidCheckDigit(key, n); !ok || !known {
+				t.Errorf("%s %s should be valid", key, n)
+			}
+		}
+	}
+	for key, ns := range invalid {
+		for _, n := range ns {
+			if ok, _ := vocab.ValidCheckDigit(key, n); ok {
+				t.Errorf("%s %s should be invalid", key, n)
+			}
+		}
+	}
+	if _, known := vocab.ValidCheckDigit("XX_UNKNOWN", "1"); known {
+		t.Fatal("unknown algorithm")
+	}
+	// FR: the check is the first ten digits mod 511.
+	if ok, _ := vocab.ValidCheckDigit("FR_SPI_MOD511", "3023217600"+fmt.Sprintf("%03d", 3023217600%511)); !ok {
+		t.Fatal("FR SPI")
+	}
 }

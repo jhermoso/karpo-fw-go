@@ -118,11 +118,13 @@ type GetParty struct{ ID domain.PartyID }
 // SearchParties searches parties; every criterion becomes part of one specification executed by
 // the store.
 type SearchParties struct {
-	Text       string
-	Kind       string
-	Role       string // role type id: parties playing it (or a role below it) now
-	ActiveOnly bool
-	Page, Size int
+	Text           string
+	Kind           string
+	Role           string // role type id: parties playing it (or a role below it) now
+	Document       string // identification number
+	Classification string // classification type id: parties classified so now
+	ActiveOnly     bool
+	Page, Size     int
 }
 
 // PartyRelationships lists the relationships of a party.

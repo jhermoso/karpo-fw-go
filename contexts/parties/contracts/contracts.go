@@ -109,3 +109,90 @@ type Directory interface {
 	Resolve(ctx context.Context, ids []string) (map[string]PartyRef, error)
 	SearchIDsByName(ctx context.Context, text string, limit int) ([]string, error)
 }
+
+// PartyIdentificationAddedV1 is published when a party gets an identity document (Invoicing
+// needs tax ids; the number is personal data: consumers must protect it).
+type PartyIdentificationAddedV1 struct {
+	PartyID          string `json:"partyId"`
+	IdentificationID string `json:"identificationId"`
+	DocumentType     string `json:"documentType"`
+	Country          string `json:"country"`
+	Number           string `json:"number"`
+	Primary          bool   `json:"primary"`
+}
+
+// IntegrationEventType implements application.IntegrationEvent.
+func (PartyIdentificationAddedV1) IntegrationEventType() string {
+	return "parties.party-identification-added.v1"
+}
+
+// PartyIdentificationRemovedV1 is published when an identity document is removed.
+type PartyIdentificationRemovedV1 struct {
+	PartyID          string `json:"partyId"`
+	IdentificationID string `json:"identificationId"`
+}
+
+// IntegrationEventType implements application.IntegrationEvent.
+func (PartyIdentificationRemovedV1) IntegrationEventType() string {
+	return "parties.party-identification-removed.v1"
+}
+
+// PartyContactAddedV1 is published when a party gets a contact.
+type PartyContactAddedV1 struct {
+	PartyID   string    `json:"partyId"`
+	ContactID string    `json:"contactId"`
+	Kind      string    `json:"kind"` // email | phone | fax | web | postal
+	Value     string    `json:"value,omitempty"`
+	Address   string    `json:"address,omitempty"` // one-line rendering
+	Purposes  []string  `json:"purposes"`
+	From      time.Time `json:"from"`
+}
+
+// IntegrationEventType implements application.IntegrationEvent.
+func (PartyContactAddedV1) IntegrationEventType() string { return "parties.party-contact-added.v1" }
+
+// PartyContactPurposesChangedV1 is published when the purposes of a contact change.
+type PartyContactPurposesChangedV1 struct {
+	PartyID   string   `json:"partyId"`
+	ContactID string   `json:"contactId"`
+	Purposes  []string `json:"purposes"`
+}
+
+// IntegrationEventType implements application.IntegrationEvent.
+func (PartyContactPurposesChangedV1) IntegrationEventType() string {
+	return "parties.party-contact-purposes-changed.v1"
+}
+
+// PartyContactEndedV1 is published when a contact stops being used.
+type PartyContactEndedV1 struct {
+	PartyID   string    `json:"partyId"`
+	ContactID string    `json:"contactId"`
+	At        time.Time `json:"at"`
+}
+
+// IntegrationEventType implements application.IntegrationEvent.
+func (PartyContactEndedV1) IntegrationEventType() string { return "parties.party-contact-ended.v1" }
+
+// PartyClassifiedV1 is published when a party gets a classification.
+type PartyClassifiedV1 struct {
+	PartyID          string    `json:"partyId"`
+	ClassificationID string    `json:"classificationId"`
+	Type             string    `json:"type"`
+	From             time.Time `json:"from"`
+}
+
+// IntegrationEventType implements application.IntegrationEvent.
+func (PartyClassifiedV1) IntegrationEventType() string { return "parties.party-classified.v1" }
+
+// PartyClassificationEndedV1 is published when a classification ends.
+type PartyClassificationEndedV1 struct {
+	PartyID          string    `json:"partyId"`
+	ClassificationID string    `json:"classificationId"`
+	Type             string    `json:"type"`
+	At               time.Time `json:"at"`
+}
+
+// IntegrationEventType implements application.IntegrationEvent.
+func (PartyClassificationEndedV1) IntegrationEventType() string {
+	return "parties.party-classification-ended.v1"
+}
