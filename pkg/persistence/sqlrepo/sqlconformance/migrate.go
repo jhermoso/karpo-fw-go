@@ -16,7 +16,7 @@ import (
 // lease lock.
 func RunMigrations(t *testing.T, db *sqlrepo.DB) {
 	ctx := context.Background()
-	for _, s := range []string{"t_mig_a", "t_mig_b", "t_mig_c", "t_mig_other", sqlrepo.DefaultMigrationsTable, sqlrepo.DefaultMigrationsLock} {
+	for _, s := range []string{"t_mig_a", "t_mig_b", "t_mig_c", "t_mig_other", "t_mig_seed", sqlrepo.DefaultMigrationsTable, sqlrepo.DefaultMigrationsLock} {
 		_, _ = db.ExecContext(ctx, "DROP TABLE "+s)
 	}
 	transactional := db.Dialect().Name() != "oracle" && db.Dialect().Name() != "mysql"
@@ -173,6 +173,30 @@ func RunMigrations(t *testing.T, db *sqlrepo.DB) {
 	}
 	if count(sqlrepo.DefaultMigrationsLock) != 0 {
 		t.Fatal("the lock must be released")
+	}
+
+	// Go migrations: seeds with the dialect's value binding, in the migration's unit of work.
+	seed := []sqlrepo.MigrationSet{{Context: "seed", Migrations: []sqlrepo.Migration{
+		{Version: 1, Name: "seed table", Up: sqlrepo.Portable(`CREATE TABLE t_mig_seed (id INT NOT NULL PRIMARY KEY, name VARCHAR(50) NOT NULL)`)},
+		{Version: 2, Name: "seed rows", Run: func(ctx context.Context, db *sqlrepo.DB) error {
+			for i, n := range []string{"uno", "dos"} {
+				if err := db.Insert(ctx, "t_mig_seed", sqlrepo.Values{"id": int64(i + 1), "name": n}); err != nil {
+					return err
+				}
+			}
+			return nil
+		}},
+	}}}
+	sm := migrator(seed)
+	if applied, err := sm.Migrate(ctx); err != nil || len(applied) != 2 || count("t_mig_seed") != 2 {
+		t.Fatalf("go migration: %v %v", applied, err)
+	}
+	if err := sm.Verify(ctx); err != nil {
+		t.Fatalf("a go migration keeps a stable checksum: %v", err)
+	}
+	rows, err := db.Select(ctx, "t_mig_seed", []string{"id", "name"}, "id")
+	if err != nil || len(rows) != 2 || rows[1].Int64("id") != 2 || rows[1].String("name") != "dos" {
+		t.Fatalf("select: %v %v", rows, err)
 	}
 
 	if _, err := sqlrepo.NewMigrator(db, []sqlrepo.MigrationSet{{Context: "x", Migrations: []sqlrepo.Migration{v2, v1}}}); err == nil {

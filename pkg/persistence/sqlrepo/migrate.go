@@ -31,6 +31,10 @@ type Migration struct {
 	Version int64
 	Name    string
 	Up      map[string][]string
+	// Run is optional Go code executed after the statements, in a unit of work of db (data
+	// migrations and seeds that need the dialect's value binding, such as UUIDs on Oracle).
+	// Its code is not part of the checksum: never change an applied Run, add a migration.
+	Run func(ctx context.Context, db *DB) error
 }
 
 // Portable builds the statements of a migration valid on every engine.
@@ -53,7 +57,7 @@ func (s MigrationSet) validate() error {
 			return fmt.Errorf("%w: %s: migration versions must be positive and strictly increasing (%d after %d)",
 				domain.ErrValidation, s.Context, m.Version, last)
 		}
-		if strings.TrimSpace(m.Name) == "" || len(m.Up) == 0 {
+		if strings.TrimSpace(m.Name) == "" || (len(m.Up) == 0 && m.Run == nil) {
 			return fmt.Errorf("%w: %s v%d needs a name and statements", domain.ErrValidation, s.Context, m.Version)
 		}
 		last = m.Version
@@ -128,7 +132,22 @@ func (m *Migrator) statements(mg Migration) ([]string, error) {
 	if s, ok := mg.Up[AnyDialect]; ok {
 		return s, nil
 	}
+	if len(mg.Up) == 0 && mg.Run != nil {
+		return nil, nil
+	}
 	return nil, fmt.Errorf("%w: migration %d %q has no statements for %s", domain.ErrUnsupported, mg.Version, mg.Name, m.db.d.Name())
+}
+
+// checksumOf returns the checksum of a migration on the migrator's dialect.
+func (m *Migrator) checksumOf(mg Migration) (string, error) {
+	stmts, err := m.statements(mg)
+	if err != nil {
+		return "", err
+	}
+	if mg.Run != nil {
+		stmts = append(slices.Clone(stmts), "run:"+mg.Name)
+	}
+	return checksum(stmts), nil
 }
 
 func checksum(stmts []string) string {
@@ -252,11 +271,11 @@ func (m *Migrator) Status(ctx context.Context) ([]application.MigrationStatus, e
 			if row, ok := h[historyKey{s.Context, mg.Version}]; ok {
 				at := row.at
 				st.AppliedAt = &at
-				stmts, err := m.statements(mg)
+				sum, err := m.checksumOf(mg)
 				switch {
 				case row.dirty:
 					st.State = application.MigrationDirty
-				case err != nil || row.checksum != checksum(stmts):
+				case err != nil || row.checksum != sum:
 					st.State = application.MigrationModified
 				default:
 					st.State = application.MigrationApplied
@@ -364,12 +383,21 @@ func (m *Migrator) apply(ctx context.Context, bc string, mg Migration) error {
 	if err != nil {
 		return err
 	}
-	sum := checksum(stmts)
+	sum, err := m.checksumOf(mg)
+	if err != nil {
+		return err
+	}
 	run := func(ctx context.Context) error {
 		for i, s := range stmts {
 			if _, err := m.db.ExecContext(ctx, s); err != nil {
 				return fmt.Errorf("sqlrepo: %s v%d %s, statement %d: %w", bc, mg.Version, mg.Name, i+1, err)
 			}
+		}
+		if mg.Run == nil {
+			return nil
+		}
+		if err := m.db.Do(ctx, func(ctx context.Context) error { return mg.Run(ctx, m.db) }); err != nil {
+			return fmt.Errorf("sqlrepo: %s v%d %s: %w", bc, mg.Version, mg.Name, err)
 		}
 		return nil
 	}
@@ -431,13 +459,13 @@ func (m *Migrator) Force(ctx context.Context, bc string, version int64) error {
 			if mg.Version != version {
 				continue
 			}
-			stmts, err := m.statements(mg)
+			cs, err := m.checksumOf(mg)
 			if err != nil {
 				return err
 			}
 			b := &Builder{d: m.db.d}
 			f, _ := b.Arg(false)
-			sum, _ := b.Arg(checksum(stmts))
+			sum, _ := b.Arg(cs)
 			c, _ := b.Arg(bc)
 			v, _ := b.Arg(version)
 			_, err = m.db.ExecContext(ctx, fmt.Sprintf("UPDATE %s SET %s = %s, %s = %s WHERE %s = %s AND %s = %s",

@@ -353,3 +353,56 @@ func toAny[V any](vs []V) []any {
 	}
 	return out
 }
+
+// OptionalTimeField is a nullable instant (e.g. the end of an open-ended period). Comparisons
+// never match a null value, in memory and in SQL alike, so "still open or ending later" is
+// f.IsNull().Or(f.After(t)).
+type OptionalTimeField[T any] struct {
+	name string
+	get  func(T) *time.Time
+}
+
+// OptionalTime declares a nullable time.Time field.
+func OptionalTime[T any](name string, get func(T) *time.Time) OptionalTimeField[T] {
+	return OptionalTimeField[T]{name: name, get: get}
+}
+
+// Name returns the logical field name.
+func (f OptionalTimeField[T]) Name() string { return f.name }
+
+// IsNull matches candidates without a value.
+func (f OptionalTimeField[T]) IsNull() Spec[T] {
+	return Spec[T]{expr: Compare{Field: f.name, Op: OpIsNull}, eval: func(c T) bool { return f.get(c) == nil }}
+}
+
+// IsNotNull matches candidates with a value.
+func (f OptionalTimeField[T]) IsNotNull() Spec[T] {
+	return Spec[T]{expr: Compare{Field: f.name, Op: OpIsNotNull}, eval: func(c T) bool { return f.get(c) != nil }}
+}
+
+func (f OptionalTimeField[T]) timeSpec(op Op, t time.Time, ok func(int) bool) Spec[T] {
+	return Spec[T]{expr: Compare{Field: f.name, Op: op, Value: t}, eval: func(c T) bool {
+		v := f.get(c)
+		return v != nil && ok(v.Compare(t))
+	}}
+}
+
+// After matches instants strictly after t (null never matches).
+func (f OptionalTimeField[T]) After(t time.Time) Spec[T] {
+	return f.timeSpec(OpGt, t, func(r int) bool { return r > 0 })
+}
+
+// AtOrAfter matches instants at or after t (null never matches).
+func (f OptionalTimeField[T]) AtOrAfter(t time.Time) Spec[T] {
+	return f.timeSpec(OpGe, t, func(r int) bool { return r >= 0 })
+}
+
+// Before matches instants strictly before t (null never matches).
+func (f OptionalTimeField[T]) Before(t time.Time) Spec[T] {
+	return f.timeSpec(OpLt, t, func(r int) bool { return r < 0 })
+}
+
+// AtOrBefore matches instants at or before t (null never matches).
+func (f OptionalTimeField[T]) AtOrBefore(t time.Time) Spec[T] {
+	return f.timeSpec(OpLe, t, func(r int) bool { return r <= 0 })
+}

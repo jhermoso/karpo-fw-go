@@ -137,7 +137,7 @@ func Migrations() sqlrepo.MigrationSet {
 	for _, d := range []string{"sqlite", "postgres", "sqlserver", "oracle", "mysql"} {
 		initial[d] = Schema(d)
 	}
-	return sqlrepo.MigrationSet{Context: "parties", Migrations: []sqlrepo.Migration{
+	return sqlrepo.MigrationSet{Context: "example-parties", Migrations: []sqlrepo.Migration{
 		{Version: 1, Name: "initial schema", Up: initial},
 	}}
 }
