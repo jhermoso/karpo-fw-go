@@ -54,7 +54,7 @@ Leyenda: ✅ hecho · 🟡 parcial · ❌ falta · — no aplica en Go (decisió
 | Base de datos activa (`IActiveDatabaseTargetProvider`) | ✅ | ✅ `persistence/hotswap` | |
 | DTOs / mappers | 🟡 `Mapper` | 🟡 | 🟡 `ISearchQuery` |
 | Proyecciones / modelos de lectura (`IAggregateProjection`) | ❌ | ❌ | |
-| Autorización (`AuthorizationContext`, resolvers, `OrganizationAccessLevel`, `PermissionCodes`, `ICurrentActorResolver`) | ❌ | ❌ | 🟡 `distribution` solo propaga ids |
+| Autorización (`AuthorizationContext`, resolvers, `OrganizationAccessLevel`, `PermissionCodes`, `ICurrentActorResolver`) | ✅ `application/authz` | ✅ `authorization`, `pipeline.RequirePermission`, `distribution.Authorize`, `jwtauth` | Evaluado en `AUTORIZACION.md`; ❌ modo `Http`, `Directory` de Security |
 | Workflow (definiciones, instancias, pasos, motor) | ❌ | ❌ | contexto completo del Fw |
 | Gestión de esquema / migraciones (`IDatabaseSchemaManager`) | ❌ | ❌ | |
 | Importación y referencias legadas (`ImportRun`, `LegacyReference`) | ❌ | ❌ | |
@@ -69,7 +69,7 @@ Leyenda: ✅ hecho · 🟡 parcial · ❌ falta · — no aplica en Go (decisió
 
 1. ~~Lenguaje ubicuo común~~ ✅ (`pkg/domain/vocab`).
 2. ~~Rasgos transversales componibles~~ ✅ (`pkg/domain/traits` + `application.AuditLog`).
-3. Contratos de autorización y actor en contexto.
+3. ~~Contratos de autorización y actor en contexto~~ ✅ (`application/authz` + `authorization`).
 4. Eventos de integración.
 5. Gestión de esquema / migraciones por dialecto.
 

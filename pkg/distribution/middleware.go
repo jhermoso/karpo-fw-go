@@ -97,7 +97,8 @@ const (
 // operation channel (web, mobile, device, api).
 //
 // These headers must come from a trusted gateway that authenticated the caller: this
-// middleware does not authenticate anybody.
+// middleware does not authenticate anybody. Authenticated APIs use Authorize instead, which
+// derives the actor from the resolved authorization context and ignores these headers.
 func TenantActorContext() Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
