@@ -19,7 +19,7 @@ import (
 func WidgetMapping() sqlrepo.Mapping[repotest.WidgetID, *repotest.Widget] {
 	return sqlrepo.Mapping[repotest.WidgetID, *repotest.Widget]{
 		Table:   "widgets",
-		Columns: []string{"name", "price", "active", "color", "created_at"},
+		Columns: []string{"name", "price", "active", "color", "created_at", "weight", "launch"},
 		Dehydrate: func(w *repotest.Widget) (sqlrepo.Values, error) {
 			return sqlrepo.Values{
 				"name":       w.Name(),
@@ -27,6 +27,8 @@ func WidgetMapping() sqlrepo.Mapping[repotest.WidgetID, *repotest.Widget] {
 				"active":     w.Active(),
 				"color":      w.Color(),
 				"created_at": w.CreatedAt(),
+				"weight":     w.Weight(),
+				"launch":     w.Launch(),
 			}, nil
 		},
 		Hydrate: func(row *sqlrepo.Row, children sqlrepo.ChildRows) (*repotest.Widget, error) {
@@ -37,7 +39,7 @@ func WidgetMapping() sqlrepo.Mapping[repotest.WidgetID, *repotest.Widget] {
 			return repotest.Reconstitute(
 				repotest.WidgetID{UUID: row.UUID("id")},
 				row.String("name"), row.Int64("price"), row.Bool("active"),
-				row.NullString("color"), row.Time("created_at"), parts)
+				row.NullString("color"), row.Time("created_at"), row.Decimal("weight"), row.Date("launch"), parts)
 		},
 		Children: []sqlrepo.Child[*repotest.Widget]{{
 			Name:       "parts",
@@ -85,35 +87,40 @@ func Schema(dialect string) (drop, create []string) {
 	case "sqlite":
 		create = []string{
 			`CREATE TABLE widgets (id TEXT PRIMARY KEY, version INTEGER NOT NULL, name TEXT NOT NULL,
-				price INTEGER NOT NULL, active INTEGER NOT NULL, color TEXT, created_at TEXT NOT NULL)`,
+				price INTEGER NOT NULL, active INTEGER NOT NULL, color TEXT, created_at TEXT NOT NULL,
+				weight NUMERIC NOT NULL, launch TEXT NOT NULL)`,
 			`CREATE TABLE widget_parts (widget_id TEXT NOT NULL REFERENCES widgets(id), pos INTEGER NOT NULL,
 				name TEXT NOT NULL, qty INTEGER NOT NULL, PRIMARY KEY (widget_id, pos))`,
 		}
 	case "postgres":
 		create = []string{
 			`CREATE TABLE widgets (id UUID PRIMARY KEY, version BIGINT NOT NULL, name VARCHAR(200) NOT NULL,
-				price BIGINT NOT NULL, active BOOLEAN NOT NULL, color VARCHAR(50), created_at TIMESTAMPTZ NOT NULL)`,
+				price BIGINT NOT NULL, active BOOLEAN NOT NULL, color VARCHAR(50), created_at TIMESTAMPTZ NOT NULL,
+				weight NUMERIC(18,4) NOT NULL, launch DATE NOT NULL)`,
 			`CREATE TABLE widget_parts (widget_id UUID NOT NULL REFERENCES widgets(id), pos INTEGER NOT NULL,
 				name VARCHAR(100) NOT NULL, qty BIGINT NOT NULL, PRIMARY KEY (widget_id, pos))`,
 		}
 	case "sqlserver":
 		create = []string{
 			`CREATE TABLE widgets (id UNIQUEIDENTIFIER PRIMARY KEY, version BIGINT NOT NULL, name NVARCHAR(200) NOT NULL,
-				price BIGINT NOT NULL, active BIT NOT NULL, color NVARCHAR(50) NULL, created_at DATETIME2(7) NOT NULL)`,
+				price BIGINT NOT NULL, active BIT NOT NULL, color NVARCHAR(50) NULL, created_at DATETIME2(7) NOT NULL,
+				weight DECIMAL(18,4) NOT NULL, launch DATE NOT NULL)`,
 			`CREATE TABLE widget_parts (widget_id UNIQUEIDENTIFIER NOT NULL REFERENCES widgets(id), pos INT NOT NULL,
 				name NVARCHAR(100) NOT NULL, qty BIGINT NOT NULL, PRIMARY KEY (widget_id, pos))`,
 		}
 	case "oracle":
 		create = []string{
 			`CREATE TABLE widgets (id RAW(16) PRIMARY KEY, version NUMBER(19) NOT NULL, name VARCHAR2(200) NOT NULL,
-				price NUMBER(19) NOT NULL, active NUMBER(1) NOT NULL, color VARCHAR2(50), created_at TIMESTAMP(6) WITH TIME ZONE NOT NULL)`,
+				price NUMBER(19) NOT NULL, active NUMBER(1) NOT NULL, color VARCHAR2(50), created_at TIMESTAMP(6) WITH TIME ZONE NOT NULL,
+				weight NUMBER(18,4) NOT NULL, launch DATE NOT NULL)`,
 			`CREATE TABLE widget_parts (widget_id RAW(16) NOT NULL REFERENCES widgets(id), pos NUMBER(10) NOT NULL,
 				name VARCHAR2(100) NOT NULL, qty NUMBER(19) NOT NULL, PRIMARY KEY (widget_id, pos))`,
 		}
 	case "mysql":
 		create = []string{
 			`CREATE TABLE widgets (id CHAR(36) PRIMARY KEY, version BIGINT NOT NULL, name VARCHAR(200) NOT NULL,
-				price BIGINT NOT NULL, active BOOLEAN NOT NULL, color VARCHAR(50), created_at DATETIME(6) NOT NULL)`,
+				price BIGINT NOT NULL, active BOOLEAN NOT NULL, color VARCHAR(50), created_at DATETIME(6) NOT NULL,
+				weight DECIMAL(18,4) NOT NULL, launch DATE NOT NULL)`,
 			`CREATE TABLE widget_parts (widget_id CHAR(36) NOT NULL, pos INT NOT NULL,
 				name VARCHAR(100) NOT NULL, qty BIGINT NOT NULL, PRIMARY KEY (widget_id, pos),
 				FOREIGN KEY (widget_id) REFERENCES widgets(id))`,

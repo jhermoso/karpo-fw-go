@@ -55,14 +55,18 @@ func (b *Builder) Column(field string) (string, error) {
 	return b.scope.alias + "." + b.d.Quote(col), nil
 }
 
-// Arg binds v (converted for the dialect) and returns its placeholder.
+// Arg binds v (converted for the dialect) and returns its placeholder expression.
 func (b *Builder) Arg(v any) (string, error) {
 	dv, err := toDriver(b.d, v)
 	if err != nil {
 		return "", err
 	}
 	b.args = append(b.args, dv)
-	return b.d.Placeholder(len(b.args)), nil
+	ph := b.d.Placeholder(len(b.args))
+	if _, isDate := v.(domain.DateBacked); isDate {
+		ph = b.d.DateExpr(ph)
+	}
+	return ph, nil
 }
 
 // Translate converts an expression to a SQL boolean condition in the current scope.

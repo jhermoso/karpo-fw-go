@@ -8,7 +8,13 @@
 //     Guid.ToByteArray order (WithDotNetGUIDs) to share tables with the C# Karpo services,
 //     which store GUIDs with HEXTORAW / EF Core conventions;
 //   - booleans are stored as NUMBER(1) (0/1), instants as TIMESTAMP WITH TIME ZONE (UTC);
+//   - civil dates (vocab.Date) are bound as TO_DATE('YYYY-MM-DD'), never as instants;
 //   - IN lists are split in chunks of 1000 (ORA-01795).
+//
+// Time zones: go-ora sets the session time zone to the client's. Instants are stored in
+// TIMESTAMP WITH TIME ZONE columns and compare correctly; when sharing tables with the C#
+// services that use DATE/TIMESTAMP columns without zone for instants, set the session time zone
+// to UTC (ALTER SESSION SET TIME_ZONE = 'UTC') or run the process with TZ=UTC.
 //
 // Semantics note: Oracle treats the empty string as NULL.
 package oracle
@@ -98,6 +104,16 @@ func (d Dialect) ParseUUID(v any) (domain.UUID, error) {
 	}
 	return sqlrepo.ParseUUIDDefault(v)
 }
+
+// DateValue binds a civil date as ISO text; DateExpr converts it with TO_DATE. Binding a
+// time.Time would send a TIMESTAMP WITH TIME ZONE, and comparing it with a DATE column converts
+// the column with the session time zone (which go-ora sets to the client's), shifting the day.
+func (Dialect) DateValue(y int, m time.Month, d int) any {
+	return fmt.Sprintf("%04d-%02d-%02d", y, m, d)
+}
+
+// DateExpr wraps the placeholder in TO_DATE(..., 'YYYY-MM-DD'), independent of NLS settings.
+func (Dialect) DateExpr(ph string) string { return "TO_DATE(" + ph + ", 'YYYY-MM-DD')" }
 
 func (Dialect) IsUniqueViolation(err error) bool {
 	return sqlrepo.ErrorContains(err, "ORA-00001")

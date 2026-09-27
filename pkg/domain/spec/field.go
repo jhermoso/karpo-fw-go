@@ -104,6 +104,68 @@ func (f OrderedField[T, V]) Asc() Order[T] {
 // Desc sorts descending by this field.
 func (f OrderedField[T, V]) Desc() Order[T] { o := f.Asc(); o.Desc = true; return o }
 
+// CompareField is an ordered field whose values define their own total order through a compare
+// function instead of Go operators (decimals, civil dates, money amounts...). Equality is
+// compare(a, b) == 0, not ==.
+type CompareField[T any, V any] struct {
+	name    string
+	get     func(T) V
+	compare func(a, b V) int
+}
+
+// OrderedBy declares a field ordered by compare (for example Decimal.Cmp or Date.Compare).
+func OrderedBy[T any, V any](name string, get func(T) V, compare func(a, b V) int) CompareField[T, V] {
+	return CompareField[T, V]{name: name, get: get, compare: compare}
+}
+
+// Name returns the logical field name.
+func (f CompareField[T, V]) Name() string { return f.name }
+
+func (f CompareField[T, V]) spec(op Op, v V, ok func(int) bool) Spec[T] {
+	return Spec[T]{expr: Compare{Field: f.name, Op: op, Value: v}, eval: func(c T) bool { return ok(f.compare(f.get(c), v)) }}
+}
+
+// Eq matches values equal to v according to compare.
+func (f CompareField[T, V]) Eq(v V) Spec[T] {
+	return f.spec(OpEq, v, func(r int) bool { return r == 0 })
+}
+
+// Ne matches values different from v according to compare.
+func (f CompareField[T, V]) Ne(v V) Spec[T] {
+	return f.spec(OpNe, v, func(r int) bool { return r != 0 })
+}
+
+// Gt matches field > v.
+func (f CompareField[T, V]) Gt(v V) Spec[T] {
+	return f.spec(OpGt, v, func(r int) bool { return r > 0 })
+}
+
+// Ge matches field >= v.
+func (f CompareField[T, V]) Ge(v V) Spec[T] {
+	return f.spec(OpGe, v, func(r int) bool { return r >= 0 })
+}
+
+// Lt matches field < v.
+func (f CompareField[T, V]) Lt(v V) Spec[T] {
+	return f.spec(OpLt, v, func(r int) bool { return r < 0 })
+}
+
+// Le matches field <= v.
+func (f CompareField[T, V]) Le(v V) Spec[T] {
+	return f.spec(OpLe, v, func(r int) bool { return r <= 0 })
+}
+
+// Between matches lo <= field <= hi.
+func (f CompareField[T, V]) Between(lo, hi V) Spec[T] { return f.Ge(lo).And(f.Le(hi)) }
+
+// Asc sorts ascending by this field.
+func (f CompareField[T, V]) Asc() Order[T] {
+	return Order[T]{Field: f.name, compare: func(a, b T) int { return f.compare(f.get(a), f.get(b)) }}
+}
+
+// Desc sorts descending by this field.
+func (f CompareField[T, V]) Desc() Order[T] { o := f.Asc(); o.Desc = true; return o }
+
 // TextField is an ordered string field with pattern operators.
 type TextField[T any] struct {
 	OrderedField[T, string]

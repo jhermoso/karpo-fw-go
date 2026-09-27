@@ -27,7 +27,7 @@ Leyenda: ✅ hecho · 🟡 parcial · ❌ falta · — no aplica en Go (decisió
 | Clock | ✅ `Clock` | ✅ real / fake | |
 | Rasgos transversales (`IAuditable`, `IAuditableHashChained`, `IAuthorizable`, `ITraceable`, `IActivable`/`IToggleable`, `IExpirable`/`ITimeScoped`/`IHistoriable`, `ICodificable`, `INamed`, `IDescriptable`, `IComentable`, `IRegulated`, `IAccountable`, `INotificable`) | ❌ | ❌ | base de `BusinessEntity`; en Go como componentes componibles |
 | Extensibilidad (`BusinessEntityExtensible`, `TypeRef`) | ❌ | ❌ | |
-| Lenguaje ubicuo común (`Name`, `PersonalName`, `OrganizationName`, `Email`, `Telephone`, `Url`, `PostalCode`, `Percentage`, `ValidPeriod`, `DateValue`, `Actor`, `Tag`, `EventType`, `Error`) | ❌ | ❌ | `Fw.Domain/SustantivosComunes` |
+| Lenguaje ubicuo común | ✅ `pkg/domain/vocab` | ✅ | Evaluado término a término en `LENGUAJE-UBICUO.md`; 🟡 `PostalCode` pendiente de `Address` |
 
 ## 2. Estratégicos
 
@@ -67,7 +67,7 @@ Leyenda: ✅ hecho · 🟡 parcial · ❌ falta · — no aplica en Go (decisió
 
 ## 4. Prioridad propuesta antes de Parties
 
-1. Lenguaje ubicuo común (`Name`, `Email`, `Telephone`, `ValidPeriod`, `Actor`...).
+1. ~~Lenguaje ubicuo común~~ ✅ (`pkg/domain/vocab`).
 2. Rasgos transversales componibles (auditable, activable, vigencia...).
 3. Contratos de autorización y actor en contexto.
 4. Eventos de integración.

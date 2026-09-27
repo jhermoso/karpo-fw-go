@@ -44,6 +44,11 @@ type Dialect interface {
 	ParseUUID(v any) (domain.UUID, error)
 	// TimeValue converts an instant to its driver representation (UTC).
 	TimeValue(t time.Time) any
+	// DateValue converts a civil date (no time, no zone) to its driver representation.
+	DateValue(year int, month time.Month, day int) any
+	// DateExpr wraps the placeholder of a civil date when the engine needs an explicit
+	// conversion (Oracle: TO_DATE(:n, 'YYYY-MM-DD')); most engines return it unchanged.
+	DateExpr(placeholder string) string
 	// IsUniqueViolation reports whether err is a primary-key/unique constraint violation.
 	IsUniqueViolation(err error) bool
 }

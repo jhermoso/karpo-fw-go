@@ -259,7 +259,9 @@ su código.
 
 `pkg/testing/archtest` verifica en cada `go test` (listas blancas con patrones al estilo Go:
 `std`, `ruta/...`, `ruta`):
-1. **Contratos de dominio puros**: solo biblioteca estándar y el propio árbol `pkg/domain`.
+1. **Contratos de dominio puros**: solo biblioteca estándar y el propio árbol `pkg/domain`, con
+   una única excepción aprobada: `github.com/shopspring/decimal` (Go no tiene tipo decimal). El
+   núcleo (`pkg/domain`, `pkg/domain/spec`) sigue siendo solo biblioteca estándar.
 2. **Contratos de aplicación** (`pkg/application`, `log`, `cache`, `time`): solo contratos; nunca
    sus propias implementaciones ni adaptadores.
 3. **Implementaciones de aplicación** (`pipeline`, `orchestration`, `outbox`, `hosting`): solo

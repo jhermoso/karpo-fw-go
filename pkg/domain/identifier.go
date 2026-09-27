@@ -40,6 +40,13 @@ type LongBacked interface {
 	BaseLong() int64
 }
 
+// DateBacked is implemented by civil-date value objects (vocab.Date): a calendar day without
+// time or time zone. Persistence adapters bind them as dates, never as instants, so the day
+// cannot shift with the session or server time zone.
+type DateBacked interface {
+	BaseDate() (year int, month time.Month, day int)
+}
+
 // UUID is an RFC 9562 universally unique identifier. It is comparable, so it can be used as a
 // map key and compared with ==. The zero value is the nil UUID.
 type UUID [16]byte
