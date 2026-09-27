@@ -41,6 +41,29 @@ func Publications(r *messaging.Recorder) *messaging.Recorder {
 	messaging.On(r, func(_ context.Context, e domain.RelationshipTerminated) ([]app.IntegrationEvent, error) {
 		return one(contracts.RelationshipTerminatedV1{RelationshipID: e.AggregateID, At: e.At})
 	})
+	messaging.On(r, func(_ context.Context, e domain.IdentificationAdded) ([]app.IntegrationEvent, error) {
+		return one(contracts.PartyIdentificationAddedV1{PartyID: e.AggregateID, IdentificationID: e.IdentificationID,
+			DocumentType: e.DocumentType, Country: e.Country, Number: e.Number, Primary: e.Primary})
+	})
+	messaging.On(r, func(_ context.Context, e domain.IdentificationRemoved) ([]app.IntegrationEvent, error) {
+		return one(contracts.PartyIdentificationRemovedV1{PartyID: e.AggregateID, IdentificationID: e.IdentificationID})
+	})
+	messaging.On(r, func(_ context.Context, e domain.ContactAdded) ([]app.IntegrationEvent, error) {
+		return one(contracts.PartyContactAddedV1{PartyID: e.AggregateID, ContactID: e.ContactID, Kind: e.Kind, Value: e.Value,
+			Address: e.Address, Purposes: e.Purposes, From: e.From})
+	})
+	messaging.On(r, func(_ context.Context, e domain.ContactPurposesChanged) ([]app.IntegrationEvent, error) {
+		return one(contracts.PartyContactPurposesChangedV1{PartyID: e.AggregateID, ContactID: e.ContactID, Purposes: e.Purposes})
+	})
+	messaging.On(r, func(_ context.Context, e domain.ContactEnded) ([]app.IntegrationEvent, error) {
+		return one(contracts.PartyContactEndedV1{PartyID: e.AggregateID, ContactID: e.ContactID, At: e.At})
+	})
+	messaging.On(r, func(_ context.Context, e domain.PartyClassified) ([]app.IntegrationEvent, error) {
+		return one(contracts.PartyClassifiedV1{PartyID: e.AggregateID, ClassificationID: e.ClassificationID, Type: e.Type, From: e.From})
+	})
+	messaging.On(r, func(_ context.Context, e domain.PartyClassificationEnded) ([]app.IntegrationEvent, error) {
+		return one(contracts.PartyClassificationEndedV1{PartyID: e.AggregateID, ClassificationID: e.ClassificationID, Type: e.Type, At: e.At})
+	})
 	return r
 }
 

@@ -85,6 +85,33 @@ var initialDDL = []string{
 	`CREATE INDEX ix_party_relationships_to ON party_relationships (to_party)`,
 }
 
+var phase2DDL = []string{
+	`CREATE TABLE document_types (id {uuid} NOT NULL PRIMARY KEY, code {str:10} NOT NULL, name {str:200} NOT NULL,
+	default_pattern {str:300}, requires_expiry {bool} NOT NULL, requires_authority {bool} NOT NULL, active {bool} NOT NULL)`,
+	`CREATE TABLE country_document_rules (id {str:64} NOT NULL PRIMARY KEY, country {str:2} NOT NULL, doc_type {uuid} NOT NULL,
+	available {bool} NOT NULL, is_default {bool} NOT NULL, display_order {bigint} NOT NULL, pattern {str:300},
+	min_length {bigint}, max_length {bigint}, check_digit {str:40}, requires_expiry {bool}, requires_authority {bool},
+	active {bool} NOT NULL, FOREIGN KEY (doc_type) REFERENCES document_types (id))`,
+	`CREATE TABLE classification_types (id {uuid} NOT NULL PRIMARY KEY, name {str:200} NOT NULL, description {str:500},
+	family_id {uuid}, active {bool} NOT NULL, applies_to {str:20} NOT NULL, exclusive_family {bool} NOT NULL)`,
+	`CREATE TABLE party_identifications (party_id {uuid} NOT NULL, id {uuid} NOT NULL, doc_type {uuid} NOT NULL,
+	country {str:2} NOT NULL, doc_number {str:60} NOT NULL, issuing_authority {str:200}, issued_on {date}, expires_on {date},
+	is_primary {bool} NOT NULL, PRIMARY KEY (party_id, id),
+	FOREIGN KEY (party_id) REFERENCES parties (id), FOREIGN KEY (doc_type) REFERENCES document_types (id))`,
+	`CREATE UNIQUE INDEX ux_party_identifications_doc ON party_identifications (doc_type, country, doc_number)`,
+	`CREATE INDEX ix_party_identifications_number ON party_identifications (doc_number)`,
+	`CREATE TABLE party_contacts (party_id {uuid} NOT NULL, id {uuid} NOT NULL, kind {str:10} NOT NULL,
+	contact_value {str:320}, street_type {str:10}, line1 {str:200}, line2 {str:200}, directions {str:500},
+	postal_code {str:20}, locality {str:100}, region {str:100}, country {str:2}, geo_postal_code {uuid}, geo_boundary {uuid},
+	purposes {str:100}, non_solicitation {bool} NOT NULL, valid_from {ts} NOT NULL, valid_to {ts},
+	PRIMARY KEY (party_id, id), FOREIGN KEY (party_id) REFERENCES parties (id))`,
+	`CREATE INDEX ix_party_contacts_value ON party_contacts (contact_value)`,
+	`CREATE TABLE party_classifications (party_id {uuid} NOT NULL, id {uuid} NOT NULL, class_type {uuid} NOT NULL,
+	valid_from {ts} NOT NULL, valid_to {ts}, PRIMARY KEY (party_id, id),
+	FOREIGN KEY (party_id) REFERENCES parties (id), FOREIGN KEY (class_type) REFERENCES classification_types (id))`,
+	`CREATE INDEX ix_party_classifications_type ON party_classifications (class_type)`,
+}
+
 // technicalDDL returns the outboxes and audit log of the context for a dialect.
 func technicalDDL(dialect string) []string {
 	switch dialect {
@@ -106,9 +133,13 @@ func technicalDDL(dialect string) []string {
 func Migrations() sqlrepo.MigrationSet {
 	initial := map[string][]string{}
 	technical := map[string][]string{}
+	phase2 := map[string][]string{}
 	for _, d := range Dialects {
 		for _, s := range initialDDL {
 			initial[d] = append(initial[d], render(d, s))
+		}
+		for _, s := range phase2DDL {
+			phase2[d] = append(phase2[d], render(d, s))
 		}
 		technical[d] = technicalDDL(d)
 	}
@@ -116,6 +147,8 @@ func Migrations() sqlrepo.MigrationSet {
 		{Version: 1, Name: "parties, roles and relationships", Up: initial},
 		{Version: 2, Name: "outboxes and audit log", Up: technical},
 		{Version: 3, Name: "well-known role and relationship types", Run: seedCatalogs},
+		{Version: 4, Name: "identifications, contacts and classifications", Up: phase2},
+		{Version: 5, Name: "document types, country document rules and classification types", Run: seedPhase2},
 	}}
 }
 
@@ -141,6 +174,50 @@ func seedCatalogs(ctx context.Context, db *sqlrepo.DB) error {
 	return nil
 }
 
+// seedPhase2 inserts the document and classification catalogs (C# GUIDs). Families go first.
+func seedPhase2(ctx context.Context, db *sqlrepo.DB) error {
+	optBool := func(b *bool) any {
+		if b == nil {
+			return nil
+		}
+		return *b
+	}
+	optInt := func(n int) any {
+		if n == 0 {
+			return nil
+		}
+		return int64(n)
+	}
+	for _, t := range domain.WellKnownDocumentTypes() {
+		if err := db.Insert(ctx, "document_types", sqlrepo.Values{"id": t.ID, "code": t.Code, "name": t.Name.String(),
+			"default_pattern": nullable(t.DefaultPattern), "requires_expiry": t.RequiresExpiry,
+			"requires_authority": t.RequiresIssuingAuthority, "active": t.Active}); err != nil {
+			return fmt.Errorf("seeding document type %s: %w", t.Code, err)
+		}
+	}
+	for _, r := range domain.WellKnownCountryDocumentRules() {
+		if err := db.Insert(ctx, "country_document_rules", sqlrepo.Values{"id": r.ID, "country": r.Country.String(),
+			"doc_type": r.DocumentType, "available": r.Available, "is_default": r.Default, "display_order": int64(r.DisplayOrder),
+			"pattern": nullable(r.Pattern), "min_length": optInt(r.MinLength), "max_length": optInt(r.MaxLength),
+			"check_digit": nullable(r.CheckDigit), "requires_expiry": optBool(r.RequiresExpiry),
+			"requires_authority": optBool(r.RequiresIssuingAuthority), "active": r.Active}); err != nil {
+			return fmt.Errorf("seeding country document rule %s: %w", r.ID, err)
+		}
+	}
+	for _, t := range domain.WellKnownClassificationTypes() {
+		var family any
+		if t.Family != nil {
+			family = *t.Family
+		}
+		if err := db.Insert(ctx, "classification_types", sqlrepo.Values{"id": t.ID, "name": t.Name.String(),
+			"description": nullable(t.Description), "family_id": family, "active": t.Active,
+			"applies_to": string(t.AppliesTo), "exclusive_family": t.Exclusive}); err != nil {
+			return fmt.Errorf("seeding classification %s: %w", t.Name, err)
+		}
+	}
+	return nil
+}
+
 // Migrator returns the schema migrator of Parties on db.
 func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 	return sqlrepo.NewMigrator(db, []sqlrepo.MigrationSet{Migrations()})
@@ -148,7 +225,9 @@ func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 
 // DropAll removes every table of the context (tests only).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
-	for _, t := range []string{"party_relationships", "party_roles", "parties", "relationship_types", "role_types",
+	for _, t := range []string{"party_relationships", "party_roles", "party_identifications", "party_contacts",
+		"party_classifications", "parties", "relationship_types", "role_types", "country_document_rules",
+		"document_types", "classification_types",
 		TablePartiesOutbox, TableIntegrationOutbox, TableAuditLog, sqlrepo.DefaultMigrationsTable, sqlrepo.DefaultMigrationsLock} {
 		_, _ = db.ExecContext(ctx, "DROP TABLE "+t)
 	}

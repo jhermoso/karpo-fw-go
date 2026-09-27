@@ -2,6 +2,7 @@ package domain
 
 import (
 	"slices"
+	"strings"
 	"time"
 
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
@@ -65,6 +66,10 @@ type Party struct {
 	person       PersonDetails
 	organization OrganizationDetails
 	roles        []PartyRole
+
+	identifications []Identification
+	contacts        []Contact
+	classifications []Classification
 }
 
 // RegisterPerson creates a person.
@@ -111,6 +116,9 @@ type PartyState struct {
 	Person       PersonDetails
 	Organization OrganizationDetails
 	Roles        []PartyRole
+	Identities   []Identification
+	Contacts     []Contact
+	Classes      []Classification
 	Active       bool
 	Test         bool
 	Audit        traits.AuditStamp
@@ -133,6 +141,9 @@ func Reconstitute(id PartyID, s PartyState) (*Party, error) {
 		return nil, v.Err()
 	}
 	p.roles = slices.Clone(s.Roles)
+	p.identifications = slices.Clone(s.Identities)
+	p.contacts = slices.Clone(s.Contacts)
+	p.classifications = slices.Clone(s.Classes)
 	p.Activation = traits.RestoredActivation(s.Active)
 	p.Audited = traits.RestoredAudit(s.Audit)
 	p.TestFlag = traits.RestoredTestFlag(s.Test)
@@ -303,6 +314,32 @@ func (p *Party) PlaysAt(c RoleCatalog, roleType RoleTypeID, t time.Time) bool {
 // AuditSnapshot implements traits.Snapshotter.
 func (p *Party) AuditSnapshot() map[string]any {
 	s := map[string]any{"kind": string(p.kind), "name": p.Name(), "active": p.IsActive(), "test": p.IsTest()}
+	docs := make([]string, 0, len(p.identifications))
+	for _, i := range p.identifications {
+		docs = append(docs, i.Country.String()+":"+i.Number)
+	}
+	contacts := make([]string, 0, len(p.contacts))
+	for _, c := range p.contacts {
+		if c.IsActiveAt(fw.Now()) {
+			contacts = append(contacts, string(c.Kind)+":"+c.Value+c.Address.String())
+		}
+	}
+	now := fw.Now()
+	var roles, classes []string
+	for _, r := range p.roles {
+		if r.IsActiveAt(now) {
+			roles = append(roles, r.RoleType.String())
+		}
+	}
+	for _, c := range p.classifications {
+		if c.Period.IsActiveAt(now) {
+			classes = append(classes, c.Type.String())
+		}
+	}
+	s["roles"] = strings.Join(roles, ",")
+	s["classifications"] = strings.Join(classes, ",")
+	s["identifications"] = strings.Join(docs, ",")
+	s["contacts"] = strings.Join(contacts, ",")
 	if p.kind == KindPerson {
 		s["gender"] = string(p.person.Gender)
 		s["birthDate"] = p.person.BirthDate.String()

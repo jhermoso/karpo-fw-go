@@ -125,6 +125,54 @@ func TestPartiesContext(t *testing.T) {
 			if err != nil || len(trail) != 2 {
 				t.Fatalf("audit: %d %v", len(trail), err)
 			}
+			// Phase 2: identifications, contacts and classifications.
+			opts, err := svc.DocumentOptions.Handle(ctx, papp.DocumentOptions{Country: "ES"})
+			if err != nil || len(opts) != 5 || opts[0].Code != "NIDN" {
+				t.Fatalf("document options from SQL: %+v %v", opts, err)
+			}
+			if _, err := svc.AddIdentification.Handle(ctx, papp.AddIdentification{PartyID: anaID, DocumentType: domain.DocNationalID.String(),
+				Country: "ES", Number: "12345678-Z"}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := svc.AddIdentification.Handle(ctx, papp.AddIdentification{PartyID: anaID, DocumentType: domain.DocPassport.String(),
+				Country: "ES", Number: "PAA123456", IssuedOn: "2021-02-03", ExpiresOn: "2031-02-02", IssuingAuthority: "Policía Nacional", Primary: true}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := svc.AddIdentification.Handle(ctx, papp.AddIdentification{PartyID: luisID, DocumentType: domain.DocNationalID.String(),
+				Country: "ES", Number: "12345678Z"}); !errors.Is(err, fw.ErrRuleViolation) {
+				t.Fatalf("document taken: %v", err)
+			}
+			boundary := fw.NewUUID()
+			if _, err := svc.AddContact.Handle(ctx, papp.AddContact{PartyID: anaID, Kind: "postal", Purposes: []string{"billing"},
+				Address: &papp.AddressDTO{StreetType: "CL", Line1: "Mayor 1", PostalCode: "28013", Locality: "Madrid", Country: "ES",
+					GeoBoundary: boundary.String()}}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := svc.AddContact.Handle(ctx, papp.AddContact{PartyID: anaID, Kind: "phone", Value: "+34 600 000 001", Purposes: []string{"default"}}); err != nil {
+				t.Fatal(err)
+			}
+			acmeID, _ := domain.ParsePartyID(acme.ID)
+			if _, err := svc.Classify.Handle(ctx, papp.Classify{PartyID: acmeID, Classification: domain.ClassCorporate.String()}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := svc.Classify.Handle(ctx, papp.Classify{PartyID: acmeID, Classification: domain.ClassRetail.String()}); !errors.Is(err, fw.ErrRuleViolation) {
+				t.Fatalf("exclusive family: %v", err)
+			}
+			got, err = svc.Get.Handle(ctx, papp.GetParty{ID: anaID})
+			if err != nil || len(got.Identifications) != 2 || got.Identifications[1].ExpiresOn != "2031-02-02" || !got.Identifications[1].Primary ||
+				got.Identifications[0].Primary || len(got.Contacts) != 2 || got.Contacts[0].Address == nil ||
+				got.Contacts[0].Address.GeoBoundary != boundary.String() || got.Contacts[1].Value != "+34600000001" {
+				t.Fatalf("phase 2 round trip: %+v %v", got, err)
+			}
+			byDoc, err := svc.Search.Handle(ctx, papp.SearchParties{Document: "paa123456"})
+			if err != nil || byDoc.Total != 1 || byDoc.Items[0].ID != ana.ID {
+				t.Fatalf("search by document: %+v %v", byDoc, err)
+			}
+			byClass, err := svc.Search.Handle(ctx, papp.SearchParties{Classification: domain.ClassCorporate.String()})
+			if err != nil || byClass.Total != 1 || byClass.Items[0].ID != acme.ID {
+				t.Fatalf("search by classification: %+v %v", byClass, err)
+			}
+
 			pending, err := mod.IntegrationOutbox.Pending(ctx, 100, 10)
 			if err != nil || len(pending) < 8 {
 				t.Fatalf("published language: %d %v", len(pending), err)

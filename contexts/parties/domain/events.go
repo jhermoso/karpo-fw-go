@@ -82,3 +82,84 @@ type RelationshipTerminated struct {
 
 // EventType implements domain.Event.
 func (RelationshipTerminated) EventType() string { return "parties.relationship_terminated" }
+
+// IdentificationAdded is raised when a party gets an identity document.
+type IdentificationAdded struct {
+	fw.EventMeta
+	IdentificationID string `json:"identificationId"`
+	DocumentType     string `json:"documentType"`
+	Country          string `json:"country"`
+	Number           string `json:"number"`
+	Primary          bool   `json:"primary"`
+}
+
+// EventType implements domain.Event.
+func (IdentificationAdded) EventType() string { return "parties.identification_added" }
+
+// IdentificationRemoved is raised when an identity document is removed.
+type IdentificationRemoved struct {
+	fw.EventMeta
+	IdentificationID string `json:"identificationId"`
+	DocumentType     string `json:"documentType"`
+	Country          string `json:"country"`
+	Number           string `json:"number"`
+}
+
+// EventType implements domain.Event.
+func (IdentificationRemoved) EventType() string { return "parties.identification_removed" }
+
+// ContactAdded is raised when a party gets a contact.
+type ContactAdded struct {
+	fw.EventMeta
+	ContactID string    `json:"contactId"`
+	Kind      string    `json:"kind"`
+	Value     string    `json:"value,omitempty"`
+	Address   string    `json:"address,omitempty"`
+	Purposes  []string  `json:"purposes"`
+	From      time.Time `json:"from"`
+}
+
+// EventType implements domain.Event.
+func (ContactAdded) EventType() string { return "parties.contact_added" }
+
+// ContactPurposesChanged is raised when the purposes of a contact change.
+type ContactPurposesChanged struct {
+	fw.EventMeta
+	ContactID string   `json:"contactId"`
+	Purposes  []string `json:"purposes"`
+}
+
+// EventType implements domain.Event.
+func (ContactPurposesChanged) EventType() string { return "parties.contact_purposes_changed" }
+
+// ContactEnded is raised when a contact stops being used.
+type ContactEnded struct {
+	fw.EventMeta
+	ContactID string    `json:"contactId"`
+	At        time.Time `json:"at"`
+}
+
+// EventType implements domain.Event.
+func (ContactEnded) EventType() string { return "parties.contact_ended" }
+
+// PartyClassified is raised when a party gets a classification.
+type PartyClassified struct {
+	fw.EventMeta
+	ClassificationID string    `json:"classificationId"`
+	Type             string    `json:"type"`
+	From             time.Time `json:"from"`
+}
+
+// EventType implements domain.Event.
+func (PartyClassified) EventType() string { return "parties.party_classified" }
+
+// PartyClassificationEnded is raised when a classification ends.
+type PartyClassificationEnded struct {
+	fw.EventMeta
+	ClassificationID string    `json:"classificationId"`
+	Type             string    `json:"type"`
+	At               time.Time `json:"at"`
+}
+
+// EventType implements domain.Event.
+func (PartyClassificationEnded) EventType() string { return "parties.party_classification_ended" }

@@ -182,6 +182,7 @@ escapes de `%` y `_`...) y exige que el resultado de la base de datos sea **idé
 | `Contains/StartsWith/EndsWith/Eq` sobre texto | siguen la **collation** del motor (SQL Server y MySQL no distinguen mayúsculas por defecto; SQLite tampoco en `LIKE`). Para no distinguir mayúsculas en todos los motores usa `EqualFold`/`ContainsFold` |
 | Espacios finales | SQL Server y MySQL los ignoran en `=` |
 | Cadena vacía | Oracle la trata como `NULL` |
+| Orden de `UNIQUEIDENTIFIER` | SQL Server ordena los GUID por grupos de bytes (los 6 últimos primero): `ORDER BY id` no es cronológico con UUID v7. Los mapeos que necesitan un orden estable lo imponen en Go (Parties ordena sus hijos al hidratar) |
 | Orden de textos | depende de la collation; el desempate siempre es por identidad |
 
 ### Añadir otra tecnología

@@ -21,6 +21,9 @@ type (
 type Catalogs interface {
 	RoleTypes(ctx context.Context) ([]RoleType, error)
 	RelationshipTypes(ctx context.Context) ([]RelationshipType, error)
+	DocumentTypes(ctx context.Context) ([]DocumentType, error)
+	CountryDocumentRules(ctx context.Context) ([]CountryDocumentRule, error)
+	ClassificationTypes(ctx context.Context) ([]ClassificationType, error)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -43,6 +46,22 @@ var (
 	FieldTest   = spec.Comparable("test", (*Party).IsTest)
 	FieldRoles  = spec.Collection("roles", (*Party).Roles)
 
+	FieldIdentifications = spec.Collection("identifications", (*Party).Identifications)
+	FieldClassifications = spec.Collection("classifications", (*Party).Classifications)
+
+	IdFieldType    = spec.Comparable("doc_type", func(i Identification) DocumentTypeID { return i.Type })
+	IdFieldCountry = spec.Comparable("country", func(i Identification) string { return i.Country.String() })
+	IdFieldNumber  = spec.Comparable("number", func(i Identification) string { return i.Number })
+
+	ClassFieldType  = spec.Comparable("class_type", func(c Classification) ClassificationTypeID { return c.Type })
+	ClassFieldFrom  = spec.Time("valid_from", func(c Classification) time.Time { return c.Period.From() })
+	ClassFieldUntil = spec.OptionalTime("valid_to", func(c Classification) *time.Time {
+		if t, ok := c.Period.To(); ok {
+			return &t
+		}
+		return nil
+	})
+
 	RoleFieldType  = spec.Comparable("role_type", func(r PartyRole) RoleTypeID { return r.RoleType })
 	RoleFieldFrom  = spec.Time("valid_from", func(r PartyRole) time.Time { return r.Period.From() })
 	RoleFieldUntil = spec.OptionalTime("valid_to", roleEnd)
@@ -50,6 +69,25 @@ var (
 
 // WithIDs matches the given parties.
 func WithIDs(ids ...PartyID) spec.Spec[*Party] { return FieldID.In(ids...) }
+
+// HoldsDocument matches parties holding the document (the duplicate check across parties).
+func HoldsDocument(t DocumentTypeID, country string, number string) spec.Spec[*Party] {
+	return FieldIdentifications.Any(spec.And(IdFieldType.Eq(t), IdFieldCountry.Eq(country), IdFieldNumber.Eq(number)))
+}
+
+// WithDocumentNumber matches parties holding a document with that canonical number.
+func WithDocumentNumber(number string) spec.Spec[*Party] {
+	return FieldIdentifications.Any(IdFieldNumber.Eq(number))
+}
+
+// ClassifiedAt matches parties with any of the classifications at t.
+func ClassifiedAt(t time.Time, types ...ClassificationTypeID) spec.Spec[*Party] {
+	return FieldClassifications.Any(spec.And(
+		ClassFieldType.In(types...),
+		ClassFieldFrom.AtOrBefore(t),
+		ClassFieldUntil.IsNull().Or(ClassFieldUntil.After(t)),
+	))
+}
 
 // NameContains matches parties whose display name contains text, ignoring case.
 func NameContains(text string) spec.Spec[*Party] { return FieldName.ContainsFold(text) }
