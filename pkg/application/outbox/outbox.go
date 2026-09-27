@@ -59,8 +59,7 @@ func (o *Recorder) Record(ctx context.Context, evts []domain.Event) error {
 // Delivery is at-least-once: subscribers must be idempotent (use the event id).
 type Relay struct {
 	store       application.OutboxStore
-	decoder     application.EventDecoder
-	publisher   application.Publisher
+	deliverFn   DeliverFunc
 	batchSize   int
 	maxAttempts int
 	logger      log.Logger
@@ -78,9 +77,25 @@ func WithMaxAttempts(n int) RelayOption { return func(r *Relay) { r.maxAttempts 
 // WithRelayLogger sets a logger for delivery failures.
 func WithRelayLogger(l log.Logger) RelayOption { return func(r *Relay) { r.logger = l } }
 
-// NewRelay creates a relay.
+// DeliverFunc delivers one outbox message; an error leaves it pending for a retry.
+type DeliverFunc func(ctx context.Context, m application.OutboxMessage) error
+
+// NewRelay creates a relay that decodes domain events and hands them to publisher.
 func NewRelay(store application.OutboxStore, decoder application.EventDecoder, publisher application.Publisher, opts ...RelayOption) *Relay {
-	r := &Relay{store: store, decoder: decoder, publisher: publisher, batchSize: 100, maxAttempts: 10}
+	return NewForwarder(store, func(ctx context.Context, m application.OutboxMessage) error {
+		evt, err := decoder.Decode(m.EventType, m.Payload)
+		if err != nil {
+			return err
+		}
+		ctx = application.WithCausationID(application.WithCorrelationID(ctx, m.CorrelationID), m.ID)
+		return publisher.Publish(ctx, evt)
+	}, opts...)
+}
+
+// NewForwarder creates a relay with a custom delivery (e.g. the integration relay, which
+// forwards the serialized message to a transport without decoding it).
+func NewForwarder(store application.OutboxStore, deliver DeliverFunc, opts ...RelayOption) *Relay {
+	r := &Relay{store: store, deliverFn: deliver, batchSize: 100, maxAttempts: 10}
 	for _, opt := range opts {
 		opt(r)
 	}
@@ -96,7 +111,7 @@ func (r *Relay) RelayOnce(ctx context.Context) (int, error) {
 	delivered := 0
 	var errs []error
 	for _, m := range msgs {
-		if err := r.deliver(ctx, m); err != nil {
+		if err := r.deliverFn(ctx, m); err != nil {
 			if r.logger != nil {
 				r.logger.Warn("outbox delivery failed", "message_id", m.ID, "event_type", m.EventType, "error", err)
 			}
@@ -114,13 +129,21 @@ func (r *Relay) RelayOnce(ctx context.Context) (int, error) {
 	return delivered, errors.Join(errs...)
 }
 
-func (r *Relay) deliver(ctx context.Context, m application.OutboxMessage) error {
-	evt, err := r.decoder.Decode(m.EventType, m.Payload)
-	if err != nil {
-		return err
+// Recorders combines several recorders (e.g. the domain outbox and the integration outbox)
+// into one application.EventRecorder; all of them record in the same unit of work.
+func Recorders(recorders ...application.EventRecorder) application.EventRecorder {
+	return multi(recorders)
+}
+
+type multi []application.EventRecorder
+
+func (m multi) Record(ctx context.Context, evts []domain.Event) error {
+	for _, r := range m {
+		if err := r.Record(ctx, evts); err != nil {
+			return err
+		}
 	}
-	ctx = application.WithCausationID(application.WithCorrelationID(ctx, m.CorrelationID), m.ID)
-	return r.publisher.Publish(ctx, evt)
+	return nil
 }
 
 // Run relays continuously every interval until ctx is cancelled.

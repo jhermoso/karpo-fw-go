@@ -16,10 +16,12 @@ import (
 	_ "modernc.org/sqlite"
 
 	papp "github.com/jhermoso/karpo-fw-go/examples/parties/application"
+	"github.com/jhermoso/karpo-fw-go/examples/parties/contracts"
 	pdist "github.com/jhermoso/karpo-fw-go/examples/parties/distribution"
 	"github.com/jhermoso/karpo-fw-go/examples/parties/domain"
 	"github.com/jhermoso/karpo-fw-go/examples/parties/infrastructure"
 	"github.com/jhermoso/karpo-fw-go/pkg/application"
+	"github.com/jhermoso/karpo-fw-go/pkg/application/messaging"
 	appoutbox "github.com/jhermoso/karpo-fw-go/pkg/application/outbox"
 	"github.com/jhermoso/karpo-fw-go/pkg/distribution"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
@@ -37,6 +39,7 @@ type env struct {
 	srv    *httptest.Server
 	sw     *hotswap.Switch
 	outbox application.OutboxStore
+	integ  application.OutboxStore
 	audit  application.AuditLog
 }
 
@@ -53,15 +56,20 @@ func compose(t *testing.T) *env {
 	sw := hotswap.New(memory.NewStore("memory"))
 	repo := hotswap.Repository(sw, infrastructure.RepositoryFactory)
 	outbox := hotswap.Outbox(sw, infrastructure.OutboxFactory)
+	integ := hotswap.Outbox(sw, infrastructure.IntegrationOutboxFactory)
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
-	svc := papp.NewService(repo, sw, appoutbox.NewRecorder(outbox), memory.NewIdempotencyStore(), audit)
+	recorder := appoutbox.Recorders(
+		appoutbox.NewRecorder(outbox),                                     // domain events, inside Parties
+		papp.Publications(messaging.NewRecorder(contracts.Source, integ)), // Published Language
+	)
+	svc := papp.NewService(repo, sw, recorder, memory.NewIdempotencyStore(), audit)
 
 	mux := http.NewServeMux()
 	pdist.NewModule(svc).RegisterRoutes(mux)
 	srv := httptest.NewServer(distribution.Chain(mux, distribution.Correlation(), distribution.TenantActorContext()))
 	t.Cleanup(srv.Close)
 	t.Cleanup(func() { _ = sw.Close(context.Background()) })
-	return &env{t: t, srv: srv, sw: sw, outbox: outbox, audit: audit}
+	return &env{t: t, srv: srv, sw: sw, outbox: outbox, integ: integ, audit: audit}
 }
 
 func (e *env) do(method, path string, body any, headers map[string]string) (int, []byte) {

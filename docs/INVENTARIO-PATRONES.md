@@ -35,10 +35,10 @@ Leyenda: ✅ hecho · 🟡 parcial · ❌ falta · — no aplica en Go (decisió
 |---|---|---|---|
 | Bounded Context | ✅ `application.Module` | ✅ `hosting.Host` | 🟡 identificador, icono, descripción, configuración |
 | Shared Kernel | ✅ `pkg/domain` | ✅ | |
-| Eventos de integración / lenguaje publicado | ❌ | ❌ | envelope y versionado distintos de los eventos de dominio |
+| Eventos de integración / lenguaje publicado | ✅ `IntegrationEvent`, `Envelope`, `Translator`, `InboxStore` | ✅ `messaging` (Recorder, Relay, Consumer), inbox memoria/SQL ×5/hotswap | Evaluado en `EVENTOS-INTEGRACION.md` |
 | Anti-Corruption Layer | ❌ | ❌ | contrato de traductor entre modelos |
 | Open Host Service | 🟡 `distribution.EndpointModule` | 🟡 HTTP | |
-| Mensajería entre contextos | 🟡 `application.Publisher`/`Dispatcher` | 🟡 en proceso | ❌ adaptador de broker |
+| Mensajería entre contextos | ✅ `MessageSender`, `MessageHandler` | 🟡 `messaging/inprocess` | ❌ adaptador de broker (NATS/Kafka) |
 | Fronteras entre subdominios | — | 🟡 `archtest` | ❌ reglas por contexto |
 
 ## 3. Capa de aplicación — contratos en `pkg/application`
@@ -70,7 +70,7 @@ Leyenda: ✅ hecho · 🟡 parcial · ❌ falta · — no aplica en Go (decisió
 1. ~~Lenguaje ubicuo común~~ ✅ (`pkg/domain/vocab`).
 2. ~~Rasgos transversales componibles~~ ✅ (`pkg/domain/traits` + `application.AuditLog`).
 3. ~~Contratos de autorización y actor en contexto~~ ✅ (`application/authz` + `authorization`).
-4. Eventos de integración.
+4. ~~Eventos de integración~~ ✅ (`application/messaging` + inbox).
 5. Gestión de esquema / migraciones por dialecto.
 
 Pueden esperar a un segundo contexto que los necesite: Workflow, ACL, adaptador de broker.

@@ -132,7 +132,25 @@ func (a *auditLog) Trail(ctx context.Context, aggregateType, aggregateID string)
 	return out, err
 }
 
+// Inbox returns an application.InboxStore that follows the Switch.
+func Inbox(s *Switch, factory func(Backend) (application.InboxStore, error)) application.InboxStore {
+	return &inbox{b: Bind(s, factory)}
+}
+
+type inbox struct {
+	b *Binding[application.InboxStore]
+}
+
+func (i *inbox) Claim(ctx context.Context, consumer, messageID string) (first bool, err error) {
+	err = i.b.With(ctx, func(ctx context.Context, x application.InboxStore) error {
+		first, err = x.Claim(ctx, consumer, messageID)
+		return err
+	})
+	return first, err
+}
+
 var (
+	_ application.InboxStore  = (*inbox)(nil)
 	_ application.AuditLog    = (*auditLog)(nil)
 	_ domain.UnitOfWork       = (*Switch)(nil)
 	_ application.OutboxStore = (*outbox)(nil)

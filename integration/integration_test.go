@@ -95,13 +95,23 @@ func TestAuditLog(t *testing.T) {
 	}
 }
 
+// TestInbox checks the SQL inbox on every engine.
+func TestInbox(t *testing.T) {
+	for _, e := range engines {
+		if e.name == "oracle-dotnet-guids" {
+			continue
+		}
+		t.Run(e.name, func(t *testing.T) { sqlconformance.RunInbox(t, open(t, e)) })
+	}
+}
+
 // TestParties runs the Parties mapping (child table, custom COUNT specification) on every engine.
 func TestParties(t *testing.T) {
 	for _, e := range engines {
 		t.Run(e.name, func(t *testing.T) {
 			db := open(t, e)
 			ctx := context.Background()
-			for _, s := range []string{"DROP TABLE party_contacts", "DROP TABLE parties", "DROP TABLE outbox_messages", "DROP TABLE audit_log"} {
+			for _, s := range []string{"DROP TABLE party_contacts", "DROP TABLE parties", "DROP TABLE outbox_messages", "DROP TABLE parties_integration_outbox", "DROP TABLE audit_log"} {
 				_, _ = db.ExecContext(ctx, s)
 			}
 			for _, s := range infrastructure.Schema(e.dialect.Name()) {
@@ -218,7 +228,7 @@ func TestHotSwapAcrossEngines(t *testing.T) {
 func resetParties(t *testing.T, db *sqlrepo.DB) {
 	t.Helper()
 	ctx := context.Background()
-	for _, s := range []string{"DROP TABLE party_contacts", "DROP TABLE parties", "DROP TABLE outbox_messages", "DROP TABLE audit_log"} {
+	for _, s := range []string{"DROP TABLE party_contacts", "DROP TABLE parties", "DROP TABLE outbox_messages", "DROP TABLE parties_integration_outbox", "DROP TABLE audit_log"} {
 		_, _ = db.ExecContext(ctx, s)
 	}
 	for _, s := range infrastructure.Schema(db.Dialect().Name()) {
