@@ -48,3 +48,48 @@ type FilingRevertedV1 struct {
 
 // IntegrationEventType implements application.IntegrationEvent.
 func (FilingRevertedV1) IntegrationEventType() string { return "fiscal.filing-reverted.v1" }
+
+// TaxableLine is a line to tax: its base (rounded to cents) and its tax code or treatment code.
+type TaxableLine struct {
+	Ref       string `json:"ref,omitempty"`
+	Base      string `json:"base"`
+	TaxCode   string `json:"taxCode,omitempty"`
+	Treatment string `json:"treatment,omitempty"`
+}
+
+// TaxableDocument is a document to tax: the seller (its fiscal profile decides the jurisdiction,
+// the territory and the regime), the date of accrual and the lines.
+type TaxableDocument struct {
+	Seller               string        `json:"seller"`
+	Date                 string        `json:"date"` // civil date
+	EquivalenceSurcharge bool          `json:"equivalenceSurcharge,omitempty"`
+	Lines                []TaxableLine `json:"lines"`
+}
+
+// TaxLine is a line of the tax breakdown: one per tax code and treatment.
+type TaxLine struct {
+	TaxType         string `json:"taxType,omitempty"` // vat | igic | ipsi; empty for exempt and not subject bases
+	TaxCode         string `json:"taxCode,omitempty"`
+	Treatment       string `json:"treatment,omitempty"`
+	TreatmentKind   string `json:"treatmentKind"` // subject | exempt | not-subject
+	Rate            string `json:"rate"`
+	Base            string `json:"base"`
+	Amount          string `json:"amount"`
+	SurchargeRate   string `json:"surchargeRate,omitempty"`
+	SurchargeAmount string `json:"surchargeAmount,omitempty"`
+}
+
+// TaxBreakdown is the result of a calculation. Amounts are decimal strings with two decimals.
+type TaxBreakdown struct {
+	Country   string    `json:"country"`
+	Lines     []TaxLine `json:"lines"`
+	Net       string    `json:"net"`
+	Tax       string    `json:"tax"`
+	Surcharge string    `json:"surcharge"`
+}
+
+// TaxEngine calculates the indirect taxes of a document with the jurisdiction of the seller
+// (approved structure: one jurisdiction per country, one strategy per regime or sector).
+type TaxEngine interface {
+	Calculate(ctx context.Context, doc TaxableDocument) (TaxBreakdown, error)
+}

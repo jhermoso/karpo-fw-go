@@ -144,7 +144,7 @@ contexts/fiscal/
 ## Pendiente
 
 - Cálculo de impuestos por país y por sector: ver el punto 6 de [BACKLOG.md](../BACKLOG.md).
-- Contexto Facturación (impuestos por línea con `Rates`) y, sobre él, el 303, el 390, el 347, el
+- ~~Contexto Facturación~~: hecho en [FACTURACION.md](FACTURACION.md), que calcula con el `TaxEngine` y la jurisdicción España. Sobre él quedan el 303, el 390, el 347, el
   349, los libros registro, SII y Verifactu.
 - Fichero AEAT del 111 y del 190 (decisión 3).
 - Modelos 115 y 180 (arrendamientos) cuando haya datos de alquileres.
