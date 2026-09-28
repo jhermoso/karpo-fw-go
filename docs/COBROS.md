@@ -89,7 +89,7 @@ contexts/receivables/
   - `rec_collections` (+ `rec_allocations`);
   - las bandejas de salida, la auditoría y `receivables_inbox`.
 
-## Decisiones propuestas (pendientes de confirmar)
+## Decisiones (aprobadas por Javier el 2026-09-28)
 
 1. **Las condiciones de pago y el riesgo viven en Cobros** (`Terms` y `CreditProfile`), no en el
    perfil comercial de Parties. Pedidos consultará la exposición por el puerto `Credit`.
@@ -148,7 +148,6 @@ contexts/receivables/
 
 ## Pendiente
 
-- Confirmar las decisiones 1–5.
 - Contexto Tesorería (decisión 5) y, con él:
   - la conciliación de extractos contra cobros;
   - las remesas SEPA (pain.008) de los plazos domiciliados;
