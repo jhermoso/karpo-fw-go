@@ -27,14 +27,14 @@ type Module struct {
 	Audit             application.AuditLog
 }
 
-// Compose builds the context on sw. Treasury needs the due items of Receivables and the identities
-// of Parties: both are ports it owns.
-func Compose(sw *hotswap.Switch, receivables domain.Receivables, identities domain.Identities) *Module {
+// Compose builds the context on sw. Treasury needs the due items of Receivables, the payables of
+// Payments (nil: no transfer orders) and the identities of Parties: all are ports it owns.
+func Compose(sw *hotswap.Switch, receivables domain.Receivables, payables domain.Payables, identities domain.Identities) *Module {
 	integration := hotswap.Outbox(sw, infrastructure.IntegrationOutboxFactory)
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
 	svc := tapp.NewService(tapp.Deps{
 		Accounts: hotswap.Repository(sw, infrastructure.AccountRepositoryFactory), Mandates: hotswap.Repository(sw, infrastructure.MandateRepositoryFactory),
-		Remittances: hotswap.Repository(sw, infrastructure.RemittanceRepositoryFactory), Receivables: receivables, Identities: identities,
+		Remittances: hotswap.Repository(sw, infrastructure.RemittanceRepositoryFactory), Transfers: hotswap.Repository(sw, infrastructure.TransferOrderRepositoryFactory), Receivables: receivables, Payables: payables, Identities: identities,
 		UoW: sw, Audit: audit,
 		Recorder: outbox.Recorders(outbox.NewRecorder(hotswap.Outbox(sw, infrastructure.OutboxFactory)),
 			tapp.Publications(messaging.NewRecorder(contracts.Source, integration))),
@@ -150,6 +150,44 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/treasury/remittances/{id}/settle", command(rem, func(c *tapp.SettleRemittance, id domain.RemittanceID) { c.ID = id }, svc.Settle.Handle))
 	mux.HandleFunc("POST /api/treasury/remittances/{id}/returns", command(rem, func(c *tapp.ReturnDebit, id domain.RemittanceID) { c.ID = id }, svc.Return.Handle))
 	mux.HandleFunc("POST /api/treasury/remittances/{id}/cancel", command(rem, func(c *tapp.CancelRemittance, id domain.RemittanceID) { c.ID = id }, svc.Cancel.Handle))
+
+	trf := domain.ParseTransferOrderID
+	mux.HandleFunc("POST /api/treasury/transfers", create(svc.ProposeTransfers.Handle))
+	mux.HandleFunc("GET /api/treasury/transfers", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		atoi := func(k string) int { n, _ := strconv.Atoi(q.Get(k)); return n }
+		out, err := svc.SearchTransferOrders.Handle(r.Context(), tapp.SearchTransferOrders{Debtor: q.Get("debtor"), Page: atoi("page"), Size: atoi("size")})
+		distribution.Respond(w, r, out, err, http.StatusOK)
+	})
+	mux.HandleFunc("GET /api/treasury/transfers/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id, err := trf(r.PathValue("id"))
+		if err != nil {
+			badID(w, r)
+			return
+		}
+		out, err := svc.GetTransferOrder.Handle(r.Context(), tapp.GetTransferOrder{ID: id})
+		distribution.Respond(w, r, out, err, http.StatusOK)
+	})
+	mux.HandleFunc("GET /api/treasury/transfers/{id}/pain001", func(w http.ResponseWriter, r *http.Request) {
+		id, err := trf(r.PathValue("id"))
+		if err != nil {
+			badID(w, r)
+			return
+		}
+		file, err := svc.TransferFile.Handle(r.Context(), tapp.GetTransferFile{ID: id})
+		if err != nil {
+			distribution.WriteError(w, r, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+		w.Header().Set("Content-Disposition", `attachment; filename="`+id.String()+`.xml"`)
+		_, _ = w.Write(file)
+	})
+	mux.HandleFunc("POST /api/treasury/transfers/{id}/remove", command(trf, func(c *tapp.RemoveTransfer, id domain.TransferOrderID) { c.ID = id }, svc.RemoveTransfer.Handle))
+	mux.HandleFunc("POST /api/treasury/transfers/{id}/generate", command(trf, func(c *tapp.GenerateTransfers, id domain.TransferOrderID) { c.ID = id }, svc.GenerateTransfers.Handle))
+	mux.HandleFunc("POST /api/treasury/transfers/{id}/settle", command(trf, func(c *tapp.SettleTransfers, id domain.TransferOrderID) { c.ID = id }, svc.SettleTransfers.Handle))
+	mux.HandleFunc("POST /api/treasury/transfers/{id}/rejections", command(trf, func(c *tapp.RejectTransfer, id domain.TransferOrderID) { c.ID = id }, svc.RejectTransfer.Handle))
+	mux.HandleFunc("POST /api/treasury/transfers/{id}/cancel", command(trf, func(c *tapp.CancelTransfers, id domain.TransferOrderID) { c.ID = id }, svc.CancelTransfers.Handle))
 }
 
 var _ distribution.EndpointModule = (*Module)(nil)

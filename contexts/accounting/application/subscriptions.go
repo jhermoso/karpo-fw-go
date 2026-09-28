@@ -113,6 +113,33 @@ type PayslipCancelled struct {
 // IntegrationEventType implements application.IntegrationEvent.
 func (PayslipCancelled) IntegrationEventType() string { return "payroll.payslip-cancelled.v1" }
 
+// PaymentAllocated is payments.payment-allocated.v1.
+type PaymentAllocated struct {
+	PaymentID string `json:"paymentId"`
+	Company   string `json:"company"`
+	Payee     string `json:"payee"`
+	Method    string `json:"method"`
+	PayableID string `json:"payableId"`
+	Kind      string `json:"kind"`
+	Amount    string `json:"amount"`
+	On        string `json:"on"`
+}
+
+// IntegrationEventType implements application.IntegrationEvent.
+func (PaymentAllocated) IntegrationEventType() string { return "payments.payment-allocated.v1" }
+
+// PaymentAllocationReversed is payments.allocation-reversed.v1.
+type PaymentAllocationReversed struct {
+	PaymentID string `json:"paymentId"`
+	Company   string `json:"company"`
+	PayableID string `json:"payableId"`
+}
+
+// IntegrationEventType implements application.IntegrationEvent.
+func (PaymentAllocationReversed) IntegrationEventType() string {
+	return "payments.allocation-reversed.v1"
+}
+
 type parser struct{ err error }
 
 func (p *parser) id(s string) fw.UUID {
@@ -277,6 +304,46 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 			return domain.Draft{Company: domain.OrganizationID{UUID: company}, Date: on, Description: "Adeudo devuelto " + e.EndToEnd,
 				Source: domain.Source{Type: "treasury.direct-debit-returned.v1", ID: e.RemittanceID + "|" + e.EndToEnd, Key: e.EndToEnd}, Lines: lines}, err
 		})
+	})
+
+	// Payment allocated: the account of what was owed (suppliers, net pay, withholdings) against the
+	// bank or cash. The party is the payee when it is a party (not the tax authority).
+	kindRole := map[string]domain.Role{"supplier-invoice": domain.RoleSuppliers, "payroll": domain.RoleNetPay, "tax": domain.RoleWithholding}
+	messaging.Handle(c, func(ctx context.Context, e PaymentAllocated, env app.Envelope) error {
+		owed, ok := kindRole[e.Kind]
+		if !ok {
+			return fw.Violation("accounting.invalid_event", "payments.payment-allocated.v1: unknown kind "+e.Kind)
+		}
+		var p parser
+		company, on, amount := p.id(e.Company), p.date(e.On), p.amount(e.Amount)
+		if err := p.check("payments.payment-allocated.v1"); err != nil {
+			return err
+		}
+		var payee domain.PartyID
+		if u, err := fw.ParseUUID(e.Payee); err == nil {
+			payee = domain.PartyID{UUID: u}
+		}
+		out := domain.RoleBank
+		if e.Method == "cash" {
+			out = domain.RoleCash
+		}
+		key := e.PaymentID + "|" + e.PayableID
+		return withLedger(ctx, domain.OrganizationID{UUID: company}, func(l *domain.Ledger) (domain.Draft, error) {
+			var err error
+			lines := []domain.Line{{Account: role(l, owed, &err), Party: payee, Debit: amount}, {Account: role(l, out, &err), Credit: amount}}
+			return domain.Draft{Company: domain.OrganizationID{UUID: company}, Date: on, Description: "Pago (" + e.Method + ")",
+				Source: domain.Source{Type: "payments.payment-allocated.v1", ID: env.ID, Key: key}, Lines: lines}, err
+		})
+	})
+	messaging.Handle(c, func(ctx context.Context, e PaymentAllocationReversed, env app.Envelope) error {
+		var p parser
+		company := p.id(e.Company)
+		if err := p.check("payments.allocation-reversed.v1"); err != nil {
+			return err
+		}
+		key := e.PaymentID + "|" + e.PayableID
+		return reverseSource(ctx, domain.OrganizationID{UUID: company}, "payments.payment-allocated.v1", key, vocab.DateOf(env.OccurredAt),
+			domain.Source{Type: "payments.allocation-reversed.v1", ID: env.ID, Key: key})
 	})
 
 	// Payslip: wages and employer social security against their payables and the net pay.

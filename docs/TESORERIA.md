@@ -135,7 +135,8 @@ contexts/treasury/
 
 - Fase 2:
   - extractos (Norma 43 / camt.053) y conciliación automática;
-  - transferencias (pain.001) con Pagos y Proveedores;
+  - ~~transferencias (pain.001)~~: hechas con el contexto de Pagos, ver [PAGOS.md](PAGOS.md)
+    (órdenes de transferencia, migración 3);
   - caja;
   - ficheros de devoluciones (pain.002 / camt.054) en lugar del alta manual.
 - Calendario TARGET2 para validar la fecha de cobro (D+1 hábil).
