@@ -154,8 +154,7 @@ contexts/fiscal/
 - Todo el cálculo de impuestos que falta, por país y por sector: punto 6 de
   [BACKLOG.md](../BACKLOG.md).
 - Facturación a demanda desde Pedidos y Envíos (enlaces facturados, precios del pedido).
-- Plazos de vencimiento desde la condición de pago del cliente; cobros y remesas en
-  Cobros/Tesorería.
+- ~~Plazos de vencimiento y cobros~~: hechos en [COBROS.md](COBROS.md). Las remesas quedan para Tesorería.
 - Facturas recibidas (compras), con el mismo `TaxEngine` y la deducibilidad.
 - Dirección fiscal del cliente en la factura (hoy solo NIF, nombre y país).
 - Importar las facturas de C# como emitidas, con sus números de Documents.
