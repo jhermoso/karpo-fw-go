@@ -97,7 +97,7 @@ contexts/accounting/
   - `acc_counters`;
   - las bandejas de salida, la auditoría y `accounting_inbox`.
 
-## Decisiones propuestas (pendientes de confirmar)
+## Decisiones (aprobadas por Javier el 2026-09-28)
 
 1. **Plan por empresa sin semilla PGC.** Cada empresa da de alta sus cuentas (o las importa de
    Sage). La jerarquía es la del prefijo del código y solo las cuentas de detalle admiten apuntes.
