@@ -72,7 +72,7 @@ func compose(t *testing.T) *host {
 	fm := fiscal.Compose(sw, finfra.PartiesIdentities{TaxIdentities: pm.TaxIdentities})
 	bm := billing.Compose(sw, binfra.FiscalTaxes{Engine: fm.TaxEngine}, binfra.PartiesIdentities{TaxIdentities: pm.TaxIdentities})
 	rm := receivables.Compose(sw, nil)
-	tm := treasury.Compose(sw, tinfra.ReceivablesDueItems{Collectable: rm.Collectable}, tinfra.PartiesIdentities{TaxIdentities: pm.TaxIdentities})
+	tm := treasury.Compose(sw, tinfra.ReceivablesDueItems{Collectable: rm.Collectable}, nil, tinfra.PartiesIdentities{TaxIdentities: pm.TaxIdentities})
 	broker := inprocess.NewBroker()
 	broker.Subscribe("receivables", rm.Consumer)
 

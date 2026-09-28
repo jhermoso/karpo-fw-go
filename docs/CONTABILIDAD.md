@@ -79,6 +79,8 @@ contexts/accounting/
   | Adeudo devuelto | efectos al cobro | bancos |
   | Nómina aprobada | sueldos (bruto); Seguridad Social a cargo de la empresa | Seguridad Social acreedora (trabajador + empresa); retenciones IRPF; otras deducciones; remuneraciones pendientes (neto) |
   | Nómina anulada | contraasiento de la nómina | |
+  | Pago aplicado ([PAGOS.md](PAGOS.md)) | proveedores, remuneraciones pendientes o retenciones (con el beneficiario) | bancos, o caja si es en efectivo |
+  | Aplicación de pago anulada | contraasiento del pago aplicado | |
 
   Así, una domiciliación cobrada y luego devuelta deja **efectos al cobro a cero** y la deuda del
   cliente otra vez abierta, igual que en Cobros.

@@ -39,7 +39,9 @@ type Deps struct {
 	Accounts    domain.AccountRepository
 	Mandates    domain.MandateRepository
 	Remittances domain.RemittanceRepository
+	Transfers   domain.TransferOrderRepository
 	Receivables domain.Receivables
+	Payables    domain.Payables // optional: without it there are no transfer proposals
 	Identities  domain.Identities
 	UoW         fw.UnitOfWork
 	Recorder    app.EventRecorder
@@ -65,6 +67,16 @@ type Service struct {
 	Cancel     app.CommandHandler[CancelRemittance, RemittanceDTO]
 	Get        app.QueryHandler[GetRemittance, RemittanceDTO]
 	Search     app.QueryHandler[SearchRemittances, fw.Page[RemittanceDTO]]
+
+	ProposeTransfers     app.CommandHandler[ProposeTransfers, TransferOrderDTO]
+	RemoveTransfer       app.CommandHandler[RemoveTransfer, TransferOrderDTO]
+	GenerateTransfers    app.CommandHandler[GenerateTransfers, TransferOrderDTO]
+	TransferFile         app.QueryHandler[GetTransferFile, []byte]
+	SettleTransfers      app.CommandHandler[SettleTransfers, TransferOrderDTO]
+	RejectTransfer       app.CommandHandler[RejectTransfer, TransferOrderDTO]
+	CancelTransfers      app.CommandHandler[CancelTransfers, TransferOrderDTO]
+	GetTransferOrder     app.QueryHandler[GetTransferOrder, TransferOrderDTO]
+	SearchTransferOrders app.QueryHandler[SearchTransferOrders, fw.Page[TransferOrderDTO]]
 }
 
 type scope struct {
@@ -111,6 +123,7 @@ type service struct {
 	accounts    *orchestration.Orchestrator[domain.AccountID, *domain.Account]
 	mandates    *orchestration.Orchestrator[domain.MandateID, *domain.Mandate]
 	remittances *orchestration.Orchestrator[domain.RemittanceID, *domain.Remittance]
+	transfers   *orchestration.Orchestrator[domain.TransferOrderID, *domain.TransferOrder]
 }
 
 func parseID(v *fw.Validation, field, s string) fw.UUID {
@@ -145,10 +158,12 @@ func NewService(d Deps) *Service {
 		accounts:    orchestration.New[domain.AccountID, *domain.Account](d.Accounts, d.UoW, opts...),
 		mandates:    orchestration.New[domain.MandateID, *domain.Mandate](d.Mandates, d.UoW, opts...),
 		remittances: orchestration.New[domain.RemittanceID, *domain.Remittance](d.Remittances, d.UoW, opts...),
+		transfers:   orchestration.New[domain.TransferOrderID, *domain.TransferOrder](d.Transfers, d.UoW, opts...),
 	}
 	svc := &Service{}
 	s.accountUseCases(svc)
 	s.remittanceUseCases(svc)
+	s.transferUseCases(svc)
 	return svc
 }
 
@@ -390,5 +405,6 @@ func Publications(r *messaging.Recorder) *messaging.Recorder {
 			Debtor: i.Debtor.String(), InvoiceID: i.Invoice.String(), Installment: i.Installment, Amount: i.Amount.StringFixed(2),
 			ReturnedOn: i.Returned.String(), Reason: i.Reason}}, nil
 	})
+	transferPublications(r)
 	return r
 }

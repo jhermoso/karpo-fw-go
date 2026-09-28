@@ -6,8 +6,10 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 
 	parties "github.com/jhermoso/karpo-fw-go/contexts/parties/contracts"
+	payments "github.com/jhermoso/karpo-fw-go/contexts/payments/contracts"
 	receivables "github.com/jhermoso/karpo-fw-go/contexts/receivables/contracts"
 	"github.com/jhermoso/karpo-fw-go/contexts/treasury/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/application"
@@ -57,6 +59,17 @@ var schemaDDL = []string{
 	`CREATE INDEX ix_trs_remittance_items_invoice ON trs_remittance_items (invoice)`,
 }
 
+var transfersDDL = []string{
+	`CREATE TABLE trs_transfer_orders (id {uuid} NOT NULL PRIMARY KEY, version {bigint} NOT NULL, debtor {uuid} NOT NULL, account_id {uuid} NOT NULL,
+	execution_date {date} NOT NULL, status {int} NOT NULL, generated_at {ts}, debtor_name {str:200}, debtor_iban {str:34}, debtor_bic {str:11},
+	settled {date}, ` + audit + `, FOREIGN KEY (account_id) REFERENCES trs_accounts (id))`,
+	`CREATE INDEX ix_trs_transfer_orders_debtor ON trs_transfer_orders (debtor, status)`,
+	`CREATE TABLE trs_transfers (order_id {uuid} NOT NULL, end_to_end {str:35} NOT NULL, payable {uuid} NOT NULL, line_no {int} NOT NULL,
+	document {str:60} NOT NULL, payee {str:40} NOT NULL, payee_name {str:200}, iban {str:34} NOT NULL, amount {str:30} NOT NULL, rejected {date},
+	reject_reason {str:4}, PRIMARY KEY (order_id, end_to_end), FOREIGN KEY (order_id) REFERENCES trs_transfer_orders (id))`,
+	`CREATE INDEX ix_trs_transfers_payable ON trs_transfers (payable)`,
+}
+
 func technicalDDL(d string) []string {
 	switch d {
 	case "sqlite":
@@ -82,6 +95,7 @@ func Migrations() sqlrepo.MigrationSet {
 	return sqlrepo.MigrationSet{Context: Context, Migrations: []sqlrepo.Migration{
 		{Version: 1, Name: "accounts, mandates and remittances", Up: sqlrepo.RenderDDLAll(schemaDDL...)},
 		{Version: 2, Name: "outboxes and audit log", Up: technical},
+		{Version: 3, Name: "credit transfer orders", Up: sqlrepo.RenderDDLAll(transfersDDL...)},
 	}}
 }
 
@@ -91,7 +105,7 @@ func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 }
 
 // Tables lists the tables of the context, children first (drop order).
-var Tables = []string{"trs_remittance_items", "trs_remittances", "trs_mandates", "trs_accounts", TableOutbox, TableIntegrationOutbox, TableAuditLog}
+var Tables = []string{"trs_transfers", "trs_transfer_orders", "trs_remittance_items", "trs_remittances", "trs_mandates", "trs_accounts", TableOutbox, TableIntegrationOutbox, TableAuditLog}
 
 // DropAll removes the tables of the context and its migration history (tests only).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
@@ -251,6 +265,104 @@ func RemittanceMapping() sqlrepo.Mapping[domain.RemittanceID, *domain.Remittance
 			},
 		}},
 	}
+}
+
+// TransferOrderMapping maps TransferOrder to trs_transfer_orders and its transfers.
+func TransferOrderMapping() sqlrepo.Mapping[domain.TransferOrderID, *domain.TransferOrder] {
+	return sqlrepo.Mapping[domain.TransferOrderID, *domain.TransferOrder]{
+		Table: "trs_transfer_orders",
+		Columns: sqlrepo.WithAuditColumns("debtor", "account_id", "execution_date", "status", "generated_at", "debtor_name", "debtor_iban", "debtor_bic",
+			"settled"),
+		Dehydrate: func(o *domain.TransferOrder) (sqlrepo.Values, error) {
+			s := o.State()
+			v := sqlrepo.Values{"debtor": s.Debtor, "account_id": s.Account, "execution_date": s.ExecutionDate, "status": int64(s.Status),
+				"generated_at": nil, "debtor_name": opt(s.DebtorName), "debtor_iban": opt(s.DebtorIBAN.String()), "debtor_bic": opt(s.DebtorBIC),
+				"settled": optDate(s.Settled)}
+			if !s.GeneratedAt.IsZero() {
+				v["generated_at"] = s.GeneratedAt
+			}
+			return sqlrepo.AuditStampValues(v, o.AuditStamp()), nil
+		},
+		Hydrate: func(r *sqlrepo.Row, children sqlrepo.ChildRows) (*domain.TransferOrder, error) {
+			diban, err := ibanOf(r, "debtor_iban")
+			if err != nil {
+				return nil, err
+			}
+			s := domain.TransferOrderState{Debtor: domain.OrganizationID{UUID: r.UUID("debtor")}, Account: domain.AccountID{UUID: r.UUID("account_id")},
+				ExecutionDate: r.Date("execution_date"), Status: domain.RemittanceStatus(r.Int64("status")), DebtorName: r.String("debtor_name"),
+				DebtorIBAN: diban, DebtorBIC: r.String("debtor_bic"), Settled: r.Date("settled"), Audit: r.AuditStamp()}
+			if t := r.NullTime("generated_at"); t != nil {
+				s.GeneratedAt = *t
+			}
+			for _, c := range children.Of("transfers") {
+				iban, err := ibanOf(c, "iban")
+				if err != nil {
+					return nil, err
+				}
+				s.Transfers = append(s.Transfers, domain.Transfer{EndToEnd: c.String("end_to_end"), Payable: domain.PayableID{UUID: c.UUID("payable")},
+					Line: int(c.Int64("line_no")), Document: c.String("document"), Payee: c.String("payee"), PayeeName: c.String("payee_name"), IBAN: iban,
+					Amount: c.Decimal("amount"), Rejected: c.Date("rejected"), Reason: c.String("reject_reason")})
+				if err := c.Err(); err != nil {
+					return nil, err
+				}
+			}
+			slices.SortFunc(s.Transfers, func(a, b domain.Transfer) int { return strings.Compare(a.EndToEnd, b.EndToEnd) })
+			if err := r.Err(); err != nil {
+				return nil, err
+			}
+			return domain.ReconstituteTransferOrder(domain.TransferOrderID{UUID: r.UUID("id")}, s)
+		},
+		Children: []sqlrepo.Child[*domain.TransferOrder]{{
+			Name: "transfers", Table: "trs_transfers", ForeignKey: "order_id", OrderBy: []string{"end_to_end"},
+			Columns: []string{"end_to_end", "payable", "line_no", "document", "payee", "payee_name", "iban", "amount", "rejected", "reject_reason"},
+			Dehydrate: func(o *domain.TransferOrder) ([]sqlrepo.Values, error) {
+				out := []sqlrepo.Values{}
+				for _, t := range o.State().Transfers {
+					out = append(out, sqlrepo.Values{"end_to_end": t.EndToEnd, "payable": t.Payable, "line_no": int64(t.Line), "document": t.Document,
+						"payee": t.Payee, "payee_name": opt(t.PayeeName), "iban": t.IBAN.String(), "amount": t.Amount.StringFixed(2),
+						"rejected": optDate(t.Rejected), "reject_reason": opt(t.Reason)})
+				}
+				return out, nil
+			},
+		}},
+	}
+}
+
+// TransferOrderRepositoryFactory builds the transfer order repository.
+func TransferOrderRepositoryFactory(b hotswap.Backend) (domain.TransferOrderRepository, error) {
+	return repository(b, TransferOrderMapping())
+}
+
+// PaymentsPayables adapts the Payments Payable contract to the Treasury port (ACL).
+type PaymentsPayables struct{ Payable payments.Payable }
+
+var _ domain.Payables = PaymentsPayables{}
+
+// DueForTransfer implements domain.Payables.
+func (p PaymentsPayables) DueForTransfer(ctx context.Context, debtor domain.OrganizationID, dueTo vocab.Date) ([]domain.PayableDue, int, error) {
+	items, without, err := p.Payable.DueForTransfer(ctx, debtor.String(), dueTo.String())
+	if err != nil {
+		return nil, 0, err
+	}
+	out := make([]domain.PayableDue, 0, len(items))
+	for _, i := range items {
+		id, err1 := fw.ParseUUID(i.PayableID)
+		due, err2 := vocab.ParseDate(i.Due)
+		if err1 != nil || err2 != nil {
+			return nil, 0, fmt.Errorf("treasury: invalid payable from Payments: %+v", i)
+		}
+		d := domain.PayableDue{Payable: domain.PayableID{UUID: id}, Kind: i.Kind, Document: i.Document, Payee: i.Payee, Due: due}
+		for _, t := range i.PayTo {
+			iban, err1 := vocab.NewIBAN(t.IBAN)
+			amount, err2 := vocab.ParseDecimal(t.Amount)
+			if err1 != nil || err2 != nil {
+				return nil, 0, fmt.Errorf("treasury: invalid account from Payments: %+v", t)
+			}
+			d.PayTo = append(d.PayTo, domain.PayableAccount{IBAN: iban, Amount: amount})
+		}
+		out = append(out, d)
+	}
+	return out, without, nil
 }
 
 func unsupported(b hotswap.Backend) error { return fmt.Errorf("treasury: unsupported backend %T", b) }

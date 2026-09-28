@@ -30,11 +30,12 @@ const (
 	RoleWithholding         Role = "withholding-payable"      // 4751
 	RoleOtherDeductions     Role = "other-deductions"         // 4659
 	RoleNetPay              Role = "net-pay-payable"          // 465
+	RoleSuppliers           Role = "suppliers"                // 400/410
 )
 
 // Roles lists the roles a posting profile may define.
 var Roles = []Role{RoleRevenue, RoleCustomers, RoleOutputTax, RoleSurcharge, RoleCash, RoleBank, RoleDirectDebitClearing, RoleWages,
-	RoleEmployerSS, RoleSSPayable, RoleWithholding, RoleOtherDeductions, RoleNetPay}
+	RoleEmployerSS, RoleSSPayable, RoleWithholding, RoleOtherDeductions, RoleNetPay, RoleSuppliers}
 
 // LedgerKind is the stable aggregate type name.
 const LedgerKind = "accounting.ledger"
