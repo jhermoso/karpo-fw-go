@@ -148,10 +148,12 @@ contexts/receivables/
 
 ## Pendiente
 
-- Contexto Tesorería (decisión 5) y, con él:
-  - la conciliación de extractos contra cobros;
-  - las remesas SEPA (pain.008) de los plazos domiciliados;
-  - las devoluciones e impagados.
+- ~~Contexto Tesorería (decisión 5)~~: hecho en [TESORERIA.md](TESORERIA.md):
+  - remesas SEPA (pain.008) de los plazos domiciliados;
+  - cobros por domiciliación y devoluciones consumidos por Cobros (`SubscribeTreasury`);
+  - el puerto `Collectable`.
+
+  Queda la conciliación de extractos.
 - Reclamación de deuda (dunning), provisión y baja por incobrable (art. 80 LIVA: rectificativa
   R2 o R3 desde Facturación).
 - Pedidos: comprobar el riesgo con `Credit.Exposure` al confirmar un pedido.

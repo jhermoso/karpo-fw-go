@@ -166,10 +166,12 @@ func (s service) apply(ctx context.Context, c *domain.Collection, in AllocationI
 		if rs.Customer != cs.Payer {
 			return fw.Violation("receivables.other_customer", "the invoice is of another customer")
 		}
-		if _, err := c.Allocate(rid, in.Installment, amount, on); err != nil {
+		// The receivable validates first: a refused amount leaves no allocation on the collection.
+		if err := r.Apply(in.Installment, amount); err != nil {
 			return err
 		}
-		return r.Apply(in.Installment, amount)
+		_, err := c.Allocate(rid, in.Installment, amount, on)
+		return err
 	})
 	return err
 }

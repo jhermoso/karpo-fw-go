@@ -196,4 +196,5 @@ var (
 	ColFieldPayer     = spec.Comparable("payer", func(c *Collection) PartyID { return c.s.Payer })
 	ColFieldDate      = spec.OrderedBy("collected_on", func(c *Collection) vocab.Date { return c.s.Date }, vocab.CompareDates)
 	ColFieldCancelled = spec.Comparable("cancelled", func(c *Collection) bool { return c.s.Cancelled })
+	ColFieldReference = spec.Comparable("reference", func(c *Collection) string { return c.s.Reference })
 )
