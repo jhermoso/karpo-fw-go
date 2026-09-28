@@ -21,7 +21,7 @@ Puntos clave:
 - **Batería de conformidad**: toda implementación del repositorio debe demostrar que cada
   especificación devuelve en la base de datos exactamente lo mismo que en memoria.
 
-📖 Diseño completo: [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) · Inventario de patrones: [docs/INVENTARIO-PATRONES.md](docs/INVENTARIO-PATRONES.md) · Lenguaje ubicuo: [docs/LENGUAJE-UBICUO.md](docs/LENGUAJE-UBICUO.md) · Rasgos: [docs/RASGOS-TRANSVERSALES.md](docs/RASGOS-TRANSVERSALES.md) · Autorización: [docs/AUTORIZACION.md](docs/AUTORIZACION.md) · Integración: [docs/EVENTOS-INTEGRACION.md](docs/EVENTOS-INTEGRACION.md) · Esquema: [docs/ESQUEMA-MIGRACIONES.md](docs/ESQUEMA-MIGRACIONES.md) · Parties: [docs/PARTIES.md](docs/PARTIES.md) · Geografía: [docs/GEOGRAFIA.md](docs/GEOGRAFIA.md) · Instalaciones: [docs/INSTALACIONES.md](docs/INSTALACIONES.md) · RRHH: [docs/RRHH.md](docs/RRHH.md) · Nóminas: [docs/NOMINAS.md](docs/NOMINAS.md) · Fiscal: [docs/FISCAL.md](docs/FISCAL.md) · Facturación: [docs/FACTURACION.md](docs/FACTURACION.md) · Cobros: [docs/COBROS.md](docs/COBROS.md) · Tesorería: [docs/TESORERIA.md](docs/TESORERIA.md)
+📖 Diseño completo: [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) · Inventario de patrones: [docs/INVENTARIO-PATRONES.md](docs/INVENTARIO-PATRONES.md) · Lenguaje ubicuo: [docs/LENGUAJE-UBICUO.md](docs/LENGUAJE-UBICUO.md) · Rasgos: [docs/RASGOS-TRANSVERSALES.md](docs/RASGOS-TRANSVERSALES.md) · Autorización: [docs/AUTORIZACION.md](docs/AUTORIZACION.md) · Integración: [docs/EVENTOS-INTEGRACION.md](docs/EVENTOS-INTEGRACION.md) · Esquema: [docs/ESQUEMA-MIGRACIONES.md](docs/ESQUEMA-MIGRACIONES.md) · Parties: [docs/PARTIES.md](docs/PARTIES.md) · Geografía: [docs/GEOGRAFIA.md](docs/GEOGRAFIA.md) · Instalaciones: [docs/INSTALACIONES.md](docs/INSTALACIONES.md) · RRHH: [docs/RRHH.md](docs/RRHH.md) · Nóminas: [docs/NOMINAS.md](docs/NOMINAS.md) · Fiscal: [docs/FISCAL.md](docs/FISCAL.md) · Facturación: [docs/FACTURACION.md](docs/FACTURACION.md) · Cobros: [docs/COBROS.md](docs/COBROS.md) · Tesorería: [docs/TESORERIA.md](docs/TESORERIA.md) · Contabilidad: [docs/CONTABILIDAD.md](docs/CONTABILIDAD.md)
 
 ---
 
@@ -91,6 +91,7 @@ contexts/fiscal/          # Contexto Fiscal (tipos por territorio, contribuyente
 contexts/billing/         # Contexto Facturación (facturas con desglose de Fiscal, series sin huecos, rectificativas): ver docs/FACTURACION.md
 contexts/receivables/     # Contexto Cobros (condiciones y vencimientos, cartera por factura, cobros y compensaciones, riesgo): ver docs/COBROS.md
 contexts/treasury/        # Contexto Tesorería (cuentas, mandatos SEPA, remesas con pain.008, cobros y devoluciones hacia Cobros): ver docs/TESORERIA.md
+contexts/accounting/      # Contexto Contabilidad (plan por empresa, libro con perfil y cierre de periodos, asientos cuadrados y contraasientos, contabilización de facturas, cobros, adeudos y nóminas): ver docs/CONTABILIDAD.md
 integration/              # Módulo aparte: pruebas contra PostgreSQL, SQL Server, Oracle, MySQL
 ```
 
