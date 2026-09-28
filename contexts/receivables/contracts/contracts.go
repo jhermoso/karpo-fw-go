@@ -67,3 +67,19 @@ type ReceivableSettledV1 struct {
 
 // IntegrationEventType implements application.IntegrationEvent.
 func (ReceivableSettledV1) IntegrationEventType() string { return "receivables.receivable-settled.v1" }
+
+// DueItem is an open installment of an invoice.
+type DueItem struct {
+	InvoiceID   string `json:"invoiceId"`
+	Number      string `json:"number"`
+	Customer    string `json:"customer"`
+	Installment int    `json:"installment"`
+	Due         string `json:"due"`
+	Open        string `json:"open"`
+}
+
+// Collectable answers the open installments of a seller due up to a civil date (Treasury builds
+// its direct debit remittances from them).
+type Collectable interface {
+	DueItems(ctx context.Context, seller, dueTo string) ([]DueItem, error)
+}

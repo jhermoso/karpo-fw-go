@@ -24,9 +24,11 @@ import (
 type Module struct {
 	Service           *rapp.Service
 	Credit            contracts.Credit
+	Collectable       contracts.Collectable
 	IntegrationOutbox application.OutboxStore
 	Audit             application.AuditLog
-	// Consumer receives billing.invoice-issued.v1: subscribe it to the transport.
+	// Consumer receives billing.invoice-issued.v1 and the direct debit events of Treasury: subscribe
+	// it to the transport.
 	Consumer *messaging.Consumer
 }
 
@@ -43,7 +45,9 @@ func Compose(sw *hotswap.Switch, cal domain.Calendar) *Module {
 	}
 	consumer := messaging.NewConsumer(contracts.Source, hotswap.Inbox(sw, infrastructure.InboxFactory), sw)
 	rapp.Subscribe(consumer, d)
+	rapp.SubscribeTreasury(consumer, d)
 	return &Module{Service: rapp.NewService(d), Credit: rapp.CreditPort{Receivables: d.Receivables, Credit: d.Credit},
+		Collectable:       rapp.DueItemsPort{Receivables: d.Receivables},
 		IntegrationOutbox: integration, Audit: audit, Consumer: consumer}
 }
 
