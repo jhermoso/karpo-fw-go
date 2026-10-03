@@ -114,7 +114,7 @@ contexts/accounting/ # + rol suppliers y suscripción a los pagos
   - las bandejas de salida, la auditoría y `payments_inbox`;
   - en Tesorería, `trs_transfer_orders` (+ `trs_transfers`).
 
-## Decisiones propuestas (pendientes de confirmar)
+## Decisiones (aprobadas por Javier el 2026-10-03)
 
 1. **Pagos registra obligaciones y pagos; Tesorería ejecuta las transferencias.** El pain.001
    vive en Tesorería, junto al pain.008, y Pagos no conoce ficheros bancarios.
