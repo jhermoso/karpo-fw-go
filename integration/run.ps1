@@ -4,6 +4,7 @@
 param([switch]$Down)
 
 $ErrorActionPreference = 'Stop'
+$code = 1
 Push-Location $PSScriptRoot
 try {
     docker compose up -d --wait
@@ -12,8 +13,11 @@ try {
     $env:KARPO_ORACLE_DSN = 'oracle://karpo:karpo@localhost:51521/FREEPDB1'
     $env:KARPO_MYSQL_DSN = 'karpo:karpo@tcp(localhost:53306)/karpo?parseTime=true&loc=UTC'
     go test -count=1 -v ./...
+    $code = $LASTEXITCODE
 }
 finally {
     if ($Down) { docker compose down -v }
     Pop-Location
 }
+# The exit code is the tests' one, not that of the last docker command.
+exit $code

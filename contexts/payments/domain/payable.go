@@ -25,7 +25,7 @@ type Kind int
 
 // Kinds.
 const (
-	SupplierInvoice Kind = iota + 1 // registered by hand until a Purchases context exists
+	SupplierInvoice Kind = iota + 1 // what is paid to the supplier of a received invoice (Purchases)
 	Payroll                         // the net pay of an approved payslip
 	Tax                             // the amount of a submitted tax form (Modelo 111)
 )
@@ -47,7 +47,7 @@ func ParseKind(s string) (Kind, bool) {
 
 // Source is the fact an obligation comes from (unique per company).
 type Source struct {
-	Type string // e.g. "supplier-invoice", "payroll.payslip-approved.v1", "fiscal.filing-submitted.v1"
+	Type string // e.g. "purchases.invoice-registered.v1", "payroll.payslip-approved.v1", "fiscal.filing-submitted.v1"
 	ID   string
 }
 

@@ -238,6 +238,7 @@ func (h *host) scenario(tag string) {
 		h.grant(u, acme.ID)
 	}
 	h.grant("outsider", globex.ID)
+	var list0 fw.Page[yapp.PayableDTO]
 
 	// The chart and ledger of Acme.
 	for code, name := range map[string]string{"4000": "Proveedores", "5700": "Caja", "5720": "Bancos", "4650": "Remuneraciones pendientes",
@@ -249,19 +250,32 @@ func (h *host) scenario(tag string) {
 		"cash": "5700", "bank": "5720", "net-pay-payable": "4650", "withholding-payable": "4751"}})
 	h.ok(err)
 
-	// Supplier invoices: registering what is owed is not paying it, and the other way round.
-	f1 := map[string]any{"company": acme.ID, "supplier": supplier.ID, "number": "F-1/2026", "issued": "2026-09-15", "due": "2026-10-05",
-		"amount": "605.00", "payTo": []map[string]any{{"iban": "ES9121000418450200051332", "amount": "605.00"}}}
-	var inv1, inv2 yapp.PayableDTO
-	h.must(h.do("POST", "/api/payments/supplier-invoices", "payer", f1, nil), 403, "paying is not registering")
-	h.must(h.do("POST", "/api/payments/supplier-invoices", "outsider", f1, nil), 404, "outsider")
-	h.must(h.do("POST", "/api/payments/supplier-invoices", "registrar", f1, &inv1), 201, "supplier invoice")
-	h.must(h.do("POST", "/api/payments/supplier-invoices", "registrar", f1, nil), 422, "registered once")
-	h.must(h.do("POST", "/api/payments/supplier-invoices", "registrar", map[string]any{"company": acme.ID, "supplier": supplier.ID, "number": "F-X",
-		"issued": "2026-09-15", "due": "2026-10-05", "amount": "605.00", "payTo": []map[string]any{{"iban": "ES9121000418450200051333", "amount": "605.00"}}},
-		nil), 400, "IBAN check digits")
-	h.must(h.do("POST", "/api/payments/supplier-invoices", "registrar", map[string]any{"company": acme.ID, "supplier": supplier.ID, "number": "F-2/2026",
-		"issued": "2026-09-20", "due": "2026-10-20", "amount": "121.00"}, &inv2), 201, "supplier invoice without account")
+	// Purchases: a received invoice owes what is paid to the supplier, once however many times it
+	// arrives; a credit of the supplier owes nothing here.
+	f1 := fw.NewUUID().String()
+	invoice := func(id, number, issued, due, payable string, payTo []map[string]any) map[string]any {
+		return map[string]any{"invoiceId": id, "company": acme.ID, "supplier": supplier.ID, "supplierNumber": number, "issued": issued, "due": due,
+			"payable": payable, "payTo": payTo}
+	}
+	registered := invoice(f1, "F-1/2026", "2026-09-15", "2026-10-05", "605.00", []map[string]any{{"iban": "ES9121000418450200051332", "amount": "605.00"}})
+	msgF1 := fw.NewUUID().String()
+	h.send(msgF1, "purchases.invoice-registered.v1", registered)
+	h.send(msgF1, "purchases.invoice-registered.v1", registered)
+	h.send(fw.NewUUID().String(), "purchases.invoice-registered.v1", registered)
+	h.send(fw.NewUUID().String(), "purchases.invoice-registered.v1", invoice(fw.NewUUID().String(), "F-2/2026", "2026-09-20", "2026-10-20", "121.00", nil))
+	h.send(fw.NewUUID().String(), "purchases.invoice-registered.v1", invoice(fw.NewUUID().String(), "A-1/2026", "2026-09-21", "2026-09-21", "-50.00", nil))
+	var supplierPayables fw.Page[yapp.PayableDTO]
+	h.must(h.do("GET", "/api/payments/payables?company="+acme.ID+"&kind=supplier-invoice", "registrar", nil, &supplierPayables), 200, "supplier payables")
+	h.must(h.do("GET", "/api/payments/payables?company="+acme.ID, "outsider", nil, &list0), 200, "outsider sees nothing")
+	if len(supplierPayables.Items) != 2 || len(list0.Items) != 0 || supplierPayables.Items[0].Document != "F-1/2026" ||
+		supplierPayables.Items[0].Source != "purchases.invoice-registered.v1" || len(supplierPayables.Items[0].PayTo) != 1 {
+		t.Fatalf("supplier payables: %+v / outsider %+v", supplierPayables.Items, list0.Items)
+	}
+	inv1, inv2 := supplierPayables.Items[0], supplierPayables.Items[1]
+	h.must(h.do("PUT", "/api/payments/payables/"+inv2.ID+"/pay-to", "payer", map[string]any{"payTo": []map[string]any{{"iban": "ES9121000418450200051332",
+		"amount": "121.00"}}}, nil), 403, "paying is not maintaining what is owed")
+	h.must(h.do("PUT", "/api/payments/payables/"+inv2.ID+"/pay-to", "registrar", map[string]any{"payTo": []map[string]any{{"iban": "ES9121000418450200051333",
+		"amount": "121.00"}}}, nil), 400, "IBAN check digits")
 
 	// Payroll: an approved payslip owes its net pay on its payment date to the split accounts,
 	// once however many times it arrives.
@@ -385,6 +399,10 @@ func (h *host) scenario(tag string) {
 	}
 	h.expect(acme.ID, map[string]string{"4000": "605.00", "5700": "0.00"})
 	h.must(h.do("POST", "/api/payments/payables/"+inv2.ID+"/cancel", "registrar", map[string]any{"reason": "error"}, nil), 200, "cancel unpaid payable")
+	h.send(fw.NewUUID().String(), "purchases.invoice-cancelled.v1", map[string]any{"invoiceId": f1, "reason": "error"})
+	if p := h.payable(inv1.ID); p.Cancelled || !p.Settled {
+		t.Fatalf("a paid payable is not withdrawn by a cancelled invoice: %+v", p)
+	}
 	h.must(h.do("GET", "/api/payments/payables/"+inv2.ID, "outsider", nil, nil), 404, "outsider")
 
 	var pays fw.Page[yapp.PaymentDTO]

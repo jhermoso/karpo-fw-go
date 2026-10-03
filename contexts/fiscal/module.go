@@ -29,8 +29,8 @@ type Module struct {
 	TaxEngine         contracts.TaxEngine
 	IntegrationOutbox application.OutboxStore
 	Audit             application.AuditLog
-	// Consumer receives the Payroll events that feed the withholding forms: subscribe it to the
-	// transport.
+	// Consumer receives the Payroll and Purchases events that feed the withholding forms:
+	// subscribe it to the transport.
 	Consumer *messaging.Consumer
 }
 
@@ -51,6 +51,7 @@ func Compose(sw *hotswap.Switch, identities domain.Identities) *Module {
 	})
 	consumer := messaging.NewConsumer(contracts.Source, hotswap.Inbox(sw, infrastructure.InboxFactory), sw)
 	fapp.Subscribe(consumer, withholdings)
+	fapp.SubscribePurchases(consumer, withholdings)
 	return &Module{Service: svc, Rates: fapp.RateLookup{Rates: rates}, TaxEngine: fapp.NewEngine(taxpayers, rates, treatments, es.Spain{}),
 		IntegrationOutbox: integration, Audit: audit, Consumer: consumer}
 }

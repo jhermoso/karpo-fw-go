@@ -79,6 +79,8 @@ contexts/accounting/
   | Adeudo devuelto | efectos al cobro | bancos |
   | Nómina aprobada | sueldos (bruto); Seguridad Social a cargo de la empresa | Seguridad Social acreedora (trabajador + empresa); retenciones IRPF; otras deducciones; remuneraciones pendientes (neto) |
   | Nómina anulada | contraasiento de la nómina | |
+  | Factura recibida ([COMPRAS.md](COMPRAS.md)) | gasto de cada categoría (600, 621–629) e IVA soportado deducible (472) | proveedores (lo que se paga, con el proveedor) y retenciones |
+  | Factura recibida anulada | contraasiento de la factura | |
   | Pago aplicado ([PAGOS.md](PAGOS.md)) | proveedores, remuneraciones pendientes o retenciones (con el beneficiario) | bancos, o caja si es en efectivo |
   | Aplicación de pago anulada | contraasiento del pago aplicado | |
 

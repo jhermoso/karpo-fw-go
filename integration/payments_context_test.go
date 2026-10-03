@@ -3,7 +3,6 @@ package integration
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -77,7 +76,8 @@ func TestPaymentsContext(t *testing.T) {
 			am := accounting.Compose(sw)
 			broker := inprocess.NewBroker()
 			broker.Subscribe("payments", ym.Consumer)
-			broker.Subscribe("accounting", am.Consumer)
+			// The received invoices are played with the fields Payments reads: Accounting posts only the payments here.
+			broker.Subscribe("accounting", am.Consumer, "payments.payment-allocated.v1", "payments.allocation-reversed.v1")
 			must := func(err error) {
 				t.Helper()
 				if err != nil {
@@ -127,18 +127,24 @@ func TestPaymentsContext(t *testing.T) {
 				}
 			}
 
-			// Two supplier invoices (one paid to two accounts) and a Modelo 111 through the inbox.
-			inv, err := svc.RegisterSupplierInvoice.Handle(actx, yapp.RegisterSupplierInvoice{Company: acme.ID, Supplier: supplier.ID, Number: "F-1/2026",
-				Issued: vocab.MustDate(2026, 9, 15), Due: vocab.MustDate(2026, 10, 5), Amount: "99.99", Description: "Material de oficina",
-				PayTo: []yapp.PayToInput{{IBAN: "ES9121000418450200051332", Amount: "60.00"}, {IBAN: "ES7921000813610123456789", Amount: "39.99"}}})
-			must(err)
-			if _, err := svc.RegisterSupplierInvoice.Handle(actx, yapp.RegisterSupplierInvoice{Company: acme.ID, Supplier: supplier.ID, Number: "F-1/2026",
-				Issued: vocab.MustDate(2026, 9, 15), Due: vocab.MustDate(2026, 10, 5), Amount: "1"}); !errors.Is(err, fw.ErrRuleViolation) {
-				t.Fatalf("duplicate invoice: %v", err)
+			// Two received invoices (one paid to two accounts, sent twice) and a Modelo 111 through the inbox.
+			send := func(id, typ string, data any) {
+				raw, _ := json.Marshal(data)
+				must(broker.Send(ctx, application.Envelope{ID: id, Type: typ, OccurredAt: time.Date(2026, 10, 2, 0, 0, 0, 0, time.UTC), Data: raw}))
 			}
-			inv2, err := svc.RegisterSupplierInvoice.Handle(actx, yapp.RegisterSupplierInvoice{Company: acme.ID, Supplier: supplier.ID, Number: "F-2/2026",
-				Issued: vocab.MustDate(2026, 9, 20), Due: vocab.MustDate(2026, 11, 20), Amount: "50.00"})
-			must(err)
+			f1, f2 := fw.NewUUID().String(), fw.NewUUID().String()
+			first := map[string]any{"invoiceId": f1, "company": acme.ID, "supplier": supplier.ID, "supplierNumber": "F-1/2026", "issued": "2026-09-15",
+				"due": "2026-10-05", "payable": "99.99", "payTo": []map[string]any{{"iban": "ES9121000418450200051332", "amount": "60.00"},
+					{"iban": "ES7921000813610123456789", "amount": "39.99"}}}
+			send("f1-a", "purchases.invoice-registered.v1", first)
+			send("f1-b", "purchases.invoice-registered.v1", first)
+			send("f2", "purchases.invoice-registered.v1", map[string]any{"invoiceId": f2, "company": acme.ID, "supplier": supplier.ID,
+				"supplierNumber": "F-2/2026", "issued": "2026-09-20", "due": "2026-11-20", "payable": "50.00"})
+			sup, err := svc.SearchPayables.Handle(actx, yapp.SearchPayables{Company: acme.ID, Kind: "supplier-invoice"})
+			if err != nil || len(sup.Items) != 2 {
+				t.Fatalf("supplier payables: %+v %v", sup.Items, err)
+			}
+			inv, inv2 := sup.Items[0], sup.Items[1]
 			filing := fw.NewUUID().String()
 			data, _ := json.Marshal(map[string]any{"filingId": filing, "declarant": acme.ID, "form": "111", "year": 2026, "period": "09", "withheld": "216.00"})
 			for i := 0; i < 2; i++ {
@@ -146,7 +152,7 @@ func TestPaymentsContext(t *testing.T) {
 			}
 			id1, _ := ydomain.ParsePayableID(inv.ID)
 			p1, err := svc.GetPayable.Handle(actx, yapp.GetPayable{ID: id1})
-			if err != nil || len(p1.PayTo) != 2 || p1.PayTo[1].Amount != "39.99" || p1.Description != "Material de oficina" || p1.Issued != "2026-09-15" {
+			if err != nil || len(p1.PayTo) != 2 || p1.PayTo[1].Amount != "39.99" || p1.Document != "F-1/2026" || p1.Issued != "2026-09-15" || p1.SourceID != f1 {
 				t.Fatalf("payable round trip: %+v %v", p1, err)
 			}
 			taxes, err := svc.SearchPayables.Handle(actx, yapp.SearchPayables{Company: acme.ID, Kind: "tax"})

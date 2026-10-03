@@ -26,8 +26,8 @@ type Module struct {
 	Payable           contracts.Payable
 	IntegrationOutbox application.OutboxStore
 	Audit             application.AuditLog
-	// Consumer receives the payslips of Payroll, the tax forms of Fiscal and the transfers of
-	// Treasury: subscribe it to the transport.
+	// Consumer receives the received invoices of Purchases, the payslips of Payroll, the tax forms
+	// of Fiscal and the transfers of Treasury: subscribe it to the transport.
 	Consumer *messaging.Consumer
 }
 
@@ -108,7 +108,6 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 		return q.Get, func(k string) int { n, _ := strconv.Atoi(q.Get(k)); return n }
 	}
 
-	mux.HandleFunc("POST /api/payments/supplier-invoices", create(http.StatusCreated, svc.RegisterSupplierInvoice.Handle))
 	mux.HandleFunc("GET /api/payments/payables", func(w http.ResponseWriter, r *http.Request) {
 		s, n := query(r)
 		out, err := svc.SearchPayables.Handle(r.Context(), papp.SearchPayables{Company: s("company"), Payee: s("payee"), Kind: s("kind"), DueTo: s("dueTo"),

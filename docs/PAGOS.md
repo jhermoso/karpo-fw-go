@@ -91,8 +91,8 @@ contexts/accounting/ # + rol suppliers y suscripción a los pagos
 ```
 
 - **El ciclo completo, sin escrituras entre contextos:**
-  1. Nóminas y Fiscal publican; Pagos crea las obligaciones. Las facturas de proveedor se dan de
-     alta a mano.
+  1. Compras, Nóminas y Fiscal publican; Pagos crea las obligaciones. (Hasta Compras, las
+     facturas de proveedor se daban de alta a mano; ver [COMPRAS.md](COMPRAS.md).)
   2. Tesorería consulta lo que se paga por transferencia (`Payable.DueForTransfer`), propone y
      genera la orden, y el banco la ejecuta.
   3. Tesorería publica `treasury.transfer-executed.v1`, uno por transferencia. Pagos registra un
@@ -145,9 +145,10 @@ contexts/accounting/ # + rol suppliers y suscripción a los pagos
   - **pain.001 analizado** (espacio de nombres, número y suma de control, `TRF`, fecha, BIC del
     ordenante, nombres transliterados, importes).
 - **Extremo a extremo** (Parties, Pagos, Tesorería y Contabilidad sobre el mismo backend, en
-  memoria y en SQLite migrada; Nóminas y Fiscal se simulan con sus mensajes):
-  - alta de factura de proveedor: pagar no es registrar (403), ajeno 404, duplicada 422, IBAN
-    erróneo 400;
+  memoria y en SQLite migrada; Compras, Nóminas y Fiscal se simulan con sus mensajes):
+  - factura recibida entregada tres veces: una sola obligación; un abono del proveedor no genera
+    ninguna; ajeno no ve nada; cambiar las cuentas no es cosa de quien paga (403); IBAN erróneo
+    400;
   - nómina entregada tres veces: una obligación con el reparto en dos cuentas; otra nómina
     anulada antes de pagarse queda retirada;
   - modelo 111 del 3T con vencimiento el 20 de octubre; el 190 no genera nada;
@@ -169,8 +170,8 @@ contexts/accounting/ # + rol suppliers y suscripción a los pagos
 
 ## Pendiente
 
-- Contexto de **Compras**: recepción de facturas de proveedor con base, IVA soportado y gasto;
-  sustituirá el alta manual.
+- ~~Contexto de **Compras**~~: hecho, ver [COMPRAS.md](COMPRAS.md). Las obligaciones de proveedor
+  nacen de las facturas recibidas y el alta manual se ha retirado.
 - Pago de la **Seguridad Social** (RLC/RNT) cuando Nóminas publique sus liquidaciones.
 - Cuentas bancarias de terceros en Parties como fuente de las cuentas de abono.
 - Agrupar en un solo pago varias obligaciones del mismo beneficiario en una transferencia.
