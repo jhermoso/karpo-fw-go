@@ -1,0 +1,52 @@
+# Database servers for the integration module.
+#   docker compose up -d --wait
+#   (see integration_test.go for the DSNs to export, or run ./run.ps1)
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: karpo
+      POSTGRES_PASSWORD: karpo
+      POSTGRES_DB: karpo
+    ports: ["55433:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U karpo"]
+      interval: 5s
+      retries: 30
+
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "Karpo_2026!"
+      MSSQL_PID: Developer
+    ports: ["51433:1433"]
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P 'Karpo_2026!' -Q 'SELECT 1' || exit 1"]
+      interval: 10s
+      retries: 30
+
+  oracle:
+    image: gvenzl/oracle-free:23-slim-faststart
+    environment:
+      ORACLE_PASSWORD: karpo
+      APP_USER: karpo
+      APP_USER_PASSWORD: karpo
+    ports: ["51521:1521"]
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 10s
+      retries: 60
+
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: karpo
+      MYSQL_DATABASE: karpo
+      MYSQL_USER: karpo
+      MYSQL_PASSWORD: karpo
+    ports: ["53306:3306"]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-pkarpo"]
+      interval: 5s
+      retries: 30

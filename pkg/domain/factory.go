@@ -1,20 +1,19 @@
 package domain
 
-import (
-	"context"
+import "context"
 
-	"github.com/jhermoso/karpo-fw-go/pkg/result"
-)
-
-// Factory encapsulates complex creation and reconstitution logic for an Aggregate Root or Entity of type T.
-type Factory[T any, TParams any] interface {
-	// Create instantiates a new T ensuring all creation invariants are satisfied.
-	Create(ctx context.Context, params TParams) result.Result[T]
+// Factory encapsulates complex creation logic for an aggregate or entity T from parameters P,
+// guaranteeing creation invariants (equivalent to the C# IFactory<TProduct, TParam>).
+// Simple aggregates just expose a New... constructor function; use Factory when creation needs
+// collaborators (sequences, policies, other repositories).
+type Factory[T any, P any] interface {
+	Create(ctx context.Context, params P) (T, error)
 }
 
 // FactoryFunc adapts a function into a Factory.
-type FactoryFunc[T any, TParams any] func(ctx context.Context, params TParams) result.Result[T]
+type FactoryFunc[T any, P any] func(ctx context.Context, params P) (T, error)
 
-func (fn FactoryFunc[T, TParams]) Create(ctx context.Context, params TParams) result.Result[T] {
+// Create calls fn.
+func (fn FactoryFunc[T, P]) Create(ctx context.Context, params P) (T, error) {
 	return fn(ctx, params)
 }
