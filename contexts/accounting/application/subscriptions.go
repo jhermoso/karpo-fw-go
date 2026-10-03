@@ -140,6 +140,35 @@ func (PaymentAllocationReversed) IntegrationEventType() string {
 	return "payments.allocation-reversed.v1"
 }
 
+// PurchaseRegistered is purchases.invoice-registered.v1.
+type PurchaseRegistered struct {
+	InvoiceID      string `json:"invoiceId"`
+	Company        string `json:"company"`
+	Supplier       string `json:"supplier"`
+	SupplierNumber string `json:"supplierNumber"`
+	Register       string `json:"register"`
+	Received       string `json:"received"`
+	DeductibleTax  string `json:"deductibleTax"`
+	Withholding    string `json:"withholding"`
+	Payable        string `json:"payable"`
+	Expenses       []struct {
+		Category string `json:"category"`
+		Amount   string `json:"amount"`
+	} `json:"expenses"`
+}
+
+// IntegrationEventType implements application.IntegrationEvent.
+func (PurchaseRegistered) IntegrationEventType() string { return "purchases.invoice-registered.v1" }
+
+// PurchaseCancelled is purchases.invoice-cancelled.v1.
+type PurchaseCancelled struct {
+	InvoiceID string `json:"invoiceId"`
+	Company   string `json:"company"`
+}
+
+// IntegrationEventType implements application.IntegrationEvent.
+func (PurchaseCancelled) IntegrationEventType() string { return "purchases.invoice-cancelled.v1" }
+
 type parser struct{ err error }
 
 func (p *parser) id(s string) fw.UUID {
@@ -304,6 +333,54 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 			return domain.Draft{Company: domain.OrganizationID{UUID: company}, Date: on, Description: "Adeudo devuelto " + e.EndToEnd,
 				Source: domain.Source{Type: "treasury.direct-debit-returned.v1", ID: e.RemittanceID + "|" + e.EndToEnd, Key: e.EndToEnd}, Lines: lines}, err
 		})
+	})
+
+	// Received invoice: each expense category (with the non-deductible tax) and the input tax
+	// against the supplier (what is paid) and the withholding payable. Booked on the reception date;
+	// a corrective invoice posts negative amounts, which change sides.
+	categoryRole := map[string]domain.Role{"goods": domain.RolePurchases, "rent": domain.RoleRent, "repairs": domain.RoleRepairs,
+		"professional-services": domain.RoleProfessional, "transport": domain.RoleTransport, "insurance": domain.RoleInsurance,
+		"advertising": domain.RoleAdvertising, "supplies": domain.RoleSupplies, "other-services": domain.RoleOtherServices}
+	messaging.Handle(c, func(ctx context.Context, e PurchaseRegistered, _ app.Envelope) error {
+		var p parser
+		company, supplier, on := p.id(e.Company), p.id(e.Supplier), p.date(e.Received)
+		tax, withholding, payable := p.amount(e.DeductibleTax), p.amount(e.Withholding), p.amount(e.Payable)
+		if err := p.check("purchases.invoice-registered.v1"); err != nil {
+			return err
+		}
+		return withLedger(ctx, domain.OrganizationID{UUID: company}, func(l *domain.Ledger) (domain.Draft, error) {
+			var err error
+			sup := domain.PartyID{UUID: supplier}
+			var lines []domain.Line
+			for _, x := range e.Expenses {
+				r, ok := categoryRole[x.Category]
+				if !ok {
+					return domain.Draft{}, fw.Violation("accounting.invalid_event", "purchases.invoice-registered.v1: unknown category "+x.Category)
+				}
+				lines = append(lines, domain.Line{Account: role(l, r, &err), Debit: p.amount(x.Amount)})
+			}
+			if !tax.IsZero() {
+				lines = append(lines, domain.Line{Account: role(l, domain.RoleInputTax, &err), Debit: tax})
+			}
+			lines = append(lines, domain.Line{Account: role(l, domain.RoleSuppliers, &err), Party: sup, Credit: payable, Description: "Factura " + e.SupplierNumber})
+			if !withholding.IsZero() {
+				lines = append(lines, domain.Line{Account: role(l, domain.RoleWithholding, &err), Party: sup, Credit: withholding})
+			}
+			if err := errors.Join(err, p.check("purchases.invoice-registered.v1")); err != nil {
+				return domain.Draft{}, err
+			}
+			return domain.Draft{Company: domain.OrganizationID{UUID: company}, Date: on, Description: "Factura recibida " + e.Register,
+				Source: domain.Source{Type: "purchases.invoice-registered.v1", ID: e.InvoiceID, Key: e.InvoiceID}, Lines: lines}, nil
+		})
+	})
+	messaging.Handle(c, func(ctx context.Context, e PurchaseCancelled, env app.Envelope) error {
+		var p parser
+		company := p.id(e.Company)
+		if err := p.check("purchases.invoice-cancelled.v1"); err != nil {
+			return err
+		}
+		return reverseSource(ctx, domain.OrganizationID{UUID: company}, "purchases.invoice-registered.v1", e.InvoiceID, vocab.DateOf(env.OccurredAt),
+			domain.Source{Type: "purchases.invoice-cancelled.v1", ID: e.InvoiceID, Key: e.InvoiceID})
 	})
 
 	// Payment allocated: the account of what was owed (suppliers, net pay, withholdings) against the

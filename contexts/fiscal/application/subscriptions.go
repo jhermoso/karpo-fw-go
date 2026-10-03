@@ -87,6 +87,79 @@ func Subscribe(c *messaging.Consumer, withholdings domain.WithholdingRepository)
 	})
 }
 
+// InvoiceRegistered is the Fiscal copy of purchases.invoice-registered.v1.
+type InvoiceRegistered struct {
+	InvoiceID      string `json:"invoiceId"`
+	Company        string `json:"company"`
+	Supplier       string `json:"supplier"`
+	Issued         string `json:"issued"`
+	Net            string `json:"net"`
+	Withholding    string `json:"withholding"`
+	WithholdingKey string `json:"withholdingKey"`
+}
+
+// IntegrationEventType implements application.IntegrationEvent.
+func (InvoiceRegistered) IntegrationEventType() string { return "purchases.invoice-registered.v1" }
+
+// InvoiceCancelled is the Fiscal copy of purchases.invoice-cancelled.v1.
+type InvoiceCancelled struct {
+	InvoiceID string `json:"invoiceId"`
+}
+
+// IntegrationEventType implements application.IntegrationEvent.
+func (InvoiceCancelled) IntegrationEventType() string { return "purchases.invoice-cancelled.v1" }
+
+// SubscribePurchases records the withholdings of received invoices (professionals, key G of
+// Modelo 190) next to the payroll ones, so Modelo 111 and 190 include them (approved decision of
+// docs/COMPRAS.md). The withholding accrues on the invoice date; a cancelled invoice cancels it.
+func SubscribePurchases(c *messaging.Consumer, withholdings domain.WithholdingRepository) {
+	messaging.Handle(c, func(ctx context.Context, e InvoiceRegistered, _ app.Envelope) error {
+		if e.Withholding == "" || e.WithholdingKey == "" {
+			return nil
+		}
+		id, err1 := fw.ParseUUID(e.InvoiceID)
+		payer, err2 := fw.ParseUUID(e.Company)
+		supplier, err3 := fw.ParseUUID(e.Supplier)
+		issued, err4 := vocab.ParseDate(e.Issued)
+		base, err5 := vocab.ParseDecimal(e.Net)
+		withheld, err6 := vocab.ParseDecimal(e.Withholding)
+		if err := errors.Join(err1, err2, err3, err4, err5, err6); err != nil {
+			return fw.Violation("fiscal.invalid_event", "purchases.invoice-registered.v1: "+err.Error())
+		}
+		if !withheld.IsPositive() {
+			return nil
+		}
+		if _, err := withholdings.Get(ctx, domain.WithholdingID{UUID: id}); err == nil {
+			return nil
+		} else if !errors.Is(err, fw.ErrNotFound) {
+			return err
+		}
+		w, err := domain.ReconstituteWithholding(domain.WithholdingID{UUID: id}, domain.WithholdingState{Payer: domain.OrganizationID{UUID: payer},
+			Recipient: domain.PartyID{UUID: supplier}, PaymentDate: issued, Key: e.WithholdingKey, Perceptions: base, Withheld: withheld})
+		if err != nil {
+			return err
+		}
+		return withholdings.Save(ctx, w)
+	})
+	messaging.Handle(c, func(ctx context.Context, e InvoiceCancelled, _ app.Envelope) error {
+		id, err := fw.ParseUUID(e.InvoiceID)
+		if err != nil {
+			return fw.Violation("fiscal.invalid_event", "purchases.invoice-cancelled.v1 without invoice")
+		}
+		w, err := withholdings.Get(ctx, domain.WithholdingID{UUID: id})
+		if errors.Is(err, fw.ErrNotFound) {
+			return nil
+		} else if err != nil {
+			return err
+		}
+		if w.State().Cancelled {
+			return nil
+		}
+		w.Cancel()
+		return withholdings.Save(ctx, w)
+	})
+}
+
 // Publications translates the domain events into the Published Language.
 func Publications(r *messaging.Recorder) *messaging.Recorder {
 	messaging.On(r, func(_ context.Context, e domain.FilingSubmitted) ([]app.IntegrationEvent, error) {

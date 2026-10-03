@@ -61,6 +61,33 @@ type FilingReverted struct {
 // IntegrationEventType implements application.IntegrationEvent.
 func (FilingReverted) IntegrationEventType() string { return "fiscal.filing-reverted.v1" }
 
+// InvoiceRegistered is purchases.invoice-registered.v1.
+type InvoiceRegistered struct {
+	InvoiceID      string `json:"invoiceId"`
+	Company        string `json:"company"`
+	Supplier       string `json:"supplier"`
+	SupplierNumber string `json:"supplierNumber"`
+	Issued         string `json:"issued"`
+	Due            string `json:"due"`
+	Payable        string `json:"payable"`
+	PayTo          []struct {
+		IBAN   string `json:"iban"`
+		Amount string `json:"amount"`
+	} `json:"payTo"`
+}
+
+// IntegrationEventType implements application.IntegrationEvent.
+func (InvoiceRegistered) IntegrationEventType() string { return "purchases.invoice-registered.v1" }
+
+// InvoiceCancelled is purchases.invoice-cancelled.v1.
+type InvoiceCancelled struct {
+	InvoiceID string `json:"invoiceId"`
+	Reason    string `json:"reason"`
+}
+
+// IntegrationEventType implements application.IntegrationEvent.
+func (InvoiceCancelled) IntegrationEventType() string { return "purchases.invoice-cancelled.v1" }
+
 // TransferExecuted is treasury.transfer-executed.v1.
 type TransferExecuted struct {
 	EndToEnd   string `json:"endToEnd"`
@@ -90,9 +117,12 @@ func invalid(event string, err error) error {
 }
 
 // Subscribe registers the reactions to the other contexts (approved decisions of docs/NOMINAS.md,
-// docs/FISCAL.md and docs/TESORERIA.md: each publishes, Payments records what is owed and
-// Treasury executes the transfers):
+// docs/FISCAL.md, docs/TESORERIA.md and docs/COMPRAS.md: each publishes, Payments records what is
+// owed and Treasury executes the transfers):
 //
+//   - a received invoice owes what is paid to the supplier (its total minus the withholding) on
+//     its due date, to the accounts it carries; a corrective one (negative) owes nothing here; a
+//     cancelled invoice withdraws it while unpaid;
 //   - an approved payslip owes its net pay to the employee on its payment date, to the accounts
 //     of its split (Payroll's Remittance port); a cancelled one withdraws it while unpaid;
 //   - a submitted tax form with an amount owes it to the tax authority by its legal deadline; a
@@ -133,6 +163,36 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 		}
 		return nil
 	}
+
+	const invoiceRegistered = "purchases.invoice-registered.v1"
+	messaging.Handle(c, func(ctx context.Context, e InvoiceRegistered, _ app.Envelope) error {
+		company, err1 := fw.ParseUUID(e.Company)
+		supplier, err2 := fw.ParseUUID(e.Supplier)
+		issued, err3 := vocab.ParseDate(e.Issued)
+		due, err4 := vocab.ParseDate(e.Due)
+		amount, err5 := vocab.ParseDecimal(e.Payable)
+		if err := errors.Join(err1, err2, err3, err4, err5); err != nil {
+			return invalid(invoiceRegistered, err)
+		}
+		if !amount.IsPositive() {
+			return nil // a credit of the supplier: offsets are phase 2
+		}
+		st := domain.PayableState{Company: domain.OrganizationID{UUID: company}, Payee: domain.PartyID{UUID: supplier}, Kind: domain.SupplierInvoice,
+			Source: domain.Source{Type: invoiceRegistered, ID: e.InvoiceID}, Document: e.SupplierNumber, Issued: issued, Due: due, Currency: euro,
+			Amount: amount}
+		for _, t := range e.PayTo {
+			iban, err1 := vocab.NewIBAN(t.IBAN)
+			a, err2 := vocab.ParseDecimal(t.Amount)
+			if err := errors.Join(err1, err2); err != nil {
+				return invalid(invoiceRegistered, err)
+			}
+			st.PayTo = append(st.PayTo, domain.PayTo{IBAN: iban, Amount: a})
+		}
+		return create(ctx, st)
+	})
+	messaging.Handle(c, func(ctx context.Context, e InvoiceCancelled, _ app.Envelope) error {
+		return withdraw(ctx, invoiceRegistered, e.InvoiceID, "invoice cancelled: "+e.Reason)
+	})
 
 	const payslipApproved = "payroll.payslip-approved.v1"
 	messaging.Handle(c, func(ctx context.Context, e PayslipApproved, _ app.Envelope) error {

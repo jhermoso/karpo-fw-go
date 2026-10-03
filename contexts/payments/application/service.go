@@ -21,7 +21,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Permissions (the C# generated 12 Payments.* codes and enforced none). Registering what is owed
+// Permissions (the C# generated 12 Payments.* codes and enforced none). Maintaining what is owed
 // and paying it are separate permissions.
 var (
 	PermPayableRead  = authz.MustPermission("Payments.Payable.Read")
@@ -42,11 +42,10 @@ type Deps struct {
 
 // Service exposes the use cases.
 type Service struct {
-	RegisterSupplierInvoice app.CommandHandler[RegisterSupplierInvoice, PayableDTO]
-	SetPayTo                app.CommandHandler[SetPayTo, PayableDTO]
-	CancelPayable           app.CommandHandler[CancelPayable, PayableDTO]
-	GetPayable              app.QueryHandler[GetPayable, PayableDTO]
-	SearchPayables          app.QueryHandler[SearchPayables, fw.Page[PayableDTO]]
+	SetPayTo       app.CommandHandler[SetPayTo, PayableDTO]
+	CancelPayable  app.CommandHandler[CancelPayable, PayableDTO]
+	GetPayable     app.QueryHandler[GetPayable, PayableDTO]
+	SearchPayables app.QueryHandler[SearchPayables, fw.Page[PayableDTO]]
 
 	RegisterPayment app.CommandHandler[RegisterPayment, PaymentDTO]
 	Allocate        app.CommandHandler[Allocate, PaymentDTO]

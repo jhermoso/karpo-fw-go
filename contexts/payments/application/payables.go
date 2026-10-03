@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/payments/domain"
-	"github.com/jhermoso/karpo-fw-go/pkg/application/pipeline"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
@@ -15,19 +14,6 @@ import (
 type PayToInput struct {
 	IBAN   string `json:"iban"`
 	Amount string `json:"amount"`
-}
-
-// RegisterSupplierInvoice records what a supplier invoice obliges to pay (until a Purchases
-// context books the invoice itself).
-type RegisterSupplierInvoice struct {
-	Company     string       `json:"company"`
-	Supplier    string       `json:"supplier"`
-	Number      string       `json:"number"`
-	Issued      vocab.Date   `json:"issued"`
-	Due         vocab.Date   `json:"due"`
-	Amount      string       `json:"amount"`
-	Description string       `json:"description,omitempty"`
-	PayTo       []PayToInput `json:"payTo,omitempty"`
 }
 
 // SetPayTo replaces the accounts a payable is paid to.
@@ -101,39 +87,6 @@ func payTo(v *fw.Validation, in []PayToInput) []domain.PayTo {
 }
 
 func (s service) payableUseCases(svc *Service) {
-	svc.RegisterSupplierInvoice = guard(PermPayableWrite, func(ctx context.Context, c RegisterSupplierInvoice) (PayableDTO, error) {
-		var v fw.Validation
-		company := domain.OrganizationID{UUID: parseID(&v, "company", c.Company)}
-		supplier := domain.PartyID{UUID: parseID(&v, "supplier", c.Supplier)}
-		amount := parseDecimal(&v, "amount", c.Amount)
-		to := payTo(&v, c.PayTo)
-		if err := v.Err(); err != nil {
-			return PayableDTO{}, err
-		}
-		if err := scopeOf(ctx).check("parties.party", company, company, true); err != nil {
-			return PayableDTO{}, err
-		}
-		id := domain.NewPayableID()
-		p, err := domain.RegisterPayable(id, domain.PayableState{Company: company, Payee: supplier, Kind: domain.SupplierInvoice,
-			Source: domain.Source{Type: "supplier-invoice", ID: id.String()}, Document: c.Number, Description: c.Description, Issued: c.Issued, Due: c.Due,
-			Currency: euro, Amount: amount, PayTo: to})
-		if err != nil {
-			return PayableDTO{}, err
-		}
-		dup, err := s.Payables.Exists(ctx, spec.And(domain.PayFieldCompany.Eq(company), domain.PayFieldPayee.Eq(supplier),
-			domain.PayFieldKind.Eq(domain.SupplierInvoice.String()), domain.PayFieldDocument.Eq(p.State().Document), domain.PayFieldCancelled.Eq(false)))
-		if err != nil {
-			return PayableDTO{}, err
-		}
-		if dup {
-			return PayableDTO{}, fw.Violation("payments.duplicate_invoice", "that supplier invoice is already registered")
-		}
-		if err := s.payables.Create(ctx, p); err != nil {
-			return PayableDTO{}, err
-		}
-		return payableDTO(p), nil
-	}, pipeline.Transactional[RegisterSupplierInvoice, PayableDTO](s.UoW))
-
 	update := func(ctx context.Context, id domain.PayableID, fn func(*domain.Payable) error) (PayableDTO, error) {
 		sc := scopeOf(ctx)
 		p, err := s.payables.Update(ctx, id, func(_ context.Context, p *domain.Payable) error {
