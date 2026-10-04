@@ -19,6 +19,9 @@ import (
 	"github.com/jhermoso/karpo-fw-go/contexts/parties/contracts"
 	"github.com/jhermoso/karpo-fw-go/contexts/parties/domain"
 	"github.com/jhermoso/karpo-fw-go/contexts/parties/infrastructure"
+	"github.com/jhermoso/karpo-fw-go/contexts/security"
+	sapp "github.com/jhermoso/karpo-fw-go/contexts/security/application"
+	sdomain "github.com/jhermoso/karpo-fw-go/contexts/security/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/application"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/authorization"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
@@ -39,8 +42,7 @@ type env struct {
 	srv *httptest.Server
 	sw  *hotswap.Switch
 	mod *parties.Module
-	dir *authorization.MemoryDirectory
-	ids map[string]fw.UUID
+	dir directory
 	// admin is a global administrator; the others work in an organization scope: reader
 	// (read-only), clerk (full), viewer (read-only grant, write permissions), outsider (full
 	// on another organization).
@@ -50,34 +52,137 @@ type env struct {
 var allPerms = []authz.Permission{papp.PermPartyRead, papp.PermPartyCreate, papp.PermPartyUpdate, papp.PermRoleAssign,
 	papp.PermRelationshipRead, papp.PermRelationshipCreate, papp.PermRelationshipEnd}
 
-// grant gives a user access to organizations (the security directory is read on every request).
-func (e *env) grant(user string, level authz.AccessLevel, orgs ...string) {
-	s, _, _ := e.dir.Subject(context.Background(), e.ids[user])
+var readerPerms = []authz.Permission{papp.PermPartyRead, papp.PermRelationshipRead}
+
+// profiles are the users of the test host and their user names.
+var profiles = map[string]string{"admin": "ana.admin", "reader": "rita.reader", "clerk": "carl.clerk", "viewer": "vera.viewer",
+	"outsider": "otto.outsider"}
+
+// directory is the security source of the test host. The Parties use cases never see it: they
+// only read the authorization context the resolver builds from it on every request. The same
+// scenario runs over the in-memory directory of the framework and over the Security context.
+type directory interface {
+	authz.Directory
+	// register creates the subject of a profile and returns its id and its party.
+	register(t *testing.T, profile, username string) (subject, party fw.UUID)
+	// grant gives a profile access to organizations.
+	grant(t *testing.T, profile string, level authz.AccessLevel, orgs ...string)
+}
+
+// memoryDirectory is the in-memory directory of the framework.
+type memoryDirectory struct {
+	*authorization.MemoryDirectory
+	ids map[string]fw.UUID
+}
+
+func newMemoryDirectory(*testing.T) directory {
+	return &memoryDirectory{MemoryDirectory: authorization.NewMemoryDirectory(), ids: map[string]fw.UUID{}}
+}
+
+func (d *memoryDirectory) register(_ *testing.T, profile, _ string) (fw.UUID, fw.UUID) {
+	s := authz.Subject{Active: true, Permissions: allPerms}
+	switch profile {
+	case "admin":
+		s = authz.Subject{Active: true, Roles: []string{authorization.DefaultGlobalAdminRole}}
+	case "reader":
+		s.Permissions = readerPerms
+	}
+	d.ids[profile] = fw.NewUUID()
+	d.Put(d.ids[profile], s)
+	return d.ids[profile], fw.NewUUID()
+}
+
+func (d *memoryDirectory) grant(_ *testing.T, profile string, level authz.AccessLevel, orgs ...string) {
+	s, _, _ := d.Subject(context.Background(), d.ids[profile])
 	for _, o := range orgs {
 		id, _ := fw.ParseUUID(o)
 		s.Grants = append(s.Grants, authz.Grant{OrganizationID: id, Level: level})
 	}
-	e.dir.Put(e.ids[user], s)
+	d.Put(d.ids[profile], s)
+}
+
+// securityDirectory is the real directory: the Security bounded context, with its users, roles,
+// permission catalog and organization accesses in its own store.
+type securityDirectory struct {
+	authz.Directory
+	sec   *security.Module
+	setup context.Context // a global administrator, for the setup
+	roles map[string]sdomain.RoleID
+	ids   map[string]sdomain.UserID
+}
+
+func newSecurityDirectory(t *testing.T) directory {
+	ctx := context.Background()
+	sw := hotswap.New(memory.NewStore("security"))
+	t.Cleanup(func() { _ = sw.Close(ctx) })
+	sec := security.Compose(sw)
+	if _, err := sec.SyncCatalog(ctx, papp.Permissions()...); err != nil {
+		t.Fatal(err)
+	}
+	ac, _ := authz.NewContext(authz.Context{Subject: fw.NewUUID(), SubjectName: "setup", Kind: authz.Service})
+	ac.GlobalAdmin = true
+	d := &securityDirectory{Directory: sec.Directory, sec: sec, setup: authz.WithContext(ctx, ac),
+		roles: map[string]sdomain.RoleID{"admin": sdomain.RoleGlobalSuperAdmin}, ids: map[string]sdomain.UserID{}}
+	codes := func(perms []authz.Permission) (out []string) {
+		for _, p := range perms {
+			out = append(out, string(p))
+		}
+		return out
+	}
+	for name, perms := range map[string][]authz.Permission{"reader": readerPerms, "worker": allPerms} {
+		r, err := sec.Service.DefineRole.Handle(d.setup, sapp.DefineRole{Name: name, Permissions: codes(perms)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		d.roles[name], _ = sdomain.ParseRoleID(r.ID)
+	}
+	return d
+}
+
+func (d *securityDirectory) register(t *testing.T, profile, username string) (fw.UUID, fw.UUID) {
+	party := fw.NewUUID()
+	u, err := d.sec.Service.RegisterUser.Handle(d.setup, sapp.RegisterUser{Username: username, Party: party.String()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, _ := sdomain.ParseUserID(u.ID)
+	role, ok := d.roles[profile]
+	if !ok {
+		role = d.roles["worker"]
+	}
+	if _, err := d.sec.Service.AssignRole.Handle(d.setup, sapp.AssignRole{ID: id, Role: role}); err != nil {
+		t.Fatal(err)
+	}
+	d.ids[profile] = id
+	return id.UUID, party
+}
+
+func (d *securityDirectory) grant(t *testing.T, profile string, level authz.AccessLevel, orgs ...string) {
+	for _, o := range orgs {
+		org, _ := sdomain.ParseOrganizationID(o)
+		if _, err := d.sec.Service.GrantAccess.Handle(d.setup, sapp.GrantAccess{ID: d.ids[profile], Organization: org, Level: string(level)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// grant gives a user access to organizations (the security directory is read on every request).
+func (e *env) grant(user string, level authz.AccessLevel, orgs ...string) {
+	e.t.Helper()
+	e.dir.grant(e.t, user, level, orgs...)
 }
 
 // compose is the composition root of the test host: JWT authentication, the authorization
-// resolver over an in-memory security directory, and the Parties module on a hot-swap switch.
-func compose(t *testing.T) *env {
+// resolver over the security directory, and the Parties module on a hot-swap switch.
+func compose(t *testing.T, newDirectory func(*testing.T) directory) *env {
 	jwt, _ := jwtauth.New(jwtauth.Config{Secret: []byte("parties-test")})
-	dir := authorization.NewMemoryDirectory()
-	ids := map[string]fw.UUID{}
-	for _, u := range []string{"admin", "reader", "clerk", "viewer", "outsider"} {
-		ids[u] = fw.NewUUID()
-	}
-	dir.Put(ids["admin"], authz.Subject{Active: true, Roles: []string{authorization.DefaultGlobalAdminRole}})
-	dir.Put(ids["reader"], authz.Subject{Active: true, Permissions: []authz.Permission{papp.PermPartyRead, papp.PermRelationshipRead}})
-	for _, u := range []string{"clerk", "viewer", "outsider"} {
-		dir.Put(ids[u], authz.Subject{Active: true, Permissions: allPerms})
-	}
-	token := func(sub fw.UUID, name string) string {
-		s, _ := jwt.Issue(jwtauth.Claims{Subject: sub.String(), Username: name, PartyID: fw.NewUUID().String(),
+	dir := newDirectory(t)
+	tokens := map[string]string{}
+	for profile, username := range profiles {
+		subject, party := dir.register(t, profile, username)
+		s, _ := jwt.Issue(jwtauth.Claims{Subject: subject.String(), Username: username, PartyID: party.String(),
 			ExpiresAt: fw.Now().Add(time.Hour).Unix()})
-		return "Bearer " + s
+		tokens[profile] = "Bearer " + s
 	}
 
 	sw := hotswap.New(memory.NewStore("memory"))
@@ -88,9 +193,8 @@ func compose(t *testing.T) *env {
 		distribution.Authorize(jwt, authorization.NewResolver(dir, authorization.Options{}))))
 	t.Cleanup(srv.Close)
 	t.Cleanup(func() { _ = sw.Close(context.Background()) })
-	return &env{t: t, srv: srv, sw: sw, mod: mod, dir: dir, ids: ids, admin: token(ids["admin"], "ana.admin"),
-		reader: token(ids["reader"], "rita.reader"), clerk: token(ids["clerk"], "carl.clerk"),
-		viewer: token(ids["viewer"], "vera.viewer"), outsider: token(ids["outsider"], "otto.outsider")}
+	return &env{t: t, srv: srv, sw: sw, mod: mod, dir: dir, admin: tokens["admin"], reader: tokens["reader"],
+		clerk: tokens["clerk"], viewer: tokens["viewer"], outsider: tokens["outsider"]}
 }
 
 func (e *env) do(method, path, auth string, body any, out any) int {
@@ -345,8 +449,16 @@ func (e *env) phase2(acme, ana papp.PartyDTO) {
 	}
 }
 
+// The whole scenario runs twice: over the in-memory security directory of the framework and over
+// the Security bounded context. Nothing in Parties changes between the two: its use cases read
+// the authorization context, not where it comes from.
 func TestParties_EndToEnd_MemoryThenSQLite(t *testing.T) {
-	e := compose(t)
+	t.Run("in-memory directory", func(t *testing.T) { endToEnd(t, newMemoryDirectory) })
+	t.Run("Security directory", func(t *testing.T) { endToEnd(t, newSecurityDirectory) })
+}
+
+func endToEnd(t *testing.T, newDirectory func(*testing.T) directory) {
+	e := compose(t, newDirectory)
 	ctx := context.Background()
 	e.scenario("mem")
 

@@ -97,8 +97,9 @@ casos de uso:            pipeline.RequirePermission[In,Out]("Parties.Party.Creat
 | `pkg/distribution` | `Authorize`, `RequirePermission`, `OrganizationScopeHeader`; `ErrIndeterminate` → 503 |
 | `pkg/distribution/jwtauth` | `HS256` (`Authenticate`, `Issue`): rechaza `alg: none`, firmas ajenas, emisor y audiencia incorrectos, caducados y sin `exp` |
 
-El contexto de Security implementará `authz.Directory` sobre sus repositorios (usuarios, roles,
-permisos y accesos a organizaciones). El resolvedor no guarda caché entre peticiones (D7).
+El contexto de Security implementa `authz.Directory` sobre sus repositorios (usuarios, roles,
+permisos y accesos a organizaciones; ver [SEGURIDAD.md](SEGURIDAD.md)). El resolvedor no guarda
+caché entre peticiones (D7).
 
 ## Validación
 
@@ -119,8 +120,11 @@ permisos y accesos a organizaciones). El resolvedor no guarda caché entre petic
 
 ## Pendiente
 
-- Resolvedor en modo `Http` (consultar el contexto a Security por red).
-- Implementar `authz.Directory` en el contexto Security.
-- Visibilidad de Parties por `PartyRelationship` + permiso (P1) y `OrganizationAdmin` con ámbito
-  (P3), cuando se porte Parties.
+- Resolvedor en modo `Http` (consultar el contexto a Security por red, sobre su
+  `GET /api/auth/context`).
+- ~~Implementar `authz.Directory` en el contexto Security~~: hecho, ver
+  [SEGURIDAD.md](SEGURIDAD.md). `security.Module.Directory` sustituye a `MemoryDirectory`, y
+  `authorization.Authenticators` combina el token propio con el de un proveedor de identidad externo.
+- ~~Visibilidad de Parties por `PartyRelationship` + permiso (P1)~~: hecha en
+  [PARTIES.md](PARTIES.md). ~~`OrganizationAdmin` con ámbito (P3)~~: hecho en Security.
 - `IncludeSubsidiaries` viaja en el contrato, pero en v1 no amplía el ámbito (P2).

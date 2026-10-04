@@ -48,6 +48,26 @@ Registro de tareas pendientes, ideas de tooling y mejoras para el ecosistema Kar
 - **Filtros HTTP → especificaciones** (lista blanca de campos) para búsquedas genéricas.
 - **CI en Linux** con `go test -race` (en Windows no hay compilador C) y `integration/run.ps1`.
 
+### 2c. Security: siguientes pasos
+Hecho (ver [docs/SEGURIDAD.md](docs/SEGURIDAD.md), decisiones aprobadas el 2026-10-04): contexto
+`contexts/security` con usuarios, roles, catálogo de permisos declarado por cada contexto, acceso
+por organización, sesiones con rotación, identidades externas y el `authz.Directory` real.
+
+Pendiente:
+- **Verificador OIDC** (`contracts.TokenVerifier` con clave pública) cuando la prueba G-43 elija
+  el proveedor de identidad; hoy solo existe el puerto y un verificador de prueba.
+- **Resolutor en modo `Http`** sobre `GET /api/auth/context`, para servicios que no alojen Security.
+- **Integración del contexto en MySQL**: repetir `./integration/run.ps1` sin otra ejecución a la
+  vez; la pasada del 2026-10-04 quedó contaminada (PostgreSQL, SQL Server y Oracle sí pasan, y
+  la conformidad de los mapeos pasa en los cinco motores).
+- **Límite de intentos por origen** al iniciar sesión, y purga de las sesiones caducadas.
+- **Front de Angular**: leer permisos y accesos del contexto, no del token (decisión 2).
+- **Importar los usuarios de C#** (`infrastructure.FromCSharp` ya convierte sus hashes).
+- Segundo factor, recuperación de contraseña y alta por invitación (o delegarlos en el proveedor).
+- Desactivar al usuario al recibir `hr.employee-terminated.v1`.
+- Principales de servicio en base de datos, el día que haya que administrarlos sin desplegar.
+- Vigencia de las asignaciones de rol e `IncludeSubsidiaries` (P2).
+
 ### 3. PoC Frontend: Evaluación de Stack Ligero (Svelte 5 / SolidJS)
 - Prototipar la interfaz de listado y ficha de `Parties`.
 - Comparar tamaño de bundle (< 100 KB objetivo vs ~9.4 MB de Angular 20) y velocidad de carga/hidratación.
