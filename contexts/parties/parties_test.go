@@ -50,7 +50,7 @@ type env struct {
 }
 
 var allPerms = []authz.Permission{papp.PermPartyRead, papp.PermPartyCreate, papp.PermPartyUpdate, papp.PermRoleAssign,
-	papp.PermRelationshipRead, papp.PermRelationshipCreate, papp.PermRelationshipEnd}
+	papp.PermRelationshipRead, papp.PermRelationshipCreate, papp.PermRelationshipEnd, papp.PermRelationshipUpdate}
 
 var readerPerms = []authz.Permission{papp.PermPartyRead, papp.PermRelationshipRead}
 
@@ -295,7 +295,154 @@ func (e *env) scenario(prefix string) (acme, ana papp.PartyDTO) {
 	}
 	e.phase2(acme, ana)
 	e.phase3(acme, ana)
+	e.prospects(acme, ana)
 	return acme, ana
+}
+
+// prospects covers the details a relationship carries because of its type (docs/PARTIES-UDM.md):
+// the prospect relationship with an internal organization and its trial.
+func (e *env) prospects(acme, ana papp.PartyDTO) {
+	e.t.Helper()
+	ctx := context.Background()
+	var types []papp.RelationshipTypeDTO
+	e.must(e.do("GET", "/api/catalogs/party-relationship-types", e.reader, nil, &types), 200, "relationship types")
+	codes := map[string]string{}
+	for _, t := range types {
+		codes[t.Code] = t.ID
+	}
+	if len(types) != len(domain.WellKnownRelationshipTypes()) || codes["prospect"] != domain.RelProspect.String() || codes["customer"] != domain.RelCustomer.String() {
+		e.t.Fatalf("relationship type codes: %+v", codes)
+	}
+
+	// A prospect is registered inside the scope with its trial: role, relationship, affiliation
+	// and trial in one request.
+	until := fw.Now().Add(30 * 24 * time.Hour).Truncate(time.Second)
+	var flotas papp.PartyDTO
+	e.must(e.do("POST", "/api/organizations", e.clerk, map[string]any{"legalName": "Flotas " + acme.ID[:8],
+		"affiliation": map[string]any{"organization": acme.ID, "relationshipType": domain.RelProspect.String(),
+			"prospect": map[string]any{"trialUntil": until}}}, &flotas), 201, "register a prospect with a trial")
+	if len(flotas.Roles) != 1 || flotas.Roles[0].Name != "Prospect" || len(flotas.Organizations) != 1 || flotas.Organizations[0] != acme.ID {
+		e.t.Fatalf("prospect: %+v", flotas)
+	}
+	var rels []papp.RelationshipDTO
+	e.must(e.do("GET", "/api/parties/"+flotas.ID+"/relationships", e.reader, nil, &rels), 200, "the prospect's relationships")
+	if len(rels) != 1 || rels[0].TypeName != "Prospect Relationship" || rels[0].Prospect == nil || !rels[0].Prospect.InTrial ||
+		rels[0].Prospect.TrialUntil == nil || !rels[0].Prospect.TrialUntil.Equal(until) {
+		e.t.Fatalf("prospect relationship: %+v", rels)
+	}
+	trial := "/api/party-relationships/" + rels[0].ID + "/trial"
+
+	// Extending the trial needs the permission and a writable scope.
+	longer := until.Add(15 * 24 * time.Hour)
+	var rel papp.RelationshipDTO
+	e.must(e.do("PUT", trial, e.reader, map[string]any{"trialUntil": longer}, nil), 403, "the reader lacks the permission")
+	e.must(e.do("PUT", trial, e.viewer, map[string]any{"trialUntil": longer}, nil), 403, "a read-only grant cannot extend")
+	e.must(e.do("PUT", trial, e.outsider, map[string]any{"trialUntil": longer}, nil), 404, "out of scope")
+	e.must(e.do("PUT", trial, e.clerk, map[string]any{"trialUntil": fw.Now().Add(-365 * 24 * time.Hour)}, nil), 400, "before the relationship starts")
+	e.must(e.do("PUT", trial, e.clerk, map[string]any{"trialUntil": longer}, &rel), 200, "extend the trial")
+	if rel.Prospect == nil || !rel.Prospect.TrialUntil.Equal(longer) || !rel.Prospect.InTrial || rel.Version != rels[0].Version+1 {
+		e.t.Fatalf("extended: %+v", rel)
+	}
+	trials, err := e.mod.Trials.Trials(ctx, acme.ID, []string{flotas.ID, ana.ID, "junk"})
+	if err != nil || len(trials) != 1 || !trials[flotas.ID].InForce || !trials[flotas.ID].Until.Equal(longer) || trials[flotas.ID].RelationshipID != rel.ID {
+		e.t.Fatalf("trials port: %+v %v", trials, err)
+	}
+
+	// Only prospect relationships have a trial; the other types keep working without details.
+	var anas []papp.RelationshipDTO
+	e.must(e.do("GET", "/api/parties/"+ana.ID+"/relationships?active=true", e.reader, nil, &anas), 200, "ana's relationships")
+	if len(anas) != 1 || anas[0].Prospect != nil {
+		e.t.Fatalf("a customer relationship carries no prospect details: %+v", anas)
+	}
+	e.must(e.do("PUT", "/api/party-relationships/"+anas[0].ID+"/trial", e.admin, map[string]any{"trialUntil": longer}, nil), 422, "a customer relationship has no trial")
+
+	// Establishing the relationship afterwards, with or without trial.
+	var bea papp.PartyDTO
+	e.must(e.do("POST", "/api/persons", e.admin, map[string]any{"givenName": "Bea", "firstSurname": "Prueba " + acme.ID[:8],
+		"roles": []string{domain.RoleProspect.String()}}, &bea), 201, "register bea")
+	body := map[string]any{"type": domain.RelProspect.String(), "fromParty": bea.ID, "toParty": acme.ID}
+	rel = papp.RelationshipDTO{} // decoding into a used value would keep the fields the response omits
+	e.must(e.do("POST", "/api/party-relationships", e.admin, body, &rel), 201, "a prospect without trial")
+	if rel.Prospect == nil || rel.Prospect.InTrial || rel.Prospect.TrialUntil != nil {
+		e.t.Fatalf("no trial: %+v", rel.Prospect)
+	}
+	e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelEmployment.String(), "fromParty": ana.ID,
+		"toParty": acme.ID, "prospect": map[string]any{"trialUntil": until}}, nil), 422, "employment has no trial")
+	e.must(e.do("PUT", "/api/party-relationships/"+rel.ID+"/trial", e.clerk, map[string]any{"trialUntil": until}, &rel), 200, "grant the trial later")
+	withdraw := "/api/party-relationships/" + rel.ID + "/trial"
+	rel = papp.RelationshipDTO{}
+	e.must(e.do("PUT", withdraw, e.clerk, map[string]any{"trialUntil": nil}, &rel), 200, "withdraw it")
+	if rel.Prospect.InTrial || rel.Prospect.TrialUntil != nil {
+		e.t.Fatalf("withdrawn: %+v", rel.Prospect)
+	}
+
+	// Converting the prospect into a customer: the customer relationship starts and the prospect
+	// relationship ends, and with it the trial. The party stays in the organization's scope.
+	e.must(e.do("POST", "/api/parties/"+flotas.ID+"/roles", e.clerk, map[string]any{"roleType": domain.RoleCustomer.String()}, nil), 200, "customer role")
+	e.must(e.do("POST", "/api/party-relationships", e.clerk, map[string]any{"type": domain.RelCustomer.String(),
+		"fromParty": flotas.ID, "toParty": acme.ID}, nil), 201, "customer relationship")
+	rel = papp.RelationshipDTO{}
+	e.must(e.do("POST", "/api/party-relationships/"+rels[0].ID+"/terminate", e.clerk, nil, &rel), 200, "end the prospect relationship")
+	if rel.Prospect == nil || rel.Prospect.InTrial || !rel.Prospect.TrialUntil.Equal(longer) {
+		e.t.Fatalf("an ended prospect relationship keeps its trial but is not in trial: %+v", rel.Prospect)
+	}
+	e.must(e.do("PUT", trial, e.clerk, map[string]any{"trialUntil": longer.Add(time.Hour)}, nil), 422, "an ended relationship")
+	e.must(e.do("GET", "/api/parties/"+flotas.ID, e.clerk, nil, nil), 200, "still visible as a customer")
+	if trials, err = e.mod.Trials.Trials(ctx, acme.ID, []string{flotas.ID, bea.ID}); err != nil || len(trials) != 1 || trials[bea.ID].InForce || trials[bea.ID].Until != nil {
+		e.t.Fatalf("trials after the conversion: %+v %v", trials, err)
+	}
+
+	// The personal details of a person can be corrected after registration.
+	var edited papp.PartyDTO
+	person := "/api/parties/" + bea.ID + "/person"
+	e.must(e.do("PUT", person, e.admin, map[string]any{"gender": "female", "birthDate": "1988-02-29", "maritalStatus": "married"}, &edited), 200, "edit the person")
+	if edited.Person.Gender != "female" || edited.Person.BirthDate != "1988-02-29" || edited.Person.MaritalStatus != "married" || edited.Name != bea.Name {
+		e.t.Fatalf("edited person: %+v", edited.Person)
+	}
+	e.must(e.do("PUT", person, e.admin, map[string]any{"birthDate": "2999-01-01"}, nil), 400, "born in the future")
+	e.must(e.do("PUT", person, e.admin, map[string]any{"gender": "x"}, nil), 400, "unknown gender")
+	e.must(e.do("PUT", person, e.viewer, map[string]any{"gender": "male"}, nil), 403, "a read-only grant cannot edit")
+	e.must(e.do("PUT", person, e.outsider, map[string]any{"gender": "male"}, nil), 404, "out of scope")
+	e.must(e.do("PUT", "/api/parties/"+acme.ID+"/person", e.admin, map[string]any{"gender": "female"}, nil), 422, "an organization has no personal details")
+	edited = papp.PartyDTO{}
+	e.must(e.do("PUT", person, e.clerk, map[string]any{"maritalStatus": "single"}, &edited), 200, "the fields left out become unknown")
+	if edited.Person.Gender != "" || edited.Person.BirthDate != "" || edited.Person.MaritalStatus != "single" {
+		e.t.Fatalf("replaced person details: %+v", edited.Person)
+	}
+
+	// Ownership: the stake of a shareholder is a detail of the ownership relationship.
+	var sara papp.PartyDTO
+	e.must(e.do("POST", "/api/persons", e.admin, map[string]any{"givenName": "Sara", "firstSurname": "Socia " + acme.ID[:8],
+		"roles": []string{domain.RoleShareholder.String()}}, &sara), 201, "register sara")
+	owns := map[string]any{"type": domain.RelOwnership.String(), "fromParty": sara.ID, "toParty": acme.ID}
+	owns["ownership"] = map[string]any{"share": "130"}
+	e.must(e.do("POST", "/api/party-relationships", e.admin, owns, nil), 400, "more than the whole company")
+	owns["ownership"] = map[string]any{"share": "30"}
+	var own papp.RelationshipDTO
+	e.must(e.do("POST", "/api/party-relationships", e.admin, owns, &own), 201, "sara owns 30 % of acme")
+	if own.Ownership == nil || own.Ownership.Share != "30.00" || own.Prospect != nil {
+		e.t.Fatalf("ownership: %+v", own)
+	}
+	share := "/api/party-relationships/" + own.ID + "/ownership"
+	e.must(e.do("PUT", share, e.viewer, map[string]any{"share": "45.5"}, nil), 403, "a read-only grant cannot change the share")
+	e.must(e.do("PUT", share, e.clerk, map[string]any{"share": "a third"}, nil), 400, "not a number")
+	e.must(e.do("PUT", share, e.clerk, map[string]any{"share": "33.333"}, nil), 400, "two decimals at most")
+	e.must(e.do("PUT", "/api/party-relationships/"+own.ID+"/trial", e.clerk, map[string]any{"trialUntil": until}, nil), 422, "an ownership has no trial")
+	own = papp.RelationshipDTO{}
+	e.must(e.do("PUT", share, e.clerk, map[string]any{"share": "45.5"}, &own), 200, "correct the share")
+	if own.Ownership.Share != "45.50" {
+		e.t.Fatalf("corrected share: %+v", own.Ownership)
+	}
+	var saras []papp.RelationshipDTO
+	e.must(e.do("GET", "/api/parties/"+sara.ID+"/relationships", e.reader, nil, &saras), 200, "sara's relationships")
+	if len(saras) != 1 || saras[0].Ownership == nil || saras[0].Ownership.Share != "45.50" {
+		e.t.Fatalf("share round trip: %+v", saras)
+	}
+	own = papp.RelationshipDTO{}
+	e.must(e.do("PUT", share, e.clerk, map[string]any{"share": nil}, &own), 200, "clear the share")
+	if own.Ownership == nil || own.Ownership.Share != "" {
+		e.t.Fatalf("cleared share: %+v", own.Ownership)
+	}
 }
 
 // phase3 covers organization scope (decision P1), registration inside the scope, the
@@ -521,12 +668,30 @@ func endToEnd(t *testing.T, newDirectory func(*testing.T) directory) {
 		}
 		return nil
 	})
+	var trials []contracts.ProspectTrialChangedV1
+	messaging.Handle(crm, func(_ context.Context, e contracts.ProspectTrialChangedV1, _ application.Envelope) error {
+		trials = append(trials, e)
+		return nil
+	})
+	var shares []string
+	messaging.Handle(crm, func(_ context.Context, e contracts.OwnershipShareChangedV1, _ application.Envelope) error {
+		shares = append(shares, e.Share)
+		return nil
+	})
 	broker.Subscribe("crm", crm)
 	if _, err := e.mod.Relay(broker).RelayOnce(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if len(seen) != 8 || roles != 2 {
+	if len(seen) != 11 || roles != 2 {
 		t.Fatalf("published: %v, roles %d", seen, roles)
+	}
+	if len(shares) != 3 || shares[0] != "30.00" || shares[1] != "45.50" || shares[2] != "" {
+		t.Fatalf("share events: %v", shares)
+	}
+	// Granted at registration, extended, granted later and withdrawn.
+	if len(trials) != 4 || trials[0].Organization != acme.ID || trials[0].TrialUntil == nil || trials[3].TrialUntil != nil ||
+		!trials[1].TrialUntil.After(*trials[0].TrialUntil) || trials[2].Prospect != trials[3].Prospect {
+		t.Fatalf("trial events: %+v", trials)
 	}
 }
 

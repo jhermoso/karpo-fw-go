@@ -8,6 +8,9 @@
 //   - Organization Rollup relates any organization unit to any organization and is hierarchical
 //     (one parent, no cycles). The C# row said Department -> Division, yet the C#
 //     IOrganizationHierarchy walked rollups down from the legal organizations.
+//   - Prospect Relationship (…0002-000000000016) and the codes of the relationship types do not
+//     exist in C#, where "potential" is a status of the customer relationship (docs/PARTIES-UDM.md,
+//     decision PU-5).
 
 package domain
 
@@ -67,6 +70,13 @@ var (
 	RelContact                 = MustRelationshipTypeID("10000000-0000-0000-0002-000000000009")
 	RelCollaborator            = MustRelationshipTypeID("10000000-0000-0000-0002-000000000014")
 	RelCollaboratorOrigination = MustRelationshipTypeID("10000000-0000-0000-0002-000000000015")
+	RelProspect                = MustRelationshipTypeID("10000000-0000-0000-0002-000000000016")
+)
+
+// Codes of the relationship types whose relationships carry details of their own.
+const (
+	CodeProspect  = "prospect"
+	CodeOwnership = "ownership"
 )
 
 func parent(id RoleTypeID) *RoleTypeID { return &id }
@@ -126,17 +136,18 @@ func WellKnownRoleCatalog() *Catalog {
 // WellKnownRelationshipTypes returns the seed of the relationship type catalog.
 func WellKnownRelationshipTypes() []RelationshipType {
 	return []RelationshipType{
-		{ID: RelEmployment, Name: vocab.MustName("Employment"), Description: "Employee works for an internal organization", FromRole: RoleEmployee, ToRole: RoleInternalOrganization},
-		{ID: RelCustomer, Name: vocab.MustName("Customer Relationship"), Description: "Customer buys from an internal organization", FromRole: RoleCustomer, ToRole: RoleInternalOrganization},
-		{ID: RelSupplier, Name: vocab.MustName("Supplier Relationship"), Description: "Internal organization buys from a supplier", FromRole: RoleInternalOrganization, ToRole: RoleSupplier},
-		{ID: RelPartnership, Name: vocab.MustName("Partnership"), Description: "Symmetric partnership between organizations", FromRole: RolePartner, ToRole: RolePartner},
-		{ID: RelOrganizationRollup, Name: vocab.MustName("Organization Rollup"), Description: "An organization unit belongs to its parent organization",
+		{ID: RelEmployment, Code: "employment", Name: vocab.MustName("Employment"), Description: "Employee works for an internal organization", FromRole: RoleEmployee, ToRole: RoleInternalOrganization},
+		{ID: RelCustomer, Code: "customer", Name: vocab.MustName("Customer Relationship"), Description: "Customer buys from an internal organization", FromRole: RoleCustomer, ToRole: RoleInternalOrganization},
+		{ID: RelSupplier, Code: "supplier", Name: vocab.MustName("Supplier Relationship"), Description: "Internal organization buys from a supplier", FromRole: RoleInternalOrganization, ToRole: RoleSupplier},
+		{ID: RelPartnership, Code: "partnership", Name: vocab.MustName("Partnership"), Description: "Symmetric partnership between organizations", FromRole: RolePartner, ToRole: RolePartner},
+		{ID: RelOrganizationRollup, Code: "organization-rollup", Name: vocab.MustName("Organization Rollup"), Description: "An organization unit belongs to its parent organization",
 			FromRole: RoleOrganizationUnitCategory, ToRole: RoleOrganizationCategory, Hierarchical: true},
-		{ID: RelFamily, Name: vocab.MustName("Family Relationship"), Description: "Symmetric family relationship between persons", FromRole: RoleFamilyMember, ToRole: RoleFamilyMember},
-		{ID: RelOwnership, Name: vocab.MustName("Ownership"), Description: "Shareholder owns shares in an internal organization", FromRole: RoleShareholder, ToRole: RoleInternalOrganization},
-		{ID: RelAgent, Name: vocab.MustName("Agent Relationship"), Description: "Agent acts on behalf of a customer", FromRole: RoleAgent, ToRole: RoleCustomer},
-		{ID: RelContact, Name: vocab.MustName("Contact Relationship"), Description: "Contact person for a customer", FromRole: RoleContact, ToRole: RoleCustomer},
-		{ID: RelCollaborator, Name: vocab.MustName("Collaborator Relationship"), Description: "Collaborator refers business for an internal organization", FromRole: RoleCollaborator, ToRole: RoleInternalOrganization},
-		{ID: RelCollaboratorOrigination, Name: vocab.MustName("Collaborator Origination"), Description: "Salesperson who originated the collaborator", FromRole: RoleSalesperson, ToRole: RoleCollaborator},
+		{ID: RelFamily, Code: "family", Name: vocab.MustName("Family Relationship"), Description: "Symmetric family relationship between persons", FromRole: RoleFamilyMember, ToRole: RoleFamilyMember},
+		{ID: RelOwnership, Code: CodeOwnership, Name: vocab.MustName("Ownership"), Description: "Shareholder owns shares in an internal organization", FromRole: RoleShareholder, ToRole: RoleInternalOrganization},
+		{ID: RelAgent, Code: "agent", Name: vocab.MustName("Agent Relationship"), Description: "Agent acts on behalf of a customer", FromRole: RoleAgent, ToRole: RoleCustomer},
+		{ID: RelContact, Code: "contact", Name: vocab.MustName("Contact Relationship"), Description: "Contact person for a customer", FromRole: RoleContact, ToRole: RoleCustomer},
+		{ID: RelCollaborator, Code: "collaborator", Name: vocab.MustName("Collaborator Relationship"), Description: "Collaborator refers business for an internal organization", FromRole: RoleCollaborator, ToRole: RoleInternalOrganization},
+		{ID: RelCollaboratorOrigination, Code: "collaborator-origination", Name: vocab.MustName("Collaborator Origination"), Description: "Salesperson who originated the collaborator", FromRole: RoleSalesperson, ToRole: RoleCollaborator},
+		{ID: RelProspect, Code: CodeProspect, Name: vocab.MustName("Prospect Relationship"), Description: "Prospect may become a customer of an internal organization", FromRole: RoleProspect, ToRole: RoleInternalOrganization},
 	}
 }

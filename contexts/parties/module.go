@@ -20,6 +20,7 @@ type Module struct {
 	Directory         contracts.Directory
 	Organizations     papp.Organizations // Membership, OrganizationHierarchy, InternalOrganizationCatalog
 	TaxIdentities     contracts.TaxIdentities
+	Trials            contracts.Trials // whether the trial of a prospect is in force
 	HTTP              *pdist.Module
 	Outbox            application.OutboxStore // domain events, inside Parties
 	IntegrationOutbox application.OutboxStore // Published Language
@@ -63,7 +64,8 @@ func Compose(sw *hotswap.Switch, idem application.IdempotencyStore, opts ...Opti
 	orgs := papp.Organizations{Parties: parties, Relationships: relationships, Catalogs: infrastructure.SwappableCatalogs(sw)}
 	consumer := messaging.NewConsumer(contracts.Source, hotswap.Inbox(sw, infrastructure.InboxFactory), sw)
 	papp.Subscribe(consumer, svc, relationships)
-	return &Module{Service: svc, Directory: dir, Organizations: orgs, TaxIdentities: papp.TaxIdentities{Parties: parties}, HTTP: pdist.NewModule(svc, dir),
+	trials := papp.Trials{Relationships: relationships, Catalogs: infrastructure.SwappableCatalogs(sw)}
+	return &Module{Service: svc, Directory: dir, Organizations: orgs, TaxIdentities: papp.TaxIdentities{Parties: parties}, Trials: trials, HTTP: pdist.NewModule(svc, dir),
 		Outbox: domainOutbox, IntegrationOutbox: integrationOutbox, Audit: audit, Consumer: consumer}
 }
 

@@ -199,16 +199,41 @@ type RelationshipDTO struct {
 	Until     *time.Time `json:"until,omitempty"`
 	Active    bool       `json:"active"`
 	Remark    string     `json:"remark,omitempty"`
-	Version   int64      `json:"version"`
+	// Prospect is present in prospect relationships only.
+	Prospect *ProspectDTO `json:"prospect,omitempty"`
+	// Ownership is present in ownership relationships only.
+	Ownership *OwnershipDTO `json:"ownership,omitempty"`
+	Version   int64         `json:"version"`
 }
 
-// RelationshipToDTO maps a relationship; types names it (nil leaves the name empty).
+// OwnershipDTO are the details of an ownership relationship.
+type OwnershipDTO struct {
+	Share string `json:"share,omitempty"` // points with two decimals ("30.00"); absent when unknown
+}
+
+// ProspectDTO are the details of a prospect relationship.
+type ProspectDTO struct {
+	TrialUntil *time.Time `json:"trialUntil,omitempty"`
+	InTrial    bool       `json:"inTrial"`
+}
+
+// RelationshipToDTO maps a relationship; types names it and tells which details it carries (nil
+// leaves the name empty and the details out).
 func RelationshipToDTO(r *domain.Relationship, types map[domain.RelationshipTypeID]domain.RelationshipType) RelationshipDTO {
 	d := RelationshipDTO{ID: r.ID().String(), Type: r.Type().String(), FromParty: r.From().String(), ToParty: r.To().String(),
 		FromRole: r.FromRole().String(), ToRole: r.ToRole().String(), Since: r.Since(), Until: r.Until(),
 		Active: r.Period().IsActive(), Remark: r.Remark(), Version: r.Version()}
 	if t, ok := types[r.Type()]; ok {
 		d.TypeName = t.Name.String()
+		switch t.Code {
+		case domain.CodeProspect:
+			d.Prospect = &ProspectDTO{TrialUntil: r.TrialUntil(), InTrial: r.InTrialAt(fw.Now())}
+		case domain.CodeOwnership:
+			d.Ownership = &OwnershipDTO{}
+			if s := r.OwnershipShare(); s != nil {
+				d.Ownership.Share = s.Points().StringFixed(2)
+			}
+		}
 	}
 	return d
 }
@@ -226,6 +251,7 @@ type RoleTypeDTO struct {
 // RelationshipTypeDTO is an entry of the relationship type catalog.
 type RelationshipTypeDTO struct {
 	ID           string `json:"id"`
+	Code         string `json:"code,omitempty"`
 	Name         string `json:"name"`
 	Description  string `json:"description,omitempty"`
 	FromRole     string `json:"fromRole"`

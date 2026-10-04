@@ -83,6 +83,30 @@ type RelationshipTerminated struct {
 // EventType implements domain.Event.
 func (RelationshipTerminated) EventType() string { return "parties.relationship_terminated" }
 
+// ProspectTrialChanged is raised when the trial of a prospect relationship is granted, extended,
+// shortened or withdrawn (TrialUntil nil).
+type ProspectTrialChanged struct {
+	fw.EventMeta
+	Prospect     string     `json:"prospect"`
+	Organization string     `json:"organization"`
+	TrialUntil   *time.Time `json:"trialUntil,omitempty"`
+}
+
+// EventType implements domain.Event.
+func (ProspectTrialChanged) EventType() string { return "parties.prospect_trial_changed" }
+
+// OwnershipShareChanged is raised when the stake of a shareholder is recorded, corrected or
+// cleared (Share empty). Share is in points with two decimals ("30.00").
+type OwnershipShareChanged struct {
+	fw.EventMeta
+	Shareholder  string `json:"shareholder"`
+	Organization string `json:"organization"`
+	Share        string `json:"share,omitempty"`
+}
+
+// EventType implements domain.Event.
+func (OwnershipShareChanged) EventType() string { return "parties.ownership_share_changed" }
+
 // PartyAffiliated is raised when a party becomes affiliated with an internal organization.
 type PartyAffiliated struct {
 	fw.EventMeta

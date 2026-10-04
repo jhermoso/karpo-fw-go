@@ -242,6 +242,9 @@ func (p *Party) UpdatePersonDetails(g Gender, birth vocab.Date, m MaritalStatus)
 	if p.kind != KindPerson {
 		return fw.Violation("parties.kind_mismatch", "only a person has personal details")
 	}
+	if err := p.requireActive("change its personal details"); err != nil {
+		return err
+	}
 	d := p.person
 	d.Gender, d.BirthDate, d.MaritalStatus = g, birth, m
 	if err := d.validate(); err != nil {

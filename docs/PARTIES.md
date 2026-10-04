@@ -254,3 +254,4 @@ provincia del contacto postal español vigente (facturación primero), por lotes
 | ~~5~~ | ✅ Contexto Instalaciones ([INSTALACIONES.md](INSTALACIONES.md)) |
 | ~~6~~ | ✅ Contexto RRHH ([RRHH.md](RRHH.md)): empleados (`Employment`), contratos, puestos y centros de trabajo; Parties conserva el rol `Employee` y la afiliación |
 | — | Clientes y el resto de extensiones de ErpDetail, cada uno en el contexto que le corresponda (Ventas, Nómina, Fiscal), no en Parties |
+| ~~7~~ | ✅ Conceptos básicos de UDM 1 que faltaban ([PARTIES-UDM.md](PARTIES-UDM.md), decisiones aprobadas el 2026-10-04): datos propios por tipo de relación (código estable en el catálogo, relación de cliente potencial con su tiempo de prueba, participación en el capital) y edición de persona |
