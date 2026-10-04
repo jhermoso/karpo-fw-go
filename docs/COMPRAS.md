@@ -104,7 +104,7 @@ contexts/purchases/
   - `pur_counters`;
   - las bandejas de salida y la auditoría.
 
-## Decisiones propuestas (pendientes de confirmar)
+## Decisiones (aprobadas por Javier el 2026-10-04)
 
 1. **La fase 1 de Compras es la factura recibida**, con su registro numerado. Pedidos, albaranes
    de entrada y la casación de los tres van a la fase 2 con Productos e Inventario.
