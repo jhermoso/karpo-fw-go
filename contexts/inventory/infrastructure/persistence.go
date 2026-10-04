@@ -40,7 +40,7 @@ var schemaDDL = []string{
 	`CREATE UNIQUE INDEX ux_inv_warehouses_code ON inv_warehouses (company, code)`,
 	`CREATE TABLE inv_levels (id {uuid} NOT NULL PRIMARY KEY, version {bigint} NOT NULL, company {uuid} NOT NULL, warehouse_id {uuid} NOT NULL,
 	product {uuid} NOT NULL, on_hand {str:30} NOT NULL, reserved {str:30} NOT NULL, average_cost {str:30} NOT NULL, reorder_point {str:30} NOT NULL,
-	moves {bigint} NOT NULL, empty {bool} NOT NULL, FOREIGN KEY (warehouse_id) REFERENCES inv_warehouses (id))`,
+	moves {bigint} NOT NULL, is_empty {bool} NOT NULL, FOREIGN KEY (warehouse_id) REFERENCES inv_warehouses (id))`,
 	`CREATE UNIQUE INDEX ux_inv_levels ON inv_levels (warehouse_id, product)`,
 	`CREATE INDEX ix_inv_levels_product ON inv_levels (company, product)`,
 	`CREATE TABLE inv_movements (id {uuid} NOT NULL PRIMARY KEY, version {bigint} NOT NULL, company {uuid} NOT NULL, warehouse_id {uuid} NOT NULL,
@@ -137,12 +137,12 @@ func WarehouseMapping() sqlrepo.Mapping[domain.WarehouseID, *domain.Warehouse] {
 func LevelMapping() sqlrepo.Mapping[domain.LevelID, *domain.Level] {
 	return sqlrepo.Mapping[domain.LevelID, *domain.Level]{
 		Table:   "inv_levels",
-		Columns: []string{"company", "warehouse_id", "product", "on_hand", "reserved", "average_cost", "reorder_point", "moves", "empty"},
+		Columns: []string{"company", "warehouse_id", "product", "on_hand", "reserved", "average_cost", "reorder_point", "moves", "is_empty"},
 		Dehydrate: func(l *domain.Level) (sqlrepo.Values, error) {
 			s := l.State()
 			return sqlrepo.Values{"company": s.Company, "warehouse_id": s.Warehouse, "product": s.Product, "on_hand": s.OnHand.String(),
 				"reserved": s.Reserved.String(), "average_cost": s.AverageCost.StringFixed(4), "reorder_point": s.ReorderPoint.String(), "moves": s.Moves,
-				"empty": s.OnHand.IsZero()}, nil
+				"is_empty": s.OnHand.IsZero()}, nil
 		},
 		Hydrate: func(r *sqlrepo.Row, _ sqlrepo.ChildRows) (*domain.Level, error) {
 			s := domain.LevelState{Company: domain.OrganizationID{UUID: r.UUID("company")}, Warehouse: domain.WarehouseID{UUID: r.UUID("warehouse_id")},
