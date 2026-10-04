@@ -104,7 +104,7 @@ contexts/products/
   - `prd_price_lists` (+ `prd_price_lines`);
   - las bandejas de salida y la auditoría.
 
-## Decisiones propuestas (pendientes de confirmar)
+## Decisiones (aprobadas por Javier el 2026-10-04)
 
 1. **El catálogo es de cada empresa.** Cada producto pertenece a una organización interna, con
    SKU y códigos de barras únicos dentro de ella. No hay catálogo compartido entre empresas ni

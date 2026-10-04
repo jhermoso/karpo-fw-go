@@ -97,7 +97,7 @@ contexts/inventory/
   - `inv_reservations`;
   - las bandejas de salida y la auditoría.
 
-## Decisiones propuestas (pendientes de confirmar)
+## Decisiones (aprobadas por Javier el 2026-10-04)
 
 1. **El stock se explica con un libro de movimientos inmutable.** El nivel es su saldo, y nada lo
    cambia sin dejar un movimiento. Un error se corrige con otro movimiento.
