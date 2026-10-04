@@ -21,7 +21,7 @@ Puntos clave:
 - **Batería de conformidad**: toda implementación del repositorio debe demostrar que cada
   especificación devuelve en la base de datos exactamente lo mismo que en memoria.
 
-📖 Diseño completo: [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) · Inventario de patrones: [docs/INVENTARIO-PATRONES.md](docs/INVENTARIO-PATRONES.md) · Lenguaje ubicuo: [docs/LENGUAJE-UBICUO.md](docs/LENGUAJE-UBICUO.md) · Rasgos: [docs/RASGOS-TRANSVERSALES.md](docs/RASGOS-TRANSVERSALES.md) · Autorización: [docs/AUTORIZACION.md](docs/AUTORIZACION.md) · Integración: [docs/EVENTOS-INTEGRACION.md](docs/EVENTOS-INTEGRACION.md) · Esquema: [docs/ESQUEMA-MIGRACIONES.md](docs/ESQUEMA-MIGRACIONES.md) · Parties: [docs/PARTIES.md](docs/PARTIES.md) · Geografía: [docs/GEOGRAFIA.md](docs/GEOGRAFIA.md) · Instalaciones: [docs/INSTALACIONES.md](docs/INSTALACIONES.md) · RRHH: [docs/RRHH.md](docs/RRHH.md) · Nóminas: [docs/NOMINAS.md](docs/NOMINAS.md) · Fiscal: [docs/FISCAL.md](docs/FISCAL.md) · Facturación: [docs/FACTURACION.md](docs/FACTURACION.md) · Cobros: [docs/COBROS.md](docs/COBROS.md) · Tesorería: [docs/TESORERIA.md](docs/TESORERIA.md) · Contabilidad: [docs/CONTABILIDAD.md](docs/CONTABILIDAD.md) · Pagos: [docs/PAGOS.md](docs/PAGOS.md) · Compras: [docs/COMPRAS.md](docs/COMPRAS.md) · Productos: [docs/PRODUCTOS.md](docs/PRODUCTOS.md) · Inventario: [docs/INVENTARIO.md](docs/INVENTARIO.md) · Pedidos: [docs/PEDIDOS.md](docs/PEDIDOS.md)
+📖 Diseño completo: [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) · Inventario de patrones: [docs/INVENTARIO-PATRONES.md](docs/INVENTARIO-PATRONES.md) · Lenguaje ubicuo: [docs/LENGUAJE-UBICUO.md](docs/LENGUAJE-UBICUO.md) · Rasgos: [docs/RASGOS-TRANSVERSALES.md](docs/RASGOS-TRANSVERSALES.md) · Autorización: [docs/AUTORIZACION.md](docs/AUTORIZACION.md) · Seguridad: [docs/SEGURIDAD.md](docs/SEGURIDAD.md) · Integración: [docs/EVENTOS-INTEGRACION.md](docs/EVENTOS-INTEGRACION.md) · Esquema: [docs/ESQUEMA-MIGRACIONES.md](docs/ESQUEMA-MIGRACIONES.md) · Parties: [docs/PARTIES.md](docs/PARTIES.md) · Geografía: [docs/GEOGRAFIA.md](docs/GEOGRAFIA.md) · Instalaciones: [docs/INSTALACIONES.md](docs/INSTALACIONES.md) · RRHH: [docs/RRHH.md](docs/RRHH.md) · Nóminas: [docs/NOMINAS.md](docs/NOMINAS.md) · Fiscal: [docs/FISCAL.md](docs/FISCAL.md) · Facturación: [docs/FACTURACION.md](docs/FACTURACION.md) · Cobros: [docs/COBROS.md](docs/COBROS.md) · Tesorería: [docs/TESORERIA.md](docs/TESORERIA.md) · Contabilidad: [docs/CONTABILIDAD.md](docs/CONTABILIDAD.md) · Pagos: [docs/PAGOS.md](docs/PAGOS.md) · Compras: [docs/COMPRAS.md](docs/COMPRAS.md) · Productos: [docs/PRODUCTOS.md](docs/PRODUCTOS.md) · Inventario: [docs/INVENTARIO.md](docs/INVENTARIO.md) · Pedidos: [docs/PEDIDOS.md](docs/PEDIDOS.md)
 
 ---
 
@@ -60,7 +60,8 @@ pkg/
 │   ├── orchestration/    # Orchestrator + Execute (carga→comportamiento→guardado→eventos)
 │   ├── outbox/           # Recorder (outbox transaccional) + Relay
 │   ├── hosting/          # Host (ciclo de vida de módulos por dependencias)
-│   ├── authorization/    # Resolver genérico sobre authz.Directory + directorio en memoria
+│   ├── authorization/    # Resolver genérico sobre authz.Directory, Authenticators (varias formas de
+│   │                     # autenticarse) y directorio en memoria para pruebas; el real está en contexts/security
 │   └── messaging/        # Eventos de integración: Recorder (traducción), Relay, Consumer (inbox)
 │
 ├── log/, cache/, time/   # contratos transversales (implementaciones en subpaquetes)
@@ -82,6 +83,7 @@ pkg/
     └── testkit/          # Arnés: reloj falso, bus, store y outbox en memoria
 
 examples/parties/         # Ejemplo del framework: contexto completo (dominio→HTTP) con cambio en caliente
+contexts/security/        # Contexto Security (usuarios, roles, catálogo de permisos, acceso por organización, sesiones, identidades externas; authz.Directory real): ver docs/SEGURIDAD.md
 contexts/parties/         # Contexto Parties real (port de ErpKernel.Parties): ver docs/PARTIES.md
 contexts/geography/       # Contexto Geografía y referencia (semilla de Karpo embebida): ver docs/GEOGRAFIA.md
 contexts/facilities/      # Contexto Instalaciones (ubicación propia, jerarquía, ámbito): ver docs/INSTALACIONES.md

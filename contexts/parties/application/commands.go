@@ -23,6 +23,12 @@ var (
 	PermRelationshipEnd    = authz.MustPermission("Parties.Relationship.Terminate")
 )
 
+// Permissions returns the permissions this context declares to the Security catalog.
+func Permissions() []authz.Permission {
+	return []authz.Permission{PermPartyRead, PermPartyCreate, PermPartyUpdate, PermRoleAssign, PermRelationshipRead,
+		PermRelationshipCreate, PermRelationshipEnd}
+}
+
 // RegisterPerson registers a person, optionally with initial roles (the C# CreatePartyWithRole).
 type RegisterPerson struct {
 	GivenName     string          `json:"givenName"`

@@ -232,7 +232,9 @@ Pendiente:
 - Las afiliaciones dependen de que la contraparte juegue Internal Organization **al establecer** la
   relación: si una organización pasa a ser interna más tarde, hay que recalcular (tarea de
   mantenimiento pendiente).
-- P3 (`OrganizationAdmin` con ámbito) pertenece al contexto Security.
+- ~~P3 (`OrganizationAdmin` con ámbito) pertenece al contexto Security~~: hecho en
+  [SEGURIDAD.md](SEGURIDAD.md). La prueba de extremo a extremo de Parties corre también sobre el
+  directorio real de Security.
 
 Reacciones a otros contextos (primer consumidor de Parties, decisión 4 de [RRHH.md](RRHH.md)):
 `hr.employee-terminated.v1` termina la relación `Employment` y la afiliación, a través de la

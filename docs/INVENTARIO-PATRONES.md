@@ -54,7 +54,8 @@ Leyenda: ✅ hecho · 🟡 parcial · ❌ falta · — no aplica en Go (decisió
 | Base de datos activa (`IActiveDatabaseTargetProvider`) | ✅ | ✅ `persistence/hotswap` | |
 | DTOs / mappers | 🟡 `Mapper` | 🟡 | 🟡 `ISearchQuery` |
 | Proyecciones / modelos de lectura (`IAggregateProjection`) | ❌ | ❌ | |
-| Autorización (`AuthorizationContext`, resolvers, `OrganizationAccessLevel`, `PermissionCodes`, `ICurrentActorResolver`) | ✅ `application/authz` | ✅ `authorization`, `pipeline.RequirePermission`, `distribution.Authorize`, `jwtauth` | Evaluado en `AUTORIZACION.md`; ❌ modo `Http`, `Directory` de Security |
+| Autorización (`AuthorizationContext`, resolvers, `OrganizationAccessLevel`, `PermissionCodes`, `ICurrentActorResolver`) | ✅ `application/authz` | ✅ `authorization` (resolutor, `Authenticators`), `pipeline.RequirePermission`, `distribution.Authorize`, `jwtauth`; `Directory` real en `contexts/security` | Evaluado en `AUTORIZACION.md` y `SEGURIDAD.md`; ❌ modo `Http`, verificador OIDC |
+| Catálogo de permisos (`WellKnownSecurityCatalog`, siembra al arrancar) | ✅ `Permissions()` por contexto | ✅ `security.Module.SyncCatalog` | Cada contexto declara los suyos; ver `SEGURIDAD.md` |
 | Workflow (definiciones, instancias, pasos, motor) | ❌ | ❌ | contexto completo del Fw |
 | Gestión de esquema / migraciones (`IDatabaseSchemaManager`) | ✅ `application.SchemaMigrator` | ✅ `sqlrepo.Migrator` (5 motores, bloqueo, checksum, dirty) | Evaluado en `ESQUEMA-MIGRACIONES.md`; ❌ comando `karpo migrate` |
 | Importación y referencias legadas (`ImportRun`, `LegacyReference`) | ❌ | ❌ | |
