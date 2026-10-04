@@ -251,7 +251,7 @@ var (
 	LvlFieldCompany   = spec.Comparable("company", func(l *Level) OrganizationID { return l.s.Company })
 	LvlFieldWarehouse = spec.Comparable("warehouse_id", func(l *Level) WarehouseID { return l.s.Warehouse })
 	LvlFieldProduct   = spec.Comparable("product", func(l *Level) ProductID { return l.s.Product })
-	LvlFieldEmpty     = spec.Comparable("empty", func(l *Level) bool { return l.s.OnHand.IsZero() })
+	LvlFieldEmpty     = spec.Comparable("is_empty", func(l *Level) bool { return l.s.OnHand.IsZero() })
 )
 
 // MoveKind is the kind of a movement.
