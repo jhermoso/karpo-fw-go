@@ -165,7 +165,7 @@ func (h *host) scenario(tag string) {
 
 	var events collector
 	broker := inprocess.NewBroker()
-	broker.Subscribe("collector", &events)
+	broker.Subscribe("collector", &events, "inventory.stock-moved.v1")
 
 	// Warehouses.
 	var al1, al2 iapp.WarehouseDTO

@@ -29,6 +29,22 @@ type StockMovedV1 struct {
 // IntegrationEventType implements application.IntegrationEvent.
 func (StockMovedV1) IntegrationEventType() string { return "inventory.stock-moved.v1" }
 
+// StockReservedV1 is published when stock is held for a source (an order line): Added now, Held in
+// total by its reservation. A request that finds no stock publishes nothing.
+type StockReservedV1 struct {
+	ReservationID string `json:"reservationId"`
+	Company       string `json:"company"`
+	Warehouse     string `json:"warehouse"`
+	Product       string `json:"product"`
+	SourceType    string `json:"sourceType"`
+	SourceID      string `json:"sourceId"`
+	Added         string `json:"added"`
+	Held          string `json:"held"`
+}
+
+// IntegrationEventType implements application.IntegrationEvent.
+func (StockReservedV1) IntegrationEventType() string { return "inventory.stock-reserved.v1" }
+
 // Stock is the stock of a product: in a warehouse, or in all those of the company.
 type Stock struct {
 	OnHand    string `json:"onHand"`

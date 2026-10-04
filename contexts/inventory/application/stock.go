@@ -449,8 +449,8 @@ func (s service) stockUseCases(svc *Service) {
 		if _, err := s.item(ctx, w.State().Company, product, "", false); err != nil {
 			return ReservationDTO{}, err
 		}
-		r, err := domain.ReconstituteReservation(domain.NewReservationID(), domain.ReservationState{Company: w.State().Company, Warehouse: wid,
-			Product: product, Source: domain.Source{Type: strings.TrimSpace(c.SourceType), ID: strings.TrimSpace(c.SourceID)}, Quantity: q, Open: q})
+		r, err := domain.Hold(domain.NewReservationID(), domain.ReservationState{Company: w.State().Company, Warehouse: wid,
+			Product: product, Source: domain.Source{Type: strings.TrimSpace(c.SourceType), ID: strings.TrimSpace(c.SourceID)}, Quantity: q})
 		if err != nil {
 			return ReservationDTO{}, err
 		}

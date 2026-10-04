@@ -26,6 +26,9 @@ type Module struct {
 	Availability      contracts.Availability
 	IntegrationOutbox application.OutboxStore
 	Audit             application.AuditLog
+	// Consumer receives the stock requests, deliveries and closures of Orders: subscribe it to the
+	// transport.
+	Consumer *messaging.Consumer
 }
 
 // Compose builds the context on sw. Inventory needs the catalog of Products, a port it owns.
@@ -33,14 +36,17 @@ func Compose(sw *hotswap.Switch, catalog domain.Catalog) *Module {
 	integration := hotswap.Outbox(sw, infrastructure.IntegrationOutboxFactory)
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
 	levels := hotswap.Repository(sw, infrastructure.LevelRepositoryFactory)
-	svc := iapp.NewService(iapp.Deps{
+	d := iapp.Deps{
 		Warehouses: hotswap.Repository(sw, infrastructure.WarehouseRepositoryFactory), Levels: levels,
 		Movements: hotswap.Repository(sw, infrastructure.MovementRepositoryFactory), Reservations: hotswap.Repository(sw, infrastructure.ReservationRepositoryFactory),
 		Catalog: catalog, UoW: sw, Audit: audit,
 		Recorder: outbox.Recorders(outbox.NewRecorder(hotswap.Outbox(sw, infrastructure.OutboxFactory)),
 			iapp.Publications(messaging.NewRecorder(contracts.Source, integration))),
-	})
-	return &Module{Service: svc, Availability: iapp.AvailabilityPort{Levels: levels}, IntegrationOutbox: integration, Audit: audit}
+	}
+	consumer := messaging.NewConsumer(contracts.Source, hotswap.Inbox(sw, infrastructure.InboxFactory), sw)
+	iapp.Subscribe(consumer, d)
+	return &Module{Service: iapp.NewService(d), Availability: iapp.AvailabilityPort{Levels: levels}, IntegrationOutbox: integration, Audit: audit,
+		Consumer: consumer}
 }
 
 // Relay forwards the Published Language to a transport.

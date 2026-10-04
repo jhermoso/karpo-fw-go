@@ -155,8 +155,9 @@ contexts/inventory/
   - contabilización de la variación de existencias y del coste de ventas;
   - regularización del coste cuando la factura de compra llega con otro precio;
   - inventario físico por hojas de recuento.
-- Que los albaranes de entrada (fase 2 de Compras) y las entregas de Pedidos muevan el stock con
-  su origen, y que Pedidos reserve y libere.
+- ~~Que Pedidos reserve, entregue y libere~~: hecho por eventos, ver [PEDIDOS.md](PEDIDOS.md)
+  (migración 3, `inventory_inbox` e `inventory.stock-reserved.v1`).
+- Que los albaranes de entrada (fase 2 de Compras) muevan el stock con su origen.
 - Explosión de kits al dar salida.
 - Propuesta de reposición a partir del punto de pedido.
 - Importar de C#: nada; `stock_balance` no tiene tabla ni datos.
