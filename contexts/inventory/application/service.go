@@ -98,8 +98,7 @@ type service struct {
 	reservations *orchestration.Orchestrator[domain.ReservationID, *domain.Reservation]
 }
 
-// NewService wires the use cases.
-func NewService(d Deps) *Service {
+func newService(d Deps) service {
 	var opts []orchestration.Option
 	if d.Recorder != nil {
 		opts = append(opts, orchestration.WithOutbox(d.Recorder))
@@ -107,11 +106,16 @@ func NewService(d Deps) *Service {
 	if d.Audit != nil {
 		opts = append(opts, orchestration.WithAuditLog(d.Audit))
 	}
-	s := service{Deps: d,
+	return service{Deps: d,
 		warehouses:   orchestration.New[domain.WarehouseID, *domain.Warehouse](d.Warehouses, d.UoW, opts...),
 		movements:    orchestration.New[domain.MovementID, *domain.Movement](d.Movements, d.UoW, opts...),
 		reservations: orchestration.New[domain.ReservationID, *domain.Reservation](d.Reservations, d.UoW, opts...),
 	}
+}
+
+// NewService wires the use cases.
+func NewService(d Deps) *Service {
+	s := newService(d)
 	svc := &Service{}
 	s.warehouseUseCases(svc)
 	s.stockUseCases(svc)
@@ -158,6 +162,10 @@ func Publications(r *messaging.Recorder) *messaging.Recorder {
 		return []app.IntegrationEvent{contracts.StockMovedV1{MovementID: e.AggregateID, Company: m.Company.String(), Warehouse: m.Warehouse.String(),
 			Product: m.Product.String(), Kind: m.Kind.String(), Date: m.Date.String(), Quantity: m.Quantity.String(), UnitCost: m.UnitCost.StringFixed(4),
 			Value: m.Value.StringFixed(2), Balance: m.Balance.String(), Lot: m.Lot, SourceType: m.Source.Type, SourceID: m.Source.ID}}, nil
+	})
+	messaging.On(r, func(_ context.Context, e domain.StockReserved) ([]app.IntegrationEvent, error) {
+		return []app.IntegrationEvent{contracts.StockReservedV1{ReservationID: e.AggregateID, Company: e.Company, Warehouse: e.Warehouse, Product: e.Product,
+			SourceType: e.SourceType, SourceID: e.SourceID, Added: e.Added, Held: e.Held}}, nil
 	})
 	return r
 }

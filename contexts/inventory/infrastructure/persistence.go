@@ -30,6 +30,7 @@ const (
 	TableOutbox            = "inventory_outbox"
 	TableIntegrationOutbox = "inventory_integration_outbox"
 	TableAuditLog          = "inventory_audit_log"
+	TableInbox             = "inventory_inbox"
 )
 
 const audit = `created_at {ts}, created_by_id {str:64}, created_by_name {str:200}, modified_at {ts}, modified_by_id {str:64}, modified_by_name {str:200}`
@@ -82,6 +83,8 @@ func Migrations() sqlrepo.MigrationSet {
 	return sqlrepo.MigrationSet{Context: Context, Migrations: []sqlrepo.Migration{
 		{Version: 1, Name: "warehouses, stock levels, ledger and reservations", Up: sqlrepo.RenderDDLAll(schemaDDL...)},
 		{Version: 2, Name: "outboxes and audit log", Up: technical},
+		{Version: 3, Name: "inbox of the Orders events", Up: map[string][]string{"sqlite": sqlite.InboxDDL(TableInbox), "postgres": postgres.InboxDDL(TableInbox),
+			"sqlserver": sqlserver.InboxDDL(TableInbox), "oracle": oracle.InboxDDL(TableInbox), "mysql": mysql.InboxDDL(TableInbox)}},
 	}}
 }
 
@@ -91,7 +94,7 @@ func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 }
 
 // Tables lists the tables of the context, children first (drop order).
-var Tables = []string{"inv_reservations", "inv_movements", "inv_levels", "inv_warehouses", TableOutbox, TableIntegrationOutbox, TableAuditLog}
+var Tables = []string{"inv_reservations", "inv_movements", "inv_levels", "inv_warehouses", TableOutbox, TableIntegrationOutbox, TableAuditLog, TableInbox}
 
 // DropAll removes the tables of the context and its migration history (tests only).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
@@ -260,6 +263,17 @@ func AuditLogFactory(b hotswap.Backend) (application.AuditLog, error) {
 		return sqlrepo.NewAuditLog(db, TableAuditLog)
 	case *memory.Store:
 		return memory.NewAuditLog(db), nil
+	}
+	return nil, unsupported(b)
+}
+
+// InboxFactory builds the inbox of the events Inventory consumes.
+func InboxFactory(b hotswap.Backend) (application.InboxStore, error) {
+	switch db := b.(type) {
+	case *sqlrepo.DB:
+		return sqlrepo.NewInbox(db, TableInbox)
+	case *memory.Store:
+		return memory.NewInbox(db), nil
 	}
 	return nil, unsupported(b)
 }

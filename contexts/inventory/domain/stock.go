@@ -394,6 +394,29 @@ func ReconstituteReservation(id ReservationID, s ReservationState) (*Reservation
 // State returns the state.
 func (r *Reservation) State() ReservationState { return r.s }
 
+// Hold creates the reservation of a source and raises it.
+func Hold(id ReservationID, s ReservationState) (*Reservation, error) {
+	s.Open = s.Quantity
+	r, err := ReconstituteReservation(id, s)
+	if err != nil {
+		return nil, err
+	}
+	r.Raise(StockReserved{EventMeta: r.NewEventMeta(), Company: s.Company.String(), Warehouse: s.Warehouse.String(), Product: s.Product.String(),
+		SourceType: s.Source.Type, SourceID: s.Source.ID, Added: s.Quantity.String(), Held: s.Quantity.String()})
+	return r, nil
+}
+
+// Add holds more stock for the same source (a shortage covered later).
+func (r *Reservation) Add(q vocab.Decimal) error {
+	if !quantity(q) {
+		return fw.Violation("inventory.quantity", "a positive quantity of up to 4 decimals")
+	}
+	r.s.Quantity, r.s.Open = r.s.Quantity.Add(q), r.s.Open.Add(q)
+	r.Raise(StockReserved{EventMeta: r.NewEventMeta(), Company: r.s.Company.String(), Warehouse: r.s.Warehouse.String(), Product: r.s.Product.String(),
+		SourceType: r.s.Source.Type, SourceID: r.s.Source.ID, Added: q.String(), Held: r.s.Open.String()})
+	return nil
+}
+
 // Consume lowers what is held by an issued quantity.
 func (r *Reservation) Consume(q vocab.Decimal) error {
 	if !quantity(q) || q.GreaterThan(r.s.Open) {
@@ -436,6 +459,21 @@ type StockMoved struct {
 
 // EventType implements fw.Event.
 func (StockMoved) EventType() string { return "inventory.stock_moved" }
+
+// StockReserved is raised when stock is held for a source: Added now, Held in total.
+type StockReserved struct {
+	fw.EventMeta
+	Company    string `json:"company"`
+	Warehouse  string `json:"warehouse"`
+	Product    string `json:"product"`
+	SourceType string `json:"sourceType"`
+	SourceID   string `json:"sourceId"`
+	Added      string `json:"added"`
+	Held       string `json:"held"`
+}
+
+// EventType implements fw.Event.
+func (StockReserved) EventType() string { return "inventory.stock_reserved" }
 
 // New identities and parsing.
 func NewWarehouseID() WarehouseID     { return WarehouseID{fw.NewUUID()} }
