@@ -30,6 +30,27 @@ Registro de tareas pendientes, ideas de tooling y mejoras para el ecosistema Kar
 - ~~Persistencia con `ent`~~: descartado; `ent` no soporta Oracle ni SQL Server. Sustituido por
   `pkg/persistence/sqlrepo` (agnóstico, un dialecto por motor).
 
+### 2a. Parties y UDM 1: lo que queda
+
+Hecho (ver [docs/PARTIES-UDM.md](docs/PARTIES-UDM.md), decisiones aprobadas el 2026-10-04): datos
+propios por tipo de relación (código estable en el catálogo, relación de cliente potencial con su
+tiempo de prueba, participación en el capital) y edición de persona.
+
+- **Integración en los cuatro motores** de los pasos anteriores: escrita, sin ejecutar (faltaba
+  Docker).
+- **Detalles por tipo de rol** en `PartyRole`, con el mismo mecanismo: cuando haya un dato que
+  sea del rol y no de la pareja ni de otra área. Los roles heredan, así que los detalles también.
+- **Número de cliente** como detalle de la relación de cliente, único por empresa: con la
+  importación de Sage o con Ventas.
+- **Convertir un cliente potencial en cliente** en una sola operación.
+- **Participación:** importes, participación indirecta y tope del 100 % por sociedad.
+- **Estado y prioridad de la relación:** decidido no hacerlos; la prioridad, en su caso, en el
+  contexto de interacciones.
+- **Contexto `subscriptions`** (Theros): consumirá `parties.prospect-trial-changed.v1` y el
+  puerto `Trials`.
+- **Prueba intermitente:** `TestParties_EndToEnd_MemoryThenSQLite` falla a veces en Windows al
+  terminar un contacto en el mismo tic de reloj en que se creó.
+
 ### 2b. Framework: siguientes pasos
 - **Migraciones de esquema** por dialecto (equivalente a `IDatabaseSchemaManager`): hoy el DDL
   vive en cada contexto (`infrastructure.Schema`).

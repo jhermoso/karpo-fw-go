@@ -151,7 +151,14 @@ var (
 	RelFieldTo    = spec.Comparable("to_party", (*Relationship).To)
 	RelFieldSince = spec.Time("valid_from", (*Relationship).Since)
 	RelFieldUntil = spec.OptionalTime("valid_to", (*Relationship).Until)
+
+	RelFieldTrialUntil = spec.OptionalTime("trial_until", (*Relationship).TrialUntil)
 )
+
+// InTrialAt matches the prospect relationships whose trial is in force at t.
+func InTrialAt(t time.Time) spec.Spec[*Relationship] {
+	return ActiveAt(t).And(RelFieldTrialUntil.After(t))
+}
 
 // Involving matches relationships where p is either side.
 func Involving(p PartyID) spec.Spec[*Relationship] { return RelFieldFrom.Eq(p).Or(RelFieldTo.Eq(p)) }

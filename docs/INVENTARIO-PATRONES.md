@@ -27,6 +27,7 @@ Leyenda: ✅ hecho · 🟡 parcial · ❌ falta · — no aplica en Go (decisió
 | Clock | ✅ `Clock` | ✅ real / fake | |
 | Rasgos transversales | ✅ `pkg/domain/traits` | ✅ | Componibles en lugar de `BusinessEntity`; evaluados en `RASGOS-TRANSVERSALES.md` (autorización, traza y log retirados de la entidad) |
 | Extensibilidad (`BusinessEntityExtensible`, `TypeRef`) | — | — | Retirada (0 usos); pendiente: atributos extendidos declarativos |
+| Datos por subtipo (subtipos de UDM con atributos propios) | — (patrón de contexto, sin pieza en el Fw) | ✅ detalles por tipo como objetos valor en el agregado, discriminados por el código de una fila de catálogo (`contexts/parties`: `RelationshipDetails`) | Evaluado en `PARTIES-UDM.md`. Los campos personalizados por cliente son otra cosa: atributos extendidos declarativos |
 | Lenguaje ubicuo común | ✅ `pkg/domain/vocab` | ✅ | Evaluado término a término en `LENGUAJE-UBICUO.md`; 🟡 `PostalCode` pendiente de `Address` |
 
 ## 2. Estratégicos

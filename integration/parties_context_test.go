@@ -220,6 +220,84 @@ func TestPartiesContext(t *testing.T) {
 				t.Fatalf("membership: %+v %v", member, err)
 			}
 
+			// Details by relationship type (docs/PARTIES-UDM.md): the codes read from SQL, the
+			// prospect relationship added by migration 11 and its trial in a nullable column.
+			relTypes, err := svc.ListRelationshipTypes.Handle(ctx, papp.ListRelationshipTypes{})
+			if err != nil || len(relTypes) != len(domain.WellKnownRelationshipTypes()) {
+				t.Fatalf("seeded relationship types: %d %v", len(relTypes), err)
+			}
+			for _, rt := range relTypes {
+				if rt.Code == "" || (rt.ID == domain.RelProspect.String()) != (rt.Code == domain.CodeProspect) {
+					t.Fatalf("relationship type code: %+v", rt)
+				}
+			}
+			until := fw.Now().Add(30 * 24 * time.Hour).Truncate(time.Second)
+			flotas, err := svc.RegisterOrganization.Handle(clerkCtx, papp.RegisterOrganization{LegalName: "Flotas Ana",
+				Affiliation: &papp.NewAffiliation{Organization: acme.ID, RelationshipType: domain.RelProspect.String(),
+					RelationshipDetailsInput: papp.RelationshipDetailsInput{Prospect: &papp.ProspectInput{TrialUntil: &until}}}})
+			if err != nil || len(flotas.Roles) != 1 || flotas.Roles[0].Name != "Prospect" {
+				t.Fatalf("register a prospect with a trial: %+v %v", flotas, err)
+			}
+			flotasID, _ := domain.ParsePartyID(flotas.ID)
+			prospects, err := svc.Relationships.Handle(clerkCtx, papp.PartyRelationships{PartyID: flotasID})
+			if err != nil || len(prospects) != 1 || prospects[0].Prospect == nil || !prospects[0].Prospect.InTrial ||
+				!prospects[0].Prospect.TrialUntil.Equal(until) {
+				t.Fatalf("trial round trip: %+v %v", prospects, err)
+			}
+			prospectID, _ := domain.ParseRelationshipID(prospects[0].ID)
+			longer := until.Add(15 * 24 * time.Hour)
+			if _, err := svc.SetProspectTrial.Handle(clerkCtx, papp.SetProspectTrial{ID: prospectID, TrialUntil: &longer}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := svc.SetProspectTrial.Handle(clerkCtx, papp.SetProspectTrial{ID: relID, TrialUntil: &longer}); !errors.Is(err, fw.ErrRuleViolation) {
+				t.Fatalf("an employment has no trial: %v", err)
+			}
+			trials, err := mod.Trials.Trials(ctx, acme.ID, []string{flotas.ID, pedro.ID})
+			if err != nil || len(trials) != 1 || !trials[flotas.ID].InForce || !trials[flotas.ID].Until.Equal(longer) {
+				t.Fatalf("trials port: %+v %v", trials, err)
+			}
+			relationships := hotswap.Repository(sw, infrastructure.RelationshipRepositoryFactory)
+			inTrial, err := relationships.Find(ctx, domain.InTrialAt(until.Add(time.Hour)))
+			if err != nil || len(inTrial) != 1 || inTrial[0].ID() != prospectID {
+				t.Fatalf("in trial (nullable end in SQL): %d %v", len(inTrial), err)
+			}
+			if late, err := relationships.Find(ctx, domain.InTrialAt(longer.Add(time.Hour))); err != nil || len(late) != 0 {
+				t.Fatalf("after the trial: %d %v", len(late), err)
+			}
+			withdrawn, err := svc.SetProspectTrial.Handle(clerkCtx, papp.SetProspectTrial{ID: prospectID})
+			if err != nil || withdrawn.Prospect.TrialUntil != nil || withdrawn.Prospect.InTrial || withdrawn.Version != 3 {
+				t.Fatalf("withdrawn trial: %+v %v", withdrawn, err)
+			}
+
+			// The share of an ownership relationship, an exact decimal in a nullable text column.
+			if _, err := svc.AssignRole.Handle(ctx, papp.AssignRole{PartyID: luisID, RoleType: domain.RoleShareholder.String()}); err != nil {
+				t.Fatal(err)
+			}
+			third := "33.33"
+			owns, err := svc.EstablishRelationship.Handle(ctx, papp.EstablishRelationship{Type: domain.RelOwnership.String(), From: luis.ID, To: acme.ID,
+				RelationshipDetailsInput: papp.RelationshipDetailsInput{Ownership: &papp.OwnershipInput{Share: &third}}})
+			if err != nil || owns.Ownership == nil || owns.Ownership.Share != "33.33" {
+				t.Fatalf("ownership with share: %+v %v", owns, err)
+			}
+			ownsID, _ := domain.ParseRelationshipID(owns.ID)
+			half := "50"
+			if _, err := svc.SetOwnershipShare.Handle(clerkCtx, papp.SetOwnershipShare{ID: ownsID, Share: &half}); err != nil {
+				t.Fatal(err)
+			}
+			luisRels, err := svc.Relationships.Handle(ctx, papp.PartyRelationships{PartyID: luisID})
+			if err != nil || len(luisRels) != 1 || luisRels[0].Ownership == nil || luisRels[0].Ownership.Share != "50.00" || luisRels[0].Prospect != nil {
+				t.Fatalf("share round trip: %+v %v", luisRels, err)
+			}
+			if _, err := svc.SetOwnershipShare.Handle(clerkCtx, papp.SetOwnershipShare{ID: prospectID, Share: &half}); !errors.Is(err, fw.ErrRuleViolation) {
+				t.Fatalf("a prospect relationship has no share: %v", err)
+			}
+
+			// The personal details of a person are edited after registration.
+			edited, err := svc.UpdatePerson.Handle(clerkCtx, papp.UpdatePerson{ID: luisID, Gender: "male", BirthDate: "1988-02-29", MaritalStatus: "single"})
+			if err != nil || edited.Person.BirthDate != "1988-02-29" || edited.Person.Gender != "male" || edited.Person.MaritalStatus != "single" {
+				t.Fatalf("person details round trip: %+v %v", edited.Person, err)
+			}
+
 			pending, err := mod.IntegrationOutbox.Pending(ctx, 100, 10)
 			if err != nil || len(pending) < 8 {
 				t.Fatalf("published language: %d %v", len(pending), err)
