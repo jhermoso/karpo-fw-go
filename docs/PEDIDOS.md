@@ -123,7 +123,7 @@ contexts/inventory/  # + suscripción a Pedidos (migración 3: inventory_inbox),
   - `ord_counters`;
   - las bandejas de salida, la auditoría y `orders_inbox`.
 
-## Decisiones propuestas (pendientes de confirmar)
+## Decisiones (aprobadas por Javier el 2026-10-05)
 
 1. **Un pedido tiene un solo estado** y, una vez confirmado, no se edita: se sirve, se cierra o se
    cancela. Cambiar un pedido confirmado es cancelarlo y hacer otro.
