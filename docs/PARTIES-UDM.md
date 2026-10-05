@@ -463,12 +463,15 @@ Ejecutado (2026-10-04, Windows, Go 1.27):
     participación.
 - **Toda la batería del repositorio** (`go test ./...`): pasa, con la salvedad de abajo.
 
-**No ejecutado: la integración en PostgreSQL, SQL Server, Oracle y MySQL.** Docker no estaba
-arrancado. La prueba está escrita en `integration/parties_context_test.go` (códigos leídos de
-SQL, alta con prueba, ida y vuelta de `trial_until`, la especificación `InTrialAt` sobre la
-columna anulable, puerto `Trials`, retirada, participación como decimal exacto y edición de
-persona) y compila (`go vet`), pero **no se ha ejecutado contra ningún motor**. Los `ALTER TABLE
-… ADD` usan la misma macro que la migración 6, ya probada en los cinco.
+- **Integración** (`integration/parties_context_test.go`, `TestPartiesContext`), ejecutada el
+  2026-10-06 en PostgreSQL, SQL Server, Oracle (GUID RFC y .NET) y MySQL: pasa en los cinco.
+  Cubre las migraciones 11 a 13, los códigos leídos de SQL, el alta con prueba, la ida y vuelta
+  de `trial_until`, la especificación `InTrialAt` sobre la columna anulable, el puerto `Trials`,
+  la retirada, la participación como decimal exacto y la edición de persona.
+
+**No ejecutado:** el resto de la batería de integración (los otros contextos, que también migran
+las tablas de Parties). Sólo se lanzó la prueba de Parties, para no coincidir con otra sesión
+sobre las mismas bases.
 
 Salvedad: `TestParties_EndToEnd_MemoryThenSQLite` falla de forma intermitente en Windows
 (1 o 2 de cada 40 ejecuciones) con «end e-mail: status 422». **Es anterior a este cambio**: se
@@ -497,7 +500,8 @@ No se ha tocado nada en `C:\Git\Paranoia\Karpo`. Queda para Javier:
 
 ## 10. Pendiente
 
-- Ejecutar la integración en los cuatro motores con Docker (`./integration/run.ps1`).
+- Ejecutar la batería de integración completa (`./integration/run.ps1`): los demás contextos
+  migran también las tablas de Parties y no se han vuelto a lanzar.
 - Detalles de rol en `PartyRole` (PU-2): cuando aparezca el primer dato que sea del rol.
 - Número de cliente como detalle de la relación de cliente (PU-2): cuando llegue la importación
   de Sage o Ventas.
