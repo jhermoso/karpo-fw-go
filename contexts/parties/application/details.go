@@ -15,7 +15,7 @@ import (
 // addRelationshipDetails wires the use cases that change the details a relationship carries
 // because of its type (docs/PARTIES-UDM.md).
 func addRelationshipDetails(svc *Service, s service) {
-	svc.SetProspectTrial = chain(PermRelationshipUpdate, func(ctx context.Context, c SetProspectTrial) (RelationshipDTO, error) {
+	svc.SetProspectTrial = chain(PermRelationshipSetTrial, func(ctx context.Context, c SetProspectTrial) (RelationshipDTO, error) {
 		return s.changeDetails(ctx, c.ID, func(r *domain.Relationship, rt domain.RelationshipType) error {
 			return r.SetTrial(rt, c.TrialUntil)
 		})

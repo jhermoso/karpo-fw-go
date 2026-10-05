@@ -380,6 +380,8 @@ una relación (la prueba, la participación). Establecer con detalles sigue pidi
 `Parties.Relationship.Create`.
 Alternativa: un permiso aparte para la prueba (`Parties.Relationship.SetTrial`), si quieres
 separar quién puede regalar tiempo de quién puede corregir una participación.
+**Revisada el 2026-10-06: se adopta la alternativa** (ver §7), porque con el catálogo de
+Security el permiso único llegaba a todos los usuarios estándar.
 
 ## 7. Lo que se ha hecho
 
@@ -392,15 +394,19 @@ Todo es aditivo: ninguna tabla, columna, ruta ni evento `v1` anterior ha cambiad
 | 3 | Participación en el capital (PU-7) | Migración 13: `party_relationships.share_percent` (decimal exacto en texto, como el resto de contextos) | `ownership` en el alta de la relación; `PUT /api/party-relationships/{id}/ownership`; el DTO devuelve `ownership: { share }` | `parties.ownership-share-changed.v1` |
 | 4 | Edición de persona (PU-9, F11) | — | `PUT /api/parties/{id}/person` (género, nacimiento y estado civil) | — (no cambia el nombre) |
 
-Permiso nuevo (PU-10): `Parties.Relationship.Update`, para las dos rutas `PUT` de detalles.
-Establecer una relación con sus detalles sigue pidiendo `Parties.Relationship.Create`; editar la
-persona, `Parties.Party.Update`.
+Permisos nuevos (PU-10, revisada por Javier el 2026-10-06), los dos declarados al catálogo de
+Security (`application.Permissions`):
 
-El permiso está declarado al catálogo de Security (`application.Permissions`). Por la regla
-estándar de ese catálogo (leer, crear y actualizar), **lo recibe también el rol de usuario
-estándar**: cualquier usuario estándar con acceso completo a la organización puede alargar una
-prueba. Si eso no se quiere, la alternativa de PU-10 (una acción propia, como `SetTrial`) lo deja
-sólo para el administrador de la organización y los roles a medida.
+| Permiso | Para qué | Quién lo recibe por la regla estándar de Security |
+|---|---|---|
+| `Parties.Relationship.Update` | Cambiar la participación (`PUT …/ownership`) | Usuario estándar y administrador de la organización |
+| `Parties.Relationship.SetTrial` | Conceder, alargar, acortar o retirar una prueba (`PUT …/trial`), **también cuando la prueba llega con el alta** de la relación o de la party | Sólo el administrador de la organización y los roles a medida |
+
+PU-10 se aprobó con un único permiso. Al portarse Security, su regla estándar (leer, crear y
+actualizar) habría dado la prueba a cualquier usuario estándar, así que se separó en una acción
+propia, que era la alternativa prevista. Dar de alta un cliente potencial **sin** prueba sigue
+pidiendo sólo `Parties.Party.Create` o `Parties.Relationship.Create`; editar la persona,
+`Parties.Party.Update`.
 
 ### Cómo queda en el código
 
@@ -456,6 +462,8 @@ Ejecutado (2026-10-04, Windows, Go 1.27):
   - alta de un cliente potencial con prueba dentro del ámbito;
   - alargar la prueba: sin permiso 403, acceso de sólo lectura 403, ajeno 404, fecha anterior al
     inicio 400, correcto 200 con la versión incrementada;
+  - un vendedor con todos los permisos menos `SetTrial`: no alarga la prueba (403), no da de alta
+    un cliente potencial con prueba (403), sí sin ella (201) y sí corrige una participación;
   - puerto `Trials`;
   - prueba en una relación de cliente o de empleo: 422;
   - relación de cliente potencial sin prueba, concedida después y retirada;

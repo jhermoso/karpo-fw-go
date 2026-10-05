@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/parties/domain"
+	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
 )
@@ -143,6 +144,12 @@ func (s service) establish(ctx context.Context, rt domain.RelationshipType, from
 	r, err := domain.Establish(domain.NewRelationshipID(), rt, from, to, cat, since, remark)
 	if err != nil {
 		return nil, err
+	}
+	// A trial that comes with the relationship is still a trial being granted.
+	if details.Prospect != nil && details.Prospect.TrialUntil != nil {
+		if err := authz.Require(ctx, PermRelationshipSetTrial); err != nil {
+			return nil, err
+		}
 	}
 	if err := details.apply(r, rt); err != nil {
 		return nil, err

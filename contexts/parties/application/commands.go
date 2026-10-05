@@ -23,12 +23,17 @@ var (
 	PermRelationshipEnd    = authz.MustPermission("Parties.Relationship.Terminate")
 	// PermRelationshipUpdate changes the details a relationship carries because of its type.
 	PermRelationshipUpdate = authz.MustPermission("Parties.Relationship.Update")
+	// PermRelationshipSetTrial grants, extends or withdraws the free trial of a prospect. It is an
+	// action of its own, not an update, so that the standard rule of the Security catalog (read,
+	// create, update) does not hand it to every standard user: giving time away is a commercial
+	// decision.
+	PermRelationshipSetTrial = authz.MustPermission("Parties.Relationship.SetTrial")
 )
 
 // Permissions returns the permissions this context declares to the Security catalog.
 func Permissions() []authz.Permission {
 	return []authz.Permission{PermPartyRead, PermPartyCreate, PermPartyUpdate, PermRoleAssign, PermRelationshipRead,
-		PermRelationshipCreate, PermRelationshipEnd, PermRelationshipUpdate}
+		PermRelationshipCreate, PermRelationshipEnd, PermRelationshipUpdate, PermRelationshipSetTrial}
 }
 
 // RegisterPerson registers a person, optionally with initial roles (the C# CreatePartyWithRole).
