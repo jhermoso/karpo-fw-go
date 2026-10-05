@@ -57,9 +57,6 @@ Pendiente:
 - **Verificador OIDC** (`contracts.TokenVerifier` con clave pública) cuando la prueba G-43 elija
   el proveedor de identidad; hoy solo existe el puerto y un verificador de prueba.
 - **Resolutor en modo `Http`** sobre `GET /api/auth/context`, para servicios que no alojen Security.
-- **Integración del contexto en MySQL**: repetir `./integration/run.ps1` sin otra ejecución a la
-  vez; la pasada del 2026-10-04 quedó contaminada (PostgreSQL, SQL Server y Oracle sí pasan, y
-  la conformidad de los mapeos pasa en los cinco motores).
 - **Límite de intentos por origen** al iniciar sesión, y purga de las sesiones caducadas.
 - **Front de Angular**: leer permisos y accesos del contexto, no del token (decisión 2).
 - **Importar los usuarios de C#** (`infrastructure.FromCSharp` ya convierte sus hashes).
