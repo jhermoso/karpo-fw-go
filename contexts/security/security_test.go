@@ -670,7 +670,7 @@ func TestPasswordHasher(t *testing.T) {
 	}
 }
 
-// Every bounded context declares its permissions and the host passes them to the catalog: the 97
+// Every bounded context declares its permissions and the host passes them to the catalog: the 98
 // codes the fifteen business contexts check, plus the eight of Security and the wildcard.
 func TestCatalog_EveryContextDeclaresItsPermissions(t *testing.T) {
 	declared := map[string][]authz.Permission{
@@ -689,7 +689,7 @@ func TestCatalog_EveryContextDeclaresItsPermissions(t *testing.T) {
 			all = append(all, p)
 		}
 	}
-	if len(all) != 97+len(sapp.Permissions()) || len(sapp.Permissions()) != 8 {
+	if len(all) != 98+len(sapp.Permissions()) || len(sapp.Permissions()) != 8 {
 		t.Fatalf("declared permissions: %d", len(all))
 	}
 
