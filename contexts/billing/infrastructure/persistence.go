@@ -57,6 +57,16 @@ var schemaDDL = []string{
 	surcharge_amount {str:30}, PRIMARY KEY (invoice_id, line_no), FOREIGN KEY (invoice_id) REFERENCES bil_invoices (id))`,
 }
 
+// TableInbox is the inbox of the events Billing consumes.
+const TableInbox = "billing_inbox"
+
+var sourceDDL = []string{
+	`ALTER TABLE bil_invoices {add:source_type} {str:80}{addEnd}`,
+	`ALTER TABLE bil_invoices {add:source_id} {str:80}{addEnd}`,
+	`ALTER TABLE bil_invoices {add:source_ref} {str:40}{addEnd}`,
+	`CREATE INDEX ix_bil_invoices_source ON bil_invoices (seller, source_type, source_id)`,
+}
+
 func technicalDDL(d string) []string {
 	switch d {
 	case "sqlite":
@@ -82,6 +92,9 @@ func Migrations() sqlrepo.MigrationSet {
 	return sqlrepo.MigrationSet{Context: Context, Migrations: []sqlrepo.Migration{
 		{Version: 1, Name: "series and invoices", Up: sqlrepo.RenderDDLAll(schemaDDL...)},
 		{Version: 2, Name: "outboxes and audit log", Up: technical},
+		{Version: 3, Name: "source document of an invoice", Up: sqlrepo.RenderDDLAll(sourceDDL...)},
+		{Version: 4, Name: "inbox of the Orders events", Up: map[string][]string{"sqlite": sqlite.InboxDDL(TableInbox), "postgres": postgres.InboxDDL(TableInbox),
+			"sqlserver": sqlserver.InboxDDL(TableInbox), "oracle": oracle.InboxDDL(TableInbox), "mysql": mysql.InboxDDL(TableInbox)}},
 	}}
 }
 
@@ -91,7 +104,7 @@ func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 }
 
 // Tables lists the tables of the context, children first (drop order).
-var Tables = []string{"bil_invoice_taxes", "bil_invoice_lines", "bil_invoices", "bil_series", TableOutbox, TableIntegrationOutbox, TableAuditLog}
+var Tables = []string{"bil_invoice_taxes", "bil_invoice_lines", "bil_invoices", "bil_series", TableOutbox, TableIntegrationOutbox, TableAuditLog, TableInbox}
 
 // DropAll removes the tables of the context and its migration history (tests only).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
@@ -156,7 +169,7 @@ func InvoiceMapping() sqlrepo.Mapping[domain.InvoiceID, *domain.Invoice] {
 		Table: "bil_invoices",
 		Columns: sqlrepo.WithAuditColumns("seller", "customer", "kind", "status", "currency", "description", "operation_date", "due_date",
 			"equivalence_surcharge", "corrects", "reason", "series_id", "invoice_number", "issue_date", "seller_nif", "seller_name", "seller_country",
-			"customer_nif", "customer_name", "customer_country", "tax_country", "net", "tax_amount", "surcharge"),
+			"customer_nif", "customer_name", "customer_country", "tax_country", "net", "tax_amount", "surcharge", "source_type", "source_id", "source_ref"),
 		Dehydrate: func(i *domain.Invoice) (sqlrepo.Values, error) {
 			s := i.State()
 			v := sqlrepo.Values{"seller": s.Seller, "customer": s.Customer, "kind": int64(s.Kind), "status": int64(s.Status), "currency": s.Currency.String(),
@@ -165,7 +178,8 @@ func InvoiceMapping() sqlrepo.Mapping[domain.InvoiceID, *domain.Invoice] {
 				"series_id": optUUID(s.Series.UUID), "invoice_number": opt(s.Number), "issue_date": optDate(s.IssueDate),
 				"seller_nif": opt(s.SellerIdentity.NIF), "seller_name": opt(s.SellerIdentity.Name), "seller_country": opt(s.SellerIdentity.Country),
 				"customer_nif": opt(s.CustomerIdentity.NIF), "customer_name": opt(s.CustomerIdentity.Name), "customer_country": opt(s.CustomerIdentity.Country),
-				"tax_country": opt(s.Taxes.Country), "net": i.Net().StringFixed(2), "tax_amount": nil, "surcharge": nil}
+				"tax_country": opt(s.Taxes.Country), "net": i.Net().StringFixed(2), "tax_amount": nil, "surcharge": nil,
+				"source_type": opt(s.Source.Type), "source_id": opt(s.Source.ID), "source_ref": opt(s.Source.Ref)}
 			if s.Status == domain.Issued {
 				v["tax_amount"], v["surcharge"] = s.Taxes.Tax.StringFixed(2), s.Taxes.Surcharge.StringFixed(2)
 			}
@@ -181,6 +195,7 @@ func InvoiceMapping() sqlrepo.Mapping[domain.InvoiceID, *domain.Invoice] {
 				OperationDate: r.Date("operation_date"), DueDate: r.Date("due_date"), EquivalenceSurcharge: r.Bool("equivalence_surcharge"),
 				Corrects: domain.InvoiceID{UUID: r.UUID("corrects")}, Reason: r.String("reason"), Series: domain.SeriesID{UUID: r.UUID("series_id")},
 				Number: r.String("invoice_number"), IssueDate: r.Date("issue_date"), Audit: r.AuditStamp(),
+				Source:           domain.Source{Type: r.String("source_type"), ID: r.String("source_id"), Ref: r.String("source_ref")},
 				SellerIdentity:   domain.Identity{NIF: r.String("seller_nif"), Name: r.String("seller_name"), Country: r.String("seller_country")},
 				CustomerIdentity: domain.Identity{NIF: r.String("customer_nif"), Name: r.String("customer_name"), Country: r.String("customer_country")}}
 			for _, c := range children.Of("lines") {
@@ -353,4 +368,15 @@ func (p PartiesIdentities) Identities(ctx context.Context, ids []domain.PartyID)
 		out[domain.PartyID{UUID: u}] = domain.Identity{NIF: vocab.NormalizeDocumentNumber(ti.Number), Name: ti.Name, Country: ti.Country}
 	}
 	return out, nil
+}
+
+// InboxFactory builds the inbox of the events Billing consumes.
+func InboxFactory(b hotswap.Backend) (application.InboxStore, error) {
+	switch db := b.(type) {
+	case *sqlrepo.DB:
+		return sqlrepo.NewInbox(db, TableInbox)
+	case *memory.Store:
+		return memory.NewInbox(db), nil
+	}
+	return nil, unsupported(b)
 }

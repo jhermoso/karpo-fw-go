@@ -149,11 +149,61 @@ contexts/fiscal/
   - rectificativa con FK a sí misma;
   - búsqueda por fecha de emisión.
 
+## Facturar desde el albarán (añadido el 2026-10-05)
+
+Aplica la decisión 5 de [PEDIDOS.md](PEDIDOS.md): Pedidos publica el albarán y Facturación lo
+factura, sin que ningún contexto escriba en el otro.
+
+- **Qué hace Facturación al recibir `orders.delivery-issued.v1`:** prepara un **borrador** de
+  factura para ese cliente con las líneas del albarán, a su precio neto y con su código de
+  impuesto. La fecha de operación es la del albarán y la descripción cita el albarán y el pedido.
+  Una persona lo revisa y lo emite en una serie; la emisión sigue siendo un permiso aparte.
+- **La factura recuerda su origen** (tipo, Id y número del documento). Hay un borrador por
+  albarán: un mensaje repetido no crea otro.
+- **Un borrador que viene de un albarán no se descarta** (422): lo entregado se factura, y un
+  error se corrige con una rectificativa después de emitir.
+- **Al emitirse,** `billing.invoice-issued.v1` lleva el origen. Pedidos anota en el albarán la
+  factura que lo cobra y deja de listarlo como pendiente de facturar. Cobros abre la deuda como
+  con cualquier factura, y esa deuda cuenta para el crédito del siguiente pedido.
+- **Pedidos no deja vender un producto sin código de impuesto** (422), porque su albarán no se
+  podría facturar.
+- **Cambios de esquema:** en Facturación, migración 3 (columnas `source_type`, `source_id` y
+  `source_ref` en `bil_invoices`) y migración 4 (`billing_inbox`); en Pedidos, migración 3
+  (`invoice_id`, `invoice_number` e `invoiced` en `ord_deliveries`).
+
+### Decisiones propuestas (pendientes de confirmar)
+
+1. **Cada albarán genera un borrador de factura, automáticamente.** No se factura el pedido sino
+   lo entregado.
+2. **El borrador se emite a mano,** en la serie y fecha que decida quien factura. Facturar
+   automáticamente al entregar queda fuera.
+3. **Un borrador nacido de un albarán no se descarta;** sí se pueden editar sus líneas antes de
+   emitir.
+4. **Una factura por albarán.** Agrupar varios albaranes de un cliente en una factura
+   (facturación periódica) queda para la fase 2.
+
+### Validación
+
+- **Extremo a extremo** (Parties, Fiscal, Productos, Inventario, Cobros, Pedidos y Facturación
+  sobre el mismo backend, en memoria y en SQLite migrada):
+  - un producto sin código de impuesto no se puede añadir al pedido (422);
+  - pedido de 60 unidades y 1 hora, albarán de 95,00 y un único borrador con su origen, fecha de
+    operación, líneas, precios y el mismo neto que el albarán;
+  - el borrador no se descarta (422); el albarán figura como pendiente de facturar;
+  - emisión (114,95): el albarán queda con su factura y ya no está pendiente;
+  - Cobros debe 114,95 y deja 85,05 de crédito: un pedido de 110,00 no se confirma (422) y uno de
+    75,00 sí.
+- **Integración** en PostgreSQL, SQL Server, Oracle y MySQL, con los siete contextos migrados en
+  la misma base, incluidas las migraciones que añaden columnas: borrador desde el albarán por
+  `billing_inbox`, origen de ida y vuelta, descarte rechazado, emisión, albarán facturado por
+  `orders_inbox` y deuda abierta en Cobros.
+
 ## Pendiente
 
 - Todo el cálculo de impuestos que falta, por país y por sector: punto 6 de
   [BACKLOG.md](../BACKLOG.md).
-- Facturación a demanda desde Pedidos y Envíos (enlaces facturados, precios del pedido).
+- ~~Facturación desde Pedidos~~: hecha desde el albarán, ver la sección anterior. Queda agrupar
+  varios albaranes en una factura y la rectificativa que reabra un albarán.
 - ~~Plazos de vencimiento y cobros~~: hechos en [COBROS.md](COBROS.md). Las remesas quedan para Tesorería.
 - Facturas recibidas (compras), con el mismo `TaxEngine` y la deducibilidad.
 - Dirección fiscal del cliente en la factura (hoy solo NIF, nombre y país).

@@ -178,7 +178,8 @@ contexts/inventory/  # + suscripción a Pedidos (migración 3: inventory_inbox),
 
 ## Pendiente
 
-- **Facturar desde el albarán** (decisión 5).
+- ~~Facturar desde el albarán~~: hecho, ver [FACTURACION.md](FACTURACION.md). Facturación prepara
+  el borrador y el albarán anota su factura al emitirse.
 - Fase 2:
   - presupuestos y su conversión en pedido;
   - devoluciones de cliente y albaranes de abono;

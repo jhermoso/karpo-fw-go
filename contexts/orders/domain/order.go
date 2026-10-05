@@ -456,6 +456,8 @@ type DeliveryState struct {
 	Date        vocab.Date
 	Warehouse   WarehouseID
 	Lines       []DeliveryLine
+	Invoice     string // id of the invoice of Billing that bills it
+	InvoiceNo   string
 	Audit       traits.AuditStamp
 }
 
@@ -481,6 +483,14 @@ func ReconstituteDelivery(id DeliveryID, s DeliveryState) (*Delivery, error) {
 	}
 	s.Lines = slices.Clone(s.Lines)
 	return &Delivery{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
+}
+
+// MarkInvoiced records the invoice that bills the delivery note (its goods and prices never
+// change; this is the only thing added to it). The first invoice stays.
+func (d *Delivery) MarkInvoiced(invoice, number string) {
+	if d.s.Invoice == "" && invoice != "" {
+		d.s.Invoice, d.s.InvoiceNo = invoice, number
+	}
 }
 
 // IssueDelivery issues the delivery note of what an order just delivered. It never changes.
@@ -522,6 +532,7 @@ var (
 	DelFieldCustomer = spec.Comparable("customer", func(d *Delivery) PartyID { return d.s.Customer })
 	DelFieldOrder    = spec.Comparable("order_id", func(d *Delivery) OrderID { return d.s.Order })
 	DelFieldNumber   = spec.Ordered("delivery_number", func(d *Delivery) string { return d.s.Number })
+	DelFieldInvoiced = spec.Comparable("invoiced", func(d *Delivery) bool { return d.s.Invoice != "" })
 )
 
 // TermsState is the persisted state of the terms of a customer.

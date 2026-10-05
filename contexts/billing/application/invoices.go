@@ -135,6 +135,9 @@ type InvoiceDTO struct {
 	Lines                []LineDTO     `json:"lines"`
 	Net                  string        `json:"net"`
 	Taxes                *BreakdownDTO `json:"taxes,omitempty"` // issued invoices
+	SourceType           string        `json:"sourceType,omitempty"`
+	SourceID             string        `json:"sourceId,omitempty"`
+	SourceRef            string        `json:"sourceRef,omitempty"`
 	Version              int64         `json:"version"`
 	ModifiedBy           string        `json:"modifiedBy,omitempty"`
 }
@@ -154,7 +157,8 @@ func invoiceDTO(i *domain.Invoice) InvoiceDTO {
 		Customer: s.Customer.String(), Reason: s.Reason, Currency: s.Currency.String(), Description: s.Description, IssueDate: dateText(s.IssueDate),
 		OperationDate: dateText(s.OperationDate), DueDate: dateText(s.DueDate), EquivalenceSurcharge: s.EquivalenceSurcharge,
 		SellerNIF: s.SellerIdentity.NIF, CustomerNIF: s.CustomerIdentity.NIF, CustomerName: s.CustomerIdentity.Name, Lines: []LineDTO{},
-		Net: money(i.Net()), Version: i.Version(), ModifiedBy: i.ModifiedBy().Name}
+		Net: money(i.Net()), Version: i.Version(), ModifiedBy: i.ModifiedBy().Name, SourceType: s.Source.Type, SourceID: s.Source.ID,
+		SourceRef: s.Source.Ref}
 	if !s.Corrects.IsZero() {
 		d.Corrects = s.Corrects.String()
 	}

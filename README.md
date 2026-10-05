@@ -88,7 +88,7 @@ contexts/facilities/      # Contexto Instalaciones (ubicación propia, jerarquí
 contexts/hr/              # Contexto RRHH (puestos, relaciones laborales, contratos, centros de trabajo): ver docs/RRHH.md
 contexts/payroll/         # Contexto Nóminas (nóminas con totales derivados, conceptos, perfil y reparto del neto, CCC): ver docs/NOMINAS.md
 contexts/fiscal/          # Contexto Fiscal (tipos por territorio, contribuyente, modelos 111 y 190 alimentados por Nóminas): ver docs/FISCAL.md
-contexts/billing/         # Contexto Facturación (facturas con desglose de Fiscal, series sin huecos, rectificativas): ver docs/FACTURACION.md
+contexts/billing/         # Contexto Facturación (facturas con desglose de Fiscal, series sin huecos, rectificativas, borradores desde los albaranes de Pedidos): ver docs/FACTURACION.md
 contexts/receivables/     # Contexto Cobros (condiciones y vencimientos, cartera por factura, cobros y compensaciones, riesgo): ver docs/COBROS.md
 contexts/treasury/        # Contexto Tesorería (cuentas, mandatos SEPA, remesas con pain.008, órdenes de transferencia con pain.001, cobros y devoluciones hacia Cobros): ver docs/TESORERIA.md
 contexts/accounting/      # Contexto Contabilidad (plan por empresa, libro con perfil y cierre de periodos, asientos cuadrados y contraasientos, contabilización de facturas, cobros, adeudos y nóminas): ver docs/CONTABILIDAD.md

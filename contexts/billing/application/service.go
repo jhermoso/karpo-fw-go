@@ -136,8 +136,7 @@ func dateText(d vocab.Date) string {
 	return d.String()
 }
 
-// NewService wires the use cases.
-func NewService(d Deps) *Service {
+func newService(d Deps) service {
 	var opts []orchestration.Option
 	if d.Recorder != nil {
 		opts = append(opts, orchestration.WithOutbox(d.Recorder))
@@ -145,10 +144,15 @@ func NewService(d Deps) *Service {
 	if d.Audit != nil {
 		opts = append(opts, orchestration.WithAuditLog(d.Audit))
 	}
-	s := service{Deps: d,
+	return service{Deps: d,
 		series:   orchestration.New[domain.SeriesID, *domain.Series](d.Series, d.UoW, opts...),
 		invoices: orchestration.New[domain.InvoiceID, *domain.Invoice](d.Invoices, d.UoW, opts...),
 	}
+}
+
+// NewService wires the use cases.
+func NewService(d Deps) *Service {
+	s := newService(d)
 	svc := &Service{}
 	s.seriesUseCases(svc)
 	s.invoiceUseCases(svc)
@@ -276,6 +280,7 @@ func Publications(r *messaging.Recorder) *messaging.Recorder {
 		if !s.Corrects.IsZero() {
 			out.Corrects = s.Corrects.String()
 		}
+		out.SourceType, out.SourceID = s.Source.Type, s.Source.ID
 		for _, l := range s.Taxes.Lines {
 			out.Taxes = append(out.Taxes, contracts.TaxLineV1{TaxType: l.TaxType, TaxCode: l.TaxCode, Treatment: l.Treatment,
 				TreatmentKind: l.TreatmentKind, Rate: money(l.Rate), Base: money(l.Base), Amount: money(l.Amount),
