@@ -25,6 +25,8 @@ type Module struct {
 	Service           *bapp.Service
 	IntegrationOutbox application.OutboxStore
 	Audit             application.AuditLog
+	// Consumer receives the delivery notes of Orders to invoice: subscribe it to the transport.
+	Consumer *messaging.Consumer
 }
 
 // Compose builds the context on sw. Billing needs the tax engine of Fiscal and the identities of
@@ -32,13 +34,15 @@ type Module struct {
 func Compose(sw *hotswap.Switch, taxes domain.Taxes, identities domain.Identities) *Module {
 	integration := hotswap.Outbox(sw, infrastructure.IntegrationOutboxFactory)
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
-	svc := bapp.NewService(bapp.Deps{
+	d := bapp.Deps{
 		Series: hotswap.Repository(sw, infrastructure.SeriesRepositoryFactory), Invoices: hotswap.Repository(sw, infrastructure.InvoiceRepositoryFactory),
 		Taxes: taxes, Identities: identities, UoW: sw, Audit: audit,
 		Recorder: outbox.Recorders(outbox.NewRecorder(hotswap.Outbox(sw, infrastructure.OutboxFactory)),
 			bapp.Publications(messaging.NewRecorder(contracts.Source, integration))),
-	})
-	return &Module{Service: svc, IntegrationOutbox: integration, Audit: audit}
+	}
+	consumer := messaging.NewConsumer(contracts.Source, hotswap.Inbox(sw, infrastructure.InboxFactory), sw)
+	bapp.Subscribe(consumer, d)
+	return &Module{Service: bapp.NewService(d), IntegrationOutbox: integration, Audit: audit, Consumer: consumer}
 }
 
 // Relay forwards the Published Language to a transport.

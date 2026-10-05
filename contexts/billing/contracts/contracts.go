@@ -26,6 +26,8 @@ type InvoiceIssuedV1 struct {
 	Number        string      `json:"number"`
 	Kind          string      `json:"kind"` // ordinary | corrective
 	Corrects      string      `json:"corrects,omitempty"`
+	SourceType    string      `json:"sourceType,omitempty"` // the document it was drafted from (orders.delivery)
+	SourceID      string      `json:"sourceId,omitempty"`
 	Reason        string      `json:"reason,omitempty"` // R1–R5
 	Seller        string      `json:"seller"`
 	SellerNIF     string      `json:"sellerNif"`

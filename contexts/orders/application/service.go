@@ -244,11 +244,40 @@ type StockReserved struct {
 // IntegrationEventType implements application.IntegrationEvent.
 func (StockReserved) IntegrationEventType() string { return "inventory.stock-reserved.v1" }
 
+// DeliverySource is the source type Billing gives the invoices drafted from delivery notes.
+const DeliverySource = "orders.delivery"
+
+// InvoiceIssued is the Orders copy of billing.invoice-issued.v1.
+type InvoiceIssued struct {
+	InvoiceID  string `json:"invoiceId"`
+	Number     string `json:"number"`
+	SourceType string `json:"sourceType"`
+	SourceID   string `json:"sourceId"`
+}
+
+// IntegrationEventType implements application.IntegrationEvent.
+func (InvoiceIssued) IntegrationEventType() string { return "billing.invoice-issued.v1" }
+
 // Subscribe records on each order line the stock Inventory holds for it (reservations of other
 // sources are ignored). A line of an order that no longer waits ignores it too: its closure
-// already asked Inventory to release what it holds.
+// already asked Inventory to release what it holds. It also records on each delivery note the
+// invoice Billing issued for it.
 func Subscribe(c *messaging.Consumer, d Deps) {
 	s := newService(d)
+	messaging.Handle(c, func(ctx context.Context, e InvoiceIssued, _ app.Envelope) error {
+		if e.SourceType != DeliverySource {
+			return nil
+		}
+		id, err := domain.ParseDeliveryID(e.SourceID)
+		if err != nil {
+			return fw.Violation("orders.invalid_event", "billing.invoice-issued.v1: "+e.SourceID)
+		}
+		_, err = s.deliveries.Update(ctx, id, func(_ context.Context, d *domain.Delivery) error { d.MarkInvoiced(e.InvoiceID, e.Number); return nil })
+		if errors.Is(err, fw.ErrNotFound) {
+			return nil
+		}
+		return err
+	})
 	messaging.Handle(c, func(ctx context.Context, e StockReserved, _ app.Envelope) error {
 		if e.SourceType != OrderSource {
 			return nil

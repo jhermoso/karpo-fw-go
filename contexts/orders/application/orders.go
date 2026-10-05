@@ -108,6 +108,7 @@ type GetDelivery struct{ ID domain.DeliveryID }
 // SearchDeliveries searches delivery notes of the caller's scope.
 type SearchDeliveries struct {
 	Company, Customer, Order string
+	Uninvoiced               bool // only those no invoice bills yet
 	Page, Size               int
 }
 
@@ -190,13 +191,16 @@ type DeliveryDTO struct {
 	Date        string            `json:"date"`
 	Warehouse   string            `json:"warehouse,omitempty"`
 	Total       string            `json:"total"`
+	Invoice     string            `json:"invoice,omitempty"` // the invoice of Billing that bills it
+	InvoiceNo   string            `json:"invoiceNumber,omitempty"`
 	Lines       []DeliveryLineDTO `json:"lines"`
 }
 
 func deliveryDTO(d *domain.Delivery) DeliveryDTO {
 	s := d.State()
 	out := DeliveryDTO{ID: d.ID().String(), Company: s.Company.String(), Customer: s.Customer.String(), Order: s.Order.String(), OrderNumber: s.OrderNumber,
-		Number: s.Number, Date: s.Date.String(), Warehouse: optID(s.Warehouse.UUID), Total: money(d.Total()), Lines: []DeliveryLineDTO{}}
+		Number: s.Number, Date: s.Date.String(), Warehouse: optID(s.Warehouse.UUID), Total: money(d.Total()), Invoice: s.Invoice, InvoiceNo: s.InvoiceNo,
+		Lines: []DeliveryLineDTO{}}
 	for _, l := range s.Lines {
 		out.Lines = append(out.Lines, DeliveryLineDTO{Line: l.Line, Product: l.Product.String(), SKU: l.SKU, Description: l.Description, UoM: l.UoM,
 			Quantity: l.Quantity.String(), NetPrice: l.NetPrice.StringFixed(4), Amount: money(l.Amount)})
@@ -331,6 +335,9 @@ func (s service) orderUseCases(svc *Service) {
 			}
 			if !it.Retired.IsZero() && !os.Date.Before(it.Retired) {
 				return fw.Violation("orders.discontinued", "the product is discontinued")
+			}
+			if it.TaxCode == "" {
+				return fw.Violation("orders.no_tax_code", "the product has no tax code: it could not be invoiced")
 			}
 			_, err = o.AddLine(domain.Line{Product: product, SKU: it.SKU, Description: it.Name, UoM: it.UoM, TaxCode: it.TaxCode, Stocked: it.Stocked,
 				Quantity: q, UnitPrice: it.UnitPrice, Discount: it.Discount})
@@ -505,6 +512,9 @@ func (s service) orderUseCases(svc *Service) {
 		}
 		if q.Order != "" {
 			parts = append(parts, domain.DelFieldOrder.Eq(domain.OrderID{UUID: parseID(&v, "order", q.Order)}))
+		}
+		if q.Uninvoiced {
+			parts = append(parts, domain.DelFieldInvoiced.Eq(false))
 		}
 		if err := v.Err(); err != nil {
 			return fw.Page[DeliveryDTO]{}, err

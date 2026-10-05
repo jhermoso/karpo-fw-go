@@ -120,6 +120,14 @@ type Breakdown struct {
 // Total returns net + taxes + surcharge.
 func (b Breakdown) Total() vocab.Decimal { return b.Net.Add(b.Tax).Add(b.Surcharge) }
 
+// Source is the document an invoice was drafted from (a delivery note of Orders); empty when it
+// was drafted by hand.
+type Source struct {
+	Type string
+	ID   string
+	Ref  string // its number, to show
+}
+
 // Invoice is a sales invoice of a seller to a customer, with its lines.
 type Invoice struct {
 	fw.BaseAggregateRoot[InvoiceID]
@@ -147,6 +155,7 @@ type InvoiceState struct {
 	SellerIdentity       Identity
 	CustomerIdentity     Identity
 	Taxes                Breakdown
+	Source               Source
 	Audit                traits.AuditStamp
 }
 
@@ -180,6 +189,8 @@ func ReconstituteInvoice(id InvoiceID, s InvoiceState) (*Invoice, error) {
 		"a corrective invoice names the invoice it corrects and a reason R1–R5")
 	v.Require(s.Kind == Corrective || (s.Corrects.IsZero() && s.Reason == ""), "corrects", "ordinary", "only corrective invoices correct")
 	v.Require(len(s.Lines) <= MaxLines, "lines", "count", "too many lines")
+	v.Require((s.Source.Type == "") == (s.Source.ID == "") && len(s.Source.Type) <= 80 && len(s.Source.ID) <= 80 && len(s.Source.Ref) <= 40, "source",
+		"length", "a source type and id within limits")
 	d := Details{Description: s.Description, OperationDate: s.OperationDate, DueDate: s.DueDate, EquivalenceSurcharge: s.EquivalenceSurcharge}
 	checkDetails(&v, &d)
 	if err := v.Err(); err != nil {
@@ -336,8 +347,18 @@ func (i *Invoice) Issue(x Issuance) error {
 	return nil
 }
 
-// Discard checks a draft can be deleted (an issued invoice never is).
-func (i *Invoice) Discard() error { return i.mustBeDraft() }
+// Discard checks a draft can be deleted (an issued invoice never is). A draft made from a delivery
+// note is not discarded either: what was delivered is invoiced, and a mistake is corrected after
+// issuing it.
+func (i *Invoice) Discard() error {
+	if err := i.mustBeDraft(); err != nil {
+		return err
+	}
+	if i.s.Source.Type != "" {
+		return fw.Violation("billing.sourced_draft", "the draft comes from "+i.s.Source.Ref+": it is issued, not discarded")
+	}
+	return nil
+}
 
 // AuditSnapshot implements traits.Snapshotter.
 func (i *Invoice) AuditSnapshot() map[string]any {
@@ -353,6 +374,8 @@ var (
 	InvFieldCorrects = spec.Comparable("corrects", func(i *Invoice) InvoiceID { return i.s.Corrects })
 	InvFieldIssued   = spec.OrderedBy("issue_date", func(i *Invoice) vocab.Date { return i.s.IssueDate }, vocab.CompareDates)
 	InvFieldNumber   = spec.Ordered("invoice_number", func(i *Invoice) string { return i.s.Number })
+	InvFieldSrcType  = spec.Comparable("source_type", func(i *Invoice) string { return i.s.Source.Type })
+	InvFieldSrcID    = spec.Comparable("source_id", func(i *Invoice) string { return i.s.Source.ID })
 )
 
 // Repositories and ports of the context.

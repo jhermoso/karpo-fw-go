@@ -88,6 +88,10 @@ func Migrations() sqlrepo.MigrationSet {
 	return sqlrepo.MigrationSet{Context: Context, Migrations: []sqlrepo.Migration{
 		{Version: 1, Name: "customer terms, sales orders and delivery notes", Up: sqlrepo.RenderDDLAll(schemaDDL...)},
 		{Version: 2, Name: "outboxes, audit log and inbox", Up: technical},
+		{Version: 3, Name: "invoice of a delivery note", Up: sqlrepo.RenderDDLAll(
+			`ALTER TABLE ord_deliveries {add:invoice_id} {str:40}{addEnd}`,
+			`ALTER TABLE ord_deliveries {add:invoice_number} {str:40}{addEnd}`,
+			`ALTER TABLE ord_deliveries {add:invoiced} {bool} DEFAULT {false} NOT NULL{addEnd}`)},
 	}}
 }
 
@@ -202,17 +206,20 @@ func OrderMapping() sqlrepo.Mapping[domain.OrderID, *domain.Order] {
 // DeliveryMapping maps Delivery to ord_deliveries and its lines.
 func DeliveryMapping() sqlrepo.Mapping[domain.DeliveryID, *domain.Delivery] {
 	return sqlrepo.Mapping[domain.DeliveryID, *domain.Delivery]{
-		Table:   "ord_deliveries",
-		Columns: sqlrepo.WithAuditColumns("company", "customer", "order_id", "order_number", "delivery_number", "delivered_on", "warehouse"),
+		Table: "ord_deliveries",
+		Columns: sqlrepo.WithAuditColumns("company", "customer", "order_id", "order_number", "delivery_number", "delivered_on", "warehouse", "invoice_id",
+			"invoice_number", "invoiced"),
 		Dehydrate: func(d *domain.Delivery) (sqlrepo.Values, error) {
 			s := d.State()
 			return sqlrepo.AuditStampValues(sqlrepo.Values{"company": s.Company, "customer": s.Customer, "order_id": s.Order, "order_number": s.OrderNumber,
-				"delivery_number": s.Number, "delivered_on": s.Date, "warehouse": optUUID(s.Warehouse.UUID)}, d.AuditStamp()), nil
+				"delivery_number": s.Number, "delivered_on": s.Date, "warehouse": optUUID(s.Warehouse.UUID), "invoice_id": opt(s.Invoice),
+				"invoice_number": opt(s.InvoiceNo), "invoiced": s.Invoice != ""}, d.AuditStamp()), nil
 		},
 		Hydrate: func(r *sqlrepo.Row, children sqlrepo.ChildRows) (*domain.Delivery, error) {
 			s := domain.DeliveryState{Company: domain.OrganizationID{UUID: r.UUID("company")}, Customer: domain.PartyID{UUID: r.UUID("customer")},
 				Order: domain.OrderID{UUID: r.UUID("order_id")}, OrderNumber: r.String("order_number"), Number: r.String("delivery_number"),
-				Date: r.Date("delivered_on"), Warehouse: domain.WarehouseID{UUID: r.UUID("warehouse")}, Audit: r.AuditStamp()}
+				Date: r.Date("delivered_on"), Warehouse: domain.WarehouseID{UUID: r.UUID("warehouse")}, Invoice: r.String("invoice_id"),
+				InvoiceNo: r.String("invoice_number"), Audit: r.AuditStamp()}
 			for _, c := range byNo(children.Of("lines")) {
 				s.Lines = append(s.Lines, domain.DeliveryLine{Line: int(c.Int64("line_no")), Product: domain.ProductID{UUID: c.UUID("product")}, SKU: c.String("sku"),
 					Description: c.String("description"), UoM: c.String("uom"), TaxCode: c.String("tax_code"), Stocked: c.Bool("stocked"),

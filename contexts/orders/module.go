@@ -25,7 +25,8 @@ type Module struct {
 	Service           *oapp.Service
 	IntegrationOutbox application.OutboxStore
 	Audit             application.AuditLog
-	// Consumer receives the stock Inventory holds for the orders: subscribe it to the transport.
+	// Consumer receives the stock Inventory holds for the orders and the invoices Billing issues
+	// for their delivery notes: subscribe it to the transport.
 	Consumer *messaging.Consumer
 }
 
@@ -141,7 +142,7 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/orders/deliveries", func(w http.ResponseWriter, r *http.Request) {
 		s, n := query(r)
 		out, err := svc.SearchDeliveries.Handle(r.Context(), oapp.SearchDeliveries{Company: s("company"), Customer: s("customer"), Order: s("order"),
-			Page: n("page"), Size: n("size")})
+			Uninvoiced: s("invoiced") == "false", Page: n("page"), Size: n("size")})
 		distribution.Respond(w, r, out, err, http.StatusOK)
 	})
 	mux.HandleFunc("GET /api/orders/deliveries/{id}", func(w http.ResponseWriter, r *http.Request) {
