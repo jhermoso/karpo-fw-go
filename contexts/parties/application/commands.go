@@ -28,7 +28,7 @@ var (
 // Permissions returns the permissions this context declares to the Security catalog.
 func Permissions() []authz.Permission {
 	return []authz.Permission{PermPartyRead, PermPartyCreate, PermPartyUpdate, PermRoleAssign, PermRelationshipRead,
-		PermRelationshipCreate, PermRelationshipEnd}
+		PermRelationshipCreate, PermRelationshipEnd, PermRelationshipUpdate}
 }
 
 // RegisterPerson registers a person, optionally with initial roles (the C# CreatePartyWithRole).

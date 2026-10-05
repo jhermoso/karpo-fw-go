@@ -396,6 +396,12 @@ Permiso nuevo (PU-10): `Parties.Relationship.Update`, para las dos rutas `PUT` d
 Establecer una relación con sus detalles sigue pidiendo `Parties.Relationship.Create`; editar la
 persona, `Parties.Party.Update`.
 
+El permiso está declarado al catálogo de Security (`application.Permissions`). Por la regla
+estándar de ese catálogo (leer, crear y actualizar), **lo recibe también el rol de usuario
+estándar**: cualquier usuario estándar con acceso completo a la organización puede alargar una
+prueba. Si eso no se quiere, la alternativa de PU-10 (una acción propia, como `SetTrial`) lo deja
+sólo para el administrador de la organización y los roles a medida.
+
 ### Cómo queda en el código
 
 - **El catálogo dice qué tipo es; el código, qué datos lleva.** `RelationshipType.Code`
@@ -473,6 +479,9 @@ Ejecutado (2026-10-04, Windows, Go 1.27):
   conformidad del framework y el cambio en caliente), ejecutada el 2026-10-06 en los cuatro
   motores: pasa entera. Los demás contextos migran también las tablas de Parties, así que
   comprueba que las migraciones 11 a 13 no les afectan.
+- **Tras reubicar el cambio sobre Productos, Inventario, Pedidos y Security** (que entraron
+  después): `go test ./...` pasa entero, y la integración de Parties y de Security pasa en los
+  cuatro motores. La batería de integración completa no se ha repetido sobre esa base.
 
 Salvedad: `TestParties_EndToEnd_MemoryThenSQLite` falla de forma intermitente en Windows
 (1 o 2 de cada 40 ejecuciones) con «end e-mail: status 422». **Es anterior a este cambio**: se
