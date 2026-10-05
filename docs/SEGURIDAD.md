@@ -417,14 +417,12 @@ Ejecutado el 2026-10-04:
 - **Arquitectura**: dominio y contratos puros; la aplicación no alcanza la persistencia ni HTTP;
   `domain`, `contracts`, `application` e `infrastructure` no importan `jwtauth`.
 - **Integración del contexto** (`integration/security_context_test.go`, Security y Parties
-  migrados en la misma base): pasa en **PostgreSQL, SQL Server y Oracle**.
+  migrados en la misma base): pasa en **PostgreSQL, SQL Server, Oracle y MySQL**.
 
-**No verificado:** la integración del contexto en **MySQL**. Sus ejecuciones coincidieron con
-otra ejecución completa de la suite contra las mismas bases. En la mejor de ellas pasaron todas
-las comprobaciones funcionales y falló la verificación final del esquema, porque el historial de
-migraciones ya no estaba; en otra, MySQL devolvió un interbloqueo al migrar (también a la prueba
-de Instalaciones, que ya existía). No hay una pasada limpia, y Docker dejó de responder antes de
-poder repetirla. Se repite con `./integration/run.ps1`, sin otra ejecución a la vez.
+La pasada de MySQL es del 2026-10-05, con el servidor para ella sola. Las del día anterior
+coincidieron con otra ejecución completa de la suite contra las mismas bases y fallaron por eso
+(interbloqueos al migrar, y el historial de migraciones borrado por el otro proceso): la suite
+de integración no admite dos ejecuciones a la vez.
 
 ## 9. Pendiente (fuera de este port)
 
