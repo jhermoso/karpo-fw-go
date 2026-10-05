@@ -670,7 +670,7 @@ func TestPasswordHasher(t *testing.T) {
 	}
 }
 
-// Every bounded context declares its permissions and the host passes them to the catalog: the 98
+// Every bounded context declares its permissions and the host passes them to the catalog: the 99
 // codes the fifteen business contexts check, plus the eight of Security and the wildcard.
 func TestCatalog_EveryContextDeclaresItsPermissions(t *testing.T) {
 	declared := map[string][]authz.Permission{
@@ -689,7 +689,7 @@ func TestCatalog_EveryContextDeclaresItsPermissions(t *testing.T) {
 			all = append(all, p)
 		}
 	}
-	if len(all) != 98+len(sapp.Permissions()) || len(sapp.Permissions()) != 8 {
+	if len(all) != 99+len(sapp.Permissions()) || len(sapp.Permissions()) != 8 {
 		t.Fatalf("declared permissions: %d", len(all))
 	}
 
@@ -716,7 +716,7 @@ func TestCatalog_EveryContextDeclaresItsPermissions(t *testing.T) {
 	// organization administrator or a custom role, never the standard user.
 	std := granted["StandardUser"]
 	for _, special := range []string{"Billing.Invoice.Issue", "Payroll.Payslip.Approve", "Fiscal.Filing.Submit", "Treasury.Remittance.Settle",
-		"Accounting.Entry.Reverse", "Parties.PartyRole.Assign", "Purchases.Invoice.Register", "Orders.Order.Confirm",
+		"Accounting.Entry.Reverse", "Parties.PartyRole.Assign", "Parties.Relationship.SetTrial", "Purchases.Invoice.Register", "Orders.Order.Confirm",
 		"Inventory.Stock.Adjust", "Security.User.Read"} {
 		if slices.Contains(std, special) || (special != "Security.User.Read" && !slices.Contains(granted["OrganizationAdmin"], special)) {
 			t.Errorf("%s: standard user %v, organization admin %v", special, slices.Contains(std, special), slices.Contains(granted["OrganizationAdmin"], special))

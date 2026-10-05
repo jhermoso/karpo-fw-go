@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -46,17 +47,22 @@ type env struct {
 	// admin is a global administrator; the others work in an organization scope: reader
 	// (read-only), clerk (full), viewer (read-only grant, write permissions), outsider (full
 	// on another organization).
-	admin, reader, clerk, viewer, outsider string
+	// on another organization), seller (full, everything but granting trials).
+	admin, reader, clerk, viewer, outsider, seller string
 }
 
-var allPerms = []authz.Permission{papp.PermPartyRead, papp.PermPartyCreate, papp.PermPartyUpdate, papp.PermRoleAssign,
-	papp.PermRelationshipRead, papp.PermRelationshipCreate, papp.PermRelationshipEnd, papp.PermRelationshipUpdate}
+var allPerms = append(slices.Clone(sellerPerms), papp.PermRelationshipSetTrial)
 
 var readerPerms = []authz.Permission{papp.PermPartyRead, papp.PermRelationshipRead}
 
+// sellerPerms are what a standard user gets from the Security catalog (read, create, update)
+// plus roles and terminations: everything but granting trials.
+var sellerPerms = []authz.Permission{papp.PermPartyRead, papp.PermPartyCreate, papp.PermPartyUpdate, papp.PermRoleAssign,
+	papp.PermRelationshipRead, papp.PermRelationshipCreate, papp.PermRelationshipEnd, papp.PermRelationshipUpdate}
+
 // profiles are the users of the test host and their user names.
 var profiles = map[string]string{"admin": "ana.admin", "reader": "rita.reader", "clerk": "carl.clerk", "viewer": "vera.viewer",
-	"outsider": "otto.outsider"}
+	"outsider": "otto.outsider", "seller": "sara.seller"}
 
 // directory is the security source of the test host. The Parties use cases never see it: they
 // only read the authorization context the resolver builds from it on every request. The same
@@ -86,6 +92,8 @@ func (d *memoryDirectory) register(_ *testing.T, profile, _ string) (fw.UUID, fw
 		s = authz.Subject{Active: true, Roles: []string{authorization.DefaultGlobalAdminRole}}
 	case "reader":
 		s.Permissions = readerPerms
+	case "seller":
+		s.Permissions = sellerPerms
 	}
 	d.ids[profile] = fw.NewUUID()
 	d.Put(d.ids[profile], s)
@@ -129,7 +137,7 @@ func newSecurityDirectory(t *testing.T) directory {
 		}
 		return out
 	}
-	for name, perms := range map[string][]authz.Permission{"reader": readerPerms, "worker": allPerms} {
+	for name, perms := range map[string][]authz.Permission{"reader": readerPerms, "worker": allPerms, "seller": sellerPerms} {
 		r, err := sec.Service.DefineRole.Handle(d.setup, sapp.DefineRole{Name: name, Permissions: codes(perms)})
 		if err != nil {
 			t.Fatal(err)
@@ -194,7 +202,7 @@ func compose(t *testing.T, newDirectory func(*testing.T) directory) *env {
 	t.Cleanup(srv.Close)
 	t.Cleanup(func() { _ = sw.Close(context.Background()) })
 	return &env{t: t, srv: srv, sw: sw, mod: mod, dir: dir, admin: tokens["admin"], reader: tokens["reader"],
-		clerk: tokens["clerk"], viewer: tokens["viewer"], outsider: tokens["outsider"]}
+		clerk: tokens["clerk"], viewer: tokens["viewer"], outsider: tokens["outsider"], seller: tokens["seller"]}
 }
 
 func (e *env) do(method, path, auth string, body any, out any) int {
@@ -336,6 +344,17 @@ func (e *env) prospects(acme, ana papp.PartyDTO) {
 	longer := until.Add(15 * 24 * time.Hour)
 	var rel papp.RelationshipDTO
 	e.must(e.do("PUT", trial, e.reader, map[string]any{"trialUntil": longer}, nil), 403, "the reader lacks the permission")
+
+	// Granting a trial is its own permission: a seller creates and updates everything else in the
+	// organization, but gives no time away, neither afterwards nor with the relationship.
+	e.grant("seller", authz.Full, acme.ID)
+	e.must(e.do("PUT", trial, e.seller, map[string]any{"trialUntil": longer}, nil), 403, "a seller cannot extend a trial")
+	lead := map[string]any{"organization": acme.ID, "relationshipType": domain.RelProspect.String(), "prospect": map[string]any{"trialUntil": until}}
+	e.must(e.do("POST", "/api/organizations", e.seller, map[string]any{"legalName": "Lead " + acme.ID[:8], "affiliation": lead}, nil),
+		403, "nor register a prospect with a trial")
+	delete(lead, "prospect")
+	e.must(e.do("POST", "/api/organizations", e.seller, map[string]any{"legalName": "Lead " + acme.ID[:8], "affiliation": lead}, nil),
+		201, "a seller registers a prospect without trial")
 	e.must(e.do("PUT", trial, e.viewer, map[string]any{"trialUntil": longer}, nil), 403, "a read-only grant cannot extend")
 	e.must(e.do("PUT", trial, e.outsider, map[string]any{"trialUntil": longer}, nil), 404, "out of scope")
 	e.must(e.do("PUT", trial, e.clerk, map[string]any{"trialUntil": fw.Now().Add(-365 * 24 * time.Hour)}, nil), 400, "before the relationship starts")
@@ -429,7 +448,7 @@ func (e *env) prospects(acme, ana papp.PartyDTO) {
 	e.must(e.do("PUT", share, e.clerk, map[string]any{"share": "33.333"}, nil), 400, "two decimals at most")
 	e.must(e.do("PUT", "/api/party-relationships/"+own.ID+"/trial", e.clerk, map[string]any{"trialUntil": until}, nil), 422, "an ownership has no trial")
 	own = papp.RelationshipDTO{}
-	e.must(e.do("PUT", share, e.clerk, map[string]any{"share": "45.5"}, &own), 200, "correct the share")
+	e.must(e.do("PUT", share, e.seller, map[string]any{"share": "45.5"}, &own), 200, "the share is an update: a seller corrects it")
 	if own.Ownership.Share != "45.50" {
 		e.t.Fatalf("corrected share: %+v", own.Ownership)
 	}
@@ -682,7 +701,7 @@ func endToEnd(t *testing.T, newDirectory func(*testing.T) directory) {
 	if _, err := e.mod.Relay(broker).RelayOnce(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if len(seen) != 11 || roles != 2 {
+	if len(seen) != 12 || roles != 2 {
 		t.Fatalf("published: %v, roles %d", seen, roles)
 	}
 	if len(shares) != 3 || shares[0] != "30.00" || shares[1] != "45.50" || shares[2] != "" {
