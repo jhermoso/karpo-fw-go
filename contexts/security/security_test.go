@@ -25,12 +25,15 @@ import (
 	fisapp "github.com/jhermoso/karpo-fw-go/contexts/fiscal/application"
 	geoapp "github.com/jhermoso/karpo-fw-go/contexts/geography/application"
 	hrapp "github.com/jhermoso/karpo-fw-go/contexts/hr/application"
+	invapp "github.com/jhermoso/karpo-fw-go/contexts/inventory/application"
+	ordapp "github.com/jhermoso/karpo-fw-go/contexts/orders/application"
 	"github.com/jhermoso/karpo-fw-go/contexts/parties"
 	papp "github.com/jhermoso/karpo-fw-go/contexts/parties/application"
 	pdomain "github.com/jhermoso/karpo-fw-go/contexts/parties/domain"
 	pinfra "github.com/jhermoso/karpo-fw-go/contexts/parties/infrastructure"
 	payapp "github.com/jhermoso/karpo-fw-go/contexts/payments/application"
 	prlapp "github.com/jhermoso/karpo-fw-go/contexts/payroll/application"
+	prdapp "github.com/jhermoso/karpo-fw-go/contexts/products/application"
 	purapp "github.com/jhermoso/karpo-fw-go/contexts/purchases/application"
 	recapp "github.com/jhermoso/karpo-fw-go/contexts/receivables/application"
 	"github.com/jhermoso/karpo-fw-go/contexts/security"
@@ -413,7 +416,7 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("catalog: %d entries", len(catalog))
 	}
 	var clerk sapp.RoleDTO
-	h.must(h.do("POST", "/api/security/roles", root, map[string]any{"name": "Purchasing clerk", "permissions": []string{"Orders.Order.Read"}}, nil), 400, "unknown permission")
+	h.must(h.do("POST", "/api/security/roles", root, map[string]any{"name": "Purchasing clerk", "permissions": []string{"Nowhere.Thing.Read"}}, nil), 400, "unknown permission")
 	h.must(h.do("POST", "/api/security/roles", root, map[string]any{"name": "Super", "permissions": []string{"*.*.*"}}, nil), 400, "no custom role carries the wildcard")
 	h.must(h.do("POST", "/api/security/roles", root, map[string]any{"name": "Purchasing clerk", "permissions": []string{"Parties.Party.Read"}}, &clerk), 201, "define")
 	h.must(h.do("POST", "/api/security/roles", root, map[string]any{"name": "purchasing CLERK", "permissions": []string{}}, nil), 422, "role names are unique")
@@ -667,12 +670,13 @@ func TestPasswordHasher(t *testing.T) {
 	}
 }
 
-// Every bounded context declares its permissions and the host passes them to the catalog: the 81
-// codes the twelve business contexts check, plus the eight of Security and the wildcard.
+// Every bounded context declares its permissions and the host passes them to the catalog: the 97
+// codes the fifteen business contexts check, plus the eight of Security and the wildcard.
 func TestCatalog_EveryContextDeclaresItsPermissions(t *testing.T) {
 	declared := map[string][]authz.Permission{
 		"Accounting": accapp.Permissions(), "Billing": bilapp.Permissions(), "Facilities": facapp.Permissions(),
-		"Fiscal": fisapp.Permissions(), "Geography": geoapp.Permissions(), "HR": hrapp.Permissions(), "Parties": papp.Permissions(),
+		"Fiscal": fisapp.Permissions(), "Geography": geoapp.Permissions(), "HR": hrapp.Permissions(), "Inventory": invapp.Permissions(),
+		"Orders": ordapp.Permissions(), "Parties": papp.Permissions(), "Products": prdapp.Permissions(),
 		"Payments": payapp.Permissions(), "Payroll": prlapp.Permissions(), "Purchases": purapp.Permissions(),
 		"Receivables": recapp.Permissions(), "Treasury": treapp.Permissions(), sdomain.Namespace: sapp.Permissions(),
 	}
@@ -685,7 +689,7 @@ func TestCatalog_EveryContextDeclaresItsPermissions(t *testing.T) {
 			all = append(all, p)
 		}
 	}
-	if len(all) != 81+len(sapp.Permissions()) || len(sapp.Permissions()) != 8 {
+	if len(all) != 97+len(sapp.Permissions()) || len(sapp.Permissions()) != 8 {
 		t.Fatalf("declared permissions: %d", len(all))
 	}
 
@@ -712,7 +716,8 @@ func TestCatalog_EveryContextDeclaresItsPermissions(t *testing.T) {
 	// organization administrator or a custom role, never the standard user.
 	std := granted["StandardUser"]
 	for _, special := range []string{"Billing.Invoice.Issue", "Payroll.Payslip.Approve", "Fiscal.Filing.Submit", "Treasury.Remittance.Settle",
-		"Accounting.Entry.Reverse", "Parties.PartyRole.Assign", "Purchases.Invoice.Register", "Security.User.Read"} {
+		"Accounting.Entry.Reverse", "Parties.PartyRole.Assign", "Purchases.Invoice.Register", "Orders.Order.Confirm",
+		"Inventory.Stock.Adjust", "Security.User.Read"} {
 		if slices.Contains(std, special) || (special != "Security.User.Read" && !slices.Contains(granted["OrganizationAdmin"], special)) {
 			t.Errorf("%s: standard user %v, organization admin %v", special, slices.Contains(std, special), slices.Contains(granted["OrganizationAdmin"], special))
 		}
@@ -720,7 +725,7 @@ func TestCatalog_EveryContextDeclaresItsPermissions(t *testing.T) {
 	if len(granted["OrganizationAdmin"]) != len(all)-1 || slices.Contains(granted["OrganizationAdmin"], string(sapp.PermRoleUpdate)) {
 		t.Errorf("OrganizationAdmin holds everything but the roles: %d of %d", len(granted["OrganizationAdmin"]), len(all))
 	}
-	if len(granted["ReadOnlyUser"]) != 34+3 || !slices.Contains(std, "Billing.Invoice.Create") || len(granted["Customer"]) != 0 ||
+	if len(granted["ReadOnlyUser"]) != 40+3 || !slices.Contains(std, "Billing.Invoice.Create") || len(granted["Customer"]) != 0 ||
 		!slices.Equal(granted["GlobalSuperAdmin"], []string{"*.*.*"}) {
 		t.Errorf("read only %d, customer %d, global %v", len(granted["ReadOnlyUser"]), len(granted["Customer"]), granted["GlobalSuperAdmin"])
 	}
