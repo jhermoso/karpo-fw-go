@@ -36,8 +36,6 @@ Hecho (ver [docs/PARTIES-UDM.md](docs/PARTIES-UDM.md), decisiones aprobadas el 2
 propios por tipo de relación (código estable en el catálogo, relación de cliente potencial con su
 tiempo de prueba, participación en el capital) y edición de persona.
 
-- **Batería de integración completa:** la de Parties pasa en los cuatro motores (2026-10-06); los
-  demás contextos, que también migran las tablas de Parties, no se han vuelto a lanzar.
 - **Detalles por tipo de rol** en `PartyRole`, con el mismo mecanismo: cuando haya un dato que
   sea del rol y no de la pareja ni de otra área. Los roles heredan, así que los detalles también.
 - **Número de cliente** como detalle de la relación de cliente, único por empresa: con la

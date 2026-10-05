@@ -469,9 +469,10 @@ Ejecutado (2026-10-04, Windows, Go 1.27):
   de `trial_until`, la especificación `InTrialAt` sobre la columna anulable, el puerto `Trials`,
   la retirada, la participación como decimal exacto y la edición de persona.
 
-**No ejecutado:** el resto de la batería de integración (los otros contextos, que también migran
-las tablas de Parties). Sólo se lanzó la prueba de Parties, para no coincidir con otra sesión
-sobre las mismas bases.
+- **Batería de integración completa** (`integration/`, 18 pruebas: los doce contextos, la
+  conformidad del framework y el cambio en caliente), ejecutada el 2026-10-06 en los cuatro
+  motores: pasa entera. Los demás contextos migran también las tablas de Parties, así que
+  comprueba que las migraciones 11 a 13 no les afectan.
 
 Salvedad: `TestParties_EndToEnd_MemoryThenSQLite` falla de forma intermitente en Windows
 (1 o 2 de cada 40 ejecuciones) con «end e-mail: status 422». **Es anterior a este cambio**: se
@@ -500,8 +501,6 @@ No se ha tocado nada en `C:\Git\Paranoia\Karpo`. Queda para Javier:
 
 ## 10. Pendiente
 
-- Ejecutar la batería de integración completa (`./integration/run.ps1`): los demás contextos
-  migran también las tablas de Parties y no se han vuelto a lanzar.
 - Detalles de rol en `PartyRole` (PU-2): cuando aparezca el primer dato que sea del rol.
 - Número de cliente como detalle de la relación de cliente (PU-2): cuando llegue la importación
   de Sage o Ventas.
