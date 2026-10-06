@@ -43,6 +43,7 @@ type Service struct {
 	RegisterPerson        app.CommandHandler[RegisterPerson, PartyDTO]
 	RegisterOrganization  app.CommandHandler[RegisterOrganization, PartyDTO]
 	Rename                app.CommandHandler[RenameParty, PartyDTO]
+	UpdatePerson          app.CommandHandler[UpdatePerson, PartyDTO]
 	SetActive             app.CommandHandler[SetPartyActive, PartyDTO]
 	SetLegalForm          app.CommandHandler[SetLegalForm, PartyDTO]
 	SetShared             app.CommandHandler[SetShared, PartyDTO]
@@ -50,6 +51,8 @@ type Service struct {
 	EndRole               app.CommandHandler[EndRole, PartyDTO]
 	EstablishRelationship app.CommandHandler[EstablishRelationship, RelationshipDTO]
 	TerminateRelationship app.CommandHandler[TerminateRelationship, RelationshipDTO]
+	SetProspectTrial      app.CommandHandler[SetProspectTrial, RelationshipDTO]
+	SetOwnershipShare     app.CommandHandler[SetOwnershipShare, RelationshipDTO]
 	AddIdentification     app.CommandHandler[AddIdentification, PartyDTO]
 	RemoveIdentification  app.CommandHandler[RemoveIdentification, PartyDTO]
 	AddContact            app.CommandHandler[AddContact, PartyDTO]
@@ -95,11 +98,7 @@ func (s service) relationshipTypes(ctx context.Context) (map[domain.Relationship
 	if err != nil {
 		return nil, err
 	}
-	out := make(map[domain.RelationshipTypeID]domain.RelationshipType, len(types))
-	for _, t := range types {
-		out[t.ID] = t
-	}
-	return out, nil
+	return domain.IndexRelationshipTypes(types)
 }
 
 // updateParty loads a party in scope, checks the caller may write it, applies fn and saves.
@@ -175,6 +174,24 @@ func NewService(d Deps) *Service {
 			return p.RenameOrganization(n)
 		})
 	}, pipeline.RetryOnConflict[RenameParty, PartyDTO](retry, backoff))
+
+	svc.UpdatePerson = chain(PermPartyUpdate, func(ctx context.Context, c UpdatePerson) (PartyDTO, error) {
+		var v fw.Validation
+		g, err := domain.ParseGender(c.Gender)
+		v.Merge("", err)
+		m, err := domain.ParseMaritalStatus(c.MaritalStatus)
+		v.Merge("", err)
+		var birth vocab.Date
+		if c.BirthDate != "" {
+			if birth, err = vocab.ParseDate(c.BirthDate); err != nil {
+				v.Add("birthDate", "format", "birth date must be YYYY-MM-DD")
+			}
+		}
+		if err := v.Err(); err != nil {
+			return PartyDTO{}, err
+		}
+		return s.updateParty(ctx, c.ID, func(p *domain.Party, _ *domain.Catalog) error { return p.UpdatePersonDetails(g, birth, m) })
+	}, pipeline.RetryOnConflict[UpdatePerson, PartyDTO](retry, backoff))
 
 	svc.SetActive = chain(PermPartyUpdate, func(ctx context.Context, c SetPartyActive) (PartyDTO, error) {
 		return s.updateParty(ctx, c.ID, func(p *domain.Party, _ *domain.Catalog) error {
@@ -255,7 +272,7 @@ func NewService(d Deps) *Service {
 		if !sc.canRelate(from, to) {
 			return RelationshipDTO{}, fw.ErrForbidden
 		}
-		r, err := s.establish(ctx, rt, from, to, nowOr(c.Since), strings.TrimSpace(c.Remark))
+		r, err := s.establish(ctx, rt, from, to, nowOr(c.Since), strings.TrimSpace(c.Remark), c.RelationshipDetailsInput)
 		if err != nil {
 			return RelationshipDTO{}, err
 		}
@@ -415,7 +432,7 @@ func NewService(d Deps) *Service {
 		}
 		out := make([]RelationshipTypeDTO, len(types))
 		for i, t := range types {
-			out[i] = RelationshipTypeDTO{ID: t.ID.String(), Name: t.Name.String(), Description: t.Description,
+			out[i] = RelationshipTypeDTO{ID: t.ID.String(), Code: t.Code, Name: t.Name.String(), Description: t.Description,
 				FromRole: t.FromRole.String(), ToRole: t.ToRole.String(), Hierarchical: t.Hierarchical}
 		}
 		return out, nil
@@ -423,6 +440,7 @@ func NewService(d Deps) *Service {
 
 	addPhase2(svc, s)
 	addFacilityRoles(svc, s)
+	addRelationshipDetails(svc, s)
 	return svc
 }
 

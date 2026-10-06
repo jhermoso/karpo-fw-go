@@ -65,3 +65,41 @@ func TestResolver(t *testing.T) {
 		t.Fatalf("a failing directory must be indeterminate (fail closed): %+v", res)
 	}
 }
+
+type fixedAuthenticator struct {
+	name string
+	err  error
+}
+
+func (f fixedAuthenticator) Authenticate(_ context.Context, credentials string) (authz.Principal, error) {
+	if credentials == "" {
+		return authz.Principal{}, authz.ErrNoCredentials
+	}
+	return authz.Principal{Name: f.name}, f.err
+}
+
+func TestAuthenticators_FirstThatRecognizesTheCredentialsWins(t *testing.T) {
+	ctx := context.Background()
+	down := errors.New("identity source unavailable")
+	own := fixedAuthenticator{name: "own", err: authz.ErrInvalidCredentials}
+	external := fixedAuthenticator{name: "external"}
+
+	p, err := authorization.Authenticators(own, external).Authenticate(ctx, "token")
+	if err != nil || p.Name != "external" {
+		t.Fatalf("the second authenticator recognizes the token: %+v %v", p, err)
+	}
+	if _, err := authorization.Authenticators(own, external).Authenticate(ctx, ""); !errors.Is(err, authz.ErrNoCredentials) {
+		t.Fatalf("no credentials: %v", err)
+	}
+	if _, err := authorization.Authenticators(own, own).Authenticate(ctx, "token"); !errors.Is(err, authz.ErrInvalidCredentials) {
+		t.Fatalf("nobody recognizes the token: %v", err)
+	}
+	// An outage is never reported as a wrong token (401): the caller sees the failure.
+	_, err = authorization.Authenticators(fixedAuthenticator{err: down}, own).Authenticate(ctx, "token")
+	if !errors.Is(err, down) || errors.Is(err, authz.ErrInvalidCredentials) {
+		t.Fatalf("outage: %v", err)
+	}
+	if _, err := authorization.Authenticators().Authenticate(ctx, "token"); !errors.Is(err, authz.ErrNoCredentials) {
+		t.Fatalf("no authenticators: %v", err)
+	}
+}

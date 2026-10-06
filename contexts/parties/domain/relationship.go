@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"fmt"
 	"time"
 
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
@@ -22,6 +23,25 @@ type RelationshipType struct {
 	// Hierarchical types relate a child (From) to its parent (To): a party has one current
 	// parent per type and the hierarchy has no cycles (organization rollups).
 	Hierarchical bool
+	// Code is the stable, readable key of the type ("prospect"); optional and unique. It is what
+	// tells which details a relationship of the type carries (the UDM subtypes of PARTY
+	// RELATIONSHIP): a type without code, or with a code the domain does not know, carries none,
+	// so adding a type without data of its own stays a catalog row.
+	Code string
+}
+
+// IndexRelationshipTypes indexes the catalog by id, refusing two types with the same code.
+func IndexRelationshipTypes(types []RelationshipType) (map[RelationshipTypeID]RelationshipType, error) {
+	out := make(map[RelationshipTypeID]RelationshipType, len(types))
+	codes := map[string]RelationshipTypeID{}
+	for _, t := range types {
+		if other, dup := codes[t.Code]; dup && t.Code != "" && other != t.ID {
+			return nil, fmt.Errorf("%w: relationship types %s and %s share the code %q", fw.ErrValidation, other, t.ID, t.Code)
+		}
+		codes[t.Code] = t.ID
+		out[t.ID] = t
+	}
+	return out, nil
 }
 
 // Relationship links two parties playing the roles its type requires, during a period
@@ -36,6 +56,29 @@ type Relationship struct {
 	toRole   RoleTypeID
 	period   vocab.ValidPeriod
 	remark   string
+	details  RelationshipDetails
+}
+
+// RelationshipDetails are the data a relationship carries because of its type (the UDM subtypes
+// of PARTY RELATIONSHIP). As with PersonDetails and OrganizationDetails in Party, the type is
+// data and the details of each type are value objects; the ones of the other types stay zero.
+type RelationshipDetails struct {
+	Prospect  ProspectDetails  // types with code CodeProspect
+	Ownership OwnershipDetails // types with code CodeOwnership
+}
+
+// OwnershipDetails are the data of an ownership relationship: the stake of the shareholder.
+type OwnershipDetails struct {
+	// Share is the direct stake in the organization, in points (30 = 30 %); nil when unknown.
+	Share *vocab.Percentage
+}
+
+// ProspectDetails are the data of a prospect relationship: the free trial the internal
+// organization grants to the prospect.
+type ProspectDetails struct {
+	// TrialUntil is when the trial ends (nil: no trial granted). The trial starts with the
+	// relationship; its default length is commercial policy and belongs to whoever grants it.
+	TrialUntil *time.Time
 }
 
 // Establish creates a relationship between two parties, checking what the C# left to stubs:
@@ -84,6 +127,7 @@ type RelationshipState struct {
 	FromRole, ToRole RoleTypeID
 	Period           vocab.ValidPeriod
 	Remark           string
+	Details          RelationshipDetails
 	Audit            traits.AuditStamp
 }
 
@@ -102,7 +146,7 @@ func ReconstituteRelationship(id RelationshipID, s RelationshipState) (*Relation
 		return nil, err
 	}
 	return &Relationship{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), relType: s.Type,
-		from: s.From, to: s.To, fromRole: s.FromRole, toRole: s.ToRole, period: s.Period, remark: s.Remark}, nil
+		from: s.From, to: s.To, fromRole: s.FromRole, toRole: s.ToRole, period: s.Period, remark: s.Remark, details: s.Details}, nil
 }
 
 // Type returns the relationship type.
@@ -155,12 +199,105 @@ func (r *Relationship) Terminate(at time.Time) error {
 	return nil
 }
 
+// Details returns the data the relationship carries because of its type.
+func (r *Relationship) Details() RelationshipDetails { return r.details }
+
+// TrialUntil returns when the trial of a prospect relationship ends (nil without trial).
+func (r *Relationship) TrialUntil() *time.Time { return r.details.Prospect.TrialUntil }
+
+// InTrialAt reports whether the trial is in force at t: the relationship is, and t is before
+// the end of the trial.
+func (r *Relationship) InTrialAt(t time.Time) bool {
+	until := r.details.Prospect.TrialUntil
+	return until != nil && r.period.IsActiveAt(t) && t.Before(*until)
+}
+
+// SetTrial grants, extends, shortens or (with nil) withdraws the trial of a prospect
+// relationship. t is the type of the relationship: only the types with code CodeProspect carry
+// a trial. The trial ends after the relationship starts, and an ended relationship keeps the
+// trial it had.
+func (r *Relationship) SetTrial(t RelationshipType, until *time.Time) error {
+	if t.ID != r.relType || t.Code != CodeProspect {
+		return fw.Violation("parties.not_a_prospect_relationship", "only a prospect relationship has a trial")
+	}
+	if err := r.requireOpen(); err != nil {
+		return err
+	}
+	if until != nil {
+		u := until.UTC()
+		if !u.After(r.Since()) {
+			var v fw.Validation
+			v.Add("trialUntil", "range", "the trial must end after the relationship starts")
+			return v.Err()
+		}
+		until = &u
+	}
+	if old := r.details.Prospect.TrialUntil; (old == nil && until == nil) || (old != nil && until != nil && old.Equal(*until)) {
+		return nil
+	}
+	r.details.Prospect.TrialUntil = until
+	r.Raise(ProspectTrialChanged{EventMeta: r.NewEventMeta(), Prospect: r.from.String(), Organization: r.to.String(), TrialUntil: until})
+	return nil
+}
+
+// requireOpen refuses to change the details of a relationship that has ended.
+func (r *Relationship) requireOpen() error {
+	if end, closed := r.period.To(); closed && !end.After(fw.Now()) {
+		return fw.Violation("parties.relationship_ended", "the details of an ended relationship cannot change")
+	}
+	return nil
+}
+
+// OwnershipShare returns the stake of the shareholder (nil when unknown or not an ownership).
+func (r *Relationship) OwnershipShare() *vocab.Percentage { return r.details.Ownership.Share }
+
+var maxShare = vocab.DecimalFromInt(100)
+
+// SetOwnershipShare records, corrects or (with nil) clears the direct stake of the shareholder in
+// an ownership relationship: above 0 and up to 100 %, with two decimals at most. t is the type of
+// the relationship: only the types with code CodeOwnership carry a stake.
+func (r *Relationship) SetOwnershipShare(t RelationshipType, share *vocab.Percentage) error {
+	if t.ID != r.relType || t.Code != CodeOwnership {
+		return fw.Violation("parties.not_an_ownership_relationship", "only an ownership relationship has a share")
+	}
+	if err := r.requireOpen(); err != nil {
+		return err
+	}
+	points := ""
+	if share != nil {
+		p := share.Points()
+		if !p.IsPositive() || p.GreaterThan(maxShare) || !p.Equal(p.Round(2)) {
+			var v fw.Validation
+			v.Add("share", "range", "the share must be above 0 and up to 100, with two decimals at most")
+			return v.Err()
+		}
+		points = p.StringFixed(2)
+	}
+	if old := r.details.Ownership.Share; (old == nil && share == nil) || (old != nil && share != nil && old.Equal(*share)) {
+		return nil
+	}
+	r.details.Ownership.Share = share
+	r.Raise(OwnershipShareChanged{EventMeta: r.NewEventMeta(), Shareholder: r.from.String(), Organization: r.to.String(), Share: points})
+	return nil
+}
+
 // AuditSnapshot implements traits.Snapshotter.
 func (r *Relationship) AuditSnapshot() map[string]any {
-	until := ""
-	if t := r.Until(); t != nil {
-		until = t.Format(time.RFC3339)
+	format := func(t *time.Time) string {
+		if t == nil {
+			return ""
+		}
+		return t.Format(time.RFC3339)
 	}
 	return map[string]any{"type": r.relType.String(), "from": r.from.String(), "to": r.to.String(),
-		"since": r.Since().Format(time.RFC3339), "until": until, "remark": r.remark}
+		"since": r.Since().Format(time.RFC3339), "until": format(r.Until()), "remark": r.remark,
+		"trialUntil": format(r.TrialUntil()), "share": shareText(r.OwnershipShare())}
+}
+
+// shareText renders a stake with two decimals ("" for nil).
+func shareText(p *vocab.Percentage) string {
+	if p == nil {
+		return ""
+	}
+	return p.Points().StringFixed(2)
 }

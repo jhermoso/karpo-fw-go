@@ -36,6 +36,7 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/parties", m.search)
 	mux.HandleFunc("GET /api/parties/{id}", m.get)
 	mux.HandleFunc("PUT /api/parties/{id}/name", m.rename)
+	mux.HandleFunc("PUT /api/parties/{id}/person", m.updatePerson)
 	mux.HandleFunc("PUT /api/parties/{id}/active", m.setActive)
 	mux.HandleFunc("POST /api/parties/{id}/roles", m.assignRole)
 	mux.HandleFunc("POST /api/parties/{id}/roles/{roleId}/end", m.endRole)
@@ -48,6 +49,7 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/parties/directory/search-ids", distribution.RequirePermission(papp.PermPartyRead, http.HandlerFunc(m.searchIDs)))
 	m.registerPhase2(mux)
 	m.registerPhase3(mux)
+	m.registerDetails(mux)
 }
 
 func decode(r *http.Request, v any) error {
@@ -134,6 +136,19 @@ func (m *Module) rename(w http.ResponseWriter, r *http.Request) {
 	handle(w, r, &c, true, http.StatusOK, func(c papp.RenameParty) (papp.PartyDTO, error) {
 		c.ID = id
 		return m.svc.Rename.Handle(r.Context(), c)
+	})
+}
+
+func (m *Module) updatePerson(w http.ResponseWriter, r *http.Request) {
+	id, err := pathParty(r)
+	if err != nil {
+		distribution.WriteError(w, r, err)
+		return
+	}
+	c := papp.UpdatePerson{}
+	handle(w, r, &c, true, http.StatusOK, func(c papp.UpdatePerson) (papp.PartyDTO, error) {
+		c.ID = id
+		return m.svc.UpdatePerson.Handle(r.Context(), c)
 	})
 }
 

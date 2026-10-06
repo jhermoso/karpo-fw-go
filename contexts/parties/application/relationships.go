@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/parties/domain"
+	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
 )
@@ -19,6 +20,7 @@ const MaxHierarchyDepth = 10
 type NewAffiliation struct {
 	Organization     string `json:"organization"`
 	RelationshipType string `json:"relationshipType"`
+	RelationshipDetailsInput
 }
 
 // canRelate: global administrators relate anything; otherwise one side must be an organization
@@ -110,7 +112,7 @@ func (s service) register(ctx context.Context, build func(domain.PartyID) (*doma
 		if !partyIsFrom {
 			from, to = org, p
 		}
-		if _, err := s.establish(ctx, rt, from, to, now, ""); err != nil {
+		if _, err := s.establish(ctx, rt, from, to, now, "", aff.RelationshipDetailsInput); err != nil {
 			return PartyDTO{}, err
 		}
 		if p, err = s.Parties.Get(ctx, p.ID()); err != nil {
@@ -123,7 +125,8 @@ func (s service) register(ctx context.Context, build func(domain.PartyID) (*doma
 // establish creates a relationship and projects it into the parties: a party related to an
 // internal organization becomes affiliated with it (visibility, membership). Hierarchical types
 // keep one parent per child and no cycles. Everything happens in the caller's unit of work.
-func (s service) establish(ctx context.Context, rt domain.RelationshipType, from, to *domain.Party, since time.Time, remark string) (*domain.Relationship, error) {
+func (s service) establish(ctx context.Context, rt domain.RelationshipType, from, to *domain.Party, since time.Time, remark string,
+	details RelationshipDetailsInput) (*domain.Relationship, error) {
 	cat, err := s.roleCatalog(ctx)
 	if err != nil {
 		return nil, err
@@ -140,6 +143,15 @@ func (s service) establish(ctx context.Context, rt domain.RelationshipType, from
 	}
 	r, err := domain.Establish(domain.NewRelationshipID(), rt, from, to, cat, since, remark)
 	if err != nil {
+		return nil, err
+	}
+	// A trial that comes with the relationship is still a trial being granted.
+	if details.Prospect != nil && details.Prospect.TrialUntil != nil {
+		if err := authz.Require(ctx, PermRelationshipSetTrial); err != nil {
+			return nil, err
+		}
+	}
+	if err := details.apply(r, rt); err != nil {
 		return nil, err
 	}
 	if err := s.relationships.Create(ctx, r); err != nil {
@@ -192,29 +204,36 @@ func (s service) checkHierarchy(ctx context.Context, rt domain.RelationshipType,
 	return nil
 }
 
+// writableRelationship loads a relationship the caller is about to change, with its parties: 404
+// when it is out of scope, 403 when the caller may not relate its parties.
+func (s service) writableRelationship(ctx context.Context, id domain.RelationshipID) (r *domain.Relationship, from, to *domain.Party, err error) {
+	sc := scopeOf(ctx)
+	if r, err = s.Relationships.Get(ctx, id); err != nil {
+		return nil, nil, nil, err
+	}
+	if !sc.relationships().IsSatisfiedBy(r) {
+		return nil, nil, nil, fw.NotFound(domain.RelationshipKind, id)
+	}
+	if from, err = s.Parties.Get(ctx, r.From()); err != nil {
+		return nil, nil, nil, err
+	}
+	if to, err = s.Parties.Get(ctx, r.To()); err != nil {
+		return nil, nil, nil, err
+	}
+	if !sc.canRelate(from, to) {
+		return nil, nil, nil, fw.ErrForbidden
+	}
+	return r, from, to, nil
+}
+
 // terminate ends a relationship and the affiliations it produced. The caller needs to see the
 // relationship and be allowed to relate its parties.
 func (s service) terminate(ctx context.Context, id domain.RelationshipID, at time.Time) (*domain.Relationship, error) {
-	sc := scopeOf(ctx)
-	r, err := s.Relationships.Get(ctx, id)
+	_, from, to, err := s.writableRelationship(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	if !sc.relationships().IsSatisfiedBy(r) {
-		return nil, fw.NotFound(domain.RelationshipKind, id)
-	}
-	from, err := s.Parties.Get(ctx, r.From())
-	if err != nil {
-		return nil, err
-	}
-	to, err := s.Parties.Get(ctx, r.To())
-	if err != nil {
-		return nil, err
-	}
-	if !sc.canRelate(from, to) {
-		return nil, fw.ErrForbidden
-	}
-	r, err = s.relationships.Update(ctx, id, func(_ context.Context, r *domain.Relationship) error { return r.Terminate(at) })
+	r, err := s.relationships.Update(ctx, id, func(_ context.Context, r *domain.Relationship) error { return r.Terminate(at) })
 	if err != nil {
 		return nil, err
 	}

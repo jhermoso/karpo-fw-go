@@ -21,7 +21,20 @@ var (
 	PermRelationshipRead   = authz.MustPermission("Parties.Relationship.Read")
 	PermRelationshipCreate = authz.MustPermission("Parties.Relationship.Create")
 	PermRelationshipEnd    = authz.MustPermission("Parties.Relationship.Terminate")
+	// PermRelationshipUpdate changes the details a relationship carries because of its type.
+	PermRelationshipUpdate = authz.MustPermission("Parties.Relationship.Update")
+	// PermRelationshipSetTrial grants, extends or withdraws the free trial of a prospect. It is an
+	// action of its own, not an update, so that the standard rule of the Security catalog (read,
+	// create, update) does not hand it to every standard user: giving time away is a commercial
+	// decision.
+	PermRelationshipSetTrial = authz.MustPermission("Parties.Relationship.SetTrial")
 )
+
+// Permissions returns the permissions this context declares to the Security catalog.
+func Permissions() []authz.Permission {
+	return []authz.Permission{PermPartyRead, PermPartyCreate, PermPartyUpdate, PermRoleAssign, PermRelationshipRead,
+		PermRelationshipCreate, PermRelationshipEnd, PermRelationshipUpdate, PermRelationshipSetTrial}
+}
 
 // RegisterPerson registers a person, optionally with initial roles (the C# CreatePartyWithRole).
 type RegisterPerson struct {
@@ -96,6 +109,15 @@ type RenameParty struct {
 	TradeName     string         `json:"tradeName,omitempty"`
 }
 
+// UpdatePerson replaces the gender, birth date and marital status of a person (empty: unknown).
+// The name changes with RenameParty.
+type UpdatePerson struct {
+	ID            domain.PartyID `json:"-"`
+	Gender        string         `json:"gender,omitempty"`
+	BirthDate     string         `json:"birthDate,omitempty"` // YYYY-MM-DD
+	MaritalStatus string         `json:"maritalStatus,omitempty"`
+}
+
 // SetPartyActive activates or deactivates a party (the C# toggle).
 type SetPartyActive struct {
 	ID     domain.PartyID `json:"-"`
@@ -116,13 +138,77 @@ type EndRole struct {
 	At      *time.Time         `json:"at,omitempty"`
 }
 
-// EstablishRelationship relates two parties (the roles come from the relationship type).
+// EstablishRelationship relates two parties (the roles come from the relationship type). The
+// details of the type, if it has any, may come with it.
 type EstablishRelationship struct {
 	Type   string     `json:"type"`
 	From   string     `json:"fromParty"`
 	To     string     `json:"toParty"`
 	Since  *time.Time `json:"since,omitempty"`
 	Remark string     `json:"remark,omitempty"`
+	RelationshipDetailsInput
+}
+
+// RelationshipDetailsInput are the details a relationship may carry because of its type; each one
+// is accepted only by the relationship types that have it.
+type RelationshipDetailsInput struct {
+	Prospect  *ProspectInput  `json:"prospect,omitempty"`  // prospect relationships
+	Ownership *OwnershipInput `json:"ownership,omitempty"` // ownership relationships
+}
+
+// apply sets the details on a relationship of type rt.
+func (d RelationshipDetailsInput) apply(r *domain.Relationship, rt domain.RelationshipType) error {
+	if d.Prospect != nil {
+		if err := r.SetTrial(rt, d.Prospect.TrialUntil); err != nil {
+			return err
+		}
+	}
+	if d.Ownership != nil {
+		share, err := parseShare(d.Ownership.Share)
+		if err != nil {
+			return err
+		}
+		return r.SetOwnershipShare(rt, share)
+	}
+	return nil
+}
+
+// ProspectInput are the details of a prospect relationship.
+type ProspectInput struct {
+	TrialUntil *time.Time `json:"trialUntil"` // null: no trial
+}
+
+// OwnershipInput are the details of an ownership relationship.
+type OwnershipInput struct {
+	Share *string `json:"share"` // points with two decimals at most ("30"); null: unknown
+}
+
+func parseShare(s *string) (*vocab.Percentage, error) {
+	if s == nil {
+		return nil, nil
+	}
+	d, err := vocab.ParseDecimal(*s)
+	if err != nil {
+		var v fw.Validation
+		v.Add("share", "format", "share must be a decimal number")
+		return nil, v.Err()
+	}
+	p := vocab.NewPercentage(d)
+	return &p, nil
+}
+
+// SetOwnershipShare records, corrects or (with a null share) clears the stake of the shareholder
+// in an ownership relationship.
+type SetOwnershipShare struct {
+	ID    domain.RelationshipID `json:"-"`
+	Share *string               `json:"share"`
+}
+
+// SetProspectTrial grants, extends, shortens or (with a null end) withdraws the trial of a
+// prospect relationship.
+type SetProspectTrial struct {
+	ID         domain.RelationshipID `json:"-"`
+	TrialUntil *time.Time            `json:"trialUntil"`
 }
 
 // TerminateRelationship ends a relationship (now when At is nil).

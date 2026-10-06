@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -19,6 +20,9 @@ import (
 	"github.com/jhermoso/karpo-fw-go/contexts/parties/contracts"
 	"github.com/jhermoso/karpo-fw-go/contexts/parties/domain"
 	"github.com/jhermoso/karpo-fw-go/contexts/parties/infrastructure"
+	"github.com/jhermoso/karpo-fw-go/contexts/security"
+	sapp "github.com/jhermoso/karpo-fw-go/contexts/security/application"
+	sdomain "github.com/jhermoso/karpo-fw-go/contexts/security/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/application"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/authorization"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
@@ -39,45 +43,154 @@ type env struct {
 	srv *httptest.Server
 	sw  *hotswap.Switch
 	mod *parties.Module
-	dir *authorization.MemoryDirectory
-	ids map[string]fw.UUID
+	dir directory
 	// admin is a global administrator; the others work in an organization scope: reader
 	// (read-only), clerk (full), viewer (read-only grant, write permissions), outsider (full
 	// on another organization).
-	admin, reader, clerk, viewer, outsider string
+	// on another organization), seller (full, everything but granting trials).
+	admin, reader, clerk, viewer, outsider, seller string
 }
 
-var allPerms = []authz.Permission{papp.PermPartyRead, papp.PermPartyCreate, papp.PermPartyUpdate, papp.PermRoleAssign,
-	papp.PermRelationshipRead, papp.PermRelationshipCreate, papp.PermRelationshipEnd}
+var allPerms = append(slices.Clone(sellerPerms), papp.PermRelationshipSetTrial)
 
-// grant gives a user access to organizations (the security directory is read on every request).
-func (e *env) grant(user string, level authz.AccessLevel, orgs ...string) {
-	s, _, _ := e.dir.Subject(context.Background(), e.ids[user])
+var readerPerms = []authz.Permission{papp.PermPartyRead, papp.PermRelationshipRead}
+
+// sellerPerms are what a standard user gets from the Security catalog (read, create, update)
+// plus roles and terminations: everything but granting trials.
+var sellerPerms = []authz.Permission{papp.PermPartyRead, papp.PermPartyCreate, papp.PermPartyUpdate, papp.PermRoleAssign,
+	papp.PermRelationshipRead, papp.PermRelationshipCreate, papp.PermRelationshipEnd, papp.PermRelationshipUpdate}
+
+// profiles are the users of the test host and their user names.
+var profiles = map[string]string{"admin": "ana.admin", "reader": "rita.reader", "clerk": "carl.clerk", "viewer": "vera.viewer",
+	"outsider": "otto.outsider", "seller": "sara.seller"}
+
+// directory is the security source of the test host. The Parties use cases never see it: they
+// only read the authorization context the resolver builds from it on every request. The same
+// scenario runs over the in-memory directory of the framework and over the Security context.
+type directory interface {
+	authz.Directory
+	// register creates the subject of a profile and returns its id and its party.
+	register(t *testing.T, profile, username string) (subject, party fw.UUID)
+	// grant gives a profile access to organizations.
+	grant(t *testing.T, profile string, level authz.AccessLevel, orgs ...string)
+}
+
+// memoryDirectory is the in-memory directory of the framework.
+type memoryDirectory struct {
+	*authorization.MemoryDirectory
+	ids map[string]fw.UUID
+}
+
+func newMemoryDirectory(*testing.T) directory {
+	return &memoryDirectory{MemoryDirectory: authorization.NewMemoryDirectory(), ids: map[string]fw.UUID{}}
+}
+
+func (d *memoryDirectory) register(_ *testing.T, profile, _ string) (fw.UUID, fw.UUID) {
+	s := authz.Subject{Active: true, Permissions: allPerms}
+	switch profile {
+	case "admin":
+		s = authz.Subject{Active: true, Roles: []string{authorization.DefaultGlobalAdminRole}}
+	case "reader":
+		s.Permissions = readerPerms
+	case "seller":
+		s.Permissions = sellerPerms
+	}
+	d.ids[profile] = fw.NewUUID()
+	d.Put(d.ids[profile], s)
+	return d.ids[profile], fw.NewUUID()
+}
+
+func (d *memoryDirectory) grant(_ *testing.T, profile string, level authz.AccessLevel, orgs ...string) {
+	s, _, _ := d.Subject(context.Background(), d.ids[profile])
 	for _, o := range orgs {
 		id, _ := fw.ParseUUID(o)
 		s.Grants = append(s.Grants, authz.Grant{OrganizationID: id, Level: level})
 	}
-	e.dir.Put(e.ids[user], s)
+	d.Put(d.ids[profile], s)
+}
+
+// securityDirectory is the real directory: the Security bounded context, with its users, roles,
+// permission catalog and organization accesses in its own store.
+type securityDirectory struct {
+	authz.Directory
+	sec   *security.Module
+	setup context.Context // a global administrator, for the setup
+	roles map[string]sdomain.RoleID
+	ids   map[string]sdomain.UserID
+}
+
+func newSecurityDirectory(t *testing.T) directory {
+	ctx := context.Background()
+	sw := hotswap.New(memory.NewStore("security"))
+	t.Cleanup(func() { _ = sw.Close(ctx) })
+	sec := security.Compose(sw)
+	if _, err := sec.SyncCatalog(ctx, papp.Permissions()...); err != nil {
+		t.Fatal(err)
+	}
+	ac, _ := authz.NewContext(authz.Context{Subject: fw.NewUUID(), SubjectName: "setup", Kind: authz.Service})
+	ac.GlobalAdmin = true
+	d := &securityDirectory{Directory: sec.Directory, sec: sec, setup: authz.WithContext(ctx, ac),
+		roles: map[string]sdomain.RoleID{"admin": sdomain.RoleGlobalSuperAdmin}, ids: map[string]sdomain.UserID{}}
+	codes := func(perms []authz.Permission) (out []string) {
+		for _, p := range perms {
+			out = append(out, string(p))
+		}
+		return out
+	}
+	for name, perms := range map[string][]authz.Permission{"reader": readerPerms, "worker": allPerms, "seller": sellerPerms} {
+		r, err := sec.Service.DefineRole.Handle(d.setup, sapp.DefineRole{Name: name, Permissions: codes(perms)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		d.roles[name], _ = sdomain.ParseRoleID(r.ID)
+	}
+	return d
+}
+
+func (d *securityDirectory) register(t *testing.T, profile, username string) (fw.UUID, fw.UUID) {
+	party := fw.NewUUID()
+	u, err := d.sec.Service.RegisterUser.Handle(d.setup, sapp.RegisterUser{Username: username, Party: party.String()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, _ := sdomain.ParseUserID(u.ID)
+	role, ok := d.roles[profile]
+	if !ok {
+		role = d.roles["worker"]
+	}
+	if _, err := d.sec.Service.AssignRole.Handle(d.setup, sapp.AssignRole{ID: id, Role: role}); err != nil {
+		t.Fatal(err)
+	}
+	d.ids[profile] = id
+	return id.UUID, party
+}
+
+func (d *securityDirectory) grant(t *testing.T, profile string, level authz.AccessLevel, orgs ...string) {
+	for _, o := range orgs {
+		org, _ := sdomain.ParseOrganizationID(o)
+		if _, err := d.sec.Service.GrantAccess.Handle(d.setup, sapp.GrantAccess{ID: d.ids[profile], Organization: org, Level: string(level)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// grant gives a user access to organizations (the security directory is read on every request).
+func (e *env) grant(user string, level authz.AccessLevel, orgs ...string) {
+	e.t.Helper()
+	e.dir.grant(e.t, user, level, orgs...)
 }
 
 // compose is the composition root of the test host: JWT authentication, the authorization
-// resolver over an in-memory security directory, and the Parties module on a hot-swap switch.
-func compose(t *testing.T) *env {
+// resolver over the security directory, and the Parties module on a hot-swap switch.
+func compose(t *testing.T, newDirectory func(*testing.T) directory) *env {
 	jwt, _ := jwtauth.New(jwtauth.Config{Secret: []byte("parties-test")})
-	dir := authorization.NewMemoryDirectory()
-	ids := map[string]fw.UUID{}
-	for _, u := range []string{"admin", "reader", "clerk", "viewer", "outsider"} {
-		ids[u] = fw.NewUUID()
-	}
-	dir.Put(ids["admin"], authz.Subject{Active: true, Roles: []string{authorization.DefaultGlobalAdminRole}})
-	dir.Put(ids["reader"], authz.Subject{Active: true, Permissions: []authz.Permission{papp.PermPartyRead, papp.PermRelationshipRead}})
-	for _, u := range []string{"clerk", "viewer", "outsider"} {
-		dir.Put(ids[u], authz.Subject{Active: true, Permissions: allPerms})
-	}
-	token := func(sub fw.UUID, name string) string {
-		s, _ := jwt.Issue(jwtauth.Claims{Subject: sub.String(), Username: name, PartyID: fw.NewUUID().String(),
+	dir := newDirectory(t)
+	tokens := map[string]string{}
+	for profile, username := range profiles {
+		subject, party := dir.register(t, profile, username)
+		s, _ := jwt.Issue(jwtauth.Claims{Subject: subject.String(), Username: username, PartyID: party.String(),
 			ExpiresAt: fw.Now().Add(time.Hour).Unix()})
-		return "Bearer " + s
+		tokens[profile] = "Bearer " + s
 	}
 
 	sw := hotswap.New(memory.NewStore("memory"))
@@ -88,9 +201,8 @@ func compose(t *testing.T) *env {
 		distribution.Authorize(jwt, authorization.NewResolver(dir, authorization.Options{}))))
 	t.Cleanup(srv.Close)
 	t.Cleanup(func() { _ = sw.Close(context.Background()) })
-	return &env{t: t, srv: srv, sw: sw, mod: mod, dir: dir, ids: ids, admin: token(ids["admin"], "ana.admin"),
-		reader: token(ids["reader"], "rita.reader"), clerk: token(ids["clerk"], "carl.clerk"),
-		viewer: token(ids["viewer"], "vera.viewer"), outsider: token(ids["outsider"], "otto.outsider")}
+	return &env{t: t, srv: srv, sw: sw, mod: mod, dir: dir, admin: tokens["admin"], reader: tokens["reader"],
+		clerk: tokens["clerk"], viewer: tokens["viewer"], outsider: tokens["outsider"], seller: tokens["seller"]}
 }
 
 func (e *env) do(method, path, auth string, body any, out any) int {
@@ -191,7 +303,165 @@ func (e *env) scenario(prefix string) (acme, ana papp.PartyDTO) {
 	}
 	e.phase2(acme, ana)
 	e.phase3(acme, ana)
+	e.prospects(acme, ana)
 	return acme, ana
+}
+
+// prospects covers the details a relationship carries because of its type (docs/PARTIES-UDM.md):
+// the prospect relationship with an internal organization and its trial.
+func (e *env) prospects(acme, ana papp.PartyDTO) {
+	e.t.Helper()
+	ctx := context.Background()
+	var types []papp.RelationshipTypeDTO
+	e.must(e.do("GET", "/api/catalogs/party-relationship-types", e.reader, nil, &types), 200, "relationship types")
+	codes := map[string]string{}
+	for _, t := range types {
+		codes[t.Code] = t.ID
+	}
+	if len(types) != len(domain.WellKnownRelationshipTypes()) || codes["prospect"] != domain.RelProspect.String() || codes["customer"] != domain.RelCustomer.String() {
+		e.t.Fatalf("relationship type codes: %+v", codes)
+	}
+
+	// A prospect is registered inside the scope with its trial: role, relationship, affiliation
+	// and trial in one request.
+	until := fw.Now().Add(30 * 24 * time.Hour).Truncate(time.Second)
+	var flotas papp.PartyDTO
+	e.must(e.do("POST", "/api/organizations", e.clerk, map[string]any{"legalName": "Flotas " + acme.ID[:8],
+		"affiliation": map[string]any{"organization": acme.ID, "relationshipType": domain.RelProspect.String(),
+			"prospect": map[string]any{"trialUntil": until}}}, &flotas), 201, "register a prospect with a trial")
+	if len(flotas.Roles) != 1 || flotas.Roles[0].Name != "Prospect" || len(flotas.Organizations) != 1 || flotas.Organizations[0] != acme.ID {
+		e.t.Fatalf("prospect: %+v", flotas)
+	}
+	var rels []papp.RelationshipDTO
+	e.must(e.do("GET", "/api/parties/"+flotas.ID+"/relationships", e.reader, nil, &rels), 200, "the prospect's relationships")
+	if len(rels) != 1 || rels[0].TypeName != "Prospect Relationship" || rels[0].Prospect == nil || !rels[0].Prospect.InTrial ||
+		rels[0].Prospect.TrialUntil == nil || !rels[0].Prospect.TrialUntil.Equal(until) {
+		e.t.Fatalf("prospect relationship: %+v", rels)
+	}
+	trial := "/api/party-relationships/" + rels[0].ID + "/trial"
+
+	// Extending the trial needs the permission and a writable scope.
+	longer := until.Add(15 * 24 * time.Hour)
+	var rel papp.RelationshipDTO
+	e.must(e.do("PUT", trial, e.reader, map[string]any{"trialUntil": longer}, nil), 403, "the reader lacks the permission")
+
+	// Granting a trial is its own permission: a seller creates and updates everything else in the
+	// organization, but gives no time away, neither afterwards nor with the relationship.
+	e.grant("seller", authz.Full, acme.ID)
+	e.must(e.do("PUT", trial, e.seller, map[string]any{"trialUntil": longer}, nil), 403, "a seller cannot extend a trial")
+	lead := map[string]any{"organization": acme.ID, "relationshipType": domain.RelProspect.String(), "prospect": map[string]any{"trialUntil": until}}
+	e.must(e.do("POST", "/api/organizations", e.seller, map[string]any{"legalName": "Lead " + acme.ID[:8], "affiliation": lead}, nil),
+		403, "nor register a prospect with a trial")
+	delete(lead, "prospect")
+	e.must(e.do("POST", "/api/organizations", e.seller, map[string]any{"legalName": "Lead " + acme.ID[:8], "affiliation": lead}, nil),
+		201, "a seller registers a prospect without trial")
+	e.must(e.do("PUT", trial, e.viewer, map[string]any{"trialUntil": longer}, nil), 403, "a read-only grant cannot extend")
+	e.must(e.do("PUT", trial, e.outsider, map[string]any{"trialUntil": longer}, nil), 404, "out of scope")
+	e.must(e.do("PUT", trial, e.clerk, map[string]any{"trialUntil": fw.Now().Add(-365 * 24 * time.Hour)}, nil), 400, "before the relationship starts")
+	e.must(e.do("PUT", trial, e.clerk, map[string]any{"trialUntil": longer}, &rel), 200, "extend the trial")
+	if rel.Prospect == nil || !rel.Prospect.TrialUntil.Equal(longer) || !rel.Prospect.InTrial || rel.Version != rels[0].Version+1 {
+		e.t.Fatalf("extended: %+v", rel)
+	}
+	trials, err := e.mod.Trials.Trials(ctx, acme.ID, []string{flotas.ID, ana.ID, "junk"})
+	if err != nil || len(trials) != 1 || !trials[flotas.ID].InForce || !trials[flotas.ID].Until.Equal(longer) || trials[flotas.ID].RelationshipID != rel.ID {
+		e.t.Fatalf("trials port: %+v %v", trials, err)
+	}
+
+	// Only prospect relationships have a trial; the other types keep working without details.
+	var anas []papp.RelationshipDTO
+	e.must(e.do("GET", "/api/parties/"+ana.ID+"/relationships?active=true", e.reader, nil, &anas), 200, "ana's relationships")
+	if len(anas) != 1 || anas[0].Prospect != nil {
+		e.t.Fatalf("a customer relationship carries no prospect details: %+v", anas)
+	}
+	e.must(e.do("PUT", "/api/party-relationships/"+anas[0].ID+"/trial", e.admin, map[string]any{"trialUntil": longer}, nil), 422, "a customer relationship has no trial")
+
+	// Establishing the relationship afterwards, with or without trial.
+	var bea papp.PartyDTO
+	e.must(e.do("POST", "/api/persons", e.admin, map[string]any{"givenName": "Bea", "firstSurname": "Prueba " + acme.ID[:8],
+		"roles": []string{domain.RoleProspect.String()}}, &bea), 201, "register bea")
+	body := map[string]any{"type": domain.RelProspect.String(), "fromParty": bea.ID, "toParty": acme.ID}
+	rel = papp.RelationshipDTO{} // decoding into a used value would keep the fields the response omits
+	e.must(e.do("POST", "/api/party-relationships", e.admin, body, &rel), 201, "a prospect without trial")
+	if rel.Prospect == nil || rel.Prospect.InTrial || rel.Prospect.TrialUntil != nil {
+		e.t.Fatalf("no trial: %+v", rel.Prospect)
+	}
+	e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelEmployment.String(), "fromParty": ana.ID,
+		"toParty": acme.ID, "prospect": map[string]any{"trialUntil": until}}, nil), 422, "employment has no trial")
+	e.must(e.do("PUT", "/api/party-relationships/"+rel.ID+"/trial", e.clerk, map[string]any{"trialUntil": until}, &rel), 200, "grant the trial later")
+	withdraw := "/api/party-relationships/" + rel.ID + "/trial"
+	rel = papp.RelationshipDTO{}
+	e.must(e.do("PUT", withdraw, e.clerk, map[string]any{"trialUntil": nil}, &rel), 200, "withdraw it")
+	if rel.Prospect.InTrial || rel.Prospect.TrialUntil != nil {
+		e.t.Fatalf("withdrawn: %+v", rel.Prospect)
+	}
+
+	// Converting the prospect into a customer: the customer relationship starts and the prospect
+	// relationship ends, and with it the trial. The party stays in the organization's scope.
+	e.must(e.do("POST", "/api/parties/"+flotas.ID+"/roles", e.clerk, map[string]any{"roleType": domain.RoleCustomer.String()}, nil), 200, "customer role")
+	e.must(e.do("POST", "/api/party-relationships", e.clerk, map[string]any{"type": domain.RelCustomer.String(),
+		"fromParty": flotas.ID, "toParty": acme.ID}, nil), 201, "customer relationship")
+	rel = papp.RelationshipDTO{}
+	e.must(e.do("POST", "/api/party-relationships/"+rels[0].ID+"/terminate", e.clerk, nil, &rel), 200, "end the prospect relationship")
+	if rel.Prospect == nil || rel.Prospect.InTrial || !rel.Prospect.TrialUntil.Equal(longer) {
+		e.t.Fatalf("an ended prospect relationship keeps its trial but is not in trial: %+v", rel.Prospect)
+	}
+	e.must(e.do("PUT", trial, e.clerk, map[string]any{"trialUntil": longer.Add(time.Hour)}, nil), 422, "an ended relationship")
+	e.must(e.do("GET", "/api/parties/"+flotas.ID, e.clerk, nil, nil), 200, "still visible as a customer")
+	if trials, err = e.mod.Trials.Trials(ctx, acme.ID, []string{flotas.ID, bea.ID}); err != nil || len(trials) != 1 || trials[bea.ID].InForce || trials[bea.ID].Until != nil {
+		e.t.Fatalf("trials after the conversion: %+v %v", trials, err)
+	}
+
+	// The personal details of a person can be corrected after registration.
+	var edited papp.PartyDTO
+	person := "/api/parties/" + bea.ID + "/person"
+	e.must(e.do("PUT", person, e.admin, map[string]any{"gender": "female", "birthDate": "1988-02-29", "maritalStatus": "married"}, &edited), 200, "edit the person")
+	if edited.Person.Gender != "female" || edited.Person.BirthDate != "1988-02-29" || edited.Person.MaritalStatus != "married" || edited.Name != bea.Name {
+		e.t.Fatalf("edited person: %+v", edited.Person)
+	}
+	e.must(e.do("PUT", person, e.admin, map[string]any{"birthDate": "2999-01-01"}, nil), 400, "born in the future")
+	e.must(e.do("PUT", person, e.admin, map[string]any{"gender": "x"}, nil), 400, "unknown gender")
+	e.must(e.do("PUT", person, e.viewer, map[string]any{"gender": "male"}, nil), 403, "a read-only grant cannot edit")
+	e.must(e.do("PUT", person, e.outsider, map[string]any{"gender": "male"}, nil), 404, "out of scope")
+	e.must(e.do("PUT", "/api/parties/"+acme.ID+"/person", e.admin, map[string]any{"gender": "female"}, nil), 422, "an organization has no personal details")
+	edited = papp.PartyDTO{}
+	e.must(e.do("PUT", person, e.clerk, map[string]any{"maritalStatus": "single"}, &edited), 200, "the fields left out become unknown")
+	if edited.Person.Gender != "" || edited.Person.BirthDate != "" || edited.Person.MaritalStatus != "single" {
+		e.t.Fatalf("replaced person details: %+v", edited.Person)
+	}
+
+	// Ownership: the stake of a shareholder is a detail of the ownership relationship.
+	var sara papp.PartyDTO
+	e.must(e.do("POST", "/api/persons", e.admin, map[string]any{"givenName": "Sara", "firstSurname": "Socia " + acme.ID[:8],
+		"roles": []string{domain.RoleShareholder.String()}}, &sara), 201, "register sara")
+	owns := map[string]any{"type": domain.RelOwnership.String(), "fromParty": sara.ID, "toParty": acme.ID}
+	owns["ownership"] = map[string]any{"share": "130"}
+	e.must(e.do("POST", "/api/party-relationships", e.admin, owns, nil), 400, "more than the whole company")
+	owns["ownership"] = map[string]any{"share": "30"}
+	var own papp.RelationshipDTO
+	e.must(e.do("POST", "/api/party-relationships", e.admin, owns, &own), 201, "sara owns 30 % of acme")
+	if own.Ownership == nil || own.Ownership.Share != "30.00" || own.Prospect != nil {
+		e.t.Fatalf("ownership: %+v", own)
+	}
+	share := "/api/party-relationships/" + own.ID + "/ownership"
+	e.must(e.do("PUT", share, e.viewer, map[string]any{"share": "45.5"}, nil), 403, "a read-only grant cannot change the share")
+	e.must(e.do("PUT", share, e.clerk, map[string]any{"share": "a third"}, nil), 400, "not a number")
+	e.must(e.do("PUT", share, e.clerk, map[string]any{"share": "33.333"}, nil), 400, "two decimals at most")
+	e.must(e.do("PUT", "/api/party-relationships/"+own.ID+"/trial", e.clerk, map[string]any{"trialUntil": until}, nil), 422, "an ownership has no trial")
+	own = papp.RelationshipDTO{}
+	e.must(e.do("PUT", share, e.seller, map[string]any{"share": "45.5"}, &own), 200, "the share is an update: a seller corrects it")
+	if own.Ownership.Share != "45.50" {
+		e.t.Fatalf("corrected share: %+v", own.Ownership)
+	}
+	var saras []papp.RelationshipDTO
+	e.must(e.do("GET", "/api/parties/"+sara.ID+"/relationships", e.reader, nil, &saras), 200, "sara's relationships")
+	if len(saras) != 1 || saras[0].Ownership == nil || saras[0].Ownership.Share != "45.50" {
+		e.t.Fatalf("share round trip: %+v", saras)
+	}
+	own = papp.RelationshipDTO{}
+	e.must(e.do("PUT", share, e.clerk, map[string]any{"share": nil}, &own), 200, "clear the share")
+	if own.Ownership == nil || own.Ownership.Share != "" {
+		e.t.Fatalf("cleared share: %+v", own.Ownership)
+	}
 }
 
 // phase3 covers organization scope (decision P1), registration inside the scope, the
@@ -345,8 +615,16 @@ func (e *env) phase2(acme, ana papp.PartyDTO) {
 	}
 }
 
+// The whole scenario runs twice: over the in-memory security directory of the framework and over
+// the Security bounded context. Nothing in Parties changes between the two: its use cases read
+// the authorization context, not where it comes from.
 func TestParties_EndToEnd_MemoryThenSQLite(t *testing.T) {
-	e := compose(t)
+	t.Run("in-memory directory", func(t *testing.T) { endToEnd(t, newMemoryDirectory) })
+	t.Run("Security directory", func(t *testing.T) { endToEnd(t, newSecurityDirectory) })
+}
+
+func endToEnd(t *testing.T, newDirectory func(*testing.T) directory) {
+	e := compose(t, newDirectory)
 	ctx := context.Background()
 	e.scenario("mem")
 
@@ -409,12 +687,30 @@ func TestParties_EndToEnd_MemoryThenSQLite(t *testing.T) {
 		}
 		return nil
 	})
+	var trials []contracts.ProspectTrialChangedV1
+	messaging.Handle(crm, func(_ context.Context, e contracts.ProspectTrialChangedV1, _ application.Envelope) error {
+		trials = append(trials, e)
+		return nil
+	})
+	var shares []string
+	messaging.Handle(crm, func(_ context.Context, e contracts.OwnershipShareChangedV1, _ application.Envelope) error {
+		shares = append(shares, e.Share)
+		return nil
+	})
 	broker.Subscribe("crm", crm)
 	if _, err := e.mod.Relay(broker).RelayOnce(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if len(seen) != 8 || roles != 2 {
+	if len(seen) != 12 || roles != 2 {
 		t.Fatalf("published: %v, roles %d", seen, roles)
+	}
+	if len(shares) != 3 || shares[0] != "30.00" || shares[1] != "45.50" || shares[2] != "" {
+		t.Fatalf("share events: %v", shares)
+	}
+	// Granted at registration, extended, granted later and withdrawn.
+	if len(trials) != 4 || trials[0].Organization != acme.ID || trials[0].TrialUntil == nil || trials[3].TrialUntil != nil ||
+		!trials[1].TrialUntil.After(*trials[0].TrialUntil) || trials[2].Prospect != trials[3].Prospect {
+		t.Fatalf("trial events: %+v", trials)
 	}
 }
 
