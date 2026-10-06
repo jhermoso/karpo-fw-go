@@ -177,7 +177,8 @@ func TestPaymentsContext(t *testing.T) {
 				!strings.Contains(string(file), "<BIC>BSCHESMMXXX</BIC>") {
 				t.Fatalf("pain.001 from the stored order: %v\n%s", err, file)
 			}
-			_, err = tm.Service.SettleTransfers.Handle(actx, tapp.SettleTransfers{ID: oid, On: vocab.MustDate(2026, 10, 5)})
+			settled := vocab.DateOf(fw.Now()) // the day the file was generated, never before
+			_, err = tm.Service.SettleTransfers.Handle(actx, tapp.SettleTransfers{ID: oid, On: settled})
 			must(err)
 			deliver()
 			p1, _ = svc.GetPayable.Handle(actx, yapp.GetPayable{ID: id1})
@@ -186,7 +187,7 @@ func TestPaymentsContext(t *testing.T) {
 			}
 			balances(map[string]string{"4000": "99.99", "5720": "-99.99"})
 
-			_, err = tm.Service.RejectTransfer.Handle(actx, tapp.RejectTransfer{ID: oid, EndToEnd: order.Transfers[1].EndToEnd, On: vocab.MustDate(2026, 10, 6),
+			_, err = tm.Service.RejectTransfer.Handle(actx, tapp.RejectTransfer{ID: oid, EndToEnd: order.Transfers[1].EndToEnd, On: settled.AddDays(1),
 				Reason: "AC01"})
 			must(err)
 			deliver()
