@@ -401,10 +401,10 @@ Ejecutado el 2026-10-04:
   - el último administrador global no se puede desactivar (422);
   - directorio `contracts.Users`, auditoría (nunca el hash) y lenguaje publicado consumido con
     bandeja de entrada.
-- **Catálogo completo**: los diecinueve contextos de negocio declaran 115 permisos (eran doce y 81
+- **Catálogo completo**: los diecinueve contextos de negocio declaran 118 permisos (eran doce y 81
   cuando se evaluó; después llegaron Productos, Inventario y Pedidos, `Parties.Relationship.Update`
-  y `Parties.Relationship.SetTrial` con los detalles por tipo de relación, Activos, Trabajos, Documentos y Envíos), bien formados, sin
-  repetir y cada uno en su espacio; con los ocho de Security y el comodín son 124. La regla estándar deja
+  y `Parties.Relationship.SetTrial` con los detalles por tipo de relación, Activos, Trabajos, Documentos, Envíos y los extractos de Tesorería), bien formados, sin
+  repetir y cada uno en su espacio; con los ocho de Security y el comodín son 127. La regla estándar deja
   fuera del usuario estándar emitir facturas, aprobar nóminas, presentar modelos o liquidar remesas.
 - **Hasher**: hash autodescriptivo, sal distinta cada vez, hash obsoleto detectado, formatos
   inválidos rechazados y un hash de C# (10 000 iteraciones) verificado y marcado para renovar.

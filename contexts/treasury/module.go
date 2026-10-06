@@ -34,7 +34,8 @@ func Compose(sw *hotswap.Switch, receivables domain.Receivables, payables domain
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
 	svc := tapp.NewService(tapp.Deps{
 		Accounts: hotswap.Repository(sw, infrastructure.AccountRepositoryFactory), Mandates: hotswap.Repository(sw, infrastructure.MandateRepositoryFactory),
-		Remittances: hotswap.Repository(sw, infrastructure.RemittanceRepositoryFactory), Transfers: hotswap.Repository(sw, infrastructure.TransferOrderRepositoryFactory), Receivables: receivables, Payables: payables, Identities: identities,
+		Remittances: hotswap.Repository(sw, infrastructure.RemittanceRepositoryFactory), Transfers: hotswap.Repository(sw, infrastructure.TransferOrderRepositoryFactory),
+		Statements: hotswap.Repository(sw, infrastructure.StatementRepositoryFactory), Receivables: receivables, Payables: payables, Identities: identities,
 		UoW: sw, Audit: audit,
 		Recorder: outbox.Recorders(outbox.NewRecorder(hotswap.Outbox(sw, infrastructure.OutboxFactory)),
 			tapp.Publications(messaging.NewRecorder(contracts.Source, integration))),
@@ -188,6 +189,29 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/treasury/transfers/{id}/settle", command(trf, func(c *tapp.SettleTransfers, id domain.TransferOrderID) { c.ID = id }, svc.SettleTransfers.Handle))
 	mux.HandleFunc("POST /api/treasury/transfers/{id}/rejections", command(trf, func(c *tapp.RejectTransfer, id domain.TransferOrderID) { c.ID = id }, svc.RejectTransfer.Handle))
 	mux.HandleFunc("POST /api/treasury/transfers/{id}/cancel", command(trf, func(c *tapp.CancelTransfers, id domain.TransferOrderID) { c.ID = id }, svc.CancelTransfers.Handle))
+
+	stm := domain.ParseStatementID
+	mux.HandleFunc("POST /api/treasury/statements", create(svc.ImportStatement.Handle))
+	mux.HandleFunc("POST /api/treasury/statements/norma43", create(svc.ImportNorma43.Handle))
+	mux.HandleFunc("GET /api/treasury/statements", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		atoi := func(k string) int { n, _ := strconv.Atoi(q.Get(k)); return n }
+		out, err := svc.SearchStatements.Handle(r.Context(), tapp.SearchStatements{Owner: q.Get("owner"), Account: q.Get("account"),
+			Pending: q.Get("pending") == "true", Page: atoi("page"), Size: atoi("size")})
+		distribution.Respond(w, r, out, err, http.StatusOK)
+	})
+	mux.HandleFunc("GET /api/treasury/statements/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id, err := stm(r.PathValue("id"))
+		if err != nil {
+			badID(w, r)
+			return
+		}
+		out, err := svc.GetStatement.Handle(r.Context(), tapp.GetStatement{ID: id})
+		distribution.Respond(w, r, out, err, http.StatusOK)
+	})
+	mux.HandleFunc("POST /api/treasury/statements/{id}/reconcile", command(stm, func(c *tapp.ReconcileLine, id domain.StatementID) { c.ID = id }, svc.Reconcile.Handle))
+	mux.HandleFunc("POST /api/treasury/statements/{id}/release", command(stm, func(c *tapp.ReleaseLine, id domain.StatementID) { c.ID = id }, svc.Release.Handle))
+	mux.HandleFunc("POST /api/treasury/statements/{id}/auto-reconcile", command(stm, func(c *tapp.AutoReconcile, id domain.StatementID) { c.ID = id }, svc.AutoReconcile.Handle))
 }
 
 var _ distribution.EndpointModule = (*Module)(nil)

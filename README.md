@@ -92,7 +92,7 @@ contexts/payroll/         # Contexto Nóminas (nóminas con totales derivados, c
 contexts/fiscal/          # Contexto Fiscal (tipos por territorio, contribuyente, modelos 111 y 190 alimentados por Nóminas): ver docs/FISCAL.md
 contexts/billing/         # Contexto Facturación (facturas con desglose de Fiscal, series sin huecos, rectificativas, borradores desde los albaranes de Pedidos): ver docs/FACTURACION.md
 contexts/receivables/     # Contexto Cobros (condiciones y vencimientos, cartera por factura, cobros y compensaciones, riesgo): ver docs/COBROS.md
-contexts/treasury/        # Contexto Tesorería (cuentas, mandatos SEPA, remesas con pain.008, órdenes de transferencia con pain.001, cobros y devoluciones hacia Cobros): ver docs/TESORERIA.md
+contexts/treasury/        # Contexto Tesorería (cuentas, mandatos SEPA, remesas con pain.008, órdenes de transferencia con pain.001, cobros y devoluciones hacia Cobros, extractos Norma 43 y conciliación): ver docs/TESORERIA.md
 contexts/accounting/      # Contexto Contabilidad (plan por empresa, libro con perfil y cierre de periodos, asientos cuadrados y contraasientos, contabilización de facturas, cobros, adeudos y nóminas): ver docs/CONTABILIDAD.md
 contexts/payments/        # Contexto Pagos (obligaciones de facturas recibidas, nóminas e impuestos; pagos y sus aplicaciones; pagos de las transferencias de Tesorería): ver docs/PAGOS.md
 contexts/purchases/       # Contexto Compras (facturas recibidas con IVA soportado y retención, registro numerado, perfil de proveedor): ver docs/COMPRAS.md

@@ -7,6 +7,6 @@ func Permissions() []authz.Permission {
 	return []authz.Permission{
 		PermAccountRead, PermAccountUpdate, PermMandateRead, PermMandateUpdate, PermRemittanceRead,
 		PermRemittanceEdit, PermRemittanceSend, PermRemittanceBank, PermTransferRead, PermTransferEdit,
-		PermTransferSend, PermTransferBank,
+		PermTransferSend, PermTransferBank, PermStatementRead, PermStatementImport, PermStatementReconcile,
 	}
 }
