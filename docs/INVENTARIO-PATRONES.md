@@ -61,9 +61,9 @@ Leyenda: ✅ hecho · 🟡 parcial · ❌ falta · — no aplica en Go (decisió
 | Gestión de esquema / migraciones (`IDatabaseSchemaManager`) | ✅ `application.SchemaMigrator` | ✅ `sqlrepo.Migrator` (5 motores, bloqueo, checksum, dirty) | Evaluado en `ESQUEMA-MIGRACIONES.md`; ❌ comando `karpo migrate` |
 | Importación y referencias legadas (`ImportRun`, `LegacyReference`) | ❌ | ❌ | |
 | Log de auditoría (`AuditLogEntry`) | ✅ `application.AuditLog` | ✅ memoria, SQL ×5, hotswap; escrito por el orquestador | ❌ almacén a prueba de manipulación |
-| Log | ✅ `log.Logger` | ✅ `log/vanilla` | |
+| Log | ✅ `log.Logger`, `log.Default`, `log.Discard` | ✅ `log/vanilla` (JSON en stdout con `ForService`; cada línea toma del contexto `correlation_id`, `causation_id`, `trace_id`, `span_id` y `actor`) | |
 | Caché | ✅ `cache.Cache` | ✅ `cache/memory` | ❌ `CatalogCache`, repositorio con caché |
-| Observabilidad (trazas, métricas) | ❌ | ❌ | |
+| Observabilidad (trazas, métricas) | ✅ `trace.Tracer`/`Span` (W3C `traceparent`), `metrics.Meter` | ✅ `trace/vanilla`, `metrics/vanilla` (`/metrics` en formato Prometheus, runtime de Go); `distribution.Observe` (línea, span y métrica por petición; causa de todo 5xx), `pipeline.Observed`, `sqlrepo.WithTelemetry`, `outbox.WithRelayTelemetry`, `messaging.Consumer.WithTelemetry` | Evaluado en `OBSERVABILIDAD.md` (pasos 1 a 7 ✅); ❌ `pipeline.Observed` en la `chain` de cada contexto, ❌ traza a través del outbox (paso 8), ❌ adaptador de OpenTelemetry en módulo aparte (paso 9) |
 | Contenedor de dependencias | — (punto de composición) | — | |
 | Guardián de arquitectura | ✅ `archtest` | 🟡 capas y contratos | ❌ nombres, screaming architecture, subdominios |
 
