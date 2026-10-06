@@ -18,7 +18,8 @@ try {
     $env:KARPO_MSSQL_DSN = "sqlserver://sa:Karpo_2026!@localhost:$($mssql)?database=master"
     $env:KARPO_ORACLE_DSN = "oracle://karpo:karpo@localhost:$oracle/FREEPDB1"
     $env:KARPO_MYSQL_DSN = "karpo:karpo@tcp(localhost:$mysql)/karpo?parseTime=true&loc=UTC"
-    if ($Run) { go test -count=1 -v -run $Run ./... } else { go test -count=1 -v ./... }
+    # The whole suite takes longer than the 10 minutes go test allows by default.
+    if ($Run) { go test -count=1 -timeout 30m -v -run $Run ./... } else { go test -count=1 -timeout 30m -v ./... }
     $code = $LASTEXITCODE
 }
 finally {
