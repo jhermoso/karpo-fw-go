@@ -171,11 +171,25 @@ la cadena estándar (Recovery, Correlation, Observe, Authorize) y comprueba tres
 
 ## 7. C# (Parte 2)
 
-Estado y alcance en `000-Docs` de Karpo y en el informe de la sesión. Los nombres son los de la
-sección 3.1. Los mismos defectos se corrigen así:
+Hecho en Karpo, en la rama `claude/karpo-observabilidad-minima-yoma1a`, con Fw 1.7.0. El detalle
+está junto al artefacto, en
+`020-Back/020-Source/Paranoia.Karpo.Fw.Infrastructure.Observability/FwObservability.md`.
 
-- línea por petición en JSON en stdout;
-- la correlación entra en la línea de error porque el middleware de telemetría la lleva en su
-  propio scope;
-- la correlación se valida igual que en Go;
-- un registro sirve también al worker (`IHostApplicationBuilder`).
+| Mínimo | C# |
+|---|---|
+| Una línea JSON por petición en stdout | `FwRequestTelemetryMiddleware` (lo monta `UseFwExceptionHandling`) + `FwJsonLineFormatter` (consola JSON por defecto) |
+| Causa de todo 5xx con su correlación | `FwRequestTelemetry.RecordError` desde el middleware de excepciones; la correlación se abre por fuera, así que también la línea de error la lleva |
+| Duración y resultado por ruta | `http.route`, `http.response.status_code`, `duration_ms` en la línea; `http.server.request.duration` de ASP.NET Core |
+| Métricas básicas | `WithMetrics`: ASP.NET Core, HttpClient, `Paranoia.Karpo.Fw` (`karpo.outbox.delivered/failed`) |
+| Registro que sirva al worker | `AddFwObservability(IHostApplicationBuilder, …)`, usado por `Outbox.Worker` |
+| Correlación validada | `FwCorrelationId`, la misma regla que `distribution.ValidCorrelationID` |
+
+Diferencias que quedan, a propósito o pendientes:
+
+- C# no expone `/metrics`: sus métricas salen por OTLP cuando hay colector.
+- `http.route` en C# es la plantilla de ASP.NET tal cual, con restricciones (`{id:guid}`) y a
+  veces barra final.
+- C# no tiene telemetría de casos de uso.
+
+**Falta publicar Fw 1.7.0** (`publicar-fw.ps1`, con el feed local). Hasta entonces las rebanadas no
+la ven.
