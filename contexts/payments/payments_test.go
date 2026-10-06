@@ -43,6 +43,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlite"
 	"github.com/jhermoso/karpo-fw-go/pkg/testing/archtest"
+	"github.com/jhermoso/karpo-fw-go/pkg/time/fake"
 )
 
 func mustIBAN(s string) vocab.IBAN {
@@ -335,7 +336,11 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("nothing twice: %+v %v", again, err)
 	}
 	oid, _ := tdomain.ParseTransferOrderID(order.ID)
+	// The order is generated on 4 October whatever the day the test runs: an order is not executed
+	// before being generated. Only this step runs on a fixed clock: the tokens are issued with the real one.
+	restore := fw.SetClock(fake.New(time.Date(2026, 10, 4, 9, 0, 0, 0, time.UTC)))
 	order, err = h.treasury.Service.GenerateTransfers.Handle(ctx, tapp.GenerateTransfers{ID: oid})
+	restore()
 	h.ok(err)
 	res := h.request("GET", "/api/treasury/transfers/"+order.ID+"/pain001", "clerk", nil)
 	file, _ := io.ReadAll(res.Body)
