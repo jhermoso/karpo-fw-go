@@ -171,7 +171,7 @@ factura, sin que ningún contexto escriba en el otro.
   `source_ref` en `bil_invoices`) y migración 4 (`billing_inbox`); en Pedidos, migración 3
   (`invoice_id`, `invoice_number` e `invoiced` en `ord_deliveries`).
 
-### Decisiones propuestas (pendientes de confirmar)
+### Decisiones (aprobadas por Javier el 2026-10-06)
 
 1. **Cada albarán genera un borrador de factura, automáticamente.** No se factura el pedido sino
    lo entregado.
