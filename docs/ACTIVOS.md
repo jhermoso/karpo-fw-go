@@ -90,7 +90,7 @@ contexts/assets/
   inmovilizado** de la empresa (coste, amortización acumulada y valor neto contable).
 - **Tablas:** `ast_assets` (+ `ast_asset_charges`), las bandejas de salida y la auditoría.
 
-## Decisiones propuestas (pendientes de confirmar)
+## Decisiones (aprobadas por Javier el 2026-10-06)
 
 1. **La fase 1 de Activos es el registro con amortización lineal mensual y baja.** Los métodos
    degresivos, los cambios de vida útil, las mejoras que aumentan el coste y el deterioro van a la
