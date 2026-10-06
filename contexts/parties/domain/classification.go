@@ -124,7 +124,7 @@ func (p *Party) Classify(c *ClassificationCatalog, typ ClassificationTypeID, fro
 		return ClassificationID{}, err
 	}
 	for _, x := range p.classifications {
-		if !overlaps(x.Period, period) {
+		if !x.Period.Overlaps(period) {
 			continue
 		}
 		if x.Type == typ {

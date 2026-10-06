@@ -42,7 +42,7 @@ func (v Validity) ExpiresWithin(d time.Duration) bool {
 	return closed && end.After(now) && !end.After(now.Add(d))
 }
 
-// ExpireAt closes the validity at t (the C# SetTimeline/expiration). It fails if t is not after
+// ExpireAt closes the validity at t (the C# SetTimeline/expiration). It fails if t is before
 // the start. It reports whether the end changed.
 func (v *Validity) ExpireAt(t time.Time) (bool, error) {
 	if end, closed := v.period.To(); closed && end.Equal(t) {

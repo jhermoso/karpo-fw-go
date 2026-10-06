@@ -187,8 +187,9 @@ func (e *env) grant(user string, level authz.AccessLevel, orgs ...string) {
 // resolver over the security directory, and the Parties module on a hot-swap switch.
 func compose(t *testing.T, newDirectory func(*testing.T) directory) *env {
 	// The system clock advances in ticks (up to 15.6 ms on Windows), longer than an in-memory
-	// request: what starts in one request could not end "now" in the next, because a validity
-	// ends strictly after it starts. The scenario runs on a clock that every request advances.
+	// request, so two requests could share an instant or not depending on the run. The scenario
+	// runs on a clock that every request advances: each validity it ends has a length. Ending at
+	// the instant of the start is covered in the domain (TestEndingAtTheInstantOfTheStart).
 	clock := fake.New(time.Now())
 	t.Cleanup(fw.SetClock(clock))
 	jwt, _ := jwtauth.New(jwtauth.Config{Secret: []byte("parties-test")})

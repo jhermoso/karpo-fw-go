@@ -185,7 +185,7 @@ func (p *Position) Fill(holder PersonID, from time.Time) error {
 		return err
 	}
 	for _, h := range p.holders {
-		if overlaps(h.Period, period) {
+		if h.Period.Overlaps(period) {
 			return fw.Violation("hr.position_filled", "the position already has a holder in that period")
 		}
 	}
@@ -225,7 +225,7 @@ func (p *Position) ReportTo(supervisor PositionID, primary bool, from time.Time)
 	}
 	lines := slices.Clone(p.reportsTo)
 	for i, l := range lines {
-		if !overlaps(l.Period, period) {
+		if !l.Period.Overlaps(period) {
 			continue
 		}
 		if l.Supervisor == supervisor {
@@ -289,12 +289,6 @@ func (p *Position) AuditSnapshot() map[string]any {
 		"holder": holder.String(), "reportsTo": sup.String()}
 }
 
-// overlaps reports whether two half-open periods intersect.
-func overlaps(a, b vocab.ValidPeriod) bool {
-	aEnd, aClosed := a.To()
-	bEnd, bClosed := b.To()
-	return (!aClosed || b.From().Before(aEnd)) && (!bClosed || a.From().Before(bEnd))
-}
 
 func until(p vocab.ValidPeriod) *time.Time {
 	if t, ok := p.To(); ok {
