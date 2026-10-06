@@ -101,7 +101,7 @@ contexts/documents/
 - **Tablas:** `doc_documents`, la auditoría y `documents_inbox`. No hay bandeja de salida: el
   contexto no publica nada.
 
-## Decisiones propuestas (pendientes de confirmar)
+## Decisiones (aprobadas por Javier el 2026-10-06)
 
 1. **Documentos no numera: cada contexto numera sus documentos.** Se retira el emisor central
    (`IDocumentIssuer`) y las series compartidas. Sugerencia: sí; en Go cada serie avanza dentro de
