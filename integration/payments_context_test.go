@@ -36,6 +36,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/messaging/inprocess"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
+	"github.com/jhermoso/karpo-fw-go/pkg/time/fake"
 )
 
 // TestPaymentsContext runs Payments with Treasury, Accounting and Parties on every engine:
@@ -170,7 +171,11 @@ func TestPaymentsContext(t *testing.T) {
 				t.Fatalf("proposal: %+v %v", order, err)
 			}
 			oid, _ := tdomain.ParseTransferOrderID(order.ID)
+			// The order is generated on 4 October whatever the day the test runs: an order is not
+			// executed before being generated.
+			restore := fw.SetClock(fake.New(time.Date(2026, 10, 4, 9, 0, 0, 0, time.UTC)))
 			order, err = tm.Service.GenerateTransfers.Handle(actx, tapp.GenerateTransfers{ID: oid})
+			restore()
 			must(err)
 			file, err := tm.Service.TransferFile.Handle(actx, tapp.GetTransferFile{ID: oid})
 			if err != nil || !strings.Contains(string(file), "<CtrlSum>99.99</CtrlSum>") || !strings.Contains(string(file), "<Nm>Suministros Munoz, S.L.</Nm>") ||
