@@ -67,9 +67,16 @@ func Problem(r *http.Request, err error) ProblemDetails {
 	return p
 }
 
-// WriteError writes err as an application/problem+json response.
+// WriteError writes err as an application/problem+json response. For a 5xx the client gets a
+// generic detail, and the cause goes to the request telemetry (see Observe and RecordError).
 func WriteError(w http.ResponseWriter, r *http.Request, err error) {
 	p := Problem(r, err)
+	if r != nil {
+		noteRoute(r)
+		if p.Status >= http.StatusInternalServerError {
+			RecordError(r.Context(), err)
+		}
+	}
 	w.Header().Set("Content-Type", "application/problem+json; charset=utf-8")
 	w.WriteHeader(p.Status)
 	_ = json.NewEncoder(w).Encode(p)
@@ -85,5 +92,6 @@ func Respond[T any](w http.ResponseWriter, r *http.Request, v T, err error, succ
 	if successStatus <= 0 {
 		successStatus = http.StatusOK
 	}
+	noteRoute(r)
 	WriteJSON(w, successStatus, v)
 }

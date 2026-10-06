@@ -33,8 +33,9 @@ func Recovery(logger log.Logger) Middleware {
 					if !ok {
 						err = fmt.Errorf("%v", rec)
 					}
+					RecordError(r.Context(), panicError(rec))
 					if logger != nil {
-						logger.Error("Unhandled HTTP panic recovered", "error", err, "path", r.URL.Path)
+						logger.WithContext(r.Context()).Error("Unhandled HTTP panic recovered", "error", err, "path", r.URL.Path)
 					}
 					w.Header().Set("Content-Type", "application/json; charset=utf-8")
 					w.WriteHeader(http.StatusInternalServerError)
@@ -50,31 +51,25 @@ func Recovery(logger log.Logger) Middleware {
 	}
 }
 
-type responseRecorder struct {
-	http.ResponseWriter
-	statusCode int
-}
-
-func (rec *responseRecorder) WriteHeader(code int) {
-	rec.statusCode = code
-	rec.ResponseWriter.WriteHeader(code)
-}
-
 // RequestLogging logs the incoming HTTP method, path, duration, and status code.
+//
+// Deprecated: use Observe, which logs the route pattern instead of the raw path, carries the
+// correlation and trace ids and the cause of every 5xx, and records the metric. RequestLogging
+// is kept for existing compositions; its writer no longer hides http.Flusher.
 func RequestLogging(logger log.Logger) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
-			rec := &responseRecorder{ResponseWriter: w, statusCode: http.StatusOK}
+			rec := &statusWriter{ResponseWriter: w}
 
 			next.ServeHTTP(rec, r)
 
 			if logger != nil {
 				duration := time.Since(start)
-				logger.Info("HTTP request processed",
+				logger.WithContext(r.Context()).Info("HTTP request processed",
 					"method", r.Method,
 					"path", r.URL.Path,
-					"status", rec.statusCode,
+					"status", rec.status(),
 					"duration_ms", duration.Milliseconds(),
 				)
 			}
@@ -134,13 +129,37 @@ func TenantActorContext() Middleware {
 // CorrelationHeader carries the correlation id of a business flow across services.
 const CorrelationHeader = "X-Correlation-ID"
 
-// Correlation propagates X-Correlation-ID (generating one when absent) into the application
-// context, so logs and outbox messages of the whole flow share it, and echoes it in the response.
+// MaxCorrelationIDLength bounds the correlation id accepted from a client.
+const MaxCorrelationIDLength = 128
+
+// ValidCorrelationID reports whether a client-supplied correlation id may be used as is: 1 to
+// MaxCorrelationIDLength characters among letters, digits and . _ : - (a UUID, a ULID, a W3C
+// trace id, a gateway request id). Anything else (spaces, control characters, quotes, line
+// breaks, non-ASCII) could forge log lines or carry personal data, and is not trusted.
+func ValidCorrelationID(id string) bool {
+	if id == "" || len(id) > MaxCorrelationIDLength {
+		return false
+	}
+	for i := 0; i < len(id); i++ {
+		c := id[i]
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9', c == '.', c == '_', c == ':', c == '-':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// Correlation propagates X-Correlation-ID into the application context, so logs and outbox
+// messages of the whole flow share it, and echoes it in the response. A missing id, or one that
+// fails ValidCorrelationID, is replaced by a new one: the client's value is never logged nor
+// echoed when invalid.
 func Correlation() Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			id := r.Header.Get(CorrelationHeader)
-			if id == "" {
+			if !ValidCorrelationID(id) {
 				id = domain.NewUUID().String()
 			}
 			w.Header().Set(CorrelationHeader, id)
