@@ -39,10 +39,11 @@ const (
 	Advertising          Category = "advertising"           // 627
 	Supplies             Category = "supplies"              // 628
 	OtherServices        Category = "other-services"        // 629
+	FixedAsset           Category = "fixed-asset"           // 21x: an investment, not an expense
 )
 
 // Categories lists the valid categories.
-var Categories = []Category{Goods, Rent, Repairs, ProfessionalServices, Transport, Insurance, Advertising, Supplies, OtherServices}
+var Categories = []Category{Goods, Rent, Repairs, ProfessionalServices, Transport, Insurance, Advertising, Supplies, OtherServices, FixedAsset}
 
 // ValidCategory reports whether c is a category.
 func ValidCategory(c Category) bool { return slices.Contains(Categories, c) }
