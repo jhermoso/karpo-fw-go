@@ -284,7 +284,7 @@ func (p *Party) AssignRole(c RoleCatalog, roleType RoleTypeID, from time.Time) (
 		return PartyRoleID{}, err
 	}
 	for _, r := range p.roles {
-		if r.RoleType == roleType && overlaps(r.Period, period) {
+		if r.RoleType == roleType && r.Period.Overlaps(period) {
 			return PartyRoleID{}, fw.Violation("parties.role_overlap", "the party already plays this role in that period")
 		}
 	}
@@ -369,11 +369,4 @@ func (p *Party) AuditSnapshot() map[string]any {
 		s["legalForm"] = string(p.organization.LegalForm)
 	}
 	return s
-}
-
-// overlaps reports whether two half-open periods intersect.
-func overlaps(a, b vocab.ValidPeriod) bool {
-	aEnd, aClosed := a.To()
-	bEnd, bClosed := b.To()
-	return (!aClosed || b.From().Before(aEnd)) && (!bClosed || a.From().Before(bEnd))
 }

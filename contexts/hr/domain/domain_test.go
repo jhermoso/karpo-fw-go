@@ -126,6 +126,32 @@ func TestPosition(t *testing.T) {
 	if _, held := ceo.HolderAt(t1.Add(2 * time.Hour)); held {
 		t.Fatal("closing vacates")
 	}
+	// A position filled, reporting and closed at one instant: what started then ends then.
+	desk, _ := domain.OpenPosition(domain.NewPositionID(), pt, st)
+	if err := desk.Fill(ana, t0); err != nil {
+		t.Fatal(err)
+	}
+	if err := desk.Vacate(t0); err != nil {
+		t.Fatalf("vacated at the instant it was filled: %v", err)
+	}
+	if err := desk.Fill(bea, t0); err != nil {
+		t.Fatalf("an empty holding is in nobody's way: %v", err)
+	}
+	if err := desk.ReportTo(cto.ID(), true, t0); err != nil {
+		t.Fatal(err)
+	}
+	if err := desk.EndReporting(cto.ID(), t0); err != nil {
+		t.Fatalf("a reporting line ended at the instant it started: %v", err)
+	}
+	if err := desk.ReportTo(cto.ID(), true, t0); err != nil {
+		t.Fatal(err)
+	}
+	if err := desk.Close(t0); err != nil || desk.Status() != domain.StatusInactive {
+		t.Fatalf("closed at the instant it was filled: %v", err)
+	}
+	if _, held := desk.HolderAt(t0); held {
+		t.Fatal("closing at once leaves no holder")
+	}
 	if err := ceo.Fill(ana, t1.Add(2*time.Hour)); !isViolation(err, "hr.position_not_active") {
 		t.Fatal("a closed position cannot be filled")
 	}

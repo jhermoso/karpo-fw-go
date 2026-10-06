@@ -266,6 +266,7 @@ func (s service) positionUseCases(svc *Service) {
 		}
 		planned, err := vocab.NewValidPeriod(at(c.PlannedFrom), c.PlannedThru)
 		v.Merge("plannedThru", err)
+		v.Require(!planned.IsEmpty(), "plannedThru", "range", "the planned end must be after the planned start")
 		if err := v.Err(); err != nil {
 			return PositionDTO{}, err
 		}

@@ -46,9 +46,10 @@ func TestPartiesContext(t *testing.T) {
 			ctx = authz.WithContext(ctx, ac)
 
 			// The scenario runs on the framework's fake clock: the system clock advances in ticks
-			// (up to 15.6 ms on Windows), so what starts in one use case could not end "now" a
-			// moment later, because a validity ends strictly after it starts. It starts at a whole
-			// second, which every engine stores exactly: an instant read back equals the clock's.
+			// (up to 15.6 ms on Windows), so two use cases could share an instant or not depending
+			// on the run, and the employment below would end with or without a length. It starts
+			// at a whole second, which every engine stores exactly: an instant read back equals
+			// the clock's.
 			clock := fake.New(time.Now().Truncate(time.Second))
 			t.Cleanup(fw.SetClock(clock))
 
@@ -113,7 +114,7 @@ func TestPartiesContext(t *testing.T) {
 				t.Fatalf("duplicate: %v", err)
 			}
 			relID, _ := domain.ParseRelationshipID(rel.ID)
-			clock.Advance(time.Millisecond) // the employment ends after it started
+			clock.Advance(time.Millisecond) // the employment lasts a moment
 			if _, err := svc.TerminateRelationship.Handle(ctx, papp.TerminateRelationship{ID: relID}); err != nil {
 				t.Fatal(err)
 			}

@@ -96,7 +96,7 @@ func (p *Party) AssignFacilityRole(types []FacilityRoleType, facility fw.UUID, r
 		return FacilityRoleID{}, err
 	}
 	for _, r := range p.facilityRoles {
-		if r.Facility == facility && r.RoleType == role && overlaps(r.Period, period) {
+		if r.Facility == facility && r.RoleType == role && r.Period.Overlaps(period) {
 			return FacilityRoleID{}, fw.Violation("parties.facility_role_overlap", "the party already plays this role at the facility")
 		}
 	}
