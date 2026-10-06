@@ -520,9 +520,9 @@ y `pkg/application/outcome.go`.
 
 Karpo, rama `feat/observabilidad-minima` (parte de `claude/karpo-observabilidad-minima-yoma1a`,
 que se había hecho sobre una evaluación reconstruida, y la alinea con los nombres de este
-documento). **Sin publicar**: la rama declara Fw 1.7.0, pero el feed ya tiene 1.7.0, 1.8.0 y
-1.9.0 de otra línea sin fusionar (ADR 0010), así que antes de publicar hay que llevarla encima de
-esa línea y tomar el siguiente número. El detalle está junto al artefacto, en
+documento). Fw **1.10.0, sin publicar**: la rama se rehízo el 2026-10-07 encima de la línea que
+ya tenía 1.7.0, 1.8.0 y 1.9.0 (ADR 0010), porque el 1.7.0 que declaraba al principio ya estaba
+ocupado en el feed. El detalle está junto al artefacto, en
 `020-Back/020-Source/Paranoia.Karpo.Fw.Infrastructure.Observability/FwObservability.md`.
 
 | Mínimo | C# |
