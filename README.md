@@ -21,7 +21,7 @@ Puntos clave:
 - **Batería de conformidad**: toda implementación del repositorio debe demostrar que cada
   especificación devuelve en la base de datos exactamente lo mismo que en memoria.
 
-📖 Diseño completo: [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) · Inventario de patrones: [docs/INVENTARIO-PATRONES.md](docs/INVENTARIO-PATRONES.md) · Lenguaje ubicuo: [docs/LENGUAJE-UBICUO.md](docs/LENGUAJE-UBICUO.md) · Rasgos: [docs/RASGOS-TRANSVERSALES.md](docs/RASGOS-TRANSVERSALES.md) · Autorización: [docs/AUTORIZACION.md](docs/AUTORIZACION.md) · Seguridad: [docs/SEGURIDAD.md](docs/SEGURIDAD.md) · Integración: [docs/EVENTOS-INTEGRACION.md](docs/EVENTOS-INTEGRACION.md) · Esquema: [docs/ESQUEMA-MIGRACIONES.md](docs/ESQUEMA-MIGRACIONES.md) · Parties: [docs/PARTIES.md](docs/PARTIES.md) · Geografía: [docs/GEOGRAFIA.md](docs/GEOGRAFIA.md) · Instalaciones: [docs/INSTALACIONES.md](docs/INSTALACIONES.md) · RRHH: [docs/RRHH.md](docs/RRHH.md) · Nóminas: [docs/NOMINAS.md](docs/NOMINAS.md) · Fiscal: [docs/FISCAL.md](docs/FISCAL.md) · Facturación: [docs/FACTURACION.md](docs/FACTURACION.md) · Cobros: [docs/COBROS.md](docs/COBROS.md) · Tesorería: [docs/TESORERIA.md](docs/TESORERIA.md) · Contabilidad: [docs/CONTABILIDAD.md](docs/CONTABILIDAD.md) · Pagos: [docs/PAGOS.md](docs/PAGOS.md) · Compras: [docs/COMPRAS.md](docs/COMPRAS.md) · Productos: [docs/PRODUCTOS.md](docs/PRODUCTOS.md) · Inventario: [docs/INVENTARIO.md](docs/INVENTARIO.md) · Pedidos: [docs/PEDIDOS.md](docs/PEDIDOS.md)
+📖 Diseño completo: [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) · Inventario de patrones: [docs/INVENTARIO-PATRONES.md](docs/INVENTARIO-PATRONES.md) · Lenguaje ubicuo: [docs/LENGUAJE-UBICUO.md](docs/LENGUAJE-UBICUO.md) · Rasgos: [docs/RASGOS-TRANSVERSALES.md](docs/RASGOS-TRANSVERSALES.md) · Autorización: [docs/AUTORIZACION.md](docs/AUTORIZACION.md) · Seguridad: [docs/SEGURIDAD.md](docs/SEGURIDAD.md) · Integración: [docs/EVENTOS-INTEGRACION.md](docs/EVENTOS-INTEGRACION.md) · Esquema: [docs/ESQUEMA-MIGRACIONES.md](docs/ESQUEMA-MIGRACIONES.md) · Observabilidad: [docs/OBSERVABILIDAD.md](docs/OBSERVABILIDAD.md) · Parties: [docs/PARTIES.md](docs/PARTIES.md) · Geografía: [docs/GEOGRAFIA.md](docs/GEOGRAFIA.md) · Instalaciones: [docs/INSTALACIONES.md](docs/INSTALACIONES.md) · RRHH: [docs/RRHH.md](docs/RRHH.md) · Nóminas: [docs/NOMINAS.md](docs/NOMINAS.md) · Fiscal: [docs/FISCAL.md](docs/FISCAL.md) · Facturación: [docs/FACTURACION.md](docs/FACTURACION.md) · Cobros: [docs/COBROS.md](docs/COBROS.md) · Tesorería: [docs/TESORERIA.md](docs/TESORERIA.md) · Contabilidad: [docs/CONTABILIDAD.md](docs/CONTABILIDAD.md) · Pagos: [docs/PAGOS.md](docs/PAGOS.md) · Compras: [docs/COMPRAS.md](docs/COMPRAS.md) · Productos: [docs/PRODUCTOS.md](docs/PRODUCTOS.md) · Inventario: [docs/INVENTARIO.md](docs/INVENTARIO.md) · Pedidos: [docs/PEDIDOS.md](docs/PEDIDOS.md)
 
 ---
 
@@ -65,7 +65,10 @@ pkg/
 │   └── messaging/        # Eventos de integración: Recorder (traducción), Relay, Consumer (inbox)
 │
 ├── log/, cache/, time/   # contratos transversales (implementaciones en subpaquetes)
-├── distribution/         # DISTRIBUCIÓN (HTTP, RFC 9457, correlación, health, Authorize)
+├── observability/        # Contrato de telemetría (trazas, métricas, nombres compartidos con C#)
+│   ├── inprocess/        # ids W3C en proceso + registro de métricas
+│   └── prometheus/       # GET /metrics en formato de texto (solo biblioteca estándar)
+├── distribution/         # DISTRIBUCIÓN (HTTP, RFC 9457, correlación, Observe, health, Authorize)
 │   └── jwtauth/          # Autenticación JWT HS256 (solo biblioteca estándar)
 ├── events/               # Registry + suscripción tipada; inprocess/ (Dispatcher en memoria)
 ├── messaging/inprocess/  # Transporte de eventos de integración en memoria (monolito modular)
@@ -99,6 +102,7 @@ contexts/purchases/       # Contexto Compras (facturas recibidas con IVA soporta
 contexts/products/        # Contexto Productos (catálogo por empresa, códigos de barras, kits, categorías, unidades, tarifas y cotización): ver docs/PRODUCTOS.md
 contexts/inventory/       # Contexto Inventario (almacenes, existencias a coste medio, libro de movimientos, reservas, recuentos y traspasos; reserva y salida del stock de los pedidos): ver docs/INVENTARIO.md
 contexts/orders/          # Contexto Pedidos (pedidos de venta valorados, condiciones del cliente, control de crédito, reserva de stock por eventos, albaranes): ver docs/PEDIDOS.md
+e2e/                      # Extremo a extremo con contextos reales (observabilidad sobre Geografía)
 integration/              # Módulo aparte: pruebas contra PostgreSQL, SQL Server, Oracle, MySQL
 ```
 
@@ -126,6 +130,18 @@ parties := hotswap.Repository(sw, infrastructure.RepositoryFactory)
 // ...
 sw.Swap(ctx, postgres.Open(pgDB))
 ```
+
+### Observabilidad
+
+```go
+logger := vanilla.FromEnv("parties")   // una línea JSON por evento en stdout
+tel := observability.Telemetry{Tracer: inprocess.NewTracer(0), Meter: inprocess.NewRegistry()}
+h := distribution.Chain(mux, distribution.Recovery(logger), distribution.Correlation(),
+	distribution.Observe(logger, tel)) // línea, span y métrica por petición; causa de todo 5xx
+```
+
+Sin `Telemetry` no se crean trazas ni métricas. Detalle y decisiones en
+[docs/OBSERVABILIDAD.md](docs/OBSERVABILIDAD.md).
 
 ---
 

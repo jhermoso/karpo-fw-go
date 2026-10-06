@@ -25,7 +25,7 @@ jobs:
 
       - name: gofmt
         run: |
-          unformatted=$(gofmt -l pkg examples integration)
+          unformatted=$(gofmt -l pkg examples integration e2e)
           if [ -n "$unformatted" ]; then
             echo "Files not formatted with gofmt:"; echo "$unformatted"; exit 1
           fi

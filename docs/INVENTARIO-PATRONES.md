@@ -61,9 +61,9 @@ Leyenda: ✅ hecho · 🟡 parcial · ❌ falta · — no aplica en Go (decisió
 | Gestión de esquema / migraciones (`IDatabaseSchemaManager`) | ✅ `application.SchemaMigrator` | ✅ `sqlrepo.Migrator` (5 motores, bloqueo, checksum, dirty) | Evaluado en `ESQUEMA-MIGRACIONES.md`; ❌ comando `karpo migrate` |
 | Importación y referencias legadas (`ImportRun`, `LegacyReference`) | ❌ | ❌ | |
 | Log de auditoría (`AuditLogEntry`) | ✅ `application.AuditLog` | ✅ memoria, SQL ×5, hotswap; escrito por el orquestador | ❌ almacén a prueba de manipulación |
-| Log | ✅ `log.Logger` | ✅ `log/vanilla` | |
+| Log | ✅ `log.Logger`, `log.Default` | ✅ `log/vanilla` (JSON en stdout con `FromEnv`; `Enrich` añade `correlation_id`, `causation_id`, `trace_id`, `span_id`) | |
 | Caché | ✅ `cache.Cache` | ✅ `cache/memory` | ❌ `CatalogCache`, repositorio con caché |
-| Observabilidad (trazas, métricas) | ❌ | ❌ | |
+| Observabilidad (trazas, métricas) | ✅ `pkg/observability` (`Tracer`, `Span`, `Meter`, W3C `traceparent`, nombres compartidos con C#) | ✅ `observability/inprocess`, `observability/prometheus` (`/metrics`), `distribution.Observe` (línea, span y métrica por petición; causa de todo 5xx), `pipeline.Telemetry`, métricas del relay | Evaluado en `OBSERVABILIDAD.md`; ❌ traza a través del outbox (paso 8), ❌ adaptador OpenTelemetry en módulo aparte (paso 9) |
 | Contenedor de dependencias | — (punto de composición) | — | |
 | Guardián de arquitectura | ✅ `archtest` | 🟡 capas y contratos | ❌ nombres, screaming architecture, subdominios |
 

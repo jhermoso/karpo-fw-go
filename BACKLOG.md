@@ -67,6 +67,24 @@ tiempo de prueba, participación en el capital) y edición de persona.
 - **Filtros HTTP → especificaciones** (lista blanca de campos) para búsquedas genéricas.
 - **CI en Linux** con `go test -race` (en Windows no hay compilador C) y `integration/run.ps1`.
 
+### 2b-bis. Observabilidad: siguientes pasos
+Hecho (ver [docs/OBSERVABILIDAD.md](docs/OBSERVABILIDAD.md), pasos 1 a 7): contrato
+`pkg/observability`, implementación en proceso, `/metrics`, registro enriquecido por contexto,
+correlación validada, `distribution.Observe` con la causa de todo 5xx, relay que no calla y
+telemetría de casos de uso. El documento es una **reconstrucción**: falta cotejar sus decisiones
+D1 a D8 con la evaluación original.
+
+Pendiente:
+- **Paso 8: la traza cruza el outbox.** `traceparent` en `OutboxMessage` (columna nueva en los
+  cinco dialectos y en memoria) y el relay arranca el span de entrega como hijo.
+- **Paso 9: adaptador de OpenTelemetry** en un módulo aparte (su propio `go.mod`), con el colector
+  por configuración (`OTEL_EXPORTER_OTLP_ENDPOINT`) y nunca en el código.
+- Montar `Observe` y `pipeline.Telemetry` en la composición de cada contexto cuando haya un
+  ejecutable de servicio (hoy los contextos se componen en las pruebas).
+- **Prueba que depende de la fecha:** `TestPayments_OwesPaysAndPosts_MemoryThenSQLite` falla desde
+  el 2026-10-06 porque liquida con fecha fija 2026-10-05 una orden generada «hoy»
+  (`treasury.settle_date`). Ajena a la observabilidad: no se tocó.
+
 ### 2c. Security: siguientes pasos
 Hecho (ver [docs/SEGURIDAD.md](docs/SEGURIDAD.md), decisiones aprobadas el 2026-10-04): contexto
 `contexts/security` con usuarios, roles, catálogo de permisos declarado por cada contexto, acceso
