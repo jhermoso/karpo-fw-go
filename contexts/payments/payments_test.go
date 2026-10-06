@@ -346,8 +346,10 @@ func (h *host) scenario(tag string) {
 	}
 	h.must(h.do("GET", "/api/treasury/transfers/"+order.ID, "outsider", nil, nil), 404, "outsider")
 
-	// The bank executes: Payments registers a payment per transfer and Accounting posts them.
-	_, err = h.treasury.Service.SettleTransfers.Handle(ctx, tapp.SettleTransfers{ID: oid, On: vocab.MustDate(2026, 10, 5)})
+	// The bank executes: Payments registers a payment per transfer and Accounting posts them. The
+	// order is settled on the day its file was generated (today), never before.
+	settled := vocab.DateOf(fw.Now())
+	_, err = h.treasury.Service.SettleTransfers.Handle(ctx, tapp.SettleTransfers{ID: oid, On: settled})
 	h.ok(err)
 	h.deliver()
 	if p := h.payable(inv1.ID); !p.Settled {
@@ -366,7 +368,7 @@ func (h *host) scenario(tag string) {
 			second = tr.EndToEnd
 		}
 	}
-	_, err = h.treasury.Service.RejectTransfer.Handle(ctx, tapp.RejectTransfer{ID: oid, EndToEnd: second, On: vocab.MustDate(2026, 10, 7), Reason: "AC04"})
+	_, err = h.treasury.Service.RejectTransfer.Handle(ctx, tapp.RejectTransfer{ID: oid, EndToEnd: second, On: settled.AddDays(2), Reason: "AC04"})
 	h.ok(err)
 	h.deliver()
 	if p := h.payable(nomina.ID); p.Settled || p.Open != "469.70" {
