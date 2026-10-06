@@ -169,6 +169,35 @@ type PurchaseCancelled struct {
 // IntegrationEventType implements application.IntegrationEvent.
 func (PurchaseCancelled) IntegrationEventType() string { return "purchases.invoice-cancelled.v1" }
 
+// DepreciationCharged is assets.depreciation-charged.v1.
+type DepreciationCharged struct {
+	AssetID string `json:"assetId"`
+	Company string `json:"company"`
+	Code    string `json:"code"`
+	Period  string `json:"period"`
+	Date    string `json:"date"`
+	Amount  string `json:"amount"`
+}
+
+// IntegrationEventType implements application.IntegrationEvent.
+func (DepreciationCharged) IntegrationEventType() string { return "assets.depreciation-charged.v1" }
+
+// AssetDisposed is assets.asset-disposed.v1.
+type AssetDisposed struct {
+	AssetID     string `json:"assetId"`
+	Company     string `json:"company"`
+	Code        string `json:"code"`
+	Kind        string `json:"kind"`
+	Date        string `json:"date"`
+	Cost        string `json:"cost"`
+	Accumulated string `json:"accumulated"`
+	Proceeds    string `json:"proceeds"`
+	Result      string `json:"result"`
+}
+
+// IntegrationEventType implements application.IntegrationEvent.
+func (AssetDisposed) IntegrationEventType() string { return "assets.asset-disposed.v1" }
+
 type parser struct{ err error }
 
 func (p *parser) id(s string) fw.UUID {
@@ -340,7 +369,8 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 	// a corrective invoice posts negative amounts, which change sides.
 	categoryRole := map[string]domain.Role{"goods": domain.RolePurchases, "rent": domain.RoleRent, "repairs": domain.RoleRepairs,
 		"professional-services": domain.RoleProfessional, "transport": domain.RoleTransport, "insurance": domain.RoleInsurance,
-		"advertising": domain.RoleAdvertising, "supplies": domain.RoleSupplies, "other-services": domain.RoleOtherServices}
+		"advertising": domain.RoleAdvertising, "supplies": domain.RoleSupplies, "other-services": domain.RoleOtherServices,
+		"fixed-asset": domain.RoleFixedAssets}
 	messaging.Handle(c, func(ctx context.Context, e PurchaseRegistered, _ app.Envelope) error {
 		var p parser
 		company, supplier, on := p.id(e.Company), p.id(e.Supplier), p.date(e.Received)
@@ -421,6 +451,54 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 		key := e.PaymentID + "|" + e.PayableID
 		return reverseSource(ctx, domain.OrganizationID{UUID: company}, "payments.payment-allocated.v1", key, vocab.DateOf(env.OccurredAt),
 			domain.Source{Type: "payments.allocation-reversed.v1", ID: env.ID, Key: key})
+	})
+
+	// Depreciation of a month: the expense against the accumulated depreciation, on the last day of
+	// the month. Each month of each asset posts once.
+	messaging.Handle(c, func(ctx context.Context, e DepreciationCharged, _ app.Envelope) error {
+		var p parser
+		company, on, amount := p.id(e.Company), p.date(e.Date), p.amount(e.Amount)
+		if err := p.check("assets.depreciation-charged.v1"); err != nil {
+			return err
+		}
+		key := e.AssetID + "|" + e.Period
+		return withLedger(ctx, domain.OrganizationID{UUID: company}, func(l *domain.Ledger) (domain.Draft, error) {
+			var err error
+			lines := []domain.Line{{Account: role(l, domain.RoleDepreciation, &err), Debit: amount},
+				{Account: role(l, domain.RoleAccumulatedDepr, &err), Credit: amount}}
+			return domain.Draft{Company: domain.OrganizationID{UUID: company}, Date: on, Description: "Amortización " + e.Code + " " + e.Period,
+				Source: domain.Source{Type: "assets.depreciation-charged.v1", ID: key, Key: key}, Lines: lines}, err
+		})
+	})
+
+	// Disposal: the asset leaves at its cost with its accumulated depreciation; what the sale brought
+	// is owed by the buyer, and the difference with the net book value is the loss or the gain.
+	messaging.Handle(c, func(ctx context.Context, e AssetDisposed, _ app.Envelope) error {
+		var p parser
+		company, on := p.id(e.Company), p.date(e.Date)
+		cost, acc, proceeds, result := p.amount(e.Cost), p.amount(e.Accumulated), p.amount(e.Proceeds), p.amount(e.Result)
+		if err := p.check("assets.asset-disposed.v1"); err != nil {
+			return err
+		}
+		return withLedger(ctx, domain.OrganizationID{UUID: company}, func(l *domain.Ledger) (domain.Draft, error) {
+			var err error
+			var lines []domain.Line
+			if !acc.IsZero() {
+				lines = append(lines, domain.Line{Account: role(l, domain.RoleAccumulatedDepr, &err), Debit: acc})
+			}
+			if !proceeds.IsZero() {
+				lines = append(lines, domain.Line{Account: role(l, domain.RoleAssetReceivable, &err), Debit: proceeds})
+			}
+			if result.IsNegative() {
+				lines = append(lines, domain.Line{Account: role(l, domain.RoleAssetLoss, &err), Debit: result.Neg()})
+			}
+			lines = append(lines, domain.Line{Account: role(l, domain.RoleFixedAssets, &err), Credit: cost})
+			if result.IsPositive() {
+				lines = append(lines, domain.Line{Account: role(l, domain.RoleAssetGain, &err), Credit: result})
+			}
+			return domain.Draft{Company: domain.OrganizationID{UUID: company}, Date: on, Description: "Baja de inmovilizado " + e.Code,
+				Source: domain.Source{Type: "assets.asset-disposed.v1", ID: e.AssetID, Key: e.AssetID}, Lines: lines}, err
+		})
 	})
 
 	// Payslip: wages and employer social security against their payables and the net pay.
