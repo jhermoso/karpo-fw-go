@@ -40,6 +40,7 @@ type Deps struct {
 	Mandates    domain.MandateRepository
 	Remittances domain.RemittanceRepository
 	Transfers   domain.TransferOrderRepository
+	Statements  domain.StatementRepository
 	Receivables domain.Receivables
 	Payables    domain.Payables // optional: without it there are no transfer proposals
 	Identities  domain.Identities
@@ -77,6 +78,14 @@ type Service struct {
 	CancelTransfers      app.CommandHandler[CancelTransfers, TransferOrderDTO]
 	GetTransferOrder     app.QueryHandler[GetTransferOrder, TransferOrderDTO]
 	SearchTransferOrders app.QueryHandler[SearchTransferOrders, fw.Page[TransferOrderDTO]]
+
+	ImportStatement  app.CommandHandler[ImportStatement, StatementDTO]
+	ImportNorma43    app.CommandHandler[ImportNorma43, []StatementDTO]
+	Reconcile        app.CommandHandler[ReconcileLine, StatementDTO]
+	Release          app.CommandHandler[ReleaseLine, StatementDTO]
+	AutoReconcile    app.CommandHandler[AutoReconcile, StatementDTO]
+	GetStatement     app.QueryHandler[GetStatement, StatementDTO]
+	SearchStatements app.QueryHandler[SearchStatements, fw.Page[StatementDTO]]
 }
 
 type scope struct {
@@ -124,6 +133,7 @@ type service struct {
 	mandates    *orchestration.Orchestrator[domain.MandateID, *domain.Mandate]
 	remittances *orchestration.Orchestrator[domain.RemittanceID, *domain.Remittance]
 	transfers   *orchestration.Orchestrator[domain.TransferOrderID, *domain.TransferOrder]
+	statements  *orchestration.Orchestrator[domain.StatementID, *domain.Statement]
 }
 
 func parseID(v *fw.Validation, field, s string) fw.UUID {
@@ -159,11 +169,13 @@ func NewService(d Deps) *Service {
 		mandates:    orchestration.New[domain.MandateID, *domain.Mandate](d.Mandates, d.UoW, opts...),
 		remittances: orchestration.New[domain.RemittanceID, *domain.Remittance](d.Remittances, d.UoW, opts...),
 		transfers:   orchestration.New[domain.TransferOrderID, *domain.TransferOrder](d.Transfers, d.UoW, opts...),
+		statements:  orchestration.New[domain.StatementID, *domain.Statement](d.Statements, d.UoW, opts...),
 	}
 	svc := &Service{}
 	s.accountUseCases(svc)
 	s.remittanceUseCases(svc)
 	s.transferUseCases(svc)
+	s.statementUseCases(svc)
 	return svc
 }
 

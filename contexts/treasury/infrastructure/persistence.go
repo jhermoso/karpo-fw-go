@@ -70,6 +70,18 @@ var transfersDDL = []string{
 	`CREATE INDEX ix_trs_transfers_payable ON trs_transfers (payable)`,
 }
 
+// A statement belongs to an account; "pending" counts its movements not reconciled yet.
+var statementsDDL = []string{
+	`CREATE TABLE trs_statements (id {uuid} NOT NULL PRIMARY KEY, version {bigint} NOT NULL, owner {uuid} NOT NULL, account_id {uuid} NOT NULL,
+	period_from {date} NOT NULL, period_to {date} NOT NULL, opening {str:30} NOT NULL, closing {str:30} NOT NULL, pending {int} NOT NULL,
+	` + audit + `, FOREIGN KEY (account_id) REFERENCES trs_accounts (id))`,
+	`CREATE UNIQUE INDEX ux_trs_statements_period ON trs_statements (account_id, period_from)`,
+	`CREATE TABLE trs_statement_lines (statement_id {uuid} NOT NULL, line_no {int} NOT NULL, booked {date} NOT NULL, value_date {date} NOT NULL,
+	amount {str:30} NOT NULL, concept {str:500}, reference {str:60}, match_kind {str:20}, match_id {str:64}, match_note {str:200},
+	PRIMARY KEY (statement_id, line_no), FOREIGN KEY (statement_id) REFERENCES trs_statements (id))`,
+	`CREATE INDEX ix_trs_statement_lines_match ON trs_statement_lines (match_kind, match_id)`,
+}
+
 func technicalDDL(d string) []string {
 	switch d {
 	case "sqlite":
@@ -96,6 +108,7 @@ func Migrations() sqlrepo.MigrationSet {
 		{Version: 1, Name: "accounts, mandates and remittances", Up: sqlrepo.RenderDDLAll(schemaDDL...)},
 		{Version: 2, Name: "outboxes and audit log", Up: technical},
 		{Version: 3, Name: "credit transfer orders", Up: sqlrepo.RenderDDLAll(transfersDDL...)},
+		{Version: 4, Name: "bank statements", Up: sqlrepo.RenderDDLAll(statementsDDL...)},
 	}}
 }
 
@@ -105,7 +118,7 @@ func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 }
 
 // Tables lists the tables of the context, children first (drop order).
-var Tables = []string{"trs_transfers", "trs_transfer_orders", "trs_remittance_items", "trs_remittances", "trs_mandates", "trs_accounts", TableOutbox, TableIntegrationOutbox, TableAuditLog}
+var Tables = []string{"trs_statement_lines", "trs_statements", "trs_transfers", "trs_transfer_orders", "trs_remittance_items", "trs_remittances", "trs_mandates", "trs_accounts", TableOutbox, TableIntegrationOutbox, TableAuditLog}
 
 // DropAll removes the tables of the context and its migration history (tests only).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
@@ -326,6 +339,55 @@ func TransferOrderMapping() sqlrepo.Mapping[domain.TransferOrderID, *domain.Tran
 			},
 		}},
 	}
+}
+
+// StatementMapping maps Statement to trs_statements and its movements.
+func StatementMapping() sqlrepo.Mapping[domain.StatementID, *domain.Statement] {
+	return sqlrepo.Mapping[domain.StatementID, *domain.Statement]{
+		Table:   "trs_statements",
+		Columns: sqlrepo.WithAuditColumns("owner", "account_id", "period_from", "period_to", "opening", "closing", "pending"),
+		Dehydrate: func(s *domain.Statement) (sqlrepo.Values, error) {
+			st := s.State()
+			return sqlrepo.AuditStampValues(sqlrepo.Values{"owner": st.Owner, "account_id": st.Account, "period_from": st.From, "period_to": st.To,
+				"opening": st.Opening.StringFixed(2), "closing": st.Closing.StringFixed(2), "pending": int64(s.Pending())}, s.AuditStamp()), nil
+		},
+		Hydrate: func(r *sqlrepo.Row, children sqlrepo.ChildRows) (*domain.Statement, error) {
+			st := domain.StatementState{Owner: domain.OrganizationID{UUID: r.UUID("owner")}, Account: domain.AccountID{UUID: r.UUID("account_id")},
+				From: r.Date("period_from"), To: r.Date("period_to"), Opening: r.Decimal("opening"), Closing: r.Decimal("closing"), Audit: r.AuditStamp()}
+			for _, c := range children.Of("lines") {
+				st.Lines = append(st.Lines, domain.StatementLine{No: int(c.Int64("line_no")), Date: c.Date("booked"), ValueDate: c.Date("value_date"),
+					Amount: c.Decimal("amount"), Concept: c.String("concept"), Reference: c.String("reference"),
+					Match: domain.Match{Kind: c.String("match_kind"), ID: c.String("match_id"), Note: c.String("match_note")}})
+				if err := c.Err(); err != nil {
+					return nil, err
+				}
+			}
+			// Engines do not agree on the order of the children: movements are sorted here.
+			slices.SortFunc(st.Lines, func(a, b domain.StatementLine) int { return a.No - b.No })
+			if err := r.Err(); err != nil {
+				return nil, err
+			}
+			return domain.ReconstituteStatement(domain.StatementID{UUID: r.UUID("id")}, st)
+		},
+		Children: []sqlrepo.Child[*domain.Statement]{{
+			Name: "lines", Table: "trs_statement_lines", ForeignKey: "statement_id", OrderBy: []string{"line_no"},
+			Columns: []string{"line_no", "booked", "value_date", "amount", "concept", "reference", "match_kind", "match_id", "match_note"},
+			Dehydrate: func(s *domain.Statement) ([]sqlrepo.Values, error) {
+				out := []sqlrepo.Values{}
+				for _, l := range s.State().Lines {
+					out = append(out, sqlrepo.Values{"line_no": int64(l.No), "booked": l.Date, "value_date": l.ValueDate, "amount": l.Amount.StringFixed(2),
+						"concept": opt(l.Concept), "reference": opt(l.Reference), "match_kind": opt(l.Match.Kind), "match_id": opt(l.Match.ID),
+						"match_note": opt(l.Match.Note)})
+				}
+				return out, nil
+			},
+		}},
+	}
+}
+
+// StatementRepositoryFactory builds the statement repository.
+func StatementRepositoryFactory(b hotswap.Backend) (domain.StatementRepository, error) {
+	return repository(b, StatementMapping())
 }
 
 // TransferOrderRepositoryFactory builds the transfer order repository.

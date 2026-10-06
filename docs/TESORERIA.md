@@ -131,10 +131,93 @@ contexts/treasury/
   - liquidación y devolución pasando por `receivables_inbox`, con la cuenta por cobrar saldada y
     reabierta.
 
+## Extractos y conciliación
+
+Fase 2 de Tesorería, aplazada por la decisión 4: lo que dice el banco que pasó en cada cuenta, y
+su punteo contra lo que la empresa le envió.
+
+En C#, `BankStatementLine` apuntaba a `financial_account` y no a una cuenta bancaria, el enlace con
+lo conciliado se ponía a mano y el estado «Matched» no se asignaba nunca (fila 5 de la tabla de
+resultados, nota 49). No había lector de ficheros del banco.
+
+- **Extracto** (`Statement`): una cuenta, un periodo, saldo inicial y final, y sus movimientos
+  (fecha, fecha valor, importe con signo, concepto y referencia).
+  - **Cuadra o no entra:** saldo inicial más movimientos es el saldo final.
+  - **Continuidad:** los periodos de una cuenta no se solapan, y el saldo inicial es el saldo
+    final del extracto anterior (422 si no).
+- **Entrada:**
+  - **Norma 43** (Cuaderno 43 de la AEB, el formato en que los bancos españoles dan los
+    extractos): registros 11 (cuenta), 22 (movimiento), 23 (conceptos), 33 (totales) y 88 (fin).
+    Se comprueban los totales de debe y haber y el saldo final de cada cuenta. Admite UTF-8 e
+    ISO 8859-1. La cuenta del fichero se localiza por banco, oficina y número entre las cuentas de
+    la organización. **Un fichero entra entero o no entra.**
+  - **A mano**, por JSON, para bancos sin Norma 43.
+- **Conciliación** de cada movimiento contra una de tres cosas:
+
+  | Contra | Movimiento | Condiciones |
+  |---|---|---|
+  | `remittance` (remesa de adeudos) | abono | generada o liquidada, de esa cuenta, por el **mismo importe** |
+  | `transfer-order` (orden de transferencias) | cargo | generada o liquidada, de esa cuenta, por el mismo importe |
+  | `other` | cualquiera | una **nota** que lo explique (comisiones, intereses, impuestos) |
+
+  Una remesa o una orden explica **un solo movimiento** (se busca en los movimientos de todos los
+  extractos). Un movimiento conciliado se puede liberar y volver a conciliar.
+- **Conciliación automática:** a cada movimiento pendiente se le asigna la remesa o la orden de su
+  cuenta con el mismo importe y fecha a **cinco días** como mucho, solo si hay **exactamente una**
+  candidata libre. Si hay varias o ninguna, decide una persona.
+- **Permisos:** `Treasury.Statement.Read`, `Import` y `Reconcile` (**registrar lo que dice el banco
+  y explicarlo están separados**).
+- **Tablas:** `trs_statements` (+ `trs_statement_lines`), migración 4.
+
+### Decisiones propuestas (pendientes de confirmar)
+
+1. **El formato de entrada es Norma 43**, más el alta a mano. camt.053 (el XML europeo) se añade
+   cuando un banco lo exija. Sugerencia: sí; Norma 43 es lo que entregan los bancos españoles.
+2. **Un extracto debe cuadrar y continuar al anterior**, o no se registra. Sugerencia: sí; así un
+   fichero repetido, saltado o truncado se detecta al entrar y no al cerrar el mes.
+3. **En esta fase se concilia contra lo que Tesorería envió al banco** (remesas y órdenes de
+   transferencia) **y con una nota para lo demás**. Conciliar contra cobros y pagos sueltos
+   (transferencias recibidas de clientes, recibos domiciliados de proveedores) es el siguiente
+   paso, con puertos a Cobros y Pagos. Sugerencia: sí.
+4. **Conciliar no cambia nada más**: no liquida la remesa ni ejecuta la orden, ni genera asientos.
+   Es un punteo. Sugerencia: sí por ahora; que el abono del banco liquide la remesa
+   automáticamente es cómodo, pero conviene decidirlo junto con las devoluciones por fichero.
+5. **La conciliación automática solo actúa cuando hay una única candidata** por importe exacto y
+   fecha a cinco días. Sugerencia: sí; prefiero dejar un movimiento pendiente a puntearlo mal.
+6. **Las comisiones y demás movimientos «otros» no se contabilizan todavía**: la nota los explica,
+   pero el asiento (626, 669…) se hace a mano en Contabilidad. Sugerencia: sí en esta fase; el
+   siguiente paso es que la nota lleve una categoría y Contabilidad asiente desde un evento.
+
+### Validación
+
+- **Dominio:** extracto que no cuadra, periodo invertido, movimiento fuera del periodo, importe
+  cero o con tres decimales; conciliar (línea inexistente, sin nota, sin referencia, tipo
+  inválido, una sola vez), liberar, y el evento al conciliar el último movimiento.
+- **Norma 43:** fichero con saltos de línea de Windows, saldos, fechas, importes con signo,
+  conceptos del registro 23, ISO 8859-1; rechazo del fichero que no cuadra, sin totales, con un
+  registro desconocido, vacío, en otra divisa o con un movimiento antes de la cuenta.
+- **Extremo a extremo** (Tesorería sola, con los demás contextos simulados; remesas y orden
+  generadas por sus casos de uso; en memoria y en SQLite migrada):
+  - fichero: conciliar no es importar (403), ajeno 404, vacío 400, descuadrado 422, cuenta de
+    otro 422; mayo registrado; repetido 422;
+  - junio a mano: no continúa mayo 422, no cuadra 400; junio y julio;
+  - automática: importar no es conciliar (403), ajeno 404; dos de tres movimientos; repetida no
+    hace nada;
+  - a mano: tipo inválido 400, sin nota 422, línea inexistente 422, la comisión con su nota, ya
+    conciliado 422;
+  - liberar (una vez) y reconciliar: una orden no es una remesa, remesa de otra cuenta, otro
+    importe y, por fin, la suya; la misma remesa en julio 422;
+  - junio: la remesa del día 20 queda fuera de la ventana automática, pero se puede asignar a mano;
+  - búsquedas (todos, pendientes, otra cuenta), ficha con sus movimientos, ajeno 404.
+- **Integración** en PostgreSQL, SQL Server, Oracle y MySQL: fichero Norma 43, solape, hueco de
+  saldos, automática, «ya conciliado» buscado en las filas hijas, importe distinto, ida y vuelta
+  de los movimientos en orden, liberar y reasignar, y búsqueda de extractos con pendientes.
+
 ## Pendiente
 
 - Fase 2:
-  - extractos (Norma 43 / camt.053) y conciliación automática;
+  - ~~extractos (Norma 43) y conciliación~~: hechos, ver «Extractos y conciliación» (migración 4);
+  - conciliación contra cobros y pagos sueltos, camt.053, y asiento de comisiones;
   - ~~transferencias (pain.001)~~: hechas con el contexto de Pagos, ver [PAGOS.md](PAGOS.md)
     (órdenes de transferencia, migración 3);
   - caja;
