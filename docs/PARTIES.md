@@ -232,7 +232,9 @@ Pendiente:
 - Las afiliaciones dependen de que la contraparte juegue Internal Organization **al establecer** la
   relación: si una organización pasa a ser interna más tarde, hay que recalcular (tarea de
   mantenimiento pendiente).
-- P3 (`OrganizationAdmin` con ámbito) pertenece al contexto Security.
+- ~~P3 (`OrganizationAdmin` con ámbito) pertenece al contexto Security~~: hecho en
+  [SEGURIDAD.md](SEGURIDAD.md). La prueba de extremo a extremo de Parties corre también sobre el
+  directorio real de Security.
 
 Reacciones a otros contextos (primer consumidor de Parties, decisión 4 de [RRHH.md](RRHH.md)):
 `hr.employee-terminated.v1` termina la relación `Employment` y la afiliación, a través de la
@@ -252,3 +254,4 @@ provincia del contacto postal español vigente (facturación primero), por lotes
 | ~~5~~ | ✅ Contexto Instalaciones ([INSTALACIONES.md](INSTALACIONES.md)) |
 | ~~6~~ | ✅ Contexto RRHH ([RRHH.md](RRHH.md)): empleados (`Employment`), contratos, puestos y centros de trabajo; Parties conserva el rol `Employee` y la afiliación |
 | — | Clientes y el resto de extensiones de ErpDetail, cada uno en el contexto que le corresponda (Ventas, Nómina, Fiscal), no en Parties |
+| ~~7~~ | ✅ Conceptos básicos de UDM 1 que faltaban ([PARTIES-UDM.md](PARTIES-UDM.md), decisiones aprobadas el 2026-10-04): datos propios por tipo de relación (código estable en el catálogo, relación de cliente potencial con su tiempo de prueba, participación en el capital) y edición de persona |

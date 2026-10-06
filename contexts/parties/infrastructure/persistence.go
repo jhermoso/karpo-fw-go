@@ -269,12 +269,16 @@ func RelationshipMapping() sqlrepo.Mapping[domain.RelationshipID, *domain.Relati
 	return sqlrepo.Mapping[domain.RelationshipID, *domain.Relationship]{
 		Table: "party_relationships",
 		Columns: sqlrepo.WithAuditColumns("rel_type", "from_party", "to_party", "from_role", "to_role",
-			"valid_from", "valid_to", "remark"),
+			"valid_from", "valid_to", "remark", "trial_until", "share_percent"),
 		Fields: map[string]string{"type": "rel_type"},
 		Dehydrate: func(r *domain.Relationship) (sqlrepo.Values, error) {
-			return sqlrepo.AuditStampValues(sqlrepo.Values{"rel_type": r.Type(), "from_party": r.From(), "to_party": r.To(),
+			v := sqlrepo.Values{"rel_type": r.Type(), "from_party": r.From(), "to_party": r.To(),
 				"from_role": r.FromRole(), "to_role": r.ToRole(), "valid_from": r.Since(), "valid_to": r.Until(),
-				"remark": nullable(r.Remark())}, r.AuditStamp()), nil
+				"remark": nullable(r.Remark()), "trial_until": r.TrialUntil(), "share_percent": nil}
+			if s := r.OwnershipShare(); s != nil {
+				v["share_percent"] = s.Points().StringFixed(2) // exact text, as every decimal of the contexts
+			}
+			return sqlrepo.AuditStampValues(v, r.AuditStamp()), nil
 		},
 		Hydrate: func(row *sqlrepo.Row, _ sqlrepo.ChildRows) (*domain.Relationship, error) {
 			period, err := vocab.NewValidPeriod(row.Time("valid_from"), row.NullTime("valid_to"))
@@ -286,6 +290,11 @@ func RelationshipMapping() sqlrepo.Mapping[domain.RelationshipID, *domain.Relati
 				From: domain.PartyID{UUID: row.UUID("from_party")}, To: domain.PartyID{UUID: row.UUID("to_party")},
 				FromRole: domain.RoleTypeID{UUID: row.UUID("from_role")}, ToRole: domain.RoleTypeID{UUID: row.UUID("to_role")},
 				Period: period, Remark: row.String("remark"), Audit: row.AuditStamp(),
+				Details: domain.RelationshipDetails{Prospect: domain.ProspectDetails{TrialUntil: row.NullTime("trial_until")}},
+			}
+			if !row.IsNull("share_percent") {
+				share := vocab.NewPercentage(row.Decimal("share_percent"))
+				s.Details.Ownership.Share = &share
 			}
 			if err := row.Err(); err != nil {
 				return nil, err
@@ -391,7 +400,7 @@ func (c SQLCatalogs) RoleTypes(ctx context.Context) ([]domain.RoleType, error) {
 
 // RelationshipTypes implements domain.Catalogs.
 func (c SQLCatalogs) RelationshipTypes(ctx context.Context) ([]domain.RelationshipType, error) {
-	rows, err := c.db.Select(ctx, "relationship_types", []string{"id", "name", "description", "from_role", "to_role", "hierarchical"}, "name")
+	rows, err := c.db.Select(ctx, "relationship_types", []string{"id", "name", "description", "from_role", "to_role", "hierarchical", "code"}, "name")
 	if err != nil {
 		return nil, err
 	}
@@ -403,7 +412,7 @@ func (c SQLCatalogs) RelationshipTypes(ctx context.Context) ([]domain.Relationsh
 		}
 		t := domain.RelationshipType{ID: domain.RelationshipTypeID{UUID: r.UUID("id")}, Name: name, Description: r.String("description"),
 			FromRole: domain.RoleTypeID{UUID: r.UUID("from_role")}, ToRole: domain.RoleTypeID{UUID: r.UUID("to_role")},
-			Hierarchical: r.Bool("hierarchical")}
+			Hierarchical: r.Bool("hierarchical"), Code: r.String("code")}
 		if err := r.Err(); err != nil {
 			return nil, err
 		}

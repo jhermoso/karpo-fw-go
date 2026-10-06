@@ -177,7 +177,36 @@ func Migrations() sqlrepo.MigrationSet {
 			return db.InsertMany(ctx, "facility_role_types", []string{"id", "name", "description", "active"}, rows)
 		}},
 		{Version: 10, Name: "inbox (integration events consumed from HR)", Up: inbox},
+		{Version: 11, Name: "relationship type codes and the prospect relationship type", Up: sqlrepo.RenderDDLAll(
+			`ALTER TABLE relationship_types {add:code} {str:40}{addEnd}`), Run: seedRelationshipCodes},
+		// Details by relationship type are nullable columns of party_relationships, as the details
+		// of persons and organizations are columns of parties.
+		{Version: 12, Name: "prospect relationship details: trial", Up: sqlrepo.RenderDDLAll(
+			`ALTER TABLE party_relationships {add:trial_until} {ts}{addEnd}`)},
+		{Version: 13, Name: "ownership relationship details: share", Up: sqlrepo.RenderDDLAll(
+			`ALTER TABLE party_relationships {add:share_percent} {str:10}{addEnd}`)},
 	}}
+}
+
+// seedRelationshipCodes gives the well-known relationship types their code and adds the prospect
+// relationship type (docs/PARTIES-UDM.md). The code is unique among the types that have one; the
+// catalog checks it when it is loaded, because a unique index over a nullable column does not
+// behave the same on every engine.
+func seedRelationshipCodes(ctx context.Context, db *sqlrepo.DB) error {
+	for _, t := range domain.WellKnownRelationshipTypes() {
+		if t.ID == domain.RelProspect {
+			if err := db.Insert(ctx, "relationship_types", sqlrepo.Values{"id": t.ID, "name": t.Name.String(),
+				"description": t.Description, "from_role": t.FromRole, "to_role": t.ToRole, "hierarchical": t.Hierarchical,
+				"code": t.Code}); err != nil {
+				return fmt.Errorf("seeding relationship type %s: %w", t.Name, err)
+			}
+			continue
+		}
+		if _, err := db.Update(ctx, "relationship_types", sqlrepo.Values{"code": t.Code}, sqlrepo.Values{"id": t.ID}); err != nil {
+			return fmt.Errorf("coding relationship type %s: %w", t.Name, err)
+		}
+	}
+	return nil
 }
 
 // seedCatalogs inserts the well-known catalogs with the same GUIDs as the C# WellKnownCatalog.
@@ -194,6 +223,9 @@ func seedCatalogs(ctx context.Context, db *sqlrepo.DB) error {
 		}
 	}
 	for _, t := range domain.WellKnownRelationshipTypes() {
+		if t.ID == domain.RelProspect { // added by migration 11, with the codes
+			continue
+		}
 		if t.ID == domain.RelOrganizationRollup { // seeded as in C#; migration 7 generalizes it
 			t.FromRole, t.ToRole, t.Description = domain.RoleDepartment, domain.RoleDivision, "Department belongs to a division"
 		}
