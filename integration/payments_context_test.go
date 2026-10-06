@@ -36,6 +36,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/messaging/inprocess"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
+	"github.com/jhermoso/karpo-fw-go/pkg/time/fake"
 )
 
 // TestPaymentsContext runs Payments with Treasury, Accounting and Parties on every engine:
@@ -69,6 +70,10 @@ func TestPaymentsContext(t *testing.T) {
 			if _, err := m.Migrate(ctx); err != nil {
 				t.Fatal(err)
 			}
+			// Treasury stamps a transfer order with the moment its file is generated and settles it on
+			// that day or later: the scenario runs on a fixed clock, so that its dates hold whatever
+			// the day the test runs.
+			t.Cleanup(fw.SetClock(fake.New(time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC))))
 			sw := hotswap.New(db)
 			pm := parties.Compose(sw, nil)
 			ym := payments.Compose(sw, nil)
@@ -177,8 +182,8 @@ func TestPaymentsContext(t *testing.T) {
 				!strings.Contains(string(file), "<BIC>BSCHESMMXXX</BIC>") {
 				t.Fatalf("pain.001 from the stored order: %v\n%s", err, file)
 			}
-			settled := vocab.DateOf(fw.Now()) // the day the file was generated, never before
-			_, err = tm.Service.SettleTransfers.Handle(actx, tapp.SettleTransfers{ID: oid, On: settled})
+			// Executed on the day the file was generated (that of the fixed clock), never before.
+			_, err = tm.Service.SettleTransfers.Handle(actx, tapp.SettleTransfers{ID: oid, On: vocab.MustDate(2026, 10, 5)})
 			must(err)
 			deliver()
 			p1, _ = svc.GetPayable.Handle(actx, yapp.GetPayable{ID: id1})
@@ -187,7 +192,7 @@ func TestPaymentsContext(t *testing.T) {
 			}
 			balances(map[string]string{"4000": "99.99", "5720": "-99.99"})
 
-			_, err = tm.Service.RejectTransfer.Handle(actx, tapp.RejectTransfer{ID: oid, EndToEnd: order.Transfers[1].EndToEnd, On: settled.AddDays(1),
+			_, err = tm.Service.RejectTransfer.Handle(actx, tapp.RejectTransfer{ID: oid, EndToEnd: order.Transfers[1].EndToEnd, On: vocab.MustDate(2026, 10, 6),
 				Reason: "AC01"})
 			must(err)
 			deliver()
