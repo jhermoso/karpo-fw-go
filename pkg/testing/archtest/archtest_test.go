@@ -35,6 +35,7 @@ var contracts = []string{
 	module + "/pkg/log",               // logging contract
 	module + "/pkg/cache",             // cache contract
 	module + "/pkg/time",              // clock contract
+	module + "/pkg/observability",     // telemetry contract (traces, metrics, shared names)
 }
 
 // Rule 1: the domain contracts are pure: standard library, the domain tree and the approved
@@ -51,7 +52,7 @@ func TestDomainContracts_ArePure(t *testing.T) {
 func TestApplicationContracts_DependOnContractsOnly(t *testing.T) {
 	archtest.AssertOnlyImports(t, root(t, "pkg", "application"), false, contracts...)
 	archtest.AssertOnlyImports(t, root(t, "pkg", "application", "authz"), false, contracts...)
-	for _, c := range []string{"log", "cache", "time"} {
+	for _, c := range []string{"log", "cache", "time", "observability"} {
 		archtest.AssertOnlyImports(t, root(t, "pkg", c), false, contracts...)
 	}
 }
@@ -87,6 +88,15 @@ func TestPersistence_IsDriverAgnostic(t *testing.T) {
 func TestEvents_DependOnContractsOnly(t *testing.T) {
 	archtest.AssertOnlyImports(t, root(t, "pkg", "events"), true, append(contracts, module+"/pkg/events/...")...)
 	archtest.AssertOnlyImports(t, root(t, "pkg", "messaging"), false, append(contracts, module+"/pkg/messaging/...")...)
+}
+
+// Rule 8: the telemetry contract is standard library only, and its implementations (one package
+// per technology) depend on contracts and on their own tree, never on third-party code: an
+// OpenTelemetry adapter belongs in a separate module so the root go.mod does not grow.
+func TestObservability_ContractIsPureAndAdaptersStayOut(t *testing.T) {
+	archtest.AssertOnlyImports(t, root(t, "pkg", "observability"), false, archtest.Std)
+	archtest.AssertOnlyImports(t, root(t, "pkg", "observability"), true, append(contracts, module+"/pkg/observability/...")...)
+	archtest.AssertTreeDoesNotImport(t, root(t, "pkg", "observability"), []string{"/pkg/persistence", "/pkg/distribution", "database/sql"})
 }
 
 func TestMatchesAndImports(t *testing.T) {
