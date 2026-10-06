@@ -325,12 +325,12 @@ func (h *host) scenario(tag string) {
 		Payments: true, Opened: vocab.MustDate(2020, 1, 1)})
 	h.ok(err)
 	order, err := h.treasury.Service.ProposeTransfers.Handle(ctx, tapp.ProposeTransfers{Debtor: acme.ID, Account: bank.ID,
-		ExecutionDate: vocab.MustDate(2026, 10, 5), DueTo: vocab.MustDate(2026, 10, 31)})
+		ExecutionDate: vocab.DateOf(fw.Now()), DueTo: vocab.MustDate(2026, 10, 31)})
 	if err != nil || len(order.Transfers) != 3 || order.Total != "2074.70" || order.WithoutAccount != 2 {
 		t.Fatalf("proposal: %+v %v", order, err)
 	}
 	again, err := h.treasury.Service.ProposeTransfers.Handle(ctx, tapp.ProposeTransfers{Debtor: acme.ID, Account: bank.ID,
-		ExecutionDate: vocab.MustDate(2026, 10, 5), DueTo: vocab.MustDate(2026, 10, 31)})
+		ExecutionDate: vocab.DateOf(fw.Now()), DueTo: vocab.MustDate(2026, 10, 31)})
 	if err != nil || len(again.Transfers) != 0 {
 		t.Fatalf("nothing twice: %+v %v", again, err)
 	}
@@ -347,7 +347,7 @@ func (h *host) scenario(tag string) {
 	h.must(h.do("GET", "/api/treasury/transfers/"+order.ID, "outsider", nil, nil), 404, "outsider")
 
 	// The bank executes: Payments registers a payment per transfer and Accounting posts them.
-	_, err = h.treasury.Service.SettleTransfers.Handle(ctx, tapp.SettleTransfers{ID: oid, On: vocab.MustDate(2026, 10, 5)})
+	_, err = h.treasury.Service.SettleTransfers.Handle(ctx, tapp.SettleTransfers{ID: oid, On: vocab.DateOf(fw.Now())})
 	h.ok(err)
 	h.deliver()
 	if p := h.payable(inv1.ID); !p.Settled {
@@ -366,7 +366,7 @@ func (h *host) scenario(tag string) {
 			second = tr.EndToEnd
 		}
 	}
-	_, err = h.treasury.Service.RejectTransfer.Handle(ctx, tapp.RejectTransfer{ID: oid, EndToEnd: second, On: vocab.MustDate(2026, 10, 7), Reason: "AC04"})
+	_, err = h.treasury.Service.RejectTransfer.Handle(ctx, tapp.RejectTransfer{ID: oid, EndToEnd: second, On: vocab.DateOf(fw.Now()).AddDays(2), Reason: "AC04"})
 	h.ok(err)
 	h.deliver()
 	if p := h.payable(nomina.ID); p.Settled || p.Open != "469.70" {
