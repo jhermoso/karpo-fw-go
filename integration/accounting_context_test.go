@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/accounting"
 	aapp "github.com/jhermoso/karpo-fw-go/contexts/accounting/application"
@@ -37,6 +38,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/messaging/inprocess"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
+	"github.com/jhermoso/karpo-fw-go/pkg/time/fake"
 )
 
 // TestAccountingContext runs Accounting with Receivables, Billing, Fiscal and Parties on every
@@ -175,10 +177,15 @@ func TestAccountingContext(t *testing.T) {
 			expect(map[string]string{"4300": "49.99", "7000": "-82.64", "4770": "-17.35", "5700": "50.00"})
 
 			// The collection is cancelled: Receivables publishes the reversed allocation.
+			// Accounting dates the reversal on the moment of the cancellation: it runs on a fixed clock,
+			// so that the journal is that of 2026 whatever the day the test runs.
 			cid, _ := rdomain.ParseCollectionID(col.ID)
-			_, err = rm.Service.CancelCollection.Handle(actx, rapp.CancelCollection{ID: cid})
-			must(err)
-			deliver()
+			func() {
+				defer fw.SetClock(fake.New(time.Date(2026, 10, 3, 9, 0, 0, 0, time.UTC)))()
+				_, err = rm.Service.CancelCollection.Handle(actx, rapp.CancelCollection{ID: cid})
+				must(err)
+				deliver()
+			}()
 			expect(map[string]string{"4300": "99.99", "5700": "0.00"})
 
 			// A payslip posted once despite a redelivery and a second message about it.

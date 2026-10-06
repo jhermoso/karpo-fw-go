@@ -48,6 +48,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlite"
 	"github.com/jhermoso/karpo-fw-go/pkg/testing/archtest"
+	"github.com/jhermoso/karpo-fw-go/pkg/time/fake"
 )
 
 // host composes Parties, Fiscal, Billing, Receivables, Treasury and Accounting on one hot-swappable
@@ -166,11 +167,15 @@ func (h *host) deliver() {
 	}
 }
 
+// afterTheReturn is when the facts that carry no date of their own happen: Accounting dates the
+// reversals on it, and the journal of the scenario is that of 2026 whatever the day the test runs.
+var afterTheReturn = time.Date(2026, 10, 28, 9, 0, 0, 0, time.UTC)
+
 // payroll plays Payroll: it sends one of its facts to the broker.
 func (h *host) payroll(id, typ string, data any) {
 	h.t.Helper()
 	raw, _ := json.Marshal(data)
-	h.ok(h.broker.Send(context.Background(), application.Envelope{ID: id, Type: typ, Source: "payroll", OccurredAt: fw.Now(), Data: raw}))
+	h.ok(h.broker.Send(context.Background(), application.Envelope{ID: id, Type: typ, Source: "payroll", OccurredAt: afterTheReturn, Data: raw}))
 }
 
 func (h *host) balances(company string) map[string]string {
@@ -321,7 +326,12 @@ func (h *host) scenario(tag string) {
 	h.expect(acme.ID, map[string]string{"4300": "0.00", "5720": "181.50", "4312": "0.00"})
 	_, err = ts.Return.Handle(ctx, tapp.ReturnDebit{ID: rid, EndToEnd: rem.Items[0].EndToEnd, On: vocab.MustDate(2026, 10, 27), Reason: "AM04"})
 	h.ok(err)
-	h.deliver()
+	// Receivables reverses the allocation when it hears of the return: only that runs on a fixed
+	// clock (the tokens are issued with the real one).
+	func() {
+		defer fw.SetClock(fake.New(afterTheReturn))()
+		h.deliver()
+	}()
 	h.expect(acme.ID, map[string]string{"4300": "121.00", "5720": "60.50", "4312": "0.00"})
 	var mayor []aapp.Movement
 	h.must(h.do("GET", "/api/accounting/ledger?company="+acme.ID+"&account=4300", "viewer", nil, &mayor), 200, "account ledger")
