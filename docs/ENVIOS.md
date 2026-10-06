@@ -100,7 +100,7 @@ contexts/shipments/
 - **Tablas:** `shp_shipments` (+ `shp_shipment_lines`, `shp_shipment_history`), `shp_carriers`,
   las bandejas de salida, la auditoría y `shipments_inbox`.
 
-## Decisiones propuestas (pendientes de confirmar)
+## Decisiones (aprobadas por Javier el 2026-10-07)
 
 1. **La fase 1 de Envíos es la expedición de salida** (lo que se entrega a clientes). Las
    entradas de proveedor van con la fase 2 de Compras, y los traspasos entre almacenes ya son de
