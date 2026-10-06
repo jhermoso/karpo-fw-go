@@ -42,6 +42,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlite"
 	"github.com/jhermoso/karpo-fw-go/pkg/testing/archtest"
+	"github.com/jhermoso/karpo-fw-go/pkg/time/fake"
 )
 
 // host composes Parties, Products, Inventory, Receivables and Orders on one hot-swappable
@@ -308,7 +309,16 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("held later: %+v", o.Lines[0])
 	}
 	h.must(h.do("POST", deliveries, "dispatcher", map[string]any{"lines": []map[string]any{{"line": 1, "quantity": "300"}}}, nil), 422, "more than held")
-	h.must(h.do("POST", deliveries, "dispatcher", map[string]any{"lines": []map[string]any{{"line": 1, "quantity": "250"}}}, &note), 201, "second delivery")
+	// A note without a date is of today and takes its number from the series of that year: those
+	// requests run on a fixed clock, so that the scenario stays in 2026 whatever the day the test runs.
+	// The moment is a past one: the tokens are issued with the real clock and must not have expired.
+	today := func(f func()) {
+		defer fw.SetClock(fake.New(time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC)))()
+		f()
+	}
+	today(func() {
+		h.must(h.do("POST", deliveries, "dispatcher", map[string]any{"lines": []map[string]any{{"line": 1, "quantity": "250"}}}, &note), 201, "second delivery")
+	})
 	if note.Number != "ALB-2026-000002" || note.Total != "17.10" {
 		t.Fatalf("second delivery: %+v", note)
 	}
@@ -354,7 +364,9 @@ func (h *host) scenario(tag string) {
 	h.must(h.do("POST", "/api/orders/orders/"+o3.ID+"/confirm", "manager", nil, &o3), 200, "confirm the third")
 	h.must(h.do("POST", "/api/orders/orders/"+o3.ID+"/deliveries", "dispatcher", nil, nil), 422, "blocked for deliveries")
 	h.must(h.do("PUT", "/api/orders/terms", "manager", map[string]any{"company": acme.ID, "customer": ana.ID}, nil), 200, "unblock")
-	h.must(h.do("POST", "/api/orders/orders/"+o3.ID+"/deliveries", "dispatcher", nil, &note), 201, "deliver the service")
+	today(func() {
+		h.must(h.do("POST", "/api/orders/orders/"+o3.ID+"/deliveries", "dispatcher", nil, &note), 201, "deliver the service")
+	})
 	// The discount of the customer is the one of the day the draft was opened (10%).
 	if note.OrderStatus != "delivered" || note.Number != "ALB-2026-000003" || note.Lines[0].NetPrice != "31.5000" {
 		t.Fatalf("third delivery: %+v", note)
