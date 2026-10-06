@@ -9,7 +9,7 @@ const Source = "purchases"
 // Expense is the cost of an expense category of an invoice (its bases plus, when the tax is not
 // deductible, its share of the tax).
 type Expense struct {
-	Category string `json:"category"` // goods | rent | repairs | professional-services | transport | insurance | advertising | supplies | other-services
+	Category string `json:"category"` // goods | rent | repairs | professional-services | transport | insurance | advertising | supplies | other-services | fixed-asset
 	Amount   string `json:"amount"`
 }
 

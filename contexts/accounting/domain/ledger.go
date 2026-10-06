@@ -41,12 +41,19 @@ const (
 	RoleAdvertising         Role = "advertising"              // 627
 	RoleSupplies            Role = "supplies"                 // 628
 	RoleOtherServices       Role = "other-services"           // 629
+	RoleFixedAssets         Role = "fixed-assets"             // 21x
+	RoleAccumulatedDepr     Role = "accumulated-depreciation" // 281
+	RoleDepreciation        Role = "depreciation-expense"     // 681
+	RoleAssetReceivable     Role = "asset-sale-receivable"    // 543
+	RoleAssetLoss           Role = "asset-disposal-loss"      // 671
+	RoleAssetGain           Role = "asset-disposal-gain"      // 771
 )
 
 // Roles lists the roles a posting profile may define.
 var Roles = []Role{RoleRevenue, RoleCustomers, RoleOutputTax, RoleSurcharge, RoleCash, RoleBank, RoleDirectDebitClearing, RoleWages,
 	RoleEmployerSS, RoleSSPayable, RoleWithholding, RoleOtherDeductions, RoleNetPay, RoleSuppliers,
-	RoleInputTax, RolePurchases, RoleRent, RoleRepairs, RoleProfessional, RoleTransport, RoleInsurance, RoleAdvertising, RoleSupplies, RoleOtherServices}
+	RoleInputTax, RolePurchases, RoleRent, RoleRepairs, RoleProfessional, RoleTransport, RoleInsurance, RoleAdvertising, RoleSupplies, RoleOtherServices,
+	RoleFixedAssets, RoleAccumulatedDepr, RoleDepreciation, RoleAssetReceivable, RoleAssetLoss, RoleAssetGain}
 
 // LedgerKind is the stable aggregate type name.
 const LedgerKind = "accounting.ledger"

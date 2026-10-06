@@ -91,7 +91,9 @@ contexts/purchases/
   - **Contabilidad** carga el gasto de cada categoría (600, 621–629) y el IVA soportado (472), y
     abona al proveedor (400) y la retención (4751), en la fecha de registro. Tiene diez roles
     nuevos en el perfil: `input-tax`, `purchases`, `rent`, `repairs`, `professional-services`,
-    `transport`, `insurance`, `advertising`, `supplies` y `other-services`.
+    `transport`, `insurance`, `advertising`, `supplies` y `other-services`. Después llegó la
+    categoría `fixed-asset` (la compra de un inmovilizado va al 21x, no a gasto): ver
+    [ACTIVOS.md](ACTIVOS.md).
   - **Fiscal** guarda la retención con clave G y fecha de la factura, de modo que el 111 del
     trimestre y el 190 del año la incluyen.
 - **Anulación:** `purchases.invoice-cancelled.v1` retira la obligación si está sin pagar, genera
