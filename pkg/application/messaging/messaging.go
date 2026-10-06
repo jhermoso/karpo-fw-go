@@ -145,6 +145,7 @@ func Envelope(source string, m application.OutboxMessage) application.Envelope {
 // NewRelay forwards the integration outbox of source to sender (at-least-once: consumers
 // deduplicate with their inbox). Run it with Relay.Run or Relay.RelayOnce.
 func NewRelay(source string, store application.OutboxStore, sender application.MessageSender, opts ...outbox.RelayOption) *outbox.Relay {
+	opts = append([]outbox.RelayOption{outbox.WithRelayName(source)}, opts...)
 	return outbox.NewForwarder(store, func(ctx context.Context, m application.OutboxMessage) error {
 		return sender.Send(ctx, Envelope(source, m))
 	}, opts...)
@@ -163,6 +164,7 @@ type Consumer struct {
 	uow      domain.UnitOfWork
 	mu       sync.RWMutex
 	handlers map[string]func(ctx context.Context, env application.Envelope) error
+	tel      *consumerTelemetry
 }
 
 var _ application.MessageHandler = (*Consumer)(nil)
@@ -207,8 +209,10 @@ func (c *Consumer) Types() []string {
 func (c *Consumer) HandleMessage(ctx context.Context, env application.Envelope) error {
 	c.mu.RLock()
 	h, ok := c.handlers[env.Type]
+	tel := c.tel
 	c.mu.RUnlock()
 	if !ok {
+		tel.ignored(ctx, c.name)
 		return nil
 	}
 	if env.ID == "" {
@@ -216,13 +220,18 @@ func (c *Consumer) HandleMessage(ctx context.Context, env application.Envelope) 
 	}
 	ctx = application.WithCorrelationID(ctx, env.CorrelationID)
 	ctx = application.WithCausationID(ctx, env.ID)
-	return c.uow.Do(ctx, func(ctx context.Context) error {
+	ctx, done := tel.start(ctx, c.name, env)
+	duplicate := false
+	err := c.uow.Do(ctx, func(ctx context.Context) error {
 		first, err := c.inbox.Claim(ctx, c.name, env.ID)
 		if err != nil || !first {
+			duplicate = err == nil
 			return err
 		}
 		return h(ctx, env)
 	})
+	done(duplicate, err)
+	return err
 }
 
 // Lag returns how long ago the message happened (for metrics and logs).

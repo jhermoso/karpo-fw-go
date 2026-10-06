@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/jhermoso/karpo-fw-go/pkg/application"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
@@ -18,6 +19,8 @@ type ProblemDetails struct {
 	Instance string              `json:"instance,omitempty"`
 	Code     string              `json:"code,omitempty"`
 	Errors   []domain.FieldError `json:"errors,omitempty"`
+	// CorrelationID is what the caller quotes to find the request in the logs.
+	CorrelationID string `json:"correlationId,omitempty"`
 }
 
 // WriteJSON writes v as JSON with the given status.
@@ -36,6 +39,7 @@ func Problem(r *http.Request, err error) ProblemDetails {
 		Detail: "An unexpected error occurred"}
 	if r != nil {
 		p.Instance = r.URL.Path
+		p.CorrelationID = application.CorrelationID(r.Context())
 	}
 
 	var (
@@ -67,9 +71,11 @@ func Problem(r *http.Request, err error) ProblemDetails {
 	return p
 }
 
-// WriteError writes err as an application/problem+json response.
+// WriteError writes err as an application/problem+json response. The caller never sees the
+// cause of a 5xx; Observe, when mounted, logs it with the correlation id returned here.
 func WriteError(w http.ResponseWriter, r *http.Request, err error) {
 	p := Problem(r, err)
+	RecordError(r, err)
 	w.Header().Set("Content-Type", "application/problem+json; charset=utf-8")
 	w.WriteHeader(p.Status)
 	_ = json.NewEncoder(w).Encode(p)
@@ -85,5 +91,6 @@ func Respond[T any](w http.ResponseWriter, r *http.Request, v T, err error, succ
 	if successStatus <= 0 {
 		successStatus = http.StatusOK
 	}
+	noteRoute(r)
 	WriteJSON(w, successStatus, v)
 }
