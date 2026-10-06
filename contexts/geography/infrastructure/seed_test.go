@@ -1,6 +1,11 @@
 package infrastructure
 
-import "testing"
+import (
+	"context"
+	"testing"
+
+	"github.com/jhermoso/karpo-fw-go/pkg/persistence/memory"
+)
 
 func TestSeed(t *testing.T) {
 	s, err := LoadSeed()
@@ -17,5 +22,19 @@ func TestSeed(t *testing.T) {
 	}
 	if links != 8870 {
 		t.Fatalf("links: %d", links)
+	}
+}
+
+// The seed is decoded once per process and loaded into as many stores as needed.
+func TestLoadMemory_LeavesTheSeedUntouched(t *testing.T) {
+	ctx := context.Background()
+	for range 2 {
+		if err := LoadMemory(ctx, memory.NewStore("memory")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s, _ := LoadSeed()
+	if s.Boundaries[0].Version() != 0 || s.PostalCodes[0].Version() != 0 || s.Countries[0].Version() != 0 {
+		t.Fatalf("loading must not mark the shared seed as persisted: %d %d %d", s.Boundaries[0].Version(), s.PostalCodes[0].Version(), s.Countries[0].Version())
 	}
 }
