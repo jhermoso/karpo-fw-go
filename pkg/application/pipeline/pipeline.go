@@ -1,7 +1,7 @@
 // Package pipeline implements the standard use-case middleware (the Go counterpart of MediatR
 // pipeline behaviors / C# handler decorators): validation, transactions, optimistic-concurrency
-// retries, idempotency and logging. Compose them with application.Chain; the first middleware is
-// the outermost one.
+// retries, idempotency, logging and telemetry. Compose them with application.Chain; the first
+// middleware is the outermost one.
 //
 //	h := application.Chain[RegisterParty, PartyDTO](handler,
 //		pipeline.Idempotent[RegisterParty, PartyDTO](store, 24*time.Hour),
@@ -20,6 +20,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/application"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/log"
+	"github.com/jhermoso/karpo-fw-go/pkg/observability"
 )
 
 // Validating rejects requests whose Validate method (application.Validatable) fails, before
@@ -102,6 +103,32 @@ func Logging[In, Out any](logger log.Logger) application.Middleware[In, Out] {
 			} else {
 				logger.WithContext(ctx).Info("use case executed", args...)
 			}
+			return out, err
+		})
+	}
+}
+
+// Telemetry measures every execution: a span named after the request type (a child of the
+// request's span, so the use case shows inside the HTTP trace) and the karpo.use_case.duration
+// histogram by use case and outcome. With a zero Telemetry it costs one no-op call.
+func Telemetry[In, Out any](tel observability.Telemetry) application.Middleware[In, Out] {
+	duration := tel.M().Histogram(observability.MetricUseCaseDuration, "s", "Duration of application use cases.")
+	tracer := tel.T()
+	return func(next application.Handler[In, Out]) application.Handler[In, Out] {
+		return application.HandlerFunc[In, Out](func(ctx context.Context, in In) (Out, error) {
+			name := fmt.Sprintf("%T", in)
+			start := time.Now()
+			ctx, span := tracer.Start(ctx, name, observability.WithAttributes(observability.String(observability.AttrUseCase, name)))
+			out, err := next.Handle(ctx, in)
+			outcome := observability.OutcomeOK
+			if err != nil {
+				outcome = observability.OutcomeError
+				span.RecordError(err)
+				span.SetStatus(observability.StatusError, err.Error())
+			}
+			duration.Record(ctx, time.Since(start).Seconds(),
+				observability.String(observability.AttrUseCase, name), observability.String(observability.AttrOutcome, outcome))
+			span.End()
 			return out, err
 		})
 	}

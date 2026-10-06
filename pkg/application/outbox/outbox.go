@@ -13,6 +13,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/application"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/log"
+	"github.com/jhermoso/karpo-fw-go/pkg/observability"
 )
 
 // Recorder is the application.EventRecorder that serializes events into an OutboxStore.
@@ -63,6 +64,8 @@ type Relay struct {
 	batchSize   int
 	maxAttempts int
 	logger      log.Logger
+	delivered   observability.Counter
+	failed      observability.Counter
 }
 
 // RelayOption configures a Relay.
@@ -74,8 +77,20 @@ func WithBatchSize(n int) RelayOption { return func(r *Relay) { r.batchSize = n 
 // WithMaxAttempts sets after how many failures a message is parked (default 10).
 func WithMaxAttempts(n int) RelayOption { return func(r *Relay) { r.maxAttempts = n } }
 
-// WithRelayLogger sets a logger for delivery failures.
+// WithRelayLogger sets the logger for delivery failures. Without it (or with nil) the relay
+// writes to log.Default: a failing delivery is never silent. To silence it on purpose, pass a
+// logger that discards.
 func WithRelayLogger(l log.Logger) RelayOption { return func(r *Relay) { r.logger = l } }
+
+// WithRelayTelemetry counts deliveries (karpo.outbox.delivered) and failed attempts
+// (karpo.outbox.failed) by event type in tel's meter.
+func WithRelayTelemetry(tel observability.Telemetry) RelayOption {
+	return func(r *Relay) {
+		m := tel.M()
+		r.delivered = m.Counter(observability.MetricOutboxDelivered, "1", "Outbox messages delivered by a relay.")
+		r.failed = m.Counter(observability.MetricOutboxFailed, "1", "Failed outbox delivery attempts.")
+	}
+}
 
 // DeliverFunc delivers one outbox message; an error leaves it pending for a retry.
 type DeliverFunc func(ctx context.Context, m application.OutboxMessage) error
@@ -99,6 +114,12 @@ func NewForwarder(store application.OutboxStore, deliver DeliverFunc, opts ...Re
 	for _, opt := range opts {
 		opt(r)
 	}
+	if r.logger == nil {
+		r.logger = log.Default()
+	}
+	if r.delivered == nil {
+		WithRelayTelemetry(observability.Telemetry{})(r)
+	}
 	return r
 }
 
@@ -111,10 +132,13 @@ func (r *Relay) RelayOnce(ctx context.Context) (int, error) {
 	delivered := 0
 	var errs []error
 	for _, m := range msgs {
+		typ := observability.String(observability.AttrEventType, m.EventType)
 		if err := r.deliverFn(ctx, m); err != nil {
-			if r.logger != nil {
-				r.logger.Warn("outbox delivery failed", "message_id", m.ID, "event_type", m.EventType, "error", err)
-			}
+			r.failed.Add(ctx, 1, typ)
+			// The line carries the correlation of the flow that recorded the message.
+			mctx := application.WithCausationID(application.WithCorrelationID(ctx, m.CorrelationID), m.CausationID)
+			r.logger.WithContext(mctx).Warn("outbox delivery failed", "message_id", m.ID, "event_type", m.EventType,
+				"attempt", m.Attempts+1, "max_attempts", r.maxAttempts, "error", err)
 			if markErr := r.store.MarkFailed(ctx, m.ID, err); markErr != nil {
 				errs = append(errs, markErr)
 			}
@@ -124,6 +148,7 @@ func (r *Relay) RelayOnce(ctx context.Context) (int, error) {
 			errs = append(errs, err)
 			continue
 		}
+		r.delivered.Add(ctx, 1, typ)
 		delivered++
 	}
 	return delivered, errors.Join(errs...)
@@ -153,8 +178,8 @@ func (r *Relay) Run(ctx context.Context, interval time.Duration) error {
 	for {
 		for {
 			n, err := r.RelayOnce(ctx)
-			if err != nil && r.logger != nil {
-				r.logger.Error("outbox relay iteration failed", "error", err)
+			if err != nil && ctx.Err() == nil {
+				r.logger.WithContext(ctx).Error("outbox relay iteration failed", "error", err)
 			}
 			if n < r.batchSize || err != nil {
 				break
