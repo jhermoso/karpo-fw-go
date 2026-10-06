@@ -13,17 +13,23 @@ import (
 // The interval is half-open, [From, To): an element valid until 2025-01-01T00:00Z is no longer
 // valid at that instant, so consecutive periods never overlap. Every "now" check uses the
 // domain clock (domain.Now), so it is deterministic in tests.
+//
+// A period may end at the instant it starts: [t, t) is the empty period of a fact that was ended
+// at once, never in force and overlapping nothing. Two readings of a clock can be the same
+// instant (the system clock advances in ticks and a store keeps fewer digits than the clock
+// gives), so "it ends after it starts" cannot be demanded of what starts and ends "now".
 type ValidPeriod struct {
 	from time.Time
 	to   *time.Time
 }
 
-// NewValidPeriod creates a period starting at from; to is nil for an open-ended period.
+// NewValidPeriod creates a period starting at from; to is nil for an open-ended period and is
+// never before from.
 func NewValidPeriod(from time.Time, to *time.Time) (ValidPeriod, error) {
 	var v domain.Validation
 	v.Require(!from.IsZero(), "from", "required", "start is required")
 	if to != nil {
-		v.Require(to.After(from), "to", "range", "end must be after start")
+		v.Require(!to.Before(from), "to", "range", "end must not be before start")
 	}
 	if err := v.Err(); err != nil {
 		return ValidPeriod{}, err
@@ -48,6 +54,11 @@ func OpenPeriodNow() ValidPeriod {
 // PeriodBetweenDates creates the period covering whole civil days [first, last] in loc
 // (UTC when nil): from midnight of first to midnight after last.
 func PeriodBetweenDates(first, last Date, loc *time.Location) (ValidPeriod, error) {
+	if last.Before(first) {
+		var v domain.Validation
+		v.Add("to", "range", "last day must not be before the first")
+		return ValidPeriod{}, v.Err()
+	}
 	end := last.AddDays(1).Time(loc)
 	return NewValidPeriod(first.Time(loc), &end)
 }
@@ -68,6 +79,9 @@ func (p ValidPeriod) IsZero() bool { return p.from.IsZero() }
 
 // IsOpenEnded reports whether the period has no end.
 func (p ValidPeriod) IsOpenEnded() bool { return p.to == nil }
+
+// IsEmpty reports whether the period ends at the instant it starts: it holds no instant.
+func (p ValidPeriod) IsEmpty() bool { return p.to != nil && !p.to.After(p.from) }
 
 // IsActiveAt reports whether t is inside [From, To).
 func (p ValidPeriod) IsActiveAt(t time.Time) bool {
@@ -91,14 +105,17 @@ func (p ValidPeriod) Duration() (time.Duration, bool) {
 	return p.to.Sub(p.from), true
 }
 
-// Overlaps reports whether both periods share at least one instant.
+// Overlaps reports whether both periods share at least one instant (an empty period shares none).
 func (p ValidPeriod) Overlaps(o ValidPeriod) bool {
+	if p.IsEmpty() || o.IsEmpty() {
+		return false
+	}
 	startsBeforeOtherEnds := o.to == nil || p.from.Before(*o.to)
 	otherStartsBeforeEnd := p.to == nil || o.from.Before(*p.to)
 	return startsBeforeOtherEnds && otherStartsBeforeEnd
 }
 
-// CloseAt returns the period ending at t (t must be after From).
+// CloseAt returns the period ending at t (t must not be before From).
 func (p ValidPeriod) CloseAt(t time.Time) (ValidPeriod, error) { return NewValidPeriod(p.from, &t) }
 
 // Equal compares both bounds as instants.

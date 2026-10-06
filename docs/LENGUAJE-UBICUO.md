@@ -154,7 +154,7 @@ Uso medido: "archivos" = ficheros de contextos que nombran el tipo; `new` = cons
 | `CountryCode`, `CurrencyCode` | `IsoCountryCode` y los `string` sueltos | ISO 3166-1 y ISO 4217 (con decimales por divisa) |
 | `Decimal`, `Money`, `Percentage` | `decimal`, `Percentage` | Dinero con divisa, redondeo por divisa, reparto sin perder céntimos; porcentaje sin tope 0–100 ni recortes silenciosos |
 | `Date` | `DateValue`, `DateOnly` | Fecha civil comparable; aritmética de meses que ajusta a fin de mes |
-| `ValidPeriod` | `ValidPeriod`, `Milestone`, `ExpirationDate` | Intervalo semiabierto `[desde, hasta)`; «ahora» siempre con `domain.Now` |
+| `ValidPeriod` | `ValidPeriod`, `Milestone`, `ExpirationDate` | Intervalo semiabierto `[desde, hasta)`; «ahora» siempre con `domain.Now`. Puede terminar en el instante en que empieza: `[t, t)` es el periodo vacío de lo que se terminó nada más empezar (nunca vigente, no solapa con nada) |
 | `Tag`, `TagSet` | `Tag`, `TagSet` | El conjunto puede estar vacío |
 | `FactReference` | `FactReference` | — |
 | `Actor` (+ `application.WithActor`/`ActorFrom`) | `Actor`, `ActorContext` | Contexto explícito en lugar de estado ambiental `AsyncLocal` |

@@ -213,6 +213,30 @@ func TestValidPeriod(t *testing.T) {
 	if _, err := vocab.NewValidPeriod(feb, &jan); err == nil {
 		t.Fatal("end before start accepted")
 	}
+	// Ending at the instant of the start gives the empty period: never in force, overlapping nothing.
+	empty, err := vocab.NewValidPeriod(jan, &jan)
+	if err != nil || !empty.IsEmpty() || p.IsEmpty() || next.IsEmpty() {
+		t.Fatalf("a period may end at the instant it starts: %v", err)
+	}
+	if closed, err := next.CloseAt(feb); err != nil || !closed.IsEmpty() {
+		t.Fatalf("closing at the start: %v", err)
+	}
+	if d, ok := empty.Duration(); empty.IsActiveAt(jan) || !empty.HasExpiredAt(jan) || !ok || d != 0 {
+		t.Fatal("an empty period holds no instant")
+	}
+	mid := time.Date(2025, 1, 15, 0, 0, 0, 0, time.UTC)
+	inside, _ := vocab.NewValidPeriod(mid, &mid)
+	if empty.Overlaps(p) || p.Overlaps(empty) || inside.Overlaps(p) || p.Overlaps(inside) || empty.Overlaps(empty) {
+		t.Fatal("an empty period overlaps nothing")
+	}
+	if _, err := vocab.PeriodBetweenDates(vocab.MustDate(2025, 1, 2), vocab.MustDate(2025, 1, 1), nil); err == nil {
+		t.Fatal("whole days need a last day not before the first")
+	}
+	rawEmpty, _ := json.Marshal(empty)
+	var emptyBack vocab.ValidPeriod
+	if err := json.Unmarshal(rawEmpty, &emptyBack); err != nil || !emptyBack.Equal(empty) {
+		t.Fatalf("json round trip of the empty period: %s %v", rawEmpty, err)
+	}
 
 	restore := domain.SetClock(fixed(time.Date(2025, 1, 15, 0, 0, 0, 0, time.UTC)))
 	defer restore()
