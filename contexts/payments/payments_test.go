@@ -43,6 +43,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlite"
 	"github.com/jhermoso/karpo-fw-go/pkg/testing/archtest"
+	"github.com/jhermoso/karpo-fw-go/pkg/time/fake"
 )
 
 func mustIBAN(s string) vocab.IBAN {
@@ -86,6 +87,10 @@ type host struct {
 }
 
 func compose(t *testing.T) *host {
+	// Treasury stamps a transfer order with the moment its file is generated and settles it on that
+	// day or later: the scenario runs on a fixed clock, so that its dates hold whatever the day the
+	// test runs. The tokens are issued and checked on the same clock.
+	t.Cleanup(fw.SetClock(fake.New(time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC))))
 	ctx := context.Background()
 	sw := hotswap.New(memory.NewStore("memory"))
 	splits := netPay{}
@@ -346,10 +351,9 @@ func (h *host) scenario(tag string) {
 	}
 	h.must(h.do("GET", "/api/treasury/transfers/"+order.ID, "outsider", nil, nil), 404, "outsider")
 
-	// The bank executes: Payments registers a payment per transfer and Accounting posts them. The
-	// order is settled on the day its file was generated (today), never before.
-	settled := vocab.DateOf(fw.Now())
-	_, err = h.treasury.Service.SettleTransfers.Handle(ctx, tapp.SettleTransfers{ID: oid, On: settled})
+	// The bank executes on the day the file was generated (that of the fixed clock), never before:
+	// Payments registers a payment per transfer and Accounting posts them.
+	_, err = h.treasury.Service.SettleTransfers.Handle(ctx, tapp.SettleTransfers{ID: oid, On: vocab.MustDate(2026, 10, 5)})
 	h.ok(err)
 	h.deliver()
 	if p := h.payable(inv1.ID); !p.Settled {
@@ -368,7 +372,7 @@ func (h *host) scenario(tag string) {
 			second = tr.EndToEnd
 		}
 	}
-	_, err = h.treasury.Service.RejectTransfer.Handle(ctx, tapp.RejectTransfer{ID: oid, EndToEnd: second, On: settled.AddDays(2), Reason: "AC04"})
+	_, err = h.treasury.Service.RejectTransfer.Handle(ctx, tapp.RejectTransfer{ID: oid, EndToEnd: second, On: vocab.MustDate(2026, 10, 7), Reason: "AC04"})
 	h.ok(err)
 	h.deliver()
 	if p := h.payable(nomina.ID); p.Settled || p.Open != "469.70" {
