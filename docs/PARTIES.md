@@ -6,18 +6,30 @@ Parties (`ErpKernel.Domain/Subdominios/Parties` + `ErpDetail.Domain/Subdominios/
 **un único ensamblado, un esquema `parties` y un `DbContext`** con:
 
 - 362 ficheros de dominio en ErpKernel y 150 en ErpDetail;
-- 91 `DbSet` en la rebanada, y ~105 tablas en la migración `ContextoDeParties`;
-- ~517 rutas HTTP.
+- 118 `DbSet` en la rebanada (90 del kernel y 28 de ErpDetail), y 104 tablas en la migración
+  `ContextoDeParties` (76 y 28);
+- 464 rutas HTTP activas en la rebanada (325 del kernel y 139 de ErpDetail).
+
+Las cifras de esta sección están **medidas** el 2026-10-04 sobre el commit `6093f680` de Karpo
+(`000-Docs/design/Karpo_Estudio_Convergencia_Modelos.md`, §2). Las de la primera versión de este
+documento eran estimaciones, y dos estaban lejos: el núcleo no eran ~68 tablas y ~447 rutas, y las
+extensiones de ErpDetail no eran 70 rutas (70 era el número de ficheros de endpoints).
 
 Dentro conviven cinco cosas distintas:
 
 | Grupo | Contenido | Tablas | Rutas |
 |---|---|---|---|
-| **Núcleo Parties** | Party (Person, Organization, LegalOrganization, Corporation), roles, relaciones, identificaciones, contactos, clasificaciones, características, cuentas bancarias, comunicaciones y casos | ~68 | ~447 |
-| **Geografía** | GeographicBoundary (+ subtipos), jerarquía (`GeographicBoundaryAssociation`), tipos, códigos postales | 5 | 16 |
+| **Núcleo Parties** | Party (Person, Organization, LegalOrganization, Corporation), roles, relaciones, identificaciones, contactos, clasificaciones, características, cuentas bancarias, comunicaciones y casos | 57 | 260 |
+| **Geografía** | GeographicBoundary (+ subtipos), jerarquía (`GeographicBoundaryAssociation`), tipos, códigos postales | 4 | 16 |
 | **Instalaciones** | Facility (+ Warehouse, Plant, Building, Office, Floor, Room), tipos, `PartyFacility`, `FacilityContactMechanism` | 5 | 31 |
-| **Datos de referencia** | CountryProfile, Currency (+ denominaciones), Language, TimeZone, StreetType, Country* | 10 | 23 |
-| **Extensiones ErpDetail** | 30 agregados: convenios, contratos laborales, perfiles fiscales y comerciales, listas de precios, modelos AEAT… | 28 | 70 |
+| **Datos de referencia** | CountryProfile, Currency (+ denominaciones), Language, TimeZone, StreetType, Country* | 9 | 18 |
+| **Extensiones ErpDetail** | 28 agregados: convenios, contratos laborales, perfiles fiscales y comerciales, listas de precios, modelos AEAT… | 28 | 139 |
+
+Del núcleo, 44 tablas y 197 rutas son lo que este port cubre (party, roles, relaciones,
+identificaciones, contactos y clasificaciones); las otras 13 tablas y 63 rutas son
+características, cuentas bancarias, comunicaciones y casos. Queda fuera de los cinco grupos una
+tabla que no es de Parties (`work_effort_role_type`). En el árbol de trabajo había además dos
+agregados de ErpDetail aún sin confirmar, con 11 rutas más.
 
 ## 2. ¿Separar Geografía e Instalaciones? Evaluación
 
@@ -197,7 +209,7 @@ Pendiente de esta fase:
 
 | Tema | C# | Go |
 |---|---|---|
-| Visibilidad (P1) | Filtros por `IOrganizationScopeProvider` repartidos en 159 ficheros; la pertenencia se calculaba al consultar, recorriendo relaciones con un mapa fijo de «lado empresa» (solo 5 tipos) | **Afiliaciones**: cuando una relación toca una organización interna, la otra party queda afiliada a ella en la misma transacción. «Visible para mi ámbito» es una especificación sobre un solo agregado (`VisibleTo`, que se traduce a `EXISTS` en SQL): la propia organización, las parties compartidas o las afiliadas vigentes. Se aplica a cualquier tipo de relación, como dice P1 |
+| Visibilidad (P1) | Filtros por `IOrganizationScopeProvider` repartidos en 95 ficheros; la pertenencia se calculaba al consultar, recorriendo relaciones con un mapa fijo de «lado empresa» (solo 5 tipos) | **Afiliaciones**: cuando una relación toca una organización interna, la otra party queda afiliada a ella en la misma transacción. «Visible para mi ámbito» es una especificación sobre un solo agregado (`VisibleTo`, que se traduce a `EXISTS` en SQL): la propia organización, las parties compartidas o las afiliadas vigentes. Se aplica a cualquier tipo de relación, como dice P1 |
 | Fuera de ámbito | — | **404 uniforme** en lectura, escritura y compartición; 403 cuando la party es visible pero el acceso es de solo lectura. Para escribir hace falta acceso completo (`Full`) en la propia organización o en una de sus afiliaciones |
 | Alta | Una party nueva sin relación era invisible para quien la creaba | El alta lleva una **afiliación**: organización y tipo de relación, obligatoria salvo para el administrador global. La party recibe el rol de su lado del tipo, y la relación y la afiliación se crean en la misma transacción (como el alta rápida de cliente del C#) |
 | «Public Catalog» | Tipo de party 9 | `Party.Share`: visible para todas las organizaciones y editable solo por el administrador global |

@@ -411,19 +411,24 @@ func LoadMemory(ctx context.Context, store *memory.Store) error {
 	boundaries := memoryRepos.boundaries(store)
 	postal := memoryRepos.postal(store)
 	countries := memoryRepos.countries(store)
+	// The decoded seed is shared by every store of the process, and saving marks the saved
+	// instance as persisted: each store saves its own copies, so the seed can be loaded again.
 	return store.Do(ctx, func(ctx context.Context) error {
 		for _, b := range s.Boundaries {
-			if err := boundaries.Save(ctx, b); err != nil {
+			c := *b
+			if err := boundaries.Save(ctx, &c); err != nil {
 				return err
 			}
 		}
 		for _, p := range s.PostalCodes {
-			if err := postal.Save(ctx, p); err != nil {
+			c := *p
+			if err := postal.Save(ctx, &c); err != nil {
 				return err
 			}
 		}
-		for _, c := range s.Countries {
-			if err := countries.Save(ctx, c); err != nil {
+		for _, country := range s.Countries {
+			c := *country
+			if err := countries.Save(ctx, &c); err != nil {
 				return err
 			}
 		}
