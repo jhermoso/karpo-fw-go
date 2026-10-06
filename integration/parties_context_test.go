@@ -14,6 +14,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
+	"github.com/jhermoso/karpo-fw-go/pkg/time/fake"
 )
 
 // TestPartiesContext runs the Parties bounded context on every engine: migrations with the
@@ -43,6 +44,13 @@ func TestPartiesContext(t *testing.T) {
 				Permissions: []authz.Permission{authz.Wildcard}, EffectiveOrganizations: []fw.UUID{}})
 			ac.GlobalAdmin = true
 			ctx = authz.WithContext(ctx, ac)
+
+			// The scenario runs on the framework's fake clock: the system clock advances in ticks
+			// (up to 15.6 ms on Windows), so what starts in one use case could not end "now" a
+			// moment later, because a validity ends strictly after it starts. It starts at a whole
+			// second, which every engine stores exactly: an instant read back equals the clock's.
+			clock := fake.New(time.Now().Truncate(time.Second))
+			t.Cleanup(fw.SetClock(clock))
 
 			sw := hotswap.New(db)
 			mod := parties.Compose(sw, nil)
@@ -105,6 +113,7 @@ func TestPartiesContext(t *testing.T) {
 				t.Fatalf("duplicate: %v", err)
 			}
 			relID, _ := domain.ParseRelationshipID(rel.ID)
+			clock.Advance(time.Millisecond) // the employment ends after it started
 			if _, err := svc.TerminateRelationship.Handle(ctx, papp.TerminateRelationship{ID: relID}); err != nil {
 				t.Fatal(err)
 			}

@@ -36,6 +36,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlite"
 	"github.com/jhermoso/karpo-fw-go/pkg/testing/archtest"
+	"github.com/jhermoso/karpo-fw-go/pkg/time/fake"
 )
 
 type env struct {
@@ -44,6 +45,8 @@ type env struct {
 	sw  *hotswap.Switch
 	mod *parties.Module
 	dir directory
+	// clock is the domain clock of the test host: do moves it forward before every request.
+	clock *fake.FakeClock
 	// admin is a global administrator; the others work in an organization scope: reader
 	// (read-only), clerk (full), viewer (read-only grant, write permissions), outsider (full
 	// on another organization).
@@ -183,6 +186,11 @@ func (e *env) grant(user string, level authz.AccessLevel, orgs ...string) {
 // compose is the composition root of the test host: JWT authentication, the authorization
 // resolver over the security directory, and the Parties module on a hot-swap switch.
 func compose(t *testing.T, newDirectory func(*testing.T) directory) *env {
+	// The system clock advances in ticks (up to 15.6 ms on Windows), longer than an in-memory
+	// request: what starts in one request could not end "now" in the next, because a validity
+	// ends strictly after it starts. The scenario runs on a clock that every request advances.
+	clock := fake.New(time.Now())
+	t.Cleanup(fw.SetClock(clock))
 	jwt, _ := jwtauth.New(jwtauth.Config{Secret: []byte("parties-test")})
 	dir := newDirectory(t)
 	tokens := map[string]string{}
@@ -201,12 +209,13 @@ func compose(t *testing.T, newDirectory func(*testing.T) directory) *env {
 		distribution.Authorize(jwt, authorization.NewResolver(dir, authorization.Options{}))))
 	t.Cleanup(srv.Close)
 	t.Cleanup(func() { _ = sw.Close(context.Background()) })
-	return &env{t: t, srv: srv, sw: sw, mod: mod, dir: dir, admin: tokens["admin"], reader: tokens["reader"],
+	return &env{t: t, srv: srv, sw: sw, mod: mod, dir: dir, clock: clock, admin: tokens["admin"], reader: tokens["reader"],
 		clerk: tokens["clerk"], viewer: tokens["viewer"], outsider: tokens["outsider"], seller: tokens["seller"]}
 }
 
 func (e *env) do(method, path, auth string, body any, out any) int {
 	e.t.Helper()
+	e.clock.Advance(time.Millisecond)
 	var buf bytes.Buffer
 	if body != nil {
 		_ = json.NewEncoder(&buf).Encode(body)
