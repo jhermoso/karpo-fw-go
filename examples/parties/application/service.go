@@ -12,6 +12,9 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/application/pipeline"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
+	"github.com/jhermoso/karpo-fw-go/pkg/log"
+	"github.com/jhermoso/karpo-fw-go/pkg/metrics"
+	"github.com/jhermoso/karpo-fw-go/pkg/trace"
 )
 
 // ContactDTO is the transport representation of a contact.
@@ -202,4 +205,16 @@ func NewService(repo domain.Repository, uow fw.UnitOfWork, recorder app.EventRec
 		Get:    get,
 		Search: search,
 	}
+}
+
+// Observe adds the use case telemetry (pipeline.Observed) around every handler and returns the
+// service: one span, one duration and, on failure, one line per execution. Call it once from the
+// composition root; any argument may be nil.
+func (s *Service) Observe(logger log.Logger, tracer trace.Tracer, meter metrics.Meter) *Service {
+	s.Register = app.Chain(s.Register, pipeline.Observed[RegisterParty, PartyDTO](logger, tracer, meter))
+	s.Rename = app.Chain(s.Rename, pipeline.Observed[RenameParty, PartyDTO](logger, tracer, meter))
+	s.AddContact = app.Chain(s.AddContact, pipeline.Observed[AddContact, PartyDTO](logger, tracer, meter))
+	s.Get = app.Chain(s.Get, pipeline.Observed[GetParty, PartyDTO](logger, tracer, meter))
+	s.Search = app.Chain(s.Search, pipeline.Observed[SearchParties, fw.Page[PartyDTO]](logger, tracer, meter))
+	return s
 }
