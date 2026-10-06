@@ -101,7 +101,7 @@ contexts/work/
 - **Tablas:** `wrk_works` (+ `wrk_work_assignments`, `wrk_work_history`), `wrk_time_entries`, las
   bandejas de salida y la auditoría.
 
-## Decisiones propuestas (pendientes de confirmar)
+## Decisiones (aprobadas por Javier el 2026-10-06)
 
 1. **La fase 1 de Trabajos es el trabajo con su estado, sus personas y sus horas.** Requisitos,
    entregables, dependencias entre tareas, consumo de materiales, reserva de activos y habilidades
