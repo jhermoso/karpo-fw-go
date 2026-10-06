@@ -81,9 +81,11 @@ Pendiente:
   por configuración (`OTEL_EXPORTER_OTLP_ENDPOINT`) y nunca en el código.
 - Montar `Observe` y `pipeline.Telemetry` en la composición de cada contexto cuando haya un
   ejecutable de servicio (hoy los contextos se componen en las pruebas).
-- **Prueba que depende de la fecha:** `TestPayments_OwesPaysAndPosts_MemoryThenSQLite` falla desde
-  el 2026-10-06 porque liquida con fecha fija 2026-10-05 una orden generada «hoy»
-  (`treasury.settle_date`). Ajena a la observabilidad: no se tocó.
+- ~~**Prueba que depende de la fecha:** `TestPayments_OwesPaysAndPosts_MemoryThenSQLite` fallaba
+  desde el 2026-10-06 porque liquidaba con fecha fija 2026-10-05 una orden generada «hoy»
+  (`treasury.settle_date`).~~ Resuelto: la prueba fija el reloj del dominio (`fw.SetClock`) en el
+  día del escenario. Otras pruebas de contextos con fechas literales pueden tener el mismo
+  problema; conviene revisarlas.
 
 ### 2c. Security: siguientes pasos
 Hecho (ver [docs/SEGURIDAD.md](docs/SEGURIDAD.md), decisiones aprobadas el 2026-10-04): contexto

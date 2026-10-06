@@ -325,12 +325,12 @@ func (h *host) scenario(tag string) {
 		Payments: true, Opened: vocab.MustDate(2020, 1, 1)})
 	h.ok(err)
 	order, err := h.treasury.Service.ProposeTransfers.Handle(ctx, tapp.ProposeTransfers{Debtor: acme.ID, Account: bank.ID,
-		ExecutionDate: vocab.DateOf(fw.Now()), DueTo: vocab.MustDate(2026, 10, 31)})
+		ExecutionDate: vocab.MustDate(2026, 10, 5), DueTo: vocab.MustDate(2026, 10, 31)})
 	if err != nil || len(order.Transfers) != 3 || order.Total != "2074.70" || order.WithoutAccount != 2 {
 		t.Fatalf("proposal: %+v %v", order, err)
 	}
 	again, err := h.treasury.Service.ProposeTransfers.Handle(ctx, tapp.ProposeTransfers{Debtor: acme.ID, Account: bank.ID,
-		ExecutionDate: vocab.DateOf(fw.Now()), DueTo: vocab.MustDate(2026, 10, 31)})
+		ExecutionDate: vocab.MustDate(2026, 10, 5), DueTo: vocab.MustDate(2026, 10, 31)})
 	if err != nil || len(again.Transfers) != 0 {
 		t.Fatalf("nothing twice: %+v %v", again, err)
 	}
@@ -347,7 +347,7 @@ func (h *host) scenario(tag string) {
 	h.must(h.do("GET", "/api/treasury/transfers/"+order.ID, "outsider", nil, nil), 404, "outsider")
 
 	// The bank executes: Payments registers a payment per transfer and Accounting posts them.
-	_, err = h.treasury.Service.SettleTransfers.Handle(ctx, tapp.SettleTransfers{ID: oid, On: vocab.DateOf(fw.Now())})
+	_, err = h.treasury.Service.SettleTransfers.Handle(ctx, tapp.SettleTransfers{ID: oid, On: vocab.MustDate(2026, 10, 5)})
 	h.ok(err)
 	h.deliver()
 	if p := h.payable(inv1.ID); !p.Settled {
@@ -366,7 +366,7 @@ func (h *host) scenario(tag string) {
 			second = tr.EndToEnd
 		}
 	}
-	_, err = h.treasury.Service.RejectTransfer.Handle(ctx, tapp.RejectTransfer{ID: oid, EndToEnd: second, On: vocab.DateOf(fw.Now()).AddDays(2), Reason: "AC04"})
+	_, err = h.treasury.Service.RejectTransfer.Handle(ctx, tapp.RejectTransfer{ID: oid, EndToEnd: second, On: vocab.MustDate(2026, 10, 7), Reason: "AC04"})
 	h.ok(err)
 	h.deliver()
 	if p := h.payable(nomina.ID); p.Settled || p.Open != "469.70" {
@@ -412,7 +412,19 @@ func (h *host) scenario(tag string) {
 	}
 }
 
+// scenarioDay is the day the scenario happens on: its dates (execution, settlement and
+// rejection of the transfer order, due dates) are fixed literals, so the domain clock is fixed
+// to that day too. It starts at 09:00 UTC and advances with real time, so timestamps stay
+// ordered (UUID v7, outbox, audit). With the real clock the test broke as soon as the calendar
+// passed 2026-10-05: the order was generated "today" and settled on the 5th.
+var scenarioDay = time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC)
+
+type scenarioClock struct{ start time.Time }
+
+func (c scenarioClock) Now() time.Time { return scenarioDay.Add(time.Since(c.start)) }
+
 func TestPayments_OwesPaysAndPosts_MemoryThenSQLite(t *testing.T) {
+	t.Cleanup(fw.SetClock(scenarioClock{start: time.Now()}))
 	h := compose(t)
 	h.scenario("m")
 
