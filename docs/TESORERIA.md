@@ -169,7 +169,7 @@ resultados, nota 49). No había lector de ficheros del banco.
   y explicarlo están separados**).
 - **Tablas:** `trs_statements` (+ `trs_statement_lines`), migración 4.
 
-### Decisiones propuestas (pendientes de confirmar)
+### Decisiones (aprobadas por Javier el 2026-10-07)
 
 1. **El formato de entrada es Norma 43**, más el alta a mano. camt.053 (el XML europeo) se añade
    cuando un banco lo exija. Sugerencia: sí; Norma 43 es lo que entregan los bancos españoles.
