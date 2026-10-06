@@ -63,6 +63,7 @@ func Authorize(authn authz.Authenticator, resolver authz.Resolver) Middleware {
 			}
 			ctx = authz.WithContext(ctx, res.Context)
 			ctx = application.WithActor(ctx, res.Context.Actor())
+			noteActor(ctx)
 			if ch := r.Header.Get(ChannelHeader); ch != "" {
 				ctx = application.WithChannel(ctx, ch)
 			}

@@ -7,6 +7,9 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
+
+	"github.com/jhermoso/karpo-fw-go/pkg/trace"
 )
 
 // DB binds a *sql.DB to a Dialect and provides the unit of work shared by every repository and
@@ -16,6 +19,7 @@ type DB struct {
 	d      Dialect
 	name   string
 	txOpts *sql.TxOptions
+	tel    *telemetry
 }
 
 // Option configures a DB.
@@ -32,6 +36,9 @@ func New(sqlDB *sql.DB, d Dialect, opts ...Option) *DB {
 	db := &DB{sqlDB: sqlDB, d: d, name: d.Name()}
 	for _, opt := range opts {
 		opt(db)
+	}
+	if db.tel != nil {
+		db.registerPool()
 	}
 	return db
 }
@@ -73,6 +80,19 @@ func (db *DB) Do(ctx context.Context, fn func(ctx context.Context) error) (err e
 	if db.tx(ctx) != nil {
 		return fn(ctx)
 	}
+	outcome := "rolled_back" // also what a panic leaves
+	if db.tel != nil {
+		start := time.Now()
+		var span trace.Span
+		ctx, span = db.tel.tracer.Start(ctx, "db transaction", trace.WithKind(trace.KindClient))
+		span.SetAttributes(AttrEngine, db.d.Name(), AttrOperation, OperationTransaction)
+		defer func() {
+			span.SetAttributes(AttrTransaction, outcome)
+			span.RecordError(err)
+			span.End()
+			db.tel.record(ctx, db.d.Name(), OperationTransaction, start, err)
+		}()
+	}
 	tx, err := db.sqlDB.BeginTx(ctx, db.txOpts)
 	if err != nil {
 		return err
@@ -99,6 +119,7 @@ func (db *DB) Do(ctx context.Context, fn func(ctx context.Context) error) (err e
 		st.rollbackHooks()
 		return err
 	}
+	outcome = "committed"
 	return nil
 }
 
@@ -123,10 +144,14 @@ type executor interface {
 }
 
 func (db *DB) executor(ctx context.Context) executor {
+	var ex executor = db.sqlDB
 	if st := db.tx(ctx); st != nil {
-		return st.tx
+		ex = st.tx
 	}
-	return db.sqlDB
+	if db.tel != nil {
+		return tracedExecutor{db: db, ex: ex}
+	}
+	return ex
 }
 
 // ExecContext executes a statement, joining the unit of work in ctx if any.

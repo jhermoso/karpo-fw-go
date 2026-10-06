@@ -33,15 +33,17 @@ func Recovery(logger log.Logger) Middleware {
 					if !ok {
 						err = fmt.Errorf("%v", rec)
 					}
+					RecordError(r, err)
 					if logger != nil {
-						logger.Error("Unhandled HTTP panic recovered", "error", err, "path", r.URL.Path)
+						logger.WithContext(r.Context()).Error("Unhandled HTTP panic recovered", "error", err, "path", r.URL.Path)
 					}
 					w.Header().Set("Content-Type", "application/json; charset=utf-8")
 					w.WriteHeader(http.StatusInternalServerError)
 					_ = json.NewEncoder(w).Encode(ProblemDetails{
-						Title:  "Internal Server Error",
-						Status: http.StatusInternalServerError,
-						Detail: "An unexpected internal server error occurred",
+						Title:         "Internal Server Error",
+						Status:        http.StatusInternalServerError,
+						Detail:        "An unexpected internal server error occurred",
+						CorrelationID: application.CorrelationID(r.Context()),
 					})
 				}
 			}()
@@ -50,31 +52,28 @@ func Recovery(logger log.Logger) Middleware {
 	}
 }
 
-type responseRecorder struct {
-	http.ResponseWriter
-	statusCode int
-}
-
-func (rec *responseRecorder) WriteHeader(code int) {
-	rec.statusCode = code
-	rec.ResponseWriter.WriteHeader(code)
-}
-
 // RequestLogging logs the incoming HTTP method, path, duration, and status code.
+//
+// Prefer Observe: it logs the route pattern instead of the path, adds the trace and the cause of
+// every 5xx, and measures the request. RequestLogging stays for callers that only want the line.
 func RequestLogging(logger log.Logger) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
-			rec := &responseRecorder{ResponseWriter: w, statusCode: http.StatusOK}
+			rec := &responseWriter{ResponseWriter: w}
 
 			next.ServeHTTP(rec, r)
 
 			if logger != nil {
 				duration := time.Since(start)
-				logger.Info("HTTP request processed",
+				status := rec.status
+				if status == 0 {
+					status = http.StatusOK
+				}
+				logger.WithContext(r.Context()).Info("HTTP request processed",
 					"method", r.Method,
 					"path", r.URL.Path,
-					"status", rec.statusCode,
+					"status", status,
 					"duration_ms", duration.Milliseconds(),
 				)
 			}
@@ -125,6 +124,7 @@ func TenantActorContext() Middleware {
 			if ch := r.Header.Get(ChannelHeader); ch != "" {
 				ctx = application.WithChannel(ctx, ch)
 			}
+			noteActor(ctx)
 
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
@@ -136,11 +136,13 @@ const CorrelationHeader = "X-Correlation-ID"
 
 // Correlation propagates X-Correlation-ID (generating one when absent) into the application
 // context, so logs and outbox messages of the whole flow share it, and echoes it in the response.
+// A client value that is not a ValidCorrelationID (too long for the columns that store it, or
+// with characters that could forge log lines) is replaced by a new one and never echoed.
 func Correlation() Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			id := r.Header.Get(CorrelationHeader)
-			if id == "" {
+			if !ValidCorrelationID(id) {
 				id = domain.NewUUID().String()
 			}
 			w.Header().Set(CorrelationHeader, id)

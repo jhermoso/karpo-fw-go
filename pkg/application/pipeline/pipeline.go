@@ -86,7 +86,10 @@ func RetryOnConflict[In, Out any](attempts int, backoff time.Duration) applicati
 	}
 }
 
-// Logging logs every execution with its request type, duration and outcome.
+// Logging logs every execution with its request type, duration and outcome. The correlation id
+// comes from the context: the logger adds it (log/vanilla does).
+//
+// Prefer Observed, which also traces and measures the use case and only logs failures.
 func Logging[In, Out any](logger log.Logger) application.Middleware[In, Out] {
 	return func(next application.Handler[In, Out]) application.Handler[In, Out] {
 		return application.HandlerFunc[In, Out](func(ctx context.Context, in In) (Out, error) {
@@ -95,7 +98,6 @@ func Logging[In, Out any](logger log.Logger) application.Middleware[In, Out] {
 			args := []any{
 				"request", fmt.Sprintf("%T", in),
 				"duration_ms", time.Since(start).Milliseconds(),
-				"correlation_id", application.CorrelationID(ctx),
 			}
 			if err != nil {
 				logger.WithContext(ctx).Warn("use case failed", append(args, "error", err)...)
