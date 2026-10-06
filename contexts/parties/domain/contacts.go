@@ -181,7 +181,7 @@ func (p *Party) AddContact(d ContactData, from time.Time) (ContactID, error) {
 		return ContactID{}, err
 	}
 	for _, c := range p.contacts {
-		if d.sameMechanism(c) && overlaps(c.Period, period) {
+		if d.sameMechanism(c) && c.Period.Overlaps(period) {
 			return ContactID{}, fw.Violation("parties.duplicate_contact", "the party already has this contact")
 		}
 	}
