@@ -54,8 +54,10 @@ type Meter interface {
 	// uses its defaults (durations in seconds).
 	Histogram(name, unit, help string, buckets ...float64) Histogram
 	// Gauge registers a value that is read when the metrics are exported. labels are the
-	// constant key/value pairs of that series.
-	Gauge(name, unit, help string, read func() float64, labels ...string)
+	// constant key/value pairs of that series. Registering the same name and labels again
+	// replaces the reader. The returned function removes the series again (e.g. when the pool
+	// it reads is closed); it does nothing once a later registration replaced the reader.
+	Gauge(name, unit, help string, read func() float64, labels ...string) (unregister func())
 }
 
 // Counter accumulates a sum.
@@ -81,8 +83,8 @@ func OrNoop(m Meter) Meter {
 
 type noop struct{}
 
-func (noop) Counter(string, string, string) Counter                  { return noop{} }
-func (noop) Histogram(string, string, string, ...float64) Histogram  { return noop{} }
-func (noop) Gauge(string, string, string, func() float64, ...string) {}
-func (noop) Add(context.Context, float64, ...string)                 {}
-func (noop) Record(context.Context, float64, ...string)              {}
+func (noop) Counter(string, string, string) Counter                         { return noop{} }
+func (noop) Histogram(string, string, string, ...float64) Histogram         { return noop{} }
+func (noop) Gauge(string, string, string, func() float64, ...string) func() { return func() {} }
+func (noop) Add(context.Context, float64, ...string)                        {}
+func (noop) Record(context.Context, float64, ...string)                     {}
