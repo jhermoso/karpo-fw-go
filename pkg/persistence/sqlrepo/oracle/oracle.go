@@ -126,17 +126,17 @@ func OutboxDDL(table string) []string {
 	}
 	return []string{
 		fmt.Sprintf(`CREATE TABLE %s (
-	id VARCHAR2(64) NOT NULL PRIMARY KEY,
-	event_type VARCHAR2(200) NOT NULL,
-	aggregate_type VARCHAR2(200),
-	aggregate_id VARCHAR2(64),
+	id VARCHAR2(64 CHAR) NOT NULL PRIMARY KEY,
+	event_type VARCHAR2(200 CHAR) NOT NULL,
+	aggregate_type VARCHAR2(200 CHAR),
+	aggregate_id VARCHAR2(64 CHAR),
 	aggregate_version NUMBER(19),
 	payload CLOB NOT NULL,
 	occurred_at TIMESTAMP(6) WITH TIME ZONE NOT NULL,
-	correlation_id VARCHAR2(64),
-	causation_id VARCHAR2(64),
+	correlation_id VARCHAR2(64 CHAR),
+	causation_id VARCHAR2(64 CHAR),
 	attempts NUMBER(10) DEFAULT 0 NOT NULL,
-	last_error VARCHAR2(1000),
+	last_error VARCHAR2(1000 CHAR),
 	processed_at TIMESTAMP(6) WITH TIME ZONE)`, table),
 		fmt.Sprintf(`CREATE INDEX ix_%s_pending ON %s (processed_at, occurred_at)`, table, table),
 	}
@@ -149,10 +149,10 @@ func AuditDDL(table string) []string {
 	}
 	return []string{
 		fmt.Sprintf(`CREATE TABLE %s (
-	id VARCHAR2(64) NOT NULL PRIMARY KEY, aggregate_type VARCHAR2(200) NOT NULL, aggregate_id VARCHAR2(64) NOT NULL,
-	aggregate_version NUMBER(19) NOT NULL, operation VARCHAR2(20) NOT NULL, actor_id VARCHAR2(64), actor_name VARCHAR2(200),
-	channel VARCHAR2(20), import_source VARCHAR2(200), import_run_id VARCHAR2(64), import_file VARCHAR2(500),
-	correlation_id VARCHAR2(64), occurred_at TIMESTAMP(6) WITH TIME ZONE NOT NULL, changes CLOB, events VARCHAR2(2000))`, table),
+	id VARCHAR2(64 CHAR) NOT NULL PRIMARY KEY, aggregate_type VARCHAR2(200 CHAR) NOT NULL, aggregate_id VARCHAR2(64 CHAR) NOT NULL,
+	aggregate_version NUMBER(19) NOT NULL, operation VARCHAR2(20 CHAR) NOT NULL, actor_id VARCHAR2(64 CHAR), actor_name VARCHAR2(200 CHAR),
+	channel VARCHAR2(20 CHAR), import_source VARCHAR2(200 CHAR), import_run_id VARCHAR2(64 CHAR), import_file VARCHAR2(500 CHAR),
+	correlation_id VARCHAR2(64 CHAR), occurred_at TIMESTAMP(6) WITH TIME ZONE NOT NULL, changes CLOB, events VARCHAR2(2000 CHAR))`, table),
 		fmt.Sprintf(`CREATE INDEX ix_%s_trail ON %s (aggregate_type, aggregate_id, occurred_at)`, table, table),
 	}
 }
@@ -166,7 +166,7 @@ func InboxDDL(table string) []string {
 	}
 	return []string{
 		fmt.Sprintf(`CREATE TABLE %s (
-	consumer VARCHAR2(100) NOT NULL, message_id VARCHAR2(64) NOT NULL, processed_at TIMESTAMP(6) WITH TIME ZONE NOT NULL,
+	consumer VARCHAR2(100 CHAR) NOT NULL, message_id VARCHAR2(64 CHAR) NOT NULL, processed_at TIMESTAMP(6) WITH TIME ZONE NOT NULL,
 	CONSTRAINT pk_%s PRIMARY KEY (consumer, message_id))`, table, table),
 	}
 }
