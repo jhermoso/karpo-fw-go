@@ -34,6 +34,12 @@ const (
 	RouteUnmatched = "unmatched"
 	// MethodOther replaces methods outside the standard set, which a client can invent.
 	MethodOther = "_OTHER"
+
+	// StatusAborted is the status recorded for a handler that aborted (http.ErrAbortHandler)
+	// before writing a response: the client got none. 499 is the conventional "closed without
+	// response" code of nginx; ErrorTypeAborted is its error_type.
+	StatusAborted    = 499
+	ErrorTypeAborted = "aborted"
 )
 
 // Router resolves the pattern a request matches. *http.ServeMux implements it.
@@ -176,10 +182,15 @@ func Observe(logger log.Logger, tracer trace.Tracer, meter metrics.Meter, opts .
 				rec.mu.Lock()
 				route, actor, cause := rec.route, rec.actor, rec.err
 				rec.mu.Unlock()
+				aborted := panicked == http.ErrAbortHandler //nolint:errorlint // the sentinel is compared by identity, as net/http does
 				if panicked != nil {
-					// Recovery (outside) will answer 500 unless the response already started.
+					// Recovery (outside) will answer 500 unless the response already started. An
+					// aborted handler gets no answer at all: StatusAborted marks it.
 					if status == 0 {
 						status = http.StatusInternalServerError
+						if aborted {
+							status = StatusAborted
+						}
 					}
 					if err, ok := panicked.(error); ok {
 						cause = err
@@ -210,12 +221,13 @@ func Observe(logger log.Logger, tracer trace.Tracer, meter metrics.Meter, opts .
 				if actor != "" {
 					span.SetAttributes(FieldActor, actor)
 				}
-				if status >= 500 {
+				failed := status >= 500 || aborted
+				if failed {
 					span.RecordError(cause)
 				}
 				span.End()
 
-				if logger == nil || (status < 500 && cfg.quiet[r.URL.Path]) {
+				if logger == nil || (!failed && cfg.quiet[r.URL.Path]) {
 					return
 				}
 				args := []any{
@@ -234,6 +246,10 @@ func Observe(logger log.Logger, tracer trace.Tracer, meter metrics.Meter, opts .
 					args = append(args, FieldActor, actor)
 				}
 				l := logger.WithContext(ctx)
+				if aborted {
+					l.Warn(RequestLogMessage, append(args, FieldError, cause.Error(), FieldErrorType, ErrorTypeAborted)...)
+					return
+				}
 				if status >= 500 {
 					l.Error(RequestLogMessage, append(args, FieldError, cause.Error(), FieldErrorType, errorType(cause))...)
 					return
@@ -243,11 +259,9 @@ func Observe(logger log.Logger, tracer trace.Tracer, meter metrics.Meter, opts .
 
 			defer func() {
 				if p := recover(); p != nil {
-					if p != http.ErrAbortHandler { //nolint:errorlint // the sentinel is compared by identity, as net/http does
-						finish(p)
-					} else {
-						span.End()
-					}
+					// Aborted handlers (http.ErrAbortHandler, e.g. httputil.ReverseProxy when the
+					// upstream fails) are measured and logged too: in bulk they are an incident.
+					finish(p)
 					panic(p)
 				}
 			}()
@@ -304,7 +318,9 @@ type responseWriter struct {
 }
 
 func (w *responseWriter) WriteHeader(code int) {
-	if w.status == 0 {
+	// 1xx are informational (100 Continue, 103 Early Hints): the final status comes after them.
+	// 101 Switching Protocols is final (the connection is upgraded).
+	if w.status == 0 && (code >= 200 || code == http.StatusSwitchingProtocols) {
 		w.status = code
 	}
 	w.ResponseWriter.WriteHeader(code)
