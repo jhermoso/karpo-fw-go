@@ -215,12 +215,26 @@ func (c *Consumer) HandleMessage(ctx context.Context, env application.Envelope) 
 		tel.ignored(ctx, c.name)
 		return nil
 	}
-	if env.ID == "" {
-		return fmt.Errorf("%w: envelope without id", domain.ErrValidation)
-	}
 	ctx = application.WithCorrelationID(ctx, env.CorrelationID)
-	ctx = application.WithCausationID(ctx, env.ID)
+	if env.ID != "" {
+		ctx = application.WithCausationID(ctx, env.ID)
+	}
 	ctx, done := tel.start(ctx, c.name, env)
+	if env.ID == "" {
+		// Rejected, but still counted and logged: a producer sending envelopes without id is a
+		// fault to see in the metrics, not a silent drop.
+		err := fmt.Errorf("%w: envelope without id", domain.ErrValidation)
+		done(false, err)
+		return err
+	}
+	// A panicking handler rolls its unit of work back (uow.Do re-raises): the span is closed and
+	// the failure counted before the panic goes on.
+	defer func() {
+		if p := recover(); p != nil {
+			done(false, panicError(p))
+			panic(p)
+		}
+	}()
 	duplicate := false
 	err := c.uow.Do(ctx, func(ctx context.Context) error {
 		first, err := c.inbox.Claim(ctx, c.name, env.ID)
@@ -232,6 +246,14 @@ func (c *Consumer) HandleMessage(ctx context.Context, env application.Envelope) 
 	})
 	done(duplicate, err)
 	return err
+}
+
+// panicError turns a recovered value into the error a panic left.
+func panicError(r any) error {
+	if err, ok := r.(error); ok {
+		return fmt.Errorf("panic: %w", err)
+	}
+	return fmt.Errorf("panic: %v", r)
 }
 
 // Lag returns how long ago the message happened (for metrics and logs).
