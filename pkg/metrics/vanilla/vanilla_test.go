@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -150,4 +151,38 @@ func TestNoop(t *testing.T) {
 	m.Counter("a", "", "").Add(context.Background(), 1)
 	m.Histogram("b", "", "").Record(context.Background(), 1)
 	m.Gauge("c", "", "", func() float64 { return 1 })
+}
+
+// Recording on one instrument does not wait for another: each family has its own lock. Run with
+// -race: concurrent recording, registration and export must stay consistent.
+func TestRegistry_ConcurrentRecordingAndExport(t *testing.T) {
+	reg := vanilla.NewRegistry()
+	h := reg.Histogram("karpo.test.duration", "s", "")
+	c := reg.Counter("karpo.test.total", "", "")
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 500; j++ {
+				h.Record(context.Background(), 0.01, "route", "/a")
+				c.Add(context.Background(), 1, "outcome", "ok")
+				if j%100 == 0 {
+					_ = reg.WriteText(io.Discard)
+					unregister := reg.Gauge("karpo.test.gauge", "", "", func() float64 { return 1 }, "n", strconv.Itoa(j))
+					unregister()
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	if n := reg.HistogramCount("karpo.test.duration", "route", "/a"); n != 4000 {
+		t.Fatalf("histogram count = %d", n)
+	}
+	if v := reg.CounterValue("karpo.test.total", "outcome", "ok"); v != 4000 {
+		t.Fatalf("counter = %v", v)
+	}
+	if labels := reg.SeriesLabels("karpo.test.gauge"); len(labels) != 0 {
+		t.Fatalf("unregistered gauges must be gone: %v", labels)
+	}
 }

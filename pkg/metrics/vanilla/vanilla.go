@@ -31,7 +31,8 @@ const (
 	kindGauge
 )
 
-// Registry is the dependency-free metrics.Meter.
+// Registry is the dependency-free metrics.Meter. Its own lock only guards the set of families;
+// every family has its lock, so recording on one instrument never waits for another.
 type Registry struct {
 	mu       sync.Mutex
 	families map[string]*family
@@ -43,7 +44,7 @@ var _ fwmetrics.Meter = (*Registry)(nil)
 func NewRegistry() *Registry { return &Registry{families: map[string]*family{}} }
 
 type family struct {
-	reg        *Registry
+	mu         sync.Mutex // guards series and their values
 	name, unit string
 	help       string
 	kind       kind
@@ -58,6 +59,7 @@ type series struct {
 	sum    float64
 	count  uint64
 	read   func() float64 // gauge
+	owner  *byte          // gauge: the registration that set read
 }
 
 func (r *Registry) family(name, unit, help string, k kind, buckets []float64) *family {
@@ -69,7 +71,7 @@ func (r *Registry) family(name, unit, help string, k kind, buckets []float64) *f
 		}
 		return f
 	}
-	f := &family{reg: r, name: name, unit: unit, help: help, kind: k, series: map[string]*series{}}
+	f := &family{name: name, unit: unit, help: help, kind: k, series: map[string]*series{}}
 	if k == kindHistogram {
 		if len(buckets) == 0 {
 			buckets = DefaultBuckets
@@ -91,15 +93,26 @@ func (r *Registry) Histogram(name, unit, help string, buckets ...float64) fwmetr
 	return histogram{r.family(name, unit, help, kindHistogram, buckets)}
 }
 
-// Gauge implements metrics.Meter. Registering the same name and labels again replaces read.
-func (r *Registry) Gauge(name, unit, help string, read func() float64, labels ...string) {
+// Gauge implements metrics.Meter. Registering the same name and labels again replaces read; the
+// returned function removes the series, unless a later registration replaced it.
+func (r *Registry) Gauge(name, unit, help string, read func() float64, labels ...string) func() {
 	f := r.family(name, unit, help, kindGauge, nil)
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	f.at(labels).read = read
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	s := f.at(labels)
+	owner := new(byte)
+	s.read, s.owner = read, owner
+	return func() {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		key := strings.Join(s.labels, "\xff")
+		if cur, ok := f.series[key]; ok && cur.owner == owner {
+			delete(f.series, key)
+		}
+	}
 }
 
-// at returns the series of labels, creating it. The registry lock must be held.
+// at returns the series of labels, creating it. The family lock must be held.
 func (f *family) at(labels []string) *series {
 	labels = labels[:len(labels)&^1]
 	key := strings.Join(labels, "\xff")
@@ -120,8 +133,8 @@ func (c counter) Add(_ context.Context, n float64, labels ...string) {
 	if n < 0 || math.IsNaN(n) {
 		return
 	}
-	c.f.reg.mu.Lock()
-	defer c.f.reg.mu.Unlock()
+	c.f.mu.Lock()
+	defer c.f.mu.Unlock()
 	c.f.at(labels).value += n
 }
 
@@ -131,8 +144,8 @@ func (h histogram) Record(_ context.Context, v float64, labels ...string) {
 	if math.IsNaN(v) {
 		return
 	}
-	h.f.reg.mu.Lock()
-	defer h.f.reg.mu.Unlock()
+	h.f.mu.Lock()
+	defer h.f.mu.Unlock()
 	s := h.f.at(labels)
 	i, _ := slices.BinarySearch(h.f.buckets, v) // first bound >= v
 	s.counts[i]++
@@ -140,20 +153,31 @@ func (h histogram) Record(_ context.Context, v float64, labels ...string) {
 	s.count++
 }
 
-func (r *Registry) find(name string, k kind, labels []string) (*family, *series) {
-	f, ok := r.families[name]
-	if !ok || f.kind != k {
-		return nil, nil
+// lookup returns the family name if it is of kind k.
+func (r *Registry) lookup(name string, k kind) *family {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if f, ok := r.families[name]; ok && f.kind == k {
+		return f
 	}
+	return nil
+}
+
+// find returns the series with exactly these labels. The family lock must be held.
+func (f *family) find(labels []string) *series {
 	labels = labels[:len(labels)&^1]
-	return f, f.series[strings.Join(labels, "\xff")]
+	return f.series[strings.Join(labels, "\xff")]
 }
 
 // CounterValue returns the value of the counter series with exactly these labels (0 if absent).
 func (r *Registry) CounterValue(name string, labels ...string) float64 {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if _, s := r.find(name, kindCounter, labels); s != nil {
+	f := r.lookup(name, kindCounter)
+	if f == nil {
+		return 0
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if s := f.find(labels); s != nil {
 		return s.value
 	}
 	return 0
@@ -162,9 +186,13 @@ func (r *Registry) CounterValue(name string, labels ...string) float64 {
 // HistogramCount returns how many observations the histogram series with exactly these labels
 // has (0 if absent).
 func (r *Registry) HistogramCount(name string, labels ...string) uint64 {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if _, s := r.find(name, kindHistogram, labels); s != nil {
+	f := r.lookup(name, kindHistogram)
+	if f == nil {
+		return 0
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if s := f.find(labels); s != nil {
 		return s.count
 	}
 	return 0
@@ -172,37 +200,48 @@ func (r *Registry) HistogramCount(name string, labels ...string) uint64 {
 
 // HistogramTotal returns the observations of a histogram across all its series.
 func (r *Registry) HistogramTotal(name string) uint64 {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	f := r.lookup(name, kindHistogram)
+	if f == nil {
+		return 0
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	var n uint64
-	if f, ok := r.families[name]; ok && f.kind == kindHistogram {
-		for _, s := range f.series {
-			n += s.count
-		}
+	for _, s := range f.series {
+		n += s.count
 	}
 	return n
 }
 
 // GaugeValue reads the gauge series with exactly these labels.
 func (r *Registry) GaugeValue(name string, labels ...string) (float64, bool) {
-	r.mu.Lock()
-	_, s := r.find(name, kindGauge, labels)
-	r.mu.Unlock()
-	if s == nil || s.read == nil {
+	f := r.lookup(name, kindGauge)
+	if f == nil {
 		return 0, false
 	}
-	return s.read(), true
+	f.mu.Lock()
+	var read func() float64
+	if s := f.find(labels); s != nil {
+		read = s.read
+	}
+	f.mu.Unlock()
+	if read == nil {
+		return 0, false
+	}
+	return read(), true
 }
 
 // SeriesLabels returns the label sets recorded for a metric (to assert that no series carries
 // an identifier).
 func (r *Registry) SeriesLabels(name string) [][]string {
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	f, ok := r.families[name]
+	r.mu.Unlock()
 	if !ok {
 		return nil
 	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	out := make([][]string, 0, len(f.series))
 	for _, k := range sortedKeys(f.series) {
 		out = append(out, slices.Clone(f.series[k].labels))
@@ -230,20 +269,24 @@ func (r *Registry) WriteText(w io.Writer) error {
 
 	r.mu.Lock()
 	names := sortedKeys(r.families)
+	families := make(map[string]*family, len(names))
 	for _, name := range names {
-		f := r.families[name]
+		families[name] = r.families[name]
+	}
+	r.mu.Unlock()
+
+	type header struct{ pname, help, typ string }
+	headers := map[string]header{}
+	bodies := map[string]string{}
+	for _, name := range names {
+		f := families[name]
+		f.mu.Lock()
 		if f.kind == kindGauge {
 			// Gauges are read outside the lock: read functions may be slow or use the registry.
 			for _, k := range sortedKeys(f.series) {
 				gauges[name] = append(gauges[name], gaugeRead{f.series[k].labels, f.series[k].read})
 			}
 		}
-	}
-	type header struct{ pname, help, typ string }
-	headers := map[string]header{}
-	bodies := map[string]string{}
-	for _, name := range names {
-		f := r.families[name]
 		pname := promName(f.name, f.unit)
 		var body strings.Builder
 		switch f.kind {
@@ -270,9 +313,9 @@ func (r *Registry) WriteText(w io.Writer) error {
 		case kindGauge:
 			headers[name] = header{pname, f.help, "gauge"}
 		}
+		f.mu.Unlock()
 		bodies[name] = body.String()
 	}
-	r.mu.Unlock()
 
 	for _, name := range names {
 		h := headers[name]
