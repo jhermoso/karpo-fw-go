@@ -174,7 +174,7 @@ sec.BootstrapFromEnv(ctx)
 
 Aportaciones al framework: `authorization.Authenticators` (combina autenticadores: el primero que
 reconoce las credenciales gana, y una caída del origen nunca se disfraza de token inválido) y una
-función `Permissions()` en la capa de aplicación de cada uno de los veinte contextos de negocio.
+función `Permissions()` en la capa de aplicación de cada uno de los veintiún contextos de negocio.
 
 Tablas: `sec_users` (+ `sec_user_roles`, `sec_user_accesses`, `sec_user_identities`), `sec_roles`
 (+ `sec_role_permissions`), `sec_permissions`, `sec_sessions`, más las bandejas de salida y la
@@ -401,10 +401,10 @@ Ejecutado el 2026-10-04:
   - el último administrador global no se puede desactivar (422);
   - directorio `contracts.Users`, auditoría (nunca el hash) y lenguaje publicado consumido con
     bandeja de entrada.
-- **Catálogo completo**: los veinte contextos de negocio declaran 122 permisos (eran doce y 81
+- **Catálogo completo**: los veintiún contextos de negocio declaran 123 permisos (eran doce y 81
   cuando se evaluó; después llegaron Productos, Inventario y Pedidos, `Parties.Relationship.Update`
-  y `Parties.Relationship.SetTrial` con los detalles por tipo de relación, Activos, Trabajos, Documentos, Envíos, los extractos de Tesorería y Módulos), bien formados, sin
-  repetir y cada uno en su espacio; con los ocho de Security y el comodín son 131. La regla estándar deja
+  y `Parties.Relationship.SetTrial` con los detalles por tipo de relación, Activos, Trabajos, Documentos, Envíos, los extractos de Tesorería, Módulos e Historial), bien formados, sin
+  repetir y cada uno en su espacio; con los ocho de Security y el comodín son 132. La regla estándar deja
   fuera del usuario estándar emitir facturas, aprobar nóminas, presentar modelos o liquidar remesas.
 - **Hasher**: hash autodescriptivo, sal distinta cada vez, hash obsoleto detectado, formatos
   inválidos rechazados y un hash de C# (10 000 iteraciones) verificado y marcado para renovar.
