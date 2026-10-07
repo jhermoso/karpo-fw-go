@@ -85,7 +85,7 @@ contexts/modules/
 - **Lenguaje publicado:** `modules.feature-activated.v1` y `modules.feature-deactivated.v1`.
 - **Tablas:** `mod_features`, `mod_activations`, las bandejas de salida y la auditoría.
 
-## Decisiones propuestas (pendientes de confirmar)
+## Decisiones (aprobadas por Javier el 2026-10-07)
 
 1. **Un solo catálogo y una sola activación** para módulos, capacidades y sectores, distinguidos
    por la clase. Sugerencia: sí; en C# eran el mismo modelo escrito tres veces.
