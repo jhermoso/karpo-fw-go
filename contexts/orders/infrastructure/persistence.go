@@ -92,6 +92,7 @@ func Migrations() sqlrepo.MigrationSet {
 			`ALTER TABLE ord_deliveries {add:invoice_id} {str:40}{addEnd}`,
 			`ALTER TABLE ord_deliveries {add:invoice_number} {str:40}{addEnd}`,
 			`ALTER TABLE ord_deliveries {add:invoiced} {bool} DEFAULT {false} NOT NULL{addEnd}`)},
+		{Version: 4, Name: "quotes", Up: sqlrepo.RenderDDLAll(quotesDDL...)},
 	}}
 }
 
@@ -101,7 +102,7 @@ func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 }
 
 // Tables lists the tables of the context, children first (drop order).
-var Tables = []string{"ord_delivery_lines", "ord_deliveries", "ord_order_lines", "ord_orders", "ord_terms", "ord_counters", TableOutbox,
+var Tables = []string{"ord_quote_lines", "ord_quotes", "ord_delivery_lines", "ord_deliveries", "ord_order_lines", "ord_orders", "ord_terms", "ord_counters", TableOutbox,
 	TableIntegrationOutbox, TableAuditLog, TableInbox}
 
 // DropAll removes the tables of the context and its migration history (tests only).

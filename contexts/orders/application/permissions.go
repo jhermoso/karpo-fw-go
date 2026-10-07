@@ -7,5 +7,6 @@ func Permissions() []authz.Permission {
 	return []authz.Permission{
 		PermOrderRead, PermOrderUpdate, PermOrderConfirm, PermOrderDeliver, PermOrderCancel,
 		PermTermsRead, PermTermsUpdate,
+		PermQuoteRead, PermQuoteUpdate, PermQuoteSend, PermQuoteResolve,
 	}
 }

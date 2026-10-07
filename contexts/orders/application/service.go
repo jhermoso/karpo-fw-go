@@ -41,6 +41,7 @@ type Deps struct {
 	Deliveries domain.DeliveryRepository
 	Terms      domain.TermsRepository
 	Counters   domain.CounterRepository
+	Quotes     domain.QuoteRepository
 	Catalog    domain.Catalog
 	Credit     domain.CreditCheck
 	UoW        fw.UnitOfWork
@@ -63,6 +64,18 @@ type Service struct {
 	Close        app.CommandHandler[EndOrder, OrderDTO]
 	GetOrder     app.QueryHandler[GetOrder, OrderDTO]
 	SearchOrders app.QueryHandler[SearchOrders, fw.Page[OrderDTO]]
+
+	DraftQuote      app.CommandHandler[DraftQuote, QuoteDTO]
+	ChangeQuote     app.CommandHandler[ChangeQuote, QuoteDTO]
+	AddQuoteLine    app.CommandHandler[AddQuoteLine, QuoteDTO]
+	RemoveQuoteLine app.CommandHandler[RemoveQuoteLine, QuoteDTO]
+	SendQuote       app.CommandHandler[SendQuote, QuoteDTO]
+	AcceptQuote     app.CommandHandler[AcceptQuote, AcceptedQuoteDTO]
+	RejectQuote     app.CommandHandler[EndQuote, QuoteDTO]
+	WithdrawQuote   app.CommandHandler[EndQuote, QuoteDTO]
+	ExpireQuotes    app.CommandHandler[ExpireQuotes, ExpiredQuotesDTO]
+	GetQuote        app.QueryHandler[GetQuote, QuoteDTO]
+	SearchQuotes    app.QueryHandler[SearchQuotes, fw.Page[QuoteDTO]]
 
 	GetDelivery      app.QueryHandler[GetDelivery, DeliveryDTO]
 	SearchDeliveries app.QueryHandler[SearchDeliveries, fw.Page[DeliveryDTO]]
@@ -112,6 +125,7 @@ type service struct {
 	orders     *orchestration.Orchestrator[domain.OrderID, *domain.Order]
 	deliveries *orchestration.Orchestrator[domain.DeliveryID, *domain.Delivery]
 	terms      *orchestration.Orchestrator[domain.TermsID, *domain.Terms]
+	quotes     *orchestration.Orchestrator[domain.QuoteID, *domain.Quote]
 }
 
 func newService(d Deps) service {
@@ -126,6 +140,7 @@ func newService(d Deps) service {
 		orders:     orchestration.New[domain.OrderID, *domain.Order](d.Orders, d.UoW, opts...),
 		deliveries: orchestration.New[domain.DeliveryID, *domain.Delivery](d.Deliveries, d.UoW, opts...),
 		terms:      orchestration.New[domain.TermsID, *domain.Terms](d.Terms, d.UoW, opts...),
+		quotes:     orchestration.New[domain.QuoteID, *domain.Quote](d.Quotes, d.UoW, opts...),
 	}
 }
 
@@ -135,6 +150,7 @@ func NewService(d Deps) *Service {
 	svc := &Service{}
 	s.termsUseCases(svc)
 	s.orderUseCases(svc)
+	s.quoteUseCases(svc)
 	return svc
 }
 
@@ -209,6 +225,14 @@ func Publications(r *messaging.Recorder) *messaging.Recorder {
 			out.Lines = append(out.Lines, contracts.StockLine{Line: l.Line, Product: l.Product, Quantity: l.Quantity})
 		}
 		return []app.IntegrationEvent{out}, nil
+	})
+	messaging.On(r, func(_ context.Context, e domain.QuoteSentOut) ([]app.IntegrationEvent, error) {
+		return []app.IntegrationEvent{contracts.QuoteSentV1{QuoteID: e.AggregateID, Company: e.Company, Customer: e.Customer, Number: e.Number,
+			Date: e.Date.String(), ValidUntil: e.ValidUntil.String(), Total: e.Total}}, nil
+	})
+	messaging.On(r, func(_ context.Context, e domain.QuoteClosed) ([]app.IntegrationEvent, error) {
+		return []app.IntegrationEvent{contracts.QuoteClosedV1{QuoteID: e.AggregateID, Company: e.Company, Customer: e.Customer, Number: e.Number,
+			Status: e.Status, Reason: e.Reason, OrderID: e.Order, Total: e.Total}}, nil
 	})
 	messaging.On(r, func(_ context.Context, e domain.OrderClosed) ([]app.IntegrationEvent, error) {
 		return []app.IntegrationEvent{contracts.OrderClosedV1{OrderID: e.AggregateID, Company: e.Company, Status: e.Status, Reason: e.Reason,
