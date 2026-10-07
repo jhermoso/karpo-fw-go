@@ -144,7 +144,7 @@ Además:
 - **Almacenamiento:** `imp_runs` (+ `imp_run_counts`, `imp_run_messages`), `imp_references`, las
   bandejas de salida y la auditoría.
 
-## Decisiones propuestas (pendientes de confirmar)
+## Decisiones (aprobadas por Javier el 2026-10-08)
 
 1. **Un motor genérico con fuentes y cargadores**, en lugar del orquestador de doce pasos y sus
    dos pasarelas. Sugerencia: sí; añadir una fuente o una clase de dato deja de tocar el motor.
