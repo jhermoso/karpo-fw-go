@@ -308,6 +308,105 @@ func TestPartiesContext(t *testing.T) {
 				t.Fatalf("person details round trip: %+v %v", edited.Person, err)
 			}
 
+			// What starts and ends at one instant of the clock (it does not move below): every
+			// engine stores the empty period and reads it back, no query finds it in force, and it
+			// is in the way of nothing that starts at that instant.
+			instant := fw.Now()
+			eva, err := svc.RegisterPerson.Handle(ctx, papp.RegisterPerson{GivenName: "Eva", FirstSurname: "Sanz", Roles: []string{domain.RoleEmployee.String()}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			evaID, _ := domain.ParsePartyID(eva.ID)
+			if _, err := svc.AssignRole.Handle(ctx, papp.AssignRole{PartyID: evaID, RoleType: domain.RoleCustomer.String()}); err != nil {
+				t.Fatal(err)
+			}
+			eva, err = svc.AddContact.Handle(ctx, papp.AddContact{PartyID: evaID, Kind: "email", Value: "eva@example.com", Purposes: []string{"default"}})
+			if err != nil || len(eva.Roles) != 2 || eva.Roles[1].RoleType != domain.RoleCustomer.String() || len(eva.Contacts) != 1 {
+				t.Fatalf("eva: %+v %v", eva, err)
+			}
+			evaRole, _ := domain.ParsePartyRoleID(eva.Roles[1].ID)
+			evaMail, _ := domain.ParseContactID(eva.Contacts[0].ID)
+			if _, err := svc.EndRole.Handle(ctx, papp.EndRole{PartyID: evaID, RoleID: evaRole}); err != nil {
+				t.Fatalf("a role ended at the instant it started: %v", err)
+			}
+			if _, err := svc.EndContact.Handle(ctx, papp.EndContact{PartyID: evaID, ContactID: evaMail}); err != nil {
+				t.Fatalf("a contact ended at the instant it started: %v", err)
+			}
+			eva, err = svc.Get.Handle(ctx, papp.GetParty{ID: evaID})
+			if err != nil {
+				t.Fatalf("a party with empty periods read back: %v", err)
+			}
+			if r := eva.Roles[1]; r.Active || r.Until == nil || !r.Until.Equal(r.From) || !r.From.Equal(instant) || !eva.Roles[0].Active {
+				t.Fatalf("empty role round trip: %+v", eva.Roles)
+			}
+			if c := eva.Contacts[0]; c.Active || c.Until == nil || !c.Until.Equal(c.From) || !c.From.Equal(instant) || len(c.Purposes) != 0 {
+				t.Fatalf("empty contact round trip: %+v", c)
+			}
+			if never, err := svc.Search.Handle(ctx, papp.SearchParties{Text: "sanz", Role: domain.RoleCustomer.String()}); err != nil || never.Total != 0 {
+				t.Fatalf("a role that never was in force (validity in SQL): %+v %v", never, err)
+			}
+			if plays, err := svc.Search.Handle(ctx, papp.SearchParties{Text: "sanz", Role: domain.RoleEmployee.String()}); err != nil || plays.Total != 1 {
+				t.Fatalf("the role that started at that instant and goes on: %+v %v", plays, err)
+			}
+			if _, err := svc.AssignRole.Handle(ctx, papp.AssignRole{PartyID: evaID, RoleType: domain.RoleCustomer.String()}); err != nil {
+				t.Fatalf("the same role again at that instant: %v", err)
+			}
+			if _, err := svc.AddContact.Handle(ctx, papp.AddContact{PartyID: evaID, Kind: "email", Value: "eva@example.com"}); err != nil {
+				t.Fatalf("the same e-mail again at that instant: %v", err)
+			}
+
+			salesID, _ := domain.ParsePartyID(sales.ID)
+			sales, err = svc.Classify.Handle(ctx, papp.Classify{PartyID: salesID, Classification: domain.ClassRetail.String()})
+			if err != nil || len(sales.Classifications) != 1 {
+				t.Fatalf("classify: %+v %v", sales.Classifications, err)
+			}
+			retail, _ := domain.ParseClassificationID(sales.Classifications[0].ID)
+			if _, err := svc.EndClassification.Handle(ctx, papp.EndClassification{PartyID: salesID, ID: retail}); err != nil {
+				t.Fatalf("a classification ended at the instant it started: %v", err)
+			}
+			sales, err = svc.Classify.Handle(ctx, papp.Classify{PartyID: salesID, Classification: domain.ClassCorporate.String()})
+			if err != nil || len(sales.Classifications) != 2 {
+				t.Fatalf("another segment at that instant (the family is exclusive): %+v %v", sales.Classifications, err)
+			}
+			if c := sales.Classifications; c[0].Active || c[0].Until == nil || !c[0].Until.Equal(c[0].From) || !c[1].Active {
+				t.Fatalf("empty classification round trip: %+v", c)
+			}
+			if never, err := svc.Search.Handle(ctx, papp.SearchParties{Classification: domain.ClassRetail.String()}); err != nil || never.Total != 0 {
+				t.Fatalf("a classification that never was in force: %+v %v", never, err)
+			}
+
+			hired, err := svc.EstablishRelationship.Handle(ctx, papp.EstablishRelationship{Type: domain.RelEmployment.String(), From: eva.ID, To: acme.ID})
+			if err != nil {
+				t.Fatal(err)
+			}
+			hiredID, _ := domain.ParseRelationshipID(hired.ID)
+			if _, err := svc.TerminateRelationship.Handle(ctx, papp.TerminateRelationship{ID: hiredID}); err != nil {
+				t.Fatalf("a relationship terminated at the instant it started: %v", err)
+			}
+			evaRels, err := svc.Relationships.Handle(ctx, papp.PartyRelationships{PartyID: evaID})
+			if err != nil || len(evaRels) != 1 || evaRels[0].Active || evaRels[0].Until == nil || !evaRels[0].Until.Equal(evaRels[0].Since) ||
+				!evaRels[0].Since.Equal(instant) {
+				t.Fatalf("empty relationship round trip: %+v %v", evaRels, err)
+			}
+			if current, err := svc.Relationships.Handle(ctx, papp.PartyRelationships{PartyID: evaID, ActiveOnly: true}); err != nil || len(current) != 0 {
+				t.Fatalf("a relationship that never was in force: %+v %v", current, err)
+			}
+			if _, err := svc.Get.Handle(clerkCtx, papp.GetParty{ID: evaID}); !errors.Is(err, fw.ErrNotFound) {
+				t.Fatalf("an affiliation that never was in force gives no visibility: %v", err)
+			}
+			if member, err := mod.Organizations.InternalOrganizations(ctx, []string{eva.ID}); err != nil || len(member[eva.ID]) != 0 {
+				t.Fatalf("membership through an empty affiliation: %+v %v", member, err)
+			}
+			if _, err := svc.EstablishRelationship.Handle(ctx, papp.EstablishRelationship{Type: domain.RelEmployment.String(), From: eva.ID, To: acme.ID}); err != nil {
+				t.Fatalf("the same relationship again at that instant: %v", err)
+			}
+			if seen, err := svc.Get.Handle(clerkCtx, papp.GetParty{ID: evaID}); err != nil || len(seen.Organizations) != 1 {
+				t.Fatalf("visible through the new employment: %+v %v", seen, err)
+			}
+			if !fw.Now().Equal(instant) {
+				t.Fatal("the clock moved")
+			}
+
 			pending, err := mod.IntegrationOutbox.Pending(ctx, 100, 10)
 			if err != nil || len(pending) < 8 {
 				t.Fatalf("published language: %d %v", len(pending), err)
