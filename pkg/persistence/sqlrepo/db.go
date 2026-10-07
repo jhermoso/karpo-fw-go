@@ -55,8 +55,11 @@ func (db *DB) SQL() *sql.DB { return db.sqlDB }
 // Ping checks connectivity (readiness probes).
 func (db *DB) Ping(ctx context.Context) error { return db.sqlDB.PingContext(ctx) }
 
-// Close closes the connection pool.
-func (db *DB) Close() error { return db.sqlDB.Close() }
+// Close closes the connection pool and removes its gauges.
+func (db *DB) Close() error {
+	db.unregisterPool()
+	return db.sqlDB.Close()
+}
 
 type txKey struct{ db *DB }
 
@@ -104,6 +107,9 @@ func (db *DB) Do(ctx context.Context, fn func(ctx context.Context) error) (err e
 		if r := recover(); r != nil {
 			_ = tx.Rollback()
 			st.rollbackHooks()
+			// The telemetry defer runs after this one: it must see the panic as a failure, not
+			// measure a rolled back transaction as ok.
+			err = panicError(r)
 			panic(r)
 		}
 	}()
@@ -121,6 +127,14 @@ func (db *DB) Do(ctx context.Context, fn func(ctx context.Context) error) (err e
 	}
 	outcome = "committed"
 	return nil
+}
+
+// panicError turns a recovered value into the error a panic left.
+func panicError(r any) error {
+	if err, ok := r.(error); ok {
+		return fmt.Errorf("panic: %w", err)
+	}
+	return fmt.Errorf("panic: %v", r)
 }
 
 func (db *DB) tx(ctx context.Context) *sqlTx {
