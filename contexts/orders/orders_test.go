@@ -42,6 +42,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlite"
 	"github.com/jhermoso/karpo-fw-go/pkg/testing/archtest"
+	"github.com/jhermoso/karpo-fw-go/pkg/testing/testkit"
 )
 
 // host composes Parties, Products, Inventory, Receivables and Orders on one hot-swappable
@@ -375,6 +376,10 @@ func (h *host) scenario(tag string) {
 }
 
 func TestOrders_PriceHoldDeliverRelease_MemoryThenSQLite(t *testing.T) {
+	// The scenario's dates are literals in October 2026 and delivery notes are numbered per
+	// year: a note without a date takes "today", so the domain clock is fixed inside the
+	// scenario (with the real clock it would open the 2027 series from 2027).
+	testkit.FixClock(t, time.Date(2026, 10, 7, 9, 0, 0, 0, time.UTC))
 	h := compose(t)
 	h.scenario("m")
 

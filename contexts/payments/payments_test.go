@@ -43,6 +43,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlite"
 	"github.com/jhermoso/karpo-fw-go/pkg/testing/archtest"
+	"github.com/jhermoso/karpo-fw-go/pkg/testing/testkit"
 )
 
 func mustIBAN(s string) vocab.IBAN {
@@ -412,19 +413,11 @@ func (h *host) scenario(tag string) {
 	}
 }
 
-// scenarioDay is the day the scenario happens on: its dates (execution, settlement and
-// rejection of the transfer order, due dates) are fixed literals, so the domain clock is fixed
-// to that day too. It starts at 09:00 UTC and advances with real time, so timestamps stay
-// ordered (UUID v7, outbox, audit). With the real clock the test broke as soon as the calendar
-// passed 2026-10-05: the order was generated "today" and settled on the 5th.
-var scenarioDay = time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC)
-
-type scenarioClock struct{ start time.Time }
-
-func (c scenarioClock) Now() time.Time { return scenarioDay.Add(time.Since(c.start)) }
-
 func TestPayments_OwesPaysAndPosts_MemoryThenSQLite(t *testing.T) {
-	t.Cleanup(fw.SetClock(scenarioClock{start: time.Now()}))
+	// The scenario's dates are literals (execution, settlement and rejection of the transfer
+	// order, due dates): the domain clock is fixed to the scenario day so they never fall
+	// behind it.
+	testkit.FixClock(t, time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC))
 	h := compose(t)
 	h.scenario("m")
 

@@ -83,9 +83,13 @@ Pendiente:
   ejecutable de servicio (hoy los contextos se componen en las pruebas).
 - ~~**Prueba que depende de la fecha:** `TestPayments_OwesPaysAndPosts_MemoryThenSQLite` fallaba
   desde el 2026-10-06 porque liquidaba con fecha fija 2026-10-05 una orden generada «hoy»
-  (`treasury.settle_date`).~~ Resuelto: la prueba fija el reloj del dominio (`fw.SetClock`) en el
-  día del escenario. Otras pruebas de contextos con fechas literales pueden tener el mismo
-  problema; conviene revisarlas.
+  (`treasury.settle_date`).~~ Resuelto con `testkit.FixClock`, que fija el reloj del dominio en
+  el día del escenario y lo deja avanzar. Revisadas todas las pruebas de `contexts/`, `examples/`
+  y `e2e/` adelantando el reloj hasta cinco años: también fallaban, desde el 2027-01-01,
+  `TestAccounting_PostsWhatTheOtherContextsPublish_MemoryThenSQLite` (asientos sin fecha en el
+  diario del año siguiente) y `TestOrders_PriceHoldDeliverRelease_MemoryThenSQLite` (albarán sin
+  fecha en la serie del año siguiente); las dos usan ya `FixClock`. Una prueba de escenario nueva
+  con fechas literales debe hacer lo mismo.
 
 ### 2c. Security: siguientes pasos
 Hecho (ver [docs/SEGURIDAD.md](docs/SEGURIDAD.md), decisiones aprobadas el 2026-10-04): contexto

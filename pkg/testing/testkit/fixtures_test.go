@@ -34,3 +34,21 @@ func TestHarness(t *testing.T) {
 		t.Fatalf("expected bus in harness to deliver event")
 	}
 }
+
+func TestFixClock_StartsAtTheGivenDayAndAdvances(t *testing.T) {
+	start := time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC)
+	t.Run("fixed", func(t *testing.T) {
+		testkit.FixClock(t, start)
+		first := domain.Now()
+		if first.Before(start) || first.Sub(start) > time.Minute {
+			t.Fatalf("clock not fixed to the scenario day: %v", first)
+		}
+		time.Sleep(2 * time.Millisecond)
+		if !domain.Now().After(first) {
+			t.Fatal("the fixed clock must keep advancing")
+		}
+	})
+	if now := domain.Now(); now.Sub(start) < time.Hour && now.After(start) {
+		t.Fatalf("clock not restored after the test: %v", now)
+	}
+}

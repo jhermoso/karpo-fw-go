@@ -48,6 +48,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlite"
 	"github.com/jhermoso/karpo-fw-go/pkg/testing/archtest"
+	"github.com/jhermoso/karpo-fw-go/pkg/testing/testkit"
 )
 
 // host composes Parties, Fiscal, Billing, Receivables, Treasury and Accounting on one hot-swappable
@@ -413,6 +414,10 @@ func (h *host) scenario(tag string) {
 }
 
 func TestAccounting_PostsWhatTheOtherContextsPublish_MemoryThenSQLite(t *testing.T) {
+	// The scenario's dates are literals in October 2026 and the journal numbers its entries per
+	// year: entries posted from events without a date take "today", so the domain clock is fixed
+	// inside the scenario (with the real clock the journal splits into two years from 2027).
+	testkit.FixClock(t, time.Date(2026, 10, 7, 9, 0, 0, 0, time.UTC))
 	h := compose(t)
 	h.scenario("m")
 
