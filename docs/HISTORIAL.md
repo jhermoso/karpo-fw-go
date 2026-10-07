@@ -69,7 +69,7 @@ contexts/audit/
 - **Rutas:** `GET /api/audit/trail/{tipo}/{id}` y `GET /api/audit/types` (los tipos con historial,
   su contexto y si están restringidos).
 
-## Decisiones propuestas (pendientes de confirmar)
+## Decisiones (aprobadas por Javier el 2026-10-07)
 
 1. **El Historial no guarda nada**: lee los registros de auditoría que cada contexto ya escribe
    en su transacción. Sugerencia: sí; así no hay una segunda copia que pueda discrepar ni una
