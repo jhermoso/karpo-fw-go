@@ -38,6 +38,7 @@ func Compose(sw *hotswap.Switch, catalog domain.Catalog, credit domain.CreditChe
 	d := oapp.Deps{
 		Orders: hotswap.Repository(sw, infrastructure.OrderRepositoryFactory), Deliveries: hotswap.Repository(sw, infrastructure.DeliveryRepositoryFactory),
 		Terms: hotswap.Repository(sw, infrastructure.TermsRepositoryFactory), Counters: hotswap.Repository(sw, infrastructure.CounterRepositoryFactory),
+		Quotes: hotswap.Repository(sw, infrastructure.QuoteRepositoryFactory),
 		Catalog: catalog, Credit: credit, UoW: sw, Audit: audit,
 		Recorder: outbox.Recorders(outbox.NewRecorder(hotswap.Outbox(sw, infrastructure.OutboxFactory)),
 			oapp.Publications(messaging.NewRecorder(contracts.Source, integration))),
@@ -138,6 +139,32 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/orders/orders/{id}/deliveries", command(http.StatusCreated, ord, func(c *oapp.Deliver, id domain.OrderID) { c.ID = id }, svc.Deliver.Handle))
 	mux.HandleFunc("POST /api/orders/orders/{id}/cancel", command(ok, ord, func(c *oapp.EndOrder, id domain.OrderID) { c.ID = id }, svc.Cancel.Handle))
 	mux.HandleFunc("POST /api/orders/orders/{id}/close", command(ok, ord, func(c *oapp.EndOrder, id domain.OrderID) { c.ID = id }, svc.Close.Handle))
+
+	quo := domain.ParseQuoteID
+	mux.HandleFunc("POST /api/orders/quotes", create(http.StatusCreated, svc.DraftQuote.Handle))
+	mux.HandleFunc("POST /api/orders/quotes/expire-due", create(ok, svc.ExpireQuotes.Handle))
+	mux.HandleFunc("GET /api/orders/quotes", func(w http.ResponseWriter, r *http.Request) {
+		s, n := query(r)
+		out, err := svc.SearchQuotes.Handle(r.Context(), oapp.SearchQuotes{Company: s("company"), Customer: s("customer"), Status: s("status"),
+			Page: n("page"), Size: n("size")})
+		distribution.Respond(w, r, out, err, http.StatusOK)
+	})
+	mux.HandleFunc("GET /api/orders/quotes/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id, err := quo(r.PathValue("id"))
+		if err != nil {
+			badID(w, r)
+			return
+		}
+		out, err := svc.GetQuote.Handle(r.Context(), oapp.GetQuote{ID: id})
+		distribution.Respond(w, r, out, err, http.StatusOK)
+	})
+	mux.HandleFunc("PUT /api/orders/quotes/{id}", command(ok, quo, func(c *oapp.ChangeQuote, id domain.QuoteID) { c.ID = id }, svc.ChangeQuote.Handle))
+	mux.HandleFunc("POST /api/orders/quotes/{id}/lines", command(ok, quo, func(c *oapp.AddQuoteLine, id domain.QuoteID) { c.ID = id }, svc.AddQuoteLine.Handle))
+	mux.HandleFunc("POST /api/orders/quotes/{id}/lines/remove", command(ok, quo, func(c *oapp.RemoveQuoteLine, id domain.QuoteID) { c.ID = id }, svc.RemoveQuoteLine.Handle))
+	mux.HandleFunc("POST /api/orders/quotes/{id}/send", command(ok, quo, func(c *oapp.SendQuote, id domain.QuoteID) { c.ID = id }, svc.SendQuote.Handle))
+	mux.HandleFunc("POST /api/orders/quotes/{id}/accept", command(ok, quo, func(c *oapp.AcceptQuote, id domain.QuoteID) { c.ID = id }, svc.AcceptQuote.Handle))
+	mux.HandleFunc("POST /api/orders/quotes/{id}/reject", command(ok, quo, func(c *oapp.EndQuote, id domain.QuoteID) { c.ID = id }, svc.RejectQuote.Handle))
+	mux.HandleFunc("POST /api/orders/quotes/{id}/withdraw", command(ok, quo, func(c *oapp.EndQuote, id domain.QuoteID) { c.ID = id }, svc.WithdrawQuote.Handle))
 
 	mux.HandleFunc("GET /api/orders/deliveries", func(w http.ResponseWriter, r *http.Request) {
 		s, n := query(r)

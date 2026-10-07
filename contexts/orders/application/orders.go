@@ -323,21 +323,9 @@ func (s service) orderUseCases(svc *Service) {
 		}
 		return update(ctx, c.ID, func(ctx context.Context, o *domain.Order) error {
 			os := o.State()
-			it, ok, err := s.Catalog.Price(ctx, os.Company, product, os.PriceList, q, os.Date)
+			it, err := s.item(ctx, os.Company, os.PriceList, product, q, os.Date)
 			if err != nil {
 				return err
-			}
-			if !ok || it.Company != os.Company {
-				return fw.Violation("orders.unknown_product", "the product is not in the catalog of the company")
-			}
-			if !it.Sellable {
-				return fw.Violation("orders.not_for_sale", "the product is not for sale or is blocked")
-			}
-			if !it.Retired.IsZero() && !os.Date.Before(it.Retired) {
-				return fw.Violation("orders.discontinued", "the product is discontinued")
-			}
-			if it.TaxCode == "" {
-				return fw.Violation("orders.no_tax_code", "the product has no tax code: it could not be invoiced")
 			}
 			_, err = o.AddLine(domain.Line{Product: product, SKU: it.SKU, Description: it.Name, UoM: it.UoM, TaxCode: it.TaxCode, Stocked: it.Stocked,
 				Quantity: q, UnitPrice: it.UnitPrice, Discount: it.Discount})

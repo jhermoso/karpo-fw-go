@@ -98,7 +98,7 @@ contexts/payments/        # Contexto Pagos (obligaciones de facturas recibidas, 
 contexts/purchases/       # Contexto Compras (facturas recibidas con IVA soportado y retención, registro numerado, perfil de proveedor): ver docs/COMPRAS.md
 contexts/products/        # Contexto Productos (catálogo por empresa, códigos de barras, kits, categorías, unidades, tarifas y cotización): ver docs/PRODUCTOS.md
 contexts/inventory/       # Contexto Inventario (almacenes, existencias a coste medio, libro de movimientos, reservas, recuentos y traspasos; reserva y salida del stock de los pedidos): ver docs/INVENTARIO.md
-contexts/orders/          # Contexto Pedidos (pedidos de venta valorados, condiciones del cliente, control de crédito, reserva de stock por eventos, albaranes): ver docs/PEDIDOS.md
+contexts/orders/          # Contexto Pedidos (pedidos de venta valorados, condiciones del cliente, control de crédito, reserva de stock por eventos, albaranes; presupuestos con validez que se convierten en pedido): ver docs/PEDIDOS.md
 contexts/assets/          # Contexto Activos (registro de inmovilizado, amortización lineal mensual, bajas y ventas; asientos por eventos en Contabilidad): ver docs/ACTIVOS.md
 contexts/work/            # Contexto Trabajos (proyectos, tareas y órdenes con estado por reglas, personas asignadas con tarifa, partes de horas con aprobación): ver docs/TRABAJOS.md
 contexts/documents/       # Contexto Documentos (registro de lo que emiten los demás contextos, alimentado por eventos; búsqueda única y rastro pedido → albarán → factura → rectificativa): ver docs/DOCUMENTOS.md

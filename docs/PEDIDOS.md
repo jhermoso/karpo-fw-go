@@ -81,7 +81,7 @@ Puntuación de 1 a 5 por criterio; nota ponderada sobre 100. **Mantener** ≥ 70
 | 7 | `DeliveryNote` (cabecera sin líneas) + `Shipment` + `ItemIssuance` | 4 | 1 | 1 | 3 | **47** | Modificar → agregado `Delivery` (**albarán**) del pedido, con líneas, numerado e **inmutable**. Solo se entrega lo pendiente y, en lo almacenable, lo que Inventario retiene. Inventario da la salida contra la reserva |
 | 8 | Numeración: seudonúmero al confirmar y `POST /issue` | 3 | 2 | 2 | 3 | **51** | Modificar → contador por empresa, serie y año: `PED-2026-000001` al confirmar y `ALB-2026-000001` al entregar |
 | 9 | `OrderRole`, `OrderItemRole`, `OrderStatus`, `OrderAdjustment` y sus tipos | 2 | 2 | 2 | 2 | **40** | Retirar → el cliente y la empresa están en el pedido; el histórico lo da la auditoría |
-| 10 | `Quote` (cabecera sin líneas, sin conversión a pedido) | 2 | 2 | 2 | 3 | **43** | Aplazado → fase 2: presupuestos que se convierten en pedido |
+| 10 | `Quote` (cabecera sin líneas, sin conversión a pedido) | 2 | 2 | 2 | 3 | **43** | Aplazado → hecho en la fase 2: ver «Presupuestos (fase 2)» |
 | 11 | Facturación bajo demanda desde pedido o envío | 4 | 1 | 1 | 3 | **47** | Aplazado → siguiente paso: Facturación prepara la factura desde el albarán publicado (`orders.delivery-issued.v1`), con sus precios |
 | 12 | Andamiaje sin tablas (`Agreement*`, `OrderTerm`, `SalesTax`, `Fee`…) | 1 | 1 | 1 | 2 | **22** | Retirar |
 | 13 | Endpoints sin permisos | — | — | — | — | — | Sustituido → `Orders.Order.Read/Update` (tomar el pedido), `Confirm`, `Deliver` y `Cancel`, **separados**, y `Orders.Terms.Read/Update` |
@@ -176,12 +176,125 @@ contexts/inventory/  # + suscripción a Pedidos (migración 3: inventory_inbox),
     `inventory_inbox` y `orders_inbox`;
   - ficha de almacén con la salida del albarán; búsquedas.
 
+## Presupuestos (fase 2)
+
+Port de `Quote` de C# (`/api/quotes`) como una pieza más de Pedidos: una oferta a un cliente, con
+productos, cantidades y precios que se mantienen hasta un día, y que al aceptarse se convierte en
+pedido.
+
+### Estado del C#
+
+Unas 665 líneas útiles: una cabecera con siete rutas. La única operación con sustancia es
+«emitir», que pide un número a Documentos.
+
+- **Sin líneas.** `quote_item` tiene tabla, pero nada la lee ni la escribe, y sus columnas
+  obligatorias apuntan a conceptos que no existen (`RequestId`, `SkillTypeId`).
+- **Sin importes:** ni totales, ni descuentos, ni impuestos.
+- **No se convierte en pedido.** `order_item.QuoteId` existe y nadie lo escribe.
+- **El estado es un número** (0, 1, 2) sin reglas: un presupuesto emitido se puede editar, borrar
+  (dejando su documento y su número huérfanos) o devolver a «enviado».
+- **La validez solo se guarda:** nada caduca, y actualizar sin enviarla la borra.
+- **El número lo puede poner quien llama** al crear, saltándose la serie.
+- **Sin permisos ni empresa:** cualquier usuario autenticado lee, cambia, borra o emite los
+  presupuestos de cualquier empresa.
+- **Sin pantalla** en el frontal.
+
+### Resultados
+
+| # | Pieza C# | U | C | D | G | Nota | Decisión → Go |
+|---|---|---|---|---|---|---|---|
+| 1 | `IssueAsync` (número `PRE-AAAA-NNNNNN`, una sola vez) | 4 | 4 | 3 | 3 | **73** | Mantener → `SendQuote` numera con la serie `PRE` de la empresa y el año, en la misma transacción |
+| 2 | `ValidUntilDate` (solo guardada) | 3 | 2 | 3 | 3 | **55** | Modificar → la validez se cumple: treinta días por defecto, y `ExpireQuotes` para una tarea |
+| 3 | `Quote` (cabecera) | 3 | 2 | 2 | 3 | **51** | Modificar → agregado `Quote` **con líneas valoradas** como las de un pedido |
+| 4 | `MarkAsSentAsync` (pone el estado a 1 desde cualquiera) | 2 | 2 | 2 | 3 | **43** | Retirar → enviar y numerar son un solo paso |
+| 5 | Estado numérico sin reglas | 3 | 1 | 1 | 3 | **42** | Retirar → `draft`, `sent`, `accepted`, `rejected`, `expired`, `withdrawn`, con sus transiciones |
+| 6 | Editar y borrar lo emitido | 2 | 1 | 2 | 3 | **38** | Retirar → solo cambia el borrador; lo demás se retira con un motivo, no se borra |
+| 7 | `QuoteItem` (tabla huérfana) | 2 | 1 | 1 | 3 | **34** | Retirar → `QuoteLine` |
+| 8 | Andamiaje (`QuoteRole`, `QuoteTerm`, `Proposal`, `Request*`, `ProductQuote`) | 1 | 1 | 1 | 2 | **22** | Retirar |
+| 9 | Rutas sin permisos ni empresa | — | — | — | — | — | Sustituido → `Orders.Quote.Read`, `Update`, `Send` y `Resolve`, dentro del ámbito de la empresa |
+| 10 | Conversión en pedido | — | — | — | — | — | No existía → `AcceptQuote` crea el pedido |
+
+### Diseño
+
+- **`Quote`**: empresa, cliente, fecha, validez, tarifa y descuento del cliente (los de sus
+  condiciones al abrirlo), referencia, notas y líneas. Cada línea se valora como la de un pedido:
+  precio de Productos, descuento de la tarifa y, encima, el del cliente.
+- **Ciclo:**
+  - `draft`: se le añaden y quitan líneas y se le cambian fechas, referencia y notas.
+  - `sent`: recibe su número (`PRE-AAAA-NNNNNN`) y ya no cambia.
+  - `accepted`: dentro de su validez; nace un **pedido en borrador con los precios ofertados**,
+    aunque la tarifa haya cambiado desde entonces, y el presupuesto guarda cuál es.
+  - `rejected` (con motivo), `expired` (pasó su último día) y `withdrawn` (lo retira la empresa,
+    siendo borrador o enviado).
+- **Validez:** el último día cuenta. Pasado ese día no se envía ni se acepta. Un envío que falla
+  no consume número.
+- **El pedido es un pedido más:** el bloqueo del cliente y el crédito se comprueban al
+  confirmarlo, como siempre.
+- **Permisos:** `Orders.Quote.Read`; `Update` (preparar y retirar); `Send` (comprometer a la
+  empresa); `Resolve` (aceptar, rechazar, caducar).
+- **Rutas:** `POST/GET /api/orders/quotes`, `GET/PUT /api/orders/quotes/{id}`, y
+  `POST …/{id}/lines`, `…/lines/remove`, `…/send`, `…/accept`, `…/reject`, `…/withdraw`, más
+  `POST /api/orders/quotes/expire-due`.
+- **Eventos publicados:** `orders.quote-sent.v1` y `orders.quote-closed.v1` (con el pedido cuando
+  se acepta). Un borrador retirado no publica nada.
+- **Almacenamiento:** `ord_quotes` y `ord_quote_lines` (migración 4 de Pedidos).
+
+### Decisiones (aprobadas por Javier el 2026-10-08)
+
+1. **Los presupuestos viven en Pedidos**, no en un contexto propio. Sugerencia: sí; comparten las
+   condiciones del cliente, los precios y el numerador, y acaban en un pedido.
+2. **Enviar es numerar**, y lo enviado no cambia. La serie `PRE` la lleva Pedidos por empresa y
+   año, como `PED` y `ALB`; en C# la serie la elegía quien llamaba y la numeraba Documentos.
+   Sugerencia: sí; Documentos puede registrar el presupuesto al oír `orders.quote-sent.v1`.
+3. **Aceptar crea el pedido en borrador a los precios ofertados**, en la misma transacción.
+   Sugerencia: sí; es para lo que sirve un presupuesto. El pedido aún puede retocarse antes de
+   confirmarse, y ahí pasa el control de crédito.
+4. **La validez se cumple:** treinta días si no se dice otra cosa, último día incluido; vencido,
+   ni se envía ni se acepta, y una tarea lo cierra. Sugerencia: sí. Queda programar la tarea.
+5. **La aceptación lleva la fecha de hoy:** no se puede fechar atrás para saltarse la validez.
+   Sugerencia: sí; si el cliente aceptó a tiempo y se anota tarde, se hace un presupuesto nuevo.
+6. **No se borra nada:** se retira (borrador o enviado) o se rechaza, con su motivo. Sugerencia:
+   sí.
+7. **Cuatro permisos separados:** preparar, enviar, resolver y leer. Sugerencia: sí; quien
+   prepara una oferta no tiene por qué poder comprometer a la empresa.
+8. **El pedido no guarda de qué presupuesto viene** en esta fase: el vínculo está en el
+   presupuesto y en el evento. Sugerencia: sí por ahora; añadirlo al pedido es una columna y un
+   filtro, y lo dejo en pendientes.
+
+### Validación
+
+- **Dominio:** borrador limpio y con treinta días; validez anterior a la fecha; líneas valoradas
+  (10 − 10 % − 5 % = 8,55); cambio que no vale deja todo igual; enviar sin líneas, sin número y
+  vencido; lo enviado no cambia; el último día cuenta; aceptar tarde, sin pedido y dos veces;
+  caducar; retirar un borrador sin avisar a nadie; lo enviado siempre tiene número.
+- **Extremo a extremo** (Pedidos con un doble de Productos; en memoria y en SQLite migrada):
+  - borrador: solo lectura 403, ajeno 404, validez de ayer 400; toma el 5 % del cliente;
+  - líneas: cantidad cero 400; no vendible, sin código de impuesto y desconocido 422; quitar y
+    volver a añadir; total 215,65;
+  - cambio de fechas, referencia y notas; validez pasada 400;
+  - enviar: preparar no es enviar (403); `PRE-AAAA-000001`; dos veces 422; después no cambia
+    nada (422);
+  - sube la tarifa y el cliente acepta: preparar no es aceptar (403), ajeno 404; pedido en
+    borrador con 8,55 y 215,65, su almacén y su referencia; dos veces 422; el pedido se confirma
+    con su `PED`;
+  - rechazo con motivo (largo 422; dos veces 422); borrador retirado sin número; enviado retirado;
+  - validez: hoy no caduca nada; al día siguiente no se acepta ni se envía (422), la tarea cierra
+    uno y la segunda vez ninguno; el envío fallido no gastó número (`…000006`);
+  - lectura y búsquedas por empresa, estado y cliente; ajeno, lista vacía;
+  - doce eventos publicados.
+- **Integración** en PostgreSQL, SQL Server, Oracle y MySQL: presupuesto de ida y vuelta con
+  líneas, fechas y decimales (10,1234 → 8,6555 → 21,64), numeración sin huecos tras un envío
+  fallido, aceptación con su pedido en la misma unidad de trabajo, rechazo, borrador retirado
+  sin número, caducidad con el reloj adelantado, búsquedas y bandeja de salida.
+
 ## Pendiente
 
 - ~~Facturar desde el albarán~~: hecho, ver [FACTURACION.md](FACTURACION.md). Facturación prepara
   el borrador y el albarán anota su factura al emitirse.
 - Fase 2:
-  - presupuestos y su conversión en pedido;
+  - ~~presupuestos y su conversión en pedido~~: hecho, ver «Presupuestos (fase 2)»; quedan
+    programar `ExpireQuotes`, guardar en el pedido el presupuesto del que viene, registrar
+    el presupuesto en Documentos y las revisiones de una oferta ya enviada;
   - devoluciones de cliente y albaranes de abono;
   - portes, recargos y comisiones;
   - cambios de precio manuales con permiso propio;
