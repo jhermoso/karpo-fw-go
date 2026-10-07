@@ -108,7 +108,7 @@ contexts/exchange/
 - **Tablas:** `exg_currencies`, `exg_margins`, `exg_settings`, `exg_reservations`
   (+ `exg_reservation_lines`, `exg_reservation_history`), las bandejas de salida y la auditoría.
 
-## Decisiones propuestas (pendientes de confirmar)
+## Decisiones (aprobadas por Javier el 2026-10-07)
 
 1. **El servidor cotiza al registrar la reserva**; no se acepta el tipo que envíe el cliente.
    Sugerencia: sí; es el fallo más serio del C#: con una petición manipulada se reservaba a
