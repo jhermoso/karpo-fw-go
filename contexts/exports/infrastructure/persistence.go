@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -285,7 +286,8 @@ func NewDiskFiles(dir string) (*DiskFiles, error) {
 
 // path refuses a key that is not a plain file name: keys are made here, never taken from a request.
 func (d *DiskFiles) path(key string) (string, error) {
-	if key == "" || key != filepath.Base(key) || key == "." || key == ".." {
+	// Both slashes are refused on every system: a key written on one is read on another.
+	if key == "" || key != filepath.Base(key) || key == "." || key == ".." || strings.ContainsAny(key, `/\`) {
 		return "", fmt.Errorf("%w: invalid file key", fw.ErrValidation)
 	}
 	return filepath.Join(d.dir, key), nil
