@@ -30,8 +30,15 @@ type Module struct {
 	deps     mapp.Deps
 }
 
+// Option configures the composition.
+type Option func(*mapp.Deps)
+
+// WithDerivation tells which features a company has because of what it is (the financial
+// capability of a financial institution) instead of because somebody switched them on.
+func WithDerivation(d mapp.Derivation) Option { return func(deps *mapp.Deps) { deps.Derivation = d } }
+
 // Compose builds the context on sw.
-func Compose(sw *hotswap.Switch) *Module {
+func Compose(sw *hotswap.Switch, opts ...Option) *Module {
 	integration := hotswap.Outbox(sw, infrastructure.IntegrationOutboxFactory)
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
 	d := mapp.Deps{
@@ -40,7 +47,11 @@ func Compose(sw *hotswap.Switch) *Module {
 		Recorder: outbox.Recorders(outbox.NewRecorder(hotswap.Outbox(sw, infrastructure.OutboxFactory)),
 			mapp.Publications(messaging.NewRecorder(contracts.Source, integration))),
 	}
-	return &Module{Service: mapp.NewService(d), IntegrationOutbox: integration, Audit: audit, Features: mapp.Features{Activations: d.Activations}, deps: d}
+	for _, o := range opts {
+		o(&d)
+	}
+	return &Module{Service: mapp.NewService(d), IntegrationOutbox: integration, Audit: audit,
+		Features: mapp.Features{Activations: d.Activations, Derivation: d.Derivation}, deps: d}
 }
 
 // EnsureCatalog adds to the catalog the seed entries it lacks; the host calls it at start-up.

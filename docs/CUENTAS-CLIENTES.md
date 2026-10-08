@@ -163,9 +163,10 @@ pieza: se mantienen porque son producto planificado.
 11. **Publica la apertura y los cambios de estado**, y ofrece a otros contextos las cuentas de una
     persona. Sugerencia: sí; el número de cuenta viaja en el evento y es un dato personal.
 
-## Sectorial: pendiente de confirmar
+## Sectorial (confirmado por Javier el 2026-10-08)
 
-Lo que he hecho a partir de la corrección, para que lo confirmes o lo cambies:
+Lo que hice a partir de la corrección; Javier confirmó los tres puntos que estaban en duda (la
+cuenta es `FinancialAccount`, la capacidad se deriva del rol y basta con impedir crear):
 
 1. **Quién es entidad financiera lo dice Parties** (organización interna con el rol de entidad
    financiera, los dos en vigor) y el contexto lo comprueba **al crear**: productos, acuerdos y
@@ -179,12 +180,10 @@ Lo que he hecho a partir de la corrección, para que lo confirmes o lo cambies:
    y una cuenta solo se abre bajo un acuerdo firmado con uno de sus titulares.
 5. **Familias en lugar de texto libre** para producto, acuerdo y cuenta (en C# eran cadenas como
    `savings_account` o `loan_agreement` sin catálogo).
-6. **Choca con una decisión aprobada de Módulos.** La 4 de [MODULOS.md](MODULOS.md) dice que la
-   capacidad `financial` «deja de derivarse del rol de Parties y se activa como cualquier otra».
-   Tu corrección dice lo contrario para este contexto. De momento **no he tocado Módulos**: el
-   sectorial depende del rol y la capacidad `financial` del catálogo sigue activándose a mano,
-   así que hoy son dos cosas distintas. Dime si la capacidad debe volver a derivarse del rol
-   (la interfaz la usa para enseñar el menú) y lo cambio.
+6. **La capacidad `financial` de Módulos se deriva del mismo rol.** Sustituye a la decisión 4 de
+   [MODULOS.md](MODULOS.md), que la dejaba como activación manual. El anfitrión usa una sola
+   comprobación para las dos cosas, así que lo que enseña el menú y lo que permite el sectorial
+   no pueden discrepar.
 
 ## Validación
 

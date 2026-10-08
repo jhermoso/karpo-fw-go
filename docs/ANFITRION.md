@@ -30,6 +30,7 @@ arrancar junto.
   | Tesorería | lo cobrable y lo pagable | Cobros, Pagos |
   | Importación | cargador de empresas | Parties (escrito aquí) |
   | Sectorial financiero | qué empresas son entidad financiera | Parties (escrito aquí) |
+| Módulos | qué capacidades se derivan de lo que es la empresa (`financial`) | Parties (escrito aquí) |
 | Exportación | listado de cuentas de clientes | Sectorial financiero (escrito aquí) |
 
 - **Mensajes:** un transporte en memoria. Los veintiún contextos que publican tienen su relé y

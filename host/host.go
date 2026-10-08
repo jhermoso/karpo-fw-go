@@ -208,9 +208,10 @@ func Compose(sw *hotswap.Switch, o Options) (*Host, error) {
 	h.Documents = documents.Compose(sw)
 	h.Shipments = shipments.Compose(sw)
 	h.Work = work.Compose(sw)
-	h.Financial = financial.Compose(sw, FinancialInstitutions{Parties: h.Parties, system: func() context.Context { return h.system }})
+	institutions := FinancialInstitutions{Parties: h.Parties, system: func() context.Context { return h.system }}
+	h.Financial = financial.Compose(sw, institutions)
 	h.Exchange = exchange.Compose(sw, nil) // no promotion codes until Parties tells whose each is
-	h.Modules = modules.Compose(sw)
+	h.Modules = modules.Compose(sw, modules.WithDerivation(SectorCapabilities{Institutions: institutions}))
 	h.Imports = imports.Compose(sw).Load(LegalEntities{Parties: h.Parties})
 	h.Exports = exports.Compose(sw, o.Files).Offer(CustomerAccounts{Financial: h.Financial})
 	h.Audit = audit.Compose()
