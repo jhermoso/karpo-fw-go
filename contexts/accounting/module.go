@@ -29,6 +29,10 @@ type Module struct {
 	// Consumer receives the facts Accounting posts (invoices, collections, direct debits,
 	// payslips): subscribe it to the transport.
 	Consumer *messaging.Consumer
+	// Parking stands before Consumer: what a rule keeps from being posted (a company without a
+	// ledger yet) is kept and posted later instead of refused. Subscribe it in place of Consumer
+	// wherever the publishers must not be held back.
+	Parking *aapp.Parking
 }
 
 // Compose builds the context on sw.
@@ -37,11 +41,13 @@ func Compose(sw *hotswap.Switch) *Module {
 	d := aapp.Deps{
 		Accounts: hotswap.Repository(sw, infrastructure.AccountRepositoryFactory), Ledgers: hotswap.Repository(sw, infrastructure.LedgerRepositoryFactory),
 		Entries: hotswap.Repository(sw, infrastructure.EntryRepositoryFactory), Counters: hotswap.Repository(sw, infrastructure.CounterRepositoryFactory),
-		UoW: sw, Audit: audit, Recorder: outbox.NewRecorder(hotswap.Outbox(sw, infrastructure.OutboxFactory)),
+		Parked: hotswap.Repository(sw, infrastructure.ParkedRepositoryFactory),
+		UoW:    sw, Audit: audit, Recorder: outbox.NewRecorder(hotswap.Outbox(sw, infrastructure.OutboxFactory)),
 	}
 	consumer := messaging.NewConsumer(Source, hotswap.Inbox(sw, infrastructure.InboxFactory), sw)
 	aapp.Subscribe(consumer, d)
-	return &Module{Service: aapp.NewService(d), Audit: audit, Consumer: consumer}
+	d.Parking = aapp.NewParking(consumer, d)
+	return &Module{Service: aapp.NewService(d), Audit: audit, Consumer: consumer, Parking: d.Parking}
 }
 
 func decode(r *http.Request, v any) error {
@@ -142,6 +148,26 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 		out, err := svc.AccountLedger.Handle(r.Context(), aapp.AccountLedger{Company: q.Get("company"), Account: q.Get("account"), From: q.Get("from"), To: q.Get("to")})
 		distribution.Respond(w, r, out, err, http.StatusOK)
 	})
+
+	mux.HandleFunc("GET /api/accounting/parked", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		atoi := func(k string) int { n, _ := strconv.Atoi(q.Get(k)); return n }
+		out, err := svc.SearchParked.Handle(r.Context(), aapp.SearchParked{Company: q.Get("company"), Status: q.Get("status"), Page: atoi("page"), Size: atoi("size")})
+		distribution.Respond(w, r, out, err, http.StatusOK)
+	})
+	mux.HandleFunc("POST /api/accounting/parked/retry", func(w http.ResponseWriter, r *http.Request) {
+		var c aapp.RetryParked
+		if r.ContentLength != 0 {
+			if err := decode(r, &c); err != nil {
+				distribution.WriteError(w, r, err)
+				return
+			}
+		}
+		out, err := svc.RetryParked.Handle(r.Context(), c)
+		distribution.Respond(w, r, out, err, http.StatusOK)
+	})
+	mux.HandleFunc("POST /api/accounting/parked/{id}/discard", command(domain.ParseParkedID, func(c *aapp.DiscardParked, id domain.ParkedID) { c.ID = id },
+		svc.DiscardParked.Handle))
 }
 
 var _ distribution.EndpointModule = (*Module)(nil)

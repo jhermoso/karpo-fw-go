@@ -42,7 +42,7 @@ arrancar junto.
   los diez que escuchan (Contabilidad, Facturación, Documentos, Fiscal, Inventario, Pedidos,
   Parties, Pagos, Cobros y Envíos) están suscritos. `Deliver` lleva lo publicado hasta que no
   queda nada.
-- **`Start`** (tras migrar; se puede llamar en cada arranque): pasa a Seguridad los 147 permisos
+- **`Start`** (tras migrar; se puede llamar en cada arranque): pasa a Seguridad los 149 permisos
   de todos los contextos, completa el catálogo de módulos y, si nadie administra la instalación,
   crea el administrador que nombre el entorno.
 - **`Handler`**: las rutas de sesión son públicas; todo lo demás exige sesión y pasa por los
@@ -50,7 +50,8 @@ arrancar junto.
 - **`RunChores`**, lo que estaba pendiente de programar en los documentos de cada contexto:
   - cierra las importaciones cuyo proceso murió;
   - escribe las exportaciones en espera (veinte por ronda) y borra los ficheros caducados;
-  - empresa por empresa, caduca las reservas de divisa y los presupuestos vencidos.
+  - empresa por empresa, caduca las reservas de divisa y los presupuestos vencidos;
+  - asienta lo que Contabilidad tenía aparcado y ya puede asentar.
   Una tarea que falla no detiene a las demás.
 - **`Run`**: entrega y tareas en un temporizador hasta que el proceso se para.
 - **Historial:** todos los tipos de agregado con historial quedan registrados en un solo sitio.
@@ -118,25 +119,27 @@ macroservicios** (decisión 1).
    Importación y Exportación funciona de punta a punta.
 9. **Configuración por variables de entorno**, sin fichero. Sugerencia: sí.
 
-## Riesgo conocido
+## El oyente que rechaza un mensaje (resuelto para Contabilidad)
 
-- **Un oyente que rechaza un mensaje frena al emisor.** El transporte en memoria entrega a todos
-  los oyentes a la vez y, si uno falla, el relé del emisor reintenta el mensaje entero. Los demás
-  oyentes lo descartan por repetido, así que no se duplica nada, pero ese mensaje no avanza.
-- **El caso real:** Contabilidad rechaza los mensajes de una empresa que aún no tiene libro o
-  cuentas de contrapartida. Con Contabilidad suscrita a todo, una empresa sin plan contable deja
-  mensajes de Facturación, Cobros, Pagos, Nóminas, Compras y Activos reintentándose.
-- Lo sé por la lectura del código y porque dos pruebas de integración ya restringen la
-  suscripción de Contabilidad por este motivo; no lo he reproducido en el anfitrión.
-- **No lo he resuelto**: la salida correcta (que Contabilidad aparque lo que no puede asentar, o
-  una cola por oyente) es una decisión de diseño que prefiero no tomar de paso.
+- **El problema:** el transporte en memoria entrega a todos los oyentes a la vez y, si uno falla,
+  el relé del emisor reintenta el mensaje entero. Contabilidad rechazaba los mensajes de una
+  empresa que aún no tiene libro o cuentas de contrapartida, así que una empresa sin plan
+  contable dejaba reintentándose mensajes de Facturación, Cobros, Pagos, Nóminas, Compras y
+  Activos.
+- **La salida (aprobada por Javier el 2026-10-08):** Contabilidad **aparca** lo que no puede
+  asentar y lo asienta cuando puede. El anfitrión suscribe ese aparcamiento en lugar del
+  consumidor directo. Ver [CONTABILIDAD.md](CONTABILIDAD.md), «Hechos aparcados».
+- **Lo que queda:** es una solución de Contabilidad, no del transporte. Cualquier otro oyente que
+  rechace un mensaje por una regla tendría el mismo efecto; hoy ninguno de los otros nueve lo
+  hace por un motivo que dependa de la configuración de una empresa, pero una cola por oyente en
+  el transporte sigue siendo la salida general.
 
 ## Validación
 
 - **`host`** (en memoria y en SQLite migrada con los 25 esquemas): arranque sin secreto
   rechazado; permisos, módulos y primer administrador, y un segundo arranque que no cambia nada;
   sin sesión 401, token inválido 401, contraseña errónea 401, cambio de contraseña obligatorio
-  (403 antes); los 147 permisos en el catálogo de Seguridad; importación por HTTP que crea dos
+  (403 antes); los 149 permisos en el catálogo de Seguridad; importación por HTTP que crea dos
   empresas en Parties y omite con aviso lo que nadie carga; repetirla con el nombre escrito de
   otra forma no crea nada; cuenta de cliente, exportación pedida por HTTP, escrita por las tareas
   y descargada; segunda ronda de tareas sin nada que hacer; mensajes entregados y nada que

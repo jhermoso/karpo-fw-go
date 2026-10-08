@@ -60,7 +60,7 @@ func (h *Host) histories() {
 		h.Payments.Audit:    {paydomain.PayableKind, paydomain.PaymentKind},
 		h.Treasury.Audit: {tredomain.AccountKind, tredomain.MandateKind, tredomain.RemittanceKind, tredomain.TransferOrderKind,
 			tredomain.StatementKind},
-		h.Accounting.Audit: {accdomain.AccountKind, accdomain.EntryKind, accdomain.LedgerKind},
+		h.Accounting.Audit: {accdomain.AccountKind, accdomain.EntryKind, accdomain.LedgerKind, accdomain.ParkedKind},
 		h.Assets.Audit:     {astdomain.AssetKind},
 		h.Documents.Audit:  {docdomain.DocumentKind},
 		h.Shipments.Audit:  {shpdomain.ShipmentKind, shpdomain.CarrierKind},

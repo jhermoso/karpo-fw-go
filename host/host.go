@@ -221,7 +221,7 @@ func Compose(sw *hotswap.Switch, o Options) (*Host, error) {
 	for _, c := range []interface {
 		application.MessageHandler
 		Name() string
-	}{h.Accounting.Consumer, h.Billing.Consumer, h.Documents.Consumer, h.Fiscal.Consumer, h.Inventory.Consumer, h.Orders.Consumer, h.Parties.Consumer,
+	}{h.Accounting.Parking, h.Billing.Consumer, h.Documents.Consumer, h.Fiscal.Consumer, h.Inventory.Consumer, h.Orders.Consumer, h.Parties.Consumer,
 		h.Payments.Consumer, h.Receivables.Consumer, h.Shipments.Consumer} {
 		h.Broker.Subscribe(c.Name(), c)
 	}
@@ -315,6 +315,7 @@ type Chores struct {
 	ExportsGivenUp int
 	Reservations   int // of currency, nobody collected in time
 	Quotes         int // nobody answered within their validity
+	Postings       int // facts Accounting had kept and could post now
 }
 
 // MaxExportsPerRound bounds how many exports a round writes, so the rest of the chores get their
@@ -323,8 +324,9 @@ const MaxExportsPerRound = 20
 
 // RunChores does once what the contexts leave for a scheduler: it closes the imports whose process
 // died, writes the exports that wait and removes the files kept long enough, and closes, company
-// by company, the currency reservations and the quotes whose time went by. One chore that fails
-// does not stop the others; every failure comes back.
+// by company, the currency reservations and the quotes whose time went by, and posts what
+// Accounting had kept for when it could. One chore that fails does not stop the others; every
+// failure comes back.
 func (h *Host) RunChores(ctx context.Context) (Chores, error) {
 	var out Chores
 	var failed error
@@ -363,6 +365,9 @@ func (h *Host) RunChores(ctx context.Context) (Chores, error) {
 		note("quotes of "+c.Name, err)
 		out.Quotes += len(quotes.Numbers)
 	}
+	retried, err := h.Accounting.Service.RetryParked.Handle(ctx, accapp.RetryParked{})
+	note("accounting", err)
+	out.Postings = retried.Posted
 	return out, failed
 }
 

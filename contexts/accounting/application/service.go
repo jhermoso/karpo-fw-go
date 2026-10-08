@@ -30,12 +30,14 @@ var (
 	PermEntryReverse = authz.MustPermission("Accounting.Entry.Reverse")
 )
 
-// Deps are the ports the use cases need; Recorder and Audit are optional.
+// Deps are the ports the use cases need; Parked, Parking, Recorder and Audit are optional.
 type Deps struct {
 	Accounts domain.AccountRepository
 	Ledgers  domain.LedgerRepository
 	Entries  domain.EntryRepository
 	Counters domain.CounterRepository
+	Parked   domain.ParkedRepository
+	Parking  *Parking // what stands before the consumer and keeps what cannot be posted yet
 	UoW      fw.UnitOfWork
 	Recorder app.EventRecorder
 	Audit    app.AuditLog
@@ -60,6 +62,10 @@ type Service struct {
 	SearchEntries app.QueryHandler[SearchEntries, fw.Page[EntryDTO]]
 	TrialBalance  app.QueryHandler[TrialBalance, []BalanceRow]
 	AccountLedger app.QueryHandler[AccountLedger, []Movement]
+
+	RetryParked   app.CommandHandler[RetryParked, RetriedDTO]
+	DiscardParked app.CommandHandler[DiscardParked, ParkedDTO]
+	SearchParked  app.QueryHandler[SearchParked, fw.Page[ParkedDTO]]
 }
 
 type scope struct {
@@ -136,6 +142,7 @@ func NewService(d Deps) *Service {
 	svc := &Service{}
 	s.chartUseCases(svc)
 	s.entryUseCases(svc)
+	s.parkedUseCases(svc)
 	return svc
 }
 
