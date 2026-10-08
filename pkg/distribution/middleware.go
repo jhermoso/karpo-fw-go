@@ -23,19 +23,33 @@ func Chain(h http.Handler, middlewares ...Middleware) http.Handler {
 	return h
 }
 
-// Recovery catches unhandled panics, logs the error, and returns a JSON 500 error response.
+// Recovery catches unhandled panics, logs the error, and returns a JSON 500 error response with
+// the correlation id. http.ErrAbortHandler is not an error to answer: it is re-raised so net/http
+// aborts the response, as it does without Recovery.
+//
+// Recovery is usually the outermost middleware, outside Correlation, so its request does not
+// carry the correlation id: it then takes the one Correlation already put in the response header.
 func Recovery(logger log.Logger) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			defer func() {
 				if rec := recover(); rec != nil {
+					if rec == http.ErrAbortHandler { //nolint:errorlint // the sentinel is compared by identity, as net/http does
+						panic(rec)
+					}
 					err, ok := rec.(error)
 					if !ok {
 						err = fmt.Errorf("%v", rec)
 					}
+					ctx := r.Context()
+					correlation := application.CorrelationID(ctx)
+					if id := w.Header().Get(CorrelationHeader); correlation == "" && ValidCorrelationID(id) {
+						correlation = id
+						ctx = application.WithCorrelationID(ctx, id)
+					}
 					RecordError(r, err)
 					if logger != nil {
-						logger.WithContext(r.Context()).Error("Unhandled HTTP panic recovered", "error", err, "path", r.URL.Path)
+						logger.WithContext(ctx).Error("Unhandled HTTP panic recovered", "error", err, "path", r.URL.Path)
 					}
 					w.Header().Set("Content-Type", "application/json; charset=utf-8")
 					w.WriteHeader(http.StatusInternalServerError)
@@ -43,7 +57,7 @@ func Recovery(logger log.Logger) Middleware {
 						Title:         "Internal Server Error",
 						Status:        http.StatusInternalServerError,
 						Detail:        "An unexpected internal server error occurred",
-						CorrelationID: application.CorrelationID(r.Context()),
+						CorrelationID: correlation,
 					})
 				}
 			}()

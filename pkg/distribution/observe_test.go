@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -247,8 +248,39 @@ func TestObserve_PanicsLeaveTheirCause(t *testing.T) {
 			if n := reg.HistogramCount(metrics.HTTPServerRequestDuration, "method", "GET", "route", "/boom", "status", "500"); n != 1 {
 				t.Fatalf("the panic must be measured as a 500: %v", reg.SeriesLabels(metrics.HTTPServerRequestDuration))
 			}
+			// The body carries the correlation too, wherever Recovery sits in the chain.
+			var problem distribution.ProblemDetails
+			if err := json.Unmarshal(rec.Body.Bytes(), &problem); err != nil || problem.CorrelationID == "" ||
+				problem.CorrelationID != rec.Header().Get(distribution.CorrelationHeader) {
+				t.Fatalf("the 500 must return its correlation id: %s", rec.Body.String())
+			}
 		})
 	}
+}
+
+func TestRecovery_LogsWithTheCorrelationAndLetsAbortsThrough(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /boom", func(http.ResponseWriter, *http.Request) { panic("kaboom") })
+	mux.HandleFunc("GET /abort", func(http.ResponseWriter, *http.Request) { panic(http.ErrAbortHandler) })
+	var logs bytes.Buffer
+	h := distribution.Chain(mux, distribution.Recovery(logvanilla.NewJSON(&logs, log.LevelInfo)), distribution.Correlation())
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/boom", nil))
+	var l map[string]any
+	if err := json.Unmarshal(logs.Bytes(), &l); err != nil {
+		t.Fatalf("expected one JSON line: %v\n%s", err, logs.String())
+	}
+	if l["correlation_id"] == nil || l["correlation_id"] != rec.Header().Get(distribution.CorrelationHeader) {
+		t.Fatalf("the recovery line must carry the correlation: %v", l)
+	}
+
+	defer func() {
+		if p := recover(); p != http.ErrAbortHandler { //nolint:errorlint // identity, as net/http
+			t.Fatalf("http.ErrAbortHandler must go through Recovery, got %v", p)
+		}
+	}()
+	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/abort", nil))
 }
 
 func TestObserve_RouteNeverFallsBackToThePath(t *testing.T) {
@@ -423,5 +455,54 @@ func TestCorrelation_ClientValueIsValidated(t *testing.T) {
 				t.Fatalf("header %q: kept = %v, context = %q", c.header, seen == c.header, seen)
 			}
 		})
+	}
+}
+
+func TestObserve_InformationalStatusIsNotTheFinalOne(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /hints", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Link", "</app.css>; rel=preload")
+		w.WriteHeader(http.StatusEarlyHints)
+		distribution.WriteError(w, r, errors.New("backend down"))
+	})
+	o := observe(mux)
+	o.do(http.MethodGet, "/hints")
+
+	if n := o.reg.HistogramCount(metrics.HTTPServerRequestDuration, "method", "GET", "route", "/hints", "status", "500"); n != 1 {
+		t.Fatalf("the final status is the 500, not the 103: %v", o.reg.SeriesLabels(metrics.HTTPServerRequestDuration))
+	}
+	lines := o.lines(t)
+	if len(lines) != 1 || lines[0]["level"] != "ERROR" || lines[0]["error"] != "backend down" {
+		t.Fatalf("the 500 after early hints must be logged as an error: %v", lines)
+	}
+	if spans := o.spans.Spans(); len(spans) != 1 || spans[0].Err == nil {
+		t.Fatalf("the span must fail: %+v", spans)
+	}
+}
+
+func TestObserve_AbortedHandlersAreMeasuredAndLogged(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /proxy", func(http.ResponseWriter, *http.Request) { panic(http.ErrAbortHandler) })
+	o := observe(mux)
+	func() {
+		defer func() {
+			if p := recover(); p != http.ErrAbortHandler { //nolint:errorlint // identity, as net/http
+				t.Fatalf("the abort must keep propagating, got %v", p)
+			}
+		}()
+		o.do(http.MethodGet, "/proxy")
+	}()
+
+	status := strconv.Itoa(distribution.StatusAborted)
+	if n := o.reg.HistogramCount(metrics.HTTPServerRequestDuration, "method", "GET", "route", "/proxy", "status", status); n != 1 {
+		t.Fatalf("an aborted request must be measured: %v", o.reg.SeriesLabels(metrics.HTTPServerRequestDuration))
+	}
+	lines := o.lines(t)
+	if len(lines) != 1 || lines[0]["level"] != "WARN" || lines[0]["error_type"] != distribution.ErrorTypeAborted ||
+		lines[0]["route"] != "/proxy" || lines[0]["correlation_id"] == nil {
+		t.Fatalf("an aborted request must leave its line: %v", lines)
+	}
+	if spans := o.spans.Spans(); len(spans) != 1 || spans[0].Err == nil || spans[0].Name != "GET /proxy" {
+		t.Fatalf("the span must carry route and error: %+v", spans)
 	}
 }
