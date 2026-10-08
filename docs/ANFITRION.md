@@ -36,6 +36,7 @@ arrancar junto.
   | Importación | cargadores de empresas, departamentos y personas | Parties (escritos aquí) |
 | Importación | cargador de centros de trabajo | Instalaciones (escrito aquí) |
 | Importación | cargador de empleos | RRHH y Parties (escrito aquí) |
+| Importación | cargadores del puesto y del centro de cada persona | RRHH, Parties (escritos aquí) |
   | Sectorial financiero | qué empresas son entidad financiera | Parties (escrito aquí) |
 | Módulos | qué capacidades se derivan de lo que es la empresa (`financial`) | Parties (escrito aquí) |
 | Exportación | listado de cuentas de clientes | Sectorial financiero (escrito aquí) |
