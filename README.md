@@ -56,7 +56,7 @@ pkg/
 │   ├── context.go, dto.go
 │   ├── authz/            # Contrato de autorización v1: Context, Grant, Permission, Resolver...
 │   │   ── implementaciones ──
-│   ├── pipeline/         # Validating, Transactional, RetryOnConflict, Idempotent, Logging
+│   ├── pipeline/         # Validating, Transactional, RetryOnConflict, Idempotent, Observed (span + duración por caso de uso)
 │   ├── orchestration/    # Orchestrator + Execute (carga→comportamiento→guardado→eventos)
 │   ├── outbox/           # Recorder (outbox transaccional) + Relay
 │   ├── hosting/          # Host (ciclo de vida de módulos por dependencias)
@@ -65,7 +65,10 @@ pkg/
 │   └── messaging/        # Eventos de integración: Recorder (traducción), Relay, Consumer (inbox)
 │
 ├── log/, cache/, time/   # contratos transversales (implementaciones en subpaquetes)
-├── distribution/         # DISTRIBUCIÓN (HTTP, RFC 9457, correlación, health, Authorize)
+├── trace/, metrics/      # OBSERVABILIDAD: contratos (Tracer, Span, traceparent; Meter, Counter, Histogram)
+│   └── vanilla/          # implementaciones sin dependencias: spans a log o a memoria; registro + /metrics (Prometheus)
+├── distribution/         # DISTRIBUCIÓN (HTTP, RFC 9457, correlación validada, health, Authorize,
+│                         # Observe: una línea JSON, un span y una métrica por petición; causa de todo 5xx)
 │   └── jwtauth/          # Autenticación JWT HS256 (solo biblioteca estándar)
 ├── events/               # Registry + suscripción tipada; inprocess/ (Dispatcher en memoria)
 ├── messaging/inprocess/  # Transporte de eventos de integración en memoria (monolito modular)
@@ -82,7 +85,8 @@ pkg/
     ├── repotest/         # Batería de conformidad del contrato de repositorio
     └── testkit/          # Arnés: reloj falso, bus, store y outbox en memoria
 
-examples/parties/         # Ejemplo del framework: contexto completo (dominio→HTTP) con cambio en caliente
+examples/parties/         # Ejemplo del framework: contexto completo (dominio→HTTP) con cambio en caliente y telemetría
+e2e/                      # Pruebas de extremo a extremo sobre contextos reales (observabilidad sobre Geography)
 contexts/security/        # Contexto Security (usuarios, roles, catálogo de permisos, acceso por organización, sesiones, identidades externas; authz.Directory real): ver docs/SEGURIDAD.md
 contexts/parties/         # Contexto Parties real (port de ErpKernel.Parties): ver docs/PARTIES.md
 contexts/geography/       # Contexto Geografía y referencia (semilla de Karpo embebida): ver docs/GEOGRAFIA.md
@@ -136,6 +140,30 @@ parties := hotswap.Repository(sw, infrastructure.RepositoryFactory)
 // ...
 sw.Swap(ctx, postgres.Open(pgDB))
 ```
+
+### Observabilidad
+
+Registro, métricas y trazas son opcionales: sin configurarlos, el framework no emite nada (salvo
+los fallos del relay, que van al logger del proceso). Detalle, nombres y decisiones en
+[docs/OBSERVABILIDAD.md](docs/OBSERVABILIDAD.md).
+
+```go
+logger := logvanilla.ForService("parties", version, env) // JSON en stdout
+reg := metricsvanilla.NewRegistry()
+tracer := tracevanilla.New(tracevanilla.WithExporter(tracevanilla.LogExporter(logger)))
+
+db := postgres.Open(pgDB, sqlrepo.WithTelemetry(tracer, reg)) // span y duración por transacción y sentencia
+public := distribution.Chain(api,
+	distribution.Recovery(logger),
+	distribution.Correlation(),                                 // X-Correlation-ID validada
+	distribution.Observe(logger, tracer, reg, distribution.ObserveRoutes(api)),
+)
+internal.Handle("GET /metrics", reg.Handler())                // en un puerto interno
+```
+
+Cada petición deja una línea JSON (`method`, `route`, `status`, `duration_ms`, `correlation_id`,
+`trace_id`), una observación de `http.server.request.duration` y un span; un 5xx deja además su
+causa (`error`) y devuelve al cliente el `correlationId` con el que buscarla.
 
 ---
 

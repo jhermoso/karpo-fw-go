@@ -145,6 +145,7 @@ func Envelope(source string, m application.OutboxMessage) application.Envelope {
 // NewRelay forwards the integration outbox of source to sender (at-least-once: consumers
 // deduplicate with their inbox). Run it with Relay.Run or Relay.RelayOnce.
 func NewRelay(source string, store application.OutboxStore, sender application.MessageSender, opts ...outbox.RelayOption) *outbox.Relay {
+	opts = append([]outbox.RelayOption{outbox.WithRelayName(source)}, opts...)
 	return outbox.NewForwarder(store, func(ctx context.Context, m application.OutboxMessage) error {
 		return sender.Send(ctx, Envelope(source, m))
 	}, opts...)
@@ -163,6 +164,7 @@ type Consumer struct {
 	uow      domain.UnitOfWork
 	mu       sync.RWMutex
 	handlers map[string]func(ctx context.Context, env application.Envelope) error
+	tel      *consumerTelemetry
 }
 
 var _ application.MessageHandler = (*Consumer)(nil)
@@ -207,22 +209,51 @@ func (c *Consumer) Types() []string {
 func (c *Consumer) HandleMessage(ctx context.Context, env application.Envelope) error {
 	c.mu.RLock()
 	h, ok := c.handlers[env.Type]
+	tel := c.tel
 	c.mu.RUnlock()
 	if !ok {
+		tel.ignored(ctx, c.name)
 		return nil
 	}
-	if env.ID == "" {
-		return fmt.Errorf("%w: envelope without id", domain.ErrValidation)
-	}
 	ctx = application.WithCorrelationID(ctx, env.CorrelationID)
-	ctx = application.WithCausationID(ctx, env.ID)
-	return c.uow.Do(ctx, func(ctx context.Context) error {
+	if env.ID != "" {
+		ctx = application.WithCausationID(ctx, env.ID)
+	}
+	ctx, done := tel.start(ctx, c.name, env)
+	if env.ID == "" {
+		// Rejected, but still counted and logged: a producer sending envelopes without id is a
+		// fault to see in the metrics, not a silent drop.
+		err := fmt.Errorf("%w: envelope without id", domain.ErrValidation)
+		done(false, err)
+		return err
+	}
+	// A panicking handler rolls its unit of work back (uow.Do re-raises): the span is closed and
+	// the failure counted before the panic goes on.
+	defer func() {
+		if p := recover(); p != nil {
+			done(false, panicError(p))
+			panic(p)
+		}
+	}()
+	duplicate := false
+	err := c.uow.Do(ctx, func(ctx context.Context) error {
 		first, err := c.inbox.Claim(ctx, c.name, env.ID)
 		if err != nil || !first {
+			duplicate = err == nil
 			return err
 		}
 		return h(ctx, env)
 	})
+	done(duplicate, err)
+	return err
+}
+
+// panicError turns a recovered value into the error a panic left.
+func panicError(r any) error {
+	if err, ok := r.(error); ok {
+		return fmt.Errorf("panic: %w", err)
+	}
+	return fmt.Errorf("panic: %v", r)
 }
 
 // Lag returns how long ago the message happened (for metrics and logs).

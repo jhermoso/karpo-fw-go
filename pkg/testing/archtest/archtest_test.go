@@ -35,6 +35,8 @@ var contracts = []string{
 	module + "/pkg/log",               // logging contract
 	module + "/pkg/cache",             // cache contract
 	module + "/pkg/time",              // clock contract
+	module + "/pkg/trace",             // tracing contract
+	module + "/pkg/metrics",           // metrics contract
 }
 
 // Rule 1: the domain contracts are pure: standard library, the domain tree and the approved
@@ -51,7 +53,7 @@ func TestDomainContracts_ArePure(t *testing.T) {
 func TestApplicationContracts_DependOnContractsOnly(t *testing.T) {
 	archtest.AssertOnlyImports(t, root(t, "pkg", "application"), false, contracts...)
 	archtest.AssertOnlyImports(t, root(t, "pkg", "application", "authz"), false, contracts...)
-	for _, c := range []string{"log", "cache", "time"} {
+	for _, c := range []string{"log", "cache", "time", "trace", "metrics"} {
 		archtest.AssertOnlyImports(t, root(t, "pkg", c), false, contracts...)
 	}
 }
@@ -146,5 +148,26 @@ func TestContexts_DependOnEachOtherThroughContracts(t *testing.T) {
 				t.Errorf("%s imports %s: contexts may only use other contexts' contracts, outside their domain", imp.File, imp.Path)
 			}
 		}
+	}
+}
+
+// Rule 8: the observability trees (contracts and their dependency-free implementations) use the
+// standard library and this module only. Rule 2 covers the contract packages; this one is
+// recursive, so log/vanilla, trace/vanilla and metrics/vanilla cannot grow a third-party import.
+func TestObservability_IsStandardLibraryOnly(t *testing.T) {
+	for _, c := range []string{"log", "trace", "metrics"} {
+		archtest.AssertOnlyImports(t, root(t, "pkg", c), true, archtest.Std, module+"/...")
+	}
+	// The contracts stay free of the transport and of persistence.
+	for _, c := range []string{"trace", "metrics"} {
+		archtest.AssertTreeDoesNotImport(t, root(t, "pkg", c), []string{"/pkg/distribution", "/pkg/persistence", "database/sql"})
+	}
+}
+
+// Rule 9: OpenTelemetry never enters the framework nor the bounded contexts. Its adapter
+// implements trace.Tracer and metrics.Meter in a separate module with its own go.mod.
+func TestOpenTelemetry_StaysOutOfTheFramework(t *testing.T) {
+	for _, tree := range []string{"pkg", "contexts", "examples"} {
+		archtest.AssertTreeDoesNotImport(t, root(t, tree), []string{"go.opentelemetry.io"})
 	}
 }

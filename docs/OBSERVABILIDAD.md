@@ -1,9 +1,14 @@
 # Evaluación de la observabilidad (Fw C# → Go)
 
-> **Estado: fase 1 — evaluación y propuesta (2026-10-06). No hay nada implementado.**
-> Todo lo que aparece bajo «Diseño propuesto», «Plan» y «Decisiones» es propuesta pendiente de
-> aprobación. Lo que aparece bajo «Uso medido», «Karpo frente a Paradigma» y «Defectos» es hecho
-> medido, con su fichero y línea. Lo que no se ha podido comprobar está en «Sin verificar».
+> **Estado: decisiones aprobadas e implementación en Go de los pasos 1 a 7 (2026-10-06).**
+> Javier aprobó las ocho decisiones, D1 a D8, tal como las recomienda este documento
+> (2026-10-06). Los pasos 1 a 7 del plan están implementados en Go, cada uno con sus pruebas: ver
+> [«Estado de la implementación en Go»](#estado-de-la-implementación-en-go), que también recoge
+> en qué se aparta el código del esbozo y qué se ha ejecutado. Los pasos 8 (la traza cruza el
+> outbox) y 9 (adaptador de OpenTelemetry) siguen pendientes.
+> Lo que aparece bajo «Uso medido», «Karpo frente a Paradigma» y «Defectos» es hecho medido en la
+> fase de evaluación, con su fichero y línea (las líneas del Go son las de antes de implementar).
+> Lo que no se ha podido comprobar está en «Sin verificar».
 
 Evaluación de `Fw.Infrastructure.Observability` (Serilog + OpenTelemetry), de los middlewares de
 petición de `Fw.Distribution.Publisher` y de cómo los registran las publicadoras, antes de
@@ -284,7 +289,8 @@ package metrics
 type Meter interface {
 	Counter(name, unit, help string) Counter
 	Histogram(name, unit, help string, buckets ...float64) Histogram
-	Gauge(name, unit, help string, read func() float64) // se lee al exportar
+	// se lee al exportar; la función devuelta da de baja la serie (p. ej. al cerrar el pool)
+	Gauge(name, unit, help string, read func() float64, labels ...string) (unregister func())
 }
 type Counter interface   { Add(ctx context.Context, n float64, labels ...string) }
 type Histogram interface { Record(ctx context.Context, v float64, labels ...string) }
@@ -400,9 +406,147 @@ Pasos pequeños; cada uno deja el repositorio en verde y se puede parar después
 
 Los pasos 1 a 7 son el mínimo para producción. El 8 y el 9 son independientes entre sí.
 
+## Estado de la implementación en Go
+
+Rama `feat/observabilidad-minima`, desde `feat/ddd-contracts-agnostic-persistence` (`9491750`).
+
+| # | Paso | Estado | Dónde | Prueba que lo demuestra |
+|---|---|---|---|---|
+| 1 | El log lee del contexto | ✅ | `pkg/log/vanilla` (manejador que añade `correlation_id`, `causation_id`, `trace_id`, `span_id`, `actor`); `pkg/log/default.go` (`log.Default`, `log.Discard`) | `log/vanilla/context_test.go`; `pipeline.Logging` ya no añade la correlación a mano (`TestLogging_TakesTheCorrelationFromTheContext`) |
+| 2 | Contratos `pkg/trace` y `pkg/metrics`; reglas de `archtest` | ✅ | `pkg/trace/trace.go`, `pkg/metrics/metrics.go`; reglas 8 y 9 de `archtest_test.go` | `trace_test.go` (15 casos de `traceparent`); `archtest` en verde |
+| 3 | Implementaciones sin dependencias | ✅ | `pkg/trace/vanilla` (`Tracer`, `Recorder`, `LogExporter`), `pkg/metrics/vanilla` (`Registry`, `Handler`, `RegisterRuntime`) | `metrics/vanilla/vanilla_test.go` lee `/metrics`; `trace/vanilla/vanilla_test.go` recoge padre e hijo; `git diff go.mod go.sum` vacío |
+| 4 | Entrada HTTP | ✅ | `pkg/distribution/observe.go` (`Observe`, `RecordError`, `ValidCorrelationID`), `response.go`, `middleware.go` | `distribution/observe_test.go`; `examples/parties/observability_test.go`; `e2e/observability_test.go` |
+| 5 | Casos de uso | ✅ | `pkg/application/pipeline/observed.go`, `pkg/application/outcome.go` | `pipeline/observed_test.go` (un caso por clase de error) |
+| 6 | SQL | ✅ | `pkg/persistence/sqlrepo/telemetry.go`, `db.go` | `sqlrepo/sqlite/telemetry_test.go` (cadena, sin argumentos, conformidad con la telemetría encendida) |
+| 7 | Outbox, relay y consumidor | ✅ | `pkg/application/outbox/outbox.go`, `pkg/application/messaging/telemetry.go` | `outbox/relay_log_test.go`; `TestObservability_OutboxRelayAndConsumers` |
+| 8 | `traceparent` en el outbox | pendiente (D6) | — | — |
+| 9 | Adaptador de OpenTelemetry | pendiente (D3) | — | — |
+| 10 | Documentación | parcial | este documento, `INVENTARIO-PATRONES.md`, `README.md`, `BACKLOG.md` | falta `ARQUITECTURA.md` §6 y §7 |
+
+**Prueba de cierre.** `e2e/observability_test.go` compone el contexto Geography real sobre SQLite
+detrás de la cadena de un servicio (`Recovery`, `Correlation`, `Observe`, `Authorize`) y comprueba
+que una petición HTTP deja **una** línea JSON, **una** observación de
+`http.server.request.duration` (visible en `/metrics`, servido en otro puerto) y **un** span de
+servidor, los tres con la misma correlación y el mismo `trace_id`; que un 401 deja línea sin
+causa; y que un 500 (la base pierde su esquema en caliente) deja su causa (`no such table`) en la
+línea y en el span, mientras el cliente solo recibe el `correlationId`.
+
+### Composición
+
+```go
+logger := logvanilla.ForService("parties", version, env)   // JSON en stdout
+reg := metricsvanilla.NewRegistry()
+metricsvanilla.RegisterRuntime(reg)
+tracer := tracevanilla.New(tracevanilla.WithExporter(tracevanilla.LogExporter(logger)))
+
+db := postgres.Open(sqlDB, sqlrepo.WithName("parties"), sqlrepo.WithTelemetry(tracer, reg))
+
+api := http.NewServeMux()
+module.RegisterRoutes(api)
+public := distribution.Chain(api,
+	distribution.Recovery(logger),
+	distribution.Correlation(),
+	distribution.Observe(logger, tracer, reg, distribution.ObserveRoutes(api), distribution.ObserveQuietly("/healthz", "/readyz")),
+	distribution.Authorize(authn, resolver),
+)
+internal := http.NewServeMux()            // puerto interno, nunca el de la API
+internal.Handle("GET /metrics", reg.Handler())
+
+relay := messaging.NewRelay(source, integrationOutbox, sender,
+	outbox.WithRelayLogger(logger), outbox.WithRelayTelemetry(tracer, reg))
+consumer := messaging.NewConsumer("crm", inbox, db).WithTelemetry(logger, tracer, reg)
+```
+
+Sin nada de esto, el framework se comporta como antes, con una excepción buscada: el relay
+escribe sus fallos en `log.Default()` (el `slog.Default` del proceso) aunque no se le pase logger.
+
+### Nombres (los mismos en C#)
+
+| Uso | Nombre |
+|---|---|
+| Mensaje de la línea de petición | `http request` |
+| Campos de la línea | `method`, `route` (el patrón, nunca la ruta), `status`, `duration_ms`, `correlation_id`, `trace_id`, `span_id`, `actor` (solo el identificador), y en los 5xx `error` y `error_type` |
+| Campos fijos del proceso | `service`, `version`, `env` |
+| Otras líneas | `causation_id`; `request` y `outcome` (caso de uso); `outbox`, `message_id`, `event_type`, `attempt` (relay); `consumer` (consumidor) |
+| Métricas | las de la tabla «Métricas mínimas», con las etiquetas `method`, `route`, `status`, `request`, `outcome`, `engine`, `operation`, `state`, `event_type`, `consumer`, `outbox` |
+| Resultados (`outcome`) | `ok`, `validation`, `rule`, `not_found`, `conflict`, `unauthorized`, `forbidden`, `error`; en el consumidor, además, `duplicate` e `ignored` |
+| Ruta sin patrón, método no estándar | `unmatched`, `_OTHER` |
+| Error devuelto al cliente | `correlationId` en el `ProblemDetails` |
+
+La fuente única en Go son las constantes de `pkg/metrics/metrics.go`, `pkg/distribution/observe.go`
+y `pkg/application/outcome.go`.
+
+### En qué se aparta el código del esbozo
+
+- **`metrics.Meter.Gauge` admite etiquetas constantes** (`labels ...string`): sin ellas no se puede
+  publicar el pool por estado ni la antigüedad por outbox.
+- **`trace.Span` tiene `SetName`**: el nombre del span de servidor (`GET /parties/{id}`) solo se
+  conoce al terminar. Y hay `trace.WithNewRoot`, que usan el relay y el consumidor (etapa 1 de D6).
+- **La ruta se resuelve por tres vías**, en este orden: `distribution.ObserveRoutes(mux)` (pregunta
+  al `ServeMux` antes de servir; es la única que cubre a un handler que responde con `WriteJSON`
+  detrás de otro middleware y a los rechazos de `Authorize`), la ficha de la petición (la rellenan
+  `WriteError` y `Respond`) y el patrón que deja el propio mux. Si ninguna la da, la etiqueta es
+  `unmatched`: nunca la ruta cruda.
+- **La línea del caso de uso** va en `Error` solo si el fallo es inesperado (`outcome=error`); un
+  rechazo que la taxonomía explica va en `Debug`, porque la línea de la petición ya lo cuenta con
+  su estado.
+- **Todos los spans van al log en `Debug`** (`tracevanilla.LogExporter`), no solo los de SQL: con
+  el destino en el log, el span de servidor duplicaría la línea de petición. Es D8 aplicada a
+  todos los tramos.
+- **`karpo.outbox.oldest_pending_age` pregunta al almacén** cada vez que se leen las métricas
+  (`Pending(1)`), en vez de recordar el último lote: así crece también cuando el relay no corre,
+  que es el caso que la alarma debe cubrir. Vale `-1` si el almacén no responde.
+- **`db.client.connections`** lleva además la etiqueta `db` (el nombre del backend) y los estados
+  `open`, `in_use`, `idle` y `waited` (acumulado de esperas).
+- **La correlación válida** es de 1 a 64 caracteres entre letras, dígitos y `-_.:`; el valor que no
+  cumple se sustituye por uno nuevo y no se devuelve ni se registra.
+- **`Recovery` anota la causa del pánico** y devuelve el `correlationId`; `RequestLogging` se
+  conserva con el envoltorio arreglado (`Flush`, `Unwrap`), aunque se recomienda `Observe`.
+- **Los contextos no se han tocado** (D7): el span del caso de uso aparece cuando cada contexto
+  añada `pipeline.Observed` a su `chain`. El ejemplo `examples/parties` lo hace con
+  `Service.Observe`.
+
+### Comprobado al implementar
+
+- **La cabecera de correlación larga** (defecto «deducido»): con la validación, una cabecera de
+  200 caracteres ya no llega al outbox (`TestObservability_AnOversizedCorrelationDoesNotBreakTheWrite`,
+  sobre SQLite). No se ha reproducido el fallo original en un motor con `VARCHAR(64)`: SQLite no
+  limita la longitud.
+- **Coste en rendimiento**: `BenchmarkAppend` (una transacción con un `INSERT` sobre SQLite en
+  disco) da entre 7 y 31 ms por operación con y sin telemetría, con más dispersión entre
+  repeticiones que diferencia entre variantes. La prueba está dominada por la escritura a disco y
+  no resuelve el coste de la instrumentación; falta una medida sin E/S.
+
+## Estado de la implementación en C#
+
+Karpo, rama `feat/observabilidad-minima` (parte de `claude/karpo-observabilidad-minima-yoma1a`,
+que se había hecho sobre una evaluación reconstruida, y la alinea con los nombres de este
+documento). Fw **1.10.0, sin publicar**: la rama se rehízo el 2026-10-07 encima de la línea que
+ya tenía 1.7.0, 1.8.0 y 1.9.0 (ADR 0010), porque el 1.7.0 que declaraba al principio ya estaba
+ocupado en el feed. El detalle está junto al artefacto, en
+`020-Back/020-Source/Paranoia.Karpo.Fw.Infrastructure.Observability/FwObservability.md`.
+
+| Mínimo | C# |
+|---|---|
+| Una línea JSON por petición en stdout | `FwRequestTelemetryMiddleware` (lo monta `UseFwExceptionHandling`, por fuera) + `FwJsonLineFormatter` (consola JSON por defecto). Mismos campos: `method`, `route`, `status`, `duration_ms`, `correlation_id`, `trace_id`, `span_id`, `actor`, `service`, `env` |
+| Causa de todo 5xx con su correlación | `FwRequestTelemetry.RecordError` desde el middleware de excepciones (`error`, `error_type`); la correlación se abre por fuera, así que la línea de error ya no la pierde |
+| Duración y resultado por ruta | `http.server.request.duration` (s) con `method`, `route`, `status`, en el medidor `Paranoia.Karpo.Fw`; la métrica homónima de ASP.NET Core no se recoge (otras etiquetas) |
+| Métricas básicas | además `karpo.outbox.relayed` (`event_type`, `outcome`) y `karpo.outbox.oldest_pending_age` (`outbox`) |
+| Registro que sirva al worker | `AddFwObservability(IHostApplicationBuilder, …)`, usado por `Outbox.Worker` |
+| Correlación validada | `FwCorrelationId`: la misma regla, 1 a 64 caracteres |
+
+Lo que sigue siendo distinto, a propósito o pendiente: C# no expone `/metrics` (sus métricas
+salen por OTLP cuando hay colector); sus trazas son las de la instrumentación de ASP.NET Core; no
+tiene telemetría de casos de uso, de base de datos ni de consumidores; la antigüedad del
+pendiente más viejo la calcula el drenador en cada ciclo, no preguntando al almacén; y cada línea
+lleva además los campos de proceso de Serilog (`SourceContext`, `MachineName`, `ProcessId`,
+`ThreadId`).
+
 ## Decisiones
 
-Cada una con la recomendación y un ejemplo. Al aprobar, basta contestar «D1 sí, D3 no…».
+**Aprobadas por Javier el 2026-10-06, las ocho, tal como se recomiendan.**
+
+Cada una con la recomendación y un ejemplo.
 
 **D1. El registro estructurado se queda en `pkg/log`.**
 Recomendación: **sí, sin cambiar su firma.** Solo cambia la implementación, para que lea del
@@ -492,7 +636,12 @@ líneas por segundo; con SQL en `Info` serían 140.
   antes del paso 9, y enlaza con la decisión FG13 de Theros. Un módulo aparte aísla la dependencia,
   pero no decide por sí solo qué pasa con el binario que los junta.
 - **Los dos defectos marcados como «deducido»** (la línea de error sin correlación en C#; la
-  cabecera de correlación larga en Go) salen de leer el código. No se han reproducido.
+  cabecera de correlación larga en Go) salen de leer el código. No se han reproducido. El de Go
+  queda cerrado por la validación (ver «Comprobado al implementar»).
+- **Rama paralela.** Existe en la remota `claude/karpo-observabilidad-minima-yoma1a`, hecha en una
+  sesión en la nube sobre una evaluación reconstruida (paquete único `pkg/observability`, otros
+  nombres de métrica, correlación de hasta 128 caracteres, sin SQL ni consumidor). No se ha
+  fusionado: esta implementación sigue el diseño aprobado aquí.
 - **Que Serilog añada el identificador de traza a cada línea** del fichero CLEF: es lo que dice su
   documentación para estas versiones; no se ha ejecutado.
 - **El claim `sid`** de los tokens: no se ha comprobado si el login lo emite.
