@@ -103,7 +103,7 @@ las cuentas de los clientes de la entidad.
 - **Almacenamiento:** `fin_accounts` (+ `fin_account_holders`, `fin_account_uses`), las bandejas
   de salida y la auditoría.
 
-## Decisiones propuestas (pendientes de confirmar)
+## Decisiones (aprobadas por Javier el 2026-10-08)
 
 1. **Se retiran `FinancialAccount`, `FinancialAgreement` y `FinancialProduct`.** Sugerencia: sí;
    no tienen datos, reglas ni uso. Es la decisión de más alcance: si alguno responde a un plan
