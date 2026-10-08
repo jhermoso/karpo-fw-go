@@ -114,7 +114,7 @@ Además:
   eventos de integración.
 - **Almacenamiento:** `exp_jobs` (+ `exp_job_filters`, `exp_job_scope`) y la auditoría.
 
-## Decisiones propuestas (pendientes de confirmar)
+## Decisiones (aprobadas por Javier el 2026-10-08)
 
 1. **Un contexto genérico con listados que ofrece el anfitrión**, no atado a Parties. Sugerencia:
    sí; exportar facturas o pedidos será escribir un listado, no tocar el contexto.
