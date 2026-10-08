@@ -8,10 +8,11 @@ segundo plano y quien lo pidió lo descarga. Es lo único de lo que quedaba por 
 frontal: la rejilla lo llama cuando el listado tiene más filas de las que maneja el navegador.
 
 > **Alcance.** Están los trabajos, los escritores de CSV y XLSX, el almacén de ficheros y las
-> rutas. Desde el 2026-10-08 el anfitrión ofrece **trece listados reales** (los de Parties que usa
-> la rejilla, empleados, cuentas de clientes, facturas, pedidos, vencimientos de cobro y facturas
-> de proveedor) y hace de trabajador: llama a `RunNext` y `Purge` en cada ronda de tareas. Ver
-> «Listados de Parties» y «Listados de ventas y compras».
+> rutas. El anfitrión ofrece **dieciséis listados reales** (los de Parties que usa la rejilla,
+> empleados, cuentas de clientes, facturas, pedidos, vencimientos de cobro y de pago, facturas de
+> proveedor, libro diario e inmovilizado) y hace de trabajador: llama a `RunNext` y `Purge` en
+> cada ronda de tareas. Ver «Listados de Parties», «Listados de ventas y compras» y «Listados
+> de los libros».
 
 ## Método
 
@@ -275,11 +276,44 @@ Validación:
 - **Integración** en PostgreSQL, SQL Server, Oracle y MySQL: pedidos, facturas y vencimientos del
   cliente que trajo Sage, exportados a través del anfitrión.
 
+## Listados de los libros (en el anfitrión)
+
+Añadidos el 2026-10-09, en `host/datasets_books.go`. Tampoco existían en C#.
+
+| Listado | De dónde sale | Columnas | Filtros | Permiso |
+|---|---|---|---|---|
+| `journal` | asientos de Contabilidad, una fila por apunte | Ejercicio, Asiento, Fecha, Cuenta, Tercero, Concepto, Debe, Haber, Origen | `company`, `from`, `to` | `Accounting.Entry.Read` |
+| `payables` | búsqueda de Pagos | Documento, Tipo, Acreedor, Concepto, Fecha, Vencimiento, Importe, Pagado, Pendiente, Anulado | `company`, `payee`, `kind`, `dueTo`, `open` | `Payments.Payable.Read` |
+| `assets` | registro de Activos | Código, Nombre, Clase, Nº serie, Adquisición, Puesta en servicio, Coste, Valor residual, Vida (meses), Amortización acumulada, Valor neto, Estado, Baja | `company`, `class`, `inService` | `Assets.Asset.Read` |
+
+- En el diario, el concepto de cada apunte es el suyo o, si no tiene, el del asiento.
+- En los vencimientos de pago, el acreedor que no es un participante (Hacienda, la Seguridad
+  Social) sale con el nombre que le da Pagos.
+
+Decisiones propuestas (pendientes de confirmar):
+
+1. **El diario sale apunte a apunte**, con ejercicio y número de asiento en cada fila, que es
+   como lo piden un auditor o una gestoría. Sugerencia: sí.
+2. **El diario lleva el código de la cuenta, no su nombre.** Sugerencia: sí; el nombre se cruza
+   con el plan de cuentas. Si lo prefieres en el fichero, es una columna más.
+3. **Tipo de vencimiento, clase y estado de un activo salen como los guarda Karpo**
+   (`supplier-invoice`, `vehicles`, `in-service`), igual que el estado de los pedidos.
+   Sugerencia: traducirlos todos a la vez cuando haya idioma por usuario.
+4. **Quedan sin listado**: nóminas, movimientos de almacén, pagos emitidos, cobros y
+   presupuestos. Sugerencia: hacerlos cuando alguien los pida; el patrón ya está.
+
+Validación:
+
+- **Anfitrión** (en memoria y en SQLite): una empresa con libro, un asiento a mano con tercero,
+  la factura de un proveedor que Pagos convierte en vencimiento y un activo; los tres ficheros
+  comparados línea a línea; otra empresa recibe el fichero vacío; sin el permiso del listado, 403.
+
 ## Pendiente
 
 - ~~Listados de Parties y el trabajador~~: hechos, ver «Listados de Parties» y
   [ANFITRION.md](ANFITRION.md). También los de facturas, pedidos, vencimientos y facturas de
-  proveedor. Siguen movimientos de almacén, asientos, nóminas…
+  proveedor, y los de los libros (diario, vencimientos de pago, inmovilizado). Siguen
+  nóminas, movimientos de almacén, pagos y cobros.
 - Un tiempo máximo por trabajo de exportación (hoy solo lo corta la limpieza a los 30 minutos).
 - Adaptar el frontal a las rutas y estados nuevos (decisión 10).
 - Un almacén en depósito de objetos para despliegues sin disco compartido.
