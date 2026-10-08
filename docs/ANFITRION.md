@@ -5,7 +5,12 @@ tiene negocio; monta los veintiséis contextos sobre un mismo almacén, da a cad
 que pide de los demás, lleva los mensajes de unos a otros, declara los permisos a Seguridad, sirve
 las rutas tras la autenticación y hace lo que los contextos dejan para un planificador.
 
-`cmd/karpo` es ese anfitrión hecho programa, sobre un fichero SQLite.
+Hay dos programas, que solo se distinguen en el controlador y en la línea que abre la base:
+
+- **`cmd/karpo-postgres`**: el de producción, sobre **PostgreSQL o Supabase**.
+- **`cmd/karpo`**: sobre un fichero SQLite, para desarrollar.
+
+Lo que tienen en común está en `host/serve`.
 
 Hasta ahora cada contexto se probaba solo o con sus vecinos. Sin esto, nada de lo portado se podía
 arrancar junto.
@@ -50,38 +55,54 @@ arrancar junto.
 - **`Run`**: entrega y tareas en un temporizador hasta que el proceso se para.
 - **Historial:** todos los tipos de agregado con historial quedan registrados en un solo sitio.
 
-## El programa
+## Los programas
 
 ```
-karpo migrate   aplica el esquema de todos los contextos
-karpo serve     comprueba el esquema y sirve (por defecto)
+karpo-postgres migrate   aplica el esquema de todos los contextos
+karpo-postgres serve     comprueba el esquema y sirve (por defecto)
 ```
 
-`serve` no arranca sobre un esquema atrasado ni adelantado: lo dice y sale.
+`serve` no arranca sobre un esquema atrasado ni adelantado: lo dice y sale. `karpo` tiene los
+mismos dos mandatos.
 
 | Variable | Qué es | Por defecto |
 |---|---|---|
-| `KARPO_SQLITE` | ruta del fichero de base de datos | obligatoria |
+| `KARPO_DATABASE_URL` | cadena de conexión de PostgreSQL (`karpo-postgres`) | obligatoria |
+| `KARPO_DB_MAX_CONNS` | conexiones que mantiene (`karpo-postgres`) | `10` |
+| `KARPO_SQLITE` | ruta del fichero de base de datos (`karpo`) | obligatoria |
 | `KARPO_JWT_SECRET` | secreto que firma las sesiones, 32 caracteres como mínimo | obligatoria |
 | `KARPO_ADDR` | dónde escucha | `:8080` |
-| `KARPO_EXPORTS_DIR` | dónde esperan los ficheros exportados | `exports`, junto a la base |
+| `KARPO_EXPORTS_DIR` | dónde esperan los ficheros exportados | `exports` |
 | `KARPO_DELIVER_EVERY` | cada cuánto se llevan los mensajes | `2s` |
 | `KARPO_CHORES_EVERY` | cada cuánto se hacen las tareas | `1m` |
 | `KARPO_BOOTSTRAP_ADMIN_USER` / `…_PASSWORD` | primer administrador, solo si no hay ninguno | — |
 
-Sirve además `/healthz` y `/readyz` (este comprueba la base de datos).
+Sirven además `/healthz` y `/readyz` (este comprueba la base de datos).
 
-## Decisiones propuestas (pendientes de confirmar)
+**En Supabase**, conectar por la conexión directa o por el *pooler* de sesión (puerto 5432). El
+*pooler* de transacción (puerto 6543) da a cada sentencia una conexión distinta, y tanto el
+bloqueo que impide dos migraciones a la vez como las transacciones de los casos de uso necesitan
+una que se mantenga. Esto sale de cómo funciona el programa y de la documentación de Supabase:
+**no lo he probado contra un proyecto de Supabase real**, solo contra PostgreSQL.
 
-1. **Un solo proceso con todos los contextos** y los mensajes en memoria. Sugerencia: sí para
-   empezar; repartir en varios procesos es cambiar el transporte, no los contextos.
+`karpo-postgres` es un módulo aparte (`cmd/karpo-postgres/go.mod`) para que el controlador de
+PostgreSQL no entre en el módulo raíz.
+
+## Decisiones (aprobadas por Javier el 2026-10-08)
+
+Con dos precisiones suyas: la base de datos de producción es **PostgreSQL o Supabase** (decisión
+3), y más adelante habrá **una versión repartida en varios contextos o subdominios, como
+macroservicios** (decisión 1).
+
+1. **Un solo proceso con todos los contextos** y los mensajes en memoria, **por ahora**. Cuando
+   se pueda se hará una versión repartida en macroservicios: varios contextos o subdominios por
+   proceso. Es cambiar el transporte y decidir qué contextos van juntos, no los contextos.
 2. **Una sola base de datos**, con el historial de migraciones de cada contexto. Migrar es un
    paso aparte de servir, y servir se niega sobre un esquema que no es el suyo. Sugerencia: sí.
-3. **El programa del repositorio solo abre SQLite**, porque el módulo raíz no lleva más
-   controladores. El de PostgreSQL, SQL Server, Oracle o MySQL es este mismo `host` con otra
-   línea para abrir la base, en un módulo aparte que sí los lleve. Sugerencia: sí, y dime **cuál
-   es el motor de producción** para escribir ese programa; no quiero meter cuatro controladores
-   en el módulo raíz sin que lo decidas.
+3. **El motor de producción es PostgreSQL (o Supabase, que lo es).** Su programa es
+   `cmd/karpo-postgres`, en un módulo aparte para no meter el controlador en el módulo raíz;
+   `cmd/karpo` sobre SQLite queda para desarrollar. SQL Server, Oracle y MySQL siguen cubiertos
+   por la integración, sin programa propio.
 4. **Entrega y tareas en un temporizador dentro del proceso, con una sola instancia.** El relé
    aún no es seguro con varias a la vez (está anotado en el backlog). Sugerencia: sí por ahora.
 5. **Las tareas las hace el propio anfitrión como administrador global de sistema** («karpo-host»
@@ -122,13 +143,18 @@ Sirve además `/healthz` y `/readyz` (este comprueba la base de datos).
   entregar después; tipos con historial y el historial de la cuenta.
 - **`cmd/karpo`** arrancado de verdad: `serve` sin migrar sale con error; `migrate` aplica 73
   migraciones; `serve` responde en `/readyz`, 401 sin sesión, y la sesión del administrador.
+- **`cmd/karpo-postgres`** contra un PostgreSQL real: sin configuración no arranca y dice qué
+  falta; mandato desconocido; migrar dos veces; servir, `/readyz`, 401 sin sesión, varias rondas
+  de entrega y tareas, y parada ordenada.
 - **Integración** en PostgreSQL, SQL Server, Oracle y MySQL: los 25 esquemas migrados en una
   misma base (ninguna tabla ni índice repetido entre contextos), verificación, arranque,
   importación, cuenta, exportación, tareas y entrega.
 
 ## Pendiente
 
-- El programa para el motor de producción (decisión 3).
+- **Versión en macroservicios** (decisión 1): qué contextos van en cada proceso, transporte real
+  entre ellos (NATS o Kafka) y relé seguro con varias instancias.
+- Probar `karpo-postgres` contra un proyecto de Supabase.
 - Resolver el riesgo del oyente que rechaza.
 - Cargadores de Importación que faltan (departamentos, centros, personas, empleos; Sage y
   Apiscore) y listados de Exportación (Parties, facturas, pedidos…).
@@ -138,5 +164,3 @@ Sirve además `/healthz` y `/readyz` (este comprueba la base de datos).
   conecta.
 - Principales de servicio desde la configuración (el anfitrión ya los acepta en `Options`).
 - Purga de sesiones caducadas y de las bandejas de entrada por antigüedad.
-- Reparto en varios procesos y transporte real (NATS o Kafka), con el relé seguro para varias
-  instancias.
