@@ -241,10 +241,11 @@ func (h *host) scenario() {
 	var sources []iapp.SourceDTO
 	h.must(h.do("GET", "/api/imports/sources", "auditor", nil, nil), 403, "auditor")
 	h.must(h.do("GET", "/api/imports/sources", "reader", nil, &sources), 200, "sources")
-	if len(sources) != 1 || sources[0].Key != "personio" || len(sources[0].Files) != 2 || !sources[0].Files[0].Required || len(sources[0].Kinds) != 5 {
+	if len(sources) != 1 || sources[0].Key != "personio" || len(sources[0].Files) != 2 || !sources[0].Files[0].Required || len(sources[0].Kinds) != 7 {
 		t.Fatalf("sources: %+v", sources)
 	}
-	h.imp.Load(loader{w, domain.KindLegalEntity}, loader{w, domain.KindDepartment}, loader{w, domain.KindWorkCenter}, loader{w, domain.KindPerson})
+	h.imp.Load(loader{w, domain.KindLegalEntity}, loader{w, domain.KindDepartment}, loader{w, domain.KindWorkCenter}, loader{w, domain.KindPerson},
+		loader{w, domain.KindPosition}, loader{w, domain.KindWorkPlace})
 	var partial iapp.ReportDTO
 	h.must(h.do("POST", "/api/imports/preview", "importer", files(orgUnits, people), &partial), 200, "preview without a loader")
 	if c := count(t, partial.Counts, domain.KindEmployment); c.Read != 4 || c.Skipped != 4 || partial.Warnings != 1 {
@@ -313,7 +314,7 @@ func (h *host) scenario() {
 	if refused.Key != "P-MC-006" || refused.Line != 4 || refused.File != "people.csv" || refused.Kind != domain.KindPerson || orphan.Key != "P-MC-006" {
 		t.Fatalf("refused: %+v %+v", refused, orphan)
 	}
-	if len(w.things) != 11 || !w.runs[first.ID+"|personio|people.csv"] || !w.runs[first.ID+"|personio|org.csv"] {
+	if len(w.things) != 16 || !w.runs[first.ID+"|personio|people.csv"] || !w.runs[first.ID+"|personio|org.csv"] {
 		t.Fatalf("the world after the first run: %d %+v", len(w.things), w.runs)
 	}
 
@@ -321,7 +322,7 @@ func (h *host) scenario() {
 	var refs fw.Page[iapp.ReferenceDTO]
 	h.must(h.do("GET", "/api/imports/references?source=personio", "reader", nil, nil), 403, "reader")
 	h.must(h.do("GET", "/api/imports/references?source=personio&size=50", "auditor", nil, &refs), 200, "references")
-	if refs.Total != 11 {
+	if refs.Total != 16 { // and three positions and two work places
 		t.Fatalf("references: %d", refs.Total)
 	}
 	h.must(h.do("GET", "/api/imports/references?source=personio&kind=employment&key=P-MC-002", "auditor", nil, &refs), 200, "two employments")
@@ -349,7 +350,7 @@ func (h *host) scenario() {
 			t.Fatalf("second run, %s: %+v", kind, got)
 		}
 	}
-	if len(w.things) != 13 || w.things[luis.EntityID]["fullName"] != "Luis P." {
+	if len(w.things) != 18 || w.things[luis.EntityID]["fullName"] != "Luis P." {
 		t.Fatalf("the world after the second run: %d %+v", len(w.things), w.things[luis.EntityID])
 	}
 	h.must(h.do("GET", "/api/imports/references?kind=person&size=50", "auditor", nil, &refs), 200, "people")
@@ -392,7 +393,7 @@ func (h *host) scenario() {
 	h.must(h.do("GET", "/api/imports/runs/"+first.ID, "auditor", nil, nil), 403, "auditor")
 	h.must(h.do("GET", "/api/imports/runs/nope", "importer", nil, nil), 400, "bad id")
 	h.must(h.do("GET", "/api/imports/runs/"+first.ID, "importer", nil, &got), 200, "the first run")
-	if len(got.Messages) != 6 || got.Messages[0].Line != 8 || len(got.Counts) != 5 || got.Counts[0].Kind != domain.KindLegalEntity {
+	if len(got.Messages) != 6 || got.Messages[0].Line != 8 || len(got.Counts) != 7 || got.Counts[0].Kind != domain.KindLegalEntity {
 		t.Fatalf("the first run: %+v", got)
 	}
 	all, err := h.imp.Service.SearchRuns.Handle(h.adminCtx, iapp.SearchRuns{})

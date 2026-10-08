@@ -227,6 +227,8 @@ organización de verdad**.
 | `work-center` | Instalaciones | instalación del mismo nombre en su empresa | la registra como **edificio** |
 | `person` | Parties | persona del mismo nombre entre las de su empresa | la registra afiliada como empleada a su primera empresa, con su correo |
 | `employment` | RRHH | empleo con ese número en esa empresa | la contrata y, si el fichero trae fecha de baja, termina el empleo |
+| `position` | RRHH | puesto de ese tipo en esa unidad que ya ocupa la persona | abre un puesto del tipo que dice el cargo, en su departamento, y se lo da desde su alta |
+| `work-place` | Parties | papel de centro de trabajo que ya tiene en esa instalación | le da el papel de centro de trabajo en la instalación, desde su alta |
 
 Reglas comunes:
 
@@ -249,7 +251,7 @@ Lo que se rechaza, con su línea:
 - **Lo que cuelga de algo que no se cargó** (`imports.unknown_company`,
   `imports.unknown_person`).
 
-Decisiones propuestas (pendientes de confirmar):
+Decisiones (aprobadas por Javier el 2026-10-08):
 
 1. **Un centro de trabajo se carga como edificio en Instalaciones**, no como oficina ni como
    centro de trabajo de RRHH. Una oficina exige dirección y teléfono, y el centro de RRHH su
@@ -258,17 +260,60 @@ Decisiones propuestas (pendientes de confirmar):
 2. **Sin fecha de alta no hay empleo.** Sugerencia: sí; inventar una fecha sería peor. En el
    fichero de ejemplo de C# las fechas eran opcionales, así que conviene revisar el fichero real
    antes de la primera carga.
-3. **Departamento, centro y puesto del empleado no se cargan todavía.** En RRHH van en el
-   contrato y en el puesto, que piden tipo de contrato y convenio. Sugerencia: sí por ahora; es
-   el siguiente paso si Personio va a ser la fuente del organigrama.
+3. ~~Departamento, centro y puesto del empleado no se cargan todavía.~~ **Hecho el mismo día**,
+   ver «Dónde y de qué trabaja cada persona» más abajo.
 4. **Pluriempleo:** la persona se registra con su primera empresa y se afilia a la segunda al
    contratarla allí, con fecha de hoy en Parties; las fechas reales del empleo las guarda RRHH.
    Sugerencia: sí.
 5. **El apellido va entero al primer apellido** («García López» no se parte en dos).
    Sugerencia: sí; partirlo bien no es posible con apellidos compuestos.
 
+### Dónde y de qué trabaja cada persona
+
+La fuente Personio saca ahora dos registros más por persona, solo para su primera empresa:
+
+- **`position`**, si el fichero trae cargo. En RRHH el departamento de alguien no es un dato
+  suelto: es **la unidad del puesto que ocupa**. Así que el cargador abre un puesto del tipo que
+  dice el cargo, en el departamento (o en la empresa, si no trae departamento), y se lo da a la
+  persona desde su fecha de alta. Abrir y ocupar van juntos, o no se hace nada.
+- **`work-place`**, si trae centro de trabajo: la persona pasa a tener en Parties el papel de
+  centro de trabajo en la instalación que la importación cargó para ese centro.
+
+Van como registros separados para que fallen por separado: un cargo que nadie conoce no impide
+que a esa persona se le asigne su centro.
+
+- **Los nombres se casan sin mirar mayúsculas, acentos ni espacios:** si el fichero de personas
+  dice «OPERACIONES» y el de unidades declaró «Operaciones», es el mismo departamento.
+- **El cargo tiene que existir** en el catálogo de tipos de puesto de RRHH, con ese título. Si no,
+  la línea se rechaza (`imports.unknown_job_title`) diciendo cuál falta.
+- **Departamento sin cargo:** no se puede registrar (un puesto necesita su tipo). Es un aviso
+  (`personio.department_without_job`), no un error.
+- **Persona sin empleo** (por ejemplo, sin fecha de alta): RRHH no le da un puesto; la línea se
+  rechaza con el motivo de RRHH y entra en la ejecución en que ya tenga empleo.
+- **Pluriempleo:** puesto y centro son los de la primera empresa, como en C#.
+
+Decisiones propuestas (pendientes de confirmar):
+
+6. **El departamento de una persona es la unidad de su puesto**, no una relación aparte. En C# era
+   una relación `DepartmentAssignment` en Parties además del puesto. Sugerencia: sí; es como lo
+   modela ya RRHH en Go, y evita guardar lo mismo en dos sitios.
+7. **El cargo se casa por título exacto con el catálogo de RRHH.** En C# había una lista fija de
+   23 puestos y 33 alias dentro del código. Sugerencia: sí; los cargos que falten se dan de alta
+   en el catálogo. Si el fichero real usa muchas variantes del mismo cargo, lo razonable es
+   añadir alias al catálogo, no al código.
+8. **Cada importación abre un puesto nuevo para la persona**: no busca uno vacante que ocupar.
+   Sugerencia: sí; un fichero de personas no dice qué plaza de la plantilla ocupa cada una.
+9. **El centro de trabajo es un papel en Parties, no el del contrato de RRHH**, que exige tipo de
+   contrato y convenio y el fichero no trae. Sugerencia: sí.
+
 Validación:
 
+- **Puestos y centros** (anfitrión, en memoria y en SQLite): cargo y departamento escritos en
+  mayúsculas y centro con dos espacios, casados con lo declarado; el puesto de Ana en su
+  departamento, del tipo de su cargo, ocupado; su papel de centro de trabajo en la instalación,
+  desde su fecha de alta; cargo desconocido rechazado sin impedir el centro; persona sin empleo
+  sin puesto, y con puesto un mes después cuando ya tiene empleo; departamento sin cargo como
+  aviso; repetir no duplica puestos ni papeles.
 - **Anfitrión** (en memoria y en SQLite): todas las clases de Personio tienen cargador; vista
   previa que no escribe; primera ejecución con dos empresas, un departamento homónimo en cada
   una, un centro cargado y otro rechazado, tres personas y tres empleos (uno rechazado por falta
@@ -282,8 +327,11 @@ Validación:
 
 ## Pendiente
 
-- ~~Cargadores reales para las cinco clases de Personio~~: hechos, ver «Cargadores de Personio».
-  Queda cargar el departamento, el centro y el puesto de cada empleado (contrato y puesto en RRHH).
+- ~~Cargadores reales para las clases de Personio~~: hechos, ver «Cargadores de Personio»,
+  incluidos el puesto y el centro de cada persona.
+- Quién supervisa a quién: el fichero trae `isSupervisor`, que se lee y no se usa (en C# tampoco).
+- Contrato de RRHH (tipo, convenio, jornada, centro): el fichero no lo trae.
+- Alias de cargos en el catálogo de tipos de puesto, si el fichero real los necesita.
 - Fuentes de Sage (CSV por concepto: clientes, proveedores, IVA, plan de cuentas, bancos) y de
   Apiscore, con sus clases de registro y sus cargadores (Parties, Fiscal, Contabilidad, Tesorería).
 - Programar `CloseStale` al montar el servidor.

@@ -97,7 +97,7 @@ func TestImportsContext(t *testing.T) {
 			}
 			w := &importedWorld{things: map[string]map[string]string{}, hold: make(chan struct{}), held: make(chan struct{})}
 			im := imports.Compose(hotswap.New(db)).Load(worldLoader{w, idomain.KindLegalEntity}, worldLoader{w, idomain.KindDepartment},
-				worldLoader{w, idomain.KindPerson}, worldLoader{w, idomain.KindEmployment})
+				worldLoader{w, idomain.KindPerson}, worldLoader{w, idomain.KindEmployment}, worldLoader{w, idomain.KindPosition})
 			admin, _ := authz.NewContext(authz.Context{Subject: fw.NewUUID(), SubjectName: "admin", Kind: authz.Service, Permissions: []authz.Permission{authz.Wildcard}})
 			admin.GlobalAdmin = true
 			actx := authz.WithContext(ctx, admin)
@@ -132,7 +132,7 @@ func TestImportsContext(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(got.Counts) != 5 || got.Counts[0].Kind != idomain.KindLegalEntity || got.Counts[2].Kind != idomain.KindWorkCenter || got.Counts[2].Read != 0 ||
+			if len(got.Counts) != 7 || got.Counts[0].Kind != idomain.KindLegalEntity || got.Counts[2].Kind != idomain.KindWorkCenter || got.Counts[2].Read != 0 ||
 				got.Counts[4] != (iapp.CountDTO{Kind: idomain.KindEmployment, Read: 4, Created: 3, Failed: 1}) {
 				t.Fatalf("counts: %+v", got.Counts)
 			}
@@ -149,7 +149,7 @@ func TestImportsContext(t *testing.T) {
 			}
 
 			refs, err := svc.References.Handle(actx, iapp.SearchReferences{Source: "personio", Size: 50})
-			if err != nil || refs.Total != 9 {
+			if err != nil || refs.Total != 11 { // and the positions of Ana and Luis
 				t.Fatalf("references: %+v %v", refs, err)
 			}
 			deps, err := svc.References.Handle(actx, iapp.SearchReferences{Kind: idomain.KindDepartment, Key: "Operaciones"})
@@ -166,7 +166,7 @@ func TestImportsContext(t *testing.T) {
 			}
 			if second.Status != "succeeded" || count(second.Counts, idomain.KindLegalEntity) != (iapp.CountDTO{Kind: idomain.KindLegalEntity, Read: 2, Unchanged: 2}) ||
 				count(second.Counts, idomain.KindPerson) != (iapp.CountDTO{Kind: idomain.KindPerson, Read: 2, Updated: 1, Unchanged: 1}) ||
-				count(second.Counts, idomain.KindEmployment).Unchanged != 3 || len(w.things) != 9 {
+				count(second.Counts, idomain.KindEmployment).Unchanged != 3 || len(w.things) != 11 {
 				t.Fatalf("second run: %+v (%d things)", second, len(w.things))
 			}
 			luis, err := svc.References.Handle(actx, iapp.SearchReferences{Kind: idomain.KindPerson, Key: "P-2"})

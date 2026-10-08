@@ -5,13 +5,16 @@ import (
 	"database/sql"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
+	"time"
 
 	facapp "github.com/jhermoso/karpo-fw-go/contexts/facilities/application"
 	geoinfra "github.com/jhermoso/karpo-fw-go/contexts/geography/infrastructure"
 	hrapp "github.com/jhermoso/karpo-fw-go/contexts/hr/application"
 	impapp "github.com/jhermoso/karpo-fw-go/contexts/imports/application"
 	parapp "github.com/jhermoso/karpo-fw-go/contexts/parties/application"
+	pardomain "github.com/jhermoso/karpo-fw-go/contexts/parties/domain"
 	"github.com/jhermoso/karpo-fw-go/host"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
@@ -32,15 +35,19 @@ Office,Aeropuerto T4,,
 
 const personioHeader = "employeeNumber,firstName,lastName,preferredName,email,gender,legalEntity,department,workCenter,jobTitle,isSupervisor,notes,hireDate,terminationDate\n"
 
-const personioPeople = personioHeader + `P-MC-001,Ana,García López,,ana@maccorp.test,F,Maccorp Exact Change,Operaciones,Oficina Sol,"Auxiliar, Caja",Sí,,01/03/2020,
-P-MC-002,Luis,Pérez,Lucho Pérez,luis@maccorp.test,M,Maccorp / Karpo (PLURIEMPLEO),Operaciones,Oficina Sol,Cajero,no,,2021-05-10,2024-12-31
-P-MC-006,Eva,Ruiz,,eva@karpo.test,,Karpo Servicios,Operaciones,,Gerente,1,,,
+// JOB-A and JOB-B stand for two titles of the catalog of position types of HR; "Domador de leones"
+// is in no catalog. Ana's department comes written otherwise than it was declared.
+const personioPeople = personioHeader + `P-MC-001,Ana,García López,,ana@maccorp.test,F,Maccorp Exact Change,OPERACIONES,oficina  sol,JOB-A,Sí,,01/03/2020,
+P-MC-002,Luis,Pérez,Lucho Pérez,luis@maccorp.test,M,Maccorp / Karpo (PLURIEMPLEO),Operaciones,Oficina Sol,Domador de leones,no,,2021-05-10,2024-12-31
+P-MC-006,Eva,Ruiz,,eva@karpo.test,,Karpo Servicios,Operaciones,,JOB-B,1,,,
+P-MC-007,Sol,Vega,,sol@karpo.test,F,Karpo Servicios,Operaciones,,,no,,2024-01-15,
 `
 
 // A month later: Eva's hire date is known, and Ana has left.
-const personioLater = personioHeader + `P-MC-001,Ana,García López,,ana@maccorp.test,F,Maccorp Exact Change,Operaciones,Oficina Sol,"Auxiliar, Caja",Sí,,01/03/2020,2026-09-30
-P-MC-002,Luis,Pérez,Lucho Pérez,luis@maccorp.test,M,Maccorp / Karpo (PLURIEMPLEO),Operaciones,Oficina Sol,Cajero,no,,2021-05-10,2024-12-31
-P-MC-006,Eva,Ruiz,,eva@karpo.test,,Karpo Servicios,Operaciones,,Gerente,1,,2025-02-03,
+const personioLater = personioHeader + `P-MC-001,Ana,García López,,ana@maccorp.test,F,Maccorp Exact Change,OPERACIONES,oficina  sol,JOB-A,Sí,,01/03/2020,2026-09-30
+P-MC-002,Luis,Pérez,Lucho Pérez,luis@maccorp.test,M,Maccorp / Karpo (PLURIEMPLEO),Operaciones,Oficina Sol,Domador de leones,no,,2021-05-10,2024-12-31
+P-MC-006,Eva,Ruiz,,eva@karpo.test,,Karpo Servicios,Operaciones,,JOB-B,1,,2025-02-03,
+P-MC-007,Sol,Vega,,sol@karpo.test,F,Karpo Servicios,Operaciones,,,no,,2024-01-15,
 `
 
 // loadersScenario imports the organization of two companies from the files of Personio through
@@ -57,7 +64,22 @@ func loadersScenario(t *testing.T, sw *hotswap.Switch) {
 	admin, _ := authz.NewContext(authz.Context{Subject: fw.NewUUID(), SubjectName: "importer", Kind: authz.Service, Permissions: []authz.Permission{authz.Wildcard}})
 	admin.GlobalAdmin = true
 	actx := authz.WithContext(ctx, admin)
+	// Two titles of the catalog of HR, whatever they are.
+	types, err := h.HR.Service.PositionTypes.Handle(actx, hrapp.ListPositionTypes{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	titles := []string{}
+	for _, pt := range types {
+		if pt.Active {
+			titles = append(titles, pt.Title)
+		}
+	}
+	if len(titles) < 2 {
+		t.Fatalf("the catalog of position types: %v", titles)
+	}
 	files := func(people string) impapp.RunImport {
+		people = strings.NewReplacer("JOB-A", strings.ToUpper(titles[0]), "JOB-B", titles[1]).Replace(people)
 		return impapp.RunImport{Source: "personio", Files: []impapp.FileDTO{{Role: "org-units", Name: "org.csv", Content: personioOrg},
 			{Role: "people", Name: "people.csv", Content: people}}}
 	}
@@ -99,9 +121,10 @@ func loadersScenario(t *testing.T, sw *hotswap.Switch) {
 		t.Fatal(err)
 	}
 	expect("preview", pre.Counts, map[string]impapp.CountDTO{"legal-entity": {Read: 2, Created: 2}, "department": {Read: 2, Created: 2},
-		"work-center": {Read: 2, Created: 2}, "person": {Read: 3, Created: 3}, "employment": {Read: 4, Created: 4}})
-	if all, _ := h.Parties.Organizations.All(ctx); len(all) != 0 {
-		t.Fatalf("a preview writes nothing: %+v", all)
+		"work-center": {Read: 2, Created: 2}, "person": {Read: 4, Created: 4}, "employment": {Read: 5, Created: 5}, "position": {Read: 3, Created: 3},
+		"work-place": {Read: 2, Created: 2}})
+	if all, _ := h.Parties.Organizations.All(ctx); len(all) != 0 || pre.Warnings != 1 {
+		t.Fatalf("a preview writes nothing: %+v, %d warnings", all, pre.Warnings)
 	}
 
 	// The first run.
@@ -113,9 +136,18 @@ func loadersScenario(t *testing.T, sw *hotswap.Switch) {
 		said = append(said, m.Key+": "+m.Text)
 	}
 	expect("first run", run.Counts, map[string]impapp.CountDTO{"legal-entity": {Read: 2, Created: 2}, "department": {Read: 2, Created: 2},
-		"work-center": {Read: 2, Created: 1, Failed: 1}, "person": {Read: 3, Created: 3}, "employment": {Read: 4, Created: 3, Failed: 1}})
-	if got := codes(run.Messages); run.Status != "completed-with-errors" || !slices.Equal(got, []string{
-		"employment:P-MC-006:imports.hire_date_required", "work-center:Aeropuerto T4:imports.work_center_without_company"}) {
+		"work-center": {Read: 2, Created: 1, Failed: 1}, "person": {Read: 4, Created: 4}, "employment": {Read: 5, Created: 4, Failed: 1},
+		"position": {Read: 3, Created: 1, Failed: 2}, "work-place": {Read: 2, Created: 2}})
+	// Each thing that could not be loaded says why, on its own: the job nobody knows does not keep
+	// Luis from his work center, and Eva, whom HR does not have yet, gets no position.
+	got := codes(run.Messages)
+	for _, want := range []string{"employment:P-MC-006:imports.hire_date_required", "position:P-MC-002:imports.unknown_job_title",
+		"position:P-MC-007:personio.department_without_job", "work-center:Aeropuerto T4:imports.work_center_without_company"} {
+		if !slices.Contains(got, want) {
+			t.Fatalf("first run lacks %s: %v", want, got)
+		}
+	}
+	if run.Status != "completed-with-errors" || len(got) != 5 || !strings.HasPrefix(got[2], "position:P-MC-006:hr.") || run.Warnings != 1 {
 		t.Fatalf("first run: %s %v", run.Status, got)
 	}
 
@@ -129,6 +161,7 @@ func loadersScenario(t *testing.T, sw *hotswap.Switch) {
 		id[c.Name] = c.ID
 	}
 	maccorp, karpo := id["Maccorp Exact Change"], id["Karpo Servicios"]
+	department := map[string]string{}
 	for _, company := range []string{maccorp, karpo} { // a department of the same name in each, rolled up to its own
 		below, err := h.Parties.Organizations.Descendants(ctx, []string{company})
 		if err != nil {
@@ -139,27 +172,28 @@ func loadersScenario(t *testing.T, sw *hotswap.Switch) {
 		for uid, u := range units {
 			if uid != company {
 				names = append(names, u.Name)
+				department[company] = uid
 			}
 		}
 		if !slices.Equal(names, []string{"Operaciones"}) {
 			t.Fatalf("units of %s: %v", company, names)
 		}
 	}
-	people := func(company string) []string {
+	people := func(company string) map[string]string {
 		t.Helper()
 		p, err := h.Parties.Service.Search.Handle(actx, parapp.SearchParties{Kind: "person", Organization: company, Size: 50})
 		if err != nil {
 			t.Fatal(err)
 		}
-		out := []string{}
+		out := map[string]string{}
 		for _, x := range p.Items {
-			out = append(out, x.Name)
+			out[x.Name] = x.ID
 		}
-		slices.Sort(out)
 		return out
 	}
 	// Luis works for both: registered with the first, affiliated with the second when he was hired there.
-	if m, k := people(maccorp), people(karpo); !slices.Equal(m, []string{"Ana García López", "Luis Pérez"}) || !slices.Equal(k, []string{"Eva Ruiz", "Luis Pérez"}) {
+	m, k := people(maccorp), people(karpo)
+	if len(m) != 2 || len(k) != 3 || m["Ana García López"] == "" || m["Luis Pérez"] == "" || k["Luis Pérez"] != m["Luis Pérez"] || k["Eva Ruiz"] == "" || k["Sol Vega"] == "" {
 		t.Fatalf("people: %v %v", m, k)
 	}
 	offices, err := h.Facilities.Service.Search.Handle(actx, facapp.SearchFacilities{Organization: maccorp, Size: 50})
@@ -178,10 +212,46 @@ func loadersScenario(t *testing.T, sw *hotswap.Switch) {
 		}
 		return out
 	}
-	m, k := jobs(maccorp), jobs(karpo)
-	if len(m) != 2 || len(k) != 1 || m["P-MC-001"].Hired != "2020-03-01" || m["P-MC-001"].Terminated != "" || m["P-MC-002"].Hired != "2021-05-10" ||
-		m["P-MC-002"].Terminated != "2024-12-31" || k["P-MC-002"].Terminated != "2024-12-31" || k["P-MC-002"].Person != m["P-MC-002"].Person {
-		t.Fatalf("employments: %+v %+v", m, k)
+	mj, kj := jobs(maccorp), jobs(karpo)
+	if len(mj) != 2 || len(kj) != 2 || mj["P-MC-001"].Hired != "2020-03-01" || mj["P-MC-001"].Terminated != "" || mj["P-MC-002"].Hired != "2021-05-10" ||
+		mj["P-MC-002"].Terminated != "2024-12-31" || kj["P-MC-002"].Terminated != "2024-12-31" || kj["P-MC-002"].Person != mj["P-MC-002"].Person ||
+		kj["P-MC-007"].Hired != "2024-01-15" {
+		t.Fatalf("employments: %+v %+v", mj, kj)
+	}
+	// Ana's job: a position of that type in her department, hers since she was hired. The file
+	// wrote the department and the title in capitals and the work center with two spaces.
+	held := func(person string) []hrapp.PositionDTO {
+		t.Helper()
+		p, err := h.HR.Service.SearchPositions.Handle(actx, hrapp.SearchPositions{Holder: person, Size: 10})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p.Items
+	}
+	ana := held(m["Ana García López"])
+	if len(ana) != 1 || ana[0].Unit != department[maccorp] || ana[0].Organization != maccorp || ana[0].TypeTitle != titles[0] || ana[0].Vacant {
+		t.Fatalf("the position of Ana: %+v", ana)
+	}
+	if len(held(m["Luis Pérez"])) != 0 || len(held(k["Eva Ruiz"])) != 0 || len(held(k["Sol Vega"])) != 0 {
+		t.Fatal("nobody else holds a position yet")
+	}
+	// And where they work: the role of work center at the facility the import loaded.
+	at := func(person string) []parapp.FacilityRoleDTO {
+		t.Helper()
+		pid, _ := pardomain.ParsePartyID(person)
+		p, err := h.Parties.Service.Get.Handle(actx, parapp.GetParty{ID: pid})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p.FacilityRoles
+	}
+	for _, name := range []string{"Ana García López", "Luis Pérez"} {
+		if roles := at(m[name]); len(roles) != 1 || roles[0].Facility != offices.Items[0].ID || roles[0].RoleType != pardomain.FacilityWorkCenter.String() || !roles[0].Active {
+			t.Fatalf("where %s works: %+v", name, roles)
+		}
+	}
+	if !at(m["Ana García López"])[0].From.Equal(time.Date(2020, 3, 1, 0, 0, 0, 0, time.UTC)) {
+		t.Fatalf("since she was hired: %v", at(m["Ana García López"])[0].From)
 	}
 
 	// The same files again: nothing new, nothing twice; what failed fails the same.
@@ -190,26 +260,35 @@ func loadersScenario(t *testing.T, sw *hotswap.Switch) {
 		t.Fatal(err)
 	}
 	expect("second run", again.Counts, map[string]impapp.CountDTO{"legal-entity": {Read: 2, Unchanged: 2}, "department": {Read: 2, Unchanged: 2},
-		"work-center": {Read: 2, Unchanged: 1, Failed: 1}, "person": {Read: 3, Unchanged: 3}, "employment": {Read: 4, Unchanged: 3, Failed: 1}})
-	if len(people(maccorp)) != 2 || len(jobs(maccorp)) != 2 {
-		t.Fatal("nobody twice")
+		"work-center": {Read: 2, Unchanged: 1, Failed: 1}, "person": {Read: 4, Unchanged: 4}, "employment": {Read: 5, Unchanged: 4, Failed: 1},
+		"position": {Read: 3, Unchanged: 1, Failed: 2}, "work-place": {Read: 2, Unchanged: 2}})
+	if len(people(maccorp)) != 2 || len(jobs(maccorp)) != 2 || len(held(m["Ana García López"])) != 1 || len(at(m["Luis Pérez"])) != 1 {
+		t.Fatal("nobody and nothing twice")
 	}
 
-	// A month later: Eva's hire date arrives and she is hired; Ana left and her employment ends.
+	// A month later: Eva's hire date arrives, she is hired and gets her position; Ana left and her
+	// employment ends.
 	later, err := h.Imports.Service.Execute.Handle(actx, files(personioLater))
 	if err != nil {
 		t.Fatal(err)
 	}
-	expect("a month later", later.Counts, map[string]impapp.CountDTO{"person": {Read: 3, Unchanged: 3}, "employment": {Read: 4, Created: 1, Updated: 1, Unchanged: 2}})
-	m, k = jobs(maccorp), jobs(karpo)
-	if m["P-MC-001"].Terminated != "2026-09-30" || k["P-MC-006"].Hired != "2025-02-03" || len(k) != 2 {
-		t.Fatalf("a month later: %+v %+v", m, k)
+	said = said[:0]
+	for _, msg := range later.Messages {
+		said = append(said, msg.Key+": "+msg.Text)
+	}
+	expect("a month later", later.Counts, map[string]impapp.CountDTO{"person": {Read: 4, Unchanged: 4},
+		"employment": {Read: 5, Created: 1, Updated: 1, Unchanged: 3}, "position": {Read: 3, Created: 1, Unchanged: 1, Failed: 1}})
+	mj, kj = jobs(maccorp), jobs(karpo)
+	eva := held(k["Eva Ruiz"])
+	if mj["P-MC-001"].Terminated != "2026-09-30" || kj["P-MC-006"].Hired != "2025-02-03" || len(kj) != 3 || len(eva) != 1 || eva[0].Unit != department[karpo] ||
+		eva[0].TypeTitle != titles[1] {
+		t.Fatalf("a month later: %+v %+v %+v", mj, kj, eva)
 	}
 
 	// The references say what each key of Personio is, and the audit of each context that it came
 	// from an import.
 	refs, err := h.Imports.Service.References.Handle(actx, impapp.SearchReferences{Source: "personio", Size: 50})
-	if err != nil || refs.Total != 12 { // 2 companies, 2 departments, 1 work center, 3 persons, 4 employments
+	if err != nil || refs.Total != 18 { // 2 companies, 2 departments, 1 work center, 4 persons, 5 employments, 2 positions, 2 work places
 		t.Fatalf("references: %d %v", refs.Total, err)
 	}
 	trail, err := h.Parties.Audit.Trail(ctx, "parties.party", maccorp)

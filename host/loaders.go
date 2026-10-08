@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/facilities"
 	facapp "github.com/jhermoso/karpo-fw-go/contexts/facilities/application"
@@ -363,7 +364,188 @@ func (l Employments) Apply(ctx context.Context, r impdomain.Record, existing str
 	return id, impdomain.Created, nil
 }
 
+// moment returns the instant a day of a file begins, or nil when the file gives none (then: now).
+func moment(s string) *time.Time {
+	d, ok := day(s)
+	if !ok {
+		return nil
+	}
+	t := d.BaseTime()
+	return &t
+}
+
+// employee returns the person of an employee number an import loaded.
+func employee(refs impdomain.Refs, number string) (string, error) {
+	if id, ok := refs.Lookup(impdomain.KindPerson, impdomain.GlobalScope, number); ok && id != "" {
+		return id, nil
+	}
+	return "", fw.Violation("imports.unknown_person", "the person "+number+" was not loaded: what is theirs cannot be either")
+}
+
+// Positions loads into HR the job each person holds: a position of the type the job title names,
+// in their department (or in the company when the file gives none), held by them since they were
+// hired. That is how HR knows which department someone is in.
+type Positions struct {
+	HR  *hr.Module
+	UoW fw.UnitOfWork
+}
+
+// Kind implements imports' Loader.
+func (Positions) Kind() string { return impdomain.KindPosition }
+
+// EntityType implements imports' Loader.
+func (Positions) EntityType() string { return hrdomain.PositionKind }
+
+// unit returns where the position is: the department of the record, or its company.
+func (l Positions) unit(r impdomain.Record, refs impdomain.Refs) (string, error) {
+	if name := r.Fields["department"]; name != "" {
+		if id, ok := refs.Lookup(impdomain.KindDepartment, r.Scope, name); ok && id != "" {
+			return id, nil
+		}
+		return "", fw.Violation("imports.unknown_department", "the department "+name+" of "+r.Scope+" was not loaded")
+	}
+	return companyOf(refs, r.Scope)
+}
+
+// jobType returns the type of position a job title names: the one of the catalog of HR with that
+// title, without minding case or accents.
+func (l Positions) jobType(ctx context.Context, title string) (string, error) {
+	types, err := l.HR.Service.PositionTypes.Handle(ctx, hrapp.ListPositionTypes{})
+	if err != nil {
+		return "", err
+	}
+	want := impdomain.Fold(title)
+	for _, t := range types {
+		if t.Active && impdomain.Fold(t.Title) == want {
+			return t.ID.String(), nil
+		}
+	}
+	return "", fw.Violation("imports.unknown_job_title", "no type of position of HR is called "+title+": add it to the catalog or correct the file")
+}
+
+// Find looks for a position of that type in that unit the person already holds.
+func (l Positions) Find(ctx context.Context, r impdomain.Record, refs impdomain.Refs) (string, error) {
+	unit, err1 := l.unit(r, refs)
+	person, err2 := employee(refs, r.Key)
+	typ, err3 := l.jobType(ctx, r.Fields["jobTitle"])
+	if err1 != nil || err2 != nil || err3 != nil {
+		return "", nil // Apply will say what is missing
+	}
+	found, err := l.HR.Service.SearchPositions.Handle(ctx, hrapp.SearchPositions{Unit: unit, Type: typ, Holder: person, Size: 5})
+	if err != nil || len(found.Items) == 0 {
+		return "", err
+	}
+	return found.Items[0].ID, nil
+}
+
+// Apply opens the position and gives it to the person, both or neither.
+func (l Positions) Apply(ctx context.Context, r impdomain.Record, existing string, refs impdomain.Refs) (string, impdomain.Outcome, error) {
+	if existing != "" {
+		return existing, impdomain.Unchanged, nil
+	}
+	unit, err := l.unit(r, refs)
+	if err != nil {
+		return "", "", err
+	}
+	person, err := employee(refs, r.Key)
+	if err != nil {
+		return "", "", err
+	}
+	typ, err := l.jobType(ctx, r.Fields["jobTitle"])
+	if err != nil {
+		return "", "", err
+	}
+	from, id := moment(r.Fields["from"]), ""
+	err = l.UoW.Do(ctx, func(ctx context.Context) error {
+		p, err := l.HR.Service.OpenPosition.Handle(ctx, hrapp.OpenPosition{Unit: unit, Type: typ, PlannedFrom: from, FullTime: true})
+		if err != nil {
+			return err
+		}
+		id = p.ID
+		pid, _ := hrdomain.ParsePositionID(p.ID)
+		_, err = l.HR.Service.FillPosition.Handle(ctx, hrapp.FillPosition{ID: pid, Person: person, From: from})
+		return err
+	})
+	if err != nil {
+		return "", "", err
+	}
+	return id, impdomain.Created, nil
+}
+
+// WorkPlaces loads into Parties the work center each person works at: the role of work center
+// they play at the facility an import loaded for it.
+type WorkPlaces struct{ Parties *parties.Module }
+
+// Kind implements imports' Loader.
+func (WorkPlaces) Kind() string { return impdomain.KindWorkPlace }
+
+// EntityType implements imports' Loader.
+func (WorkPlaces) EntityType() string { return "parties.facility_role" }
+
+func (l WorkPlaces) facility(r impdomain.Record, refs impdomain.Refs) (string, error) {
+	name := r.Fields["workCenter"]
+	if id, ok := refs.Lookup(impdomain.KindWorkCenter, r.Scope, name); ok && id != "" {
+		return id, nil
+	}
+	return "", fw.Violation("imports.unknown_work_center", "the work center "+name+" of "+r.Scope+" was not loaded")
+}
+
+// role returns the role of work center a person plays now at a facility.
+func (l WorkPlaces) role(ctx context.Context, person, facility string) (string, error) {
+	pid, err := pardomain.ParsePartyID(person)
+	if err != nil {
+		return "", err
+	}
+	p, err := l.Parties.Service.Get.Handle(ctx, parapp.GetParty{ID: pid})
+	if err != nil {
+		return "", err
+	}
+	for _, fr := range p.FacilityRoles {
+		if fr.Active && fr.Facility == facility && fr.RoleType == pardomain.FacilityWorkCenter.String() {
+			return fr.ID, nil
+		}
+	}
+	return "", nil
+}
+
+// Find looks for the role the person already plays at the work center.
+func (l WorkPlaces) Find(ctx context.Context, r impdomain.Record, refs impdomain.Refs) (string, error) {
+	facility, err1 := l.facility(r, refs)
+	person, err2 := employee(refs, r.Key)
+	if err1 != nil || err2 != nil {
+		return "", nil
+	}
+	return l.role(ctx, person, facility)
+}
+
+// Apply makes the person play the role of work center at the facility.
+func (l WorkPlaces) Apply(ctx context.Context, r impdomain.Record, existing string, refs impdomain.Refs) (string, impdomain.Outcome, error) {
+	if existing != "" {
+		return existing, impdomain.Unchanged, nil
+	}
+	facility, err := l.facility(r, refs)
+	if err != nil {
+		return "", "", err
+	}
+	person, err := employee(refs, r.Key)
+	if err != nil {
+		return "", "", err
+	}
+	pid, _ := pardomain.ParsePartyID(person)
+	if _, err := l.Parties.Service.AssignFacilityRole.Handle(ctx, parapp.AssignFacilityRole{PartyID: pid, Facility: facility,
+		RoleType: pardomain.FacilityWorkCenter.String(), From: moment(r.Fields["from"])}); err != nil {
+		return "", "", err
+	}
+	id, err := l.role(ctx, person, facility)
+	if err != nil || id == "" {
+		return "", "", errors.Join(err, errors.New("the role was assigned and cannot be read back"))
+	}
+	return id, impdomain.Created, nil
+}
+
 var (
+	_ impdomain.Loader = Positions{}
+	_ impdomain.Loader = WorkPlaces{}
 	_ impdomain.Loader = Departments{}
 	_ impdomain.Loader = WorkCenters{}
 	_ impdomain.Loader = People{}

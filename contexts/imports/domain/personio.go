@@ -12,6 +12,8 @@ const (
 	KindWorkCenter  = "work-center"
 	KindPerson      = "person"
 	KindEmployment  = "employment"
+	KindPosition    = "position"   // the job someone holds, in the department or the company
+	KindWorkPlace   = "work-place" // the work center someone works at
 )
 
 // Roles of the files of Personio.
@@ -39,7 +41,7 @@ func (Personio) Files() []FileSpec {
 
 // Kinds implements Source.
 func (Personio) Kinds() []string {
-	return []string{KindLegalEntity, KindDepartment, KindWorkCenter, KindPerson, KindEmployment}
+	return []string{KindLegalEntity, KindDepartment, KindWorkCenter, KindPerson, KindEmployment, KindPosition, KindWorkPlace}
 }
 
 type personioRun struct {
@@ -47,7 +49,17 @@ type personioRun struct {
 	messages []Message
 	legal    []string          // declared legal entities, as written
 	folded   map[string]string // folded name → as written
-	units    map[string]bool
+	units    map[string]string // kind|company|name, folded → the name as declared
+}
+
+// declared returns the name of a unit as the file of units writes it, so that what the file of
+// people calls "operaciones" is the department declared as "Operaciones". A unit nobody declared
+// keeps the name it comes with.
+func (p *personioRun) declared(kind, company, written string) string {
+	if name, ok := p.units[kind+"|"+Fold(company)+"|"+Fold(written)]; ok {
+		return name
+	}
+	return strings.Join(strings.Fields(written), " ")
 }
 
 func (p *personioRun) reject(t *Table, r Row, kind, key, code, text string) {
@@ -160,11 +172,11 @@ func (p *personioRun) orgUnits(t *Table) {
 			scope = GlobalScope
 		}
 		id := kind + "|" + Fold(scope) + "|" + Fold(name)
-		if p.units[id] {
+		if _, dup := p.units[id]; dup {
 			p.warn(t, r, kind, name, "personio.duplicate_unit", "the unit is declared twice; the second is ignored")
 			continue
 		}
-		p.units[id] = true
+		p.units[id] = name
 		p.records = append(p.records, Record{Kind: kind, Scope: scope, Key: name, File: t.File, Line: r.Line,
 			Fields: map[string]string{"name": name, "legalEntity": parent, "notes": r.Get("notes")}})
 	}
@@ -216,12 +228,33 @@ func (p *personioRun) people(t *Table) {
 			}
 			p.records = append(p.records, Record{Kind: KindEmployment, Scope: e, Key: number, File: t.File, Line: r.Line, Fields: f})
 		}
+		// Where and as what they work, in the first company: each on its own, so that a job title
+		// nobody knows does not keep the work center from being loaded.
+		department, center, job := r.Get("department"), r.Get("workCenter"), r.Get("jobTitle")
+		if department != "" {
+			department = p.declared(KindDepartment, entities[0], department)
+		}
+		if center != "" {
+			center = p.declared(KindWorkCenter, entities[0], center)
+		}
+		switch {
+		case job != "":
+			p.records = append(p.records, Record{Kind: KindPosition, Scope: entities[0], Key: number, File: t.File, Line: r.Line, Fields: map[string]string{
+				"employeeNumber": number, "legalEntity": entities[0], "department": department, "jobTitle": job, "from": hired}})
+		case department != "":
+			p.warn(t, r, KindPosition, number, "personio.department_without_job",
+				"the person has a department and no job title: a position needs both, so the department is not recorded")
+		}
+		if center != "" {
+			p.records = append(p.records, Record{Kind: KindWorkPlace, Scope: entities[0], Key: number, File: t.File, Line: r.Line, Fields: map[string]string{
+				"employeeNumber": number, "legalEntity": entities[0], "workCenter": center, "from": hired}})
+		}
 	}
 }
 
 // Read implements Source.
 func (Personio) Read(files []File) ([]Record, []Message, error) {
-	p := &personioRun{folded: map[string]string{}, units: map[string]bool{}}
+	p := &personioRun{folded: map[string]string{}, units: map[string]string{}}
 	for _, role := range []string{RoleOrgUnits, RolePeople} {
 		for _, f := range files {
 			if f.Role != role {

@@ -114,12 +114,24 @@ func TestHost(t *testing.T) {
 			}
 
 			// The rest of the organization, through the loaders of the host: departments and people in
-			// Parties, a work center in Facilities, employments in HR (one person in two companies).
+			// Parties, a work center in Facilities, employments in HR (one person in two companies), and
+			// for one of them the position they hold in their department and where they work.
+			types, err := h.HR.Service.PositionTypes.Handle(actx, hrapp.ListPositionTypes{})
+			if err != nil || len(types) == 0 {
+				t.Fatalf("position types: %v", err)
+			}
+			title, jobType := "", ""
+			for _, pt := range types {
+				if pt.Active {
+					title, jobType = pt.Title, pt.ID.String()
+					break
+				}
+			}
 			org := "unitType,name,parentOrg\nInternalOrganization,Añil Cambios,\nInternalOrganization,Karpo Servicios,\n" +
 				"Department,Operaciones,Añil Cambios\nDepartment,Operaciones,Karpo Servicios\nOffice,Oficina Sol,Añil Cambios\n"
-			people := "employeeNumber,firstName,lastName,email,gender,legalEntity,hireDate,terminationDate\n" +
-				"P-1,Íñigo,Núñez,inigo@anil.test,M,Añil Cambios,2020-03-01,\n" +
-				"P-2,Lucía,Pérez,lucia@anil.test,F,Añil / Karpo (PLURIEMPLEO),2021-05-10,2024-12-31\n"
+			people := "employeeNumber,firstName,lastName,email,gender,legalEntity,hireDate,terminationDate,department,workCenter,jobTitle\n" +
+				"P-1,Íñigo,Núñez,inigo@anil.test,M,Añil Cambios,2020-03-01,,operaciones,OFICINA SOL,\"" + title + "\"\n" +
+				"P-2,Lucía,Pérez,lucia@anil.test,F,Añil / Karpo (PLURIEMPLEO),2021-05-10,2024-12-31,,,\n"
 			whole := impapp.RunImport{Source: "personio", Files: []impapp.FileDTO{{Role: "org-units", Name: "org.csv", Content: org},
 				{Role: "people", Name: "people.csv", Content: people}}}
 			loaded, err := h.Imports.Service.Execute.Handle(actx, whole)
@@ -127,7 +139,7 @@ func TestHost(t *testing.T) {
 				t.Fatalf("the whole organization: %+v %v", loaded, err)
 			}
 			want := map[string]impapp.CountDTO{"legal-entity": {Read: 2, Unchanged: 2}, "department": {Read: 2, Created: 2}, "work-center": {Read: 1, Created: 1},
-				"person": {Read: 2, Created: 2}, "employment": {Read: 3, Created: 3}}
+				"person": {Read: 2, Created: 2}, "employment": {Read: 3, Created: 3}, "position": {Read: 1, Created: 1}, "work-place": {Read: 1, Created: 1}}
 			for _, c := range loaded.Counts {
 				kind := c.Kind
 				c.Kind = ""
@@ -147,6 +159,20 @@ func TestHost(t *testing.T) {
 			jobs, err := h.HR.Service.SearchEmployments.Handle(actx, hrapp.SearchEmployments{Number: "P-2", Size: 10})
 			if err != nil || jobs.Total != 2 || jobs.Items[0].Terminated != "2024-12-31" || jobs.Items[0].Hired != "2021-05-10" || jobs.Items[0].Person != jobs.Items[1].Person {
 				t.Fatalf("one person in two companies: %+v %v", jobs.Items, err)
+			}
+
+			held, err := h.HR.Service.SearchPositions.Handle(actx, hrapp.SearchPositions{Type: jobType, Size: 10})
+			if err != nil {
+				t.Fatal(err)
+			}
+			placed := 0
+			for _, pos := range held.Items {
+				if pos.TypeTitle == title && !pos.Vacant && pos.Unit != pos.Organization {
+					placed++
+				}
+			}
+			if placed != 1 {
+				t.Fatalf("a position in the department, held: %+v", held.Items)
 			}
 
 			// The finance sector exists only for a financial institution: the role is given in Parties.
