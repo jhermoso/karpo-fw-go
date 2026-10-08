@@ -33,8 +33,8 @@ const (
 
 const audit = `created_at {ts}, created_by_id {str:64}, created_by_name {str:200}, modified_at {ts}, modified_by_id {str:64}, modified_by_name {str:200}`
 
-// message_text holds 1,000 characters: Oracle counts the size of a column in bytes, and a character
-// may take four.
+// message_text holds 1,000 characters. It was declared as {str:4000} while {str:N} counted bytes on
+// Oracle; migration 3 gives it its real size.
 var schemaDDL = []string{
 	`CREATE TABLE imp_runs (id {uuid} NOT NULL PRIMARY KEY, version {bigint} NOT NULL, source_key {str:64} NOT NULL, files {str:1000},
 	status {str:30} NOT NULL, started_at {ts} NOT NULL, finished_at {ts}, started_by {str:64}, started_by_name {str:200}, reason {str:500},
@@ -70,15 +70,29 @@ func technicalDDL(d string) []string {
 	return nil
 }
 
+// Changing the size of a column has no portable form. SQLite stores {str:N} as TEXT, without a
+// size: there is nothing to change.
+var messageTextDDL = map[string]string{
+	"postgres":  `ALTER TABLE imp_run_messages ALTER COLUMN message_text TYPE {str:1000}`,
+	"sqlserver": `ALTER TABLE imp_run_messages ALTER COLUMN message_text {str:1000} NULL`,
+	"oracle":    `ALTER TABLE imp_run_messages MODIFY (message_text {str:1000})`,
+	"mysql":     `ALTER TABLE imp_run_messages MODIFY COLUMN message_text {str:1000} NULL`,
+}
+
 // Migrations is the versioned schema of the context.
 func Migrations() sqlrepo.MigrationSet {
-	technical := map[string][]string{}
+	technical, messageText := map[string][]string{}, map[string][]string{}
 	for _, d := range sqlrepo.Dialects {
 		technical[d] = technicalDDL(d)
+		messageText[d] = []string{}
+		if s, ok := messageTextDDL[d]; ok {
+			messageText[d] = []string{sqlrepo.RenderDDL(d, s)}
+		}
 	}
 	return sqlrepo.MigrationSet{Context: Context, Migrations: []sqlrepo.Migration{
 		{Version: 1, Name: "runs and references", Up: sqlrepo.RenderDDLAll(schemaDDL...)},
 		{Version: 2, Name: "outboxes and audit log", Up: technical},
+		{Version: 3, Name: "message text of 1,000 characters", Up: messageText},
 	}}
 }
 
