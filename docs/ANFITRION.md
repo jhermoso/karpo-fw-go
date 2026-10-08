@@ -33,7 +33,9 @@ arrancar junto.
   | Facturación, Compras | motor de impuestos | Fiscal |
   | Pagos | reparto del neto de nómina | Nóminas |
   | Tesorería | lo cobrable y lo pagable | Cobros, Pagos |
-  | Importación | cargador de empresas | Parties (escrito aquí) |
+  | Importación | cargadores de empresas, departamentos y personas | Parties (escritos aquí) |
+| Importación | cargador de centros de trabajo | Instalaciones (escrito aquí) |
+| Importación | cargador de empleos | RRHH y Parties (escrito aquí) |
   | Sectorial financiero | qué empresas son entidad financiera | Parties (escrito aquí) |
 | Módulos | qué capacidades se derivan de lo que es la empresa (`financial`) | Parties (escrito aquí) |
 | Exportación | listado de cuentas de clientes | Sectorial financiero (escrito aquí) |
@@ -159,8 +161,8 @@ macroservicios** (decisión 1).
   entre ellos (NATS o Kafka) y relé seguro con varias instancias.
 - Probar `karpo-postgres` contra un proyecto de Supabase.
 - Resolver el riesgo del oyente que rechaza.
-- Cargadores de Importación que faltan (departamentos, centros, personas, empleos; Sage y
-  Apiscore) y listados de Exportación (Parties, facturas, pedidos…).
+- Cargadores de Importación de Sage y Apiscore, y listados de Exportación (Parties, facturas,
+  pedidos…).
 - Adaptadores que faltan: calendario de festivos para Cobros y códigos de promoción para Cambio.
 - Guardas del historial por tipo, para que no sea solo de administradores.
 - Observabilidad: la rama de trazas y métricas aún no está fusionada; el anfitrión es donde se

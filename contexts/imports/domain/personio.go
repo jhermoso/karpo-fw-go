@@ -205,7 +205,8 @@ func (p *personioRun) people(t *Table) {
 		seen[number] = true
 		p.records = append(p.records, Record{Kind: KindPerson, Scope: GlobalScope, Key: number, File: t.File, Line: r.Line, Fields: map[string]string{
 			"employeeNumber": number, "firstName": first, "lastName": last, "preferredName": preferred, "fullName": full,
-			"email": strings.ToLower(r.Get("email")), "gender": r.Get("gender"), "notes": r.Get("notes")}})
+			"email": strings.ToLower(r.Get("email")), "gender": r.Get("gender"), "notes": r.Get("notes"),
+			"legalEntity": entities[0]}}) // the first company they work for: where they are registered
 		for i, e := range entities {
 			f := map[string]string{"employeeNumber": number, "legalEntity": e, "primary": strconv.FormatBool(i == 0), "hireDate": hired, "terminationDate": left,
 				"department": "", "workCenter": "", "jobTitle": "", "supervisor": "false"}

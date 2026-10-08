@@ -140,8 +140,8 @@ func scenario(t *testing.T, sw *hotswap.Switch) {
 		}
 	}
 
-	// An import registers its companies in Parties through the loader of the host; the kinds
-	// nobody loads yet are skipped saying so.
+	// An import registers its companies and their departments in Parties through the loaders of
+	// the host.
 	files := impapp.RunImport{Source: "personio", Files: []impapp.FileDTO{{Role: "org-units", Name: "org.csv",
 		Content: "unitType,name,parentOrg,notes\nInternalOrganization,Maccorp Exact Change,,\nInternalOrganization,Karpo Servicios,,\nDepartment,Operaciones,Karpo Servicios,\n"}}}
 	var run impapp.RunDTO
@@ -154,7 +154,7 @@ func scenario(t *testing.T, sw *hotswap.Switch) {
 		}
 		return impapp.CountDTO{}
 	}
-	if run.Status != "succeeded" || count("legal-entity").Created != 2 || count("department").Skipped != 1 || run.Warnings != 1 {
+	if run.Status != "succeeded" || count("legal-entity").Created != 2 || count("department").Created != 1 || run.Warnings != 0 {
 		t.Fatalf("import: %+v", run)
 	}
 	companies, err := h.Parties.Organizations.All(ctx)

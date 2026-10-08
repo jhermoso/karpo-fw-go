@@ -20,6 +20,7 @@ import (
 	fininfra "github.com/jhermoso/karpo-fw-go/contexts/financial/infrastructure"
 	fisinfra "github.com/jhermoso/karpo-fw-go/contexts/fiscal/infrastructure"
 	geoinfra "github.com/jhermoso/karpo-fw-go/contexts/geography/infrastructure"
+	hrapp "github.com/jhermoso/karpo-fw-go/contexts/hr/application"
 	hrinfra "github.com/jhermoso/karpo-fw-go/contexts/hr/infrastructure"
 	impapp "github.com/jhermoso/karpo-fw-go/contexts/imports/application"
 	impinfra "github.com/jhermoso/karpo-fw-go/contexts/imports/infrastructure"
@@ -110,6 +111,42 @@ func TestHost(t *testing.T) {
 			companies, err := h.Parties.Organizations.All(ctx)
 			if err != nil || len(companies) != 2 {
 				t.Fatalf("companies: %+v %v", companies, err)
+			}
+
+			// The rest of the organization, through the loaders of the host: departments and people in
+			// Parties, a work center in Facilities, employments in HR (one person in two companies).
+			org := "unitType,name,parentOrg\nInternalOrganization,Añil Cambios,\nInternalOrganization,Karpo Servicios,\n" +
+				"Department,Operaciones,Añil Cambios\nDepartment,Operaciones,Karpo Servicios\nOffice,Oficina Sol,Añil Cambios\n"
+			people := "employeeNumber,firstName,lastName,email,gender,legalEntity,hireDate,terminationDate\n" +
+				"P-1,Íñigo,Núñez,inigo@anil.test,M,Añil Cambios,2020-03-01,\n" +
+				"P-2,Lucía,Pérez,lucia@anil.test,F,Añil / Karpo (PLURIEMPLEO),2021-05-10,2024-12-31\n"
+			whole := impapp.RunImport{Source: "personio", Files: []impapp.FileDTO{{Role: "org-units", Name: "org.csv", Content: org},
+				{Role: "people", Name: "people.csv", Content: people}}}
+			loaded, err := h.Imports.Service.Execute.Handle(actx, whole)
+			if err != nil || loaded.Status != "succeeded" {
+				t.Fatalf("the whole organization: %+v %v", loaded, err)
+			}
+			want := map[string]impapp.CountDTO{"legal-entity": {Read: 2, Unchanged: 2}, "department": {Read: 2, Created: 2}, "work-center": {Read: 1, Created: 1},
+				"person": {Read: 2, Created: 2}, "employment": {Read: 3, Created: 3}}
+			for _, c := range loaded.Counts {
+				kind := c.Kind
+				c.Kind = ""
+				if c != want[kind] {
+					t.Fatalf("the whole organization, %s: %+v", kind, c)
+				}
+			}
+			twice, err := h.Imports.Service.Execute.Handle(actx, whole)
+			if err != nil || twice.Status != "succeeded" {
+				t.Fatalf("again: %+v %v", twice, err)
+			}
+			for _, c := range twice.Counts {
+				if c.Created != 0 || c.Updated != 0 || c.Failed != 0 || c.Unchanged != c.Read {
+					t.Fatalf("again, %s: %+v", c.Kind, c)
+				}
+			}
+			jobs, err := h.HR.Service.SearchEmployments.Handle(actx, hrapp.SearchEmployments{Number: "P-2", Size: 10})
+			if err != nil || jobs.Total != 2 || jobs.Items[0].Terminated != "2024-12-31" || jobs.Items[0].Hired != "2021-05-10" || jobs.Items[0].Person != jobs.Items[1].Person {
+				t.Fatalf("one person in two companies: %+v %v", jobs.Items, err)
 			}
 
 			// The finance sector exists only for a financial institution: the role is given in Parties.

@@ -7,10 +7,10 @@ Sirve para **cargar en Karpo lo que hoy vive en otros sistemas**: se le dan unos
 haría con ellos (vista previa), lo hace (ejecución) y deja escrito qué pasó línea a línea y en qué
 se convirtió cada clave del sistema de origen.
 
-> **Alcance de esta fase.** Está el motor, el registro de ejecuciones, las referencias y la fuente
-> Personio. **Todavía no hay cargadores reales**: quien escribe en Parties o en RRHH es una pieza
-> del anfitrión que aún no existe (en las pruebas la hace un doble). Hasta que se escriban, una
-> importación lee y valida, pero no crea nada en los demás contextos.
+> **Alcance.** Están el motor, el registro de ejecuciones, las referencias, la fuente Personio y,
+> desde el 2026-10-08, **sus cinco cargadores en el anfitrión**: una importación de Personio crea
+> empresas, departamentos, centros, personas y empleos. Ver «Cargadores de Personio». Sage y
+> Apiscore siguen pendientes.
 
 ## Método
 
@@ -214,10 +214,76 @@ Además:
   misma clave en dos ámbitos, segunda ejecución reconocida solo por las referencias, vista previa,
   ejecución en curso y dada por muerta, y bandeja de salida.
 
+## Cargadores de Personio (en el anfitrión)
+
+Añadidos el 2026-10-08. Están en `host/loaders.go`, porque son quienes conocen a la vez
+Importación y el contexto dueño de cada dato. Con ellos **una importación de Personio ya crea la
+organización de verdad**.
+
+| Clase | Dónde acaba | Cómo se reconoce si ya existe | Qué hace |
+|---|---|---|---|
+| `legal-entity` | Parties | organización interna del mismo nombre | la registra como organización interna |
+| `department` | Parties | unidad del mismo nombre bajo su empresa | organización con rol de departamento, agregada a su empresa |
+| `work-center` | Instalaciones | instalación del mismo nombre en su empresa | la registra como **edificio** |
+| `person` | Parties | persona del mismo nombre entre las de su empresa | la registra afiliada como empleada a su primera empresa, con su correo |
+| `employment` | RRHH | empleo con ese número en esa empresa | la contrata y, si el fichero trae fecha de baja, termina el empleo |
+
+Reglas comunes:
+
+- **Lo que existe no se toca.** Una importación rellena, no pisa lo que alguien mantiene a mano.
+  La única actualización es terminar un empleo cuando el fichero pasa a traer la fecha de baja.
+- **Cada registro, o entero o nada:** el departamento y su vínculo con la empresa, la persona con
+  su afiliación y su correo, y la contratación con su baja van en una sola unidad de trabajo.
+- **Con los permisos de quien importa:** hace falta `Imports.Run.Execute` y, además, lo que pida
+  cada contexto para dar de alta eso mismo a mano.
+- **La referencia manda en las siguientes ejecuciones:** dos personas con el mismo nombre se
+  distinguen por su número de empleado una vez enlazadas. Si en la primera ejecución ya hay dos
+  personas con ese nombre en la empresa, no se elige ninguna y se crea una nueva.
+
+Lo que se rechaza, con su línea:
+
+- **Centro de trabajo sin empresa** (`imports.work_center_without_company`): en Instalaciones
+  toda instalación es de una organización.
+- **Empleo sin fecha de alta** (`imports.hire_date_required`): RRHH la exige. La persona sí se
+  carga; el empleo entra cuando el fichero traiga la fecha.
+- **Lo que cuelga de algo que no se cargó** (`imports.unknown_company`,
+  `imports.unknown_person`).
+
+Decisiones propuestas (pendientes de confirmar):
+
+1. **Un centro de trabajo se carga como edificio en Instalaciones**, no como oficina ni como
+   centro de trabajo de RRHH. Una oficina exige dirección y teléfono, y el centro de RRHH su
+   código de cuenta de cotización y su fecha de apertura; el fichero solo trae un nombre.
+   Sugerencia: sí; completarlo es trabajo a mano o de una fuente que traiga esos datos.
+2. **Sin fecha de alta no hay empleo.** Sugerencia: sí; inventar una fecha sería peor. En el
+   fichero de ejemplo de C# las fechas eran opcionales, así que conviene revisar el fichero real
+   antes de la primera carga.
+3. **Departamento, centro y puesto del empleado no se cargan todavía.** En RRHH van en el
+   contrato y en el puesto, que piden tipo de contrato y convenio. Sugerencia: sí por ahora; es
+   el siguiente paso si Personio va a ser la fuente del organigrama.
+4. **Pluriempleo:** la persona se registra con su primera empresa y se afilia a la segunda al
+   contratarla allí, con fecha de hoy en Parties; las fechas reales del empleo las guarda RRHH.
+   Sugerencia: sí.
+5. **El apellido va entero al primer apellido** («García López» no se parte en dos).
+   Sugerencia: sí; partirlo bien no es posible con apellidos compuestos.
+
+Validación:
+
+- **Anfitrión** (en memoria y en SQLite): todas las clases de Personio tienen cargador; vista
+  previa que no escribe; primera ejecución con dos empresas, un departamento homónimo en cada
+  una, un centro cargado y otro rechazado, tres personas y tres empleos (uno rechazado por falta
+  de fecha); comprobado en Parties (unidades bajo cada empresa, personas por empresa, la de
+  pluriempleo en las dos), en Instalaciones y en RRHH (fechas de alta y de baja, la misma persona
+  en dos empleos); segunda ejecución sin cambios ni duplicados; un mes después se contrata a
+  quien ya trae fecha y se termina el empleo de quien se fue; doce referencias; y la auditoría de
+  Parties marca la procedencia (fuente y ejecución).
+- **Integración** en PostgreSQL, SQL Server, Oracle y MySQL: la organización completa a través
+  del anfitrión, repetida sin cambios, y una persona con dos empleos.
+
 ## Pendiente
 
-- **Cargadores reales** sobre Parties, Instalaciones y RRHH para las cinco clases de Personio: es
-  lo que falta para que una importación cree algo.
+- ~~Cargadores reales para las cinco clases de Personio~~: hechos, ver «Cargadores de Personio».
+  Queda cargar el departamento, el centro y el puesto de cada empleado (contrato y puesto en RRHH).
 - Fuentes de Sage (CSV por concepto: clientes, proveedores, IVA, plan de cuentas, bancos) y de
   Apiscore, con sus clases de registro y sus cargadores (Parties, Fiscal, Contabilidad, Tesorería).
 - Programar `CloseStale` al montar el servidor.
