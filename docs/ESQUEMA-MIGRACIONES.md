@@ -105,7 +105,49 @@ m.Verify(ctx)  // al arrancar y antes de hotswap.Switch.Swap: nunca sobre un esq
   base compartida.
 - **Solo lectura.** `Status` y `Verify` no escriben: sin tabla de historial, todo está pendiente.
 
+## Cambios en el renderizado del DDL portable
+
+El checksum de una migración se calcula sobre sus sentencias **ya renderizadas** para el dialecto
+(`RenderDDL`). Por eso, un cambio en cómo se renderiza un tipo lógico cambia el checksum de todas
+las migraciones que lo usan, aunque nadie haya tocado su texto: en las bases donde ya estaban
+aplicadas pasan a `modified`, y `Migrate` y `Verify` se niegan. Es el comportamiento deseado,
+porque el esquema de esa base ya no es el que el código crearía.
+
+**`{str:N}` en Oracle: de `VARCHAR2(N)` a `VARCHAR2(N CHAR)`.** `VARCHAR2(N)` cuenta bytes (con
+el `NLS_LENGTH_SEMANTICS` por defecto) y los contextos validan las longitudes en caracteres, así
+que un texto con acentos cerca de su límite fallaba con `ORA-12899` solo en Oracle. El cambio
+alcanza también a las tablas de outbox, auditoría, inbox e historial de migraciones de Oracle,
+que estaban escritas a mano con `VARCHAR2(N)`. Los demás motores no cambian.
+
+- Una base Oracle **nueva** nace con semántica de caracteres. No hay nada que hacer.
+- Una base Oracle **migrada antes del cambio** conserva sus columnas en bytes y sus migraciones
+  quedan como `modified`. Se repara una vez:
+  1. Pasar las columnas a caracteres. Es un cambio de metadatos que nunca recorta datos (la
+     columna solo crece). Esta consulta genera las sentencias del esquema:
+
+     ```sql
+     SELECT 'ALTER TABLE ' || table_name || ' MODIFY (' || column_name || ' VARCHAR2(' || char_length || ' CHAR))'
+       FROM user_tab_columns
+      WHERE data_type = 'VARCHAR2' AND char_used = 'B'
+      ORDER BY table_name, column_id;
+     ```
+
+  2. Llamar a `Migrator.Force(ctx, contexto, versión)` por cada migración `modified` de
+     `Status`, para registrar el checksum nuevo.
+
+  La alternativa, si la base no tiene datos que conservar, es recrearla.
+- **Límites que siguen existiendo.** Un `VARCHAR2` de Oracle no guarda más de 4000 bytes
+  (`MAX_STRING_SIZE=STANDARD`), se declare como se declare: `{str:N}` solo garantiza N caracteres
+  cualesquiera hasta N = 1000 (4 bytes por carácter). Para textos más largos, `{text}`. En SQL
+  Server, `NVARCHAR(N)` cuenta unidades UTF-16, así que los caracteres de fuera del plano básico
+  (emoji) ocupan dos.
+- Una columna declarada más ancha para esquivar el problema (por ejemplo `{str:4000}` para 1000
+  caracteres) solo puede volver a su tamaño con una migración nueva, no editando la aplicada.
+
 ## Validación
+
+- `sqlconformance.RunStrings` en los cinco motores: una columna `{str:1000}` guarda y devuelve
+  1000 caracteres de 2, 3 y 4 bytes (los de 4, salvo en SQL Server).
 
 - `sqlconformance.RunMigrations` en SQLite, PostgreSQL, SQL Server, Oracle y MySQL:
   - base vacía pendiente y `Verify` fallando;
