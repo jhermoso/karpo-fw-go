@@ -102,14 +102,18 @@ func (l LegalEntities) Find(ctx context.Context, r impdomain.Record, _ impdomain
 	return "", nil
 }
 
-// Apply registers the company when it does not exist. One that exists is left as it is: an
-// import does not rename a company.
+// Apply registers the company when it does not exist, as a financial institution too when the
+// source says it is one. One that exists is left as it is: an import does not rename a company,
+// nor does it change what it is.
 func (l LegalEntities) Apply(ctx context.Context, r impdomain.Record, existing string, _ impdomain.Refs) (string, impdomain.Outcome, error) {
 	if existing != "" {
 		return existing, impdomain.Unchanged, nil
 	}
-	p, err := l.Parties.Service.RegisterOrganization.Handle(ctx, parapp.RegisterOrganization{LegalName: r.Fields["name"],
-		Roles: []string{pardomain.RoleInternalOrganization.String()}})
+	roles := []string{pardomain.RoleInternalOrganization.String()}
+	if r.Fields["financialInstitution"] == "true" {
+		roles = append(roles, pardomain.RoleFinancialInstitution.String())
+	}
+	p, err := l.Parties.Service.RegisterOrganization.Handle(ctx, parapp.RegisterOrganization{LegalName: r.Fields["name"], Roles: roles})
 	if err != nil {
 		return "", "", err
 	}

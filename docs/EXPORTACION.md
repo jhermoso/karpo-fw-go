@@ -209,7 +209,7 @@ Más `customer-accounts`, del sectorial financiero, que ya estaba.
   contexto dueño, con el ámbito de esa persona. Filtrar por otra empresa estrecha lo que ve,
   nunca lo ensancha.
 
-Decisiones propuestas (pendientes de confirmar):
+Decisiones (aprobadas por Javier el 2026-10-08):
 
 1. **`employees` sale de RRHH**, no de Parties: una fila por empleo, así que quien trabaja para
    dos empresas sale dos veces, y pide el permiso de RRHH. En C# salía de Parties (personas con
