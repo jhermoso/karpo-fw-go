@@ -106,6 +106,16 @@ func TestMigrations(t *testing.T) {
 	}
 }
 
+// TestStrings checks on every engine that a {str:N} column holds N non-ASCII characters.
+func TestStrings(t *testing.T) {
+	for _, e := range engines {
+		if e.name == "oracle-dotnet-guids" {
+			continue
+		}
+		t.Run(e.name, func(t *testing.T) { sqlconformance.RunStrings(t, open(t, e)) })
+	}
+}
+
 // TestInbox checks the SQL inbox on every engine.
 func TestInbox(t *testing.T) {
 	for _, e := range engines {

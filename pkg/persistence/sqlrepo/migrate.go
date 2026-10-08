@@ -185,9 +185,9 @@ func (m *Migrator) ddl() (history, lock string) {
 	checksum NVARCHAR(64) NOT NULL, dirty BIT NOT NULL, applied_at DATETIME2(7) NOT NULL, PRIMARY KEY (context, version))`, m.q(m.table)),
 			fmt.Sprintf(`CREATE TABLE %s (id INT NOT NULL PRIMARY KEY, owner NVARCHAR(64) NOT NULL, acquired_at DATETIME2(7) NOT NULL)`, m.q(m.lockTable))
 	case "oracle":
-		return fmt.Sprintf(`CREATE TABLE %s (context VARCHAR2(100) NOT NULL, version NUMBER(19) NOT NULL, name VARCHAR2(200) NOT NULL,
-	checksum VARCHAR2(64) NOT NULL, dirty NUMBER(1) NOT NULL, applied_at TIMESTAMP(6) WITH TIME ZONE NOT NULL, PRIMARY KEY (context, version))`, m.q(m.table)),
-			fmt.Sprintf(`CREATE TABLE %s (id NUMBER(10) NOT NULL PRIMARY KEY, owner VARCHAR2(64) NOT NULL, acquired_at TIMESTAMP(6) WITH TIME ZONE NOT NULL)`, m.q(m.lockTable))
+		return fmt.Sprintf(`CREATE TABLE %s (context VARCHAR2(100 CHAR) NOT NULL, version NUMBER(19) NOT NULL, name VARCHAR2(200 CHAR) NOT NULL,
+	checksum VARCHAR2(64 CHAR) NOT NULL, dirty NUMBER(1) NOT NULL, applied_at TIMESTAMP(6) WITH TIME ZONE NOT NULL, PRIMARY KEY (context, version))`, m.q(m.table)),
+			fmt.Sprintf(`CREATE TABLE %s (id NUMBER(10) NOT NULL PRIMARY KEY, owner VARCHAR2(64 CHAR) NOT NULL, acquired_at TIMESTAMP(6) WITH TIME ZONE NOT NULL)`, m.q(m.lockTable))
 	case "mysql":
 		return fmt.Sprintf(`CREATE TABLE %s (context VARCHAR(100) NOT NULL, version BIGINT NOT NULL, name VARCHAR(200) NOT NULL,
 	checksum VARCHAR(64) NOT NULL, dirty BOOLEAN NOT NULL, applied_at DATETIME(6) NOT NULL, PRIMARY KEY (context, version))`, m.q(m.table)),

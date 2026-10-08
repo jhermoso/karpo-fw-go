@@ -16,7 +16,7 @@ var logicalTypes = map[string]map[string]string{
 		"int": "INTEGER", "bigint": "BIGINT", "false": "FALSE", "add": "ADD COLUMN %s", "addEnd": ""},
 	"sqlserver": {"uuid": "UNIQUEIDENTIFIER", "str": "NVARCHAR(%s)", "text": "NVARCHAR(MAX)", "bool": "BIT", "ts": "DATETIME2(7)",
 		"date": "DATE", "int": "INT", "bigint": "BIGINT", "false": "0", "add": "ADD %s", "addEnd": ""},
-	"oracle": {"uuid": "RAW(16)", "str": "VARCHAR2(%s)", "text": "CLOB", "bool": "NUMBER(1)", "ts": "TIMESTAMP(6) WITH TIME ZONE",
+	"oracle": {"uuid": "RAW(16)", "str": "VARCHAR2(%s CHAR)", "text": "CLOB", "bool": "NUMBER(1)", "ts": "TIMESTAMP(6) WITH TIME ZONE",
 		"date": "DATE", "int": "NUMBER(10)", "bigint": "NUMBER(19)", "false": "0", "add": "ADD (%s", "addEnd": ")"},
 	"mysql": {"uuid": "CHAR(36)", "str": "VARCHAR(%s)", "text": "LONGTEXT", "bool": "BOOLEAN", "ts": "DATETIME(6)", "date": "DATE",
 		"int": "INT", "bigint": "BIGINT", "false": "FALSE", "add": "ADD COLUMN %s", "addEnd": ""},
@@ -29,6 +29,13 @@ var ddlPlaceholder = regexp.MustCompile(`\{(\w+)(?::([\w ]+))?\}`)
 // expects: RAW(16) on Oracle, UNIQUEIDENTIFIER on SQL Server...), {false} its false literal and
 // {add:column} ... {addEnd} its ALTER TABLE ADD clause. Optional text columns must be nullable:
 // Oracle stores "" as NULL.
+//
+// {str:N} holds N characters, as the domain counts them (runes), on every engine: on Oracle it
+// is VARCHAR2(N CHAR), since a plain VARCHAR2(N) counts bytes and rejects accented text near
+// its limit. Two engine limits remain. An Oracle VARCHAR2 never stores more than 4000 bytes
+// (MAX_STRING_SIZE=STANDARD), so only N <= 1000 is guaranteed for any text: use {text} beyond
+// that. SQL Server's NVARCHAR(N) counts UTF-16 code units, so characters outside the Basic
+// Multilingual Plane (emoji) take two.
 func RenderDDL(dialect, ddl string) string {
 	types := logicalTypes[dialect]
 	return ddlPlaceholder.ReplaceAllStringFunc(ddl, func(m string) string {

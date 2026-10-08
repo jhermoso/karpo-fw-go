@@ -16,7 +16,7 @@ func TestRender(t *testing.T) {
 			t.Errorf("%s:\n got %s\nwant %s", d, got, w)
 		}
 	}
-	if got := render("oracle", "x {str:30} {uuid}"); got != "x VARCHAR2(30) RAW(16)" {
+	if got := render("oracle", "x {str:30} {uuid}"); got != "x VARCHAR2(30 CHAR) RAW(16)" {
 		t.Fatal(got)
 	}
 }
