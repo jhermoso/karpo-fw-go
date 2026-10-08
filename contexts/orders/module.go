@@ -38,7 +38,7 @@ func Compose(sw *hotswap.Switch, catalog domain.Catalog, credit domain.CreditChe
 	d := oapp.Deps{
 		Orders: hotswap.Repository(sw, infrastructure.OrderRepositoryFactory), Deliveries: hotswap.Repository(sw, infrastructure.DeliveryRepositoryFactory),
 		Terms: hotswap.Repository(sw, infrastructure.TermsRepositoryFactory), Counters: hotswap.Repository(sw, infrastructure.CounterRepositoryFactory),
-		Quotes: hotswap.Repository(sw, infrastructure.QuoteRepositoryFactory),
+		Quotes:  hotswap.Repository(sw, infrastructure.QuoteRepositoryFactory),
 		Catalog: catalog, Credit: credit, UoW: sw, Audit: audit,
 		Recorder: outbox.Recorders(outbox.NewRecorder(hotswap.Outbox(sw, infrastructure.OutboxFactory)),
 			oapp.Publications(messaging.NewRecorder(contracts.Source, integration))),
