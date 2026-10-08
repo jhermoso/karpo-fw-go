@@ -110,7 +110,8 @@ contexts/imports/         # Contexto Importación de datos (fuentes que leen fic
 contexts/exports/         # Contexto Exportación de listados (trabajos persistentes que escriben un listado en CSV o XLSX con la vista de quien lo pidió; listados que ofrece el anfitrión, ficheros en un almacén compartido, caducidad): ver docs/EXPORTACION.md
 contexts/financial/       # Sectorial financiero, solo para empresas que son entidad financiera: productos que ofrece, acuerdos con sus clientes y las cuentas que les lleva (IBAN o identificador propio, titulares con su papel, usos, bloqueo, abandono y cierre): ver docs/CUENTAS-CLIENTES.md
 host/                     # Punto de composición: monta todos los contextos, los cablea, lleva sus mensajes, declara permisos, sirve las rutas y hace las tareas programadas: ver docs/ANFITRION.md
-cmd/karpo/                # El anfitrión como programa, sobre SQLite (migrate | serve)
+cmd/karpo-postgres/       # El anfitrión como programa de producción, sobre PostgreSQL o Supabase (migrate | serve); módulo aparte
+cmd/karpo/                # El mismo programa sobre SQLite, para desarrollar
 integration/              # Módulo aparte: pruebas contra PostgreSQL, SQL Server, Oracle, MySQL
 ```
 
