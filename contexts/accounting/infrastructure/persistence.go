@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/accounting/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/application"
@@ -87,6 +88,7 @@ func Migrations() sqlrepo.MigrationSet {
 	return sqlrepo.MigrationSet{Context: Context, Migrations: []sqlrepo.Migration{
 		{Version: 1, Name: "chart of accounts, ledgers and journal", Up: sqlrepo.RenderDDLAll(schemaDDL...)},
 		{Version: 2, Name: "outboxes, audit log and inbox", Up: technical},
+		{Version: 3, Name: "facts that wait to be posted", Up: sqlrepo.RenderDDLAll(parkedDDL...)},
 	}}
 }
 
@@ -96,7 +98,7 @@ func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 }
 
 // Tables lists the tables of the context, children first (drop order).
-var Tables = []string{"acc_entry_lines", "acc_entries", "acc_counters", "acc_closed_periods", "acc_ledger_taxes", "acc_ledger_roles", "acc_ledgers",
+var Tables = []string{"acc_parked_facts", "acc_entry_lines", "acc_entries", "acc_counters", "acc_closed_periods", "acc_ledger_taxes", "acc_ledger_roles", "acc_ledgers",
 	"acc_accounts", TableOutbox, TableIntegrationOutbox, TableAuditLog, TableInbox}
 
 // DropAll removes the tables of the context and its migration history (tests only).
@@ -343,4 +345,68 @@ func InboxFactory(b hotswap.Backend) (application.InboxStore, error) {
 		return memory.NewInbox(db), nil
 	}
 	return nil, unsupported(b)
+}
+
+var parkedDDL = []string{
+	`CREATE TABLE acc_parked_facts (id {uuid} NOT NULL PRIMARY KEY, version {bigint} NOT NULL, company {uuid}, event_type {str:100} NOT NULL,
+	envelope_id {str:64} NOT NULL, source_name {str:50}, subject_id {str:100}, occurred_at {ts}, correlation_id {str:100}, causation_id {str:100},
+	payload {text} NOT NULL, code {str:100}, reason {str:500}, received_at {ts} NOT NULL, attempts {int} NOT NULL, status {str:20} NOT NULL,
+	resolved_at {ts}, note {str:500}, ` + audit + `)`,
+	`CREATE UNIQUE INDEX ux_acc_parked_envelope ON acc_parked_facts (envelope_id)`,
+	`CREATE INDEX ix_acc_parked_company ON acc_parked_facts (company, status)`,
+	`CREATE INDEX ix_acc_parked_subject ON acc_parked_facts (subject_id, status)`,
+}
+
+// ParkedMapping maps ParkedFact to acc_parked_facts.
+func ParkedMapping() sqlrepo.Mapping[domain.ParkedID, *domain.ParkedFact] {
+	text := func(s string) any {
+		if s == "" {
+			return nil
+		}
+		return s
+	}
+	moment := func(t time.Time) any {
+		if t.IsZero() {
+			return nil
+		}
+		return t
+	}
+	at := func(r *sqlrepo.Row, col string) time.Time {
+		if t := r.NullTime(col); t != nil {
+			return t.UTC()
+		}
+		return time.Time{}
+	}
+	return sqlrepo.Mapping[domain.ParkedID, *domain.ParkedFact]{
+		Table: "acc_parked_facts",
+		Columns: sqlrepo.WithAuditColumns("company", "event_type", "envelope_id", "source_name", "subject_id", "occurred_at", "correlation_id",
+			"causation_id", "payload", "code", "reason", "received_at", "attempts", "status", "resolved_at", "note"),
+		Dehydrate: func(p *domain.ParkedFact) (sqlrepo.Values, error) {
+			s := p.State()
+			var company any
+			if !s.Company.IsZero() {
+				company = s.Company
+			}
+			return sqlrepo.AuditStampValues(sqlrepo.Values{"company": company, "event_type": s.EventType, "envelope_id": s.EnvelopeID,
+				"source_name": text(s.Source), "subject_id": text(s.Subject), "occurred_at": moment(s.OccurredAt), "correlation_id": text(s.CorrelationID),
+				"causation_id": text(s.CausationID), "payload": s.Data, "code": text(s.Code), "reason": text(s.Reason), "received_at": s.ReceivedAt,
+				"attempts": int64(s.Attempts), "status": string(s.Status), "resolved_at": moment(s.ResolvedAt), "note": text(s.Note)}, p.AuditStamp()), nil
+		},
+		Hydrate: func(r *sqlrepo.Row, _ sqlrepo.ChildRows) (*domain.ParkedFact, error) {
+			s := domain.ParkedState{Company: domain.OrganizationID{UUID: r.UUID("company")}, EventType: r.String("event_type"), EnvelopeID: r.String("envelope_id"),
+				Source: r.String("source_name"), Subject: r.String("subject_id"), OccurredAt: at(r, "occurred_at"), CorrelationID: r.String("correlation_id"),
+				CausationID: r.String("causation_id"), Data: r.String("payload"), Code: r.String("code"), Reason: r.String("reason"),
+				ReceivedAt: r.Time("received_at").UTC(), Attempts: int(r.Int64("attempts")), Status: domain.ParkedStatus(r.String("status")),
+				ResolvedAt: at(r, "resolved_at"), Note: r.String("note"), Audit: r.AuditStamp()}
+			if err := r.Err(); err != nil {
+				return nil, err
+			}
+			return domain.ReconstituteParked(domain.ParkedID{UUID: r.UUID("id")}, s)
+		},
+	}
+}
+
+// ParkedRepositoryFactory builds the repository of the facts that wait.
+func ParkedRepositoryFactory(b hotswap.Backend) (domain.ParkedRepository, error) {
+	return repository(b, ParkedMapping())
 }

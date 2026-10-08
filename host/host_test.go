@@ -23,6 +23,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/contexts/security"
 	secapp "github.com/jhermoso/karpo-fw-go/contexts/security/application"
 	"github.com/jhermoso/karpo-fw-go/host"
+	"github.com/jhermoso/karpo-fw-go/pkg/application"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/memory"
@@ -213,6 +214,26 @@ func scenario(t *testing.T, sw *hotswap.Switch) {
 	}
 	if idle, err := h.RunChores(ctx); err != nil || idle != (host.Chores{}) {
 		t.Fatalf("nothing left to do: %+v %v", idle, err)
+	}
+
+	// A fact for the books of a company that has none yet does not hold anybody back: Accounting
+	// keeps it, and the chores will post it the day it can.
+	charge, _ := json.Marshal(map[string]any{"assetId": acc.ID, "company": maccorp, "code": "EQ-1", "period": "2026-03", "date": "2026-03-31", "amount": "50.00"})
+	if err := h.Broker.Send(ctx, application.Envelope{ID: acc.ID, Type: "assets.depreciation-charged.v1", Source: "assets", Subject: acc.ID, Data: charge}); err != nil {
+		t.Fatalf("a company without books holds the others back: %v", err)
+	}
+	var kept struct {
+		Total int64 `json:"total"`
+		Items []struct {
+			Code string `json:"code"`
+		} `json:"items"`
+	}
+	c.must(c.do("GET", "/api/accounting/parked?company="+maccorp, root, nil, &kept), 200, "what waits to be posted")
+	if kept.Total != 1 || kept.Items[0].Code != "accounting.no_ledger" {
+		t.Fatalf("kept: %+v", kept)
+	}
+	if again, err := h.RunChores(ctx); err != nil || again.Postings != 0 {
+		t.Fatalf("it still has no books: %+v %v", again, err)
 	}
 
 	// What the contexts published reaches those that listen, and then there is nothing to carry.

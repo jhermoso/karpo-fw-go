@@ -149,8 +149,61 @@ contexts/accounting/
   - nómina con reentregas; asiento manual en periodo cerrado rechazado; asiento, contraasiento y
     líneas de ida y vuelta; mayor, diario sin huecos y filtro por fechas.
 
+## Hechos aparcados
+
+Aprobado por Javier el 2026-10-08, al montar el anfitrión.
+
+Contabilidad asienta lo que publican los demás contextos. Si no puede asentar un hecho por una
+regla (la empresa aún no tiene libro, al perfil le falta una cuenta, el periodo está cerrado, el
+hecho llega mal formado), antes lo **rechazaba**. Con todos los contextos en un mismo proceso eso
+frenaba al que lo publicó: el mensaje se reintentaba una y otra vez para todos los oyentes.
+
+Ahora lo **aparca**: guarda el hecho tal como llegó, con el motivo, y lo asienta más tarde.
+
+- **`Parking`** se pone delante del consumidor. El anfitrión lo suscribe en su lugar
+  (`Module.Parking`); el consumidor directo (`Module.Consumer`) sigue existiendo y sigue
+  rechazando, para quien quiera ese comportamiento.
+- **Qué se aparca:** solo lo que rechaza una regla. Un fallo técnico (la base de datos no
+  responde) se sigue devolviendo, para que se reintente.
+- **Nada se asienta a medias:** el consumidor trabaja en su propia unidad de trabajo, que se
+  deshace entera cuando una regla rechaza el hecho; solo después se guarda como aparcado.
+- **El orden se respeta.** Los hechos de una empresa se asientan en el orden en que ocurrieron:
+  mientras uno espera, los que llegan después de esa empresa esperan detrás (motivo
+  `accounting.waiting`), aunque por sí solos se pudieran asentar. Un hecho que no nombra empresa
+  (la anulación de una nómina) sigue al hecho del que trata.
+- **Reintento** (`RetryParked`): por empresa o para todas las del ámbito. Prueba en orden; el
+  primero de una empresa que siga sin poder asentarse la detiene, y los demás se quedan detrás.
+  El anfitrión lo llama en cada ronda de tareas, así que abrir el libro o completar el perfil
+  basta para que lo aparcado se asiente solo.
+- **Descartar** (`DiscardParked`): un hecho que nunca se podrá asentar (mal formado, de prueba)
+  bloquea a su empresa hasta que alguien lo descarta, diciendo por qué. No se borra.
+- **Repetidos:** un mensaje que vuelve a llegar no se aparca ni se asienta dos veces, esté
+  esperando, asentado o descartado.
+- **Permisos:** `Accounting.Parked.Read` y `Accounting.Parked.Resolve` (reintentar y descartar).
+  Cada uno ve lo de sus empresas; un hecho sin empresa, solo un administrador global.
+- **Rutas:** `GET /api/accounting/parked`, `POST /api/accounting/parked/retry` y
+  `POST /api/accounting/parked/{id}/discard`.
+- **Almacenamiento:** `acc_parked_facts` (migración 3).
+
+Validación:
+
+- **Extremo a extremo** (en memoria y en SQLite migrada): el consumidor directo rechaza; el
+  aparcamiento guarda; reenviado no se duplica; el siguiente hecho de la empresa espera detrás; el
+  que no nombra empresa sigue a su asunto; lo que Contabilidad no asienta se ignora; otra empresa
+  con libro asienta al momento; reintentar sin libro no cambia nada y solo prueba el primero; con
+  libro pero sin cuenta de caja se asienta la factura y se detiene en el cobro; un hecho nuevo no
+  adelanta a lo que espera; completado el perfil se asienta todo, en orden; después nada se
+  asienta dos veces; un hecho mal formado bloquea hasta que se descarta (sin motivo 422, dos
+  veces 422) y descartado no vuelve a aparcarse; ámbito por empresa, sin permiso 403.
+- **Integración** en PostgreSQL, SQL Server, Oracle y MySQL: el rechazo deshace la unidad de
+  trabajo del consumidor (su bandeja de entrada no lo recuerda); el hecho guardado tal como llegó
+  (JSON de más de 7.000 bytes con acentos, instantes); dos facturas que llegan desordenadas se
+  asientan en el orden en que ocurrieron; reenvíos sin efecto.
+
 ## Pendiente
 
+- Aparcado: avisar a alguien cuando una empresa lleva hechos esperando (hoy hay que mirarlo), y
+  una vista de cuántos esperan por empresa.
 - Todo lo de la decisión 5 (fase 2).
 - Pagos: contabilizar el pago de nóminas, de retenciones (111) y de la Seguridad Social.
 - IVA de caja y recargo de equivalencia soportado.
