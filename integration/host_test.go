@@ -2,6 +2,7 @@ package integration
 
 import (
 	"context"
+	"errors"
 	"io"
 	"strings"
 	"testing"
@@ -25,6 +26,8 @@ import (
 	invinfra "github.com/jhermoso/karpo-fw-go/contexts/inventory/infrastructure"
 	modinfra "github.com/jhermoso/karpo-fw-go/contexts/modules/infrastructure"
 	ordinfra "github.com/jhermoso/karpo-fw-go/contexts/orders/infrastructure"
+	parapp "github.com/jhermoso/karpo-fw-go/contexts/parties/application"
+	pardomain "github.com/jhermoso/karpo-fw-go/contexts/parties/domain"
 	parinfra "github.com/jhermoso/karpo-fw-go/contexts/parties/infrastructure"
 	payinfra "github.com/jhermoso/karpo-fw-go/contexts/payments/infrastructure"
 	prlinfra "github.com/jhermoso/karpo-fw-go/contexts/payroll/infrastructure"
@@ -109,8 +112,17 @@ func TestHost(t *testing.T) {
 				t.Fatalf("companies: %+v %v", companies, err)
 			}
 
-			acc, err := h.Financial.Service.Open.Handle(actx, finapp.OpenAccount{Company: companies[0].ID, Number: "ES9121000418450200051332",
-				Holder: companies[1].ID, Name: "Cuenta de pago"})
+			// The finance sector exists only for a financial institution: the role is given in Parties.
+			open := finapp.OpenAccount{Company: companies[0].ID, Number: "ES9121000418450200051332", Holder: companies[1].ID, Name: "Cuenta de pago"}
+			var rv *fw.RuleViolationError
+			if _, err := h.Financial.Service.Open.Handle(actx, open); !errors.As(err, &rv) || rv.Code != "financial.not_an_institution" {
+				t.Fatalf("not an institution yet: %v", err)
+			}
+			bank, _ := pardomain.ParsePartyID(companies[0].ID)
+			if _, err := h.Parties.Service.AssignRole.Handle(actx, parapp.AssignRole{PartyID: bank, RoleType: pardomain.RoleFinancialInstitution.String()}); err != nil {
+				t.Fatal(err)
+			}
+			acc, err := h.Financial.Service.Open.Handle(actx, open)
 			if err != nil {
 				t.Fatal(err)
 			}

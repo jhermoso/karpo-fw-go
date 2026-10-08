@@ -19,6 +19,7 @@ import (
 	finapp "github.com/jhermoso/karpo-fw-go/contexts/financial/application"
 	geoinfra "github.com/jhermoso/karpo-fw-go/contexts/geography/infrastructure"
 	impapp "github.com/jhermoso/karpo-fw-go/contexts/imports/application"
+	pardomain "github.com/jhermoso/karpo-fw-go/contexts/parties/domain"
 	"github.com/jhermoso/karpo-fw-go/contexts/security"
 	secapp "github.com/jhermoso/karpo-fw-go/contexts/security/application"
 	"github.com/jhermoso/karpo-fw-go/host"
@@ -173,11 +174,16 @@ func scenario(t *testing.T, sw *hotswap.Switch) {
 		maccorp = companies[1].ID
 	}
 
+	// The finance sector exists only for a company that is a financial institution: Parties says so.
+	account := map[string]any{"company": maccorp, "number": "ES91 2100 0418 4502 0005 1332", "holder": companies[0].ID, "name": "Cuenta de pago",
+		"uses": []string{"customer-payment"}}
+	c.must(c.do("POST", "/api/financial/accounts", root, account, nil), 422, "not a financial institution yet")
+	c.must(c.do("POST", "/api/parties/"+maccorp+"/roles", root, map[string]any{"roleType": pardomain.RoleFinancialInstitution.String()}, nil), 200, "it becomes one")
+
 	// An account of a customer of one of them, and its list as a file: asked over HTTP, written by
 	// the chores of the host, downloaded by who asked.
 	var acc finapp.AccountDTO
-	c.must(c.do("POST", "/api/financial/accounts", root, map[string]any{"company": maccorp, "number": "ES91 2100 0418 4502 0005 1332",
-		"holder": companies[0].ID, "name": "Cuenta de pago", "uses": []string{"customer-payment"}}, &acc), 201, "open an account")
+	c.must(c.do("POST", "/api/financial/accounts", root, account, &acc), 201, "open an account")
 	var job expapp.JobDTO
 	c.must(c.do("POST", "/api/exports", root, map[string]any{"dataset": "customer-accounts", "filter": map[string]string{"company": maccorp}}, &job), 202, "ask for the export")
 	chores, err := h.RunChores(ctx)

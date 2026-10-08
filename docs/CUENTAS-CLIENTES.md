@@ -1,15 +1,24 @@
-# Contexto Cuentas de clientes
+# Sectorial financiero
 
 Port del núcleo financiero de C# (`FinancialKernel`) al contexto `contexts/financial`.
 
-Es el registro de **las cuentas que una entidad lleva a sus clientes**: su número, quién es
-titular, para qué se usa y si puede operar. Es el vertical de Maccorp como entidad de pago: las
-2.964 cuentas que la importación de Apiscore cargaba en C#.
+Es el **sectorial de finanzas** de Karpo: lo que solo tiene una empresa que es entidad
+financiera. Tres cosas:
 
-> **Lo que se pidió y lo que hay.** El encargo era portar cuentas, acuerdos y productos
-> financieros. Al leer el C#, los tres resultan ser cascarones sin datos ni reglas; lo único real
-> del núcleo es `BankAccount`, que es otra tabla. Este contexto porta eso, en lo que toca a
-> clientes, y propone retirar el resto (decisión 1).
+- los **productos** que ofrece (una cuenta de pago, un depósito, un préstamo);
+- los **acuerdos** que firma con cada cliente;
+- las **cuentas** que lleva a sus clientes: su número, quién es titular, para qué se usa y si
+  puede operar. Son las 2.964 cuentas que la importación de Apiscore cargaba en C#.
+
+> **Para quién existe.** Solo para una empresa que en Parties es organización interna **y además**
+> tiene el rol de entidad financiera. Para cualquier otra, este contexto no tiene nada: no puede
+> dar de alta productos, acuerdos ni cuentas.
+
+> **Corrección del 2026-10-08.** La primera versión de este documento proponía retirar
+> `FinancialAccount`, `FinancialAgreement` y `FinancialProduct` porque en el código de C# son
+> cascarones sin datos ni reglas. Javier aclaró que **no se retiran**: son el sectorial de
+> finanzas. Productos y acuerdos están ahora en el contexto, y la cuenta es lo que
+> `FinancialAccount` quería ser, con los datos reales que el C# guardaba en `BankAccount`.
 
 ## Método
 
@@ -65,15 +74,30 @@ las cuentas de los clientes de la entidad.
 | 5 | Búsqueda enriquecida y estadísticas | 3 | 1 | 2 | 3 | **46** | Modificar → búsqueda y recuento dentro del ámbito de quien llama, sin caché |
 | 6 | `BankStatementLine` sobre la cuenta financiera | 2 | 2 | 1 | 3 | **39** | Retirar → los extractos son los de Tesorería |
 | 7 | `AccountTransaction` (movimientos sin saldo) | 2 | 1 | 2 | 3 | **38** | Retirar → movimientos y saldo, si se quieren, son otra fase |
-| 8 | `FinancialAccount` | 1 | 1 | 2 | 3 | **30** | Retirar → lo que pretendía ser es `Account` |
-| 9 | `FinancialProduct` | 1 | 2 | 1 | 2 | **28** | Retirar → la cuenta apunta a un producto de Productos |
-| 10 | `FinancialAgreement` | 1 | 1 | 1 | 3 | **26** | Retirar |
+| 8 | `FinancialAccount` | 1 | 1 | 2 | 3 | **30** | Mantener por decisión de Javier → es `Account`, con los datos reales de `BankAccount` |
+| 9 | `FinancialProduct` | 1 | 2 | 1 | 2 | **28** | Mantener por decisión de Javier → agregado `Product`, propio de la entidad, sin la herencia de tres niveles |
+| 10 | `FinancialAgreement` | 1 | 1 | 1 | 3 | **26** | Mantener por decisión de Javier → agregado `Agreement`, con el cliente con quien se firma y estado |
 | 11 | Rutas sin permisos y borrado físico | — | — | — | — | — | Sustituido → cinco permisos; una cuenta se cierra, no se borra |
+
+Las notas de las filas 8 a 10 miden el código de C# tal como está (cascarones), no el valor de la
+pieza: se mantienen porque son producto planificado.
 
 ## Diseño en Go
 
-- **`Account`**: entidad (una organización interna), número, divisa, nombre, producto, estado,
-  si es de pruebas, día de apertura y de cierre, titulares y usos.
+- **Entidad financiera** (`domain.Institutions`): el contexto pregunta si la empresa lo es antes
+  de crear nada. En el anfitrión responde Parties: organización interna con el rol de entidad
+  financiera, los dos en vigor. Si no lo es: 422 `financial.not_an_institution`.
+- **`Product`**: código propio (único en la entidad), nombre, descripción, familia (`payment`,
+  `deposit`, `loan`, `investment`, `leasing`, `other`), código regulatorio y, si se deja de
+  ofrecer, desde qué día. Lo ya contratado sigue; se puede volver a ofrecer.
+- **`Agreement`**: número propio (único en la entidad), el cliente con quien se firma, nombre,
+  familia (la del producto si no se dice), producto, día de firma, vigencia y estado (`in-force`,
+  `terminated` con su motivo). Un acuerdo terminado no cambia.
+- **`Account`**: entidad (una organización interna), número, divisa, nombre, **producto**,
+  **acuerdo**, estado, si es de pruebas, día de apertura y de cierre, titulares y usos.
+  - El producto tiene que ser de la entidad y, al abrir, seguir ofreciéndose.
+  - El acuerdo tiene que ser de la entidad, estar en vigor ese día y estar firmado con uno de los
+    titulares.
 - **Número:**
   - una cuenta normal tiene un **IBAN** y sus dígitos de control tienen que cuadrar;
   - una cuenta **virtual** (solo existe en los libros de la entidad) tiene un identificador propio
@@ -94,21 +118,26 @@ las cuentas de los clientes de la entidad.
   pruebas contadas aparte.
 - **Para otros contextos** (`contracts.Accounts`): qué cuentas tiene una persona en una entidad y
   si cada una puede operar.
-- **Permisos** (`application/service.go`): `Financial.Account.Read`, `Create` (abrir), `Update`
-  (datos, titulares y usos), `Block` (bloquear, apartar por abandono y liberar) y `Close`.
+- **Permisos**: `Financial.Account.Read`, `Create` (abrir), `Update` (datos, titulares y usos),
+  `Block` (bloquear, apartar por abandono y liberar) y `Close`; `Financial.Product.Read` y
+  `Update`; `Financial.Agreement.Read` y `Update`.
 - **Rutas:** `POST/GET /api/financial/accounts`, `GET /api/financial/accounts/stats`,
   `GET …/by-number/{number}`, `GET/PUT …/{id}`, `POST …/{id}/holders`, `…/holders/end`,
   `…/holders/primary`, `…/uses`, `…/uses/end`, `…/block`, `…/abandon`, `…/release` y `…/close`.
-- **Eventos publicados:** `financial.account-opened.v1` y `financial.account-status-changed.v1`.
-- **Almacenamiento:** `fin_accounts` (+ `fin_account_holders`, `fin_account_uses`), las bandejas
-  de salida y la auditoría.
+  Además `POST/GET /api/financial/products`, `GET/PUT …/products/{id}`, `…/discontinue`,
+  `…/reinstate`; y `POST/GET /api/financial/agreements`, `GET/PUT …/agreements/{id}`,
+  `…/terminate`.
+- **Eventos publicados:** `financial.account-opened.v1`, `financial.account-status-changed.v1`,
+  `financial.agreement-signed.v1` y `financial.agreement-terminated.v1`.
+- **Almacenamiento:** `fin_accounts` (+ `fin_account_holders`, `fin_account_uses`),
+  `fin_products`, `fin_agreements`, las bandejas de salida y la auditoría.
 
 ## Decisiones (aprobadas por Javier el 2026-10-08)
 
-1. **Se retiran `FinancialAccount`, `FinancialAgreement` y `FinancialProduct`.** Sugerencia: sí;
-   no tienen datos, reglas ni uso. Es la decisión de más alcance: si alguno responde a un plan
-   que yo no veo en el código (hipotecas, depósitos, contratos), dímelo y lo trato como
-   funcionalidad nueva, no como port.
+1. ~~Se retiran `FinancialAccount`, `FinancialAgreement` y `FinancialProduct`.~~ **Corregida por
+   Javier el 2026-10-08: no se retiran.** Pertenecen al sectorial de finanzas, que se carga si la
+   empresa es organización interna y además entidad financiera. Ver «Sectorial: pendiente de
+   confirmar» más abajo para cómo lo he interpretado.
 2. **El contexto es el registro de cuentas de clientes de la entidad.** Las cuentas propias
    siguen en Tesorería, las de proveedores en Pagos y las de empleados en Nóminas. Sugerencia: sí.
 3. **IBAN validado de verdad**, e identificador propio para las cuentas virtuales. El número es
@@ -129,9 +158,33 @@ las cuentas de los clientes de la entidad.
    es la fase siguiente de este contexto.
 9. **Las estadísticas respetan el ámbito** de quien las pide, cuentan las cuentas de pruebas
    aparte y no se guardan en caché. Sugerencia: sí.
-10. **El producto es una referencia a Productos** y no hay acuerdos. Sugerencia: sí.
+10. ~~El producto es una referencia a Productos y no hay acuerdos.~~ **Sustituida por la
+    corrección de la 1:** el producto y el acuerdo son de este contexto.
 11. **Publica la apertura y los cambios de estado**, y ofrece a otros contextos las cuentas de una
     persona. Sugerencia: sí; el número de cuenta viaja en el evento y es un dato personal.
+
+## Sectorial: pendiente de confirmar
+
+Lo que he hecho a partir de la corrección, para que lo confirmes o lo cambies:
+
+1. **Quién es entidad financiera lo dice Parties** (organización interna con el rol de entidad
+   financiera, los dos en vigor) y el contexto lo comprueba **al crear**: productos, acuerdos y
+   cuentas. Leer no se bloquea: una empresa que no lo es simplemente no tiene nada. Si deja de
+   serlo, lo que tenía se conserva y se puede consultar, pero no crea más.
+2. **La cuenta que ya había es `FinancialAccount`.** No he creado otra tabla: es la misma cuenta,
+   con los datos reales de `BankAccount`, que ahora apunta a su producto y a su acuerdo.
+3. **El producto financiero es de la entidad**, no del catálogo general de Productos. En C#
+   heredaba de `Product` y `Service`; aquí es un agregado propio con su código y su familia.
+4. **El acuerdo tiene cliente y estado**, que en C# no tenía. Un acuerdo se firma con una persona
+   y una cuenta solo se abre bajo un acuerdo firmado con uno de sus titulares.
+5. **Familias en lugar de texto libre** para producto, acuerdo y cuenta (en C# eran cadenas como
+   `savings_account` o `loan_agreement` sin catálogo).
+6. **Choca con una decisión aprobada de Módulos.** La 4 de [MODULOS.md](MODULOS.md) dice que la
+   capacidad `financial` «deja de derivarse del rol de Parties y se activa como cualquier otra».
+   Tu corrección dice lo contrario para este contexto. De momento **no he tocado Módulos**: el
+   sectorial depende del rol y la capacidad `financial` del catálogo sigue activándose a mano,
+   así que hoy son dos cosas distintas. Dime si la capacidad debe volver a derivarse del rol
+   (la interfaz la usa para enseñar el menú) y lo cambio.
 
 ## Validación
 
@@ -140,6 +193,14 @@ las cuentas de los clientes de la entidad.
   abandono con motivo; transiciones inválidas; cierre el mismo día de la apertura; cuenta
   cerrada que no cambia y se reconstruye; cuenta viva sin titular principal; alta sin titular.
 - **Extremo a extremo** (en memoria y en SQLite migrada):
+  - una empresa que no es entidad financiera no crea productos, acuerdos ni cuentas (422);
+  - productos: solo lectura 403, ajeno 404, familia y código inválidos 400, código repetido 422;
+    cambio; dejar de ofrecer y volver a ofrecer; no se abre una cuenta con un producto que ya no
+    se ofrece ni con uno que no existe; búsquedas por familia y por si se ofrece;
+  - acuerdos: sin familia ni producto 400, termina antes de empezar 400, producto inexistente
+    422, número repetido 422; la familia sale del producto; terminar antes de su inicio 422, con
+    motivo, dos veces 422, y terminado no cambia; no se abre una cuenta bajo un acuerdo terminado
+    ni bajo el de otra persona; búsquedas por cliente, producto y estado;
   - apertura: solo lectura 403, ajeno 404; dígitos de control erróneos, sin titular,
     identificador corto, uso desconocido, uso de cuenta propia, divisa y BIC → 400; número
     repetido 422; cuenta virtual en dólares; cuenta de pruebas;
@@ -157,7 +218,8 @@ las cuentas de los clientes de la entidad.
   - cuentas de una persona para otros contextos, con si pueden operar;
   - cierre: bloquear no es cerrar (403), antes de la apertura 422; terminan titulares y usos;
     después no cambia nada (422) y su número sigue ocupado;
-  - ocho eventos publicados.
+  - cuentas por producto y por acuerdo;
+  - once eventos publicados.
 - **Integración** en PostgreSQL, SQL Server, Oracle y MySQL: cuenta de ida y vuelta con
   titulares, usos, fechas y acentos; número único en su entidad y libre en otra; búsquedas por
   titulares y usos vigentes; recuento; directorio; cierre; bandeja de salida.

@@ -73,11 +73,12 @@ func Migrations() sqlrepo.MigrationSet {
 	return sqlrepo.MigrationSet{Context: Context, Migrations: []sqlrepo.Migration{
 		{Version: 1, Name: "customer accounts, their holders and uses", Up: sqlrepo.RenderDDLAll(schemaDDL...)},
 		{Version: 2, Name: "outboxes and audit log", Up: technical},
+		{Version: 3, Name: "products, agreements and the agreement of an account", Up: sqlrepo.RenderDDLAll(catalogDDL...)},
 	}}
 }
 
 // Tables lists the tables of the context, children first (drop order).
-var Tables = []string{"fin_account_uses", "fin_account_holders", "fin_accounts", TableOutbox, TableIntegrationOutbox, TableAuditLog}
+var Tables = []string{"fin_account_uses", "fin_account_holders", "fin_accounts", "fin_agreements", "fin_products", TableOutbox, TableIntegrationOutbox, TableAuditLog}
 
 // DropAll removes the tables of the context and its migration history (tests only).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
@@ -119,17 +120,17 @@ func byNo(rows []*sqlrepo.Row) []*sqlrepo.Row {
 func AccountMapping() sqlrepo.Mapping[domain.AccountID, *domain.Account] {
 	return sqlrepo.Mapping[domain.AccountID, *domain.Account]{
 		Table: "fin_accounts",
-		Columns: sqlrepo.WithAuditColumns("company", "account_number", "virtual_account", "bic", "currency", "account_name", "product", "status", "demo",
-			"opened_on", "closed_on", "reason"),
+		Columns: sqlrepo.WithAuditColumns("company", "account_number", "virtual_account", "bic", "currency", "account_name", "product", "agreement", "status",
+			"demo", "opened_on", "closed_on", "reason"),
 		Dehydrate: func(a *domain.Account) (sqlrepo.Values, error) {
 			s := a.State()
 			return sqlrepo.AuditStampValues(sqlrepo.Values{"company": s.Company, "account_number": s.Number, "virtual_account": s.Virtual, "bic": opt(s.BIC),
-				"currency": s.Currency.String(), "account_name": opt(s.Name), "product": optUUID(s.Product), "status": string(s.Status), "demo": s.Demo,
+				"currency": s.Currency.String(), "account_name": opt(s.Name), "product": optUUID(s.Product), "agreement": optUUID(s.Agreement), "status": string(s.Status), "demo": s.Demo,
 				"opened_on": s.Opened, "closed_on": optDate(s.Closed), "reason": opt(s.Reason)}, a.AuditStamp()), nil
 		},
 		Hydrate: func(r *sqlrepo.Row, children sqlrepo.ChildRows) (*domain.Account, error) {
 			s := domain.AccountState{Company: domain.OrganizationID{UUID: r.UUID("company")}, Number: r.String("account_number"), Virtual: r.Bool("virtual_account"),
-				BIC: r.String("bic"), Name: r.String("account_name"), Product: r.UUID("product"), Status: domain.Status(r.String("status")), Demo: r.Bool("demo"),
+				BIC: r.String("bic"), Name: r.String("account_name"), Product: r.UUID("product"), Agreement: r.UUID("agreement"), Status: domain.Status(r.String("status")), Demo: r.Bool("demo"),
 				Opened: r.Date("opened_on"), Closed: r.Date("closed_on"), Reason: r.String("reason"), Audit: r.AuditStamp()}
 			var err error
 			if s.Currency, err = vocab.NewCurrencyCode(r.String("currency")); err != nil {
