@@ -4,25 +4,29 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/jhermoso/karpo-fw-go/pkg/application"
 	"github.com/jhermoso/karpo-fw-go/pkg/distribution"
-	"github.com/jhermoso/karpo-fw-go/pkg/result"
+	"github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-func TestWriteResult_Success(t *testing.T) {
+type stringID string
+
+func (s stringID) String() string { return string(s) }
+
+func TestRespond_Success(t *testing.T) {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/parties/123", nil)
 
-	data := map[string]string{"name": "Acme Corp"}
-	distribution.WriteResult(rec, req, result.Ok(data), http.StatusOK)
+	distribution.Respond(rec, req, map[string]string{"name": "Acme Corp"}, nil, http.StatusOK)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", rec.Code)
 	}
-
 	var body map[string]string
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatalf("failed decoding json response: %v", err)
@@ -32,33 +36,72 @@ func TestWriteResult_Success(t *testing.T) {
 	}
 }
 
-func TestWriteResult_NotFound(t *testing.T) {
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/parties/999", nil)
+func TestWriteError_MapsDomainTaxonomy(t *testing.T) {
+	var v domain.Validation
+	v.Add("taxId", "required", "tax id is required")
 
-	failRes := result.FailMsg[string]("party not found")
-	distribution.WriteResult(rec, req, failRes, http.StatusOK)
-
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("expected status 404 for not found error, got %d", rec.Code)
+	cases := []struct {
+		name   string
+		err    error
+		status int
+	}{
+		{"not found", domain.NotFound("parties.party", stringID("999")), http.StatusNotFound},
+		{"wrapped not found", fmt.Errorf("loading: %w", domain.NotFound("x", stringID("1"))), http.StatusNotFound},
+		{"validation", v.Err(), http.StatusBadRequest},
+		{"rule", domain.Violation("credit_limit", "limit exceeded"), http.StatusUnprocessableEntity},
+		{"conflict", domain.Conflict("x", stringID("1"), 3, "stale version"), http.StatusConflict},
+		{"forbidden", domain.ErrForbidden, http.StatusForbidden},
+		{"unsupported", domain.ErrUnsupported, http.StatusNotImplemented},
+		// Message text is irrelevant: an unknown error mentioning "not found" is still a 500.
+		{"unknown", errors.New("dependency not found in cache"), http.StatusInternalServerError},
 	}
-
-	var details distribution.ProblemDetails
-	_ = json.Unmarshal(rec.Body.Bytes(), &details)
-	if details.Status != 404 || details.Title != "Resource Not Found" {
-		t.Errorf("unexpected problem details: %+v", details)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			distribution.WriteError(rec, httptest.NewRequest(http.MethodGet, "/x", nil), tc.err)
+			if rec.Code != tc.status {
+				t.Fatalf("expected %d, got %d", tc.status, rec.Code)
+			}
+			var p distribution.ProblemDetails
+			_ = json.Unmarshal(rec.Body.Bytes(), &p)
+			if p.Status != tc.status {
+				t.Fatalf("problem status mismatch: %+v", p)
+			}
+		})
 	}
 }
 
-func TestWriteResult_BadRequest(t *testing.T) {
+func TestWriteError_ValidationCarriesFieldErrors(t *testing.T) {
+	var v domain.Validation
+	v.Add("taxId", "required", "tax id is required")
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/parties", nil)
+	distribution.WriteError(rec, httptest.NewRequest(http.MethodPost, "/parties", nil), v.Err())
 
-	failRes := result.FailMsg[string]("tax_id is required")
-	distribution.WriteResult(rec, req, failRes, http.StatusOK)
+	var p distribution.ProblemDetails
+	_ = json.Unmarshal(rec.Body.Bytes(), &p)
+	if len(p.Errors) != 1 || p.Errors[0].Field != "taxId" || p.Errors[0].Code != "required" {
+		t.Fatalf("field errors not propagated: %+v", p)
+	}
+}
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected status 400 for validation error, got %d", rec.Code)
+func TestCorrelationMiddleware(t *testing.T) {
+	var seen string
+	h := distribution.Chain(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = application.CorrelationID(r.Context())
+	}), distribution.Correlation())
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set(distribution.CorrelationHeader, "corr-1")
+	h.ServeHTTP(rec, req)
+	if seen != "corr-1" || rec.Header().Get(distribution.CorrelationHeader) != "corr-1" {
+		t.Fatalf("correlation not propagated: ctx=%q header=%q", seen, rec.Header().Get(distribution.CorrelationHeader))
+	}
+
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	if seen == "" || seen != rec.Header().Get(distribution.CorrelationHeader) {
+		t.Fatalf("expected generated correlation id, got %q", seen)
 	}
 }
 

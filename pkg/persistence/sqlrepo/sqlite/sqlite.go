@@ -1,0 +1,109 @@
+// Package sqlite provides the SQLite dialect for sqlrepo. It does not import a driver: register
+// one in the composition root (e.g. modernc.org/sqlite, pure Go, driver name "sqlite").
+//
+// Semantics notes: SQLite LIKE is case-insensitive for ASCII unless PRAGMA case_sensitive_like
+// is enabled; booleans are stored as 0/1; UUIDs as TEXT; instants as fixed-width UTC TEXT
+// (lexicographic order == chronological order).
+package sqlite
+
+import (
+	"database/sql"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/jhermoso/karpo-fw-go/pkg/domain"
+	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
+)
+
+// TimeLayout is the fixed-width UTC layout used to store instants.
+const TimeLayout = "2006-01-02T15:04:05.000000000Z"
+
+// Dialect implements sqlrepo.Dialect for SQLite.
+type Dialect struct{}
+
+// New returns the SQLite dialect.
+func New() Dialect { return Dialect{} }
+
+// Open wraps an opened SQLite *sql.DB.
+func Open(db *sql.DB, opts ...sqlrepo.Option) *sqlrepo.DB { return sqlrepo.New(db, New(), opts...) }
+
+func (Dialect) Name() string                         { return "sqlite" }
+func (Dialect) Placeholder(int) string               { return "?" }
+func (Dialect) Quote(ident string) string            { return `"` + strings.ReplaceAll(ident, `"`, `""`) + `"` }
+func (Dialect) LimitOffset(l, o int) string          { return fmt.Sprintf("LIMIT %d OFFSET %d", l, o) }
+func (Dialect) LikeEscape() string                   { return `ESCAPE '\'` }
+func (Dialect) MaxInList() int                       { return 900 }
+func (Dialect) UUIDValue(u domain.UUID) any          { return u.String() }
+func (Dialect) TimeValue(t time.Time) any            { return t.UTC().Format(TimeLayout) }
+func (Dialect) ParseUUID(v any) (domain.UUID, error) { return sqlrepo.ParseUUIDDefault(v) }
+
+func (Dialect) BoolValue(b bool) any {
+	if b {
+		return int64(1)
+	}
+	return int64(0)
+}
+
+// DateValue binds a civil date as ISO text "YYYY-MM-DD" (lexicographic order is chronological).
+func (Dialect) DateValue(y int, m time.Month, d int) any {
+	return fmt.Sprintf("%04d-%02d-%02d", y, m, d)
+}
+
+// DateExpr returns the placeholder unchanged.
+func (Dialect) DateExpr(ph string) string { return ph }
+
+func (Dialect) IsUniqueViolation(err error) bool {
+	return sqlrepo.ErrorContains(err, "UNIQUE constraint failed", "PRIMARY KEY constraint failed", "(1555)", "(2067)")
+}
+
+// OutboxDDL returns the statements creating the outbox table.
+func OutboxDDL(table string) []string {
+	if table == "" {
+		table = sqlrepo.DefaultOutboxTable
+	}
+	return []string{
+		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
+	id TEXT PRIMARY KEY,
+	event_type TEXT NOT NULL,
+	aggregate_type TEXT,
+	aggregate_id TEXT,
+	aggregate_version INTEGER,
+	payload TEXT NOT NULL,
+	occurred_at TEXT NOT NULL,
+	correlation_id TEXT,
+	causation_id TEXT,
+	attempts INTEGER NOT NULL DEFAULT 0,
+	last_error TEXT,
+	processed_at TEXT)`, table),
+		fmt.Sprintf(`CREATE INDEX IF NOT EXISTS ix_%s_pending ON %s (processed_at, occurred_at)`, table, table),
+	}
+}
+
+// AuditDDL returns the statements creating the audit log table.
+func AuditDDL(table string) []string {
+	if table == "" {
+		table = sqlrepo.DefaultAuditTable
+	}
+	return []string{
+		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
+	id TEXT PRIMARY KEY, aggregate_type TEXT NOT NULL, aggregate_id TEXT NOT NULL, aggregate_version INTEGER NOT NULL,
+	operation TEXT NOT NULL, actor_id TEXT, actor_name TEXT, channel TEXT, import_source TEXT, import_run_id TEXT,
+	import_file TEXT, correlation_id TEXT, occurred_at TEXT NOT NULL, changes TEXT, events TEXT)`, table),
+		fmt.Sprintf(`CREATE INDEX IF NOT EXISTS ix_%s_trail ON %s (aggregate_type, aggregate_id, occurred_at)`, table, table),
+	}
+}
+
+var _ sqlrepo.Dialect = Dialect{}
+
+// InboxDDL returns the statements creating the inbox table (consumer, message id).
+func InboxDDL(table string) []string {
+	if table == "" {
+		table = sqlrepo.DefaultInboxTable
+	}
+	return []string{
+		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
+	consumer TEXT NOT NULL, message_id TEXT NOT NULL, processed_at TEXT NOT NULL,
+	PRIMARY KEY (consumer, message_id))`, table),
+	}
+}
