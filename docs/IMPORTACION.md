@@ -9,8 +9,9 @@ se convirtió cada clave del sistema de origen.
 
 > **Alcance.** Están el motor, el registro de ejecuciones, las referencias, la fuente Personio y,
 > desde el 2026-10-08, **sus cinco cargadores en el anfitrión**: una importación de Personio crea
-> empresas, departamentos, centros, personas y empleos. Ver «Cargadores de Personio». Sage y
-> Apiscore siguen pendientes.
+> empresas, departamentos, centros, personas y empleos. Ver «Cargadores de Personio». También
+> están **las fuentes de Sage y de Apiscore con sus cargadores**: ver «Fuentes de Sage y de
+> Apiscore».
 
 ## Método
 
@@ -325,6 +326,117 @@ Validación:
 - **Integración** en PostgreSQL, SQL Server, Oracle y MySQL: la organización completa a través
   del anfitrión, repetida sin cambios, y una persona con dos empleos.
 
+## Fuentes de Sage y de Apiscore
+
+Añadidas el 2026-10-08. Las dos fuentes están en `contexts/imports/domain` (`sage.go`,
+`apiscore.go` y lo que comparten en `trade.go`); sus cargadores, en `host/loaders_trade.go`.
+
+### Qué lee cada una
+
+**Sage** (`sage`): los CSV por concepto que escribe `Sage.Export`, separados por `;`. Solo el de
+empresas es obligatorio; se sube lo que se tenga.
+
+| Fichero (rol) | Qué da | Dónde acaba |
+|---|---|---|
+| `companies` (empresas.csv) | empresas | Parties, organización interna |
+| `offices` (oficinas.csv) | centros de trabajo, con su dirección en las notas | Instalaciones |
+| `persons` + `employees` (personas.csv, empleados.csv) | personas con su DNI, empleos con sus fechas y el centro de cada uno | Parties y RRHH |
+| `customers`, `suppliers` (clientes.csv, proveedores.csv) | clientes y proveedores de cada empresa, con CIF y correo | Parties |
+| `tax-rates` (catalogos.csv) | tipos de IVA | Fiscal |
+| `chart` (plancontable.csv) | plan de cuentas de cada empresa | Contabilidad |
+| `bank-accounts` (cuentasbancarias.csv) | cuentas de la empresa en bancos | Tesorería |
+
+**Apiscore** (`apiscore`): los tres CSV del núcleo bancario, separados por `,`. Vale con uno.
+
+| Fichero (rol) | Qué da | Dónde acaba |
+|---|---|---|
+| `payment-accounts` (cuentas_pago.csv) | cuentas de pago de clientes y sus titulares | Parties y sectorial financiero |
+| `virtual-accounts` (cuentas_cv.csv) | cuentas virtuales multidivisa y sus titulares | Parties y sectorial financiero |
+| `own-accounts` (cuentas_propias.csv) | cuentas de la entidad en bancos | Tesorería |
+
+Los ficheros de Apiscore no dicen de qué entidad son. Se le dice al servidor con
+`KARPO_APISCORE_ENTITY` (el nombre de la entidad, como en Parties). La importación la crea si no
+existe, ya como entidad financiera; sin esa variable, una importación de Apiscore se rechaza.
+
+### Reglas que se conservan del C#
+
+- Persona de Sage: nombre y correo del fichero de personas, unido por DNI; si no está, el nombre
+  completo del empleado. Número de empleado repetido: gana el primero.
+- Clientes y proveedores: uno por empresa y código.
+- Cuentas bancarias de Sage: la cuenta contable dice la divisa y si es segregada o de abandono
+  (las 24 cuentas de `BancosContaUsePolicy`, como datos).
+- Apiscore: titular organización si `TIPO_PERSONA` empieza por «JUR»; orden de columnas para el
+  nombre; clave del cliente por documento y, si no hay, por nombre; bloqueada gana a abandonada;
+  demo si lo dice `DEMO` o el estado es «Pruebas»; `MXP` es `MXN`; el uso sale de
+  `OPERATIVA_DESCRIPCION`; `IBAN_ALL` manda sobre `IBAN` salvo que sea corto.
+- País que expide el documento: un número español con sus dígitos de control correctos es español
+  se llame como se llame; si no, por el tipo; si no, por la nacionalidad (las 73 formas de escribir
+  un país de `countries.csv`, como datos).
+
+### Qué cambia
+
+- **Un cliente es un participante, no uno por empresa.** Se busca por su documento y, si no
+  tiene, por nombre entre los de la empresa. Si ya existe (porque es cliente de otra empresa del
+  grupo, o porque Sage lo trajo antes que Apiscore) solo se le añade la relación con esta empresa.
+  En C# se buscaba solo por nombre.
+- **Los proveedores también llevan su CIF** y **el correo de clientes y proveedores se guarda**
+  (en C# se leían y se perdían).
+- **Las personas de Sage llevan su DNI** como identificación.
+- **Empresa desconocida: la fila se rechaza.** En C# caía en la primera empresa del fichero.
+- **El plan de cuentas dice qué cuentas admiten apuntes**: las que no tienen otras colgando. En C#
+  no había esa distinción.
+- **Las cuentas de clientes cerradas se cierran** en su fecha de baja. En C# se guardaba la fecha
+  y la cuenta seguía activa.
+- **Lo que no se puede cargar se dice, fila a fila**, y lo demás sigue.
+
+### Decisiones (aprobadas por Javier el 2026-10-08)
+
+1. **Documentos que Parties no admite con lo que traen los ficheros se guardan como «otro
+   documento», con su país.** Un pasaporte o un NIE piden fecha de caducidad en Parties y los
+   ficheros no la traen; un DNI o CIF con los dígitos de control mal no pasa como tal. El número
+   queda y se puede buscar por él. Sugerencia: sí; la alternativa es perder el documento.
+2. **Sin país no hay documento.** Si no se sabe qué país lo expidió (tipo desconocido, nacionalidad
+   que no está en la tabla), el cliente se carga sin documento y la ejecución avisa. Sugerencia: sí.
+3. **Las cuentas propias en otra divisa que no sea euro no se cargan.** Tesorería solo lleva
+   cuentas en euros. La fila falla diciéndolo. Sugerencia: sí por ahora; llevar divisas en
+   Tesorería es un cambio de ese contexto.
+4. **Segregada y abandono van en el alias de la cuenta** («BANCO SANTANDER 0022 (segregada)»).
+   Tesorería no tiene dónde guardar el uso de una cuenta propia, ni el banco. Sugerencia: sí por
+   ahora; si hace falta filtrar por ello, se añade el uso a Tesorería.
+5. **Un IBAN es de un solo dueño.** Si Sage y Apiscore traen la misma cuenta propia para la misma
+   empresa, es una sola. No se reconcilia el uso entre las dos fuentes como hacía C# (K2).
+   Sugerencia: sí, mientras el uso viva en el alias.
+6. **Los tipos de IVA de Sage van al catálogo común de Fiscal**, uno por código (Sage repite su
+   catálogo en cada empresa). Si ya hay un tipo en vigor con ese código o con el mismo porcentaje
+   y recargo, es ese y no se crea otro. Los nuevos valen desde el día de la importación, porque
+   Sage no dice desde cuándo. Sugerencia: sí.
+7. **Exento y no sujeto no se cargan como tipos**: en Karpo son tratamientos fiscales. La
+   ejecución avisa. Sugerencia: sí.
+8. **Empleado inactivo sin fecha de baja: el empleo termina el día que empezó**, con aviso. C#
+   ponía el 1 de enero de 1900. Sugerencia: sí; RRHH no admite una baja anterior al alta.
+9. **No se cargan**: convenio, salario e IRPF de los empleados (son del contrato de RRHH, que
+   necesita más datos), condiciones de pago y comisionista de clientes (C# los metía en un texto),
+   ni el banco como participante. Sugerencia: sí; cada uno es una fase propia.
+10. **Una cuenta de cliente que ya existe no se toca.** Si Apiscore dice después que se bloqueó,
+    la importación no la bloquea: desde que está en Karpo, su estado se lleva en Karpo.
+    Sugerencia: sí; si Apiscore sigue siendo el que manda, se cambia a sincronizar el estado.
+11. **El nombre de una persona se parte por el primer espacio** (nombre / apellidos), porque
+    Apiscore lo trae en una sola columna. Sugerencia: sí.
+
+### Validación
+
+- **Dominio**: el país y el tipo de 14 documentos; un juego de ficheros de Sage con duplicados,
+  empresas desconocidas, porcentajes ilegibles, oficinas repetidas y empleados sin nombre; otro de
+  Apiscore con cuentas repetidas, sin titular, fechas ilegibles, columnas en otro orden y sin
+  `ES_SEGREGADA`.
+- **Anfitrión** (en memoria y en SQLite): los ficheros de Sage de un grupo de dos empresas y los
+  de Apiscore de una entidad, cargados dos veces; lo que quedó, preguntado a Parties, RRHH,
+  Contabilidad, Tesorería y el sectorial financiero (clientes por su documento, un cliente de dos
+  empresas, cuentas activas, bloqueadas, abandonadas, cerradas y virtuales).
+- **Integración** en PostgreSQL, SQL Server, Oracle y MySQL: Sage y después Apiscore sobre la
+  misma base, dos veces cada una; el cliente y la empleada que Sage trajo son los titulares de
+  las cuentas de Apiscore, sin duplicarse.
+
 ## Pendiente
 
 - ~~Cargadores reales para las clases de Personio~~: hechos, ver «Cargadores de Personio»,
@@ -332,8 +444,9 @@ Validación:
 - Quién supervisa a quién: el fichero trae `isSupervisor`, que se lee y no se usa (en C# tampoco).
 - Contrato de RRHH (tipo, convenio, jornada, centro): el fichero no lo trae.
 - Alias de cargos en el catálogo de tipos de puesto, si el fichero real los necesita.
-- Fuentes de Sage (CSV por concepto: clientes, proveedores, IVA, plan de cuentas, bancos) y de
-  Apiscore, con sus clases de registro y sus cargadores (Parties, Fiscal, Contabilidad, Tesorería).
+- ~~Fuentes de Sage y de Apiscore~~: hechas, ver «Fuentes de Sage y de Apiscore». Quedan el
+  contrato de RRHH (convenio, salario), las condiciones de pago de clientes y los bancos como
+  participantes.
 - Programar `CloseStale` al montar el servidor.
 - Ejecución en segundo plano con progreso para ficheros grandes (hoy la petición espera).
 - Subida de ficheros como `multipart` y lectura de XLSX.

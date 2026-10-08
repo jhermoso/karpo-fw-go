@@ -50,6 +50,7 @@ import (
 	hrinfra "github.com/jhermoso/karpo-fw-go/contexts/hr/infrastructure"
 	"github.com/jhermoso/karpo-fw-go/contexts/imports"
 	impapp "github.com/jhermoso/karpo-fw-go/contexts/imports/application"
+	impdomain "github.com/jhermoso/karpo-fw-go/contexts/imports/domain"
 	impinfra "github.com/jhermoso/karpo-fw-go/contexts/imports/infrastructure"
 	"github.com/jhermoso/karpo-fw-go/contexts/inventory"
 	invapp "github.com/jhermoso/karpo-fw-go/contexts/inventory/application"
@@ -110,6 +111,9 @@ type Options struct {
 	Files expapp.Files
 	// ServicePrincipals are the processes that call the API with their own token.
 	ServicePrincipals []authz.ServicePrincipal
+	// ApiscoreEntity names, as Parties does, the financial institution whose accounts the files of
+	// Apiscore hold: they do not say it themselves. Empty: an import of Apiscore is refused.
+	ApiscoreEntity string
 }
 
 // Host is Karpo composed.
@@ -212,9 +216,12 @@ func Compose(sw *hotswap.Switch, o Options) (*Host, error) {
 	h.Financial = financial.Compose(sw, institutions)
 	h.Exchange = exchange.Compose(sw, nil) // no promotion codes until Parties tells whose each is
 	h.Modules = modules.Compose(sw, modules.WithDerivation(SectorCapabilities{Institutions: institutions}))
-	h.Imports = imports.Compose(sw).Load(LegalEntities{Parties: h.Parties}, Departments{Parties: h.Parties, UoW: sw},
+	h.Imports = imports.Compose(sw).Offer(impdomain.Sage{}, impdomain.Apiscore{Entity: o.ApiscoreEntity}).Load(
+		LegalEntities{Parties: h.Parties}, Departments{Parties: h.Parties, UoW: sw},
 		WorkCenters{Facilities: h.Facilities}, People{Parties: h.Parties, UoW: sw}, Employments{HR: h.HR, Parties: h.Parties, UoW: sw},
-		Positions{HR: h.HR, UoW: sw}, WorkPlaces{Parties: h.Parties})
+		Positions{HR: h.HR, UoW: sw}, WorkPlaces{Parties: h.Parties}, Customers(h.Parties, sw), Suppliers(h.Parties, sw),
+		TaxRates{Fiscal: h.Fiscal}, ChartAccounts{Accounting: h.Accounting}, OwnAccounts{Treasury: h.Treasury},
+		HeldAccounts{Financial: h.Financial, UoW: sw})
 	h.Exports = exports.Compose(sw, o.Files).Offer(CustomerAccounts{Financial: h.Financial}).Offer(PartyLists(h.Parties, h.HR)...)
 	h.Audit = audit.Compose()
 	h.histories()

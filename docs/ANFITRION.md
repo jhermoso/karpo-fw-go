@@ -37,6 +37,9 @@ arrancar junto.
 | Importación | cargador de centros de trabajo | Instalaciones (escrito aquí) |
 | Importación | cargador de empleos | RRHH y Parties (escrito aquí) |
 | Importación | cargadores del puesto y del centro de cada persona | RRHH, Parties (escritos aquí) |
+| Importación | cargadores de clientes y proveedores | Parties (escritos aquí) |
+| Importación | cargadores de tipos de IVA, plan de cuentas y cuentas propias | Fiscal, Contabilidad, Tesorería (escritos aquí) |
+| Importación | cargador de cuentas de clientes | Sectorial financiero (escrito aquí) |
   | Sectorial financiero | qué empresas son entidad financiera | Parties (escrito aquí) |
 | Módulos | qué capacidades se derivan de lo que es la empresa (`financial`) | Parties (escrito aquí) |
 | Exportación | listado de cuentas de clientes | Sectorial financiero (escrito aquí) |
@@ -79,6 +82,7 @@ mismos dos mandatos.
 | `KARPO_JWT_SECRET` | secreto que firma las sesiones, 32 caracteres como mínimo | obligatoria |
 | `KARPO_ADDR` | dónde escucha | `:8080` |
 | `KARPO_EXPORTS_DIR` | dónde esperan los ficheros exportados | `exports` |
+| `KARPO_APISCORE_ENTITY` | nombre de la entidad financiera de la que son los ficheros de Apiscore | — (sin ella no se importa Apiscore) |
 | `KARPO_DELIVER_EVERY` | cada cuánto se llevan los mensajes | `2s` |
 | `KARPO_CHORES_EVERY` | cada cuánto se hacen las tareas | `1m` |
 | `KARPO_BOOTSTRAP_ADMIN_USER` / `…_PASSWORD` | primer administrador, solo si no hay ninguno | — |
@@ -164,7 +168,7 @@ macroservicios** (decisión 1).
   entre ellos (NATS o Kafka) y relé seguro con varias instancias.
 - Probar `karpo-postgres` contra un proyecto de Supabase.
 - Resolver el riesgo del oyente que rechaza.
-- Cargadores de Importación de Sage y Apiscore, y listados de Exportación de facturas, pedidos…
+- Listados de Exportación de facturas, pedidos…
 - Adaptadores que faltan: calendario de festivos para Cobros y códigos de promoción para Cambio.
 - Guardas del historial por tipo, para que no sea solo de administradores.
 - Observabilidad: la rama de trazas y métricas aún no está fusionada; el anfitrión es donde se

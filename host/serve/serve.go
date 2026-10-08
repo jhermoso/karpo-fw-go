@@ -111,7 +111,7 @@ func Run(ctx context.Context, command string, db *sqlrepo.DB, ping func(context.
 	if err != nil {
 		return err
 	}
-	h, err := host.Compose(hotswap.New(db), host.Options{JWTSecret: []byte(cfg.Secret), Files: files})
+	h, err := host.Compose(hotswap.New(db), host.Options{JWTSecret: []byte(cfg.Secret), Files: files, ApiscoreEntity: os.Getenv("KARPO_APISCORE_ENTITY")})
 	if err != nil {
 		return err
 	}

@@ -161,7 +161,7 @@ func (l WorkCenters) Apply(ctx context.Context, r impdomain.Record, existing str
 }
 
 // People loads the persons of an import into Parties, affiliated as employees with the first
-// company they work for, with their email.
+// company they work for, with their email and, when the source brings it, their document.
 type People struct {
 	Parties *parties.Module
 	UoW     fw.UnitOfWork
@@ -244,7 +244,10 @@ func (l People) Apply(ctx context.Context, r impdomain.Record, existing string, 
 			_, err = l.Parties.Service.AddContact.Handle(ctx, parapp.AddContact{PartyID: pid, Kind: string(pardomain.ContactEmail), Value: email,
 				Purposes: []string{"default"}})
 		}
-		return err
+		if err != nil {
+			return err
+		}
+		return identify(ctx, l.Parties, id, r)
 	})
 	if err != nil {
 		return "", "", err

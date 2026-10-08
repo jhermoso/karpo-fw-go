@@ -83,7 +83,7 @@ func TestHost(t *testing.T) {
 
 			t.Setenv(security.EnvBootstrapUser, "root")
 			t.Setenv(security.EnvBootstrapPassword, "boot-password-0001")
-			h, err := host.Compose(hotswap.New(db), host.Options{JWTSecret: []byte("host-integration")})
+			h, err := host.Compose(hotswap.New(db), host.Options{JWTSecret: []byte("host-integration"), ApiscoreEntity: apiscoreEntity})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -248,6 +248,9 @@ func TestHost(t *testing.T) {
 			if moved, err = h.Deliver(ctx); err != nil || moved != 0 {
 				t.Fatalf("delivered twice: %d %v", moved, err)
 			}
+
+			// What Sage and Apiscore bring, through the loaders of the host.
+			tradeImports(t, h, actx)
 		})
 	}
 }
