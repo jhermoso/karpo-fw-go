@@ -292,7 +292,7 @@ que a esa persona se le asigne su centro.
   rechaza con el motivo de RRHH y entra en la ejecución en que ya tenga empleo.
 - **Pluriempleo:** puesto y centro son los de la primera empresa, como en C#.
 
-Decisiones propuestas (pendientes de confirmar):
+Decisiones (aprobadas por Javier el 2026-10-08):
 
 6. **El departamento de una persona es la unidad de su puesto**, no una relación aparte. En C# era
    una relación `DepartmentAssignment` en Parties además del puesto. Sugerencia: sí; es como lo

@@ -175,6 +175,37 @@ func TestHost(t *testing.T) {
 				t.Fatalf("a position in the department, held: %+v", held.Items)
 			}
 
+			// The lists of Parties and HR as files, through the datasets of the host.
+			listed := func(dataset string) string {
+				t.Helper()
+				j, err := h.Exports.Service.Start.Handle(actx, expapp.StartExport{Dataset: dataset})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if done, err := h.RunChores(ctx); err != nil || done.ExportsWritten != 1 {
+					t.Fatalf("%s: %+v %v", dataset, done, err)
+				}
+				id, _ := expdomain.ParseJobID(j.ID)
+				f, err := h.Exports.Service.Download.Handle(actx, expapp.DownloadJob{ID: id})
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer f.Content.Close()
+				b, _ := io.ReadAll(f.Content)
+				return string(b)
+			}
+			if persons := listed("persons"); !strings.Contains(persons, "Íñigo Núñez,Persona,Activo\r\n") || !strings.Contains(persons, "Lucía Pérez,Persona,Activo\r\n") ||
+				strings.Count(persons, "\r\n") != 3 {
+				t.Fatalf("persons: %q", persons)
+			}
+			if staff := listed("employees"); !strings.Contains(staff, "Íñigo Núñez,P-1,2020-03-01,,Sí\r\n") ||
+				strings.Count(staff, "Lucía Pérez,P-2,2021-05-10,2024-12-31,No\r\n") != 2 {
+				t.Fatalf("employees: %q", staff)
+			}
+			if rels := listed("party-relationships"); strings.Count(rels, "Employment,") != 3 || strings.Count(rels, "Organization Rollup,Operaciones,") != 2 {
+				t.Fatalf("relationships: %q", rels)
+			}
+
 			// The finance sector exists only for a financial institution: the role is given in Parties.
 			open := finapp.OpenAccount{Company: companies[0].ID, Number: "ES9121000418450200051332", Holder: companies[1].ID, Name: "Cuenta de pago"}
 			var rv *fw.RuleViolationError
