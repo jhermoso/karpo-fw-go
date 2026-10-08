@@ -204,8 +204,12 @@ func TestTelemetry_RollbackAndPanic(t *testing.T) {
 	if err != nil || len(pending) != 0 {
 		t.Fatalf("nothing may survive the rollback: %v, %v", pending, err)
 	}
-	if n := reg.HistogramCount(metrics.DBOperationDuration, "engine", "sqlite", "operation", "TRANSACTION", "outcome", "error"); n != 1 {
-		t.Fatalf("the rolled back transaction must be measured as an error: %v", reg.SeriesLabels(metrics.DBOperationDuration))
+	// Both roll back, so both are failures: the error and the panic.
+	if n := reg.HistogramCount(metrics.DBOperationDuration, "engine", "sqlite", "operation", "TRANSACTION", "outcome", "error"); n != 2 {
+		t.Fatalf("both rolled back transactions must be measured as errors: %v", reg.SeriesLabels(metrics.DBOperationDuration))
+	}
+	if n := reg.HistogramCount(metrics.DBOperationDuration, "engine", "sqlite", "operation", "TRANSACTION", "outcome", "ok"); n != 0 {
+		t.Fatalf("a panic is not an ok transaction: %v", reg.SeriesLabels(metrics.DBOperationDuration))
 	}
 }
 
@@ -266,5 +270,59 @@ func BenchmarkAppend(b *testing.B) {
 				}
 			}
 		})
+	}
+}
+
+// A panic inside the unit of work rolls it back and must be measured as a failure.
+func TestTelemetry_PanicInsideTheUnitOfWorkIsAFailure(t *testing.T) {
+	rec := tracevanilla.NewRecorder(0)
+	reg := metricsvanilla.NewRegistry()
+	db := openObserved(t, sqlrepo.WithTelemetry(tracevanilla.New(tracevanilla.WithExporter(rec)), reg))
+
+	func() {
+		defer func() {
+			if p := recover(); p != "boom" {
+				t.Fatalf("the panic must keep propagating, got %v", p)
+			}
+		}()
+		_ = db.Do(context.Background(), func(context.Context) error { panic("boom") })
+	}()
+
+	engine := db.Dialect().Name()
+	if n := reg.HistogramCount(metrics.DBOperationDuration, "engine", engine, "operation", sqlrepo.OperationTransaction, "outcome", "error"); n != 1 {
+		t.Fatalf("a panicking transaction must be measured as an error: %v", reg.SeriesLabels(metrics.DBOperationDuration))
+	}
+	tx := rec.Named("db transaction")
+	if len(tx) != 1 || tx[0].Err == nil || !strings.Contains(tx[0].Err.Error(), "boom") {
+		t.Fatalf("the transaction span must carry the panic: %+v", tx)
+	}
+}
+
+// After a hot swap the old pool is closed: its gauges go away (they no longer report a closed
+// pool nor keep it alive), and closing it never removes the gauges of the new pool.
+func TestTelemetry_ClosingThePoolRemovesItsGauges(t *testing.T) {
+	reg := metricsvanilla.NewRegistry()
+	old := openObserved(t, sqlrepo.WithTelemetry(nil, reg), sqlrepo.WithName("old"))
+	if _, ok := reg.GaugeValue(metrics.DBConnections, "engine", "sqlite", "db", "old", "state", "open"); !ok {
+		t.Fatal("the pool gauges must be registered")
+	}
+	if err := old.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := reg.GaugeValue(metrics.DBConnections, "engine", "sqlite", "db", "old", "state", "open"); ok {
+		t.Fatal("a closed pool must not keep its gauges")
+	}
+
+	// Same name: the new pool replaces the series, and closing the old one leaves it alone.
+	first := openObserved(t, sqlrepo.WithTelemetry(nil, reg), sqlrepo.WithName("parties"))
+	second := openObserved(t, sqlrepo.WithTelemetry(nil, reg), sqlrepo.WithName("parties"))
+	if err := first.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := second.Ping(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if open, ok := reg.GaugeValue(metrics.DBConnections, "engine", "sqlite", "db", "parties", "state", "open"); !ok || open != 1 {
+		t.Fatalf("the gauges of the live pool must survive closing the replaced one: %v %v", open, ok)
 	}
 }

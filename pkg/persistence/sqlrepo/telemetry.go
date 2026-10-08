@@ -25,16 +25,19 @@ const (
 
 // telemetry is the instrumentation of a DB; nil when WithTelemetry was not used.
 type telemetry struct {
-	tracer   trace.Tracer
-	meter    metrics.Meter
-	duration metrics.Histogram
+	tracer     trace.Tracer
+	meter      metrics.Meter
+	duration   metrics.Histogram
+	unregister []func() // pool gauges, removed by Close
 }
 
 // WithTelemetry instruments the DB: a span per unit of work (committed or rolled back) and per
 // statement, with the engine and the operation (SELECT, INSERT...) and never the arguments; the
 // histogram db.client.operation.duration by engine, operation and outcome; and the state of the
-// connection pool (db.client.connections) read from sql.DB.Stats. Either argument may be nil.
-// Without this option the DB does exactly what it did before.
+// connection pool (db.client.connections) read from sql.DB.Stats, removed again by Close. The
+// pool series are labelled by WithName (default: the dialect): give each DB that shares a meter
+// with another of the same engine its own name. Either argument may be nil. Without this option
+// the DB does exactly what it did before.
 func WithTelemetry(tracer trace.Tracer, meter metrics.Meter) Option {
 	return func(db *DB) {
 		m := metrics.OrNoop(meter)
@@ -57,10 +60,24 @@ func (db *DB) registerPool() {
 		return []string{metrics.LabelEngine, db.d.Name(), "db", db.name, metrics.LabelState, state}
 	}
 	m := db.tel.meter
-	m.Gauge(metrics.DBConnections, metrics.UnitNone, help, stat(func(s sql.DBStats) int { return s.OpenConnections }), labels("open")...)
-	m.Gauge(metrics.DBConnections, metrics.UnitNone, help, stat(func(s sql.DBStats) int { return s.InUse }), labels("in_use")...)
-	m.Gauge(metrics.DBConnections, metrics.UnitNone, help, stat(func(s sql.DBStats) int { return s.Idle }), labels("idle")...)
-	m.Gauge(metrics.DBConnections, metrics.UnitNone, help, stat(func(s sql.DBStats) int { return int(s.WaitCount) }), labels("waited")...)
+	db.tel.unregister = []func(){
+		m.Gauge(metrics.DBConnections, metrics.UnitNone, help, stat(func(s sql.DBStats) int { return s.OpenConnections }), labels("open")...),
+		m.Gauge(metrics.DBConnections, metrics.UnitNone, help, stat(func(s sql.DBStats) int { return s.InUse }), labels("in_use")...),
+		m.Gauge(metrics.DBConnections, metrics.UnitNone, help, stat(func(s sql.DBStats) int { return s.Idle }), labels("idle")...),
+		m.Gauge(metrics.DBConnections, metrics.UnitNone, help, stat(func(s sql.DBStats) int { return int(s.WaitCount) }), labels("waited")...),
+	}
+}
+
+// unregisterPool removes the pool gauges: a closed pool (the old backend after a hot swap) must
+// neither keep reporting nor be kept alive by the meter.
+func (db *DB) unregisterPool() {
+	if db.tel == nil {
+		return
+	}
+	for _, f := range db.tel.unregister {
+		f()
+	}
+	db.tel.unregister = nil
 }
 
 func (t *telemetry) record(ctx context.Context, engine, operation string, start time.Time, err error) {

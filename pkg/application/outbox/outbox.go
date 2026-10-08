@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
+	"sync"
 	"time"
 
 	"github.com/jhermoso/karpo-fw-go/pkg/application"
@@ -126,9 +128,65 @@ func NewForwarder(store application.OutboxStore, deliver DeliverFunc, opts ...Re
 	r.tracer = trace.OrNoop(r.tracer)
 	meter := metrics.OrNoop(r.meter)
 	r.relayed = meter.Counter(metrics.OutboxRelayed, metrics.UnitNone, "Outbox messages handed to the publisher, by outcome.")
-	meter.Gauge(metrics.OutboxOldestPendingAge, metrics.UnitSeconds,
-		"Age of the oldest outbox message still pending delivery.", r.oldestPendingAge, metrics.LabelOutbox, r.name)
+	if r.meter != nil {
+		registerPendingAge(r.meter, r)
+	}
 	return r
+}
+
+// The gauge karpo.outbox.oldest_pending_age is one series per outbox name. Relays that share a
+// name in the same meter (several bounded contexts, each with its domain relay and the default
+// name) share that series: it reports the oldest pending message among them, so any of them
+// getting stuck shows. Registering one gauge per relay would let the last one replace the others
+// in silence.
+var pendingAges = struct {
+	sync.Mutex
+	groups map[pendingAgeKey]*pendingAgeGroup
+}{groups: map[pendingAgeKey]*pendingAgeGroup{}}
+
+type pendingAgeKey struct {
+	meter metrics.Meter
+	name  string
+}
+
+type pendingAgeGroup struct {
+	mu     sync.Mutex
+	relays []*Relay
+}
+
+func registerPendingAge(meter metrics.Meter, r *Relay) {
+	const help = "Age of the oldest outbox message still pending delivery."
+	if !reflect.TypeOf(meter).Comparable() {
+		// Cannot be a map key: one gauge per relay, as best effort.
+		meter.Gauge(metrics.OutboxOldestPendingAge, metrics.UnitSeconds, help, r.oldestPendingAge, metrics.LabelOutbox, r.name)
+		return
+	}
+	key := pendingAgeKey{meter, r.name}
+	pendingAges.Lock()
+	g, ok := pendingAges.groups[key]
+	if !ok {
+		g = &pendingAgeGroup{}
+		pendingAges.groups[key] = g
+	}
+	pendingAges.Unlock()
+	g.mu.Lock()
+	g.relays = append(g.relays, r)
+	g.mu.Unlock()
+	if !ok {
+		meter.Gauge(metrics.OutboxOldestPendingAge, metrics.UnitSeconds, help, g.oldest, metrics.LabelOutbox, r.name)
+	}
+}
+
+// oldest is the largest age among the relays of the group; -1 only when none could be read.
+func (g *pendingAgeGroup) oldest() float64 {
+	g.mu.Lock()
+	relays := append([]*Relay(nil), g.relays...)
+	g.mu.Unlock()
+	age := -1.0
+	for _, r := range relays {
+		age = max(age, r.oldestPendingAge())
+	}
+	return age
 }
 
 // oldestPendingAge asks the store, so it also tells when the relay is not running at all.

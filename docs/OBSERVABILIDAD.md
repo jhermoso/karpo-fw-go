@@ -289,7 +289,8 @@ package metrics
 type Meter interface {
 	Counter(name, unit, help string) Counter
 	Histogram(name, unit, help string, buckets ...float64) Histogram
-	Gauge(name, unit, help string, read func() float64) // se lee al exportar
+	// se lee al exportar; la función devuelta da de baja la serie (p. ej. al cerrar el pool)
+	Gauge(name, unit, help string, read func() float64, labels ...string) (unregister func())
 }
 type Counter interface   { Add(ctx context.Context, n float64, labels ...string) }
 type Histogram interface { Record(ctx context.Context, v float64, labels ...string) }
