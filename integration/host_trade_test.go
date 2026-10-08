@@ -2,11 +2,17 @@ package integration
 
 import (
 	"context"
+	"io"
+	"strings"
 	"testing"
 
 	accapp "github.com/jhermoso/karpo-fw-go/contexts/accounting/application"
+	bilapp "github.com/jhermoso/karpo-fw-go/contexts/billing/application"
+	expapp "github.com/jhermoso/karpo-fw-go/contexts/exports/application"
+	expdomain "github.com/jhermoso/karpo-fw-go/contexts/exports/domain"
 	finapp "github.com/jhermoso/karpo-fw-go/contexts/financial/application"
 	impapp "github.com/jhermoso/karpo-fw-go/contexts/imports/application"
+	ordapp "github.com/jhermoso/karpo-fw-go/contexts/orders/application"
 	parapp "github.com/jhermoso/karpo-fw-go/contexts/parties/application"
 	pardomain "github.com/jhermoso/karpo-fw-go/contexts/parties/domain"
 	treapp "github.com/jhermoso/karpo-fw-go/contexts/treasury/application"
@@ -135,5 +141,41 @@ func tradeImports(t *testing.T, h *host.Host, actx context.Context) {
 	virtual, err := h.Financial.Service.Get.Handle(actx, finapp.GetAccount{Company: entity, Number: "CV0000000001"})
 	if err != nil || !virtual.Virtual || !virtual.Demo || virtual.Currency != "MXN" || len(virtual.Uses) != 1 || virtual.Uses[0].Use != "virtual-multicurrency" {
 		t.Fatalf("the virtual account: %+v %v", virtual, err)
+	}
+
+	// What the company sells, as files: a draft order and a draft invoice for the customer Sage brought.
+	acme := named(parapp.SearchParties{Document: "B12345674"})["ACME SUPPLIES SL"]
+	if _, err := h.Orders.Service.DraftOrder.Handle(actx, ordapp.DraftOrder{Company: maccorp, Customer: acme, Reference: "PO-Ñ7"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.Billing.Service.DraftInvoice.Handle(actx, bilapp.DraftInvoice{Seller: maccorp, Customer: acme}); err != nil {
+		t.Fatal(err)
+	}
+	listed := func(dataset string) string {
+		t.Helper()
+		j, err := h.Exports.Service.Start.Handle(actx, expapp.StartExport{Dataset: dataset, Filter: map[string]string{"customer": acme}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if done, err := h.RunChores(context.Background()); err != nil || done.ExportsWritten != 1 {
+			t.Fatalf("%s: %+v %v", dataset, done, err)
+		}
+		id, _ := expdomain.ParseJobID(j.ID)
+		f, err := h.Exports.Service.Download.Handle(actx, expapp.DownloadJob{ID: id})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer f.Content.Close()
+		b, _ := io.ReadAll(f.Content)
+		return string(b)
+	}
+	if orders := listed("orders"); !strings.Contains(orders, ",ACME SUPPLIES SL,PO-Ñ7,draft,0.00,0.00\r\n") || strings.Count(orders, "\r\n") != 2 {
+		t.Fatalf("orders: %q", orders)
+	}
+	if invoices := listed("invoices"); !strings.Contains(invoices, ",Borrador,,,ACME SUPPLIES SL,,0.00,,,EUR\r\n") || strings.Count(invoices, "\r\n") != 2 {
+		t.Fatalf("invoices: %q", invoices)
+	}
+	if owed := listed("receivables"); strings.Count(owed, "\r\n") != 1 {
+		t.Fatalf("receivables: %q", owed)
 	}
 }

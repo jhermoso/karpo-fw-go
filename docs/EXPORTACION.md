@@ -8,9 +8,10 @@ segundo plano y quien lo pidió lo descarga. Es lo único de lo que quedaba por 
 frontal: la rejilla lo llama cuando el listado tiene más filas de las que maneja el navegador.
 
 > **Alcance.** Están los trabajos, los escritores de CSV y XLSX, el almacén de ficheros y las
-> rutas. Desde el 2026-10-08 el anfitrión ofrece **nueve listados reales** (los de Parties que usa
-> la rejilla, empleados y cuentas de clientes) y hace de trabajador: llama a `RunNext` y `Purge`
-> en cada ronda de tareas. Ver «Listados de Parties».
+> rutas. Desde el 2026-10-08 el anfitrión ofrece **trece listados reales** (los de Parties que usa
+> la rejilla, empleados, cuentas de clientes, facturas, pedidos, vencimientos de cobro y facturas
+> de proveedor) y hace de trabajador: llama a `RunNext` y `Purge` en cada ronda de tareas. Ver
+> «Listados de Parties» y «Listados de ventas y compras».
 
 ## Método
 
@@ -235,10 +236,50 @@ Validación:
 - **Integración** en PostgreSQL, SQL Server, Oracle y MySQL: personas, empleados y relaciones
   exportados a través del anfitrión.
 
+## Listados de ventas y compras (en el anfitrión)
+
+Añadidos el 2026-10-08, en `host/datasets_trade.go`. El C# no exportaba ninguno: son nuevos.
+
+| Listado | De dónde sale | Columnas | Filtros | Permiso |
+|---|---|---|---|---|
+| `invoices` | búsqueda de Facturación | Número, Tipo, Estado, Fecha, Vencimiento, Cliente, CIF/NIF, Base, Cuota, Total, Divisa | `seller`, `customer`, `status`, `from`, `to` | `Billing.Invoice.Read` |
+| `orders` | búsqueda de Pedidos | Número, Fecha, Cliente, Referencia, Estado, Total, Pendiente | `company`, `customer`, `status` | `Orders.Order.Read` |
+| `receivables` | búsqueda de Cobros, una fila por plazo | Factura, Cliente, Fecha factura, Plazo, Vencimiento, Importe, Cobrado, Pendiente | `seller`, `customer`, `open` | `Receivables.Receivable.Read` |
+| `purchase-invoices` | búsqueda de Compras | Registro, Nº proveedor, Proveedor, Fecha, Recepción, Vencimiento, Base, Cuota, Total, Retención, A pagar, Anulada | `company`, `supplier`, `from`, `to` | `Purchases.Invoice.Read` |
+
+- Los nombres de clientes y proveedores los da Parties. En una factura emitida, el nombre y el
+  CIF son los que quedaron fijados al emitirla.
+- Como los demás listados, cada fichero lleva lo que puede ver quien lo pidió.
+- Los filtros `seller`, `company`, `customer` y `supplier` son identificadores, no nombres.
+
+Decisiones (aprobadas por Javier el 2026-10-08):
+
+1. **Los borradores salen en `invoices`**, sin número ni fecha y con «Borrador» en Estado. Se
+   quitan con el filtro `status`. Sugerencia: sí; es lo que muestra la rejilla.
+2. **`receivables` lleva una fila por plazo**, no por factura: es lo que se usa para reclamar y
+   para conciliar. El total de la factura no sale; sale el importe de cada plazo. Sugerencia: sí.
+3. **El estado de los pedidos y el tipo de factura salen como los guarda Karpo** (`draft`,
+   `confirmed`…), sin traducir; el estado de las facturas sí va en castellano. Sugerencia:
+   traducirlos todos cuando haya idioma por usuario; mientras, dime si prefieres castellano fijo
+   también aquí.
+4. **Una fila por factura, sin líneas.** Un listado de líneas de factura o de pedido sería otro
+   listado. Sugerencia: sí por ahora.
+
+Validación:
+
+- **Anfitrión** (en memoria y en SQLite): una empresa emite una factura con IVA real, deja otra
+  en borrador, abre un pedido y registra una factura de proveedor; los cuatro ficheros comparados
+  línea a línea (cliente con coma entre comillas, filtros por estado y fechas, el plazo que
+  Cobros creó al enterarse de la factura); otra empresa recibe el fichero vacío; sin el permiso
+  del listado, 403.
+- **Integración** en PostgreSQL, SQL Server, Oracle y MySQL: pedidos, facturas y vencimientos del
+  cliente que trajo Sage, exportados a través del anfitrión.
+
 ## Pendiente
 
 - ~~Listados de Parties y el trabajador~~: hechos, ver «Listados de Parties» y
-  [ANFITRION.md](ANFITRION.md). Siguen los de facturas, pedidos, movimientos…
+  [ANFITRION.md](ANFITRION.md). También los de facturas, pedidos, vencimientos y facturas de
+  proveedor. Siguen movimientos de almacén, asientos, nóminas…
 - Un tiempo máximo por trabajo de exportación (hoy solo lo corta la limpieza a los 30 minutos).
 - Adaptar el frontal a las rutas y estados nuevos (decisión 10).
 - Un almacén en depósito de objetos para despliegues sin disco compartido.

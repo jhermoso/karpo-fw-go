@@ -222,7 +222,8 @@ func Compose(sw *hotswap.Switch, o Options) (*Host, error) {
 		Positions{HR: h.HR, UoW: sw}, WorkPlaces{Parties: h.Parties}, Customers(h.Parties, sw), Suppliers(h.Parties, sw),
 		TaxRates{Fiscal: h.Fiscal}, ChartAccounts{Accounting: h.Accounting}, OwnAccounts{Treasury: h.Treasury},
 		HeldAccounts{Financial: h.Financial, UoW: sw})
-	h.Exports = exports.Compose(sw, o.Files).Offer(CustomerAccounts{Financial: h.Financial}).Offer(PartyLists(h.Parties, h.HR)...)
+	h.Exports = exports.Compose(sw, o.Files).Offer(CustomerAccounts{Financial: h.Financial}).Offer(PartyLists(h.Parties, h.HR)...).
+		Offer(TradeLists(h.Parties, h.Billing, h.Orders, h.Receivables, h.Purchases)...)
 	h.Audit = audit.Compose()
 	h.histories()
 
