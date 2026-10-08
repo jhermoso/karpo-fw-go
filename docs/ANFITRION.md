@@ -29,13 +29,14 @@ arrancar junto.
   | Pagos | reparto del neto de nómina | Nóminas |
   | Tesorería | lo cobrable y lo pagable | Cobros, Pagos |
   | Importación | cargador de empresas | Parties (escrito aquí) |
-  | Exportación | listado de cuentas de clientes | Cuentas de clientes (escrito aquí) |
+  | Sectorial financiero | qué empresas son entidad financiera | Parties (escrito aquí) |
+| Exportación | listado de cuentas de clientes | Sectorial financiero (escrito aquí) |
 
 - **Mensajes:** un transporte en memoria. Los veintiún contextos que publican tienen su relé y
   los diez que escuchan (Contabilidad, Facturación, Documentos, Fiscal, Inventario, Pedidos,
   Parties, Pagos, Cobros y Envíos) están suscritos. `Deliver` lleva lo publicado hasta que no
   queda nada.
-- **`Start`** (tras migrar; se puede llamar en cada arranque): pasa a Seguridad los 143 permisos
+- **`Start`** (tras migrar; se puede llamar en cada arranque): pasa a Seguridad los 147 permisos
   de todos los contextos, completa el catálogo de módulos y, si nadie administra la instalación,
   crea el administrador que nombre el entorno.
 - **`Handler`**: las rutas de sesión son públicas; todo lo demás exige sesión y pasa por los
@@ -113,7 +114,7 @@ Sirve además `/healthz` y `/readyz` (este comprueba la base de datos).
 - **`host`** (en memoria y en SQLite migrada con los 25 esquemas): arranque sin secreto
   rechazado; permisos, módulos y primer administrador, y un segundo arranque que no cambia nada;
   sin sesión 401, token inválido 401, contraseña errónea 401, cambio de contraseña obligatorio
-  (403 antes); los 143 permisos en el catálogo de Seguridad; importación por HTTP que crea dos
+  (403 antes); los 147 permisos en el catálogo de Seguridad; importación por HTTP que crea dos
   empresas en Parties y omite con aviso lo que nadie carga; repetirla con el nombre escrito de
   otra forma no crea nada; cuenta de cliente, exportación pedida por HTTP, escrita por las tareas
   y descargada; segunda ronda de tareas sin nada que hacer; mensajes entregados y nada que

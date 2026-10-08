@@ -2,6 +2,7 @@ package host
 
 import (
 	"context"
+	"errors"
 	"strconv"
 
 	accdomain "github.com/jhermoso/karpo-fw-go/contexts/accounting/domain"
@@ -35,6 +36,7 @@ import (
 	wrkdomain "github.com/jhermoso/karpo-fw-go/contexts/work/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/application"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
+	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
 // histories tells Historial where the history of each kind of aggregate is kept. For now only a
@@ -62,7 +64,7 @@ func (h *Host) histories() {
 		h.Documents.Audit:  {docdomain.DocumentKind},
 		h.Shipments.Audit:  {shpdomain.ShipmentKind, shpdomain.CarrierKind},
 		h.Work.Audit:       {wrkdomain.WorkKind, wrkdomain.TimeEntryKind},
-		h.Financial.Audit:  {findomain.AccountKind},
+		h.Financial.Audit:  {findomain.AccountKind, findomain.ProductKind, findomain.AgreementKind},
 		h.Exchange.Audit:   {exgdomain.CurrencyKind, exgdomain.SettingsKind, exgdomain.ReservationKind},
 		h.Modules.Audit:    {moddomain.FeatureKind, moddomain.ActivationKind},
 		h.Imports.Audit:    {impdomain.RunKind, impdomain.ReferenceKind},
@@ -111,6 +113,38 @@ func (l LegalEntities) Apply(ctx context.Context, r impdomain.Record, existing s
 		return "", "", err
 	}
 	return p.ID, impdomain.Created, nil
+}
+
+// FinancialInstitutions tells Financial which companies are financial institutions: in Parties, an
+// internal organization that also has the role of financial institution, both in force. It asks
+// as the host: it answers a fact about a company, it shows nothing of it.
+type FinancialInstitutions struct {
+	Parties *parties.Module
+	system  func() context.Context
+}
+
+// IsFinancialInstitution implements Financial's Institutions.
+func (f FinancialInstitutions) IsFinancialInstitution(ctx context.Context, company findomain.OrganizationID) (bool, error) {
+	p, err := f.Parties.Service.Get.Handle(authz.WithContext(ctx, authzOf(f.system())), parapp.GetParty{ID: pardomain.PartyID{UUID: company.UUID}})
+	if errors.Is(err, fw.ErrNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	internal, institution := false, false
+	for _, r := range p.Roles {
+		if !r.Active {
+			continue
+		}
+		switch r.RoleType {
+		case pardomain.RoleInternalOrganization.String():
+			internal = true
+		case pardomain.RoleFinancialInstitution.String():
+			institution = true
+		}
+	}
+	return internal && institution, nil
 }
 
 // CustomerAccounts is the list of the accounts an institution keeps for its customers, as an
@@ -162,6 +196,7 @@ func (c CustomerAccounts) Page(ctx context.Context, filters map[string]string, c
 }
 
 var (
-	_ impdomain.Loader = LegalEntities{}
-	_ expapp.Dataset   = CustomerAccounts{}
+	_ findomain.Institutions = FinancialInstitutions{}
+	_ impdomain.Loader       = LegalEntities{}
+	_ expapp.Dataset         = CustomerAccounts{}
 )

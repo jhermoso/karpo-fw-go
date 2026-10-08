@@ -91,22 +91,23 @@ type Use struct {
 
 // AccountState is the persisted state of an account.
 type AccountState struct {
-	Company  OrganizationID
-	Number   string     // the IBAN without spaces, or the institution's own identifier when it is virtual
-	Virtual  bool       // it has no IBAN: it exists only in the books of the institution
-	IBAN     vocab.IBAN // of an account that is not virtual
-	BIC      string
-	Currency vocab.CurrencyCode
-	Name     string
-	Product  fw.UUID // the product of Products it is an instance of
-	Status   Status
-	Demo     bool // a test account of the institution: it is never real money
-	Opened   vocab.Date
-	Closed   vocab.Date
-	Reason   string // of the block, the abandonment or the closing
-	Holders  []Holder
-	Uses     []Use
-	Audit    traits.AuditStamp
+	Company   OrganizationID
+	Number    string     // the IBAN without spaces, or the institution's own identifier when it is virtual
+	Virtual   bool       // it has no IBAN: it exists only in the books of the institution
+	IBAN      vocab.IBAN // of an account that is not virtual
+	BIC       string
+	Currency  vocab.CurrencyCode
+	Name      string
+	Product   fw.UUID // the financial product it is an instance of
+	Agreement fw.UUID // the agreement that governs it
+	Status    Status
+	Demo      bool // a test account of the institution: it is never real money
+	Opened    vocab.Date
+	Closed    vocab.Date
+	Reason    string // of the block, the abandonment or the closing
+	Holders   []Holder
+	Uses      []Use
+	Audit     traits.AuditStamp
 }
 
 // Account is an account an institution keeps for its customers.
@@ -211,17 +212,18 @@ func ReconstituteAccount(id AccountID, s AccountState) (*Account, error) {
 
 // Opening is what an account is opened with.
 type Opening struct {
-	Company  OrganizationID
-	Number   string
-	Virtual  bool
-	BIC      string
-	Currency vocab.CurrencyCode
-	Name     string
-	Product  fw.UUID
-	Demo     bool
-	Opened   vocab.Date
-	Holder   PartyID
-	Uses     []string
+	Company   OrganizationID
+	Number    string
+	Virtual   bool
+	BIC       string
+	Currency  vocab.CurrencyCode
+	Name      string
+	Product   fw.UUID
+	Agreement fw.UUID
+	Demo      bool
+	Opened    vocab.Date
+	Holder    PartyID
+	Uses      []string
 }
 
 // Open opens an account for a customer, who holds it from that day and under whom it is filed.
@@ -229,7 +231,7 @@ type Opening struct {
 // (the C# checked only its length).
 func Open(id AccountID, o Opening) (*Account, error) {
 	s := AccountState{Company: o.Company, Number: NormalizeNumber(o.Number), Virtual: o.Virtual, BIC: o.BIC, Currency: o.Currency, Name: o.Name,
-		Product: o.Product, Status: Active, Demo: o.Demo, Opened: o.Opened,
+		Product: o.Product, Agreement: o.Agreement, Status: Active, Demo: o.Demo, Opened: o.Opened,
 		Holders: []Holder{{Party: o.Holder, Role: RoleHolder, From: o.Opened, Primary: true}}}
 	if !o.Virtual {
 		iban, err := vocab.NewIBAN(s.Number)
@@ -289,12 +291,12 @@ func (a *Account) open() error {
 	return nil
 }
 
-// Describe changes the name, the BIC and the product of an account.
-func (a *Account) Describe(name, bic string, product fw.UUID) error {
+// Describe changes the name, the BIC, the product and the agreement of an account.
+func (a *Account) Describe(name, bic string, product, agreement fw.UUID) error {
 	if err := a.open(); err != nil {
 		return err
 	}
-	return a.try(func(s *AccountState) { s.Name, s.BIC, s.Product = name, bic, product })
+	return a.try(func(s *AccountState) { s.Name, s.BIC, s.Product, s.Agreement = name, bic, product, agreement })
 }
 
 // Relate gives a party a role on the account from a day. As primary, the account is filed under
@@ -483,19 +485,21 @@ func (a *Account) AuditSnapshot() map[string]any {
 
 // Account fields.
 var (
-	AccFieldCompany  = spec.Comparable("company", func(a *Account) OrganizationID { return a.s.Company })
-	AccFieldNumber   = spec.Ordered("account_number", func(a *Account) string { return a.s.Number })
-	AccFieldStatus   = spec.Comparable("status", func(a *Account) string { return string(a.s.Status) })
-	AccFieldCurrency = spec.Comparable("currency", func(a *Account) string { return a.s.Currency.String() })
-	AccFieldDemo     = spec.Comparable("demo", func(a *Account) bool { return a.s.Demo })
-	AccFieldVirtual  = spec.Comparable("virtual_account", func(a *Account) bool { return a.s.Virtual })
-	AccFieldName     = spec.Text("account_name", func(a *Account) string { return a.s.Name })
-	AccFieldHolders  = spec.Collection("holders", func(a *Account) []Holder { return a.s.Holders })
-	HolFieldParty    = spec.Comparable("party", func(h Holder) PartyID { return h.Party })
-	HolFieldCurrent  = spec.Comparable("current_holder", func(h Holder) bool { return h.Current() })
-	AccFieldUses     = spec.Collection("uses", func(a *Account) []Use { return a.s.Uses })
-	UseFieldCode     = spec.Comparable("use_code", func(u Use) string { return u.Code })
-	UseFieldCurrent  = spec.Comparable("current_use", func(u Use) bool { return u.Thru.IsZero() })
+	AccFieldCompany   = spec.Comparable("company", func(a *Account) OrganizationID { return a.s.Company })
+	AccFieldNumber    = spec.Ordered("account_number", func(a *Account) string { return a.s.Number })
+	AccFieldStatus    = spec.Comparable("status", func(a *Account) string { return string(a.s.Status) })
+	AccFieldCurrency  = spec.Comparable("currency", func(a *Account) string { return a.s.Currency.String() })
+	AccFieldDemo      = spec.Comparable("demo", func(a *Account) bool { return a.s.Demo })
+	AccFieldVirtual   = spec.Comparable("virtual_account", func(a *Account) bool { return a.s.Virtual })
+	AccFieldProduct   = spec.Comparable("product", func(a *Account) fw.UUID { return a.s.Product })
+	AccFieldAgreement = spec.Comparable("agreement", func(a *Account) fw.UUID { return a.s.Agreement })
+	AccFieldName      = spec.Text("account_name", func(a *Account) string { return a.s.Name })
+	AccFieldHolders   = spec.Collection("holders", func(a *Account) []Holder { return a.s.Holders })
+	HolFieldParty     = spec.Comparable("party", func(h Holder) PartyID { return h.Party })
+	HolFieldCurrent   = spec.Comparable("current_holder", func(h Holder) bool { return h.Current() })
+	AccFieldUses      = spec.Collection("uses", func(a *Account) []Use { return a.s.Uses })
+	UseFieldCode      = spec.Comparable("use_code", func(u Use) string { return u.Code })
+	UseFieldCurrent   = spec.Comparable("current_use", func(u Use) bool { return u.Thru.IsZero() })
 )
 
 // AccountRepository stores accounts.

@@ -32,8 +32,16 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/testing/archtest"
 )
 
+// institutions plays Parties: which companies are financial institutions.
+type institutions map[domain.OrganizationID]bool
+
+func (i institutions) IsFinancialInstitution(_ context.Context, company domain.OrganizationID) (bool, error) {
+	return i[company], nil
+}
+
 type host struct {
 	t        *testing.T
+	banks    institutions
 	srv      *httptest.Server
 	sw       *hotswap.Switch
 	dir      *authorization.MemoryDirectory
@@ -46,15 +54,17 @@ type host struct {
 func compose(t *testing.T) *host {
 	ctx := context.Background()
 	sw := hotswap.New(memory.NewStore("memory"))
-	fm := financial.Compose(sw)
+	banks := institutions{}
+	fm := financial.Compose(sw, banks)
 	jwt, _ := jwtauth.New(jwtauth.Config{Secret: []byte("financial-test")})
 	dir := authorization.NewMemoryDirectory()
-	h := &host{t: t, sw: sw, dir: dir, ids: map[string]fw.UUID{}, tokens: map[string]string{}, fin: fm}
+	h := &host{t: t, sw: sw, dir: dir, ids: map[string]fw.UUID{}, tokens: map[string]string{}, fin: fm, banks: banks}
 	users := map[string][]authz.Permission{
-		"opener":   {fapp.PermAccountRead, fapp.PermAccountCreate, fapp.PermAccountUpdate},
+		"opener": {fapp.PermAccountRead, fapp.PermAccountCreate, fapp.PermAccountUpdate, fapp.PermProductRead, fapp.PermProductUpdate,
+			fapp.PermAgreementRead, fapp.PermAgreementUpdate},
 		"officer":  {fapp.PermAccountRead, fapp.PermAccountBlock},
 		"closer":   {fapp.PermAccountRead, fapp.PermAccountClose},
-		"viewer":   {fapp.PermAccountRead},
+		"viewer":   {fapp.PermAccountRead, fapp.PermProductRead, fapp.PermAgreementRead},
 		"outsider": fapp.Permissions(),
 	}
 	for u, perms := range users {
@@ -95,8 +105,13 @@ func (h *host) do(method, path, user string, body, out any) int {
 	}
 	defer res.Body.Close()
 	if out != nil && res.StatusCode < 300 {
-		if o, ok := out.(*fapp.AccountDTO); ok { // omitted fields must not keep what a previous answer left
+		switch o := out.(type) { // omitted fields must not keep what a previous answer left
+		case *fapp.AccountDTO:
 			*o = fapp.AccountDTO{}
+		case *fapp.ProductDTO:
+			*o = fapp.ProductDTO{}
+		case *fapp.AgreementDTO:
+			*o = fapp.AgreementDTO{}
 		}
 		if err := json.NewDecoder(res.Body).Decode(out); err != nil {
 			h.t.Fatal(err)
@@ -114,18 +129,109 @@ func (h *host) must(got, want int, what string) {
 
 func (h *host) scenario() {
 	t := h.t
-	acme, globex := fw.NewUUID().String(), fw.NewUUID().String()
+	acme, globex, shop := fw.NewUUID().String(), fw.NewUUID().String(), fw.NewUUID().String()
 	ana, luis, eva := fw.NewUUID().String(), fw.NewUUID().String(), fw.NewUUID().String()
 	for _, u := range []string{"opener", "officer", "closer", "viewer"} {
 		h.grant(u, acme)
 	}
+	h.grant("opener", shop)
 	h.grant("outsider", globex)
+	// Acme and Globex are financial institutions; the shop is a company like any other.
+	h.banks[domain.OrganizationID{UUID: fw.MustParseUUID(acme)}] = true
+	h.banks[domain.OrganizationID{UUID: fw.MustParseUUID(globex)}] = true
 	today := vocab.DateOf(fw.Now())
 	path := func(a fapp.AccountDTO, action string) string { return "/api/financial/accounts/" + a.ID + "/" + action }
 
+	// The finance sector is for financial institutions only: for any other company it has nothing.
+	h.must(h.do("POST", "/api/financial/products", "opener", map[string]any{"company": shop, "code": "CTA", "name": "Cuenta", "family": "payment"}, nil), 422, "a shop has no financial products")
+	h.must(h.do("POST", "/api/financial/agreements", "opener", map[string]any{"company": shop, "customer": ana, "number": "C-1", "name": "Contrato", "family": "payment"}, nil), 422, "nor agreements")
+	h.must(h.do("POST", "/api/financial/accounts", "opener", map[string]any{"company": shop, "number": "ES9121000418450200051332", "holder": ana}, nil), 422, "nor accounts")
+
+	// What the institution offers.
+	var payment, deposit fapp.ProductDTO
+	define := map[string]any{"company": acme, "code": "cta-pago", "name": "Cuenta de pago", "family": "Payment", "regulatoryCode": "mifid-x1"}
+	h.must(h.do("POST", "/api/financial/products", "viewer", define, nil), 403, "viewer")
+	h.must(h.do("POST", "/api/financial/products", "outsider", define, nil), 404, "outsider")
+	h.must(h.do("POST", "/api/financial/products", "opener", map[string]any{"company": acme, "code": "X", "name": "X", "family": "savings"}, nil), 400, "family")
+	h.must(h.do("POST", "/api/financial/products", "opener", map[string]any{"company": acme, "code": "con espacio", "name": "X", "family": "loan"}, nil), 400, "code")
+	h.must(h.do("POST", "/api/financial/products", "opener", define, &payment), 201, "define")
+	h.must(h.do("POST", "/api/financial/products", "opener", define, nil), 422, "the same code")
+	h.must(h.do("POST", "/api/financial/products", "opener", map[string]any{"company": acme, "code": "DEP-12", "name": "Depósito a 12 meses", "family": "deposit"}, &deposit), 201, "a deposit")
+	if payment.Code != "CTA-PAGO" || payment.Family != "payment" || payment.RegulatoryCode != "MIFID-X1" || !payment.Offered || payment.Version != 1 {
+		t.Fatalf("product: %+v", payment)
+	}
+	h.must(h.do("PUT", "/api/financial/products/"+deposit.ID, "opener", map[string]any{"name": "Depósito a plazo", "family": "deposit", "description": "A 12 meses"}, &deposit), 200, "change")
+	h.must(h.do("POST", "/api/financial/products/"+deposit.ID+"/discontinue", "opener", nil, &deposit), 200, "discontinue")
+	if deposit.Name != "Depósito a plazo" || deposit.Offered || deposit.Discontinued != today.String() {
+		t.Fatalf("discontinued: %+v", deposit)
+	}
+	h.must(h.do("POST", "/api/financial/accounts", "opener", map[string]any{"company": acme, "number": "ES7921000813610123456789", "holder": ana, "product": deposit.ID}, nil), 422, "it is no longer offered")
+	h.must(h.do("POST", "/api/financial/accounts", "opener", map[string]any{"company": acme, "number": "ES7921000813610123456789", "holder": ana, "product": fw.NewUUID().String()}, nil), 422, "a product nobody has")
+	var products fw.Page[fapp.ProductDTO]
+	h.must(h.do("GET", "/api/financial/products?company="+acme, "viewer", nil, &products), 200, "products")
+	if products.Total != 2 || products.Items[0].Code != "CTA-PAGO" {
+		t.Fatalf("products: %+v", products.Items)
+	}
+	h.must(h.do("GET", "/api/financial/products?offered=true", "viewer", nil, &products), 200, "offered")
+	if products.Total != 1 || products.Items[0].ID != payment.ID {
+		t.Fatalf("offered: %+v", products.Items)
+	}
+	h.must(h.do("GET", "/api/financial/products?family=deposit&offered=false", "viewer", nil, &products), 200, "not offered")
+	if products.Total != 1 || products.Items[0].ID != deposit.ID {
+		t.Fatalf("not offered: %+v", products.Items)
+	}
+	h.must(h.do("GET", "/api/financial/products", "outsider", nil, &products), 200, "outsider")
+	if products.Total != 0 {
+		t.Fatalf("outsider: %+v", products.Items)
+	}
+	h.must(h.do("GET", "/api/financial/products/"+payment.ID, "outsider", nil, nil), 404, "outsider")
+	h.must(h.do("POST", "/api/financial/products/"+deposit.ID+"/reinstate", "opener", nil, &deposit), 200, "reinstate")
+	if !deposit.Offered || deposit.Discontinued != "" {
+		t.Fatalf("reinstated: %+v", deposit)
+	}
+
+	// What is signed with each customer.
+	var contract, old fapp.AgreementDTO
+	sign := map[string]any{"company": acme, "customer": ana, "number": "ctr-2026-001", "name": "Contrato marco de servicios de pago", "product": payment.ID}
+	h.must(h.do("POST", "/api/financial/agreements", "viewer", sign, nil), 403, "viewer")
+	h.must(h.do("POST", "/api/financial/agreements", "outsider", sign, nil), 404, "outsider")
+	h.must(h.do("POST", "/api/financial/agreements", "opener", map[string]any{"company": acme, "customer": ana, "number": "X-1", "name": "Sin familia"}, nil), 400, "no family and no product")
+	h.must(h.do("POST", "/api/financial/agreements", "opener", map[string]any{"company": acme, "customer": ana, "number": "X-1", "name": "X", "family": "loan",
+		"from": today.String(), "thru": today.AddDays(-1).String()}, nil), 400, "it ends before it begins")
+	h.must(h.do("POST", "/api/financial/agreements", "opener", map[string]any{"company": acme, "customer": ana, "number": "X-1", "name": "X", "product": fw.NewUUID().String()}, nil), 422, "a product nobody has")
+	h.must(h.do("POST", "/api/financial/agreements", "opener", sign, &contract), 201, "sign")
+	h.must(h.do("POST", "/api/financial/agreements", "opener", sign, nil), 422, "the same number")
+	if contract.Number != "CTR-2026-001" || contract.Family != "payment" || contract.Status != "in-force" || contract.Signed != today.String() ||
+		contract.From != today.String() || contract.Thru != "" || contract.Product != payment.ID {
+		t.Fatalf("agreement: %+v", contract)
+	}
+	h.must(h.do("POST", "/api/financial/agreements", "opener", map[string]any{"company": acme, "customer": luis, "number": "CTR-2025-044", "name": "Préstamo personal",
+		"family": "loan", "signed": today.AddDays(-40).String()}, &old), 201, "an older one")
+	h.must(h.do("PUT", "/api/financial/agreements/"+old.ID, "opener", map[string]any{"name": "Préstamo personal 2025", "thru": today.AddDays(300).String()}, &old), 200, "change")
+	h.must(h.do("POST", "/api/financial/agreements/"+old.ID+"/terminate", "opener", map[string]any{"on": today.AddDays(-41).String()}, nil), 422, "before it took effect")
+	h.must(h.do("POST", "/api/financial/agreements/"+old.ID+"/terminate", "opener", map[string]any{"on": today.AddDays(-1).String(), "reason": "Amortizado"}, &old), 200, "terminate")
+	if old.Status != "terminated" || old.Thru != today.AddDays(-1).String() || old.Reason != "Amortizado" || old.Name != "Préstamo personal 2025" {
+		t.Fatalf("terminated: %+v", old)
+	}
+	h.must(h.do("POST", "/api/financial/agreements/"+old.ID+"/terminate", "opener", nil, nil), 422, "terminated twice")
+	h.must(h.do("PUT", "/api/financial/agreements/"+old.ID, "opener", map[string]any{"name": "x"}, nil), 422, "a terminated agreement does not change")
+	h.must(h.do("POST", "/api/financial/accounts", "opener", map[string]any{"company": acme, "number": "ES7921000813610123456789", "holder": luis, "agreement": old.ID}, nil), 422, "it is not in force")
+	h.must(h.do("POST", "/api/financial/accounts", "opener", map[string]any{"company": acme, "number": "ES7921000813610123456789", "holder": luis, "agreement": contract.ID}, nil), 422, "signed with somebody else")
+	var agreements fw.Page[fapp.AgreementDTO]
+	h.must(h.do("GET", "/api/financial/agreements?company="+acme, "viewer", nil, &agreements), 200, "agreements")
+	if agreements.Total != 2 || agreements.Items[0].ID != old.ID {
+		t.Fatalf("agreements, by number: %+v", agreements.Items)
+	}
+	h.must(h.do("GET", "/api/financial/agreements?customer="+ana+"&status=in-force&product="+payment.ID, "viewer", nil, &agreements), 200, "of ana")
+	if agreements.Total != 1 || agreements.Items[0].ID != contract.ID {
+		t.Fatalf("of ana: %+v", agreements.Items)
+	}
+	h.must(h.do("GET", "/api/financial/agreements?status=signed", "viewer", nil, nil), 400, "status")
+	h.must(h.do("GET", "/api/financial/agreements/"+contract.ID, "outsider", nil, nil), 404, "outsider")
+
 	// Opening: an IBAN whose digits are right, or an identifier of the institution's own.
 	open := map[string]any{"company": acme, "number": "es91 2100 0418 4502 0005 1332", "holder": ana, "name": "Cuenta de pago de Ana",
-		"uses": []string{"customer-payment", "Customer-Payment"}}
+		"uses": []string{"customer-payment", "Customer-Payment"}, "product": payment.ID, "agreement": contract.ID}
 	var acc fapp.AccountDTO
 	h.must(h.do("POST", "/api/financial/accounts", "viewer", open, nil), 403, "viewer")
 	h.must(h.do("POST", "/api/financial/accounts", "outsider", open, nil), 404, "outsider")
@@ -142,7 +248,7 @@ func (h *host) scenario() {
 	}
 	h.must(h.do("POST", "/api/financial/accounts", "opener", open, &acc), 201, "open")
 	if acc.Number != "ES9121000418450200051332" || acc.Virtual || acc.Status != "active" || acc.Currency != "EUR" || acc.Holder != ana || acc.Opened != today.String() ||
-		len(acc.Holders) != 1 || !acc.Holders[0].Primary || acc.Holders[0].Role != "holder" || len(acc.Uses) != 1 || acc.Uses[0].Use != "customer-payment" || acc.Version != 1 {
+		len(acc.Holders) != 1 || !acc.Holders[0].Primary || acc.Holders[0].Role != "holder" || len(acc.Uses) != 1 || acc.Uses[0].Use != "customer-payment" || acc.Version != 1 || acc.Product != payment.ID || acc.Agreement != contract.ID {
 		t.Fatalf("opened: %+v", acc)
 	}
 	h.must(h.do("POST", "/api/financial/accounts", "opener", map[string]any{"company": acme, "number": "ES91 2100 0418 4502 0005 1332", "holder": luis}, nil), 422, "the same number")
@@ -159,9 +265,12 @@ func (h *host) scenario() {
 	h.must(h.do("PUT", "/api/financial/accounts/"+acc.ID, "officer", map[string]any{"name": "x"}, nil), 403, "stopping is not keeping")
 	h.must(h.do("PUT", "/api/financial/accounts/"+acc.ID, "outsider", map[string]any{"name": "x"}, nil), 404, "outsider")
 	h.must(h.do("PUT", "/api/financial/accounts/"+acc.ID, "opener", map[string]any{"name": "x", "bic": "CAIX"}, nil), 400, "bic")
-	product := fw.NewUUID().String()
-	h.must(h.do("PUT", "/api/financial/accounts/"+acc.ID, "opener", map[string]any{"name": "Cuenta de Ana y Luis", "bic": "caixesbbxxx", "product": product}, &acc), 200, "describe")
-	if acc.Name != "Cuenta de Ana y Luis" || acc.BIC != "CAIXESBBXXX" || acc.Product != product {
+	product := deposit.ID
+	h.must(h.do("PUT", "/api/financial/accounts/"+acc.ID, "opener", map[string]any{"name": "x", "product": fw.NewUUID().String()}, nil), 422, "a product nobody has")
+	h.must(h.do("PUT", "/api/financial/accounts/"+acc.ID, "opener", map[string]any{"name": "x", "agreement": old.ID}, nil), 422, "an agreement that is over")
+	h.must(h.do("PUT", "/api/financial/accounts/"+acc.ID, "opener", map[string]any{"name": "Cuenta de Ana y Luis", "bic": "caixesbbxxx", "product": product,
+		"agreement": contract.ID}, &acc), 200, "describe")
+	if acc.Name != "Cuenta de Ana y Luis" || acc.BIC != "CAIXESBBXXX" || acc.Product != product || acc.Agreement != contract.ID {
 		t.Fatalf("described: %+v", acc)
 	}
 
@@ -247,6 +356,8 @@ func (h *host) scenario() {
 	search("viewer", "currency=usd", wallet.ID)
 	search("viewer", "name=LUIS", acc.ID, wallet.ID)
 	search("viewer", "demo=true", demo.ID)
+	search("viewer", "product="+deposit.ID, acc.ID)
+	search("viewer", "agreement="+contract.ID, acc.ID)
 	search("outsider", "")
 	h.must(h.do("GET", "/api/financial/accounts?status=frozen", "viewer", nil, nil), 400, "status")
 	h.must(h.do("GET", "/api/financial/accounts?demo=maybe", "viewer", nil, nil), 400, "demo")
@@ -294,8 +405,9 @@ func (h *host) scenario() {
 	// Its number stays taken.
 	h.must(h.do("POST", "/api/financial/accounts", "opener", map[string]any{"company": acme, "number": "VIRT-000001", "virtual": true, "holder": ana}, nil), 422, "taken")
 
-	// Three opened; blocked, abandoned and released; the wallet blocked and closed.
-	if n, err := h.fin.Relay(inprocess.NewBroker()).RelayOnce(context.Background()); err != nil || n != 8 {
+	// Two agreements signed and one terminated; three accounts opened; blocked, abandoned and
+	// released; the wallet blocked and closed.
+	if n, err := h.fin.Relay(inprocess.NewBroker()).RelayOnce(context.Background()); err != nil || n != 11 {
 		t.Fatalf("published: %d %v", n, err)
 	}
 }
