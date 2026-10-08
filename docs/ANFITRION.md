@@ -40,6 +40,8 @@ arrancar junto.
   | Sectorial financiero | qué empresas son entidad financiera | Parties (escrito aquí) |
 | Módulos | qué capacidades se derivan de lo que es la empresa (`financial`) | Parties (escrito aquí) |
 | Exportación | listado de cuentas de clientes | Sectorial financiero (escrito aquí) |
+| Exportación | listados de participantes, roles y relaciones | Parties (escritos aquí) |
+| Exportación | listado de empleados | RRHH y Parties (escrito aquí) |
 
 - **Mensajes:** un transporte en memoria. Los veintiún contextos que publican tienen su relé y
   los diez que escuchan (Contabilidad, Facturación, Documentos, Fiscal, Inventario, Pedidos,
@@ -162,8 +164,7 @@ macroservicios** (decisión 1).
   entre ellos (NATS o Kafka) y relé seguro con varias instancias.
 - Probar `karpo-postgres` contra un proyecto de Supabase.
 - Resolver el riesgo del oyente que rechaza.
-- Cargadores de Importación de Sage y Apiscore, y listados de Exportación (Parties, facturas,
-  pedidos…).
+- Cargadores de Importación de Sage y Apiscore, y listados de Exportación de facturas, pedidos…
 - Adaptadores que faltan: calendario de festivos para Cobros y códigos de promoción para Cambio.
 - Guardas del historial por tipo, para que no sea solo de administradores.
 - Observabilidad: la rama de trazas y métricas aún no está fusionada; el anfitrión es donde se
