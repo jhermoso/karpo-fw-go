@@ -20,10 +20,34 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
 )
 
-// Deps are the ports the use cases need; Recorder and Audit are optional.
+// FeatureRef names a feature: its kind and its code.
+type FeatureRef struct {
+	Kind domain.Kind
+	Code string
+}
+
+// Derivation tells the features a company has because of what it is, not because somebody
+// switched them on: the financial capability of a company that is a financial institution. What
+// is derived is never switched by hand; an activation of it that was recorded does not count.
+type Derivation interface {
+	// Features lists what is derived.
+	Features() []FeatureRef
+	// Of lists the derived features a company has now.
+	Of(ctx context.Context, organization fw.UUID) ([]FeatureRef, error)
+	// Holders lists the companies that have a derived feature now.
+	Holders(ctx context.Context, f FeatureRef) ([]fw.UUID, error)
+}
+
+// derived reports whether a feature is derived.
+func derived(d Derivation, kind domain.Kind, code string) bool {
+	return d != nil && slices.Contains(d.Features(), FeatureRef{Kind: kind, Code: code})
+}
+
+// Deps are the ports the use cases need; Derivation, Recorder and Audit are optional.
 type Deps struct {
 	Features    domain.FeatureRepository
 	Activations domain.ActivationRepository
+	Derivation  Derivation
 	UoW         fw.UnitOfWork
 	Recorder    app.EventRecorder
 	Audit       app.AuditLog
@@ -179,6 +203,7 @@ type ActivationDTO struct {
 	Kind          string `json:"kind"`
 	Code          string `json:"code"`
 	Active        bool   `json:"active"`
+	Derived       bool   `json:"derived,omitempty"` // it has it because of what it is: nobody switched it on
 	ActivatedAt   string `json:"activatedAt,omitempty"`
 	ActivatedBy   string `json:"activatedBy,omitempty"`
 	DeactivatedAt string `json:"deactivatedAt,omitempty"`
@@ -331,6 +356,9 @@ func NewService(d Deps) *Service {
 		if err := sc.check(org, true); err != nil {
 			return ActivationDTO{}, err
 		}
+		if derived(d.Derivation, kind, domain.NormalizeCode(c.Code)) {
+			return ActivationDTO{}, fw.Violation("modules.derived", "a company has that "+string(kind)+" because of what it is: it is not switched by hand")
+		}
 		f, err := s.feature(ctx, kind, domain.NormalizeCode(c.Code))
 		if err != nil {
 			return ActivationDTO{}, err
@@ -397,6 +425,9 @@ func NewService(d Deps) *Service {
 		if err := sc.check(org, true); err != nil {
 			return ActivationDTO{}, err
 		}
+		if derived(d.Derivation, kind, domain.NormalizeCode(c.Code)) {
+			return ActivationDTO{}, fw.Violation("modules.derived", "a company has that "+string(kind)+" because of what it is: it is not switched by hand")
+		}
 		act, err := s.activation(ctx, org, kind, domain.NormalizeCode(c.Code))
 		if err != nil {
 			return ActivationDTO{}, err
@@ -432,7 +463,19 @@ func NewService(d Deps) *Service {
 		}
 		out := []ActivationDTO{}
 		for _, a := range as {
-			out = append(out, activationDTO(a))
+			if !derived(d.Derivation, a.State().Kind, a.State().Code) { // what is derived is told below, as it is now
+				out = append(out, activationDTO(a))
+			}
+		}
+		if d.Derivation != nil {
+			refs, err := d.Derivation.Of(ctx, org.UUID)
+			if err != nil {
+				return nil, err
+			}
+			for _, r := range refs {
+				out = append(out, ActivationDTO{Organization: org.String(), Kind: string(r.Kind), Code: r.Code, Active: true, Derived: true})
+			}
+			slices.SortFunc(out, func(a, b ActivationDTO) int { return strings.Compare(a.Kind+"|"+a.Code, b.Kind+"|"+b.Code) })
 		}
 		return out, nil
 	})
@@ -444,6 +487,20 @@ func NewService(d Deps) *Service {
 			return nil, err
 		}
 		sc := scopeOf(ctx)
+		if derived(d.Derivation, kind, domain.NormalizeCode(q.Code)) {
+			holders, err := d.Derivation.Holders(ctx, FeatureRef{Kind: kind, Code: domain.NormalizeCode(q.Code)})
+			if err != nil {
+				return nil, err
+			}
+			out := []string{}
+			for _, h := range holders {
+				if sc.global || slices.Contains(sc.orgs, domain.OrganizationID{UUID: h}) {
+					out = append(out, h.String())
+				}
+			}
+			slices.Sort(out)
+			return out, nil
+		}
 		parts := []spec.Specification[*domain.Activation]{domain.ActFieldKind.Eq(string(kind)), domain.ActFieldCode.Eq(domain.NormalizeCode(q.Code)),
 			domain.ActFieldActive.Eq(true)}
 		switch {
@@ -491,7 +548,20 @@ func NewService(d Deps) *Service {
 				return CurrentDTO{}, err
 			}
 			for _, a := range as {
-				add(a.State().Kind, a.State().Code)
+				if !derived(d.Derivation, a.State().Kind, a.State().Code) {
+					add(a.State().Kind, a.State().Code)
+				}
+			}
+			if d.Derivation != nil {
+				for _, org := range sc.orgs {
+					refs, err := d.Derivation.Of(ctx, org.UUID)
+					if err != nil {
+						return CurrentDTO{}, err
+					}
+					for _, r := range refs {
+						add(r.Kind, r.Code)
+					}
+				}
 			}
 		}
 		slices.Sort(out.Modules)
@@ -502,8 +572,27 @@ func NewService(d Deps) *Service {
 	return svc
 }
 
-// Features implements contracts.Features on the repository: the port other contexts ask.
-type Features struct{ Activations domain.ActivationRepository }
+// Features implements contracts.Features on the repository: the port other contexts ask. What is
+// derived is answered by the derivation, whatever was recorded by hand.
+type Features struct {
+	Activations domain.ActivationRepository
+	Derivation  Derivation
+}
+
+func (f Features) derivedOf(ctx context.Context, organization, kind string) ([]string, error) {
+	org, err := fw.ParseUUID(organization)
+	if f.Derivation == nil || err != nil {
+		return nil, nil
+	}
+	refs, err := f.Derivation.Of(ctx, org)
+	out := []string{}
+	for _, r := range refs {
+		if string(r.Kind) == kind {
+			out = append(out, r.Code)
+		}
+	}
+	return out, err
+}
 
 var _ contracts.Features = Features{}
 
@@ -519,6 +608,10 @@ func (f Features) on(ctx context.Context, organization, kind string, more ...spe
 
 // Has implements contracts.Features.
 func (f Features) Has(ctx context.Context, organization, kind, code string) (bool, error) {
+	if derived(f.Derivation, domain.Kind(kind), domain.NormalizeCode(code)) {
+		codes, err := f.derivedOf(ctx, organization, kind)
+		return slices.Contains(codes, domain.NormalizeCode(code)), err
+	}
 	as, err := f.on(ctx, organization, kind, domain.ActFieldCode.Eq(domain.NormalizeCode(code)))
 	return len(as) > 0, err
 }
@@ -526,10 +619,18 @@ func (f Features) Has(ctx context.Context, organization, kind, code string) (boo
 // Of implements contracts.Features.
 func (f Features) Of(ctx context.Context, organization, kind string) ([]string, error) {
 	as, err := f.on(ctx, organization, kind)
+	if err != nil {
+		return nil, err
+	}
 	out := []string{}
 	for _, a := range as {
-		out = append(out, a.State().Code)
+		if !derived(f.Derivation, a.State().Kind, a.State().Code) {
+			out = append(out, a.State().Code)
+		}
 	}
+	more, err := f.derivedOf(ctx, organization, kind)
+	out = append(out, more...)
+	slices.Sort(out)
 	return out, err
 }
 

@@ -94,9 +94,17 @@ contexts/modules/
    Sugerencia: sí; renombrarlos obligaría a tocar todas las reglas de visibilidad.
 3. **Sin empresas en el ámbito no se ve nada.** Se retira el «sin ámbito, todo». Sugerencia: sí;
    era la causa de la fuga que el propio C# tuvo que parchear.
-4. **`financial` deja de derivarse del rol de Parties** y se activa como cualquier otra
-   capacidad. Sugerencia: sí por ahora; si la quieres automática, se hace con un consumidor del
-   evento `parties.party-role-assigned.v1`, sin acoplar los contextos.
+4. ~~`financial` deja de derivarse del rol de Parties y se activa como cualquier otra
+   capacidad.~~ **Cambiada por Javier el 2026-10-08: la capacidad se deriva del rol.** Una empresa
+   la tiene si en Parties es organización interna y además entidad financiera, que es la misma
+   regla que abre el sectorial financiero ([CUENTAS-CLIENTES.md](CUENTAS-CLIENTES.md)): el menú y
+   el contexto dicen lo mismo.
+   - Módulos no conoce Parties: el anfitrión le pasa una `Derivation` (qué funcionalidades se
+     derivan, cuáles tiene una empresa y qué empresas tienen una).
+   - Lo derivado **no se activa ni se desactiva a mano** (422 `modules.derived`).
+   - Una activación a mano que ya estuviera guardada deja de contar: manda el rol.
+   - `Current`, `Features.Has`, `Features.Of`, la lista de una empresa (marcada como `derived`) y
+     la lista de empresas con la funcionalidad responden todas igual.
 5. **El catálogo solo lo cambia un administrador global**; las activaciones, quien tenga el
    permiso en esa empresa. Sugerencia: sí.
 6. **Este contexto informa, no bloquea.** Hoy ningún contexto rechaza una operación porque el

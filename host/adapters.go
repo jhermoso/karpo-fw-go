@@ -20,6 +20,7 @@ import (
 	hrdomain "github.com/jhermoso/karpo-fw-go/contexts/hr/domain"
 	impdomain "github.com/jhermoso/karpo-fw-go/contexts/imports/domain"
 	invdomain "github.com/jhermoso/karpo-fw-go/contexts/inventory/domain"
+	modapp "github.com/jhermoso/karpo-fw-go/contexts/modules/application"
 	moddomain "github.com/jhermoso/karpo-fw-go/contexts/modules/domain"
 	orddomain "github.com/jhermoso/karpo-fw-go/contexts/orders/domain"
 	"github.com/jhermoso/karpo-fw-go/contexts/parties"
@@ -147,6 +148,53 @@ func (f FinancialInstitutions) IsFinancialInstitution(ctx context.Context, compa
 	return internal && institution, nil
 }
 
+// financialCapability is the feature of Modules a financial institution has.
+var financialCapability = modapp.FeatureRef{Kind: moddomain.Capability, Code: "financial"}
+
+// SectorCapabilities tells Modules what a company has because of what it is: the financial
+// capability goes with being a financial institution, as the finance sector does. So what the
+// interface shows and what the sector allows are the same thing, decided in one place: the roles
+// of the company in Parties.
+type SectorCapabilities struct{ Institutions FinancialInstitutions }
+
+// Features implements Modules' Derivation.
+func (SectorCapabilities) Features() []modapp.FeatureRef {
+	return []modapp.FeatureRef{financialCapability}
+}
+
+// Of implements Modules' Derivation.
+func (s SectorCapabilities) Of(ctx context.Context, organization fw.UUID) ([]modapp.FeatureRef, error) {
+	ok, err := s.Institutions.IsFinancialInstitution(ctx, findomain.OrganizationID{UUID: organization})
+	if err != nil || !ok {
+		return nil, err
+	}
+	return []modapp.FeatureRef{financialCapability}, nil
+}
+
+// Holders implements Modules' Derivation.
+func (s SectorCapabilities) Holders(ctx context.Context, f modapp.FeatureRef) ([]fw.UUID, error) {
+	if f != financialCapability {
+		return nil, nil
+	}
+	all, err := s.Institutions.Parties.Organizations.All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := []fw.UUID{}
+	for _, o := range all {
+		id, err := fw.ParseUUID(o.ID)
+		if err != nil {
+			continue
+		}
+		if ok, err := s.Institutions.IsFinancialInstitution(ctx, findomain.OrganizationID{UUID: id}); err != nil {
+			return nil, err
+		} else if ok {
+			out = append(out, id)
+		}
+	}
+	return out, nil
+}
+
 // CustomerAccounts is the list of the accounts an institution keeps for its customers, as an
 // export: it reads through the search of Financial, so the file has what who asked may see.
 type CustomerAccounts struct{ Financial *financial.Module }
@@ -197,6 +245,7 @@ func (c CustomerAccounts) Page(ctx context.Context, filters map[string]string, c
 
 var (
 	_ findomain.Institutions = FinancialInstitutions{}
+	_ modapp.Derivation      = SectorCapabilities{}
 	_ impdomain.Loader       = LegalEntities{}
 	_ expapp.Dataset         = CustomerAccounts{}
 )

@@ -178,7 +178,22 @@ func scenario(t *testing.T, sw *hotswap.Switch) {
 	account := map[string]any{"company": maccorp, "number": "ES91 2100 0418 4502 0005 1332", "holder": companies[0].ID, "name": "Cuenta de pago",
 		"uses": []string{"customer-payment"}}
 	c.must(c.do("POST", "/api/financial/accounts", root, account, nil), 422, "not a financial institution yet")
+	financial := func() bool {
+		t.Helper()
+		ok, err := h.Modules.Features.Has(ctx, maccorp, "capability", "financial")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return ok
+	}
+	if financial() {
+		t.Fatal("no financial capability before it is a financial institution")
+	}
+	c.must(c.do("POST", "/api/modules/activate", root, map[string]any{"organization": maccorp, "kind": "capability", "code": "financial"}, nil), 422, "it is not switched by hand")
 	c.must(c.do("POST", "/api/parties/"+maccorp+"/roles", root, map[string]any{"roleType": pardomain.RoleFinancialInstitution.String()}, nil), 200, "it becomes one")
+	if !financial() {
+		t.Fatal("the capability comes with the role: the menu and the sector say the same")
+	}
 
 	// An account of a customer of one of them, and its list as a file: asked over HTTP, written by
 	// the chores of the host, downloaded by who asked.
