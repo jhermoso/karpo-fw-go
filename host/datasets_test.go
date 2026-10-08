@@ -104,8 +104,8 @@ func datasetsScenario(t *testing.T, sw *hotswap.Switch) {
 	for _, s := range sets {
 		keys = append(keys, s.Key)
 	}
-	if err != nil || !slices.Equal(keys, []string{"customer-accounts", "customers", "employees", "internal-organizations", "invoices", "orders", "organizations", "parties",
-		"party-relationships", "party-roles", "persons", "purchase-invoices", "receivables"}) {
+	if err != nil || !slices.Equal(keys, []string{"assets", "customer-accounts", "customers", "employees", "internal-organizations", "invoices", "journal", "orders", "organizations", "parties",
+		"party-relationships", "party-roles", "payables", "persons", "purchase-invoices", "receivables"}) {
 		t.Fatalf("lists that can be exported: %v %v", keys, err)
 	}
 
