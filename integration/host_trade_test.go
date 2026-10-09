@@ -11,12 +11,17 @@ import (
 	expapp "github.com/jhermoso/karpo-fw-go/contexts/exports/application"
 	expdomain "github.com/jhermoso/karpo-fw-go/contexts/exports/domain"
 	finapp "github.com/jhermoso/karpo-fw-go/contexts/financial/application"
+	geoapp "github.com/jhermoso/karpo-fw-go/contexts/geography/application"
+	geodomain "github.com/jhermoso/karpo-fw-go/contexts/geography/domain"
 	impapp "github.com/jhermoso/karpo-fw-go/contexts/imports/application"
 	ordapp "github.com/jhermoso/karpo-fw-go/contexts/orders/application"
 	parapp "github.com/jhermoso/karpo-fw-go/contexts/parties/application"
 	pardomain "github.com/jhermoso/karpo-fw-go/contexts/parties/domain"
+	recapp "github.com/jhermoso/karpo-fw-go/contexts/receivables/application"
+	recdomain "github.com/jhermoso/karpo-fw-go/contexts/receivables/domain"
 	treapp "github.com/jhermoso/karpo-fw-go/contexts/treasury/application"
 	"github.com/jhermoso/karpo-fw-go/host"
+	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
 // The institution the files of Apiscore of these tests belong to.
@@ -177,5 +182,49 @@ func tradeImports(t *testing.T, h *host.Host, actx context.Context) {
 	}
 	if owed := listed("receivables"); strings.Count(owed, "\r\n") != 1 {
 		t.Fatalf("receivables: %q", owed)
+	}
+
+	// The calendar: a company in Madrid does not collect on a weekend, on a holiday of the town or
+	// on one of the country.
+	towns, err := h.Geography.Service.SearchBoundaries.Handle(actx, geoapp.SearchBoundaries{Text: "madrid", Type: geodomain.TypeMunicipality.String(), Size: 50})
+	if err != nil {
+		t.Fatal(err)
+	}
+	madrid := ""
+	for _, b := range towns.Items {
+		if b.Name == "Madrid" {
+			madrid = b.ID
+		}
+	}
+	es, err := h.Geography.Ports.Country(actx, "ES")
+	if err != nil || madrid == "" {
+		t.Fatalf("Madrid and Spain: %q %v", madrid, err)
+	}
+	mid, _ := pardomain.ParsePartyID(maccorp)
+	if _, err := h.Parties.Service.AddContact.Handle(actx, parapp.AddContact{PartyID: mid, Kind: "postal", Purposes: []string{"default"},
+		Address: &parapp.AddressDTO{Line1: "Mayor 1", PostalCode: "28013", Locality: "Madrid", Country: "ES", GeoBoundary: madrid}}); err != nil {
+		t.Fatal(err)
+	}
+	for boundary, d := range map[string]geoapp.DayInput{madrid: {Date: vocab.MustDate(2026, 12, 7), Name: "Fiesta local"},
+		es.Boundary: {Date: vocab.MustDate(2026, 12, 8), Name: "Inmaculada Concepción"}} {
+		for range 2 { // twice: the second time nothing is new
+			if _, err := h.Geography.Holidays.Declare(actx, geoapp.DeclareHolidays{Boundary: boundary, Days: []geoapp.DayInput{d}}); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	year, err := h.Geography.Holidays.Search(actx, geoapp.SearchHolidays{Boundary: madrid, Year: 2026, Inherited: true})
+	if err != nil || len(year) != 2 || year[0].Date != "2026-12-07" || year[1].Name != "Inmaculada Concepción" || year[1].BoundaryName == "" {
+		t.Fatalf("the calendar of Madrid: %+v %v", year, err)
+	}
+	terms, err := h.Receivables.Service.CreateTerms.Handle(actx, recapp.CreateTerms{Seller: maccorp, Code: "30D", Description: "30 días", Installments: 1,
+		DaysToFirst: 30, ControlHolidays: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tid, _ := recdomain.ParseTermsID(terms.ID)
+	dues, err := h.Receivables.Service.Preview.Handle(actx, recapp.PreviewSchedule{ID: tid, Issued: "2026-11-06", Amount: "121.00"})
+	if err != nil || len(dues) != 1 || dues[0].Date != "2026-12-09" {
+		t.Fatalf("thirty days from 6 November, past Sunday 6, Monday 7 and Tuesday 8 December: %+v %v", dues, err)
 	}
 }

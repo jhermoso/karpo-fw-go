@@ -76,7 +76,9 @@ contexts/receivables/
 - **Ámbito:** todo pertenece al vendedor. Fuera de su ámbito, 404 uniforme; con solo lectura, 403.
 - **Aplicar un cobro** cambia dos agregados en la misma unidad de trabajo: el cobro (lo aplicado)
   y la cuenta por cobrar (lo abierto del plazo). Ambos usan concurrencia optimista y reintento.
-- **Festivos:** puerto `Calendar`; por defecto no hay ninguno, porque C# no tenía calendario.
+- **Festivos:** puerto `Calendar`, que recibe el vendedor y el día. Por defecto no hay ninguno;
+  el anfitrión lo conecta con el calendario de Geografía y los fines de semana (ver
+  [GEOGRAFIA.md](GEOGRAFIA.md), «Calendario de festivos»).
 - **Lenguaje publicado:**
   - `receivables.collection-allocated.v1`, con medio, pagador, factura, plazo e importe
     (Contabilidad: 572 contra 430, o 430 contra 430 en una compensación);
@@ -157,6 +159,6 @@ contexts/receivables/
 - Reclamación de deuda (dunning), provisión y baja por incobrable (art. 80 LIVA: rectificativa
   R2 o R3 desde Facturación).
 - Pedidos: comprobar el riesgo con `Credit.Exposure` al confirmar un pedido.
-- Calendario de festivos por territorio (puerto `Calendar`).
+- ~~Calendario de festivos por territorio~~: hecho, ver [GEOGRAFIA.md](GEOGRAFIA.md).
 - Importar de C# y Sage: condiciones de pago (Sage `CodigoCondiciones`, hoy perdidas), riesgo y
   cobros históricos como aplicaciones.

@@ -16,6 +16,9 @@ type Module struct {
 	Service *gapp.Service
 	Ports   gapp.Ports // contracts.Gazetteer, contracts.AddressChecker, contracts.Reference
 	HTTP    *gdist.Module
+	// Holidays is the calendar of holidays (contracts.Calendar), and HolidaysHTTP its routes.
+	Holidays     *gapp.Holidays
+	HolidaysHTTP *gdist.HolidaysModule
 }
 
 // Compose builds the context on sw. An in-memory backend must be filled with
@@ -28,7 +31,8 @@ func Compose(sw *hotswap.Switch) *Module {
 		Catalogs:    catalogs{hotswap.Bind(sw, infrastructure.CatalogsFor)},
 	}
 	svc := gapp.NewService(ports)
-	return &Module{Service: svc, Ports: ports, HTTP: gdist.NewModule(svc)}
+	holidays := gapp.NewHolidays(hotswap.Repository(sw, infrastructure.HolidayRepositoryFactory), ports, sw)
+	return &Module{Service: svc, Ports: ports, HTTP: gdist.NewModule(svc), Holidays: holidays, HolidaysHTTP: gdist.NewHolidaysModule(holidays)}
 }
 
 var _ domain.Catalogs = catalogs{}

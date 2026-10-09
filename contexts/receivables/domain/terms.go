@@ -132,16 +132,19 @@ func (t *Terms) AuditSnapshot() map[string]any {
 	return map[string]any{"code": t.s.Code, "installments": t.s.Installments, "active": t.s.Active}
 }
 
-// Calendar tells holidays (a port; no calendar exists in the C#, the default has none).
+// Calendar tells the days a seller does not collect on: the holidays of where it is and whatever
+// else its calendar counts (a port; no calendar exists in the C#, the default has none).
 type Calendar interface {
-	IsHoliday(ctx context.Context, d vocab.Date) (bool, error)
+	IsHoliday(ctx context.Context, seller OrganizationID, d vocab.Date) (bool, error)
 }
 
 // NoHolidays is a calendar without holidays.
 type NoHolidays struct{}
 
 // IsHoliday implements Calendar.
-func (NoHolidays) IsHoliday(context.Context, vocab.Date) (bool, error) { return false, nil }
+func (NoHolidays) IsHoliday(context.Context, OrganizationID, vocab.Date) (bool, error) {
+	return false, nil
+}
 
 // Due is an installment of a schedule.
 type Due struct {
@@ -214,13 +217,13 @@ func (t *Terms) toFixedDay(d vocab.Date) vocab.Date {
 }
 
 func (t *Terms) avoidHolidays(ctx context.Context, d vocab.Date, cal Calendar) (vocab.Date, error) {
-	holiday, err := cal.IsHoliday(ctx, d)
+	holiday, err := cal.IsHoliday(ctx, t.s.Seller, d)
 	if err != nil || !holiday {
 		return d, err
 	}
 	for back := 1; back <= t.s.BackwardDays; back++ {
 		c := d.AddDays(-back)
-		h, err := cal.IsHoliday(ctx, c)
+		h, err := cal.IsHoliday(ctx, t.s.Seller, c)
 		if err != nil {
 			return d, err
 		}
@@ -230,7 +233,7 @@ func (t *Terms) avoidHolidays(ctx context.Context, d vocab.Date, cal Calendar) (
 	}
 	for fwd := 1; fwd <= 366; fwd++ {
 		c := d.AddDays(fwd)
-		h, err := cal.IsHoliday(ctx, c)
+		h, err := cal.IsHoliday(ctx, t.s.Seller, c)
 		if err != nil {
 			return d, err
 		}

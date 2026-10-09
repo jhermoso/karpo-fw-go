@@ -43,7 +43,9 @@ func terms(t *testing.T, s domain.TermsState) *domain.Terms {
 
 type holidays map[string]bool
 
-func (h holidays) IsHoliday(_ context.Context, d vocab.Date) (bool, error) { return h[d.String()], nil }
+func (h holidays) IsHoliday(_ context.Context, _ domain.OrganizationID, d vocab.Date) (bool, error) {
+	return h[d.String()], nil
+}
 
 func schedule(t *testing.T, tr *domain.Terms, issued, amount string, cal domain.Calendar) []domain.Due {
 	t.Helper()
