@@ -33,6 +33,7 @@ arrancar junto.
   | Facturación, Compras | motor de impuestos | Fiscal |
   | Pagos | reparto del neto de nómina | Nóminas |
   | Tesorería | lo cobrable y lo pagable | Cobros, Pagos |
+  | Cobros | calendario del vendedor (festivos y fines de semana) | Geografía y Parties (escrito aquí) |
   | Importación | cargadores de empresas, departamentos y personas | Parties (escritos aquí) |
 | Importación | cargador de centros de trabajo | Instalaciones (escrito aquí) |
 | Importación | cargador de empleos | RRHH y Parties (escrito aquí) |
@@ -52,7 +53,7 @@ arrancar junto.
   los diez que escuchan (Contabilidad, Facturación, Documentos, Fiscal, Inventario, Pedidos,
   Parties, Pagos, Cobros y Envíos) están suscritos. `Deliver` lleva lo publicado hasta que no
   queda nada.
-- **`Start`** (tras migrar; se puede llamar en cada arranque): pasa a Seguridad los 149 permisos
+- **`Start`** (tras migrar; se puede llamar en cada arranque): pasa a Seguridad los 151 permisos
   de todos los contextos, completa el catálogo de módulos y, si nadie administra la instalación,
   crea el administrador que nombre el entorno.
 - **`Handler`**: las rutas de sesión son públicas; todo lo demás exige sesión y pasa por los
@@ -158,7 +159,7 @@ macroservicios** (decisión 1).
 - **Tabla:** `host_deliveries`, migración propia del anfitrión (contexto `host`). No toca
   `pkg/`: con un transporte real (NATS, Kafka) cada consumidor tiene su cola y el buzón sobra.
 
-### Decisiones propuestas (pendientes de confirmar)
+### Decisiones (aprobadas por Javier el 2026-10-09)
 
 1. **Al emisor siempre se le dice «entregado»** cuando el mensaje queda guardado en el buzón.
    Solo se le devuelve error si ni siquiera se pudo guardar. Sugerencia: sí; es lo que desacopla
@@ -184,12 +185,12 @@ macroservicios** (decisión 1).
 - **`host`** (en memoria y en SQLite migrada con los 25 esquemas): arranque sin secreto
   rechazado; permisos, módulos y primer administrador, y un segundo arranque que no cambia nada;
   sin sesión 401, token inválido 401, contraseña errónea 401, cambio de contraseña obligatorio
-  (403 antes); los 149 permisos en el catálogo de Seguridad; importación por HTTP que crea dos
+  (403 antes); los 151 permisos en el catálogo de Seguridad; importación por HTTP que crea dos
   empresas en Parties y omite con aviso lo que nadie carga; repetirla con el nombre escrito de
   otra forma no crea nada; cuenta de cliente, exportación pedida por HTTP, escrita por las tareas
   y descargada; segunda ronda de tareas sin nada que hacer; mensajes entregados y nada que
   entregar después; tipos con historial y el historial de la cuenta.
-- **`cmd/karpo`** arrancado de verdad: `serve` sin migrar sale con error; `migrate` aplica 74
+- **`cmd/karpo`** arrancado de verdad: `serve` sin migrar sale con error; `migrate` aplica 75
   migraciones; `serve` responde en `/readyz`, 401 sin sesión, y la sesión del administrador.
 - **`cmd/karpo-postgres`** contra un PostgreSQL real: sin configuración no arranca y dice qué
   falta; mandato desconocido; migrar dos veces; servir, `/readyz`, 401 sin sesión, varias rondas
@@ -211,7 +212,8 @@ macroservicios** (decisión 1).
 - ~~Resolver el riesgo del oyente que rechaza~~: hecho, ver «Un buzón por oyente». Queda avisar
   a alguien cuando un mensaje se da por imposible.
 - Más listados de Exportación (nóminas, movimientos de almacén, pagos, cobros…).
-- Adaptadores que faltan: calendario de festivos para Cobros y códigos de promoción para Cambio.
+- ~~Calendario de festivos para Cobros~~: hecho, ver [GEOGRAFIA.md](GEOGRAFIA.md). Falta el
+  adaptador de códigos de promoción para Cambio.
 - Guardas del historial por tipo, para que no sea solo de administradores.
 - Observabilidad: la rama de trazas y métricas aún no está fusionada; el anfitrión es donde se
   conecta.

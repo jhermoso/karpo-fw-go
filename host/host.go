@@ -202,7 +202,7 @@ func Compose(sw *hotswap.Switch, o Options) (*Host, error) {
 	h.HR = hr.Compose(sw, hr.WithOrganizations(hrinfra.PartiesOrganizations{Hierarchy: h.Parties.Organizations, Membership: h.Parties.Organizations}),
 		hr.WithFacilities(hrinfra.FacilitiesDirectory{Directory: h.Facilities.Directory}))
 	h.Payroll = payroll.Compose(sw, prlinfra.HRStaff{Staff: h.HR.Staff})
-	h.Receivables = receivables.Compose(sw, nil) // no calendar of holidays yet: due dates do not skip them
+	h.Receivables = receivables.Compose(sw, &SellerCalendar{Parties: h.Parties, Geography: h.Geography, system: func() context.Context { return h.system }})
 	h.Inventory = inventory.Compose(sw, invinfra.ProductsCatalog{Catalog: h.Products.Catalog})
 	h.Orders = orders.Compose(sw, ordinfra.ProductsCatalog{Catalog: h.Products.Catalog, Pricing: h.Products.Pricing},
 		ordinfra.ReceivablesCredit{Exposure: h.Receivables.Credit})
@@ -289,7 +289,7 @@ func (h *Host) Start(ctx context.Context) (Started, error) {
 // a session and goes through the permissions and the scope of who calls.
 func (h *Host) Handler() http.Handler {
 	protected := http.NewServeMux()
-	for _, m := range []distribution.EndpointModule{h.Geography.HTTP, h.Facilities, h.Parties.HTTP, h.Security.HTTP, h.Products, h.Fiscal, h.HR, h.Payroll,
+	for _, m := range []distribution.EndpointModule{h.Geography.HTTP, h.Geography.HolidaysHTTP, h.Facilities, h.Parties.HTTP, h.Security.HTTP, h.Products, h.Fiscal, h.HR, h.Payroll,
 		h.Receivables, h.Inventory, h.Orders, h.Billing, h.Purchases, h.Payments, h.Treasury, h.Accounting, h.Assets, h.Documents, h.Shipments, h.Work,
 		h.Financial, h.Exchange, h.Modules, h.Imports, h.Exports, h.Audit, h.Deliveries} {
 		m.RegisterRoutes(protected)
