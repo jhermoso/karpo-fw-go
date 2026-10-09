@@ -392,6 +392,7 @@ Todo es aditivo: ninguna tabla, columna, ruta ni evento `v1` anterior ha cambiad
 | 1 | Código estable en los tipos de relación (PU-3) y tipo `Prospect Relationship` (PU-5) | Migración 11: `relationship_types.code`, los códigos de los 11 tipos que había y la fila nueva `…0002-000000000016` | `GET /api/catalogs/party-relationship-types` devuelve `code` | — |
 | 2 | Tiempo de prueba del cliente potencial (PU-4, PU-6) | Migración 12: `party_relationships.trial_until` | `prospect` en `POST /api/party-relationships` y en `affiliation` del alta; `PUT /api/party-relationships/{id}/trial`; el DTO devuelve `prospect: { trialUntil, inTrial }` | `parties.prospect-trial-changed.v1`; puerto `contracts.Trials` (`Module.Trials`) |
 | 3 | Participación en el capital (PU-7) | Migración 13: `party_relationships.share_percent` (decimal exacto en texto, como el resto de contextos) | `ownership` en el alta de la relación; `PUT /api/party-relationships/{id}/ownership`; el DTO devuelve `ownership: { share }` | `parties.ownership-share-changed.v1` |
+| 5 | Código de promoción del colaborador (2026-10-09, ver [CAMBIO.md](CAMBIO.md)) | Migración 14: `party_relationships.promotion_code` | `PUT /api/party-relationships/{id}/promotion-code`; `collaborator` en la relación | — |
 | 4 | Edición de persona (PU-9, F11) | — | `PUT /api/parties/{id}/person` (género, nacimiento y estado civil) | — (no cambia el nombre) |
 
 Permisos nuevos (PU-10, revisada por Javier el 2026-10-06), los dos declarados al catálogo de

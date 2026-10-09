@@ -2,12 +2,15 @@ package integration
 
 import (
 	"context"
+	"errors"
 	"io"
 	"strings"
 	"testing"
+	"time"
 
 	accapp "github.com/jhermoso/karpo-fw-go/contexts/accounting/application"
 	bilapp "github.com/jhermoso/karpo-fw-go/contexts/billing/application"
+	exgapp "github.com/jhermoso/karpo-fw-go/contexts/exchange/application"
 	expapp "github.com/jhermoso/karpo-fw-go/contexts/exports/application"
 	expdomain "github.com/jhermoso/karpo-fw-go/contexts/exports/domain"
 	finapp "github.com/jhermoso/karpo-fw-go/contexts/financial/application"
@@ -21,6 +24,7 @@ import (
 	recdomain "github.com/jhermoso/karpo-fw-go/contexts/receivables/domain"
 	treapp "github.com/jhermoso/karpo-fw-go/contexts/treasury/application"
 	"github.com/jhermoso/karpo-fw-go/host"
+	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
@@ -235,7 +239,53 @@ func tradeImports(t *testing.T, h *host.Host, actx context.Context) {
 	}
 	tid, _ := recdomain.ParseTermsID(terms.ID)
 	dues, err := h.Receivables.Service.Preview.Handle(actx, recapp.PreviewSchedule{ID: tid, Issued: "2026-11-06", Amount: "121.00"})
+	promotionCodes(t, h, actx, maccorp, acme)
 	if err != nil || len(dues) != 1 || dues[0].Date != "2026-12-10" {
 		t.Fatalf("thirty days from 6 November, past Sunday 6, Monday 7, Tuesday 8 and Wednesday 9 December: %+v %v", dues, err)
+	}
+}
+
+// promotionCodes gives a collaborator of a company its promotion code in Parties and reserves
+// currency with it in Exchange.
+func promotionCodes(t *testing.T, h *host.Host, actx context.Context, company, customer string) {
+	t.Helper()
+	agency, err := h.Parties.Service.RegisterOrganization.Handle(actx, parapp.RegisterOrganization{LegalName: "Agencia Ñu", Roles: []string{pardomain.RoleCollaborator.String()},
+		Affiliation: &parapp.NewAffiliation{Organization: company, RelationshipType: pardomain.RelCollaborator.String()}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	aid, _ := pardomain.ParsePartyID(agency.ID)
+	rels, err := h.Parties.Service.Relationships.Handle(actx, parapp.PartyRelationships{PartyID: aid, ActiveOnly: true})
+	if err != nil || len(rels) != 1 {
+		t.Fatalf("the relationship of the collaborator: %+v %v", rels, err)
+	}
+	rid, _ := pardomain.ParseRelationshipID(rels[0].ID)
+	set, err := h.Parties.Service.SetPromotionCode.Handle(actx, parapp.SetPromotionCode{ID: rid, PromotionCode: " promo-1 "})
+	if err != nil || set.Collaborator == nil || set.Collaborator.PromotionCode != "PROMO-1" {
+		t.Fatalf("the promotion code: %+v %v", set, err)
+	}
+	rels, err = h.Parties.Service.Relationships.Handle(actx, parapp.PartyRelationships{PartyID: aid, ActiveOnly: true})
+	if err != nil || len(rels) != 1 || rels[0].Collaborator == nil || rels[0].Collaborator.PromotionCode != "PROMO-1" {
+		t.Fatalf("the promotion code read back: %+v %v", rels, err)
+	}
+	if _, err := h.Exchange.Service.SetCurrency.Handle(actx, exgapp.SetCurrency{Company: company, Code: "USD", Name: "Dólar"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.Exchange.Service.SetRate.Handle(actx, exgapp.SetRate{Company: company, Code: "USD", Rate: "0.92"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.Exchange.Service.SetMargin.Handle(actx, exgapp.SetMargin{Company: company, Currency: "USD", Kind: "percent", Level1: "1.5", Level2: "2", Level3: "2.5"}); err != nil {
+		t.Fatal(err)
+	}
+	reserve := func(code string) (exgapp.ReservationDTO, error) {
+		return h.Exchange.Service.Reserve.Handle(actx, exgapp.Reserve{Company: company, Customer: customer, Channel: "web", Pickup: time.Now().Add(48 * time.Hour),
+			PromotionCode: code, Lines: []exgapp.ReserveLine{{Currency: "USD", Amount: "500"}}})
+	}
+	if res, err := reserve("promo-1"); err != nil || res.Collaborator != agency.ID {
+		t.Fatalf("a reservation with the code: %+v %v", res, err)
+	}
+	var rule *fw.RuleViolationError
+	if _, err := reserve("NOPE"); !errors.As(err, &rule) || rule.Code != "exchange.promotion_unknown" {
+		t.Fatalf("a code of nobody: %v", err)
 	}
 }

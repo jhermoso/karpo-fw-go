@@ -185,6 +185,9 @@ func Migrations() sqlrepo.MigrationSet {
 			`ALTER TABLE party_relationships {add:trial_until} {ts}{addEnd}`)},
 		{Version: 13, Name: "ownership relationship details: share", Up: sqlrepo.RenderDDLAll(
 			`ALTER TABLE party_relationships {add:share_percent} {str:10}{addEnd}`)},
+		{Version: 14, Name: "collaborator relationship details: promotion code", Up: sqlrepo.RenderDDLAll(
+			`ALTER TABLE party_relationships {add:promotion_code} {str:15}{addEnd}`,
+			`CREATE INDEX ix_party_rel_promotion ON party_relationships (promotion_code)`)},
 	}}
 }
 

@@ -153,6 +153,8 @@ var (
 	RelFieldUntil = spec.OptionalTime("valid_to", (*Relationship).Until)
 
 	RelFieldTrialUntil = spec.OptionalTime("trial_until", (*Relationship).TrialUntil)
+
+	RelFieldPromotionCode = spec.Comparable("promotion_code", (*Relationship).PromotionCode)
 )
 
 // InTrialAt matches the prospect relationships whose trial is in force at t.

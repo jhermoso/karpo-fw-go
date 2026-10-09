@@ -102,7 +102,8 @@ contexts/exchange/
 - **Ciclo:** `registered → email-verified → notified → completed`; `cancelled` desde cualquiera de
   los tres primeros; `expired` cuando pasa la espera sin recogerse. Una reserva vencida no avanza
   aunque la tarea todavía no la haya cerrado.
-- **Código de promoción:** atribuye la reserva a un colaborador; no cambia el precio.
+- **Código de promoción:** atribuye la reserva a un colaborador; no cambia el precio. De quién
+  es cada código lo dice Parties (ver «Códigos de promoción de los colaboradores»).
 - **Lenguaje publicado:** `exchange.reservation-registered.v1` y
   `exchange.reservation-status-changed.v1`.
 - **Tablas:** `exg_currencies`, `exg_margins`, `exg_settings`, `exg_reservations`
@@ -171,10 +172,54 @@ contexts/exchange/
   cancelación, caducidad, búsquedas por una divisa de las líneas y por días, cuadro de mando y
   bandeja de salida.
 
+## Códigos de promoción de los colaboradores
+
+Añadido el 2026-10-09. En C# el código estaba en una tabla `collaborator` sin modelo, que creaba
+un guion y llenaba una carga masiva; Cambio de divisas la leía con SQL a mano y el código era
+único en toda la instalación.
+
+- **De quién es el código:** de la **relación de colaborador** entre el colaborador y la empresa
+  para la que trae negocio. Es el tercer detalle por tipo de relación en Parties, junto a la
+  prueba del cliente potencial y la participación del socio (ver
+  [PARTIES-UDM.md](PARTIES-UDM.md)).
+- **Forma:** hasta 15 letras, cifras, guiones y guiones bajos. Se guarda en mayúsculas y se
+  compara sin distinguirlas.
+- **Único por empresa:** dos colaboradores vigentes de la misma empresa no comparten código; los
+  de dos empresas sí pueden.
+- **Ruta:** `PUT /api/party-relationships/{id}/promotion-code` con `{"promotionCode": …}`; vacío
+  lo quita. Pide `Parties.Relationship.Update`. La relación lo devuelve en `collaborator`.
+- **Para otros contextos:** `contracts.Collaborators.ByPromotionCode(empresa, código)` en
+  Parties. El anfitrión lo conecta al puerto `Collaborators` de Cambio (`host/promotions.go`).
+- **Efecto en Cambio:** con «validar código» activado, una reserva con un código que no es de
+  un colaborador vigente de la empresa se rechaza (`exchange.promotion_unknown`); con uno
+  válido, la reserva queda atribuida a ese colaborador. El precio no cambia.
+- **Tabla:** columna `party_relationships.promotion_code` (migración 14 de Parties).
+
+### Decisiones propuestas (pendientes de confirmar)
+
+1. **El código es de la relación de colaborador con la empresa**, no del participante ni de su
+   rol. Sugerencia: sí; un mismo colaborador puede trabajar para dos empresas del grupo con un
+   código en cada una, y al terminar la relación el código deja de valer solo.
+2. **Único por empresa, no en toda la instalación** (en C# era global). Sugerencia: sí; Cambio ya
+   pregunta por empresa.
+3. **Un código por colaborador y empresa.** Sugerencia: sí; si hicieran falta campañas con
+   varios códigos, sería un agregado propio.
+4. **Al terminar la relación, el código queda libre** y otro colaborador puede usarlo. Las
+   reservas antiguas conservan el colaborador que tenían. Sugerencia: sí.
+5. **Lo cambia quien puede modificar relaciones** (`Parties.Relationship.Update`), sin permiso
+   propio. Sugerencia: sí; es un dato más de la relación, como la participación.
+6. **No se comprueba que el participante esté activo**, solo que la relación esté vigente (C#
+   miraba las dos cosas). Sugerencia: sí; desactivar a un participante debería terminar sus
+   relaciones, y eso es de Parties.
+7. **No se publica evento** cuando cambia un código. Sugerencia: sí por ahora; nadie lo escucha.
+8. **El código no se pone al dar de alta la relación**, sino después, con su ruta: así la
+   comprobación de duplicados está en un solo sitio. Sugerencia: sí.
+
 ## Pendiente
 
 - Programar `ExpireDue` y una fuente de tipos de cambio al montar el servidor.
-- Adaptador del puerto `Collaborators` sobre Parties (hoy solo en pruebas).
+- ~~Adaptador del puerto `Collaborators` sobre Parties~~: hecho, ver «Códigos de promoción de
+  los colaboradores».
 - Notificaciones al cliente con verificación real del email.
 - Parties: prospecto → cliente al oír `completed`.
 - Caja de la oficina: existencias por billete, reserva y entrega de efectivo, billete mínimo

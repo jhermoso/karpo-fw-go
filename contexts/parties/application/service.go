@@ -53,6 +53,7 @@ type Service struct {
 	TerminateRelationship app.CommandHandler[TerminateRelationship, RelationshipDTO]
 	SetProspectTrial      app.CommandHandler[SetProspectTrial, RelationshipDTO]
 	SetOwnershipShare     app.CommandHandler[SetOwnershipShare, RelationshipDTO]
+	SetPromotionCode      app.CommandHandler[SetPromotionCode, RelationshipDTO]
 	AddIdentification     app.CommandHandler[AddIdentification, PartyDTO]
 	RemoveIdentification  app.CommandHandler[RemoveIdentification, PartyDTO]
 	AddContact            app.CommandHandler[AddContact, PartyDTO]

@@ -203,7 +203,14 @@ type RelationshipDTO struct {
 	Prospect *ProspectDTO `json:"prospect,omitempty"`
 	// Ownership is present in ownership relationships only.
 	Ownership *OwnershipDTO `json:"ownership,omitempty"`
-	Version   int64         `json:"version"`
+	// Collaborator is present in collaborator relationships only.
+	Collaborator *CollaboratorDTO `json:"collaborator,omitempty"`
+	Version      int64            `json:"version"`
+}
+
+// CollaboratorDTO are the details of a collaborator relationship.
+type CollaboratorDTO struct {
+	PromotionCode string `json:"promotionCode,omitempty"`
 }
 
 // OwnershipDTO are the details of an ownership relationship.
@@ -233,6 +240,8 @@ func RelationshipToDTO(r *domain.Relationship, types map[domain.RelationshipType
 			if s := r.OwnershipShare(); s != nil {
 				d.Ownership.Share = s.Points().StringFixed(2)
 			}
+		case domain.CodeCollaborator:
+			d.Collaborator = &CollaboratorDTO{PromotionCode: r.PromotionCode()}
 		}
 	}
 	return d

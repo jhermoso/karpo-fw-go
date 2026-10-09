@@ -47,6 +47,19 @@ type Trial struct {
 	InForce        bool       `json:"inForce"`
 }
 
+// Collaborator is who a promotion code belongs to.
+type Collaborator struct {
+	PartyID        string `json:"partyId"`
+	RelationshipID string `json:"relationshipId"`
+	PromotionCode  string `json:"promotionCode"`
+}
+
+// Collaborators tells whose a promotion code is: the collaborator of an internal organization
+// that has it now. Codes are compared without minding capitals.
+type Collaborators interface {
+	ByPromotionCode(ctx context.Context, organization, code string) (Collaborator, bool, error)
+}
+
 // Trials answers whether the trial of a prospect is still in force (what a subscriptions context
 // asks before letting a prospect work), in batches of at most MaxDirectoryBatch ids. A party
 // without a current prospect relationship with the organization is absent from the result.

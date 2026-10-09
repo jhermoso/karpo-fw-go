@@ -30,6 +30,73 @@ func addRelationshipDetails(svc *Service, s service) {
 			return r.SetOwnershipShare(rt, share)
 		})
 	}, pipeline.RetryOnConflict[SetOwnershipShare, RelationshipDTO](3, 10*time.Millisecond))
+
+	svc.SetPromotionCode = chain(PermRelationshipUpdate, func(ctx context.Context, c SetPromotionCode) (RelationshipDTO, error) {
+		code := domain.NormalizePromotionCode(c.PromotionCode)
+		if code != "" {
+			// A code tells one collaborator of the organization from the others. Asked before
+			// the change, with its own read: who may not see the relationship is told so below.
+			if r, err := s.relationships.Repository().Get(ctx, c.ID); err == nil {
+				same, err := s.relationships.Repository().Find(ctx, spec.And(domain.RelFieldType.Eq(r.Type()), domain.RelFieldTo.Eq(r.To()),
+					domain.RelFieldPromotionCode.Eq(code), domain.ActiveAt(fw.Now())))
+				if err != nil {
+					return RelationshipDTO{}, err
+				}
+				for _, o := range same {
+					if o.ID() != r.ID() {
+						if _, _, _, err := s.writableRelationship(ctx, c.ID); err != nil {
+							return RelationshipDTO{}, err
+						}
+						return RelationshipDTO{}, fw.Violation("parties.duplicate_promotion_code",
+							"another collaborator of the organization already has that promotion code")
+					}
+				}
+			}
+		}
+		return s.changeDetails(ctx, c.ID, func(r *domain.Relationship, rt domain.RelationshipType) error {
+			return r.SetPromotionCode(rt, code)
+		})
+	}, pipeline.RetryOnConflict[SetPromotionCode, RelationshipDTO](3, 10*time.Millisecond))
+}
+
+// Collaborators implements contracts.Collaborators over the collaborator relationships. Like
+// Directory, it serves contexts, not users: the caller's own use case is what is authorized.
+type Collaborators struct {
+	Relationships domain.RelationshipRepository
+	Catalogs      domain.Catalogs
+}
+
+var _ contracts.Collaborators = Collaborators{}
+
+// ByPromotionCode implements contracts.Collaborators.
+func (c Collaborators) ByPromotionCode(ctx context.Context, organization, code string) (contracts.Collaborator, bool, error) {
+	org, err := domain.ParsePartyID(organization)
+	if err != nil {
+		return contracts.Collaborator{}, false, fmt.Errorf("%w: organization must be a party id", fw.ErrValidation)
+	}
+	code = domain.NormalizePromotionCode(code)
+	if code == "" {
+		return contracts.Collaborator{}, false, nil
+	}
+	types, err := c.Catalogs.RelationshipTypes(ctx)
+	if err != nil {
+		return contracts.Collaborator{}, false, err
+	}
+	var collaborator []domain.RelationshipTypeID
+	for _, rt := range types {
+		if rt.Code == domain.CodeCollaborator {
+			collaborator = append(collaborator, rt.ID)
+		}
+	}
+	if len(collaborator) == 0 {
+		return contracts.Collaborator{}, false, nil
+	}
+	rs, err := c.Relationships.Find(ctx, spec.And(domain.RelFieldType.In(collaborator...), domain.RelFieldTo.Eq(org),
+		domain.RelFieldPromotionCode.Eq(code), domain.ActiveAt(fw.Now())))
+	if err != nil || len(rs) == 0 {
+		return contracts.Collaborator{}, false, err
+	}
+	return contracts.Collaborator{PartyID: rs[0].From().String(), RelationshipID: rs[0].ID().String(), PromotionCode: code}, true, nil
 }
 
 // changeDetails loads a relationship the caller may change, applies fn with its type and saves.

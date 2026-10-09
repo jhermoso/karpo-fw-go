@@ -2,6 +2,7 @@ package domain
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
@@ -63,9 +64,24 @@ type Relationship struct {
 // of PARTY RELATIONSHIP). As with PersonDetails and OrganizationDetails in Party, the type is
 // data and the details of each type are value objects; the ones of the other types stay zero.
 type RelationshipDetails struct {
-	Prospect  ProspectDetails  // types with code CodeProspect
-	Ownership OwnershipDetails // types with code CodeOwnership
+	Prospect     ProspectDetails     // types with code CodeProspect
+	Ownership    OwnershipDetails    // types with code CodeOwnership
+	Collaborator CollaboratorDetails // types with code CodeCollaborator
 }
+
+// CollaboratorDetails are the data of a collaborator relationship: the code the collaborator
+// gives to whom it refers, by which the internal organization knows whose a piece of business is.
+// (In the C# it was a column of a table without a model, filled by a bulk load.)
+type CollaboratorDetails struct {
+	// PromotionCode is written in capitals; empty when the collaborator has none.
+	PromotionCode string
+}
+
+// MaxPromotionCode is the length of the longest promotion code.
+const MaxPromotionCode = 15
+
+// NormalizePromotionCode writes a promotion code as it is kept and compared.
+func NormalizePromotionCode(s string) string { return strings.ToUpper(strings.TrimSpace(s)) }
 
 // OwnershipDetails are the data of an ownership relationship: the stake of the shareholder.
 type OwnershipDetails struct {
@@ -281,6 +297,34 @@ func (r *Relationship) SetOwnershipShare(t RelationshipType, share *vocab.Percen
 	return nil
 }
 
+// PromotionCode returns the promotion code of the collaborator ("" when none or not a collaborator).
+func (r *Relationship) PromotionCode() string { return r.details.Collaborator.PromotionCode }
+
+// SetPromotionCode gives the collaborator its promotion code, changes it or (with "") takes it
+// away: up to 15 letters, digits, dashes and underscores. t is the type of the relationship: only
+// the types with code CodeCollaborator carry one. That no other collaborator of the organization
+// has the code is for who calls to check.
+func (r *Relationship) SetPromotionCode(t RelationshipType, code string) error {
+	if t.ID != r.relType || t.Code != CodeCollaborator {
+		return fw.Violation("parties.not_a_collaborator_relationship", "only a collaborator relationship has a promotion code")
+	}
+	if err := r.requireOpen(); err != nil {
+		return err
+	}
+	code = NormalizePromotionCode(code)
+	valid := len(code) <= MaxPromotionCode
+	for _, c := range code {
+		valid = valid && (c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '_')
+	}
+	if !valid {
+		var v fw.Validation
+		v.Add("promotionCode", "format", "up to 15 letters, digits, dashes and underscores")
+		return v.Err()
+	}
+	r.details.Collaborator.PromotionCode = code
+	return nil
+}
+
 // AuditSnapshot implements traits.Snapshotter.
 func (r *Relationship) AuditSnapshot() map[string]any {
 	format := func(t *time.Time) string {
@@ -291,7 +335,7 @@ func (r *Relationship) AuditSnapshot() map[string]any {
 	}
 	return map[string]any{"type": r.relType.String(), "from": r.from.String(), "to": r.to.String(),
 		"since": r.Since().Format(time.RFC3339), "until": format(r.Until()), "remark": r.remark,
-		"trialUntil": format(r.TrialUntil()), "share": shareText(r.OwnershipShare())}
+		"trialUntil": format(r.TrialUntil()), "share": shareText(r.OwnershipShare()), "promotionCode": r.PromotionCode()}
 }
 
 // shareText renders a stake with two decimals ("" for nil).

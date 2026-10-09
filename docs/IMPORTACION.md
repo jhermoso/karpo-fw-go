@@ -472,7 +472,7 @@ Añadida el 2026-10-09: fuente `holidays` en `contexts/imports/domain/holidays.g
 - **Permiso:** además de ejecutar importaciones, quien importa necesita
   `Geography.Holiday.Update` y `Geography.Holiday.Read`.
 
-### Decisiones propuestas (pendientes de confirmar)
+### Decisiones (aprobadas por Javier el 2026-10-09)
 
 1. **El fichero es uno neutro de tres columnas**, no el formato de ningún boletín. No existe un
    fichero oficial único: el BOE publica los nacionales y autonómicos en una tabla, cada

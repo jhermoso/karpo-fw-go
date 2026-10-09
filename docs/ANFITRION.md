@@ -34,6 +34,7 @@ arrancar junto.
   | Pagos | reparto del neto de nómina | Nóminas |
   | Tesorería | lo cobrable y lo pagable | Cobros, Pagos |
   | Cobros | calendario del vendedor (festivos y fines de semana) | Geografía y Parties (escrito aquí) |
+  | Cambio | de quién es un código de promoción | Parties (escrito aquí) |
   | Importación | cargadores de empresas, departamentos y personas | Parties (escritos aquí) |
 | Importación | cargador de centros de trabajo | Instalaciones (escrito aquí) |
 | Importación | cargador de empleos | RRHH y Parties (escrito aquí) |
@@ -127,7 +128,7 @@ macroservicios** (decisión 1).
    Sugerencia: sí como punto de partida; es el lado seguro.
 7. **Los puertos sin adaptador quedan vacíos:** Cobros no salta festivos al calcular
    vencimientos y Cambio de divisas no valida códigos de promoción. Sugerencia: sí, hasta que
-   existan el calendario y la consulta en Parties.
+   existan el calendario y la consulta en Parties. (Los dos existen desde el 2026-10-09.)
 8. **Un cargador y un listado reales como muestra** (empresas de una importación; cuentas de
    clientes como exportación). El resto sigue pendiente. Sugerencia: sí; prueban que el diseño de
    Importación y Exportación funciona de punta a punta.
@@ -191,7 +192,7 @@ macroservicios** (decisión 1).
   otra forma no crea nada; cuenta de cliente, exportación pedida por HTTP, escrita por las tareas
   y descargada; segunda ronda de tareas sin nada que hacer; mensajes entregados y nada que
   entregar después; tipos con historial y el historial de la cuenta.
-- **`cmd/karpo`** arrancado de verdad: `serve` sin migrar sale con error; `migrate` aplica 75
+- **`cmd/karpo`** arrancado de verdad: `serve` sin migrar sale con error; `migrate` aplica 76
   migraciones; `serve` responde en `/readyz`, 401 sin sesión, y la sesión del administrador.
 - **`cmd/karpo-postgres`** contra un PostgreSQL real: sin configuración no arranca y dice qué
   falta; mandato desconocido; migrar dos veces; servir, `/readyz`, 401 sin sesión, varias rondas
@@ -213,8 +214,8 @@ macroservicios** (decisión 1).
 - ~~Resolver el riesgo del oyente que rechaza~~: hecho, ver «Un buzón por oyente». Queda avisar
   a alguien cuando un mensaje se da por imposible.
 - Más listados de Exportación (nóminas, movimientos de almacén, pagos, cobros…).
-- ~~Calendario de festivos para Cobros~~: hecho, ver [GEOGRAFIA.md](GEOGRAFIA.md). Falta el
-  adaptador de códigos de promoción para Cambio.
+- ~~Calendario de festivos para Cobros~~: hecho, ver [GEOGRAFIA.md](GEOGRAFIA.md).
+- ~~Códigos de promoción para Cambio~~: hecho, ver [CAMBIO.md](CAMBIO.md).
 - Guardas del historial por tipo, para que no sea solo de administradores.
 - Observabilidad: la rama de trazas y métricas aún no está fusionada; el anfitrión es donde se
   conecta.
