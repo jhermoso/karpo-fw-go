@@ -42,6 +42,7 @@ import (
 	treinfra "github.com/jhermoso/karpo-fw-go/contexts/treasury/infrastructure"
 	wrkinfra "github.com/jhermoso/karpo-fw-go/contexts/work/infrastructure"
 	"github.com/jhermoso/karpo-fw-go/host"
+	"github.com/jhermoso/karpo-fw-go/host/mailbox"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
@@ -60,7 +61,7 @@ func TestHost(t *testing.T) {
 		t.Run(e.name, func(t *testing.T) {
 			db := open(t, e)
 			ctx := context.Background()
-			for _, drop := range []func(context.Context, *sqlrepo.DB){expinfra.DropAll, impinfra.DropAll, modinfra.DropAll, exginfra.DropAll, fininfra.DropAll,
+			for _, drop := range []func(context.Context, *sqlrepo.DB){mailbox.DropAll, expinfra.DropAll, impinfra.DropAll, modinfra.DropAll, exginfra.DropAll, fininfra.DropAll,
 				wrkinfra.DropAll, shpinfra.DropAll, docinfra.DropAll, astinfra.DropAll, accinfra.DropAll, treinfra.DropAll, payinfra.DropAll, purinfra.DropAll,
 				bilinfra.DropAll, ordinfra.DropAll, invinfra.DropAll, recinfra.DropAll, prlinfra.DropAll, hrinfra.DropAll, fisinfra.DropAll, proinfra.DropAll,
 				secinfra.DropAll, parinfra.DropAll, dropPartiesTables, facinfra.DropAll, geoinfra.DropAll} {

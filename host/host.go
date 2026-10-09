@@ -91,6 +91,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/contexts/work"
 	wrkapp "github.com/jhermoso/karpo-fw-go/contexts/work/application"
 	wrkinfra "github.com/jhermoso/karpo-fw-go/contexts/work/infrastructure"
+	"github.com/jhermoso/karpo-fw-go/host/mailbox"
 	"github.com/jhermoso/karpo-fw-go/pkg/application"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/authorization"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
@@ -151,7 +152,10 @@ type Host struct {
 	jwt      *jwtauth.HS256
 	resolver *authorization.Resolver
 	relays   []*outbox.Relay
-	system   context.Context
+
+	// Deliveries keeps, for each listener, the messages it could not take.
+	Deliveries *mailbox.Office
+	system     context.Context
 }
 
 // systemSubject is who the host is when it runs what nobody asked for by hand.
@@ -164,7 +168,7 @@ func Migrations() []sqlrepo.MigrationSet {
 		fisinfra.Migrations(), hrinfra.Migrations(), prlinfra.Migrations(), recinfra.Migrations(), invinfra.Migrations(), ordinfra.Migrations(),
 		bilinfra.Migrations(), purinfra.Migrations(), payinfra.Migrations(), treinfra.Migrations(), accinfra.Migrations(), astinfra.Migrations(),
 		docinfra.Migrations(), shpinfra.Migrations(), wrkinfra.Migrations(), fininfra.Migrations(), exginfra.Migrations(), modinfra.Migrations(),
-		impinfra.Migrations(), expinfra.Migrations()}
+		impinfra.Migrations(), expinfra.Migrations(), mailbox.Migrations()}
 }
 
 // Permissions lists what every business context checks: what Security is told at start-up.
@@ -228,13 +232,12 @@ func Compose(sw *hotswap.Switch, o Options) (*Host, error) {
 	h.Audit = audit.Compose()
 	h.histories()
 
-	// The Published Language: what each context publishes reaches those that listen to it.
-	for _, c := range []interface {
-		application.MessageHandler
-		Name() string
-	}{h.Accounting.Parking, h.Billing.Consumer, h.Documents.Consumer, h.Fiscal.Consumer, h.Inventory.Consumer, h.Orders.Consumer, h.Parties.Consumer,
+	// The Published Language: what each context publishes reaches those that listen to it. Each
+	// listener has a mailbox: what it cannot take is kept for it and the others are not held back.
+	h.Deliveries = mailbox.New(sw)
+	for _, c := range []mailbox.Listener{h.Accounting.Parking, h.Billing.Consumer, h.Documents.Consumer, h.Fiscal.Consumer, h.Inventory.Consumer, h.Orders.Consumer, h.Parties.Consumer,
 		h.Payments.Consumer, h.Receivables.Consumer, h.Shipments.Consumer} {
-		h.Broker.Subscribe(c.Name(), c)
+		h.Broker.Subscribe(c.Name(), h.Deliveries.For(c))
 	}
 	for _, r := range []interface {
 		Relay(application.MessageSender, ...outbox.RelayOption) *outbox.Relay
@@ -288,7 +291,7 @@ func (h *Host) Handler() http.Handler {
 	protected := http.NewServeMux()
 	for _, m := range []distribution.EndpointModule{h.Geography.HTTP, h.Facilities, h.Parties.HTTP, h.Security.HTTP, h.Products, h.Fiscal, h.HR, h.Payroll,
 		h.Receivables, h.Inventory, h.Orders, h.Billing, h.Purchases, h.Payments, h.Treasury, h.Accounting, h.Assets, h.Documents, h.Shipments, h.Work,
-		h.Financial, h.Exchange, h.Modules, h.Imports, h.Exports, h.Audit} {
+		h.Financial, h.Exchange, h.Modules, h.Imports, h.Exports, h.Audit, h.Deliveries} {
 		m.RegisterRoutes(protected)
 	}
 	mux := http.NewServeMux()
@@ -327,6 +330,7 @@ type Chores struct {
 	Reservations   int // of currency, nobody collected in time
 	Quotes         int // nobody answered within their validity
 	Postings       int // facts Accounting had kept and could post now
+	Redelivered    int // messages a listener could not take before and took now
 }
 
 // MaxExportsPerRound bounds how many exports a round writes, so the rest of the chores get their
@@ -341,12 +345,16 @@ const MaxExportsPerRound = 20
 func (h *Host) RunChores(ctx context.Context) (Chores, error) {
 	var out Chores
 	var failed error
-	ctx = authz.WithContext(ctx, authzOf(h.system))
 	note := func(what string, err error) {
 		if err != nil {
 			failed = errors.Join(failed, fmt.Errorf("%s: %w", what, err))
 		}
 	}
+	// As the transport delivers: without anybody's session.
+	again, err := h.Deliveries.Redeliver(ctx, false)
+	note("deliveries", err)
+	out.Redelivered = again.Delivered
+	ctx = authz.WithContext(ctx, authzOf(h.system))
 
 	closed, err := h.Imports.Service.CloseStale.Handle(ctx, impapp.CloseStale{})
 	note("imports", err)

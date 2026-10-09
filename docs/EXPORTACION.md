@@ -290,7 +290,7 @@ Añadidos el 2026-10-09, en `host/datasets_books.go`. Tampoco existían en C#.
 - En los vencimientos de pago, el acreedor que no es un participante (Hacienda, la Seguridad
   Social) sale con el nombre que le da Pagos.
 
-Decisiones propuestas (pendientes de confirmar):
+Decisiones (aprobadas por Javier el 2026-10-09):
 
 1. **El diario sale apunte a apunte**, con ejercicio y número de asiento en cada fila, que es
    como lo piden un auditor o una gestoría. Sugerencia: sí.
