@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/geography/contracts"
 	"github.com/jhermoso/karpo-fw-go/contexts/geography/domain"
@@ -102,6 +103,69 @@ func (h *Holidays) chain(ctx context.Context, id domain.BoundaryID) ([]domain.Bo
 		}
 	}
 	return ids, names, nil
+}
+
+// Locate finds the boundary a calendar names by its code, as the official calendars do:
+//
+//	ES      a country, by its ISO 3166-1 code
+//	ES-MD   a region of a country, by its ISO 3166-2 code
+//	28      a province, by its code of the INE
+//	28079   a municipality, by its code of the INE
+//
+// It serves other contexts, as IsHoliday does.
+func (h *Holidays) Locate(ctx context.Context, place string) (contracts.BoundaryRef, error) {
+	place = strings.ToUpper(strings.TrimSpace(place))
+	unknown := fw.Violation("geography.unknown_place", "no boundary has the code "+place+
+		": a country is written ES, a region ES-MD, a province 28 and a municipality 28079")
+	digits := place != "" && strings.Trim(place, "0123456789") == ""
+	var found []*domain.Boundary
+	var err error
+	switch {
+	case len(place) == 2 && !digits:
+		c, cerr := h.ports.Country(ctx, place)
+		if cerr != nil {
+			return contracts.BoundaryRef{}, unknown
+		}
+		refs, rerr := h.ports.Resolve(ctx, []string{c.Boundary})
+		if ref, ok := refs[c.Boundary]; rerr == nil && ok {
+			return ref, nil
+		}
+		return contracts.BoundaryRef{}, errors.Join(unknown, rerr)
+	case len(place) > 3 && place[2] == '-':
+		regions, ferr := h.ports.Boundaries.Find(ctx, spec.And(domain.FieldBoundaryType.Eq(domain.TypeRegion), domain.FieldAbbreviation.Eq(place[3:])))
+		if ferr != nil {
+			return contracts.BoundaryRef{}, ferr
+		}
+		ids := make([]string, 0, len(regions))
+		for _, r := range regions {
+			ids = append(ids, r.ID().String())
+		}
+		countries, cerr := h.ports.CountryOf(ctx, ids)
+		if cerr != nil {
+			return contracts.BoundaryRef{}, cerr
+		}
+		for _, r := range regions {
+			if countries[r.ID().String()] == place[:2] {
+				found = append(found, r)
+			}
+		}
+	case digits && len(place) == 2:
+		found, err = h.ports.Boundaries.Find(ctx, spec.And(domain.FieldBoundaryType.Eq(domain.TypeProvince), domain.FieldGeoCode.Eq(place)))
+	case digits && len(place) == 5:
+		found, err = h.ports.Boundaries.Find(ctx, spec.And(domain.FieldBoundaryType.Eq(domain.TypeMunicipality), domain.FieldGeoCode.Eq(place)))
+	}
+	if err != nil {
+		return contracts.BoundaryRef{}, err
+	}
+	if len(found) != 1 {
+		return contracts.BoundaryRef{}, unknown
+	}
+	id := found[0].ID().String()
+	refs, err := h.ports.Resolve(ctx, []string{id})
+	if err != nil {
+		return contracts.BoundaryRef{}, err
+	}
+	return refs[id], nil
 }
 
 // Declare declares holidays in a boundary and returns those that were new.

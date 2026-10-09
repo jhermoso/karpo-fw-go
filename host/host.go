@@ -220,12 +220,12 @@ func Compose(sw *hotswap.Switch, o Options) (*Host, error) {
 	h.Financial = financial.Compose(sw, institutions)
 	h.Exchange = exchange.Compose(sw, nil) // no promotion codes until Parties tells whose each is
 	h.Modules = modules.Compose(sw, modules.WithDerivation(SectorCapabilities{Institutions: institutions}))
-	h.Imports = imports.Compose(sw).Offer(impdomain.Sage{}, impdomain.Apiscore{Entity: o.ApiscoreEntity}).Load(
+	h.Imports = imports.Compose(sw).Offer(impdomain.Sage{}, impdomain.Apiscore{Entity: o.ApiscoreEntity}, impdomain.Holidays{}).Load(
 		LegalEntities{Parties: h.Parties}, Departments{Parties: h.Parties, UoW: sw},
 		WorkCenters{Facilities: h.Facilities}, People{Parties: h.Parties, UoW: sw}, Employments{HR: h.HR, Parties: h.Parties, UoW: sw},
 		Positions{HR: h.HR, UoW: sw}, WorkPlaces{Parties: h.Parties}, Customers(h.Parties, sw), Suppliers(h.Parties, sw),
 		TaxRates{Fiscal: h.Fiscal}, ChartAccounts{Accounting: h.Accounting}, OwnAccounts{Treasury: h.Treasury},
-		HeldAccounts{Financial: h.Financial, UoW: sw})
+		HeldAccounts{Financial: h.Financial, UoW: sw}, HolidayCalendar{Geography: h.Geography})
 	h.Exports = exports.Compose(sw, o.Files).Offer(CustomerAccounts{Financial: h.Financial}).Offer(PartyLists(h.Parties, h.HR)...).
 		Offer(TradeLists(h.Parties, h.Billing, h.Orders, h.Receivables, h.Purchases)...).
 		Offer(BookLists(h.Parties, h.Accounting, h.Payments, h.Assets)...)

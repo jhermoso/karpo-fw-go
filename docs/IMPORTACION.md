@@ -10,8 +10,8 @@ se convirtió cada clave del sistema de origen.
 > **Alcance.** Están el motor, el registro de ejecuciones, las referencias, la fuente Personio y,
 > desde el 2026-10-08, **sus cinco cargadores en el anfitrión**: una importación de Personio crea
 > empresas, departamentos, centros, personas y empleos. Ver «Cargadores de Personio». También
-> están **las fuentes de Sage y de Apiscore con sus cargadores**: ver «Fuentes de Sage y de
-> Apiscore».
+> están **las fuentes de Sage y de Apiscore con sus cargadores** (ver «Fuentes de Sage y de
+> Apiscore») y **la del calendario de festivos** (ver «Fuente del calendario de festivos»).
 
 ## Método
 
@@ -436,6 +436,69 @@ existe, ya como entidad financiera; sin esa variable, una importación de Apisco
 - **Integración** en PostgreSQL, SQL Server, Oracle y MySQL: Sage y después Apiscore sobre la
   misma base, dos veces cada una; el cliente y la empleada que Sage trajo son los titulares de
   las cuentas de Apiscore, sin duplicarse.
+
+## Fuente del calendario de festivos
+
+Añadida el 2026-10-09: fuente `holidays` en `contexts/imports/domain/holidays.go`, cargador
+`HolidayCalendar` en `host/loaders_holidays.go`. Carga en el calendario de Geografía (ver
+[GEOGRAFIA.md](GEOGRAFIA.md), «Calendario de festivos»).
+
+- **Un solo fichero** (rol `calendar`), separado por `;` o por `,`, con tres columnas:
+
+  ```
+  fecha;festivo;ámbito
+  2026-12-25;Natividad del Señor;ES
+  2026-05-02;Fiesta de la Comunidad de Madrid;ES-MD
+  2026-12-07;Traslado de la Constitución;28
+  2026-11-09;Nuestra Señora de la Almudena;28079
+  ```
+
+  Las columnas valen también en inglés (`date`, `name`, `place`). La fecha, como en las demás
+  fuentes: `2026-12-25` o `25/12/2026`.
+- **El ámbito es el código oficial del lugar:**
+
+  | Se escribe | Qué es | Código |
+  |---|---|---|
+  | `ES` | un país | ISO 3166-1 |
+  | `ES-MD` | una comunidad autónoma | ISO 3166-2 |
+  | `28` | una provincia | INE, 2 cifras |
+  | `28079` | un municipio | INE, 5 cifras |
+
+  Un festivo vale para su ámbito y todo lo que contiene.
+- **Se puede cargar las veces que haga falta.** Un día que el lugar ya tiene se deja como está:
+  el calendario del año se carga cuando sale el nacional y otra vez cuando se publican los
+  locales, con el mismo fichero ampliado.
+- **Lo que no se puede situar falla fila a fila** (`geography.unknown_place`) y lo demás se carga.
+- **Permiso:** además de ejecutar importaciones, quien importa necesita
+  `Geography.Holiday.Update` y `Geography.Holiday.Read`.
+
+### Decisiones propuestas (pendientes de confirmar)
+
+1. **El fichero es uno neutro de tres columnas**, no el formato de ningún boletín. No existe un
+   fichero oficial único: el BOE publica los nacionales y autonómicos en una tabla, cada
+   comunidad los suyos y cada ayuntamiento sus dos días. Sugerencia: sí; se copia a este fichero
+   una vez al año.
+2. **El lugar se escribe con su código oficial**, no con su nombre. Sugerencia: sí; «Madrid» es
+   municipio, provincia y comunidad, y el código no deja dudas.
+3. **Provincias y municipios por código INE, sin prefijo de país.** Hoy la semilla solo trae los
+   de España. Sugerencia: sí; cuando haya otro país se antepone su código.
+4. **Importar no corrige ni borra**: un festivo ya declarado conserva su nombre, y un día que
+   desaparece del fichero no se quita. Sugerencia: sí; borrar se hace a mano, por la ruta.
+5. **No se descarga nada de internet**: el servidor no va a buscar el calendario a ninguna web
+   (decisión 5 de Importación: los ficheros llegan en la petición). Sugerencia: sí.
+
+### Validación
+
+- **Dominio**: columnas en castellano y con BOM, fechas en dos formatos, ámbito en minúsculas o con
+  espacios, nombre con coma entre comillas, día repetido, y filas sin día, sin lugar o sin nombre.
+- **Geografía**: `Locate` de país, comunidad, provincia y municipio, y ocho códigos que no son
+  de ningún sitio.
+- **Anfitrión** (en memoria y en SQLite): el calendario de 2026 con días de país, comunidad,
+  provincia y municipio y dos filas sin sitio; previsualización; el calendario de Madrid con lo
+  heredado en orden; el mismo fichero ampliado con un municipio más; y el vencimiento de una
+  empresa de Madrid, que salta los festivos importados.
+- **Integración** en PostgreSQL, SQL Server, Oracle y MySQL: un fichero sobre un calendario que
+  ya tenía un día declarado a mano.
 
 ## Pendiente
 

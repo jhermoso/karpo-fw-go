@@ -185,7 +185,7 @@ func sageScenario(t *testing.T, sw *hotswap.Switch) {
 	th := newTradeHost(t, sw)
 	h, actx := th.h, th.actx
 	sources, err := h.Imports.Service.Sources.Handle(actx, impapp.ListSources{})
-	if err != nil || len(sources) != 3 {
+	if err != nil || len(sources) != 4 {
 		t.Fatalf("sources: %+v %v", sources, err)
 	}
 	for _, s := range sources {

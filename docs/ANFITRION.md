@@ -41,6 +41,7 @@ arrancar junto.
 | Importación | cargadores de clientes y proveedores | Parties (escritos aquí) |
 | Importación | cargadores de tipos de IVA, plan de cuentas y cuentas propias | Fiscal, Contabilidad, Tesorería (escritos aquí) |
 | Importación | cargador de cuentas de clientes | Sectorial financiero (escrito aquí) |
+| Importación | cargador del calendario de festivos | Geografía (escrito aquí) |
   | Sectorial financiero | qué empresas son entidad financiera | Parties (escrito aquí) |
 | Módulos | qué capacidades se derivan de lo que es la empresa (`financial`) | Parties (escrito aquí) |
 | Exportación | listado de cuentas de clientes | Sectorial financiero (escrito aquí) |

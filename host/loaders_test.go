@@ -111,7 +111,7 @@ func loadersScenario(t *testing.T, sw *hotswap.Switch) {
 		return out
 	}
 	sources, err := h.Imports.Service.Sources.Handle(actx, impapp.ListSources{})
-	if err != nil || len(sources) != 3 || sources[1].Key != "personio" || len(sources[1].Unloaded) != 0 {
+	if err != nil || len(sources) != 4 || sources[2].Key != "personio" || len(sources[2].Unloaded) != 0 {
 		t.Fatalf("every kind of Personio has who loads it: %+v %v", sources, err)
 	}
 

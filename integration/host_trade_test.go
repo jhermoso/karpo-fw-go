@@ -213,7 +213,18 @@ func tradeImports(t *testing.T, h *host.Host, actx context.Context) {
 			}
 		}
 	}
+	// The rest of the calendar comes from a file: the day already declared is left as it is.
+	cal, err := h.Imports.Service.Execute.Handle(actx, impapp.RunImport{Source: "holidays", Files: []impapp.FileDTO{{Role: "calendar", Name: "2026.csv",
+		Content: "fecha;festivo;ámbito\n2026-12-08;Inmaculada Concepción;ES\n2026-05-02;Fiesta de la Comunidad de Madrid;ES-MD\n" +
+			"2026-12-09;Día de Ñandú;28\n2026-08-15;Asunción;ES-ZZ\n"}}})
+	if err != nil || len(cal.Counts) != 1 || cal.Counts[0] != (impapp.CountDTO{Kind: "holiday", Read: 4, Created: 2, Unchanged: 1, Failed: 1}) {
+		t.Fatalf("the calendar from a file: %+v %v", cal, err)
+	}
 	year, err := h.Geography.Holidays.Search(actx, geoapp.SearchHolidays{Boundary: madrid, Year: 2026, Inherited: true})
+	if err != nil || len(year) != 4 || year[0].Date != "2026-05-02" || year[3].Name != "Día de Ñandú" {
+		t.Fatalf("the calendar of Madrid with the file: %+v %v", year, err)
+	}
+	year = year[1:3]
 	if err != nil || len(year) != 2 || year[0].Date != "2026-12-07" || year[1].Name != "Inmaculada Concepción" || year[1].BoundaryName == "" {
 		t.Fatalf("the calendar of Madrid: %+v %v", year, err)
 	}
@@ -224,7 +235,7 @@ func tradeImports(t *testing.T, h *host.Host, actx context.Context) {
 	}
 	tid, _ := recdomain.ParseTermsID(terms.ID)
 	dues, err := h.Receivables.Service.Preview.Handle(actx, recapp.PreviewSchedule{ID: tid, Issued: "2026-11-06", Amount: "121.00"})
-	if err != nil || len(dues) != 1 || dues[0].Date != "2026-12-09" {
-		t.Fatalf("thirty days from 6 November, past Sunday 6, Monday 7 and Tuesday 8 December: %+v %v", dues, err)
+	if err != nil || len(dues) != 1 || dues[0].Date != "2026-12-10" {
+		t.Fatalf("thirty days from 6 November, past Sunday 6, Monday 7, Tuesday 8 and Wednesday 9 December: %+v %v", dues, err)
 	}
 }
