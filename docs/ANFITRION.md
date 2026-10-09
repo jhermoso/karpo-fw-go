@@ -61,7 +61,8 @@ arrancar junto.
   - cierra las importaciones cuyo proceso murió;
   - escribe las exportaciones en espera (veinte por ronda) y borra los ficheros caducados;
   - empresa por empresa, caduca las reservas de divisa y los presupuestos vencidos;
-  - asienta lo que Contabilidad tenía aparcado y ya puede asentar.
+  - asienta lo que Contabilidad tenía aparcado y ya puede asentar;
+  - vuelve a entregar lo que algún oyente no pudo coger (ver «Un buzón por oyente»).
   Una tarea que falla no detiene a las demás.
 - **`Run`**: entrega y tareas en un temporizador hasta que el proceso se para.
 - **Historial:** todos los tipos de agregado con historial quedan registrados en un solo sitio.
@@ -130,20 +131,53 @@ macroservicios** (decisión 1).
    Importación y Exportación funciona de punta a punta.
 9. **Configuración por variables de entorno**, sin fichero. Sugerencia: sí.
 
-## El oyente que rechaza un mensaje (resuelto para Contabilidad)
+## El oyente que rechaza un mensaje: un buzón por oyente
 
-- **El problema:** el transporte en memoria entrega a todos los oyentes a la vez y, si uno falla,
-  el relé del emisor reintenta el mensaje entero. Contabilidad rechazaba los mensajes de una
-  empresa que aún no tiene libro o cuentas de contrapartida, así que una empresa sin plan
-  contable dejaba reintentándose mensajes de Facturación, Cobros, Pagos, Nóminas, Compras y
-  Activos.
-- **La salida (aprobada por Javier el 2026-10-08):** Contabilidad **aparca** lo que no puede
-  asentar y lo asienta cuando puede. El anfitrión suscribe ese aparcamiento en lugar del
-  consumidor directo. Ver [CONTABILIDAD.md](CONTABILIDAD.md), «Hechos aparcados».
-- **Lo que queda:** es una solución de Contabilidad, no del transporte. Cualquier otro oyente que
-  rechace un mensaje por una regla tendría el mismo efecto; hoy ninguno de los otros nueve lo
-  hace por un motivo que dependa de la configuración de una empresa, pero una cola por oyente en
-  el transporte sigue siendo la salida general.
+- **El problema:** el transporte en memoria entrega a todos los oyentes a la vez y, si uno
+  falla, el relé del emisor reintenta el mensaje entero y, a los diez intentos, lo da por
+  perdido para todos. Un oyente con un problema retenía los mensajes de los demás.
+- **Primera salida (2026-10-08), solo para Contabilidad:** Contabilidad aparca lo que una regla
+  suya no deja asentar. Sigue en pie: ver [CONTABILIDAD.md](CONTABILIDAD.md), «Hechos aparcados».
+- **Salida general (2026-10-09): cada oyente tiene un buzón**, en `host/mailbox`. El anfitrión
+  ya no suscribe al oyente, sino a su buzón:
+  - Si el oyente coge el mensaje, no queda rastro.
+  - Si lo rechaza, **el mensaje se guarda para ese oyente** con el motivo, y al emisor se le dice
+    que está entregado. Los demás oyentes no se enteran.
+  - Lo guardado se reintenta en cada ronda de tareas, con espera creciente: 1, 2, 4… minutos,
+    hasta una hora. A los **diez intentos se da por imposible** y espera a una persona.
+  - **Orden:** mientras un mensaje espera, los que llegan después sobre lo mismo (el mismo
+    `subject`: la misma factura, el mismo pedido) se ponen detrás sin intentarse. Lo que trata de
+    otra cosa pasa con normalidad.
+  - Un mensaje reenviado que ya está guardado no se guarda dos veces.
+- **Para quien administra** (solo administrador global, como el historial):
+  - `GET /api/deliveries?consumer=&status=` — lo guardado, lo más antiguo primero.
+  - `POST /api/deliveries/retry` — vuelve a intentar ya todo lo que espera, y lo dado por
+    imposible (uno, con `{"id":…}`, o todo).
+  - `POST /api/deliveries/{id}/discard` con `{"note":…}` — ese oyente no lo recibirá; lo que
+    esperaba detrás sigue su camino.
+- **Tabla:** `host_deliveries`, migración propia del anfitrión (contexto `host`). No toca
+  `pkg/`: con un transporte real (NATS, Kafka) cada consumidor tiene su cola y el buzón sobra.
+
+### Decisiones propuestas (pendientes de confirmar)
+
+1. **Al emisor siempre se le dice «entregado»** cuando el mensaje queda guardado en el buzón.
+   Solo se le devuelve error si ni siquiera se pudo guardar. Sugerencia: sí; es lo que desacopla
+   a los oyentes.
+2. **Se guarda cualquier fallo**, no solo los de una regla: también una base de datos caída o un
+   error de programación. Sugerencia: sí; así ningún fallo de un oyente toca a los demás.
+3. **Diez intentos y espera hasta una hora** antes de darlo por imposible (unas cuatro horas
+   en total). Sugerencia: sí; son constantes fáciles de cambiar.
+4. **Un mensaje dado por imposible retiene a los que vienen detrás sobre lo mismo** hasta que
+   alguien lo reintenta o lo descarta. Sugerencia: sí; entregar una anulación antes que la
+   factura que anula es peor que esperar.
+5. **Lo entregado se borra del buzón**; lo descartado se conserva con su nota. Sugerencia: sí.
+6. **Solo un administrador global ve y resuelve los buzones**, sin permiso propio en el catálogo.
+   Sugerencia: sí por ahora; es operación de la instalación, no de una empresa.
+7. **Nadie recibe aviso** cuando un mensaje se da por imposible: hay que mirar la lista.
+   Sugerencia: aceptarlo hasta que haya notificaciones u observabilidad; es el siguiente paso
+   natural.
+8. **El aparcamiento de Contabilidad se queda**, delante de su buzón: sabe de empresas (ordena
+   por empresa, lo resuelve quien lleva la contabilidad con su permiso). Sugerencia: sí.
 
 ## Validación
 
@@ -155,7 +189,7 @@ macroservicios** (decisión 1).
   otra forma no crea nada; cuenta de cliente, exportación pedida por HTTP, escrita por las tareas
   y descargada; segunda ronda de tareas sin nada que hacer; mensajes entregados y nada que
   entregar después; tipos con historial y el historial de la cuenta.
-- **`cmd/karpo`** arrancado de verdad: `serve` sin migrar sale con error; `migrate` aplica 73
+- **`cmd/karpo`** arrancado de verdad: `serve` sin migrar sale con error; `migrate` aplica 74
   migraciones; `serve` responde en `/readyz`, 401 sin sesión, y la sesión del administrador.
 - **`cmd/karpo-postgres`** contra un PostgreSQL real: sin configuración no arranca y dice qué
   falta; mandato desconocido; migrar dos veces; servir, `/readyz`, 401 sin sesión, varias rondas
@@ -164,12 +198,18 @@ macroservicios** (decisión 1).
   misma base (ninguna tabla ni índice repetido entre contextos), verificación, arranque,
   importación, cuenta, exportación, tareas y entrega.
 
+- **`host/mailbox`** (en memoria, SQLite y los cuatro motores): un oyente rechaza y el otro
+  recibe; el emisor no se entera; reenvío sin duplicar; lo que llega detrás sobre lo mismo
+  espera y lo demás pasa; reintento en orden; diez intentos y se da por imposible; descartar
+  con nota libera lo que esperaba; reintentar uno o todos; solo administrador global.
+
 ## Pendiente
 
 - **Versión en macroservicios** (decisión 1): qué contextos van en cada proceso, transporte real
   entre ellos (NATS o Kafka) y relé seguro con varias instancias.
 - Probar `karpo-postgres` contra un proyecto de Supabase.
-- Resolver el riesgo del oyente que rechaza.
+- ~~Resolver el riesgo del oyente que rechaza~~: hecho, ver «Un buzón por oyente». Queda avisar
+  a alguien cuando un mensaje se da por imposible.
 - Más listados de Exportación (nóminas, movimientos de almacén, pagos, cobros…).
 - Adaptadores que faltan: calendario de festivos para Cobros y códigos de promoción para Cambio.
 - Guardas del historial por tipo, para que no sea solo de administradores.
