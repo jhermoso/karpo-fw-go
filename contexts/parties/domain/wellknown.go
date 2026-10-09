@@ -75,8 +75,9 @@ var (
 
 // Codes of the relationship types whose relationships carry details of their own.
 const (
-	CodeProspect  = "prospect"
-	CodeOwnership = "ownership"
+	CodeProspect     = "prospect"
+	CodeOwnership    = "ownership"
+	CodeCollaborator = "collaborator"
 )
 
 func parent(id RoleTypeID) *RoleTypeID { return &id }

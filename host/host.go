@@ -218,7 +218,7 @@ func Compose(sw *hotswap.Switch, o Options) (*Host, error) {
 	h.Work = work.Compose(sw)
 	institutions := FinancialInstitutions{Parties: h.Parties, system: func() context.Context { return h.system }}
 	h.Financial = financial.Compose(sw, institutions)
-	h.Exchange = exchange.Compose(sw, nil) // no promotion codes until Parties tells whose each is
+	h.Exchange = exchange.Compose(sw, PromotionCodes{Collaborators: h.Parties.Collaborators})
 	h.Modules = modules.Compose(sw, modules.WithDerivation(SectorCapabilities{Institutions: institutions}))
 	h.Imports = imports.Compose(sw).Offer(impdomain.Sage{}, impdomain.Apiscore{Entity: o.ApiscoreEntity}, impdomain.Holidays{}).Load(
 		LegalEntities{Parties: h.Parties}, Departments{Parties: h.Parties, UoW: sw},
