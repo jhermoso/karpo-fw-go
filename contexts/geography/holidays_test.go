@@ -93,6 +93,22 @@ func (e *env) holidays() {
 		t.Fatalf("a day written otherwise: %v", err)
 	}
 
+	// A place by the code the official calendars give it.
+	for code, name := range map[string]string{"es": "Spain", "ES-MD": "Comunidad de Madrid", "28": "Madrid", " 28079 ": "Madrid", "ES-CT": "Cataluña"} {
+		if ref, err := e.mod.Holidays.Locate(ctx, code); err != nil || ref.Name != name || ref.ID == "" {
+			t.Fatalf("%q: %+v %v", code, ref, err)
+		}
+	}
+	if town, _ := e.mod.Holidays.Locate(ctx, "28079"); town.ID != madrid {
+		t.Fatalf("28079 is Madrid: %+v", town)
+	}
+	var rule *fw.RuleViolationError
+	for _, code := range []string{"", "XX", "ES-ZZ", "FR-MD", "99", "99999", "2807", "Madrid"} {
+		if _, err := e.mod.Holidays.Locate(ctx, code); !errors.As(err, &rule) || rule.Code != "geography.unknown_place" {
+			t.Fatalf("%q is nowhere: %v", code, err)
+		}
+	}
+
 	// Removing one declared by mistake.
 	e.must(e.do("DELETE", "/api/geography/holidays/"+almudena, e.reader, nil, nil), 403, "removing without the permission")
 	e.must(e.do("DELETE", "/api/geography/holidays/"+almudena, e.keeper, nil, nil), 200, "removing")

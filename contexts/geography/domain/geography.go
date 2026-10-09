@@ -157,6 +157,7 @@ var (
 	FieldBoundaryName = spec.Text("name", (*Boundary).Name)
 	FieldBoundaryType = spec.Comparable("type", (*Boundary).Type)
 	FieldGeoCode      = spec.Comparable("geo_code", func(b *Boundary) string { return b.codes.Geo })
+	FieldAbbreviation = spec.Comparable("abbreviation", func(b *Boundary) string { return b.codes.Abbreviation })
 	FieldLinks        = spec.Collection("links", (*Boundary).Links)
 	LinkFieldParent   = spec.Comparable("parent", func(l Link) BoundaryID { return l.Parent })
 	LinkFieldKind     = spec.Comparable("kind", func(l Link) LinkKind { return l.Kind })

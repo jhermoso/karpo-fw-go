@@ -91,6 +91,8 @@ nadie sabía cuáles eran.
 - **Para otros contextos:** `contracts.Calendar.IsHoliday(delimitación, día)`. Los fines de semana
   no son festivos: que cuenten o no lo decide quien pregunta.
 - **Tabla:** `geo_holidays` (migración 3), única por delimitación y día.
+- **`Locate`** encuentra una delimitación por su código oficial (`ES`, `ES-MD`, `28`, `28079`):
+  es como los calendarios nombran los lugares, y lo usa la importación.
 
 ### Quién lo usa: los vencimientos de Cobros
 
@@ -105,14 +107,15 @@ conecta con `SellerCalendar` (`host/calendar.go`):
 Solo afecta a las condiciones de pago con «controlar festivos» activado: el vencimiento que cae
 en día no hábil retrocede hasta `BackwardDays` días o, si no encuentra hábil, avanza.
 
-### Decisiones propuestas (pendientes de confirmar)
+### Decisiones (aprobadas por Javier el 2026-10-09)
 
 1. **Los festivos son de Geografía**, colgados de una delimitación y heredados hacia abajo.
    Sugerencia: sí; es un hecho del lugar, y RRHH o Pagos podrán usar el mismo calendario.
 2. **Geografía deja de ser solo lectura en esto**, con dos permisos nuevos. No se toca el resto.
    Sugerencia: sí.
-3. **No hay semilla de festivos**: se cargan por la ruta. Sugerencia: sí; si quieres, el
-   siguiente paso es una fuente de Importación con el calendario oficial de cada año.
+3. **No hay semilla de festivos**: se cargan por la ruta o, desde el mismo día, con la fuente
+   `holidays` de Importación (ver [IMPORTACION.md](IMPORTACION.md), «Fuente del calendario de
+   festivos»).
 4. **Sábados y domingos cuentan como no hábiles para cobrar**, y eso lo decide el anfitrión, no
    Geografía. Sugerencia: sí; es el uso bancario en España. Otro sector u otro país lo cambia en
    el adaptador.
