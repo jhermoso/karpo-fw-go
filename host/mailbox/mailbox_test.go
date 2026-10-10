@@ -52,6 +52,8 @@ func message(id, subject string, minute int) app.Envelope {
 func scenario(t *testing.T, sw *hotswap.Switch) {
 	ctx := context.Background()
 	office := mailbox.New(sw)
+	told := []mailbox.DTO{}
+	office.OnGivenUp(func(_ context.Context, d mailbox.DTO) { told = append(told, d) })
 	broker := inprocess.NewBroker()
 	books := &listener{name: "accounting", refuse: fw.Violation("accounting.no_ledger", "the company has no ledger")}
 	dues := &listener{name: "receivables"}
@@ -122,6 +124,15 @@ func scenario(t *testing.T, sw *hotswap.Switch) {
 	if r, err := office.Redeliver(ctx, true); err != nil || r != (mailbox.Redelivered{Waiting: 1, GivenUp: 1}) {
 		t.Fatalf("given up: %+v %v", r, err)
 	}
+	// Somebody is told, once, the moment it is given up.
+	if len(told) != 1 || told[0].Consumer != "accounting" || told[0].Status != "given-up" || told[0].Attempts != mailbox.MaxAttempts ||
+		told[0].Reason != "the database is down" {
+		t.Fatalf("told: %+v", told)
+	}
+	sum, err := office.Summary(admin)
+	if err != nil || len(sum) != 1 || sum[0] != (mailbox.Count{Consumer: "accounting", Waiting: 1, GivenUp: 1}) {
+		t.Fatalf("summary: %+v %v", sum, err)
+	}
 	given := kept("given-up")
 	if len(given) != 1 || given[0].Attempts != mailbox.MaxAttempts || given[0].Code != "error" || given[0].Reason != "the database is down" || given[0].NextAttempt != "" {
 		t.Fatalf("given up: %+v", given)
@@ -138,6 +149,12 @@ func scenario(t *testing.T, sw *hotswap.Switch) {
 	gid, _ := mailbox.ParseID(given[0].ID)
 	if _, err := office.Search(cctx, mailbox.Search{}); !errors.Is(err, fw.ErrForbidden) {
 		t.Fatalf("search: %v", err)
+	}
+	if _, err := office.Summary(cctx); !errors.Is(err, fw.ErrForbidden) {
+		t.Fatalf("summary: %v", err)
+	}
+	if len(told) != 1 {
+		t.Fatalf("told again about the same delivery: %+v", told)
 	}
 	if _, err := office.Retry(cctx, mailbox.Retry{}); !errors.Is(err, fw.ErrForbidden) {
 		t.Fatalf("retry: %v", err)
@@ -177,8 +194,8 @@ func scenario(t *testing.T, sw *hotswap.Switch) {
 			t.Fatal(err)
 		}
 	}
-	if g := kept("given-up"); len(g) != 2 {
-		t.Fatalf("two given up: %+v", g)
+	if g := kept("given-up"); len(g) != 2 || len(told) != 3 {
+		t.Fatalf("two given up: %+v, told %d", g, len(told))
 	}
 	books.refuse = nil
 	one := kept("given-up")[0]
@@ -187,6 +204,9 @@ func scenario(t *testing.T, sw *hotswap.Switch) {
 	}
 	if r, err := office.Retry(admin, mailbox.Retry{}); err != nil || r != (mailbox.Redelivered{Delivered: 1}) || len(kept("waiting"))+len(kept("given-up")) != 0 {
 		t.Fatalf("retry all: %+v %v", r, err)
+	}
+	if sum, err := office.Summary(admin); err != nil || len(sum) != 0 {
+		t.Fatalf("nothing pending: %+v %v", sum, err)
 	}
 	if _, err := office.Retry(admin, mailbox.Retry{ID: "x"}); !errors.Is(err, fw.ErrValidation) {
 		t.Fatalf("retry of nothing: %v", err)

@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"time"
 
@@ -45,6 +46,8 @@ type Config struct {
 	Exports string
 	Deliver time.Duration
 	Chores  time.Duration
+	// AlertWebhook is where what needs a person is told (KARPO_ALERT_WEBHOOK); empty: only the log.
+	AlertWebhook string
 }
 
 // Env returns a variable of the environment, or a fallback.
@@ -66,14 +69,20 @@ func every(name, fallback string) (time.Duration, error) {
 // Load reads the configuration; exports is where the exported files wait when the environment
 // does not say.
 func Load(exports string) (Config, error) {
-	c := Config{Secret: os.Getenv("KARPO_JWT_SECRET"), Addr: Env("KARPO_ADDR", ":8080"), Exports: Env("KARPO_EXPORTS_DIR", exports)}
-	var err1, err2, err3 error
+	c := Config{Secret: os.Getenv("KARPO_JWT_SECRET"), Addr: Env("KARPO_ADDR", ":8080"), Exports: Env("KARPO_EXPORTS_DIR", exports),
+		AlertWebhook: os.Getenv("KARPO_ALERT_WEBHOOK")}
+	var err1, err2, err3, err4 error
+	if c.AlertWebhook != "" {
+		if u, err := url.Parse(c.AlertWebhook); err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
+			err4 = errors.New("KARPO_ALERT_WEBHOOK: an http or https address")
+		}
+	}
 	c.Deliver, err1 = every("KARPO_DELIVER_EVERY", "2s")
 	c.Chores, err2 = every("KARPO_CHORES_EVERY", "1m")
 	if len(c.Secret) < MinSecret {
 		err3 = fmt.Errorf("KARPO_JWT_SECRET: a secret of %d characters at least is required", MinSecret)
 	}
-	return c, errors.Join(err3, err1, err2)
+	return c, errors.Join(err3, err1, err2, err4)
 }
 
 // Command returns the command the arguments of a program ask for: serve when they ask for none.
@@ -111,7 +120,8 @@ func Run(ctx context.Context, command string, db *sqlrepo.DB, ping func(context.
 	if err != nil {
 		return err
 	}
-	h, err := host.Compose(hotswap.New(db), host.Options{JWTSecret: []byte(cfg.Secret), Files: files, ApiscoreEntity: os.Getenv("KARPO_APISCORE_ENTITY")})
+	h, err := host.Compose(hotswap.New(db), host.Options{JWTSecret: []byte(cfg.Secret), Files: files, ApiscoreEntity: os.Getenv("KARPO_APISCORE_ENTITY"),
+		OnDeliveryGivenUp: Alerts{Webhook: cfg.AlertWebhook, Logger: logger}.DeliveryGivenUp})
 	if err != nil {
 		return err
 	}

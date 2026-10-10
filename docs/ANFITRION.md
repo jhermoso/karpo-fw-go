@@ -88,6 +88,7 @@ mismos dos mandatos.
 | `KARPO_JWT_SECRET` | secreto que firma las sesiones, 32 caracteres como mínimo | obligatoria |
 | `KARPO_ADDR` | dónde escucha | `:8080` |
 | `KARPO_EXPORTS_DIR` | dónde esperan los ficheros exportados | `exports` |
+| `KARPO_ALERT_WEBHOOK` | dirección a la que se avisa cuando un mensaje se da por imposible | — (solo el registro) |
 | `KARPO_APISCORE_ENTITY` | nombre de la entidad financiera de la que son los ficheros de Apiscore | — (sin ella no se importa Apiscore) |
 | `KARPO_DELIVER_EVERY` | cada cuánto se llevan los mensajes | `2s` |
 | `KARPO_CHORES_EVERY` | cada cuánto se hacen las tareas | `1m` |
@@ -161,6 +162,46 @@ macroservicios** (decisión 1).
 - **Tabla:** `host_deliveries`, migración propia del anfitrión (contexto `host`). No toca
   `pkg/`: con un transporte real (NATS, Kafka) cada consumidor tiene su cola y el buzón sobra.
 
+### Aviso cuando un mensaje se da por imposible
+
+Añadido el 2026-10-10. Era lo que quedaba abierto en la decisión 7: un mensaje dado por imposible
+esperaba en una lista que nadie tenía por qué mirar.
+
+- **Cuándo:** una sola vez por mensaje, en el momento en que agota sus diez intentos. Es el único
+  instante en que hace falta una persona: desde ahí ya no pasa nada solo.
+- **Dónde:**
+  - **siempre en el registro**, como error, con el oyente, el tipo de mensaje, los intentos y el
+    motivo;
+  - **en un webhook**, si se configura `KARPO_ALERT_WEBHOOK`: un `POST` con JSON que lleva un
+    `text` legible (lo que aceptan los webhooks de entrada de las herramientas de chat
+    habituales) y los datos sueltos (`kind`, `consumer`, `delivery`, `eventType`, `subject`,
+    `attempts`, `reason`) para quien quiera procesarlo.
+- **Qué no se envía:** el contenido del mensaje. Solo de quién era, de qué tipo y por qué se
+  rechazó.
+- **Si el aviso falla** (el webhook no responde o responde error), se anota en el registro y la
+  ronda sigue: lo dado por imposible continúa en la lista.
+- **Resumen para una pantalla:** `GET /api/deliveries/summary` (administrador global) devuelve,
+  por oyente, cuántos mensajes esperan y cuántos están dados por imposibles, con estos primero.
+
+Decisiones propuestas (pendientes de confirmar):
+
+1. **Se avisa solo al dar por imposible**, no en cada rechazo. Sugerencia: sí; los rechazos
+   intermedios se arreglan solos casi siempre y avisarían de más.
+2. **El canal es un webhook genérico**, no correo. Karpo no tiene servidor de correo configurado
+   y un webhook sirve para Slack, Teams, un correo vía pasarela o una herramienta de guardias.
+   Sugerencia: sí.
+3. **Una sola dirección para toda la instalación**, por variable de entorno. Sugerencia: sí; es
+   operación del servidor, no de una empresa.
+4. **El texto del aviso va en castellano y no incluye el contenido del mensaje.** Sugerencia: sí;
+   el webhook sale de la instalación y el mensaje puede llevar importes o nombres.
+5. **El motivo del rechazo sí se envía.** Suele ser un texto técnico («la empresa no tiene
+   libro»), pero podría nombrar algo. Sugerencia: sí; sin el motivo el aviso no sirve. Dime si
+   prefieres quitarlo.
+6. **No se repite el aviso** si nadie hace nada. Sugerencia: sí por ahora; un recordatorio diario
+   sería el siguiente paso si se quedan sin atender.
+7. **Los hechos aparcados de Contabilidad no avisan**: se resuelven solos al abrir el libro o
+   completar el perfil, y los ve quien lleva la contabilidad. Sugerencia: sí.
+
 ### Decisiones (aprobadas por Javier el 2026-10-09)
 
 1. **Al emisor siempre se le dice «entregado»** cuando el mensaje queda guardado en el buzón.
@@ -204,15 +245,19 @@ macroservicios** (decisión 1).
 - **`host/mailbox`** (en memoria, SQLite y los cuatro motores): un oyente rechaza y el otro
   recibe; el emisor no se entera; reenvío sin duplicar; lo que llega detrás sobre lo mismo
   espera y lo demás pasa; reintento en orden; diez intentos y se da por imposible; descartar
-  con nota libera lo que esperaba; reintentar uno o todos; solo administrador global.
+  con nota libera lo que esperaba; reintentar uno o todos; solo administrador global; el aviso
+  sale una vez por mensaje y el resumen cuenta por oyente.
+- **`host/serve`**: el aviso sin webhook solo va al registro; con webhook lleva oyente, tipo,
+  intentos y motivo y nunca el contenido; un webhook que falla o no existe se anota y no detiene
+  nada; se envía aunque la ronda esté parando; la dirección mal escrita impide arrancar.
 
 ## Pendiente
 
 - **Versión en macroservicios** (decisión 1): qué contextos van en cada proceso, transporte real
   entre ellos (NATS o Kafka) y relé seguro con varias instancias.
 - Probar `karpo-postgres` contra un proyecto de Supabase.
-- ~~Resolver el riesgo del oyente que rechaza~~: hecho, ver «Un buzón por oyente». Queda avisar
-  a alguien cuando un mensaje se da por imposible.
+- ~~Resolver el riesgo del oyente que rechaza~~: hecho, ver «Un buzón por oyente», con su aviso
+  cuando un mensaje se da por imposible.
 - Más listados de Exportación (nóminas, movimientos de almacén, pagos, cobros…).
 - ~~Calendario de festivos para Cobros~~: hecho, ver [GEOGRAFIA.md](GEOGRAFIA.md).
 - ~~Códigos de promoción para Cambio~~: hecho, ver [CAMBIO.md](CAMBIO.md).
