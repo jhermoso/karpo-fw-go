@@ -2,6 +2,7 @@ package infrastructure
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/memory"
@@ -22,6 +23,39 @@ func TestSeed(t *testing.T) {
 	}
 	if links != 8870 {
 		t.Fatalf("links: %d", links)
+	}
+}
+
+// mojibake are the traces of UTF-8 text read as Latin-1 or Windows-1252 and encoded again
+// ("Ã±" for "ñ", "â€™" for an apostrophe), and of a failed decoding.
+var mojibake = []string{"Ã", "Â", "â€", "\uFFFD"}
+
+// Every text of every seed file, whether or not the domain reads the column.
+func TestSeed_NoTextHasABrokenEncoding(t *testing.T) {
+	for _, name := range []string{"boundary_types", "boundaries", "associations", "postal_codes", "countries", "currencies",
+		"languages", "time_zones", "street_types", "country_currencies", "country_languages", "country_time_zones"} {
+		rows, err := readSeed(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, r := range rows {
+			for col, v := range r {
+				for _, m := range mojibake {
+					if strings.Contains(v, m) {
+						t.Errorf("%s %s: %s %q contains %q", name, r["id"], col, v, m)
+					}
+				}
+			}
+		}
+	}
+	s, err := LoadSeed()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, b := range s.Boundaries {
+		if b.ID().String() == boundaryNameFixes[0].id && b.Name() != "Coruña, A" {
+			t.Errorf("province 15: %q", b.Name())
+		}
 	}
 }
 
