@@ -183,7 +183,7 @@ esperaba en una lista que nadie tenía por qué mirar.
 - **Resumen para una pantalla:** `GET /api/deliveries/summary` (administrador global) devuelve,
   por oyente, cuántos mensajes esperan y cuántos están dados por imposibles, con estos primero.
 
-Decisiones propuestas (pendientes de confirmar):
+Decisiones (aprobadas por Javier el 2026-10-10):
 
 1. **Se avisa solo al dar por imposible**, no en cada rechazo. Sugerencia: sí; los rechazos
    intermedios se arreglan solos casi siempre y avisarían de más.
