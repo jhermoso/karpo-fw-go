@@ -67,6 +67,36 @@ tiempo de prueba, participación en el capital) y edición de persona.
 - **Filtros HTTP → especificaciones** (lista blanca de campos) para búsquedas genéricas.
 - **CI en Linux** con `go test -race` (en Windows no hay compilador C) y `integration/run.ps1`.
 
+### 2b-bis. Observabilidad: siguientes pasos
+Hecho (ver [docs/OBSERVABILIDAD.md](docs/OBSERVABILIDAD.md), decisiones D1 a D8 aprobadas el
+2026-10-06, pasos 1 a 7): contratos `pkg/trace` y `pkg/metrics` con implementaciones sin
+dependencias y `/metrics`; registro que lee la correlación, la traza y el actor del contexto;
+correlación del cliente validada; `distribution.Observe` (una línea JSON, un span y una métrica
+por petición, y la causa de todo 5xx); `pipeline.Observed`; `sqlrepo.WithTelemetry`; relay que
+no calla por defecto, con contadores y antigüedad del pendiente más viejo; consumidor medido.
+
+Pendiente:
+- **`pipeline.Observed` en la `chain` de cada contexto** (D7): una línea por contexto, en una
+  tanda aparte cuando no haya otras sesiones sobre `contexts/`. Hasta entonces los contextos
+  dejan HTTP y SQL, pero no el tramo del caso de uso.
+- **Paso 8: la traza cruza el outbox** (D6): `traceparent` en `OutboxMessage` y en el sobre,
+  columna nueva en los cinco motores; hoy el relay y el consumidor abren traza propia y el flujo
+  se sigue por la correlación.
+- **Paso 9: adaptador de OpenTelemetry** en un módulo `otel/` con su propio `go.mod` (D3).
+  Antes hay que aclarar la licencia (GPL-2.0 del framework frente a Apache-2.0) y medir las
+  dependencias que arrastra.
+- **Ejecutable de servicio** que monte la composición (logger de servicio, puerto interno de
+  `/metrics`, relay con telemetría): hoy los contextos se componen en las pruebas.
+- **Envoltorio de `http.RoundTripper`** que propague `traceparent` y `X-Correlation-ID`, cuando
+  haya clientes HTTP (costuras HTTP, resolvedor de autorización en modo `Http`).
+- **Número de pendientes y de aparcados del outbox** como métricas: exige ampliar `OutboxStore`.
+- **Medir el coste de la instrumentación sin E/S**: `BenchmarkAppend` (SQLite en disco) no lo
+  resuelve.
+- **`ARQUITECTURA.md` §6 y §7** (paso 10) sin actualizar.
+- **Prueba intermitente ajena:** `TestParties_EndToEnd_MemoryThenSQLite/Security_directory`
+  (`contexts/parties`) falló una vez con «end e-mail: status 422» al correr toda la suite y pasó
+  en 12 repeticiones, también en el checkout sin estos cambios. Sin investigar.
+
 ### 2c. Security: siguientes pasos
 Hecho (ver [docs/SEGURIDAD.md](docs/SEGURIDAD.md), decisiones aprobadas el 2026-10-04): contexto
 `contexts/security` con usuarios, roles, catálogo de permisos declarado por cada contexto, acceso
