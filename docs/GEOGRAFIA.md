@@ -18,6 +18,21 @@ comprimidos embebidos en el binario (`contexts/geography/infrastructure/seed`, 6
 | Perfiles de país | 248 | ISO 3166 (alfa-2, alfa-3 y numérico), prefijo telefónico, IBAN, formato postal, UE, EEE, eurozona, SEPA |
 | Monedas / idiomas / zonas horarias / tipos de vía | 182 / 183 / 5 / 40 | Con sus vínculos por país (71 / 4 / 2) |
 
+### Nombres con la codificación rota
+
+La semilla traía un nombre con *mojibake* (UTF-8 leído como Latin-1 y vuelto a codificar): la
+provincia de código geográfico `15` se llamaba «CoruÃ±a, A» en lugar de «Coruña, A». Revisados
+todos los textos de los doce ficheros (secuencias `Ã`, `Â`, `â€` y el carácter de sustitución
+U+FFFD), era el único caso: los municipios, los países, las monedas, los idiomas y los tipos de
+vía estaban bien.
+
+- **Semilla:** corregido `boundaries.csv.gz`. Los backends en memoria y las bases de datos nuevas
+  reciben ya el nombre correcto.
+- **Bases de datos ya migradas:** la migración 4 («boundary names with broken encoding») corrige
+  la fila en `geo_boundaries` por su identificador. En una base nueva no cambia nada.
+- **Prueba:** `TestSeed_NoTextHasABrokenEncoding` recorre todas las columnas de todos los ficheros
+  de la semilla y falla si aparece alguna de esas secuencias.
+
 ## Evaluación del C#
 
 | # | Pieza C# | Decisión → Go |

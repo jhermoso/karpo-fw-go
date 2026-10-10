@@ -65,6 +65,7 @@ func Migrations() sqlrepo.MigrationSet {
 		{Version: 1, Name: "boundaries, postal codes and reference data", Up: sqlrepo.RenderDDLAll(schemaDDL...)},
 		{Version: 2, Name: "Karpo geography and reference seed", Run: seedDatabase},
 		{Version: 3, Name: "calendar of holidays", Up: sqlrepo.RenderDDLAll(holidayDDL...)},
+		{Version: 4, Name: "boundary names with broken encoding", Run: fixBoundaryNames},
 	}}
 }
 
@@ -190,6 +191,24 @@ func seedDatabase(ctx context.Context, db *sqlrepo.DB) error {
 		return err
 	}
 	return insert("geo_country_time_zones", []string{"country_id", "id", "time_zone", "is_primary"}, zones)
+}
+
+// boundaryNameFixes are the names the seed carried with a broken encoding (UTF-8 read as Latin-1
+// and encoded again): the province of geo code 15 was "CoruÃ±a, A".
+var boundaryNameFixes = []struct{ id, name string }{
+	{"b3100000-0003-0000-0003-00000000000f", "Coruña, A"},
+}
+
+// fixBoundaryNames renames the boundaries of a database seeded before the seed was corrected; one
+// seeded afterwards already holds these names.
+func fixBoundaryNames(ctx context.Context, db *sqlrepo.DB) error {
+	for _, f := range boundaryNameFixes {
+		id := domain.BoundaryID{UUID: fw.MustParseUUID(f.id)}
+		if _, err := db.Update(ctx, "geo_boundaries", sqlrepo.Values{"name": f.name}, sqlrepo.Values{"id": id}); err != nil {
+			return fmt.Errorf("fixing the name of boundary %s: %w", f.id, err)
+		}
+	}
+	return nil
 }
 
 var countryColumns = []string{"id", "version", "boundary", "alpha2", "alpha3", "numeric_code", "calling_code", "trunk_prefix", "default_locale",
