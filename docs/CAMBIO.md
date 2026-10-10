@@ -195,7 +195,7 @@ un guion y llenaba una carga masiva; Cambio de divisas la leía con SQL a mano y
   válido, la reserva queda atribuida a ese colaborador. El precio no cambia.
 - **Tabla:** columna `party_relationships.promotion_code` (migración 14 de Parties).
 
-### Decisiones propuestas (pendientes de confirmar)
+### Decisiones (aprobadas por Javier el 2026-10-10)
 
 1. **El código es de la relación de colaborador con la empresa**, no del participante ni de su
    rol. Sugerencia: sí; un mismo colaborador puede trabajar para dos empresas del grupo con un

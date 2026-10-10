@@ -115,6 +115,9 @@ type Options struct {
 	// ApiscoreEntity names, as Parties does, the financial institution whose accounts the files of
 	// Apiscore hold: they do not say it themselves. Empty: an import of Apiscore is refused.
 	ApiscoreEntity string
+	// OnDeliveryGivenUp is told when a message is given up for a listener after too many tries:
+	// from then on it waits for a person. Nil: nobody is told.
+	OnDeliveryGivenUp func(context.Context, mailbox.DTO)
 }
 
 // Host is Karpo composed.
@@ -235,6 +238,7 @@ func Compose(sw *hotswap.Switch, o Options) (*Host, error) {
 	// The Published Language: what each context publishes reaches those that listen to it. Each
 	// listener has a mailbox: what it cannot take is kept for it and the others are not held back.
 	h.Deliveries = mailbox.New(sw)
+	h.Deliveries.OnGivenUp(o.OnDeliveryGivenUp)
 	for _, c := range []mailbox.Listener{h.Accounting.Parking, h.Billing.Consumer, h.Documents.Consumer, h.Fiscal.Consumer, h.Inventory.Consumer, h.Orders.Consumer, h.Parties.Consumer,
 		h.Payments.Consumer, h.Receivables.Consumer, h.Shipments.Consumer} {
 		h.Broker.Subscribe(c.Name(), h.Deliveries.For(c))

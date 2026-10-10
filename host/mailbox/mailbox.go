@@ -31,7 +31,12 @@ type Office struct {
 	deliveries Repository
 	orch       *orchestration.Orchestrator[ID, *Delivery]
 	listeners  map[string]Listener
+	givenUp    func(context.Context, DTO)
 }
+
+// OnGivenUp sets what is told when a delivery is given up: the one moment somebody has to know,
+// because from then on nothing happens on its own. fn must not fail the round: it is told, no more.
+func (o *Office) OnGivenUp(fn func(context.Context, DTO)) { o.givenUp = fn }
 
 // New builds the office on sw.
 func New(sw *hotswap.Switch) *Office {
@@ -185,6 +190,9 @@ func (o *Office) Redeliver(ctx context.Context, force bool) (Redelivered, error)
 		held[chain] = true
 		if after.State().Status == GivenUp {
 			out.GivenUp++
+			if o.givenUp != nil {
+				o.givenUp(ctx, dto(after))
+			}
 		} else {
 			out.Waiting++
 		}
@@ -276,6 +284,50 @@ func (o *Office) Search(ctx context.Context, q Search) (fw.Page[DTO], error) {
 	return fw.MapPage(page, dto), nil
 }
 
+// Count is how many deliveries a listener has waiting and given up.
+type Count struct {
+	Consumer string `json:"consumer"`
+	Waiting  int    `json:"waiting"`
+	GivenUp  int    `json:"givenUp"`
+}
+
+// Summary counts what each listener has pending, those with something given up first: what a
+// screen shows to tell at a glance whether somebody has to look.
+func (o *Office) Summary(ctx context.Context) ([]Count, error) {
+	if err := admin(ctx); err != nil {
+		return nil, err
+	}
+	open, err := o.open(ctx)
+	if err != nil {
+		return nil, err
+	}
+	by := map[string]*Count{}
+	for _, d := range open {
+		st := d.State()
+		c := by[st.Consumer]
+		if c == nil {
+			c = &Count{Consumer: st.Consumer}
+			by[st.Consumer] = c
+		}
+		if st.Status == GivenUp {
+			c.GivenUp++
+		} else {
+			c.Waiting++
+		}
+	}
+	out := make([]Count, 0, len(by))
+	for _, c := range by {
+		out = append(out, *c)
+	}
+	slices.SortFunc(out, func(a, b Count) int {
+		if a.GivenUp != b.GivenUp {
+			return b.GivenUp - a.GivenUp
+		}
+		return strings.Compare(a.Consumer, b.Consumer)
+	})
+	return out, nil
+}
+
 // Retry tries again what somebody asks for.
 func (o *Office) Retry(ctx context.Context, c Retry) (Redelivered, error) {
 	if err := admin(ctx); err != nil {
@@ -338,6 +390,10 @@ func (o *Office) RegisterRoutes(mux *http.ServeMux) {
 		q := r.URL.Query()
 		atoi := func(k string) int { n, _ := strconv.Atoi(q.Get(k)); return n }
 		out, err := o.Search(r.Context(), Search{Consumer: q.Get("consumer"), Status: q.Get("status"), Page: atoi("page"), Size: atoi("size")})
+		distribution.Respond(w, r, out, err, http.StatusOK)
+	})
+	mux.HandleFunc("GET /api/deliveries/summary", func(w http.ResponseWriter, r *http.Request) {
+		out, err := o.Summary(r.Context())
 		distribution.Respond(w, r, out, err, http.StatusOK)
 	})
 	mux.HandleFunc("POST /api/deliveries/retry", func(w http.ResponseWriter, r *http.Request) {
