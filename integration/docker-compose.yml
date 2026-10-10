@@ -1,4 +1,4 @@
-# Database servers for the integration module.
+# Database servers and message broker for the integration module.
 #   docker compose up -d --wait
 #   (see integration_test.go for the DSNs to export, or run ./run.ps1)
 # The host ports come from KARPO_*_PORT (defaults below), so several checkouts can run their own
@@ -51,4 +51,14 @@ services:
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-pkarpo"]
       interval: 5s
+      retries: 30
+
+  # NATS with JetStream (-js): the broker of the integration events between processes.
+  nats:
+    image: nats:2-alpine
+    command: ["-js", "-m", "8222"]
+    ports: ["${KARPO_NATS_PORT:-54222}:4222"]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8222/healthz"]
+      interval: 2s
       retries: 30

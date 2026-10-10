@@ -36,10 +36,10 @@ Leyenda: ✅ hecho · 🟡 parcial · ❌ falta · — no aplica en Go (decisió
 |---|---|---|---|
 | Bounded Context | ✅ `application.Module` | ✅ `hosting.Host` | 🟡 identificador, icono, descripción, configuración |
 | Shared Kernel | ✅ `pkg/domain` | ✅ | |
-| Eventos de integración / lenguaje publicado | ✅ `IntegrationEvent`, `Envelope`, `Translator`, `InboxStore` | ✅ `messaging` (Recorder, Relay, Consumer), inbox memoria/SQL ×5/hotswap | Evaluado en `EVENTOS-INTEGRACION.md` |
+| Eventos de integración / lenguaje publicado | ✅ `IntegrationEvent`, `Envelope`, `Translator`, `InboxStore`, `InboxPurger` | ✅ `messaging` (Recorder, Relay, Consumer, `PurgeInbox`), inbox memoria/SQL ×5/hotswap con purga por antigüedad | Evaluado en `EVENTOS-INTEGRACION.md` |
 | Anti-Corruption Layer | ❌ | ❌ | contrato de traductor entre modelos |
 | Open Host Service | 🟡 `distribution.EndpointModule` | 🟡 HTTP | |
-| Mensajería entre contextos | ✅ `MessageSender`, `MessageHandler` | 🟡 `messaging/inprocess` | ❌ adaptador de broker (NATS/Kafka) |
+| Mensajería entre contextos | ✅ `MessageSender`, `MessageHandler`, `MessageSubscriber` | ✅ `messaging/inprocess` (un proceso) y `nats/` (NATS JetStream, módulo aparte); conformidad en `testing/transporttest` | Evaluado en `BROKER.md`; ❌ costuras HTTP (puertos síncronos entre procesos), adaptador de Kafka, herramienta de mensajes muertos |
 | Fronteras entre subdominios | — | 🟡 `archtest` | ❌ reglas por contexto |
 
 ## 3. Capa de aplicación — contratos en `pkg/application`
@@ -50,7 +50,7 @@ Leyenda: ✅ hecho · 🟡 parcial · ❌ falta · — no aplica en Go (decisió
 | Pipeline / decoradores | ✅ `Middleware`, `Chain` | ✅ `pipeline.*` | |
 | Idempotencia | ✅ `IdempotencyStore`, `IdempotencyKeyed` | 🟡 memoria | ❌ almacén SQL |
 | Orquestador | 🟡 sin interfaz | ✅ `orchestration` | |
-| Outbox | ✅ `OutboxStore`, `EventRecorder`, `EventDecoder` | ✅ `outbox`, memoria, SQL, hotswap | ❌ varias instancias (`SKIP LOCKED`/`READPAST`) |
+| Outbox | ✅ `OutboxStore`, `OutboxClaimer`, `EventRecorder`, `EventDecoder` | ✅ `outbox`, memoria, SQL, hotswap; varios relays sobre un outbox (`outbox.WithClaims`: `SKIP LOCKED` / `READPAST`) conservando el orden | |
 | Publicación / suscripción | ✅ `Publisher`, `Dispatcher`, `EventHandler` | ✅ `events/inprocess`, `events.Registry` | |
 | Base de datos activa (`IActiveDatabaseTargetProvider`) | ✅ | ✅ `persistence/hotswap` | |
 | DTOs / mappers | 🟡 `Mapper` | 🟡 | 🟡 `ISearchQuery` |
@@ -75,4 +75,5 @@ Leyenda: ✅ hecho · 🟡 parcial · ❌ falta · — no aplica en Go (decisió
 4. ~~Eventos de integración~~ ✅ (`application/messaging` + inbox).
 5. ~~Gestión de esquema / migraciones por dialecto~~ ✅ (`sqlrepo.Migrator`).
 
-Pueden esperar a un segundo contexto que los necesite: Workflow, ACL, adaptador de broker.
+Pueden esperar a un segundo contexto que los necesite: Workflow, ACL. El adaptador de broker
+ya existe (`nats/`, ver `BROKER.md`).

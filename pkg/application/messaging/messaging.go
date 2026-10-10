@@ -11,6 +11,7 @@ package messaging
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -202,6 +203,11 @@ func (c *Consumer) Types() []string {
 	return out
 }
 
+// Attach subscribes the consumer to a transport for the types it handles.
+func Attach(ctx context.Context, transport application.MessageSubscriber, c *Consumer) (detach func() error, err error) {
+	return transport.Attach(ctx, c.Name(), c, c.Types()...)
+}
+
 // HandleMessage implements application.MessageHandler. Messages of types without a handler are
 // acknowledged without effect.
 func (c *Consumer) HandleMessage(ctx context.Context, env application.Envelope) error {
@@ -223,6 +229,41 @@ func (c *Consumer) HandleMessage(ctx context.Context, env application.Envelope) 
 		}
 		return h(ctx, env)
 	})
+}
+
+// DefaultInboxRetention is how long an inbox remembers a message before PurgeInbox forgets it.
+// It must stay well above what the transport retains (a broker adapter keeps 7 days by
+// default): a message the transport can still redeliver must still be in the inbox.
+const DefaultInboxRetention = 30 * 24 * time.Hour
+
+// PurgeInbox forgets the messages the inbox claimed more than retention ago
+// (DefaultInboxRetention when it is not positive) and returns how many.
+func PurgeInbox(ctx context.Context, inbox application.InboxStore, retention time.Duration) (int64, error) {
+	purger, ok := inbox.(application.InboxPurger)
+	if !ok {
+		return 0, fmt.Errorf("%w: inbox store %T cannot be purged", domain.ErrUnsupported, inbox)
+	}
+	if retention <= 0 {
+		retention = DefaultInboxRetention
+	}
+	return purger.Purge(ctx, domain.Now().Add(-retention))
+}
+
+// RunInboxPurge purges the inbox now and then every interval until ctx is cancelled; a failed
+// purge is retried at the next one. A host runs it next to the relay.
+func RunInboxPurge(ctx context.Context, inbox application.InboxStore, retention, interval time.Duration) error {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		if _, err := PurgeInbox(ctx, inbox, retention); errors.Is(err, domain.ErrUnsupported) {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+	}
 }
 
 // Lag returns how long ago the message happened (for metrics and logs).

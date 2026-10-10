@@ -86,7 +86,7 @@ ni Service Bus.
                                    ├─ outbox.Recorder ─► outbox_messages        (dentro de Parties)
                                    └─ messaging.Recorder ─ Translator ─► parties_integration_outbox
                                                                          │
-                          messaging.NewRelay ─► application.MessageSender ┤ (inprocess.Broker, NATS, Kafka...)
+                          messaging.NewRelay ─► application.MessageSender ┤ (inprocess.Broker, nats.Transport...)
                                                                          ▼
                                                      messaging.Consumer ─ UoW { inbox.Claim + handler }
 ```
@@ -97,12 +97,17 @@ ni Service Bus.
 | `Envelope` | `application` | Mensaje en la red: id, tipo, origen, sujeto, instante, correlación, causa (id del evento de dominio) y datos JSON |
 | `Translator` | `application` | Traduce eventos de dominio a eventos de integración: la ACL de salida |
 | `MessageSender` / `MessageHandler` | `application` | Puerto del transporte y del consumidor |
-| `InboxStore` | `application` | `Claim(consumer, messageID)` dentro de la UoW del consumidor |
+| `MessageSubscriber` | `application` | Puerto para suscribir un consumidor lógico a un transporte: la composición no depende de un transporte concreto |
+| `InboxStore`, `InboxPurger` | `application` | `Claim(consumer, messageID)` dentro de la UoW del consumidor; `Purge` olvida por antigüedad |
+| `OutboxClaimer` | `application` | Capacidad del outbox para que lo drenen varios relays a la vez |
 | `messaging.Recorder`, `messaging.On` | `application/messaging` | Aplica las traducciones y escribe en el outbox de integración |
-| `messaging.NewRelay` | `application/messaging` | Reenvía el outbox de integración al transporte (al menos una vez) |
+| `messaging.NewRelay` | `application/messaging` | Reenvía el outbox de integración al transporte (al menos una vez); con `outbox.WithClaims`, un relay por réplica |
+| `messaging.Attach`, `messaging.PurgeInbox` | `application/messaging` | Suscribir un consumidor a un transporte; purga del inbox (30 días por defecto) |
 | `messaging.Consumer`, `messaging.Handle` | `application/messaging` | Lector tolerante tipado; inbox y handler en la misma UoW |
 | `outbox.Recorders`, `outbox.NewForwarder` | `application/outbox` | Combinar el outbox de dominio con el de integración; relay con entrega propia |
 | `inprocess.Broker` | `messaging/inprocess` | Transporte en memoria (monolito modular y tests) |
+| `nats.Transport` | módulo `nats/` | Transporte entre procesos sobre NATS JetStream (ver [BROKER.md](BROKER.md)) |
+| `transporttest.Run` | `testing/transporttest` | Batería de conformidad que todo transporte debe pasar |
 | `memory.Inbox`, `sqlrepo.Inbox` (+ `InboxDDL` ×5), `hotswap.Inbox` | persistencia | Almacenes del inbox |
 
 **Reglas:**
@@ -118,6 +123,13 @@ ni Service Bus.
 - En SQL, `Claim` consulta antes de insertar (en PostgreSQL una sentencia fallida aborta la
   transacción). Si dos entregas simultáneas chocan en la clave primaria, la segunda recibe
   `ErrConflict` y se reintenta.
+- **Orden por sujeto:** los hechos de un mismo agregado llegan a cada consumidor en el orden en
+  que ocurrieron. Si la entrega de uno falla, los posteriores del mismo agregado esperan. Entre
+  agregados distintos no se promete orden.
+- **Un corte del transporte no es un fallo del mensaje:** el transporte lo señala con
+  `application.ErrTransportUnavailable` y el relay corta la pasada sin sumar intentos.
+- **El inbox recuerda más tiempo del que el transporte puede reentregar** (30 días frente a los
+  7 que conserva el broker): un mensaje purgado que volviera se aplicaría otra vez.
 
 ## Validación
 
@@ -134,10 +146,29 @@ ni Service Bus.
   reentrega a los dos. Se comprobó que **quitando el inbox el test falla** (la reentrega viola la
   clave primaria del CRM).
 
+## Transporte entre procesos (2026-10-06)
+
+Evaluado, decidido e implementado en [BROKER.md](BROKER.md):
+
+- **Adaptador de NATS JetStream** (módulo `nats/`) sobre `MessageSender` y `MessageSubscriber`,
+  con grupos de consumidores, reentrega con espera creciente y mensajes muertos.
+- **Batería de conformidad del transporte** (`transporttest`): la pasan el transporte en memoria
+  y el de NATS.
+- **Relay con varias instancias** (`outbox.WithClaims`): `FOR UPDATE SKIP LOCKED` en PostgreSQL,
+  Oracle y MySQL, y `READPAST` en SQL Server, conservando el orden del outbox.
+- **Purga del inbox** por antigüedad, en memoria, SQL (cinco motores) e intercambiable en
+  caliente.
+- **Dos servicios en procesos separados** (`integration/broker_test.go`): RR. HH. publica
+  `hr.employee-terminated.v1` y Parties, con su propia base de datos, termina la relación de
+  empleo.
+
+Un cambio de comportamiento respecto a lo descrito arriba: en el test de extremo a extremo de
+`examples/parties`, el renombrado de Acme ya no se entrega en la misma pasada en que falló su
+alta. Espera detrás de ella (orden por sujeto) y se entrega en la siguiente.
+
 ## Pendiente
 
-- Adaptador de un broker real (NATS JetStream o Kafka) sobre `MessageSender`/`MessageHandler`.
-- Relay con varias instancias (`FOR UPDATE SKIP LOCKED` / `READPAST`), ya anotado en BACKLOG.
-- Purga del inbox por antigüedad.
-- Adaptadores HTTP de las costuras cuando se porten los contextos que las usan (el patrón se
-  mantiene: puerto en los contratos del consumidor y adaptador por despliegue).
+- Adaptadores HTTP de las costuras (el patrón se mantiene: puerto en los contratos del
+  consumidor y adaptador por despliegue). Es la otra mitad del transporte entre procesos; se
+  dejó fuera de la tarea del broker (decisión 6 de [BROKER.md](BROKER.md)).
+- Lo demás, en el BACKLOG («Transporte entre procesos: siguientes pasos»).

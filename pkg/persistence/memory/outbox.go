@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"sync"
 	"time"
@@ -69,6 +70,15 @@ func (o *Outbox) Pending(_ context.Context, limit, maxAttempts int) ([]applicati
 		out = out[:limit]
 	}
 	return out, nil
+}
+
+// Claim implements application.OutboxClaimer. The units of work of a Store run one at a time,
+// so inside one no other relay can hold messages: it is Pending.
+func (o *Outbox) Claim(ctx context.Context, limit, maxAttempts int) ([]application.OutboxMessage, error) {
+	if o.store.tx(ctx) == nil {
+		return nil, errors.New("memory: outbox claim outside a unit of work")
+	}
+	return o.Pending(ctx, limit, maxAttempts)
 }
 
 // MarkProcessed flags a message as delivered.
@@ -140,5 +150,6 @@ func (s *IdempotencyStore) Put(_ context.Context, key string, value []byte, ttl 
 
 var (
 	_ application.OutboxStore      = (*Outbox)(nil)
+	_ application.OutboxClaimer    = (*Outbox)(nil)
 	_ application.IdempotencyStore = (*IdempotencyStore)(nil)
 )

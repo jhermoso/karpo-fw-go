@@ -63,6 +63,7 @@ type Relay struct {
 	batchSize   int
 	maxAttempts int
 	logger      log.Logger
+	claims      domain.UnitOfWork
 }
 
 // RelayOption configures a Relay.
@@ -76,6 +77,14 @@ func WithMaxAttempts(n int) RelayOption { return func(r *Relay) { r.maxAttempts 
 
 // WithRelayLogger sets a logger for delivery failures.
 func WithRelayLogger(l log.Logger) RelayOption { return func(r *Relay) { r.logger = l } }
+
+// WithClaims lets several relays share the outbox, one per replica of a service: each pass
+// runs in a unit of work of uow that holds the messages it claims (the store must implement
+// application.OutboxClaimer), so no other relay sends them, and the outbox is still drained in
+// order. Meant for database servers and a transport that stores the message: the deliveries
+// run outside the unit of work, so a consumer called inside the delivery must not need the
+// same single-writer store (memory, SQLite).
+func WithClaims(uow domain.UnitOfWork) RelayOption { return func(r *Relay) { r.claims = uow } }
 
 // DeliverFunc delivers one outbox message; an error leaves it pending for a retry.
 type DeliverFunc func(ctx context.Context, m application.OutboxMessage) error
@@ -103,24 +112,68 @@ func NewForwarder(store application.OutboxStore, deliver DeliverFunc, opts ...Re
 }
 
 // RelayOnce delivers one batch of pending messages and returns how many were delivered.
+//
+// Messages of one aggregate are delivered in order: when one fails, the later ones of the same
+// aggregate wait for the next pass. A delivery that fails with
+// application.ErrTransportUnavailable ends the pass without counting an attempt.
 func (r *Relay) RelayOnce(ctx context.Context) (int, error) {
-	msgs, err := r.store.Pending(ctx, r.batchSize, r.maxAttempts)
-	if err != nil {
-		return 0, err
+	if r.claims == nil {
+		msgs, err := r.store.Pending(ctx, r.batchSize, r.maxAttempts)
+		if err != nil {
+			return 0, err
+		}
+		return r.deliver(ctx, ctx, msgs)
 	}
+	claimer, ok := r.store.(application.OutboxClaimer)
+	if !ok {
+		return 0, fmt.Errorf("%w: outbox store %T cannot be shared by several relays", domain.ErrUnsupported, r.store)
+	}
+	var delivered int
+	var deliverErr error
+	err := r.claims.Do(ctx, func(held context.Context) error {
+		msgs, err := claimer.Claim(held, r.batchSize, r.maxAttempts)
+		if err != nil {
+			return err
+		}
+		// The outcomes are recorded in the unit of work; it commits even when a delivery failed.
+		delivered, deliverErr = r.deliver(ctx, held, msgs)
+		return nil
+	})
+	if err != nil {
+		// Nothing was recorded: what was delivered is sent again and discarded by the inboxes.
+		return 0, errors.Join(err, deliverErr)
+	}
+	return delivered, deliverErr
+}
+
+// deliver hands msgs to the delivery function with ctx and records each outcome with storeCtx.
+func (r *Relay) deliver(ctx, storeCtx context.Context, msgs []application.OutboxMessage) (int, error) {
 	delivered := 0
 	var errs []error
+	held := map[string]struct{}{} // aggregates with a failed message in this pass
 	for _, m := range msgs {
+		key := ""
+		if m.AggregateID != "" {
+			key = m.AggregateType + "/" + m.AggregateID
+		}
+		if _, waits := held[key]; waits && key != "" {
+			continue
+		}
 		if err := r.deliverFn(ctx, m); err != nil {
 			if r.logger != nil {
 				r.logger.Warn("outbox delivery failed", "message_id", m.ID, "event_type", m.EventType, "error", err)
 			}
-			if markErr := r.store.MarkFailed(ctx, m.ID, err); markErr != nil {
+			if errors.Is(err, application.ErrTransportUnavailable) {
+				errs = append(errs, err)
+				break
+			}
+			held[key] = struct{}{}
+			if markErr := r.store.MarkFailed(storeCtx, m.ID, err); markErr != nil {
 				errs = append(errs, markErr)
 			}
 			continue
 		}
-		if err := r.store.MarkProcessed(ctx, m.ID); err != nil {
+		if err := r.store.MarkProcessed(storeCtx, m.ID); err != nil {
 			errs = append(errs, err)
 			continue
 		}

@@ -99,10 +99,10 @@ func TestParties_IntegrationEvents(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n != 2 { // Globex and the rename delivered; Acme failed in billing and stays pending
+	if n != 1 { // Globex delivered; Acme failed in billing, and its rename waits behind it (order per subject)
 		t.Fatalf("first pass delivered %d", n)
 	}
-	if n, err := relay.RelayOnce(ctx); err != nil || n != 1 {
+	if n, err := relay.RelayOnce(ctx); err != nil || n != 2 {
 		t.Fatalf("second pass: %d %v", n, err)
 	}
 	if left, _ := e.integ.Pending(ctx, 100, 10); len(left) != 0 {

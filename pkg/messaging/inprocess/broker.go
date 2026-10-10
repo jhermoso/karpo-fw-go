@@ -21,15 +21,20 @@ import (
 type Broker struct {
 	mu   sync.RWMutex
 	subs []subscription
+	seq  uint64
 }
 
 type subscription struct {
+	id       uint64
 	consumer string
 	types    []string // empty: every type
 	handler  application.MessageHandler
 }
 
-var _ application.MessageSender = (*Broker)(nil)
+var (
+	_ application.MessageSender     = (*Broker)(nil)
+	_ application.MessageSubscriber = (*Broker)(nil)
+)
 
 // NewBroker creates an empty broker.
 func NewBroker() *Broker { return &Broker{} }
@@ -37,14 +42,33 @@ func NewBroker() *Broker { return &Broker{} }
 // Subscribe registers a consumer for the given types (all types when none) and returns an
 // unsubscribe function.
 func (b *Broker) Subscribe(consumer string, h application.MessageHandler, types ...string) (unsubscribe func()) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	b.subs = append(b.subs, subscription{consumer: consumer, types: slices.Clone(types), handler: h})
+	b.add(consumer, h, types)
 	return func() {
 		b.mu.Lock()
 		defer b.mu.Unlock()
 		b.subs = slices.DeleteFunc(b.subs, func(s subscription) bool { return s.consumer == consumer })
 	}
+}
+
+// Attach implements application.MessageSubscriber. Replicas of a consumer all receive every
+// message (there is nothing to share inside one process); their common inbox keeps the effect
+// to one.
+func (b *Broker) Attach(_ context.Context, consumer string, h application.MessageHandler, types ...string) (detach func() error, err error) {
+	id := b.add(consumer, h, types)
+	return func() error {
+		b.mu.Lock()
+		defer b.mu.Unlock()
+		b.subs = slices.DeleteFunc(b.subs, func(s subscription) bool { return s.id == id })
+		return nil
+	}, nil
+}
+
+func (b *Broker) add(consumer string, h application.MessageHandler, types []string) uint64 {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.seq++
+	b.subs = append(b.subs, subscription{id: b.seq, consumer: consumer, types: slices.Clone(types), handler: h})
+	return b.seq
 }
 
 // Send implements application.MessageSender.

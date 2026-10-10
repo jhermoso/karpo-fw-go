@@ -181,3 +181,36 @@ func TestRelay_ThroughTheInProcessBroker(t *testing.T) {
 		t.Fatal("unsubscribed consumers receive nothing")
 	}
 }
+
+func TestPurgeInbox_ForgetsOnlyOldMessages(t *testing.T) {
+	ctx := context.Background()
+	store := memory.NewStore("consumer")
+	inbox := memory.NewInbox(store)
+	restore := domain.SetClock(fixedClock(domain.Now().Add(-40 * 24 * time.Hour)))
+	_, _ = inbox.Claim(ctx, "crm", "old")
+	restore()
+	_, _ = inbox.Claim(ctx, "crm", "recent")
+
+	if n, err := messaging.PurgeInbox(ctx, inbox, 0); err != nil || n != 1 {
+		t.Fatalf("default retention (30 days): purged %d, %v", n, err)
+	}
+	if first, _ := inbox.Claim(ctx, "crm", "recent"); first {
+		t.Fatal("a recent message must still be remembered")
+	}
+	if first, _ := inbox.Claim(ctx, "crm", "old"); !first {
+		t.Fatal("a purged message is forgotten")
+	}
+	if _, err := messaging.PurgeInbox(ctx, claimOnly{inbox}, time.Hour); !errors.Is(err, domain.ErrUnsupported) {
+		t.Fatalf("a store without purge: %v", err)
+	}
+	if err := messaging.RunInboxPurge(ctx, claimOnly{inbox}, time.Hour, time.Hour); !errors.Is(err, domain.ErrUnsupported) {
+		t.Fatalf("the purge job must not spin on a store without purge: %v", err)
+	}
+}
+
+type fixedClock time.Time
+
+func (c fixedClock) Now() time.Time { return time.Time(c) }
+
+// claimOnly hides the purge of an inbox.
+type claimOnly struct{ application.InboxStore }

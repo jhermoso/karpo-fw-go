@@ -25,7 +25,7 @@ jobs:
 
       - name: gofmt
         run: |
-          unformatted=$(gofmt -l pkg examples integration)
+          unformatted=$(gofmt -l pkg examples integration nats)
           if [ -n "$unformatted" ]; then
             echo "Files not formatted with gofmt:"; echo "$unformatted"; exit 1
           fi
@@ -36,8 +36,16 @@ jobs:
       - name: go test -race
         run: go test -race -count=1 ./...
 
+      # The NATS adapter is a module of its own. Its tests start a NATS server inside the test
+      # process, so the transport conformance suite needs no container here.
+      - name: NATS adapter (vet and test -race)
+        working-directory: nats
+        run: |
+          go vet ./...
+          go test -race -count=1 ./...
+
   integration:
-    name: Integration (PostgreSQL, SQL Server, Oracle, MySQL)
+    name: Integration (PostgreSQL, SQL Server, Oracle, MySQL, NATS)
     runs-on: ubuntu-latest
     needs: test
     services:
@@ -91,6 +99,7 @@ jobs:
       KARPO_MSSQL_DSN: sqlserver://sa:Karpo_2026!@localhost:51433?database=master
       KARPO_ORACLE_DSN: oracle://karpo:karpo@localhost:51521/FREEPDB1
       KARPO_MYSQL_DSN: karpo:karpo@tcp(localhost:53306)/karpo?parseTime=true&loc=UTC
+      KARPO_NATS_URL: nats://localhost:54222
 
     steps:
       - uses: actions/checkout@v4
@@ -100,6 +109,17 @@ jobs:
           go-version-file: integration/go.mod
           cache-dependency-path: integration/go.sum
 
+      # Not a service container: those cannot be given arguments, and JetStream is enabled
+      # with -js.
+      - name: Start NATS with JetStream
+        run: |
+          docker run -d --name nats -p 54222:4222 -p 58222:8222 nats:2-alpine -js -m 8222
+          for i in $(seq 1 30); do
+            if curl -fs http://localhost:58222/healthz > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          docker logs nats; exit 1
+
       - name: go vet
         working-directory: integration
         run: go vet ./...
@@ -107,7 +127,7 @@ jobs:
       - name: Integration suite on real servers
         working-directory: integration
         run: |
-          go test -count=1 -v ./... | tee integration.log
+          go test -count=1 -timeout 45m -v ./... | tee integration.log
           # Every engine must actually run: a missing DSN or server would only skip.
           if grep -q -- "--- SKIP" integration.log; then
             echo "Some engines were skipped"; exit 1

@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/jhermoso/karpo-fw-go/pkg/domain"
@@ -52,14 +53,29 @@ func (fn TranslatorFunc) Translate(ctx context.Context, evt domain.Event) ([]Int
 }
 
 // MessageSender hands envelopes to a transport (message broker adapter, in-process broker,
-// HTTP webhook...). It returns only when the transport accepted them.
+// HTTP webhook...). It returns only when the transport accepted them, in the order given.
 type MessageSender interface {
 	Send(ctx context.Context, envelopes ...Envelope) error
 }
 
+// ErrTransportUnavailable is returned (wrapped) by a MessageSender when the transport cannot be
+// reached. It says nothing about the message, so a relay stops its pass and tries again later
+// without counting an attempt against it.
+var ErrTransportUnavailable = errors.New("message transport unavailable")
+
 // MessageHandler consumes an envelope in a downstream bounded context.
 type MessageHandler interface {
 	HandleMessage(ctx context.Context, env Envelope) error
+}
+
+// MessageSubscriber attaches consumers to a transport (in-process broker, message broker
+// adapter). The composition of a bounded context depends on this port, never on a transport.
+type MessageSubscriber interface {
+	// Attach delivers to h the envelopes of the given types (every type when none) until detach
+	// is called. consumer names a logical consumer, usually a bounded context: attachments that
+	// share the name are replicas of it, and each message takes effect once among them. A
+	// message is settled only when h returns nil; otherwise it is delivered again.
+	Attach(ctx context.Context, consumer string, h MessageHandler, types ...string) (detach func() error, err error)
 }
 
 // MessageHandlerFunc adapts a function into a MessageHandler.
@@ -77,4 +93,13 @@ func (fn MessageHandlerFunc) HandleMessage(ctx context.Context, env Envelope) er
 type InboxStore interface {
 	// Claim records (consumer, messageID) and reports whether it is the first time.
 	Claim(ctx context.Context, consumer, messageID string) (first bool, err error)
+}
+
+// InboxPurger is implemented by the inbox stores that can forget old messages, so that the
+// inbox does not grow for ever.
+type InboxPurger interface {
+	// Purge forgets the messages claimed before olderThan and returns how many. A forgotten
+	// message that is delivered again takes effect again: only purge what the transport can no
+	// longer redeliver (older than what it retains).
+	Purge(ctx context.Context, olderThan time.Time) (int64, error)
 }

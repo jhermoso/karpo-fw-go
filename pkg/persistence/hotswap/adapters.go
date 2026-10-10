@@ -2,6 +2,8 @@ package hotswap
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/jhermoso/karpo-fw-go/pkg/application"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain"
@@ -103,6 +105,20 @@ func (o *outbox) Pending(ctx context.Context, limit, maxAttempts int) (out []app
 	return out, err
 }
 
+// Claim implements application.OutboxClaimer when the current backend does. Run the relay with
+// outbox.WithClaims(switch): the unit of work pins the backend that holds the messages.
+func (o *outbox) Claim(ctx context.Context, limit, maxAttempts int) (out []application.OutboxMessage, err error) {
+	err = o.b.With(ctx, func(ctx context.Context, x application.OutboxStore) error {
+		c, ok := x.(application.OutboxClaimer)
+		if !ok {
+			return fmt.Errorf("%w: outbox store %T cannot be shared by several relays", domain.ErrUnsupported, x)
+		}
+		out, err = c.Claim(ctx, limit, maxAttempts)
+		return err
+	})
+	return out, err
+}
+
 func (o *outbox) MarkProcessed(ctx context.Context, id string) error {
 	return o.b.With(ctx, func(ctx context.Context, x application.OutboxStore) error { return x.MarkProcessed(ctx, id) })
 }
@@ -154,4 +170,21 @@ var (
 	_ application.AuditLog    = (*auditLog)(nil)
 	_ domain.UnitOfWork       = (*Switch)(nil)
 	_ application.OutboxStore = (*outbox)(nil)
+
+	_ application.OutboxClaimer = (*outbox)(nil)
 )
+
+// Purge implements application.InboxPurger when the current backend does.
+func (i *inbox) Purge(ctx context.Context, olderThan time.Time) (n int64, err error) {
+	err = i.b.With(ctx, func(ctx context.Context, x application.InboxStore) error {
+		p, ok := x.(application.InboxPurger)
+		if !ok {
+			return fmt.Errorf("%w: inbox store %T cannot be purged", domain.ErrUnsupported, x)
+		}
+		n, err = p.Purge(ctx, olderThan)
+		return err
+	})
+	return n, err
+}
+
+var _ application.InboxPurger = (*inbox)(nil)

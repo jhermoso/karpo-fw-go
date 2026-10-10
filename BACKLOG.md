@@ -59,13 +59,46 @@ tiempo de prueba, participación en el capital) y edición de persona.
   JSON con esquema) en lugar del `IExtensible` basado en delegados.
 - **Cifrado de campos** en el mapeo de persistencia (sustituto de `EncryptedAttribute`).
 - ~~Lenguaje ubicuo común~~ ✅ `pkg/domain/vocab`.
-- **Outbox multi-instancia**: `SELECT ... FOR UPDATE SKIP LOCKED` (PostgreSQL/Oracle/MySQL) y
-  `READPAST` (SQL Server) para varios relays en paralelo.
+- ~~Outbox multi-instancia~~ ✅ `outbox.WithClaims` (`FOR UPDATE SKIP LOCKED` en
+  PostgreSQL/Oracle/MySQL y `READPAST` en SQL Server), conservando el orden: ver
+  [docs/BROKER.md](docs/BROKER.md).
 - **Idempotencia persistente** (`sqlrepo` store) para despliegues con varias réplicas.
 - **Herramienta de backfill/dual-write** para acompañar a `hotswap.Swap` cuando haya que mover
   datos entre motores.
 - **Filtros HTTP → especificaciones** (lista blanca de campos) para búsquedas genéricas.
 - **CI en Linux** con `go test -race` (en Windows no hay compilador C) y `integration/run.ps1`.
+
+### 2b-bis. Transporte entre procesos: siguientes pasos
+Hecho (ver [docs/BROKER.md](docs/BROKER.md), decisiones aprobadas el 2026-10-06): adaptador de
+NATS JetStream en el módulo `nats/`, puerto `MessageSubscriber`, batería de conformidad del
+transporte, varios relays sobre un outbox, purga del inbox y demostración con dos servicios en
+procesos separados.
+
+Pendiente:
+- **Costuras HTTP**: adaptadores de los puertos síncronos entre contextos (`AddressChecker`,
+  `Organizations`, `FacilityDirectory`…) para `macroservices` y `microservices`. Hace falta un
+  cliente común en el framework (correlación, errores RFC 9457 de vuelta a centinelas, identidad
+  del servicio que llama) y depende del resolutor en modo `Http` y de los principales de
+  servicio de Security (§2c). Hasta entonces, un contexto desplegado aparte se compone sin esos
+  puertos, como hace RR. HH. en la demostración.
+- **Herramienta de mensajes muertos**: ver los mensajes apartados de un consumidor y
+  reinyectarlos. Hoy existe la lectura (`Transport.DeadLetters`) y reinyectar es volver a enviar
+  el sobre. Falta también decidir si un sujeto con un mensaje apartado debe quedar en cuarentena.
+- **Programar la purga del inbox en cada servicio**: `messaging.RunInboxPurge` existe, pero los
+  módulos de los contextos no exponen su inbox para que el anfitrión lo lance.
+- **Índice por fecha en las tablas de inbox**, cuando la purga recorriendo la tabla no baste
+  (obliga a una migración por contexto).
+- **Paralelismo conservando el orden**: hoy cada consumidor lógico procesa un mensaje cada vez
+  y cada outbox lo drena un relay cada vez. Si un día no basta: particionar por sujeto.
+- **Adaptador de Kafka** (`kafka/`), para quien ya lo opere: debe pasar `transporttest.Run`.
+- **Orden con relojes desajustados**: el outbox se ordena por el instante del evento. Dos
+  instancias de un mismo contexto con relojes que difieran más que el tiempo entre dos cambios
+  seguidos de un agregado podrían publicarlos al revés. Una secuencia asignada por la base lo
+  evitaría (cambia el esquema del outbox).
+- **Trazas entre procesos**: propagar `traceparent` en las cabeceras del mensaje cuando se
+  apruebe [docs/OBSERVABILIDAD.md](docs/OBSERVABILIDAD.md).
+- **Cifrado y credenciales del broker** en un despliegue real (TLS, cuentas de NATS): se pasan
+  por `Config.Options`; falta una guía de despliegue.
 
 ### 2c. Security: siguientes pasos
 Hecho (ver [docs/SEGURIDAD.md](docs/SEGURIDAD.md), decisiones aprobadas el 2026-10-04): contexto

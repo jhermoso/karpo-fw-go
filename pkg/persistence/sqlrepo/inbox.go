@@ -3,6 +3,7 @@ package sqlrepo
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/jhermoso/karpo-fw-go/pkg/application"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain"
@@ -19,7 +20,10 @@ type Inbox struct {
 	table string
 }
 
-var _ application.InboxStore = (*Inbox)(nil)
+var (
+	_ application.InboxStore  = (*Inbox)(nil)
+	_ application.InboxPurger = (*Inbox)(nil)
+)
 
 // NewInbox creates an inbox on db using table (DefaultInboxTable when empty).
 func NewInbox(db *DB, table string) (*Inbox, error) {
@@ -71,4 +75,19 @@ func (i *Inbox) Claim(ctx context.Context, consumer, messageID string) (first bo
 		return nil
 	})
 	return first, err
+}
+
+// Purge implements application.InboxPurger: it deletes the rows claimed before olderThan. The
+// table has no index by date: the purge scans it, which is fine for an occasional job.
+func (i *Inbox) Purge(ctx context.Context, olderThan time.Time) (int64, error) {
+	b := &Builder{d: i.db.d}
+	tp, err := b.Arg(olderThan)
+	if err != nil {
+		return 0, err
+	}
+	res, err := i.db.executor(ctx).ExecContext(ctx, fmt.Sprintf("DELETE FROM %s WHERE %s < %s", i.q(i.table), i.q("processed_at"), tp), b.args...)
+	if err != nil {
+		return 0, fmt.Errorf("sqlrepo: inbox purge: %w", err)
+	}
+	return res.RowsAffected()
 }

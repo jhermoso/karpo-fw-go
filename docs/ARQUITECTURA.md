@@ -275,7 +275,10 @@ su código.
 4. **Distribución**: no alcanza la persistencia.
 5. **Persistencia**: agnóstica de drivers, sin terceros, sin distribución ni implementaciones de
    aplicación.
-6. **Eventos**: implementan contratos de aplicación y no dependen de nada más.
+6. **Eventos y transportes**: implementan contratos de aplicación y no dependen de nada más.
+7. **Contextos**: un contexto sólo importa de otro su paquete `contracts`, y nunca en su dominio.
+8. **Adaptadores de broker**: son módulos aparte (`nats/`), hechos sólo con contratos y con su
+   cliente. Ni el framework ni los contextos dependen de un broker (ver `BROKER.md`).
 
 Los contextos delimitados pueden reutilizarlo (ver `examples/parties/parties_test.go`).
 
@@ -306,3 +309,7 @@ levanta PostgreSQL 17, SQL Server 2022, Oracle 23 Free y MySQL 8.4 y ejecuta en 
   PostgreSQL → SQL Server → Oracle → MySQL con una unidad de trabajo abierta en cada cambio.
 
 Todo ello pasa en verde contra los cuatro motores.
+
+La misma suite levanta **NATS con JetStream** y ejecuta la conformidad del transporte, el outbox
+drenado por tres relays a la vez en cada motor, y dos servicios (RR. HH. y Parties) en procesos
+separados, cada uno con su base de datos: ver `BROKER.md`.

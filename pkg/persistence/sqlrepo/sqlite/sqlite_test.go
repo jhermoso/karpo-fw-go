@@ -38,6 +38,10 @@ func TestInboxConformance(t *testing.T) {
 	sqlconformance.RunInbox(t, openTemp(t))
 }
 
+func TestOutboxConformance(t *testing.T) {
+	sqlconformance.RunOutbox(t, openTemp(t))
+}
+
 func TestMigratorConformance(t *testing.T) {
 	sqlconformance.RunMigrations(t, openTemp(t))
 }

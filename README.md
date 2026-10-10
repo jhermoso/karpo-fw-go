@@ -21,7 +21,7 @@ Puntos clave:
 - **Batería de conformidad**: toda implementación del repositorio debe demostrar que cada
   especificación devuelve en la base de datos exactamente lo mismo que en memoria.
 
-📖 Diseño completo: [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) · Inventario de patrones: [docs/INVENTARIO-PATRONES.md](docs/INVENTARIO-PATRONES.md) · Lenguaje ubicuo: [docs/LENGUAJE-UBICUO.md](docs/LENGUAJE-UBICUO.md) · Rasgos: [docs/RASGOS-TRANSVERSALES.md](docs/RASGOS-TRANSVERSALES.md) · Autorización: [docs/AUTORIZACION.md](docs/AUTORIZACION.md) · Seguridad: [docs/SEGURIDAD.md](docs/SEGURIDAD.md) · Integración: [docs/EVENTOS-INTEGRACION.md](docs/EVENTOS-INTEGRACION.md) · Esquema: [docs/ESQUEMA-MIGRACIONES.md](docs/ESQUEMA-MIGRACIONES.md) · Parties: [docs/PARTIES.md](docs/PARTIES.md) · Geografía: [docs/GEOGRAFIA.md](docs/GEOGRAFIA.md) · Instalaciones: [docs/INSTALACIONES.md](docs/INSTALACIONES.md) · RRHH: [docs/RRHH.md](docs/RRHH.md) · Nóminas: [docs/NOMINAS.md](docs/NOMINAS.md) · Fiscal: [docs/FISCAL.md](docs/FISCAL.md) · Facturación: [docs/FACTURACION.md](docs/FACTURACION.md) · Cobros: [docs/COBROS.md](docs/COBROS.md) · Tesorería: [docs/TESORERIA.md](docs/TESORERIA.md) · Contabilidad: [docs/CONTABILIDAD.md](docs/CONTABILIDAD.md) · Pagos: [docs/PAGOS.md](docs/PAGOS.md) · Compras: [docs/COMPRAS.md](docs/COMPRAS.md) · Productos: [docs/PRODUCTOS.md](docs/PRODUCTOS.md) · Inventario: [docs/INVENTARIO.md](docs/INVENTARIO.md) · Pedidos: [docs/PEDIDOS.md](docs/PEDIDOS.md)
+📖 Diseño completo: [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) · Inventario de patrones: [docs/INVENTARIO-PATRONES.md](docs/INVENTARIO-PATRONES.md) · Lenguaje ubicuo: [docs/LENGUAJE-UBICUO.md](docs/LENGUAJE-UBICUO.md) · Rasgos: [docs/RASGOS-TRANSVERSALES.md](docs/RASGOS-TRANSVERSALES.md) · Autorización: [docs/AUTORIZACION.md](docs/AUTORIZACION.md) · Seguridad: [docs/SEGURIDAD.md](docs/SEGURIDAD.md) · Integración: [docs/EVENTOS-INTEGRACION.md](docs/EVENTOS-INTEGRACION.md) · Broker: [docs/BROKER.md](docs/BROKER.md) · Esquema: [docs/ESQUEMA-MIGRACIONES.md](docs/ESQUEMA-MIGRACIONES.md) · Parties: [docs/PARTIES.md](docs/PARTIES.md) · Geografía: [docs/GEOGRAFIA.md](docs/GEOGRAFIA.md) · Instalaciones: [docs/INSTALACIONES.md](docs/INSTALACIONES.md) · RRHH: [docs/RRHH.md](docs/RRHH.md) · Nóminas: [docs/NOMINAS.md](docs/NOMINAS.md) · Fiscal: [docs/FISCAL.md](docs/FISCAL.md) · Facturación: [docs/FACTURACION.md](docs/FACTURACION.md) · Cobros: [docs/COBROS.md](docs/COBROS.md) · Tesorería: [docs/TESORERIA.md](docs/TESORERIA.md) · Contabilidad: [docs/CONTABILIDAD.md](docs/CONTABILIDAD.md) · Pagos: [docs/PAGOS.md](docs/PAGOS.md) · Compras: [docs/COMPRAS.md](docs/COMPRAS.md) · Productos: [docs/PRODUCTOS.md](docs/PRODUCTOS.md) · Inventario: [docs/INVENTARIO.md](docs/INVENTARIO.md) · Pedidos: [docs/PEDIDOS.md](docs/PEDIDOS.md)
 
 ---
 
@@ -51,18 +51,18 @@ pkg/
 │   ├── ports.go          # Publisher, Dispatcher, EventHandler, EventRecorder, EventDecoder,
 │   │                     # OutboxStore/OutboxMessage, IdempotencyStore, Validatable...
 │   ├── module.go         # Module, Starter, Stopper (bounded contexts)
-│   ├── integration.go    # IntegrationEvent, Envelope, Translator, MessageSender/Handler, InboxStore
+│   ├── integration.go    # IntegrationEvent, Envelope, Translator, MessageSender/Handler/Subscriber, InboxStore
 │   ├── schema.go         # SchemaMigrator (Status, Migrate, Verify)
 │   ├── context.go, dto.go
 │   ├── authz/            # Contrato de autorización v1: Context, Grant, Permission, Resolver...
 │   │   ── implementaciones ──
 │   ├── pipeline/         # Validating, Transactional, RetryOnConflict, Idempotent, Logging
 │   ├── orchestration/    # Orchestrator + Execute (carga→comportamiento→guardado→eventos)
-│   ├── outbox/           # Recorder (outbox transaccional) + Relay
+│   ├── outbox/           # Recorder (outbox transaccional) + Relay (varias instancias con WithClaims)
 │   ├── hosting/          # Host (ciclo de vida de módulos por dependencias)
 │   ├── authorization/    # Resolver genérico sobre authz.Directory, Authenticators (varias formas de
 │   │                     # autenticarse) y directorio en memoria para pruebas; el real está en contexts/security
-│   └── messaging/        # Eventos de integración: Recorder (traducción), Relay, Consumer (inbox)
+│   └── messaging/        # Eventos de integración: Recorder (traducción), Relay, Consumer (inbox), purga del inbox
 │
 ├── log/, cache/, time/   # contratos transversales (implementaciones en subpaquetes)
 ├── distribution/         # DISTRIBUCIÓN (HTTP, RFC 9457, correlación, health, Authorize)
@@ -80,6 +80,7 @@ pkg/
 └── testing/
     ├── archtest/         # Guardián de arquitectura (contratos solo importan contratos)
     ├── repotest/         # Batería de conformidad del contrato de repositorio
+    ├── transporttest/    # Batería de conformidad del transporte de eventos de integración
     └── testkit/          # Arnés: reloj falso, bus, store y outbox en memoria
 
 examples/parties/         # Ejemplo del framework: contexto completo (dominio→HTTP) con cambio en caliente
@@ -99,7 +100,8 @@ contexts/purchases/       # Contexto Compras (facturas recibidas con IVA soporta
 contexts/products/        # Contexto Productos (catálogo por empresa, códigos de barras, kits, categorías, unidades, tarifas y cotización): ver docs/PRODUCTOS.md
 contexts/inventory/       # Contexto Inventario (almacenes, existencias a coste medio, libro de movimientos, reservas, recuentos y traspasos; reserva y salida del stock de los pedidos): ver docs/INVENTARIO.md
 contexts/orders/          # Contexto Pedidos (pedidos de venta valorados, condiciones del cliente, control de crédito, reserva de stock por eventos, albaranes): ver docs/PEDIDOS.md
-integration/              # Módulo aparte: pruebas contra PostgreSQL, SQL Server, Oracle, MySQL
+nats/                     # Módulo aparte: transporte de eventos de integración entre procesos sobre NATS JetStream: ver docs/BROKER.md
+integration/              # Módulo aparte: pruebas contra PostgreSQL, SQL Server, Oracle, MySQL y NATS (incluye dos servicios en procesos separados)
 ```
 
 ---
@@ -136,7 +138,8 @@ Requisitos: **Go 1.27+**.
 ```powershell
 go test ./...                      # unitarias, arquitectura, conformidad en memoria y SQLite, e2e
 go test ./... -cover
-./integration/run.ps1 -Down        # (Docker) conformidad + cambio en caliente en PostgreSQL, SQL Server, Oracle y MySQL
+cd nats; go test ./...; cd ..      # adaptador de NATS: conformidad del transporte contra un servidor arrancado en el propio test
+./integration/run.ps1 -Down        # (Docker) conformidad + cambio en caliente en PostgreSQL, SQL Server, Oracle y MySQL; broker NATS y dos servicios en procesos separados
 ```
 
 ---

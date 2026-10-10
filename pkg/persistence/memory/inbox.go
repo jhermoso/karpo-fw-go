@@ -3,8 +3,10 @@ package memory
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/jhermoso/karpo-fw-go/pkg/application"
+	"github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
 type inboxKey struct{ consumer, id string }
@@ -14,14 +16,17 @@ type inboxKey struct{ consumer, id string }
 type Inbox struct {
 	store *Store
 	mu    sync.Mutex
-	seen  map[inboxKey]struct{}
+	seen  map[inboxKey]time.Time // when each message was claimed
 }
 
-var _ application.InboxStore = (*Inbox)(nil)
+var (
+	_ application.InboxStore  = (*Inbox)(nil)
+	_ application.InboxPurger = (*Inbox)(nil)
+)
 
 // NewInbox creates an inbox on store.
 func NewInbox(store *Store) *Inbox {
-	return &Inbox{store: store, seen: map[inboxKey]struct{}{}}
+	return &Inbox{store: store, seen: map[inboxKey]time.Time{}}
 }
 
 // Claim implements application.InboxStore.
@@ -33,7 +38,7 @@ func (i *Inbox) Claim(ctx context.Context, consumer, messageID string) (bool, er
 	i.mu.Lock()
 	_, dup := i.seen[k]
 	if !dup {
-		i.seen[k] = struct{}{}
+		i.seen[k] = domain.Now()
 	}
 	i.mu.Unlock()
 	if dup {
@@ -45,4 +50,21 @@ func (i *Inbox) Claim(ctx context.Context, consumer, messageID string) (bool, er
 		i.mu.Unlock()
 	})
 	return true, nil
+}
+
+// Purge implements application.InboxPurger.
+func (i *Inbox) Purge(_ context.Context, olderThan time.Time) (int64, error) {
+	if i.store.closed.Load() {
+		return 0, ErrClosed
+	}
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	var n int64
+	for k, at := range i.seen {
+		if at.Before(olderThan) {
+			delete(i.seen, k)
+			n++
+		}
+	}
+	return n, nil
 }

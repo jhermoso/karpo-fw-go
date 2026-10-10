@@ -88,6 +88,16 @@ type OutboxStore interface {
 	MarkFailed(ctx context.Context, id string, cause error) error
 }
 
+// OutboxClaimer is implemented by the outbox stores that several relays can drain at once (one
+// per replica of a service) without sending a message twice and without waiting for each other.
+type OutboxClaimer interface {
+	// Claim is Pending for a relay that shares the outbox: it must run inside a unit of work,
+	// which holds the returned messages until it ends, and it skips the messages held by
+	// another relay. To keep the order of the outbox it returns nothing while another relay
+	// holds older messages.
+	Claim(ctx context.Context, limit, maxAttempts int) ([]OutboxMessage, error)
+}
+
 // ---------------------------------------------------------------------------------------------
 // Idempotency
 // ---------------------------------------------------------------------------------------------

@@ -86,7 +86,16 @@ func TestPersistence_IsDriverAgnostic(t *testing.T) {
 // depend on nothing else.
 func TestEvents_DependOnContractsOnly(t *testing.T) {
 	archtest.AssertOnlyImports(t, root(t, "pkg", "events"), true, append(contracts, module+"/pkg/events/...")...)
-	archtest.AssertOnlyImports(t, root(t, "pkg", "messaging"), false, append(contracts, module+"/pkg/messaging/...")...)
+	archtest.AssertOnlyImports(t, root(t, "pkg", "messaging"), true, append(contracts, module+"/pkg/messaging/...")...)
+}
+
+// Rule 8: a broker adapter is a module of its own, built on the contracts and on its client.
+// Nothing of the framework or of the bounded contexts depends on a broker.
+func TestBrokerAdapters_AreModulesOfTheirOwn(t *testing.T) {
+	archtest.AssertOnlyImports(t, root(t, "nats"), true, append(contracts, "github.com/nats-io/nats.go/...")...)
+	for _, tree := range []string{"pkg", "contexts", "examples"} {
+		archtest.AssertTreeDoesNotImport(t, root(t, tree), []string{"github.com/nats-io", module + "/nats"})
+	}
 }
 
 func TestMatchesAndImports(t *testing.T) {

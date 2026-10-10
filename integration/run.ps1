@@ -1,4 +1,4 @@
-# Starts the database servers and runs the integration suite against all of them.
+# Starts the database servers and the message broker and runs the integration suite against them.
 # Usage: ./run.ps1            (keeps the containers running)
 #        ./run.ps1 -Down      (removes them afterwards)
 #        ./run.ps1 -Slot 1    (its own Compose project and host ports +10 per slot, so that
@@ -8,17 +8,19 @@ param([switch]$Down, [int]$Slot = 0, [string]$Run = '')
 
 $ErrorActionPreference = 'Stop'
 $code = 1
-$pg = 55433 + 10 * $Slot; $mssql = 51433 + 10 * $Slot; $oracle = 51521 + 10 * $Slot; $mysql = 53306 + 10 * $Slot
+$pg = 55433 + 10 * $Slot; $mssql = 51433 + 10 * $Slot; $oracle = 51521 + 10 * $Slot; $mysql = 53306 + 10 * $Slot; $nats = 54222 + 10 * $Slot
 $project = if ($Slot -eq 0) { 'integration' } else { "integration-s$Slot" }
 Push-Location $PSScriptRoot
 try {
-    $env:KARPO_PG_PORT = $pg; $env:KARPO_MSSQL_PORT = $mssql; $env:KARPO_ORACLE_PORT = $oracle; $env:KARPO_MYSQL_PORT = $mysql
+    $env:KARPO_PG_PORT = $pg; $env:KARPO_MSSQL_PORT = $mssql; $env:KARPO_ORACLE_PORT = $oracle; $env:KARPO_MYSQL_PORT = $mysql; $env:KARPO_NATS_PORT = $nats
     docker compose -p $project up -d --wait
     $env:KARPO_PG_DSN = "postgres://karpo:karpo@localhost:$pg/karpo?sslmode=disable"
     $env:KARPO_MSSQL_DSN = "sqlserver://sa:Karpo_2026!@localhost:$($mssql)?database=master"
     $env:KARPO_ORACLE_DSN = "oracle://karpo:karpo@localhost:$oracle/FREEPDB1"
     $env:KARPO_MYSQL_DSN = "karpo:karpo@tcp(localhost:$mysql)/karpo?parseTime=true&loc=UTC"
-    if ($Run) { go test -count=1 -v -run $Run ./... } else { go test -count=1 -v ./... }
+    $env:KARPO_NATS_URL = "nats://localhost:$nats"
+    # The whole suite takes longer than the ten minutes go test allows by default.
+    if ($Run) { go test -count=1 -timeout 45m -v -run $Run ./... } else { go test -count=1 -timeout 45m -v ./... }
     $code = $LASTEXITCODE
 }
 finally {
