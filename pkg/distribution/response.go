@@ -42,9 +42,12 @@ func Problem(r *http.Request, err error) ProblemDetails {
 		p.CorrelationID = application.CorrelationID(r.Context())
 	}
 
+	// The kind of a NotFoundError or ConflictError may be the Go type of the aggregate (the
+	// repositories take it from the type), so the caller is told what happened, never the kind.
 	var (
 		ve *domain.ValidationError
 		rv *domain.RuleViolationError
+		ce *domain.ConflictError
 	)
 	switch {
 	case errors.As(err, &ve):
@@ -56,7 +59,9 @@ func Problem(r *http.Request, err error) ProblemDetails {
 	case errors.Is(err, domain.ErrRuleViolation):
 		p.Status, p.Title, p.Detail = http.StatusUnprocessableEntity, "Business Rule Violated", err.Error()
 	case errors.Is(err, domain.ErrNotFound):
-		p.Status, p.Title, p.Detail = http.StatusNotFound, "Resource Not Found", err.Error()
+		p.Status, p.Title, p.Detail = http.StatusNotFound, "Resource Not Found", "The requested resource was not found"
+	case errors.As(err, &ce):
+		p.Status, p.Title, p.Detail = http.StatusConflict, "Conflict", ce.Reason
 	case errors.Is(err, domain.ErrConflict):
 		p.Status, p.Title, p.Detail = http.StatusConflict, "Conflict", err.Error()
 	case errors.Is(err, domain.ErrUnauthorized):

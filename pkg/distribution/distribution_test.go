@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/jhermoso/karpo-fw-go/pkg/application"
@@ -66,6 +67,36 @@ func TestWriteError_MapsDomainTaxonomy(t *testing.T) {
 			_ = json.Unmarshal(rec.Body.Bytes(), &p)
 			if p.Status != tc.status {
 				t.Fatalf("problem status mismatch: %+v", p)
+			}
+		})
+	}
+}
+
+// The repositories name a missing or stale aggregate by its Go type: that name stays in the
+// error (and in the logs) and never reaches the caller.
+func TestWriteError_DoesNotNameInternalTypes(t *testing.T) {
+	cases := []struct {
+		name   string
+		err    error
+		detail string
+	}{
+		{"not found", domain.NotFound("domain.Product", stringID("42")), "The requested resource was not found"},
+		{"wrapped not found", fmt.Errorf("loading: %w", domain.NotFound("domain.Product", stringID("42"))), "The requested resource was not found"},
+		{"conflict", domain.Conflict("domain.Product", stringID("42"), 3, "stale version"), "stale version"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			distribution.WriteError(rec, httptest.NewRequest(http.MethodGet, "/api/products/42", nil), tc.err)
+			var p distribution.ProblemDetails
+			if err := json.Unmarshal(rec.Body.Bytes(), &p); err != nil {
+				t.Fatal(err)
+			}
+			if p.Detail != tc.detail {
+				t.Fatalf("detail %q, want %q", p.Detail, tc.detail)
+			}
+			if strings.Contains(rec.Body.String(), "domain.Product") {
+				t.Fatalf("the response names an internal type: %s", rec.Body.String())
 			}
 		})
 	}
