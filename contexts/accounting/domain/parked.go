@@ -57,7 +57,7 @@ type ParkedState struct {
 	Code          string // of the rule that kept it from being posted
 	Reason        string
 	ReceivedAt    time.Time
-	Attempts      int
+	Attempts      int // the tries that changed something: see Refused
 	Status        ParkedStatus
 	ResolvedAt    time.Time
 	Note          string // of who discarded it
@@ -114,7 +114,15 @@ func (p *ParkedFact) State() ParkedState { return p.s }
 // Waiting reports whether the fact still waits.
 func (p *ParkedFact) Waiting() bool { return p.s.Status == Parked }
 
-// Refused notes another try that did not post it, and why this time.
+// SameRefusal reports whether the fact already waits for this code and this reason: a try that
+// ends as the one before has nothing new to note, and is not written.
+func (p *ParkedFact) SameRefusal(code, reason string) bool {
+	return p.Waiting() && p.s.Code == clip(code, 100) && p.s.Reason == clip(reason, 500)
+}
+
+// Refused notes a try that did not post it, and why this time. Who retries calls it only when
+// the code or the reason changed (SameRefusal), so Attempts does not count every try: it counts
+// the first one, each one that was refused for something else, and the one that posted it.
 func (p *ParkedFact) Refused(code, reason string) {
 	if p.Waiting() {
 		p.s.Attempts++

@@ -126,9 +126,9 @@ func parkingScenario(t *testing.T, sw *hotswap.Switch) {
 		t.Fatal("the company with books posts at once")
 	}
 
-	// Trying again changes nothing while the reason stands; only the first is tried.
+	// Trying again changes nothing while the reason stands, not even the count of attempts.
 	retry(shop, 0, 3)
-	if w := parked(aapp.SearchParked{Company: shop}); w[0].Attempts != 2 || w[1].Attempts != 1 {
+	if w := parked(aapp.SearchParked{Company: shop}); w[0].Attempts != 1 || w[1].Attempts != 1 || w[0].Version != 1 {
 		t.Fatalf("attempts: %+v", w)
 	}
 
@@ -250,18 +250,31 @@ func (s *stubInner) HandleMessage(_ context.Context, env app.Envelope) error {
 	return s.answer(env)
 }
 
+// countedParked counts what is written of the parked facts.
+type countedParked struct {
+	domain.ParkedRepository
+	saves int
+}
+
+func (c *countedParked) Save(ctx context.Context, f *domain.ParkedFact) error {
+	c.saves++
+	return c.ParkedRepository.Save(ctx, f)
+}
+
 // parkingOver puts the parking before a consumer of the test, on a backend in memory. It gives
-// the service, the parking, a context that may do everything and what makes the invoice of a
-// company at a minute.
-func parkingOver(t *testing.T, inner aapp.Inner) (*aapp.Service, *aapp.Parking, context.Context, func(company string, minute int) app.Envelope) {
+// the service, the parking, a context that may do everything, what makes the invoice of a
+// company at a minute, and the repository, which counts what is written.
+func parkingOver(t *testing.T, inner aapp.Inner) (*aapp.Service, *aapp.Parking, context.Context, func(company string, minute int) app.Envelope, *countedParked) {
 	t.Helper()
 	sw := hotswap.New(memory.NewStore("memory"))
 	t.Cleanup(func() { _ = sw.Close(context.Background()) })
 	d := aapp.Deps{
 		Accounts: hotswap.Repository(sw, ainfra.AccountRepositoryFactory), Ledgers: hotswap.Repository(sw, ainfra.LedgerRepositoryFactory),
 		Entries: hotswap.Repository(sw, ainfra.EntryRepositoryFactory), Counters: hotswap.Repository(sw, ainfra.CounterRepositoryFactory),
-		Parked: hotswap.Repository(sw, ainfra.ParkedRepositoryFactory), UoW: sw,
+		UoW: sw,
 	}
+	parked := &countedParked{ParkedRepository: hotswap.Repository(sw, ainfra.ParkedRepositoryFactory)}
+	d.Parked = parked
 	d.Parking = aapp.NewParking(inner, d)
 	admin, _ := authz.NewContext(authz.Context{Subject: fw.NewUUID(), SubjectName: "admin", Kind: authz.Service, Permissions: []authz.Permission{authz.Wildcard}})
 	admin.GlobalAdmin = true
@@ -271,13 +284,13 @@ func parkingOver(t *testing.T, inner aapp.Inner) (*aapp.Service, *aapp.Parking, 
 		return app.Envelope{ID: fw.NewUUID().String(), Type: "billing.invoice-issued.v1", Source: "test", Subject: id,
 			OccurredAt: time.Date(2026, 3, 10, 9, minute, 0, 0, time.UTC), Data: raw}
 	}
-	return aapp.NewService(d), d.Parking, authz.WithContext(context.Background(), admin), invoice
+	return aapp.NewService(d), d.Parking, authz.WithContext(context.Background(), admin), invoice, parked
 }
 
 // A fact that fails with something that is not a rule stops its own company and no other.
 func TestParking_AFailureThatIsNoRuleStopsItsCompanyAlone(t *testing.T) {
 	inner := &stubInner{answer: func(app.Envelope) error { return fw.Violation("accounting.no_ledger", "the company has no ledger") }}
-	svc, parking, actx, invoice := parkingOver(t, inner)
+	svc, parking, actx, invoice, _ := parkingOver(t, inner)
 	one, other := fw.NewUUID().String(), fw.NewUUID().String()
 	bad, behind, good := invoice(one, 1), invoice(one, 2), invoice(other, 3)
 	for _, env := range []app.Envelope{bad, behind, good} {
@@ -322,5 +335,50 @@ func TestParking_AFailureThatIsNoRuleStopsItsCompanyAlone(t *testing.T) {
 	if len(k) != 2 || k[0].Status != "parked" || k[0].Code != domain.FailedCode || !strings.Contains(k[0].Reason, "issueDate") ||
 		k[1].Status != "parked" || k[1].Code != domain.WaitingCode {
 		t.Fatalf("the company of the fact that failed: %+v", k)
+	}
+}
+
+// The scheduler retries every round. A fact refused again for the same reason is written once,
+// when it is kept, and not once a round; when the reason changes, once more.
+func TestParking_TheSameRefusalIsNotWrittenAgain(t *testing.T) {
+	refusal := fw.Violation("accounting.no_ledger", "the company has no ledger")
+	tries := 0
+	inner := &stubInner{answer: func(app.Envelope) error { tries++; return refusal }}
+	svc, parking, actx, invoice, parked := parkingOver(t, inner)
+	company := fw.NewUUID().String()
+	if err := parking.HandleMessage(context.Background(), invoice(company, 1)); err != nil {
+		t.Fatal(err)
+	}
+	rounds := func(n int) aapp.ParkedDTO {
+		t.Helper()
+		for range n {
+			if r, err := svc.RetryParked.Handle(actx, aapp.RetryParked{}); err != nil || r.Posted != 0 || r.Waiting != 1 {
+				t.Fatalf("retry: %+v %v", r, err)
+			}
+		}
+		p, err := svc.SearchParked.Handle(actx, aapp.SearchParked{Company: company})
+		if err != nil || len(p.Items) != 1 {
+			t.Fatalf("kept: %+v %v", p.Items, err)
+		}
+		return p.Items[0]
+	}
+	const n = 25
+	if f := rounds(n); tries != 1+n || parked.saves != 1 || f.Attempts != 1 || f.Version != 1 || f.Code != "accounting.no_ledger" {
+		t.Fatalf("%d rounds for the same reason: %d tries, %d writes, %+v; want one write", n, tries, parked.saves, f)
+	}
+	// Another reason is news: it is written, once.
+	refusal = fw.Violation("accounting.role_undefined", "the profile has no account for cash")
+	if f := rounds(n); parked.saves != 2 || f.Attempts != 2 || f.Version != 2 || f.Code != "accounting.role_undefined" {
+		t.Fatalf("%d rounds for another reason: %d writes, %+v; want two writes", n, parked.saves, f)
+	}
+	// And so is a failure that is no rule (it is given back every round, and written once).
+	refusal = errors.New("the database is down")
+	for range n {
+		if _, err := svc.RetryParked.Handle(actx, aapp.RetryParked{}); err == nil {
+			t.Fatal("the failure is not given back")
+		}
+	}
+	if parked.saves != 3 {
+		t.Fatalf("%d rounds failing the same way: %d writes, want three", n, parked.saves)
 	}
 }

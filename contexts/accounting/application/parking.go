@@ -163,7 +163,9 @@ func inOrder(fs []*domain.ParkedFact) {
 // retry tries again the facts that wait, in the order they happened. The first one of a company
 // that still cannot be posted stops that company: the rest stay behind it. What stops a fact
 // without being a rule (a validation, a failure) stops its company too, and no other: it is
-// noted on the fact and given at the end, once every company had its turn.
+// noted on the fact and given at the end, once every company had its turn. A fact refused again
+// for the same code and reason is not written again: the scheduler retries every round, and a
+// company that takes days to open its books would otherwise fill the audit trail with nothing.
 func (p *Parking) retry(ctx context.Context, only spec.Specification[*domain.ParkedFact]) (posted, waiting int, err error) {
 	all, err := p.waiting(ctx, only)
 	if err != nil {
@@ -193,8 +195,10 @@ func (p *Parking) retry(ctx context.Context, only spec.Specification[*domain.Par
 		} else {
 			failed = errors.Join(failed, fmt.Errorf("accounting: %s %s: %w", st.EventType, st.EnvelopeID, herr))
 		}
-		if _, err := p.orch.Update(ctx, f.ID(), func(_ context.Context, x *domain.ParkedFact) error { x.Refused(code, reason); return nil }); err != nil {
-			return posted, waiting, errors.Join(failed, err)
+		if !f.SameRefusal(code, reason) {
+			if _, err := p.orch.Update(ctx, f.ID(), func(_ context.Context, x *domain.ParkedFact) error { x.Refused(code, reason); return nil }); err != nil {
+				return posted, waiting, errors.Join(failed, err)
+			}
 		}
 		stopped[st.Company] = true
 		waiting++

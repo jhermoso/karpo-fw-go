@@ -175,6 +175,12 @@ Ahora lo **aparca**: guarda el hecho tal como llegó, con el motivo, y lo asient
   primero de una empresa que siga sin poder asentarse la detiene, y los demás se quedan detrás.
   El anfitrión lo llama en cada ronda de tareas, así que abrir el libro o completar el perfil
   basta para que lo aparcado se asiente solo.
+  - **Un rechazo repetido no se escribe.** Si el reintento acaba con el mismo código y el mismo
+    motivo que el intento anterior, el hecho no se toca: ni escritura ni fila de auditoría (el
+    anfitrión reintenta cada minuto; una empresa sin libro producía unas 1.440 al día). Por eso
+    `attempts` ya no cuenta todos los intentos: cuenta el primero, cada rechazo por un motivo
+    **distinto** y el intento que lo asentó. No hay espera creciente ni tope de intentos (ver
+    `BACKLOG.md`).
   - Si un hecho aparcado falla con algo que **no es una regla** (una validación, un fallo
     técnico), se anota en el hecho con el motivo `accounting.failed`, detiene **solo a su
     empresa** y el reintento sigue con las demás. El error se devuelve al final, con el tipo y el
