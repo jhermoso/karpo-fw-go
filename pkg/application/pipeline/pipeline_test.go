@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jhermoso/karpo-fw-go/pkg/application"
+	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/internal/apptest"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/pipeline"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain"
@@ -98,5 +99,51 @@ func TestRetryOnConflict(t *testing.T) {
 	)
 	if v, err := h.Handle(context.Background(), 0); err != nil || v != 7 || attempts != 3 {
 		t.Fatalf("v=%d err=%v attempts=%d", v, err, attempts)
+	}
+}
+
+type openWidget struct {
+	Name string
+	Key  string
+}
+
+func (c openWidget) IdempotencyKey() string { return c.Key }
+
+func callerContext(t *testing.T, name string) context.Context {
+	t.Helper()
+	return authz.WithContext(context.Background(), &authz.Context{TenantID: "t1", Subject: domain.NewUUID(), SubjectName: name})
+}
+
+func TestIdempotent_KeyBelongsToTheCallerAndToTheRequest(t *testing.T) {
+	calls := 0
+	h := application.Chain[openWidget, string](
+		application.HandlerFunc[openWidget, string](func(ctx context.Context, c openWidget) (string, error) {
+			calls++
+			caller, _ := authz.FromContext(ctx)
+			return caller.SubjectName + " opened " + c.Name, nil
+		}),
+		pipeline.Idempotent[openWidget, string](memory.NewIdempotencyStore(), time.Hour),
+	)
+	ana, luis := callerContext(t, "ana"), callerContext(t, "luis")
+
+	first, err := h.Handle(ana, openWidget{Name: "Alpha", Key: "k1"})
+	if err != nil || first != "ana opened Alpha" {
+		t.Fatalf("first call: %q %v", first, err)
+	}
+	if again, err := h.Handle(ana, openWidget{Name: "Alpha", Key: "k1"}); err != nil || again != first || calls != 1 {
+		t.Fatalf("the same caller repeating the request must get the stored result: %q %v calls=%d", again, err, calls)
+	}
+
+	// Another caller with the same key is another request: it runs, and gets its own result.
+	other, err := h.Handle(luis, openWidget{Name: "Alpha", Key: "k1"})
+	if err != nil || other != "luis opened Alpha" || calls != 2 {
+		t.Fatalf("another caller must not receive the first caller's result: %q %v calls=%d", other, err, calls)
+	}
+
+	// The same caller reusing the key for a different request is told so, and nothing runs.
+	_, err = h.Handle(ana, openWidget{Name: "Beta", Key: "k1"})
+	var rv *domain.RuleViolationError
+	if !errors.As(err, &rv) || rv.Code != pipeline.CodeIdempotencyKeyReused || calls != 2 {
+		t.Fatalf("a key reused with a different request must be rejected: %v calls=%d", err, calls)
 	}
 }
