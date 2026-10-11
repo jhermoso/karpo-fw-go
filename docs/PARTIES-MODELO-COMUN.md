@@ -24,6 +24,9 @@
 | D-7 | **El límite de crédito es de la pareja empresa–cliente**, no del cliente | Talleres Pérez: 10.000 € con Acme y 3.000 € con Acme Levante |
 | D-8 | **Un alta equivocada se quita con un comando «anular»**, que matiza D-4. El comando mira qué depende del dato: si nada depende, lo borra (de forma lógica o física, la que se pueda); si algo depende, lo deja marcado como anulado | A Ana se le da «Proveedor» por error y se corrige al minuto: nada cuelga de ese rol y se borra. Si ya tuviera una relación de proveedor, queda anulado |
 | D-9 | **Una party importada con el documento rechazado entra**, marcada con el error «documento identificativo erróneo». Hay un filtro para buscar las que lo tienen, y además queda en el informe de la importación (completa D-5) | El cliente 301 de Sage entra sin NIF válido, aparece al filtrar «con documento erróneo» y sale en el informe |
+| D-10 | **El número de cliente es de la pareja empresa–cliente** (cada empresa numera a los suyos) | Talleres Pérez es el cliente 4301 de Acme y el 0017 de Acme Levante |
+| D-11 | **El estado y la prioridad de la relación quedan fuera del modelo.** El estado sale de las fechas | Una relación «terminada» es una con fecha de fin; no hay una columna que lo repita |
+| D-12 | **La extensibilidad es un requisito del programa generado**, no de Theros: primero la implementan Karpo y Trench, y de ahí salen las plantillas. Diseño en [EXTENSIBILIDAD.md](EXTENSIBILIDAD.md) | Un pedido o una reserva con campos propios de un sector |
 
 ## 2. Qué cambia en cada lado con lo decidido
 
@@ -49,7 +52,7 @@ se guarda lo mismo), luego las de reglas y por último las de alcance.
 | 2 | **Supresión de datos personales (RGPD).** ¿Cómo se atiende a quien pide que se borren sus datos? | Un antiguo cliente particular pide la supresión | **Pendiente de consulta legal** (Javier, 2026-10-11); ver §3.5 |
 | 3 | **¿Qué bloquea una desactivación?** (el detalle de D-4) | ¿Se puede desactivar a Talleres Pérez con una factura pendiente de cobro? | Dentro de Parties: bloquean las relaciones y los roles vigentes. Lo de otros contextos (facturas, pedidos) no lo sabe Parties: o cada contexto escucha `party-deactivated` y avisa, o Parties pregunta por un puerto. Recomiendo lo primero ahora |
 | 4 | ~~Importación con documento rechazado: ¿entra la party?~~ | | **Decidido: D-9.** Queda un detalle: si el número rechazado se conserva junto a la marca, para que quien lo corrige lo vea sin abrir el informe. Recomiendo que sí, sin que cuente como identificación |
-| 5 | **Diseño de la extensibilidad** (D-6): quién puede crear una extensión, si es código o configuración, y cómo la ve el front | «Avalista» con importe avalado | Necesita su propio documento. La pregunta de fondo: una extensión con reglas es código (la genera Theros); sin reglas pueden ser campos declarados. Son dos mecanismos distintos |
+| 5 | **Diseño de la extensibilidad** (D-6, D-12; propuesta en [EXTENSIBILIDAD.md](EXTENSIBILIDAD.md)): quién puede crear una extensión, si es código o configuración, y cómo la ve el front | «Avalista» con importe avalado | Necesita su propio documento. La pregunta de fondo: una extensión con reglas es código (la genera Theros); sin reglas pueden ser campos declarados. Son dos mecanismos distintos |
 | 6 | **Tipos de relación nuevos sin datos**: D-6 habla de roles. ¿Vale igual para tipos de relación? | «Avalista de» entre dos parties | Sí, con el mismo criterio: una fila que dice qué rol juega cada lado |
 
 ### 3.2 Datos: lo que uno guarda y el otro no
@@ -57,9 +60,9 @@ se guarda lo mismo), luego las de reglas y por último las de alcance.
 | # | Dato | En C# | En Go | Recomendación |
 |---|---|---|---|---|
 | 7 | **Nombre de la persona** (R2) | La clase tiene nombre, apellidos y estado civil y **no los guarda**; el nombre vale «JOHN DOE» por defecto | Nombre, dos apellidos, género, nacimiento, estado civil | El de Go. En C# son columnas nuevas en `person` |
-| 8 | **Número de cliente** (F9) | En `customer` (uno por cliente) y en el perfil comercial (uno por empresa). Trench tiene 1.888 valores en el primero | En ningún sitio; decidido que sea de la relación de cliente (PU-2), sin hacer | Por pareja, como el límite de crédito. Pendiente: a qué empresa se asignan los 1.888 de Trench |
+| 8 | ~~Número de cliente~~ (F9) — **decidido: D-10** | En `customer` (uno por cliente) y en el perfil comercial (uno por empresa). Trench tiene 1.888 valores en el primero | En ningún sitio; decidido que sea de la relación de cliente (PU-2), sin hacer | Por pareja, como el límite de crédito. Pendiente: a qué empresa se asignan los 1.888 de Trench |
 | 9 | **Bloqueo del cliente** | `customer.BlockReason` y, por empresa, `BlockOrders`/`BlockDelivery` en el perfil | En `receivables` y `orders`, por pareja | Por pareja |
-| 10 | **Estado y prioridad de la relación** (F7, R10) | Dos catálogos (9 estados, 5 prioridades), obligatorios en cada relación | No existen; decidido no hacerlos (PU-8): el estado se deriva de las fechas | Mantener PU-8 y retirar de C# los que repiten las fechas. Si «pendiente» o «suspendida» tienen uso real, decirlo |
+| 10 | ~~Estado y prioridad de la relación~~ (F7, R10) — **decidido: D-11** | Dos catálogos (9 estados, 5 prioridades), obligatorios en cada relación | No existen; decidido no hacerlos (PU-8): el estado se deriva de las fechas | Mantener PU-8 y retirar de C# los que repiten las fechas. Si «pendiente» o «suspendida» tienen uso real, decirlo |
 | 11 | **Participación en el capital** (F8) | Porcentaje en tres sitios; además importes y participación indirecta | Un porcentaje directo en la relación `Ownership` | Un solo sitio. Importes e indirecta, cuando alguien los pida |
 | 12 | **Cargo y administrador único** de un representante | `RoleTitleCode`, `IsSoleAdministrator` en la relación | Nada | Detalle de la relación de representación; hace falta para Fiscal y Asesoría |
 | 13 | **Forma jurídica y «catálogo público»** (R17) | Tipos de party 3 a 9, mezclados con las clasificaciones | `legal_form` y `shared` en la party | El de Go. En C#, dos columnas y migrar los tipos |
