@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math"
 	"testing"
 	"time"
 
@@ -208,6 +209,15 @@ func TestPage(t *testing.T) {
 	req := domain.PageRequest[*Account]{Number: 0, Size: 5000}.Normalize()
 	if req.Number != 1 || req.Size != domain.MaxPageSize || req.Offset() != 0 {
 		t.Fatalf("normalize: %+v", req)
+	}
+	// A page number whose offset does not fit in an int must not wrap around to a negative one.
+	for _, number := range []int{math.MaxInt, math.MaxInt/20 + 2} {
+		if off := (domain.PageRequest[*Account]{Number: number, Size: 20}).Offset(); off != math.MaxInt {
+			t.Fatalf("page %d: offset %d, want math.MaxInt", number, off)
+		}
+	}
+	if off := (domain.PageRequest[*Account]{Number: 3, Size: 20}).Offset(); off != 40 {
+		t.Fatalf("offset %d, want 40", off)
 	}
 	p := domain.NewPage([]int{1, 2}, 45, 3, 20)
 	if p.TotalPages != 3 {
