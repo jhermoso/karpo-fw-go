@@ -175,6 +175,10 @@ Ahora lo **aparca**: guarda el hecho tal como llegó, con el motivo, y lo asient
   primero de una empresa que siga sin poder asentarse la detiene, y los demás se quedan detrás.
   El anfitrión lo llama en cada ronda de tareas, así que abrir el libro o completar el perfil
   basta para que lo aparcado se asiente solo.
+  - Si un hecho aparcado falla con algo que **no es una regla** (una validación, un fallo
+    técnico), se anota en el hecho con el motivo `accounting.failed`, detiene **solo a su
+    empresa** y el reintento sigue con las demás. El error se devuelve al final, con el tipo y el
+    identificador del mensaje.
 - **Descartar** (`DiscardParked`): un hecho que nunca se podrá asentar (mal formado, de prueba)
   bloquea a su empresa hasta que alguien lo descarta, diciendo por qué. No se borra.
 - **Repetidos:** un mensaje que vuelve a llegar no se aparca ni se asienta dos veces, esté

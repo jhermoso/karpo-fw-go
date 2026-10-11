@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -236,4 +237,90 @@ func TestAccounting_KeepsWhatItCannotPostYet_MemoryThenSQLite(t *testing.T) {
 		t.Fatal(err)
 	}
 	parkingScenario(t, hotswap.New(db))
+}
+
+// stubInner is a consumer that answers each message what the test says.
+type stubInner struct {
+	answer func(app.Envelope) error
+}
+
+func (s *stubInner) Name() string    { return accounting.Source }
+func (s *stubInner) Types() []string { return []string{"billing.invoice-issued.v1"} }
+func (s *stubInner) HandleMessage(_ context.Context, env app.Envelope) error {
+	return s.answer(env)
+}
+
+// parkingOver puts the parking before a consumer of the test, on a backend in memory. It gives
+// the service, the parking, a context that may do everything and what makes the invoice of a
+// company at a minute.
+func parkingOver(t *testing.T, inner aapp.Inner) (*aapp.Service, *aapp.Parking, context.Context, func(company string, minute int) app.Envelope) {
+	t.Helper()
+	sw := hotswap.New(memory.NewStore("memory"))
+	t.Cleanup(func() { _ = sw.Close(context.Background()) })
+	d := aapp.Deps{
+		Accounts: hotswap.Repository(sw, ainfra.AccountRepositoryFactory), Ledgers: hotswap.Repository(sw, ainfra.LedgerRepositoryFactory),
+		Entries: hotswap.Repository(sw, ainfra.EntryRepositoryFactory), Counters: hotswap.Repository(sw, ainfra.CounterRepositoryFactory),
+		Parked: hotswap.Repository(sw, ainfra.ParkedRepositoryFactory), UoW: sw,
+	}
+	d.Parking = aapp.NewParking(inner, d)
+	admin, _ := authz.NewContext(authz.Context{Subject: fw.NewUUID(), SubjectName: "admin", Kind: authz.Service, Permissions: []authz.Permission{authz.Wildcard}})
+	admin.GlobalAdmin = true
+	invoice := func(company string, minute int) app.Envelope {
+		id := fw.NewUUID().String()
+		raw, _ := json.Marshal(map[string]any{"invoiceId": id, "seller": company})
+		return app.Envelope{ID: fw.NewUUID().String(), Type: "billing.invoice-issued.v1", Source: "test", Subject: id,
+			OccurredAt: time.Date(2026, 3, 10, 9, minute, 0, 0, time.UTC), Data: raw}
+	}
+	return aapp.NewService(d), d.Parking, authz.WithContext(context.Background(), admin), invoice
+}
+
+// A fact that fails with something that is not a rule stops its own company and no other.
+func TestParking_AFailureThatIsNoRuleStopsItsCompanyAlone(t *testing.T) {
+	inner := &stubInner{answer: func(app.Envelope) error { return fw.Violation("accounting.no_ledger", "the company has no ledger") }}
+	svc, parking, actx, invoice := parkingOver(t, inner)
+	one, other := fw.NewUUID().String(), fw.NewUUID().String()
+	bad, behind, good := invoice(one, 1), invoice(one, 2), invoice(other, 3)
+	for _, env := range []app.Envelope{bad, behind, good} {
+		if err := parking.HandleMessage(context.Background(), env); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// The oldest fact, the one tried first, now fails with a validation; the rest could be posted.
+	tried := []string{}
+	inner.answer = func(env app.Envelope) error {
+		tried = append(tried, env.ID)
+		if env.ID == bad.ID {
+			var v fw.Validation
+			v.Add("issueDate", "required", "the date of the invoice")
+			return v.Err()
+		}
+		return nil
+	}
+	r, err := svc.RetryParked.Handle(actx, aapp.RetryParked{})
+	if r.Posted != 1 || r.Waiting != 2 {
+		t.Fatalf("retry: %+v, want 1 posted and 2 waiting", r)
+	}
+	if !errors.Is(err, fw.ErrValidation) || !strings.Contains(err.Error(), bad.ID) {
+		t.Fatalf("what failed is not given at the end: %v", err)
+	}
+	if len(tried) != 2 || tried[0] != bad.ID || tried[1] != good.ID {
+		t.Fatalf("tried: %v, want the bad one and that of the other company", tried)
+	}
+	kept := func(company string) []aapp.ParkedDTO {
+		t.Helper()
+		p, err := svc.SearchParked.Handle(actx, aapp.SearchParked{Company: company, Size: 50})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p.Items
+	}
+	if k := kept(other); len(k) != 1 || k[0].Status != "posted" {
+		t.Fatalf("the other company: %+v", k)
+	}
+	k := kept(one)
+	if len(k) != 2 || k[0].Status != "parked" || k[0].Code != domain.FailedCode || !strings.Contains(k[0].Reason, "issueDate") ||
+		k[1].Status != "parked" || k[1].Code != domain.WaitingCode {
+		t.Fatalf("the company of the fact that failed: %+v", k)
+	}
 }

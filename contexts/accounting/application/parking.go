@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -160,7 +161,9 @@ func inOrder(fs []*domain.ParkedFact) {
 }
 
 // retry tries again the facts that wait, in the order they happened. The first one of a company
-// that still cannot be posted stops that company: the rest stay behind it.
+// that still cannot be posted stops that company: the rest stay behind it. What stops a fact
+// without being a rule (a validation, a failure) stops its company too, and no other: it is
+// noted on the fact and given at the end, once every company had its turn.
 func (p *Parking) retry(ctx context.Context, only spec.Specification[*domain.ParkedFact]) (posted, waiting int, err error) {
 	all, err := p.waiting(ctx, only)
 	if err != nil {
@@ -168,6 +171,7 @@ func (p *Parking) retry(ctx context.Context, only spec.Specification[*domain.Par
 	}
 	inOrder(all)
 	stopped := map[domain.OrganizationID]bool{}
+	var failed error
 	for _, f := range all {
 		st := f.State()
 		if stopped[st.Company] {
@@ -175,24 +179,27 @@ func (p *Parking) retry(ctx context.Context, only spec.Specification[*domain.Par
 			continue
 		}
 		herr := p.inner.HandleMessage(ctx, envelopeOf(st))
-		var rule *fw.RuleViolationError
-		switch {
-		case herr == nil:
+		if herr == nil {
 			if _, err := p.orch.Update(ctx, f.ID(), func(_ context.Context, x *domain.ParkedFact) error { x.MarkPosted(fw.Now()); return nil }); err != nil {
-				return posted, waiting, err
+				return posted, waiting, errors.Join(failed, err)
 			}
 			posted++
-		case errors.As(herr, &rule):
-			if _, err := p.orch.Update(ctx, f.ID(), func(_ context.Context, x *domain.ParkedFact) error { x.Refused(rule.Code, rule.Error()); return nil }); err != nil {
-				return posted, waiting, err
-			}
-			stopped[st.Company] = true
-			waiting++
-		default:
-			return posted, waiting, herr
+			continue
 		}
+		code, reason := domain.FailedCode, herr.Error()
+		var rule *fw.RuleViolationError
+		if errors.As(herr, &rule) {
+			code, reason = rule.Code, rule.Error()
+		} else {
+			failed = errors.Join(failed, fmt.Errorf("accounting: %s %s: %w", st.EventType, st.EnvelopeID, herr))
+		}
+		if _, err := p.orch.Update(ctx, f.ID(), func(_ context.Context, x *domain.ParkedFact) error { x.Refused(code, reason); return nil }); err != nil {
+			return posted, waiting, errors.Join(failed, err)
+		}
+		stopped[st.Company] = true
+		waiting++
 	}
-	return posted, waiting, nil
+	return posted, waiting, failed
 }
 
 // Commands and queries of what waits.

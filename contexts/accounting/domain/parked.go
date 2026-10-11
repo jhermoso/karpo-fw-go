@@ -39,6 +39,10 @@ var ParkedStatuses = []ParkedStatus{Parked, Posted, Discarded}
 // WaitingCode is why a fact waits behind another: nothing is wrong with it.
 const WaitingCode = "accounting.waiting"
 
+// FailedCode is why a fact waits when what kept it from being posted on a later try was not a
+// rule (a validation, a failure): the reason says what.
+const FailedCode = "accounting.failed"
+
 // ParkedState is the persisted state of a parked fact: the message as it came and why it waits.
 type ParkedState struct {
 	Company       OrganizationID // whose books it goes to; zero when the fact does not say
