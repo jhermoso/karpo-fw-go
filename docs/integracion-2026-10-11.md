@@ -14,7 +14,7 @@ en el worktree `.claude/worktrees/integra-2026-10-11`. **Nada se ha subido ni fu
 | G-3 Compilar y tres pasadas | 01:28–02:40 | Hecha. Raíz: 3 de 3. Cuatro motores reales: 3 de 3, ningún salto |
 | G-4 Base de datos | 01:31 | Hecha. `migrate` dos veces sobre SQLite nuevo: 0 y 0 |
 | G-5 Publicadora de humo | 01:32–02:40 | Hecha. Tres commits; sus pruebas, 3 de 3 |
-| G-6 Revisión | — | **No ejecutada** (la lanza la orquestadora con otra sesión) |
+| G-6 Revisión | — | Hecha por otra sesión. Sus arreglos, en «Arreglos tras la revisión»: seis commits, tres pasadas en verde |
 | G-7 Humo por HTTP | — | **No ejecutada** como etapa. Hay un recorrido con `curl`, anotado abajo |
 | G-8 Subida, G-9 Limpieza | — | **No ejecutadas**. No se ha borrado ninguna rama ni worktree |
 
@@ -131,6 +131,48 @@ Contra `cmd/karpo-smoke -port 8092 -seed`, sobre una base temporal que se borró
 | — | `/readyz`, `/api/auth/context`, `/api/smoke/enter?as=admin` | 200 los tres |
 | — | Login de `admin` con cualquier contraseña / de otro usuario | 200 / 401 |
 
+## Arreglos tras la revisión
+
+La revisión independiente (G-6) dedujo sus hallazgos leyendo el código, sin ejecutarlo. Antes de
+tocar nada se confirmó cada uno leyendo el código, y cada prueba nueva se ejecutó además **sin**
+su arreglo para ver que fallaba. Los cuatro eran ciertos.
+
+| Arreglo | Qué pasaba | Qué se hizo | Prueba | Commit |
+|---|---|---|---|---|
+| **H-1** | Con `-db` sobre un fichero existente, la publicadora de humo lo migraba y arrancaba el anfitrión antes de mirar si había administrador: sobre una base real sin administrador dejaba `smoke-admin` como administrador global | `cmd/karpo-smoke/main.go`: se niega con `os.Stat` antes de abrir nada. Sólo trabaja sobre una base que crea ella | `TestRun_RefusesADatabaseThatAlreadyExists`: con un fichero vacío (que SQLite sí abre) y con otro contenido, sale con error, el fichero queda byte a byte igual y no aparece nada a su lado | `956c7d4` |
+| **H-2** | En `Parking.retry`, un error que no era de regla (una validación) devolvía y cortaba el bucle: bloqueaba a los hechos posteriores de todas las empresas | `contexts/accounting/application/parking.go`: se anota en el hecho con el motivo `accounting.failed`, se detiene sólo a su empresa, se sigue con las demás y los errores se devuelven juntos al final | `TestParking_AFailureThatIsNoRuleStopsItsCompanyAlone`: dos empresas; el hecho de la primera falla con una validación y el de la segunda se asienta | `1862f5c` |
+| **H-3** | El anfitrión reintenta cada minuto y cada rechazo escribía el hecho y su auditoría: unas 1.440 escrituras al día por empresa sin libro | Si el código y el motivo son los del intento anterior, no se escribe (`ParkedFact.SameRefusal`). Sin cambio de esquema | `TestParking_TheSameRefusalIsNotWrittenAgain`: 25 rondas por el mismo motivo, una sola escritura (la que lo aparcó); al cambiar el motivo, una más | `c22a9f6` |
+| **Menores de la publicadora** | `CheckAddress` aceptaba el nombre `localhost`; no se miraba la cabecera `Host`; la regla de arquitectura comparaba texto | Sólo direcciones IP de bucle local; 403 si `Host` no es `127.0.0.1`, `[::1]` o `localhost` (con cualquier puerto); la regla lee la etiqueta con `go/parser` y `go/build/constraint` y mira todos los `.go` de fuera de la publicadora, pruebas y todos los `cmd/*` incluidos | `TestListen_RefusesWhatIsNotThisMachine`, `TestHost_OnlyThisMachine`, y `TestSmoke_TheRuleBites`, que pasa de 6 a 13 casos | `8ab4583` |
+| **Backlog** | Hallazgos menores que no se tocan | Siete entradas en `BACKLOG.md`, §2d, con fichero y línea | — | `ebe2411` |
+
+Decisiones tomadas (técnicas y reversibles):
+
+| Decisión | Por qué |
+|---|---|
+| **Cambia el significado de `attempts`** de un hecho aparcado: ya no cuenta todos los intentos, cuenta el primero, cada rechazo por un motivo distinto y el intento que lo asentó | Es la consecuencia de no escribir cuando nada cambió. Está documentado en el dominio y en `docs/CONTABILIDAD.md` |
+| **No se aplicó la espera creciente con tope** de `host/mailbox` (`NextAttempt`, `MaxAttempts`) | Exige una columna nueva en `acc_parked_facts`, es decir, una migración. Queda en el backlog. El hecho se sigue intentando cada minuto, pero ya no escribe |
+| Motivo nuevo `accounting.failed` para lo que no es una regla | El hecho necesita un código que diga que no lo rechazó una regla; el texto del error va en el motivo |
+| Mientras un hecho siga fallando con algo que no es una regla, el anfitrión lo anota en el registro **en cada ronda** | Es lo que pide «devolver el error al final». No se escribe nada en la base (H-3) |
+| **La regla 10 es más estricta**: nada de fuera de la publicadora la importa, tampoco una prueba con la etiqueta `smoke` | Un programa real compilado con la etiqueta llevaría la puerta. No había ningún fichero así |
+| La comprobación de `Host` cubre **todas** las rutas de la publicadora, no sólo las de la puerta | Con el reenlace de DNS, la página de fuera pediría el token y después cualquier ruta |
+| El proxy de desarrollo del front de Karpo C# (`010-Front/Angular/proxy.conf.js`, sólo leído) usa `changeOrigin: true` | Envía el `Host` de su destino (`localhost:<puerto>`), que pasa. Sin `changeOrigin` enviaría `localhost:4200`, que también pasa |
+
+Tres pasadas tras el último arreglo, sin reintentos:
+
+| Batería | Pasada 1 | Pasada 2 | Pasada 3 | Fallos |
+|---|---|---|---|---|
+| Raíz (`go build ./... && go vet ./... && go test -count=1 ./...`) | 62 s | 63 s | 79 s | 0 |
+| Publicadora de humo (`go vet -tags smoke ./...` y las pruebas con la etiqueta de `host/smoke`, `cmd/karpo-smoke` y `pkg/testing/archtest`) | 17 s | 18 s | 37 s | 0 |
+
+- Raíz: **81 paquetes** en verde en cada pasada.
+- **Turno de pruebas**: antes de cada batería se esperó a que no hubiera `go` ni pruebas de otra
+  sesión (30 s antes de la primera, 150 s antes de la última). Los `dotnet` que había eran nodos
+  de MSBuild en reposo.
+- **No ejecutado**: la batería contra motores reales (`integration/`). Los arreglos **no tocan
+  SQL ni el esquema**; del módulo `integration/` sólo se pasó `go vet`, que compila sus pruebas.
+  Tampoco `go test -race` (queda para el CI).
+- Sin dependencias nuevas: `go.mod` y `go.sum` no cambian.
+
 ## Lo que el plan decía y no era así
 
 | El plan | La realidad |
@@ -160,4 +202,14 @@ git push -u origin integra/2026-10-11 wip/2026-10-11-broker-nats
 Debería verse: dos ramas nuevas en el remoto, y el CI de la primera en marcha (ahí corre
 `-race` por primera vez sobre esta integración). El resto de la subida está en el plan, §8.2.
 
-Antes de subir faltan G-6 (revisión) y G-7 (humo por HTTP).
+Antes de subir falta G-7 (humo por HTTP). G-6 está hecha y sus arreglos aplicados.
+
+Para comprobar los arreglos:
+
+```powershell
+cd C:\Git\Paranoia\Karpo.Fw.Go\.claude\worktrees\integra-2026-10-11
+go test -count=1 ./contexts/accounting/... ./pkg/testing/archtest/...
+go test -tags smoke -count=1 ./host/smoke/... ./cmd/karpo-smoke/...
+```
+
+Debería verse `ok` en cuatro paquetes (y dos líneas «no test files» de Contabilidad).
