@@ -27,6 +27,10 @@
 | D-10 | **El número de cliente es de la pareja empresa–cliente** (cada empresa numera a los suyos) | Talleres Pérez es el cliente 4301 de Acme y el 0017 de Acme Levante |
 | D-11 | **El estado y la prioridad de la relación quedan fuera del modelo.** El estado sale de las fechas | Una relación «terminada» es una con fecha de fin; no hay una columna que lo repita |
 | D-12 | **La extensibilidad es un requisito del programa generado**, no de Theros: primero la implementan Karpo y Trench, y de ahí salen las plantillas. Diseño en [EXTENSIBILIDAD.md](EXTENSIBILIDAD.md) | Un pedido o una reserva con campos propios de un sector |
+| D-13 | **Lo que bloquea o arrastra un borrado o una desactivación lo decide el ciclo de vida de lo relacionado**, y se declara en el dominio de la relación. Si el ciclo de vida del hijo depende del padre (composición), el borrado es en cascada; si son independientes, no se bloquea ni se arrastra | Factura y sus líneas: dependientes, se borran juntas. Profesor y alumnos: independientes; desactivar al profesor no desactiva a los alumnos |
+| D-14 | **La dirección postal lleva los campos españoles**, y la geografía se apoya en la clasificación NUTS para poder traducir los niveles entre países. Urgente. Análisis y propuesta en `GEOGRAFIA-NUTS.md` (rama `docs/geografia-nuts`) | Comunidad autónoma en España, Land en Alemania |
+| D-15 | **La visibilidad no depende de la vigencia de la relación**, sino de si la party está activada | Talleres Pérez deja de ser cliente de Acme en marzo: Acme lo sigue viendo mientras esté activo. **Cambia Go**, donde la afiliación termina con la relación |
+| D-16 | **La extensibilidad se hace en tiempo de ejecución**, por un administrador, para cualquier entidad y desde un espacio del front. El modelo son los configuradores de producto de Trench. Hay que llevarla también a Trench. Cómo y dónde: pendiente de definir con Javier | Añadir un campo a un pedido o a una reserva sin una versión nueva del programa |
 
 ## 2. Qué cambia en cada lado con lo decidido
 
