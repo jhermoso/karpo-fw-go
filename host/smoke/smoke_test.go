@@ -79,14 +79,21 @@ func publisher(t *testing.T) *smoke.Publisher {
 	return p
 }
 
-// do sends a request to a handler and gives the status and the body.
+// do sends a request to a handler, as of this machine, and gives the status and the body.
 func do(t *testing.T, to http.Handler, method, path, token string, body any) (int, []byte, http.Header) {
+	t.Helper()
+	return doAs(t, to, "127.0.0.1:8092", method, path, token, body)
+}
+
+// doAs is do with the Host the request says.
+func doAs(t *testing.T, to http.Handler, host, method, path, token string, body any) (int, []byte, http.Header) {
 	t.Helper()
 	var sent bytes.Buffer
 	if body != nil {
 		_ = json.NewEncoder(&sent).Encode(body)
 	}
 	request := httptest.NewRequest(method, path, &sent)
+	request.Host = host
 	if token != "" {
 		request.Header.Set("Authorization", "Bearer "+token)
 	}
@@ -127,12 +134,13 @@ func TestNew_RefusesOutsideDevelopment(t *testing.T) {
 
 // The second barrier of the start: this machine alone.
 func TestListen_RefusesWhatIsNotThisMachine(t *testing.T) {
-	for _, address := range []string{"0.0.0.0:8092", ":8092", "[::]:8092", "192.168.1.10:8092", "10.0.0.1:8092", "example.com:8092", "host.docker.internal:8092", "127.0.0.1", "localhost"} {
+	for _, address := range []string{"0.0.0.0:8092", ":8092", "[::]:8092", "192.168.1.10:8092", "10.0.0.1:8092", "example.com:8092", "host.docker.internal:8092", "127.0.0.1", "localhost",
+		"localhost:8092", "LOCALHOST:8092", "localhost.:8092"} {
 		if err := smoke.CheckAddress(address); err == nil {
 			t.Errorf("%q is accepted", address)
 		}
 	}
-	for _, address := range []string{"127.0.0.1:8092", "127.0.0.2:0", "[::1]:8092", "localhost:8092"} {
+	for _, address := range []string{"127.0.0.1:8092", "127.0.0.2:0", "[::1]:8092"} {
 		if err := smoke.CheckAddress(address); err != nil {
 			t.Errorf("%q is refused: %v", address, err)
 		}
@@ -169,6 +177,34 @@ func TestNew_TakesNoCredentialsAndOnlyANewDatabase(t *testing.T) {
 	// The same database again: it has an administrator now, and nobody knows its password.
 	if _, err := smoke.New(context.Background(), smoke.Development, sw, smoke.Options{}); err == nil || !strings.Contains(err.Error(), "new database") {
 		t.Fatalf("it started on a database that already has an administrator: %v", err)
+	}
+}
+
+// A request that does not name this machine in its Host gets nothing, not even from the host
+// behind the door: that is what a page of anywhere sends when its name is made to resolve here.
+func TestHost_OnlyThisMachine(t *testing.T) {
+	p := publisher(t)
+	_, raw, _ := do(t, p, "GET", "/api/smoke/token", "", nil)
+	token := session(t, raw).AccessToken
+	for _, host := range []string{"", "evil.example", "evil.example:8092", "127.0.0.1.evil.example:8092", "localhost.evil.example", "192.168.1.10:8092",
+		"0.0.0.0:8092", "[::]:8092", "host.docker.internal:8092"} {
+		for _, path := range []string{"/api/smoke/token", "/api/smoke/enter?as=admin", "/api/parties", "/healthz"} {
+			if status, body, _ := doAs(t, p, host, "GET", path, token, nil); status != http.StatusForbidden || strings.Contains(string(body), "accessToken") {
+				t.Errorf("Host %q, %s: %d, want 403", host, path, status)
+			}
+		}
+		if status, _, _ := doAs(t, p, host, "POST", "/api/auth/login", "", map[string]any{"username": "admin", "password": "x"}); status != http.StatusForbidden {
+			t.Errorf("Host %q, login: %d, want 403", host, status)
+		}
+	}
+	// Any port: that of the publisher, or what the development proxy of the front sends.
+	for _, host := range []string{"127.0.0.1", "127.0.0.1:8092", "[::1]", "[::1]:8092", "localhost", "localhost:8092", "localhost:4200", "LocalHost:8081"} {
+		if status, body, _ := doAs(t, p, host, "GET", "/api/smoke/token", "", nil); status != http.StatusOK {
+			t.Errorf("Host %q: %d %s, want 200", host, status, body)
+		}
+		if status, _, _ := doAs(t, p, host, "GET", "/api/smoke/enter?as=admin", "", nil); status != http.StatusOK {
+			t.Errorf("Host %q, the page of entry: %d, want 200", host, status)
+		}
 	}
 }
 

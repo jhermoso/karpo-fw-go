@@ -1,15 +1,16 @@
 package archtest_test
 
 import (
-	"bufio"
+	"go/build/constraint"
+	"go/parser"
+	"go/token"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
-
-	"github.com/jhermoso/karpo-fw-go/pkg/testing/archtest"
 )
 
 // The smoke publisher (host/smoke and cmd/karpo-smoke) lets anybody in without credentials. It
@@ -29,30 +30,53 @@ const (
 // smokeTrees are the directories where everything is of the smoke publisher.
 var smokeTrees = []string{"host/smoke", "cmd/karpo-smoke"}
 
-// hasSmokeTag says whether a Go file carries the build tag smoke, alone, before its package clause.
-func hasSmokeTag(path string) (bool, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return false, err
+// importsSmoke is how a violation of rule 10 ends.
+const importsSmoke = "imports the smoke publisher"
+
+// behindSmoke says whether a build constraint is false whenever the tag smoke is not set: the
+// tag itself, an && with a side that is, or an || with both sides that are.
+func behindSmoke(x constraint.Expr) bool {
+	switch x := x.(type) {
+	case *constraint.TagExpr:
+		return x.Tag == "smoke"
+	case *constraint.AndExpr:
+		return behindSmoke(x.X) || behindSmoke(x.Y)
+	case *constraint.OrExpr:
+		return behindSmoke(x.X) && behindSmoke(x.Y)
 	}
-	defer f.Close()
-	lines := bufio.NewScanner(f)
-	lines.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
-	for lines.Scan() {
-		line := strings.TrimSpace(lines.Text())
-		if line == smokeTag {
-			return true, nil
-		}
-		if strings.HasPrefix(line, "package ") {
-			break
-		}
-	}
-	return false, lines.Err()
+	return false
 }
 
-// smokeViolations walks every Go file under root, tests included, and says what breaks the rule:
-// a file of the smoke publisher without the tag, or a file without the tag that imports the
-// smoke publisher or names its routes.
+// readSmoke parses the head of a Go file and says whether its build constraint (the //go:build
+// line before the package clause, as the compiler reads it) keeps it behind the tag smoke, and
+// whether it imports the smoke publisher.
+func readSmoke(path string) (tagged, imports bool, err error) {
+	f, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.ImportsOnly|parser.ParseComments)
+	if err != nil {
+		return false, false, err
+	}
+	for _, group := range f.Comments {
+		for _, c := range group.List {
+			if c.Pos() > f.Package || !constraint.IsGoBuild(c.Text) {
+				continue
+			}
+			if x, err := constraint.Parse(c.Text); err == nil && behindSmoke(x) {
+				tagged = true
+			}
+		}
+	}
+	for _, i := range f.Imports {
+		if p, _ := strconv.Unquote(i.Path.Value); p == module+smokePackage || strings.HasPrefix(p, module+smokePackage+"/") {
+			imports = true
+		}
+	}
+	return tagged, imports, nil
+}
+
+// smokeViolations walks every Go file under root, tests included and every program of cmd, and
+// says what breaks the rules: a file of the smoke publisher that is not behind the tag, a file
+// outside the publisher that imports it (with the tag or without: a real program built with the
+// tag would have the door), or a file without the tag that names its routes.
 func smokeViolations(root string) ([]string, error) {
 	var out []string
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
@@ -73,15 +97,20 @@ func smokeViolations(root string) ([]string, error) {
 			return err
 		}
 		rel = filepath.ToSlash(rel)
-		tagged, err := hasSmokeTag(path)
+		tagged, imports, err := readSmoke(path)
 		if err != nil {
 			return err
 		}
-		if tagged {
+		if slices.ContainsFunc(smokeTrees, func(tree string) bool { return strings.HasPrefix(rel, tree+"/") }) {
+			if !tagged {
+				out = append(out, rel+": a file of the smoke publisher that is not behind the build tag smoke")
+			}
 			return nil
 		}
-		if slices.ContainsFunc(smokeTrees, func(tree string) bool { return strings.HasPrefix(rel, tree+"/") }) {
-			out = append(out, rel+": a file of the smoke publisher without the line "+smokeTag)
+		if imports {
+			out = append(out, rel+": "+importsSmoke)
+		}
+		if tagged {
 			return nil
 		}
 		text, err := os.ReadFile(path)
@@ -91,30 +120,42 @@ func smokeViolations(root string) ([]string, error) {
 		if strings.Contains(string(text), smokeRoute) {
 			out = append(out, rel+": names "+smokeRoute+" without the build tag smoke")
 		}
-		if strings.Contains(string(text), `"`+module+smokePackage) {
-			out = append(out, rel+": imports the smoke publisher without the build tag smoke")
-		}
 		return nil
 	})
 	return out, err
 }
 
-// Rule 10: what is served for real never imports the smoke publisher.
+// Rule 10: nothing but the smoke publisher imports the smoke publisher: no program of cmd, no
+// package, no test, with the build tag or without it.
 func TestSmoke_IsNotImportedByThePrograms(t *testing.T) {
-	for _, tree := range [][]string{{"cmd", "karpo"}, {"cmd", "karpo-postgres"}, {"host"}, {"pkg"}, {"contexts"}, {"examples"}, {"integration"}} {
-		archtest.AssertTreeDoesNotImport(t, root(t, tree...), []string{smokePackage})
+	violations, err := smokeViolations(root(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, v := range violations {
+		if strings.HasSuffix(v, importsSmoke) {
+			t.Error(v)
+		}
+	}
+	// The real programs are where the rule looks for them.
+	for _, program := range []string{"karpo", "karpo-postgres"} {
+		if files, _ := filepath.Glob(filepath.Join(root(t, "cmd", program), "*.go")); len(files) == 0 {
+			t.Errorf("cmd/%s has no Go files: the rule is looking in the wrong place", program)
+		}
 	}
 }
 
-// Rule 11: the smoke publisher stays behind its build tag, and nothing without the tag imports it
-// or names its routes.
+// Rule 11: the smoke publisher stays behind its build tag, and nothing without the tag names its
+// routes.
 func TestSmoke_StaysBehindItsTag(t *testing.T) {
 	violations, err := smokeViolations(root(t))
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, v := range violations {
-		t.Error(v)
+		if !strings.HasSuffix(v, importsSmoke) {
+			t.Error(v)
+		}
 	}
 	// The publisher is where the rule looks for it: if it moves, the rule moves with it.
 	for _, tree := range smokeTrees {
@@ -137,30 +178,47 @@ func TestSmoke_TheRuleBites(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	imported := "\n\nimport _ \"" + module + smokePackage + "\"\n"
+	named := "\n\nconst door = \"" + smokeRoute + "\"\n"
 	write("host/smoke/smoke.go", smokeTag+"\n\npackage smoke\n")
-	write("cmd/karpo-smoke/main.go", smokeTag+"\n\npackage main\n\nimport _ \""+module+smokePackage+"\"\n")
+	write("host/smoke/more.go", "// Something said before.\n\n//go:build smoke && !race\n\npackage smoke\n") // behind the tag, and something else
+	write("cmd/karpo-smoke/main.go", smokeTag+"\n\npackage main"+imported)
+	write("cmd/karpo-smoke/main_test.go", smokeTag+"\n\npackage main"+imported)
+	write("integration/door_test.go", smokeTag+"\n\npackage integration"+named) // with the tag, the door may be named
 	write("host/host.go", "package host\n")
 	if got, err := smokeViolations(dir); err != nil || len(got) != 0 {
 		t.Fatalf("what is right is taken for wrong: %v %v", got, err)
 	}
 
-	write("host/smoke/extra.go", "package smoke\n")                                                  // a file of the publisher without the tag
-	write("cmd/karpo-smoke/other.go", "//go:build !production\n\npackage main\n")                    // another tag is not the tag
-	write("cmd/karpo/main.go", "package main\n\nimport _ \""+module+smokePackage+"\"\n")             // the real program imports it
-	write("host/serve/serve.go", "package serve\n\nconst door = \""+smokeRoute+"/token\"\n")         // the real program names the door
-	write("contexts/security/door_test.go", "package security\n\nconst door = \""+smokeRoute+"\"\n") // a test without the tag
-	write("pkg/late.go", "package pkg\n\n"+smokeTag+"\n\nconst door = \""+smokeRoute+"\"\n")         // the tag after the package clause is not a tag
-	write(".hidden/skipped.go", "package hidden\n\nconst door = \""+smokeRoute+"\"\n")               // not looked at
+	wrong := map[string]string{
+		"host/smoke/extra.go":            "package smoke\n",                                 // a file of the publisher without the tag
+		"cmd/karpo-smoke/other.go":       "//go:build !production\n\npackage main\n",        // another tag is not the tag
+		"host/smoke/either.go":           "//go:build smoke || linux\n\npackage smoke\n",    // on linux it needs no tag
+		"host/smoke/never.go":            "//go:build !smoke\n\npackage smoke\n",            // the tag, the other way round
+		"cmd/karpo/main.go":              "package main" + imported,                         // the real program imports it
+		"cmd/karpo/door.go":              smokeTag + "\n\npackage main" + imported,          // with the tag too: built with it, it has the door
+		"cmd/another/main_test.go":       "package main" + imported,                         // a test, of a program nobody listed
+		"integration/enter_test.go":      smokeTag + "\n\npackage integration" + imported,   // a test with the tag
+		"host/serve/serve.go":            "package serve" + named,                           // the real program names the door
+		"contexts/security/door_test.go": "package security" + named,                        // a test without the tag
+		"pkg/late.go":                    "package pkg\n\n" + smokeTag + named,              // the tag after the package clause is not a tag
+		"pkg/block.go":                   "/*\n" + smokeTag + "\n*/\n\npackage pkg" + named, // nor is it inside a block comment
+		"pkg/old.go":                     "// +build smoke\n\npackage pkg" + named,          // nor in the old form, which is not looked at
+	}
+	for rel, text := range wrong {
+		write(rel, text)
+	}
+	write(".hidden/skipped.go", "package hidden"+named) // not looked at
 	got, err := smokeViolations(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, file := range []string{"host/smoke/extra.go", "cmd/karpo-smoke/other.go", "cmd/karpo/main.go", "host/serve/serve.go", "contexts/security/door_test.go", "pkg/late.go"} {
+	for file := range wrong {
 		if !slices.ContainsFunc(got, func(v string) bool { return strings.HasPrefix(v, file+":") }) {
 			t.Errorf("%s is not seen: %v", file, got)
 		}
 	}
-	if len(got) != 6 {
-		t.Errorf("%d violations, want 6: %v", len(got), got)
+	if len(got) != len(wrong) {
+		t.Errorf("%d violations, want %d: %v", len(got), len(wrong), got)
 	}
 }

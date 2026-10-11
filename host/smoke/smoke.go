@@ -17,8 +17,8 @@
 //
 //   - Every file of it carries the build tag smoke: without -tags smoke it is not in any binary,
 //     and cmd/karpo-smoke does not compile. Neither cmd/karpo nor cmd/karpo-postgres import it.
-//   - New refuses to start unless KARPO_ENV is exactly "development", and Listen refuses any
-//     address that is not of this machine alone.
+//   - New refuses to start unless KARPO_ENV is exactly "development", Listen refuses any
+//     address that is not a loopback one, and every request has to name this machine in its Host.
 //   - A test that always runs (pkg/testing/archtest, without the tag) fails if a Go file without
 //     the tag imports this package or names its routes.
 //
@@ -226,6 +226,7 @@ func (p *Publisher) call(to http.Handler, method, path, token string, body, out 
 		_ = json.NewEncoder(&sent).Encode(body)
 	}
 	request := httptest.NewRequest(method, path, &sent)
+	request.Host = "127.0.0.1" // of this process
 	request.Header.Set("Content-Type", "application/json")
 	if token != "" {
 		request.Header.Set("Authorization", "Bearer "+token)
@@ -243,17 +244,29 @@ func (p *Publisher) call(to http.Handler, method, path, token string, body, out 
 	return recorder.Code, nil
 }
 
-// CheckAddress says whether an address to listen on is of this machine alone: 127.0.0.1 (or
-// any other loopback address), ::1 or localhost, with a port.
+// CheckAddress says whether an address to listen on is of this machine alone: a loopback IP
+// address (127.0.0.0/8 or ::1) with a port. A name is refused, localhost too: what a name
+// resolves to is not decided here.
 func CheckAddress(address string) error {
 	name, _, err := net.SplitHostPort(address)
 	if err != nil {
 		return fmt.Errorf("smoke: the address %q is not host:port: %v", address, err)
 	}
-	if ip := net.ParseIP(name); name == "localhost" || (ip != nil && ip.IsLoopback()) {
+	if ip := net.ParseIP(name); ip != nil && ip.IsLoopback() {
 		return nil
 	}
-	return fmt.Errorf("smoke: the address %q is not of this machine alone (127.0.0.1, ::1 or localhost): the smoke publisher does not listen anywhere else", address)
+	return fmt.Errorf("smoke: the address %q is not a loopback IP address (127.0.0.1 or ::1): the smoke publisher does not listen anywhere else", address)
+}
+
+// localHost says whether the Host of a request names this machine: 127.0.0.1, [::1] or
+// localhost, with any port or none.
+func localHost(host string) bool {
+	name := host
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		name = h
+	}
+	name = strings.TrimSuffix(strings.TrimPrefix(name, "["), "]")
+	return name == "127.0.0.1" || name == "::1" || strings.EqualFold(name, "localhost")
 }
 
 // Listen listens on an address, and only if it is of this machine alone.
@@ -282,8 +295,17 @@ func Banner(address, database string) string {
 	return b.String()
 }
 
-// ServeHTTP implements http.Handler.
-func (p *Publisher) ServeHTTP(w http.ResponseWriter, r *http.Request) { p.handler.ServeHTTP(w, r) }
+// ServeHTTP implements http.Handler. A request whose Host does not name this machine is refused:
+// a page of anywhere, open in the browser of the developer, can make its own name resolve to
+// 127.0.0.1 (DNS rebinding) and would be let in as anybody else. Its Host still says that name.
+// The development proxy of the front sends the Host of its target, which is this machine.
+func (p *Publisher) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if !localHost(r.Host) {
+		http.Error(w, "the smoke publisher only answers to 127.0.0.1, [::1] or localhost", http.StatusForbidden)
+		return
+	}
+	p.handler.ServeHTTP(w, r)
+}
 
 // Session is what the publisher answers for a profile: what the login of the host answers
 // (accessToken, refreshToken, expiresAt, userId, username, mustChangePassword), the member
