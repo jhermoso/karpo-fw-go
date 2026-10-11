@@ -22,6 +22,8 @@
 | D-5 | **Un documento de identidad inválido se rechaza siempre.** Las importaciones generan un documento con los rechazados (CV-4) | De 400 clientes de Sage, 12 con el NIF mal: no entran con ese documento y salen en el informe |
 | D-6 | **Catálogos híbridos** (CV-9). Se siembra todo lo identificado. Un tipo de rol nuevo **sin** atributos se añade como dato, diciendo quién es su padre. Uno **con** atributos (suyos o de sus relaciones) va por la interfaz de extensibilidad, con tablas uno a uno | «Avalista» sin datos: una fila que cuelga de «Persona». «Avalista» con importe avalado: una extensión |
 | D-7 | **El límite de crédito es de la pareja empresa–cliente**, no del cliente | Talleres Pérez: 10.000 € con Acme y 3.000 € con Acme Levante |
+| D-8 | **Un alta equivocada se quita con un comando «anular»**, que matiza D-4. El comando mira qué depende del dato: si nada depende, lo borra (de forma lógica o física, la que se pueda); si algo depende, lo deja marcado como anulado | A Ana se le da «Proveedor» por error y se corrige al minuto: nada cuelga de ese rol y se borra. Si ya tuviera una relación de proveedor, queda anulado |
+| D-9 | **Una party importada con el documento rechazado entra**, marcada con el error «documento identificativo erróneo». Hay un filtro para buscar las que lo tienen, y además queda en el informe de la importación (completa D-5) | El cliente 301 de Sage entra sin NIF válido, aparece al filtrar «con documento erróneo» y sale en el informe |
 
 ## 2. Qué cambia en cada lado con lo decidido
 
@@ -43,10 +45,10 @@ se guarda lo mismo), luego las de reglas y por último las de alcance.
 
 | # | Pregunta | Ejemplo | Recomendación |
 |---|---|---|---|
-| 1 | **Un alta equivocada, ¿cómo se quita?** Con D-4 no hay borrado. Un rol dado por error queda para siempre como un rol que duró un instante | Se da a Ana el rol «Proveedor» por error y se corrige al minuto: en su historial aparece un proveedor de un minuto | Una operación «anular», distinta de terminar: marca el dato como nulo, lo saca de todas las listas e historiales y deja rastro en la auditoría. Sólo si nada depende de él. Con permiso propio |
-| 2 | **Supresión de datos personales (RGPD).** Sin borrado físico, ¿cómo se atiende a quien pide que se borren sus datos? | Un antiguo cliente particular pide la supresión | Anonimizar: se vacían nombre, documentos y contactos y la party queda como «suprimida», conservando las facturas que la ley obliga a guardar. Es una operación propia, no un borrado |
+| 1 | ~~Un alta equivocada, ¿cómo se quita?~~ | | **Decidido: D-8.** Queda por fijar si anular pide un permiso propio y qué cuenta como «depende» (misma lista que la fila 3) |
+| 2 | **Supresión de datos personales (RGPD).** ¿Cómo se atiende a quien pide que se borren sus datos? | Un antiguo cliente particular pide la supresión | **Pendiente de consulta legal** (Javier, 2026-10-11); ver §3.5 |
 | 3 | **¿Qué bloquea una desactivación?** (el detalle de D-4) | ¿Se puede desactivar a Talleres Pérez con una factura pendiente de cobro? | Dentro de Parties: bloquean las relaciones y los roles vigentes. Lo de otros contextos (facturas, pedidos) no lo sabe Parties: o cada contexto escucha `party-deactivated` y avisa, o Parties pregunta por un puerto. Recomiendo lo primero ahora |
-| 4 | **Importación con documento rechazado: ¿entra la party sin documento, o no entra?** | El cliente 301 de Sage tiene el NIF mal | Que entre la party sin documento y salga en el informe: se puede corregir a mano. Si no entra, se pierden también sus direcciones y sus condiciones |
+| 4 | ~~Importación con documento rechazado: ¿entra la party?~~ | | **Decidido: D-9.** Queda un detalle: si el número rechazado se conserva junto a la marca, para que quien lo corrige lo vea sin abrir el informe. Recomiendo que sí, sin que cuente como identificación |
 | 5 | **Diseño de la extensibilidad** (D-6): quién puede crear una extensión, si es código o configuración, y cómo la ve el front | «Avalista» con importe avalado | Necesita su propio documento. La pregunta de fondo: una extensión con reglas es código (la genera Theros); sin reglas pueden ser campos declarados. Son dos mecanismos distintos |
 | 6 | **Tipos de relación nuevos sin datos**: D-6 habla de roles. ¿Vale igual para tipos de relación? | «Avalista de» entre dos parties | Sí, con el mismo criterio: una fila que dice qué rol juega cada lado |
 
@@ -106,6 +108,34 @@ relación vigente, o si está compartida») y que cada lado la cumpla a su maner
 | 37 | Callejero e IAE (F17, F18) | C# | A `geography` y `fiscal` de Go |
 | 38 | Afiliaciones, 18 eventos publicados, relación de cliente potencial con prueba, código de promoción | Go | A C#; todo aditivo |
 | 39 | Lecturas para la pantalla: búsqueda por campos, estadísticas, vista agregada (F12) | C# | Se decide con el contrato HTTP común (§4) |
+
+### 3.5 Supresión de datos personales: lo que hay que consultar
+
+Javier no lo ha decidido: quiere consultar antes la ley, al menos la española. Lo que ha dejado
+dicho y lo que hay hoy:
+
+- **El documento tiene que guardar el nombre por sí mismo**, exista o no el cliente. En Go la
+  factura ya lo hace: `bil_invoices` guarda `customer_nif`, `customer_name` y `customer_country`
+  además del identificador (`contexts/billing/infrastructure`, línea 46). Anonimizar la party no
+  cambiaría la factura emitida.
+- **En el sector financiero no hay facturas sino movimientos**, y los informes al banco central
+  exigen los datos. En Go los titulares de una cuenta (`fin_account_holders`) guardan sólo el
+  identificador de la party: si la party se anonimiza, la cuenta se queda sin nombre de titular.
+- **Puede que no se puedan borrar los registros y sí haya que dejar de enviar comunicaciones
+  comerciales.** Son dos cosas distintas y el modelo tendría que separarlas.
+
+Lo que hay que preguntar a quien sepa de la ley (lo que sigue es lo que yo conozco, **sin
+contrastar hoy con el texto legal; no es asesoramiento**):
+
+1. El derecho de supresión del RGPD tiene excepciones cuando una ley obliga a conservar el dato.
+2. La ley española de protección de datos prevé el **bloqueo**: el dato no se borra, se aparta
+   de todo uso y queda sólo a disposición de jueces y administraciones mientras puedan exigirse
+   responsabilidades; después se destruye. Si se confirma, el modelo no necesita «anonimizar»
+   sino «bloquear», con un plazo por tipo de dato.
+3. Plazos de conservación que conviene confirmar: los libros y facturas del Código de Comercio,
+   la prescripción tributaria, y la documentación de prevención del blanqueo en entidades
+   financieras, que es más larga.
+4. Oponerse a recibir publicidad es un derecho distinto y más sencillo: no exige borrar nada.
 
 ## 4. Lo que no entra aquí
 
