@@ -20,7 +20,7 @@ go run -tags smoke ./cmd/karpo-smoke -port 8092 -seed
 | Opción | Qué hace |
 |---|---|
 | `-port` | Puerto de `127.0.0.1` (por defecto 8092). No se puede elegir otra dirección |
-| `-db` | Fichero SQLite, **nuevo** (por defecto, uno en una carpeta temporal nueva; la ruta sale al arrancar) |
+| `-db` | Fichero SQLite, **que no exista**: si el fichero ya está, se niega antes de abrirlo y no lo toca (por defecto, uno en una carpeta temporal nueva; la ruta sale al arrancar) |
 | `-seed` | Carga una organización en Parties si no hay ninguna |
 
 ```powershell

@@ -132,9 +132,37 @@ func TestRun_ServesOnThisMachineAndLetsIn(t *testing.T) {
 		t.Fatal("it did not stop")
 	}
 
-	// The same file again: it has an administrator whose password nobody knows.
+	// The same file again: it exists, so it is not even opened.
 	err = run(context.Background(), []string{"-port", "0", "-db", db}, "development", &out{}, nil)
 	if err == nil || !strings.Contains(err.Error(), "new database") {
 		t.Fatalf("it started again on the same database: %v", err)
+	}
+}
+
+// A file that is already there is never touched: it could be the database of a real installation
+// without an administrator yet, and the publisher would leave its own there for good.
+func TestRun_RefusesADatabaseThatAlreadyExists(t *testing.T) {
+	clean(t)
+	// An empty file is a database SQLite opens and migrates; the other is not one at all.
+	for _, before := range [][]byte{{}, []byte("whatever is here is not of the smoke publisher")} {
+		dir := t.TempDir()
+		db := filepath.Join(dir, "karpo.db")
+		if err := os.WriteFile(db, before, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		err := run(ctx, []string{"-port", "0", "-db", db}, "development", &out{}, nil)
+		cancel()
+		if err == nil || !strings.Contains(err.Error(), "already exists") {
+			t.Fatalf("it started on a file that was there: %v", err)
+		}
+		after, err := os.ReadFile(db)
+		if err != nil || !bytes.Equal(before, after) {
+			t.Fatalf("the file was changed: %d bytes, %v", len(after), err)
+		}
+		// Nothing was put next to it either (the journal of SQLite, the folder of the exports).
+		if around, _ := os.ReadDir(dir); len(around) != 1 {
+			t.Fatalf("something was created next to the file: %v", around)
+		}
 	}
 }

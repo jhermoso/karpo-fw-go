@@ -8,8 +8,8 @@
 //	KARPO_ENV=development go run -tags smoke ./cmd/karpo-smoke [-port 8092] [-db <file>] [-seed]
 //
 //	-port  the port of 127.0.0.1 it listens on (8092)
-//	-db    the SQLite file, which must not have an administrator yet (default: a new file in a
-//	       new temporary directory)
+//	-db    the SQLite file, which must not exist yet: the publisher only works on a database it
+//	       creates itself (default: a new file in a new temporary directory)
 //	-seed  loads something to look at, if there is nothing
 //
 // It reads no secret and writes none: the key that signs the sessions and the password of the
@@ -19,9 +19,11 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"net"
 	"net/http"
 	"os"
@@ -47,7 +49,7 @@ func run(ctx context.Context, args []string, env string, out io.Writer, listenin
 	flags := flag.NewFlagSet("karpo-smoke", flag.ContinueOnError)
 	flags.SetOutput(out)
 	port := flags.Int("port", 8092, "the port of 127.0.0.1 it listens on")
-	path := flags.String("db", "", "the SQLite file, without an administrator yet (default: a new one in a new temporary directory)")
+	path := flags.String("db", "", "the SQLite file, which must not exist yet (default: a new one in a new temporary directory)")
 	seed := flags.Bool("seed", false, "loads something to look at, if there is nothing")
 	if err := flags.Parse(args); err != nil {
 		return err
@@ -66,6 +68,11 @@ func run(ctx context.Context, args []string, env string, out io.Writer, listenin
 			return err
 		}
 		*path = filepath.Join(dir, "karpo.db")
+	} else if _, err := os.Stat(*path); err == nil {
+		// Before it is opened: migrating it and starting the host on it would already change it.
+		return fmt.Errorf("karpo-smoke: the file %s already exists: the smoke publisher only starts on a new database, one it creates itself (give -db a file that does not exist)", *path)
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("karpo-smoke: -db: %w", err)
 	}
 
 	raw, err := sql.Open("sqlite", "file:"+filepath.ToSlash(*path)+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)")
