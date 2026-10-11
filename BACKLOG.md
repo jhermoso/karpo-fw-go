@@ -61,7 +61,12 @@ tiempo de prueba, participación en el capital) y edición de persona.
 - ~~Lenguaje ubicuo común~~ ✅ `pkg/domain/vocab`.
 - **Outbox multi-instancia**: `SELECT ... FOR UPDATE SKIP LOCKED` (PostgreSQL/Oracle/MySQL) y
   `READPAST` (SQL Server) para varios relays en paralelo.
-- **Idempotencia persistente** (`sqlrepo` store) para despliegues con varias réplicas.
+- **Idempotencia persistente** (`sqlrepo` store) para despliegues con varias réplicas. Tiene que
+  escribir **dentro de la unidad de trabajo** del caso de uso: hoy `pipeline.Idempotent` guarda el
+  resultado después de confirmar, así que una caída entre la confirmación y el guardado, o dos
+  peticiones simultáneas con la misma clave, ejecutan dos veces (petición de Theros, 2026-10-11;
+  la clave ya incluye a quien llama y la huella de la petición). El único almacén que existe es
+  el de memoria, y el anfitrión no pasa ninguno a los contextos.
 - **Herramienta de backfill/dual-write** para acompañar a `hotswap.Swap` cuando haya que mover
   datos entre motores.
 - **Filtros HTTP → especificaciones** (lista blanca de campos) para búsquedas genéricas.
