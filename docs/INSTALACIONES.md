@@ -67,3 +67,18 @@ En Parties:
   validado con el directorio de Instalaciones (existe, está activa y es del empleador).
 - La importación de las instalaciones de cada cliente (Sage, Personio) debe crear las instalaciones
   y los roles con estos casos de uso.
+
+## Dirección: las piezas españolas (2026-10-12)
+
+La dirección de una instalación lleva, como la de una party, las piezas que los formularios
+españoles piden por separado: `number`, `numberQualifier`, `block`, `portal`, `staircase`,
+`floor` y `door`. Todas opcionales, de diez caracteres como mucho, junto al nombre de la vía
+(`line1`).
+
+*Ejemplo:* la oficina de «Puerta del Sol 1, planta 3, puerta B» se registra con
+`"line1": "Puerta del Sol", "number": "1", "floor": "3", "door": "B"`.
+
+- Son el mismo objeto valor que en Parties (`vocab.Premises`); cada contexto sigue teniendo su
+  propia dirección, como se decidió el 2026-09-27.
+- Migración 4: siete columnas `addr_*` en `fac_facilities`. Ninguna ruta ni evento cambia.
+- Explicación de los campos y de por qué son esos: [PARTIES.md](PARTIES.md) §7.

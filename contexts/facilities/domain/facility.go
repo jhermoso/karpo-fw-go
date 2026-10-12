@@ -60,6 +60,7 @@ type GeoRef struct {
 type Address struct {
 	StreetType string
 	Line1      string
+	Premises   vocab.Premises // where in the street, piece by piece; optional
 	Line2      string
 	PostalCode string
 	Locality   string
@@ -73,7 +74,7 @@ func (a Address) IsZero() bool { return a.Line1 == "" && a.Country.IsZero() }
 
 // String renders the address in one line.
 func (a Address) String() string {
-	parts := []string{strings.TrimSpace(a.StreetType + " " + a.Line1), a.Line2, strings.TrimSpace(a.PostalCode + " " + a.Locality), a.Region, a.Country.String()}
+	parts := []string{strings.TrimSpace(a.StreetType + " " + a.Line1 + " " + a.Premises.String()), a.Line2, strings.TrimSpace(a.PostalCode + " " + a.Locality), a.Region, a.Country.String()}
 	return strings.Join(slices.DeleteFunc(parts, func(s string) bool { return s == "" }), ", ")
 }
 
@@ -92,7 +93,10 @@ func (l Location) normalized() (Location, error) {
 	a.StreetType, a.Line1, a.Line2 = strings.ToUpper(clean(a.StreetType)), clean(a.Line1), clean(a.Line2)
 	a.PostalCode, a.Locality, a.Region = strings.ToUpper(clean(a.PostalCode)), clean(a.Locality), clean(a.Region)
 	var v fw.Validation
-	if !a.IsZero() {
+	premises, err := a.Premises.Normalized("location.address")
+	v.Merge("", err)
+	a.Premises = premises
+	if !a.IsZero() || !a.Premises.IsZero() {
 		v.Require(a.Line1 != "", "location.address.line1", "required", "the first address line is required")
 		v.Require(!a.Country.IsZero(), "location.address.country", "required", "country is required")
 	}

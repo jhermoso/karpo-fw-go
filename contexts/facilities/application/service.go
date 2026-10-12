@@ -51,6 +51,14 @@ type Deps struct {
 type LocationDTO struct {
 	StreetType    string `json:"streetType,omitempty"`
 	Line1         string `json:"line1,omitempty"`
+	// Where in the street, piece by piece (Spanish forms ask for them one by one). All optional.
+	Number          string `json:"number,omitempty"`
+	NumberQualifier string `json:"numberQualifier,omitempty"` // bis, duplicado
+	Block           string `json:"block,omitempty"`
+	Portal          string `json:"portal,omitempty"`
+	Staircase       string `json:"staircase,omitempty"`
+	Floor           string `json:"floor,omitempty"`
+	Door            string `json:"door,omitempty"`
 	Line2         string `json:"line2,omitempty"`
 	PostalCode    string `json:"postalCode,omitempty"`
 	Locality      string `json:"locality,omitempty"`
@@ -207,7 +215,8 @@ func (s service) location(ctx context.Context, d *LocationDTO) (domain.Location,
 	}
 	var v fw.Validation
 	l := domain.Location{Address: domain.Address{StreetType: d.StreetType, Line1: d.Line1, Line2: d.Line2, PostalCode: d.PostalCode,
-		Locality: d.Locality, Region: d.Region}}
+		Locality: d.Locality, Region: d.Region, Premises: vocab.Premises{Number: d.Number, Qualifier: d.NumberQualifier, Block: d.Block,
+			Portal: d.Portal, Staircase: d.Staircase, Floor: d.Floor, Door: d.Door}}}
 	if d.Country != "" {
 		c, err := vocab.NewCountryCode(d.Country)
 		v.Merge("location.address.country", err)
@@ -254,6 +263,8 @@ func toDTO(f *domain.Facility, types map[domain.FacilityTypeID]domain.FacilityTy
 	d := FacilityDTO{ID: f.ID().String(), Organization: f.Owner().String(), Type: f.Type().String(), TypeName: types[f.Type()].Name,
 		Name: f.Name(), Description: f.Description(), Active: f.IsActive(), Version: f.Version(), ModifiedBy: f.ModifiedBy().Name,
 		Location: LocationDTO{StreetType: a.StreetType, Line1: a.Line1, Line2: a.Line2, PostalCode: a.PostalCode, Locality: a.Locality,
+			Number: a.Premises.Number, NumberQualifier: a.Premises.Qualifier, Block: a.Premises.Block, Portal: a.Premises.Portal,
+			Staircase: a.Premises.Staircase, Floor: a.Premises.Floor, Door: a.Premises.Door,
 			Region: a.Region, Country: a.Country.String(), Phone: l.Phone.String(), Email: l.Email.String()}}
 	if !a.Geo.PostalCode.IsZero() {
 		d.Location.GeoPostalCode = a.Geo.PostalCode.String()
