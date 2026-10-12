@@ -725,9 +725,9 @@ func (e *env) roleTypes(tag string) {
 
 	// What does not fit the catalog.
 	for what, body := range map[string]map[string]any{
-		"the same name, whatever the case": {"name": "GUARANTOR", "parent": domain.RolePersonCategory.String()},
+		"the same name, whatever the case":  {"name": "GUARANTOR", "parent": domain.RolePersonCategory.String()},
 		"the name of a role of the program": {"name": "customer", "parent": domain.RolePartyRoot.String()},
-		"the same code":                    {"name": "Avalista", "code": "guarantor", "parent": domain.RolePersonCategory.String()},
+		"the same code":                     {"name": "Avalista", "code": "guarantor", "parent": domain.RolePersonCategory.String()},
 	} {
 		e.must(e.do("POST", "/api/catalogs/party-role-types", e.admin, body, nil), 422, what)
 	}
@@ -779,16 +779,16 @@ func (e *env) roleTypes(tag string) {
 		t.Fatalf("added relationship type: %+v", relType)
 	}
 	for what, body := range map[string]map[string]any{
-		"the same name": {"name": "guarantee", "fromRole": added.ID, "toRole": domain.RoleCustomer.String()},
+		"the same name":                  {"name": "guarantee", "fromRole": added.ID, "toRole": domain.RoleCustomer.String()},
 		"the name of one of the program": {"name": "EMPLOYMENT", "fromRole": added.ID, "toRole": domain.RoleCustomer.String()},
-		"the same code": {"name": "Aval", "code": "guarantee", "fromRole": added.ID, "toRole": domain.RoleCustomer.String()},
+		"the same code":                  {"name": "Aval", "code": "guarantee", "fromRole": added.ID, "toRole": domain.RoleCustomer.String()},
 		"the code of one of the program": {"name": "Aval", "code": "prospect", "fromRole": added.ID, "toRole": domain.RoleCustomer.String()},
 	} {
 		e.must(e.do("POST", "/api/catalogs/party-relationship-types", e.admin, body, nil), 422, what)
 	}
 	for what, body := range map[string]map[string]any{
-		"no roles":           {"name": "Aval"},
-		"a role nobody has":  {"name": "Aval", "fromRole": added.ID, "toRole": fw.NewUUID().String()},
+		"no roles":                 {"name": "Aval"},
+		"a role nobody has":        {"name": "Aval", "fromRole": added.ID, "toRole": fw.NewUUID().String()},
 		"a role that is not an id": {"name": "Aval", "fromRole": "guarantor", "toRole": domain.RoleCustomer.String()},
 	} {
 		e.must(e.do("POST", "/api/catalogs/party-relationship-types", e.admin, body, nil), 400, what)
