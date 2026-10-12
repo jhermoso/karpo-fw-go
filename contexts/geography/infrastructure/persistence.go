@@ -68,6 +68,7 @@ func Migrations() sqlrepo.MigrationSet {
 		{Version: 4, Name: "boundary names with broken encoding", Run: fixBoundaryNames},
 		{Version: 5, Name: "country and level of a boundary, and the names of the levels by country", Up: sqlrepo.RenderDDLAll(levelDDL...)},
 		{Version: 6, Name: "levels of the seed, islands and the NUTS 3 codes of the insular provinces", Run: seedLevels},
+		{Version: 7, Name: "the municipalities of the islands hang from their island", Run: islandMunicipalities},
 	}}
 }
 
@@ -312,6 +313,33 @@ func seedLevels(ctx context.Context, db *sqlrepo.DB) error {
 		if err := db.Insert(ctx, "geo_country_levels", sqlrepo.Values{"country": l.Country.String(), "boundary_level": string(l.Level),
 			"name": l.Name, "administrative": l.Administrative, "principal": l.Principal}); err != nil {
 			return fmt.Errorf("adding level %s of %s: %w", l.Level, l.Country, err)
+		}
+	}
+	return nil
+}
+
+// islandMunicipalities moves every municipality of an island from its province to its island
+// (the official LAU - NUTS 3 table of Eurostat, seed/official). A database seeded with the islands
+// already has them there.
+func islandMunicipalities(ctx context.Context, db *sqlrepo.DB) error {
+	s, err := LoadSeed()
+	if err != nil {
+		return err
+	}
+	islands := map[domain.BoundaryID]bool{}
+	for _, b := range s.Boundaries {
+		if b.Type() == domain.TypeIsland {
+			islands[b.ID()] = true
+		}
+	}
+	for _, b := range s.Boundaries {
+		parent, ok := b.Parent()
+		if b.Type() != domain.TypeMunicipality || !ok || !islands[parent] {
+			continue
+		}
+		if _, err := db.Update(ctx, "geo_boundary_links", sqlrepo.Values{"parent": parent},
+			sqlrepo.Values{"boundary_id": b.ID(), "kind": string(domain.Containment)}); err != nil {
+			return fmt.Errorf("moving municipality %s to its island: %w", b.Name(), err)
 		}
 	}
 	return nil

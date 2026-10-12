@@ -100,6 +100,63 @@ func TestSeed_NUTSCodesAreTheOfficialOnes(t *testing.T) {
 	}
 }
 
+// Every municipality is in the NUTS 3 region the official LAU table says: its province on the
+// mainland, its island in the Balearic and Canary Islands.
+func TestSeed_MunicipalitiesAreInTheirOfficialRegion(t *testing.T) {
+	f, err := os.Open(filepath.Join("seed", "official", "LAU_ES_2024.csv.gz"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := csv.NewReader(gz).ReadAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	official := map[string]string{} // LAU code -> NUTS 3
+	for _, r := range rows[1:] {
+		official[r[1]] = r[0]
+	}
+	s, err := LoadSeed()
+	if err != nil {
+		t.Fatal(err)
+	}
+	byID := map[domain.BoundaryID]*domain.Boundary{}
+	for _, b := range s.Boundaries {
+		byID[b.ID()] = b
+	}
+	municipalities, insular := 0, 0
+	for _, b := range s.Boundaries {
+		if b.Type() != domain.TypeMunicipality {
+			continue
+		}
+		municipalities++
+		want, ok := official[b.Codes().LAU]
+		if !ok {
+			t.Errorf("%s (%s) is not in the official table", b.Name(), b.Codes().LAU)
+			continue
+		}
+		parent, ok := b.Parent()
+		if !ok {
+			t.Errorf("%s has no parent", b.Name())
+			continue
+		}
+		p := byID[parent]
+		if p.Position().Level != domain.Level3 || p.Codes().NUTS != want {
+			t.Errorf("%s hangs from %s (%s, level %q), officially in %s", b.Name(), p.Name(), p.Codes().NUTS, p.Position().Level, want)
+		}
+		if p.Type() == domain.TypeIsland {
+			insular++
+		}
+	}
+	if municipalities != len(official) || insular != 155 {
+		t.Fatalf("%d municipalities against %d official ones, %d of them on an island", municipalities, len(official), insular)
+	}
+}
+
 // A database seeded before the levels existed converges on the same data as a new one, and
 // running the migration again changes nothing.
 func TestSeedLevels_UpgradesAnOldDatabase(t *testing.T) {
@@ -148,6 +205,9 @@ func TestSeedLevels_UpgradesAnOldDatabase(t *testing.T) {
 
 	// Back to what migration 2 left with the seed of before.
 	for _, stmt := range []string{
+		// The municipalities of the islands, back under their province.
+		`UPDATE geo_boundary_links SET parent = (SELECT l.parent FROM geo_boundary_links l WHERE l.boundary_id = geo_boundary_links.parent
+			AND l.kind = 'containment') WHERE kind = 'containment' AND parent IN (SELECT id FROM geo_boundaries WHERE boundary_level = '3' AND ine_code IS NULL)`,
 		"DELETE FROM geo_country_levels",
 		"DELETE FROM geo_boundary_links WHERE boundary_id IN (SELECT id FROM geo_boundaries WHERE boundary_level = '3' AND ine_code IS NULL)",
 		"DELETE FROM geo_boundaries WHERE boundary_level = '3' AND ine_code IS NULL",
@@ -168,6 +228,9 @@ func TestSeedLevels_UpgradesAnOldDatabase(t *testing.T) {
 
 	for pass := 1; pass <= 2; pass++ {
 		if err := seedLevels(ctx, db); err != nil {
+			t.Fatal(err)
+		}
+		if err := islandMunicipalities(ctx, db); err != nil {
 			t.Fatal(err)
 		}
 		got := snapshot()

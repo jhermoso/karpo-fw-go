@@ -1,7 +1,7 @@
 # Geografía: la clasificación NUTS y la dirección postal española
 
 > **Estado: aprobado por Javier el 2026-10-12 (las tres decisiones de §6) e implementado en
-> parte.** Hechos los pasos N-1 a N-4; lo que se hizo y lo que queda está en §5. Javier decidió
+> parte.** Hechos los pasos N-1 a N-4, completos; lo que se hizo y lo que queda está en §5. Javier decidió
 > ese día que la dirección postal lleva los campos españoles y que la geografía tiene que
 > apoyarse en NUTS, para que el programa sirva en otro país europeo, y que había que resolverlo
 > cuanto antes. Los §2 y §3 describen el punto de partida.
@@ -135,7 +135,7 @@ festivos (nada se descarga de internet desde el programa).
 |---|---|---|
 | N-1 | Comprobar los códigos NUTS contra la tabla oficial | **Hecho.** La tabla de Eurostat (GISCO, `NUTS_AT_2024.csv`, descargada el 2026-10-12) está en `contexts/geography/infrastructure/seed/official/`. Los 86 códigos españoles son los mismos en NUTS 2021 y NUTS 2024. `TestSeed_NUTSCodesAreTheOfficialOnes` compara la semilla con ella |
 | N-2 | Nivel y país en cada delimitación; nombres de los niveles por país | **Hecho.** Columnas `country` y `boundary_level` en `geo_boundaries` y tabla `geo_country_levels`, con España sembrada (migraciones 5 y 6). `GET /api/geography/boundaries?country=ES&level=2` devuelve las 19 comunidades y ciudades autónomas; `GET /api/reference/boundary-levels?country=ES` dice cómo se llama cada nivel y cuál es la división principal |
-| N-3 | Corregir las provincias insulares y añadir las islas | **Hecho a medias.** Las tres provincias ya no llevan código NUTS 3 y existen las diez islas, cada una dentro de su provincia y con su código oficial. **Falta:** los municipios insulares siguen colgando de la provincia, no de su isla (ver abajo) |
+| N-3 | Corregir las provincias insulares y añadir las islas | **Hecho.** Las tres provincias ya no llevan código NUTS 3; existen las diez islas, cada una dentro de su provincia y con su código oficial; y los 155 municipios insulares cuelgan de su isla (migración 7), según la tabla oficial de municipios de Eurostat (`LAU_ES_2024`, también en `seed/official/`). Los 8.132 municipios de la semilla son exactamente los de esa tabla, y `TestSeed_MunicipalitiesAreInTheirOfficialRegion` comprueba que cada uno está en su región de nivel 3 |
 | N-4 | Las comunidades autónomas, con su tipo propio | **Hecho.** Las 17 comunidades y las 2 ciudades autónomas son «Autonomous Community»; los identificadores no cambian. Las 7 agrupaciones de nivel 1 siguen siendo «Region» |
 | N-5 | Campos españoles en la dirección de Parties | Sin hacer |
 | N-6 | Un segundo país de prueba | Sin hacer |
@@ -161,22 +161,17 @@ festivos (nada se descarga de internet desde el programa).
 - Tipo de delimitación nuevo, «Island», con el identificador
   `10000000-0000-0000-0005-000000000019`.
 
-**Lo que falta de N-3: los municipios de las islas.** Para situar una dirección de Palma en
-Mallorca (`ES532`) hay que colgar cada municipio insular de su isla. Son unos 155 municipios y
-hace falta la tabla oficial que relaciona cada municipio (LAU) con su NUTS 3. Es otro fichero de
-Eurostat, en formato Excel; **no lo he descargado** porque la autorización era para la tabla de
-NUTS. Mientras tanto, de un municipio insular se llega a su provincia, no a su isla.
+**Cómo queda una isla.** Palma → Mallorca (`ES532`, nivel 3) → Illes Balears (provincia `07`,
+sin nivel) → Illes Balears (comunidad, nivel 2) → Este (nivel 1) → España. Un festivo declarado
+en La Palma lo heredan sus 14 municipios y ninguno de El Hierro.
 
-Consecuencias de que las islas estén todavía vacías (las señaló la revisión independiente):
+Dos cosas que conviene saber al consultar (las señaló la revisión independiente):
 
-- **Un festivo declarado en una isla no se aplica a ningún municipio**, porque el calendario
-  sube municipio → provincia → comunidad. Los festivos insulares de Canarias son un caso real.
-- Buscar «dentro de Mallorca» no encuentra nada: la isla no tiene nada dentro.
-- **Pedir los hijos de una provincia insular devuelve ahora islas y municipios mezclados.**
-  Quien quiera sólo los municipios tiene que añadir `level=local`.
 - **`country=ES&level=3` devuelve 49 provincias y 10 islas, y no las tres provincias
   insulares**, que no tienen nivel. Para «las 52 provincias» hay que filtrar por tipo.
-- El importador de festivos no sabe nombrar una isla por su código.
+- Los hijos de una provincia insular son ahora sus islas, no sus municipios.
+- El importador de festivos todavía no sabe nombrar una isla por su código (un país es `ES`,
+  una comunidad `ES-MD`, una provincia `28`, un municipio `28079`). Por la ruta sí se puede.
 
 **Para C#** (lo que tendrían que igualar Karpo C# y Trench, que comparten estos GUID):
 
@@ -184,7 +179,7 @@ Consecuencias de que las islas estén todavía vacías (las señaló la revisió
   (`b3100000-0006-0000-0006-…01` a `…0a`, en el orden de su código NUTS). Si C# las crea, que
   sea con los mismos.
 - En su semilla las tres provincias insulares llevan los mismos códigos equivocados, porque la
-  de Go salió de ella.
+  de Go salió de ella, y los municipios insulares cuelgan de la provincia.
 
 ## 6. Decisiones (aprobadas por Javier el 2026-10-12: «sí a las 3»)
 
@@ -194,8 +189,9 @@ Consecuencias de que las islas estén todavía vacías (las señaló la revisió
    90 KB (NUTS 2021 y 2024) de `gisco-services.ec.europa.eu`; en el repositorio queda el de
    2024.
 
-Queda una decisión nueva: **¿autorizas descargar la tabla de municipios (LAU ↔ NUTS 3)** para
-colgar los municipios insulares de su isla?
+4. **Autorizada la descarga de la tabla de municipios** (LAU ↔ NUTS 3), el 2026-10-12. Hecha:
+   un Excel de 19 MB de `ec.europa.eu/eurostat` con todos los países; en el repositorio queda
+   sólo la hoja de España, en CSV, con cuatro columnas.
 
 ## 7. Límites
 
