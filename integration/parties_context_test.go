@@ -154,7 +154,8 @@ func TestPartiesContext(t *testing.T) {
 			}
 			boundary := fw.NewUUID()
 			if _, err := svc.AddContact.Handle(ctx, papp.AddContact{PartyID: anaID, Kind: "postal", Purposes: []string{"billing"},
-				Address: &papp.AddressDTO{StreetType: "CL", Line1: "Mayor 1", PostalCode: "28013", Locality: "Madrid", Country: "ES",
+				Address: &papp.AddressDTO{StreetType: "CL", Line1: "Mayor", Number: "1", NumberQualifier: "bis", Block: "2", Portal: "A", Staircase: "B",
+					Floor: "3", Door: "izquierda", PostalCode: "28013", Locality: "Madrid", Country: "ES",
 					GeoBoundary: boundary.String()}}); err != nil {
 				t.Fatal(err)
 			}
@@ -171,7 +172,10 @@ func TestPartiesContext(t *testing.T) {
 			got, err = svc.Get.Handle(ctx, papp.GetParty{ID: anaID})
 			if err != nil || len(got.Identifications) != 2 || got.Identifications[1].ExpiresOn != "2031-02-02" || !got.Identifications[1].Primary ||
 				got.Identifications[0].Primary || len(got.Contacts) != 2 || got.Contacts[0].Address == nil ||
-				got.Contacts[0].Address.GeoBoundary != boundary.String() || got.Contacts[1].Value != "+34600000001" {
+				got.Contacts[0].Address.GeoBoundary != boundary.String() || got.Contacts[1].Value != "+34600000001" ||
+				got.Contacts[0].Address.Number != "1" || got.Contacts[0].Address.NumberQualifier != "bis" || got.Contacts[0].Address.Block != "2" ||
+				got.Contacts[0].Address.Portal != "A" || got.Contacts[0].Address.Staircase != "B" || got.Contacts[0].Address.Floor != "3" ||
+				got.Contacts[0].Address.Door != "izquierda" {
 				t.Fatalf("phase 2 round trip: %+v %v", got, err)
 			}
 			byDoc, err := svc.Search.Handle(ctx, papp.SearchParties{Document: "paa123456"})

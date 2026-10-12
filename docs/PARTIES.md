@@ -267,3 +267,38 @@ provincia del contacto postal español vigente (facturación primero), por lotes
 | ~~6~~ | ✅ Contexto RRHH ([RRHH.md](RRHH.md)): empleados (`Employment`), contratos, puestos y centros de trabajo; Parties conserva el rol `Employee` y la afiliación |
 | — | Clientes y el resto de extensiones de ErpDetail, cada uno en el contexto que le corresponda (Ventas, Nómina, Fiscal), no en Parties |
 | ~~7~~ | ✅ Conceptos básicos de UDM 1 que faltaban ([PARTIES-UDM.md](PARTIES-UDM.md), decisiones aprobadas el 2026-10-04): datos propios por tipo de relación (código estable en el catálogo, relación de cliente potencial con su tiempo de prueba, participación en el capital) y edición de persona |
+
+## 7. Dirección postal: las piezas españolas (2026-10-12)
+
+Decidido por Javier el 2026-10-12: la dirección lleva los campos que los formularios españoles
+piden por separado. Hasta ahora todo iba en dos líneas de texto libre, y de un texto libre no se
+puede sacar la planta para una casilla.
+
+*Ejemplo:* «Calle Mayor 5 bis, bloque 2, portal A, escalera B, 3.º izquierda».
+
+| Campo (HTTP) | Columna | Ejemplo | Qué es |
+|---|---|---|---|
+| `streetType` | `street_type` | `CL` | Ya existía: tipo de vía del catálogo |
+| `line1` | `line1` | `Mayor` | Ya existía: el nombre de la vía. Sigue siendo el único obligatorio |
+| `number` | `addr_number` | `5`, `5-7`, `s/n` | Número |
+| `numberQualifier` | `addr_qualifier` | `bis` | Lo que sigue al número |
+| `block` | `addr_block` | `2` | Bloque |
+| `portal` | `addr_portal` | `A` | Portal |
+| `staircase` | `addr_staircase` | `B` | Escalera |
+| `floor` | `addr_floor` | `3` | Planta |
+| `door` | `addr_door` | `izquierda`, `B` | Puerta o letra |
+
+- **Todos opcionales, de diez caracteres como mucho.** Una dirección extranjera, o una española
+  escrita como antes («Mayor 1» en `line1`), sigue valiendo: no se intenta partir el texto.
+- **Aditivo.** Migración 15 (siete columnas en `party_contacts`). Ninguna ruta ni evento `v1`
+  cambia; el evento `party-contact-added` y la auditoría llevan la dirección en una línea, que
+  ahora incluye las piezas.
+- **Decisiones técnicas tomadas** (reversibles): las piezas son las de los formularios de la
+  Agencia Tributaria (número, calificador, bloque, portal, escalera, planta, puerta) y no las
+  cinco columnas que Trench tiene sin usar en `contact_mechanism` (`StreetNumber2`,
+  `Staircase`, `Floor`, `Door`, `Letter`). La correspondencia: escalera, planta y puerta, igual;
+  `Letter` va en `door`; `StreetNumber2` no sé qué guarda (ningún código de Trench la lee) y
+  la he tomado por el calificador. Trench no tiene bloque ni portal.
+- **Pendiente:** la dirección de una instalación (`facilities`) tiene su propio objeto y no
+  lleva todavía estas piezas; y la región de la dirección sigue siendo texto libre aunque la
+  dirección lleve los identificadores de Geografía (ver [GEOGRAFIA-NUTS.md](GEOGRAFIA-NUTS.md)).

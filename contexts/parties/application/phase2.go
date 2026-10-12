@@ -33,6 +33,14 @@ type RemoveIdentification struct {
 type AddressDTO struct {
 	StreetType    string `json:"streetType,omitempty"`
 	Line1         string `json:"line1"`
+	// Where in the street, piece by piece (Spanish forms ask for them one by one). All optional.
+	Number          string `json:"number,omitempty"`
+	NumberQualifier string `json:"numberQualifier,omitempty"` // bis, duplicado
+	Block           string `json:"block,omitempty"`
+	Portal          string `json:"portal,omitempty"`
+	Staircase       string `json:"staircase,omitempty"`
+	Floor           string `json:"floor,omitempty"`
+	Door            string `json:"door,omitempty"`
 	Line2         string `json:"line2,omitempty"`
 	Directions    string `json:"directions,omitempty"`
 	PostalCode    string `json:"postalCode,omitempty"`
@@ -174,6 +182,8 @@ func (c AddContact) data() (domain.ContactData, error) {
 			return u
 		}
 		d.Address = domain.PostalAddress{StreetType: a.StreetType, Line1: a.Line1, Line2: a.Line2, Directions: a.Directions,
+			Premises: domain.Premises{Number: a.Number, Qualifier: a.NumberQualifier, Block: a.Block, Portal: a.Portal,
+				Staircase: a.Staircase, Floor: a.Floor, Door: a.Door},
 			PostalCode: a.PostalCode, Locality: a.Locality, Region: a.Region, Country: country,
 			Geo: domain.GeoRef{PostalCode: geo("address.geoPostalCode", a.GeoPostalCode), Boundary: geo("address.geoBoundary", a.GeoBoundary)}}
 	}
