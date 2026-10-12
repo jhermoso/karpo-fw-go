@@ -36,16 +36,16 @@ type RoleDTO struct {
 
 // PartyDTO is the transport representation of a party.
 type PartyDTO struct {
-	ID              string              `json:"id"`
-	Kind            string              `json:"kind"`
-	Name            string              `json:"name"`
-	Person          *PersonDTO          `json:"person,omitempty"`
-	Organization    *OrganizationDTO    `json:"organization,omitempty"`
-	Active          bool                `json:"active"`
-	Test            bool                `json:"test,omitempty"`
-	Shared          bool                `json:"shared,omitempty"`
+	ID           string           `json:"id"`
+	Kind         string           `json:"kind"`
+	Name         string           `json:"name"`
+	Person       *PersonDTO       `json:"person,omitempty"`
+	Organization *OrganizationDTO `json:"organization,omitempty"`
+	Active       bool             `json:"active"`
+	Test         bool             `json:"test,omitempty"`
+	Shared       bool             `json:"shared,omitempty"`
 	// DocumentIssue is present when the identity document of the party was refused.
-	DocumentIssue *DocumentIssueDTO `json:"documentIssue,omitempty"`
+	DocumentIssue   *DocumentIssueDTO   `json:"documentIssue,omitempty"`
 	Organizations   []string            `json:"organizations"` // internal organizations it is affiliated with now
 	Roles           []RoleDTO           `json:"roles"`
 	Identifications []IdentificationDTO `json:"identifications"`

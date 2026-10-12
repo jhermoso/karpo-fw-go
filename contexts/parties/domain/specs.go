@@ -51,13 +51,13 @@ var (
 	FieldTest   = spec.Comparable("test", (*Party).IsTest)
 	FieldRoles  = spec.Collection("roles", (*Party).Roles)
 
-	FieldShared       = spec.Comparable("shared", (*Party).IsShared)
+	FieldShared = spec.Comparable("shared", (*Party).IsShared)
 	// FieldDocumentIssue tells the parties marked with a refused identity document.
 	FieldDocumentIssue = spec.Comparable("doc_issue", (*Party).HasDocumentIssue)
-	FieldAffiliations = spec.Collection("affiliations", (*Party).Affiliations)
-	AffFieldOrg       = spec.Comparable("organization", func(a Affiliation) PartyID { return a.Organization })
-	AffFieldFrom      = spec.Time("valid_from", func(a Affiliation) time.Time { return a.Period.From() })
-	AffFieldUntil     = spec.OptionalTime("valid_to", func(a Affiliation) *time.Time {
+	FieldAffiliations  = spec.Collection("affiliations", (*Party).Affiliations)
+	AffFieldOrg        = spec.Comparable("organization", func(a Affiliation) PartyID { return a.Organization })
+	AffFieldFrom       = spec.Time("valid_from", func(a Affiliation) time.Time { return a.Period.From() })
+	AffFieldUntil      = spec.OptionalTime("valid_to", func(a Affiliation) *time.Time {
 		if t, ok := a.Period.To(); ok {
 			return &t
 		}
