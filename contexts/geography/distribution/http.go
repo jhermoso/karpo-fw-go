@@ -34,7 +34,7 @@ func (m *Module) searchBoundaries(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	atoi := func(k string) int { n, _ := strconv.Atoi(q.Get(k)); return n }
 	page, err := m.svc.SearchBoundaries.Handle(r.Context(), gapp.SearchBoundaries{Text: q.Get("q"), Type: q.Get("type"),
-		Parent: q.Get("parent"), Grouping: q.Get("grouping"), Page: atoi("page"), Size: atoi("size")})
+		Parent: q.Get("parent"), Grouping: q.Get("grouping"), Country: q.Get("country"), Level: q.Get("level"), Page: atoi("page"), Size: atoi("size")})
 	distribution.Respond(w, r, page, err, http.StatusOK)
 }
 

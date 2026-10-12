@@ -1,9 +1,10 @@
 # Geografía: la clasificación NUTS y la dirección postal española
 
-> **Estado: análisis y propuesta, sin aprobar.** Escrito el 2026-10-12. Javier decidió ese día
-> que la dirección postal lleva los campos españoles y que la geografía tiene que apoyarse en
-> NUTS, para que el programa sirva en otro país europeo, y que hay que resolverlo cuanto antes.
-> Este documento dice qué hay hoy, qué falla y qué propongo. Las decisiones están en §6.
+> **Estado: aprobado por Javier el 2026-10-12 (las tres decisiones de §6) e implementado en
+> parte.** Hechos los pasos N-1 a N-4; lo que se hizo y lo que queda está en §5. Javier decidió
+> ese día que la dirección postal lleva los campos españoles y que la geografía tiene que
+> apoyarse en NUTS, para que el programa sirva en otro país europeo, y que había que resolverlo
+> cuanto antes. Los §2 y §3 describen el punto de partida.
 >
 > Continúa [GEOGRAFIA.md](GEOGRAFIA.md).
 
@@ -39,8 +40,8 @@ Lo que sí da NUTS, y es lo que hace falta: **una escalera común y con código 
 que colgar los nombres de cada país. Para traducir el concepto político hace falta, además, que
 cada país diga cómo se llama cada peldaño y cuál es su «primera división».
 
-Lo de esta sección es lo que conozco de la clasificación (versión 2021); **no lo he contrastado
-hoy con las tablas de Eurostat**.
+La columna de España está contrastada con la tabla oficial (§5, N-1). Las de Alemania y Francia
+son lo que conozco de la clasificación y **no están contrastadas**: son un ejemplo, no un dato.
 
 ## 2. Lo que hay hoy en Go (leído en la semilla)
 
@@ -63,7 +64,7 @@ Es decir: **España está entera y el resto del mundo sólo tiene países.** La 
 |---|---|---|---|
 | 1 | **El nivel no es un dato.** Las 7 agrupaciones NUTS 1 y las 19 comunidades NUTS 2 tienen el mismo tipo, «Región». El nivel sólo se adivina por la longitud del código | «Noroeste» (`ES1`) y «Galicia» (`ES11`) son las dos «Región» | No se puede pedir «las comunidades autónomas» sin contar letras |
 | 2 | **El tipo «Comunidad Autónoma» existe y no tiene ninguna fila.** Tampoco «Estado», «Departamento» ni «Cantón» | Andalucía es «Región», no «Comunidad Autónoma» | El nombre español del nivel no está en ningún sitio |
-| 3 | **Tres provincias llevan un código NUTS 3 que no es el suyo**, porque en las islas el NUTS 3 es la isla y no la provincia | Illes Balears lleva `ES530`, Las Palmas `ES703`, Santa Cruz de Tenerife `ES707`. Según lo que conozco, `ES530` no existe (hay `ES531` Eivissa y Formentera, `ES532` Mallorca, `ES533` Menorca), `ES703` es El Hierro y `ES707` es La Palma | Un informe por NUTS 3 saldría mal para las islas. **Hay que comprobarlo contra la tabla oficial antes de tocar nada** |
+| 3 | **Tres provincias llevan un código NUTS 3 que no es el suyo**, porque en las islas el NUTS 3 es la isla y no la provincia | Illes Balears lleva `ES530`, Las Palmas `ES703`, Santa Cruz de Tenerife `ES707`. **Comprobado contra la tabla oficial:** `ES530` no existe (hay `ES531` Eivissa y Formentera, `ES532` Mallorca, `ES533` Menorca), `ES703` es El Hierro y `ES707` es La Palma. Los otros 75 códigos de la semilla son correctos | Un informe por NUTS 3 saldría mal para las islas |
 | 4 | **Las islas no existen** como delimitación | No hay «Mallorca» entre la provincia y el municipio | No se puede situar una dirección en su NUTS 3 real |
 | 5 | **No hay nombre local del nivel por país.** Los tipos son una lista única en inglés | Para Alemania haría falta decir que su NUTS 1 se llama «Land» | El formulario de dirección no sabe qué etiqueta poner en otro país |
 | 6 | **La versión de NUTS no consta.** La clasificación cambia cada pocos años | — | Un código puede dejar de valer sin que se sepa |
@@ -128,36 +129,78 @@ Propongo cargarlos de la tabla que publica Eurostat, descargada una vez por una 
 guardada en el repositorio como el resto de la semilla, igual que se hizo con el calendario de
 festivos (nada se descarga de internet desde el programa).
 
-## 5. Pasos
+## 5. Pasos y estado
 
-| # | Paso | Rompe | Hecho cuando |
-|---|---|---|---|
-| N-1 | Comprobar los 52 códigos NUTS 3 y los 26 de región contra la tabla oficial | Nada | Una prueba compara la semilla con el fichero oficial guardado en el repositorio |
-| N-2 | Nivel en cada delimitación y tabla de niveles por país (España sembrada) | Nada: columnas y tabla nuevas | `GET /api/geography/boundaries?country=ES&level=2` devuelve las 19 comunidades y ciudades autónomas |
-| N-3 | Corregir las tres provincias insulares y añadir las islas | Datos: cambian tres códigos | Mallorca existe, cuelga de Illes Balears y lleva `ES532` |
-| N-4 | Las comunidades autónomas pasan a su tipo propio | Datos: cambia el tipo de 19 filas (los identificadores no cambian) | Andalucía es «Comunidad Autónoma» |
-| N-5 | Campos españoles en la dirección de Parties | Nada: columnas nuevas | Una dirección con escalera y planta se guarda y se lee; los eventos `v1` no cambian |
-| N-6 | Un segundo país de prueba (Alemania o Portugal), sólo niveles 1 a 3 | Nada | El formulario de dirección de una empresa alemana pide «Land» |
-| N-7 | Trasladar N-2 a N-5 a Karpo C# y Trench | Lo decide cada sesión | — |
+| # | Paso | Estado |
+|---|---|---|
+| N-1 | Comprobar los códigos NUTS contra la tabla oficial | **Hecho.** La tabla de Eurostat (GISCO, `NUTS_AT_2024.csv`, descargada el 2026-10-12) está en `contexts/geography/infrastructure/seed/official/`. Los 86 códigos españoles son los mismos en NUTS 2021 y NUTS 2024. `TestSeed_NUTSCodesAreTheOfficialOnes` compara la semilla con ella |
+| N-2 | Nivel y país en cada delimitación; nombres de los niveles por país | **Hecho.** Columnas `country` y `boundary_level` en `geo_boundaries` y tabla `geo_country_levels`, con España sembrada (migraciones 5 y 6). `GET /api/geography/boundaries?country=ES&level=2` devuelve las 19 comunidades y ciudades autónomas; `GET /api/reference/boundary-levels?country=ES` dice cómo se llama cada nivel y cuál es la división principal |
+| N-3 | Corregir las provincias insulares y añadir las islas | **Hecho a medias.** Las tres provincias ya no llevan código NUTS 3 y existen las diez islas, cada una dentro de su provincia y con su código oficial. **Falta:** los municipios insulares siguen colgando de la provincia, no de su isla (ver abajo) |
+| N-4 | Las comunidades autónomas, con su tipo propio | **Hecho.** Las 17 comunidades y las 2 ciudades autónomas son «Autonomous Community»; los identificadores no cambian. Las 7 agrupaciones de nivel 1 siguen siendo «Region» |
+| N-5 | Campos españoles en la dirección de Parties | Sin hacer |
+| N-6 | Un segundo país de prueba | Sin hacer |
+| N-7 | Trasladarlo a Karpo C# y Trench | Sin hacer; ver «Para C#» |
 
-No he estimado tiempos. N-1 necesita que alguien descargue el fichero oficial.
+**Cómo queda una delimitación:**
 
-## 6. Decisiones que tocan a Javier
+```json
+{ "name": "Mallorca", "typeName": "Island", "nutsCode": "ES532", "country": "ES", "level": "3",
+  "parent": "<Illes Balears>" }
+```
 
-1. **¿Vale separar «nivel estadístico» de «división principal»?** (§4.1). Sin eso, NUTS no
-   traduce comunidad autónoma por Land, porque están en niveles distintos. *Alternativa:* usar
-   sólo el nivel NUTS y aceptar que el nivel 1 español (Noroeste, Sur…) no significa nada para
-   un usuario.
-2. **¿Provincia e isla separadas?** (§4.2). *Alternativa:* partir las provincias insulares y
-   dejar que el NUTS 3 mande; rompe la correspondencia con el código del INE que usan Hacienda
-   y los códigos postales.
-3. **¿Quién descarga la tabla oficial de Eurostat?** Yo no descargo ficheros sin que lo
-   apruebes; si me lo autorizas, lo hago y lo dejo en el repositorio con su fecha y su origen.
+**Decisiones técnicas tomadas al implementar** (reversibles; se cuentan aquí):
+
+- El nivel es un texto: `country`, `1`, `2`, `3` o `local`. Una delimitación fuera de la
+  escalera (un continente, una unión, una provincia insular) no tiene nivel.
+- Cada delimitación guarda su país (`ES`). Es un dato repetido —se podría deducir subiendo por
+  la jerarquía—, pero permite pedir «el nivel 2 de España» con una sola consulta.
+- La versión de NUTS es una constante del programa (`domain.NUTSVersion`, hoy `2024`) y sale en
+  la ruta de niveles; no hay una tabla para ella.
+- Buscar una región por su código ISO 3166-2 (`ES-MD`, lo usa el calendario de festivos) ya no
+  mira el tipo «Region», sino los niveles 1 y 2 del país.
+- Tipo de delimitación nuevo, «Island», con el identificador
+  `10000000-0000-0000-0005-000000000019`.
+
+**Lo que falta de N-3: los municipios de las islas.** Para situar una dirección de Palma en
+Mallorca (`ES532`) hay que colgar cada municipio insular de su isla. Son unos 155 municipios y
+hace falta la tabla oficial que relaciona cada municipio (LAU) con su NUTS 3. Es otro fichero de
+Eurostat, en formato Excel; **no lo he descargado** porque la autorización era para la tabla de
+NUTS. Mientras tanto, de un municipio insular se llega a su provincia, no a su isla.
+
+Consecuencias de que las islas estén todavía vacías (las señaló la revisión independiente):
+
+- **Un festivo declarado en una isla no se aplica a ningún municipio**, porque el calendario
+  sube municipio → provincia → comunidad. Los festivos insulares de Canarias son un caso real.
+- Buscar «dentro de Mallorca» no encuentra nada: la isla no tiene nada dentro.
+- **Pedir los hijos de una provincia insular devuelve ahora islas y municipios mezclados.**
+  Quien quiera sólo los municipios tiene que añadir `level=local`.
+- **`country=ES&level=3` devuelve 49 provincias y 10 islas, y no las tres provincias
+  insulares**, que no tienen nivel. Para «las 52 provincias» hay que filtrar por tipo.
+- El importador de festivos no sabe nombrar una isla por su código.
+
+**Para C#** (lo que tendrían que igualar Karpo C# y Trench, que comparten estos GUID):
+
+- El tipo «Island» y las diez islas son filas nuevas con identificadores elegidos aquí
+  (`b3100000-0006-0000-0006-…01` a `…0a`, en el orden de su código NUTS). Si C# las crea, que
+  sea con los mismos.
+- En su semilla las tres provincias insulares llevan los mismos códigos equivocados, porque la
+  de Go salió de ella.
+
+## 6. Decisiones (aprobadas por Javier el 2026-10-12: «sí a las 3»)
+
+1. **Se separa «nivel estadístico» de «división principal»** (§4.1).
+2. **Provincia e isla son delimitaciones separadas** (§4.2).
+3. **Autorizada la descarga de la tabla oficial de Eurostat.** Hecha: dos ficheros CSV de unos
+   90 KB (NUTS 2021 y 2024) de `gisco-services.ec.europa.eu`; en el repositorio queda el de
+   2024.
+
+Queda una decisión nueva: **¿autorizas descargar la tabla de municipios (LAU ↔ NUTS 3)** para
+colgar los municipios insulares de su isla?
 
 ## 7. Límites
 
-- Los códigos NUTS «correctos» de §3 fila 3 y la tabla de §1 son de mi conocimiento de NUTS
-  2021, no de una comprobación hecha hoy.
+- Los nombres de nivel de España («Agrupación de comunidades autónomas», «Provincia o isla»)
+  los he puesto yo; no salen de ninguna tabla oficial.
+- Ceuta y Melilla quedan con el tipo «Autonomous Community», aunque son ciudades autónomas.
 - No he mirado cómo guardan esto Karpo C# ni Trench más allá de que Trench tiene las
   columnas de dirección.
-- Sólo he leído la semilla y el esquema de Go; no he ejecutado nada.

@@ -56,7 +56,7 @@ var schemaDDL = []string{
 }
 
 // Tables of the context, children first (DropAll).
-var tables = []string{"geo_holidays", "geo_country_time_zones", "geo_country_languages", "geo_country_currencies", "geo_countries", "geo_postal_codes",
+var tables = []string{"geo_country_levels", "geo_holidays", "geo_country_time_zones", "geo_country_languages", "geo_country_currencies", "geo_countries", "geo_postal_codes",
 	"geo_boundary_links", "geo_boundaries", "geo_boundary_types", "geo_street_types", "geo_time_zones", "geo_languages", "geo_currencies"}
 
 // Migrations is the versioned schema of the context: the tables, then the Karpo seed.
@@ -66,6 +66,8 @@ func Migrations() sqlrepo.MigrationSet {
 		{Version: 2, Name: "Karpo geography and reference seed", Run: seedDatabase},
 		{Version: 3, Name: "calendar of holidays", Up: sqlrepo.RenderDDLAll(holidayDDL...)},
 		{Version: 4, Name: "boundary names with broken encoding", Run: fixBoundaryNames},
+		{Version: 5, Name: "country and level of a boundary, and the names of the levels by country", Up: sqlrepo.RenderDDLAll(levelDDL...)},
+		{Version: 6, Name: "levels of the seed, islands and the NUTS 3 codes of the insular provinces", Run: seedLevels},
 	}}
 }
 
@@ -199,6 +201,122 @@ var boundaryNameFixes = []struct{ id, name string }{
 	{"b3100000-0003-0000-0003-00000000000f", "Coruña, A"},
 }
 
+// levelDDL places a boundary on the ladder of levels (docs/GEOGRAFIA-NUTS.md).
+var levelDDL = []string{
+	`ALTER TABLE geo_boundaries {add:country} {str:2}{addEnd}`,
+	`ALTER TABLE geo_boundaries {add:boundary_level} {str:10}{addEnd}`,
+	`CREATE INDEX ix_geo_boundaries_level ON geo_boundaries (country, boundary_level)`,
+	`CREATE TABLE geo_country_levels (country {str:2} NOT NULL, boundary_level {str:10} NOT NULL, name {str:100} NOT NULL,
+	administrative {bool} NOT NULL, principal {bool} NOT NULL, PRIMARY KEY (country, boundary_level))`,
+}
+
+// seedLevels brings a database to the seed that carries levels. The boundaries were inserted by
+// migration 2 before the columns existed, so every database, old or new, gets its countries and
+// levels here. A database seeded before the seed changed also gets what changed in it: the
+// island type and the ten islands, the autonomous communities with their own type and the three
+// insular provinces without a NUTS 3 code (it belongs to their islands). Running it again
+// changes nothing.
+//
+// It follows the embedded seed, so it only adds boundaries and sets these four columns of the
+// ones that exist: a later change of the seed in anything else (a name, a link) needs its own
+// migration. A new boundary is linked as it is added, so its parent must come before it.
+func seedLevels(ctx context.Context, db *sqlrepo.DB) error {
+	s, err := LoadSeed()
+	if err != nil {
+		return err
+	}
+	existing := func(table string, key ...string) (map[string]bool, error) {
+		rows, err := db.Select(ctx, table, key)
+		if err != nil {
+			return nil, err
+		}
+		out := make(map[string]bool, len(rows))
+		for _, r := range rows {
+			k := ""
+			for _, c := range key {
+				if c == "id" {
+					k += r.UUID(c).String() + "|"
+				} else {
+					k += r.String(c) + "|"
+				}
+			}
+			if err := r.Err(); err != nil {
+				return nil, err
+			}
+			out[k] = true
+		}
+		return out, nil
+	}
+
+	types, err := existing("geo_boundary_types", "id")
+	if err != nil {
+		return err
+	}
+	municipality := domain.TypeMunicipality
+	for _, t := range s.BoundaryTypes {
+		if types[t.ID.String()+"|"] {
+			continue
+		}
+		if err := db.Insert(ctx, "geo_boundary_types", sqlrepo.Values{"id": t.ID, "name": t.Name, "description": opt(t.Description),
+			"active": t.Active}); err != nil {
+			return fmt.Errorf("adding boundary type %s: %w", t.Name, err)
+		}
+	}
+
+	// The municipalities are nine tenths of the rows and all alike: one statement.
+	if _, err := db.Update(ctx, "geo_boundaries", sqlrepo.Values{"country": "ES", "boundary_level": string(domain.LevelLocal)},
+		sqlrepo.Values{"boundary_type": municipality}); err != nil {
+		return fmt.Errorf("placing the municipalities: %w", err)
+	}
+	boundaries, err := existing("geo_boundaries", "id")
+	if err != nil {
+		return err
+	}
+	for _, b := range s.Boundaries {
+		if b.Type() == municipality {
+			if p := b.Position(); p.Country != "ES" || p.Level != domain.LevelLocal {
+				return fmt.Errorf("seed: municipality %s is not a Spanish local unit", b.ID())
+			}
+			continue
+		}
+		c, p := b.Codes(), b.Position()
+		if boundaries[b.ID().String()+"|"] {
+			if _, err := db.Update(ctx, "geo_boundaries", sqlrepo.Values{"boundary_type": b.Type(), "nuts_code": opt(c.NUTS),
+				"country": opt(p.Country), "boundary_level": opt(string(p.Level))}, sqlrepo.Values{"id": b.ID()}); err != nil {
+				return fmt.Errorf("placing boundary %s: %w", b.ID(), err)
+			}
+			continue
+		}
+		if err := db.Insert(ctx, "geo_boundaries", sqlrepo.Values{"id": b.ID(), "version": int64(1), "name": b.Name(),
+			"boundary_type": b.Type(), "geo_code": opt(c.Geo), "abbreviation": opt(c.Abbreviation), "ine_code": opt(c.INE),
+			"nuts_code": opt(c.NUTS), "lau_code": opt(c.LAU), "active": b.IsActive(), "country": opt(p.Country),
+			"boundary_level": opt(string(p.Level))}); err != nil {
+			return fmt.Errorf("adding boundary %s: %w", b.Name(), err)
+		}
+		for _, l := range b.Links() {
+			if err := db.Insert(ctx, "geo_boundary_links", sqlrepo.Values{"boundary_id": b.ID(), "id": l.ID, "parent": l.Parent,
+				"kind": string(l.Kind)}); err != nil {
+				return fmt.Errorf("linking boundary %s: %w", b.Name(), err)
+			}
+		}
+	}
+
+	levels, err := existing("geo_country_levels", "country", "boundary_level")
+	if err != nil {
+		return err
+	}
+	for _, l := range s.CountryLevels {
+		if levels[l.Country.String()+"|"+string(l.Level)+"|"] {
+			continue
+		}
+		if err := db.Insert(ctx, "geo_country_levels", sqlrepo.Values{"country": l.Country.String(), "boundary_level": string(l.Level),
+			"name": l.Name, "administrative": l.Administrative, "principal": l.Principal}); err != nil {
+			return fmt.Errorf("adding level %s of %s: %w", l.Level, l.Country, err)
+		}
+	}
+	return nil
+}
+
 // fixBoundaryNames renames the boundaries of a database seeded before the seed was corrected; one
 // seeded afterwards already holds these names.
 func fixBoundaryNames(ctx context.Context, db *sqlrepo.DB) error {
@@ -226,8 +344,8 @@ func readOnly(kind string) error {
 func BoundaryMapping() sqlrepo.Mapping[domain.BoundaryID, *domain.Boundary] {
 	return sqlrepo.Mapping[domain.BoundaryID, *domain.Boundary]{
 		Table:   "geo_boundaries",
-		Columns: []string{"name", "boundary_type", "geo_code", "abbreviation", "ine_code", "nuts_code", "lau_code", "active"},
-		Fields:  map[string]string{"type": "boundary_type"},
+		Columns: []string{"name", "boundary_type", "geo_code", "abbreviation", "ine_code", "nuts_code", "lau_code", "active", "country", "boundary_level"},
+		Fields:  map[string]string{"type": "boundary_type", "level": "boundary_level"},
 		Dehydrate: func(*domain.Boundary) (sqlrepo.Values, error) {
 			return nil, readOnly(domain.BoundaryKind)
 		},
@@ -242,7 +360,7 @@ func BoundaryMapping() sqlrepo.Mapping[domain.BoundaryID, *domain.Boundary] {
 			return domain.ReconstituteBoundary(domain.BoundaryID{UUID: row.UUID("id")}, row.String("name"),
 				domain.BoundaryTypeID{UUID: row.UUID("boundary_type")}, domain.Codes{Geo: row.String("geo_code"),
 					Abbreviation: row.String("abbreviation"), INE: row.String("ine_code"), NUTS: row.String("nuts_code"), LAU: row.String("lau_code")},
-				row.Bool("active"), links)
+				domain.Position{Country: row.String("country"), Level: domain.Level(row.String("boundary_level"))}, row.Bool("active"), links)
 		},
 		Children: []sqlrepo.Child[*domain.Boundary]{{
 			Name: "links", Table: "geo_boundary_links", ForeignKey: "boundary_id", Columns: []string{"id", "parent", "kind"},
@@ -327,6 +445,17 @@ func (c SQLCatalogs) BoundaryTypes(ctx context.Context) ([]domain.BoundaryType, 
 	})
 }
 
+// CountryLevels implements domain.Catalogs.
+func (c SQLCatalogs) CountryLevels(ctx context.Context) ([]domain.CountryLevel, error) {
+	rows, err := c.db.Select(ctx, "geo_country_levels", []string{"country", "boundary_level", "name", "administrative", "principal"},
+		"country", "boundary_level")
+	return mapRows(rows, err, func(r *sqlrepo.Row) domain.CountryLevel {
+		country, _ := vocab.NewCountryCode(r.String("country"))
+		return domain.CountryLevel{Country: country, Level: domain.Level(r.String("boundary_level")), Name: r.String("name"),
+			Administrative: r.Bool("administrative"), Principal: r.Bool("principal")}
+	})
+}
+
 // Currencies implements domain.Catalogs.
 func (c SQLCatalogs) Currencies(ctx context.Context) ([]domain.Currency, error) {
 	rows, err := c.db.Select(ctx, "geo_currencies", []string{"id", "code", "name", "symbol", "minor_units", "crypto", "active"}, "code")
@@ -392,6 +521,15 @@ func seed() *Seed {
 // BoundaryTypes implements domain.Catalogs.
 func (SeedCatalogs) BoundaryTypes(context.Context) ([]domain.BoundaryType, error) {
 	return slices.Clone(seed().BoundaryTypes), nil
+}
+
+// CountryLevels implements domain.Catalogs.
+func (SeedCatalogs) CountryLevels(context.Context) ([]domain.CountryLevel, error) {
+	out := slices.Clone(seed().CountryLevels)
+	slices.SortFunc(out, func(a, b domain.CountryLevel) int {
+		return strings.Compare(a.Country.String()+string(a.Level), b.Country.String()+string(b.Level))
+	})
+	return out, nil
 }
 
 // Currencies implements domain.Catalogs.
