@@ -32,6 +32,32 @@
 | D-15 | **La visibilidad no depende de la vigencia de la relación**, sino de si la party está activada | Talleres Pérez deja de ser cliente de Acme en marzo: Acme lo sigue viendo mientras esté activo. **Cambia Go**, donde la afiliación termina con la relación |
 | D-16 | **La extensibilidad se hace en tiempo de ejecución**, por un administrador, para cualquier entidad y desde un espacio del front. El modelo son los configuradores de producto de Trench. Hay que llevarla también a Trench. Cómo y dónde: pendiente de definir con Javier | Añadir un campo a un pedido o a una reserva sin una versión nueva del programa |
 
+## 1 bis. Estado en Go (2026-10-13)
+
+Lo que de §1 está ya hecho en Karpo Go. Cada fila dice dónde; «PR» es un PR en borrador de
+`jhermoso/karpo-fw-go`, «local» una rama sin subir.
+
+| # | Decisión | Estado en Go | Dónde |
+|---|---|---|---|
+| D-1, D-2, D-3, D-7 | Esquemas distintos, monolito, contacto propio, límite de crédito por pareja | Ya era así | — |
+| D-4, D-8, D-13 | Terminar y desactivar; anular; ciclo de vida y cascada | **Sin hacer.** `Party.Deactivate` sigue sin comprobar nada | — |
+| D-5, D-9 | Documento inválido rechazado; la party importada entra marcada, con filtro | **Hecho**, con un matiz: el número erróneo se conserva además como «otro documento», porque por él se reconoce a quien ya se cargó ([PARTIES.md](PARTIES.md) §10) | local, `feat/parties-documento-erroneo` |
+| D-6 | Catálogos híbridos | **Hecho el caso sin atributos**: alta de tipos de rol y de relación desde la aplicación, con código estable ([PARTIES.md](PARTIES.md) §8). El caso con atributos es la extensibilidad | PR 16 |
+| D-10 | Número de cliente por pareja | **Hecho** ([PARTIES.md](PARTIES.md) §9) | local, `feat/parties-numero-de-cliente` |
+| D-11 | Estado y prioridad fuera | Ya era así | — |
+| D-12, D-16 | Extensibilidad en ejecución | **Definida, sin implementar.** El contrato común lo ha escrito Trench y está sin aprobar ([EXTENSIBILIDAD.md](EXTENSIBILIDAD.md) §3) | PR 12; Trench PR 27 |
+| D-14 | Dirección española y NUTS | **Hecho**: niveles NUTS, islas y municipios insulares; piezas de la dirección en Parties e instalaciones | PR 13, 14 y 15 |
+| D-15 | Visibilidad por activación | **Sin hacer: faltan tres respuestas** (abajo) | — |
+
+**D-15, lo que hay que contestar antes de tocar nada.** Hoy en Go la afiliación de una party a una
+empresa termina cuando termina su relación, y con ella deja de verla la empresa.
+
+1. Una party **desactivada**, ¿deja de verla también quien tendría que reactivarla? Hoy una party
+   inactiva se sigue viendo y se puede filtrar.
+2. Un antiguo cliente, ¿se puede seguir **editando** desde la empresa, o sólo ver?
+3. ¿Cambia también lo que responde «a qué empresas pertenece hoy», que usan RRHH y Security, o
+   sólo quién la ve?
+
 ## 2. Qué cambia en cada lado con lo decidido
 
 | # | Go | C# |
