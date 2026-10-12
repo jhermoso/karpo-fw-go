@@ -280,4 +280,12 @@ type RelationshipTypeDTO struct {
 	FromRole     string `json:"fromRole"`
 	ToRole       string `json:"toRole"`
 	Hierarchical bool   `json:"hierarchical,omitempty"`
+	// WellKnown tells the types that come with the program from the ones added to the catalog.
+	WellKnown bool `json:"wellKnown"`
+}
+
+func relationshipTypeDTO(t domain.RelationshipType) RelationshipTypeDTO {
+	return RelationshipTypeDTO{ID: t.ID.String(), Code: t.Code, Name: t.Name.String(), Description: t.Description,
+		FromRole: t.FromRole.String(), ToRole: t.ToRole.String(), Hierarchical: t.Hierarchical,
+		WellKnown: domain.IsWellKnownRelationshipType(t.ID)}
 }

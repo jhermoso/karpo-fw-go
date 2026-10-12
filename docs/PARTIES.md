@@ -305,7 +305,7 @@ puede sacar la planta para una casilla.
 - **Pendiente:** la región de la dirección sigue siendo texto libre aunque la dirección lleve
   los identificadores de Geografía (ver [GEOGRAFIA-NUTS.md](GEOGRAFIA-NUTS.md)).
 
-## 8. Tipos de rol: código estable y alta desde la aplicación (2026-10-12)
+## 8. Tipos de rol y de relación: código estable y alta desde la aplicación (2026-10-12)
 
 Primer paso de la extensibilidad en Go ([EXTENSIBILIDAD.md](EXTENSIBILIDAD.md), X-3), y el primer
 caso de la decisión sobre catálogos: un tipo de rol **sin datos propios** se añade como dato,
@@ -330,10 +330,19 @@ POST /api/catalogs/party-role-types
   global: el catálogo es de toda la instalación. La acción no se llama «Create» a propósito,
   porque la regla estándar de Security reparte «Create» a cualquier usuario.
 - **`wellKnown`** distingue en el listado los tipos del programa de los añadidos.
-- **Lo que no hay todavía:** cambiar o retirar un tipo añadido; añadir tipos de relación; y los
-  tipos **con** datos propios, que son el resto de la extensibilidad.
+- **Queda en el historial.** Quién añadió el tipo, cuándo y con qué datos se anota en la
+  auditoría, en la misma transacción que el alta (tipos `parties.role_type` y
+  `parties.relationship_type`).
+- **Los tipos de relación, igual.** `POST /api/catalogs/party-relationship-types` con nombre,
+  código opcional y el rol que juega cada lado (`fromRole`, `toRole`); permiso
+  `Parties.RelationshipType.Define` y administrador global. Se comprueba que los dos roles
+  existen y que el nombre y el código están libres. Un tipo añadido no es jerárquico ni lleva
+  datos propios. *Ejemplo:* «Guarantee», de «Guarantor» a «Customer»; desde entonces relaciona a
+  un avalista con un cliente, y se rechaza con los lados al revés.
+- **Lo que no hay todavía:** cambiar o retirar un tipo añadido; y los tipos **con** datos
+  propios, que son el resto de la extensibilidad.
 - **Decisiones técnicas tomadas** (reversibles): la unicidad del nombre y del código se comprueba
   antes de escribir y no con un índice único (un índice único sobre una columna que admite vacíos
   no se comporta igual en todos los motores), así que dos altas simultáneas con el mismo código
-  podrían entrar las dos; el alta no deja traza en la auditoría, porque el catálogo no es un
-  agregado; y en el almacén de memoria los tipos añadidos no sobreviven a un cambio de almacén.
+  podrían entrar las dos; y en el almacén de memoria los tipos añadidos no sobreviven a un cambio
+  de almacén.

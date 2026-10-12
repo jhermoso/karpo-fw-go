@@ -12,6 +12,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/application/orchestration"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/pipeline"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
+	"github.com/jhermoso/karpo-fw-go/pkg/domain/traits"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
@@ -71,6 +72,7 @@ type Service struct {
 	InternalOrganizations   app.QueryHandler[ListInternalOrganizations, []PartyDTO]
 	ListRoleTypes           app.QueryHandler[ListRoleTypes, []RoleTypeDTO]
 	DefineRoleType          app.CommandHandler[DefineRoleType, RoleTypeDTO]
+	DefineRelationshipType  app.CommandHandler[DefineRelationshipType, RelationshipTypeDTO]
 	ListRelationshipTypes   app.QueryHandler[ListRelationshipTypes, []RelationshipTypeDTO]
 	DocumentOptions         app.QueryHandler[DocumentOptions, []DocumentOptionDTO]
 	ListClassificationTypes app.QueryHandler[ListClassificationTypes, []ClassificationTypeDTO]
@@ -94,6 +96,18 @@ func (s service) roleCatalog(ctx context.Context) (*domain.Catalog, error) {
 		return nil, err
 	}
 	return domain.NewRoleCatalog(types, domain.RolePersonCategory, domain.RoleOrganizationCategory)
+}
+
+// catalogAdded leaves in the audit log, in the unit of work of ctx, that somebody added an entry
+// to a catalog: who, when and what it says. A catalog entry is not an aggregate, so nobody else
+// writes this record.
+func (s service) catalogAdded(ctx context.Context, kind, id string, fields map[string]any) error {
+	if s.Audit == nil {
+		return nil
+	}
+	return s.Audit.Append(ctx, app.AuditRecord{ID: fw.NewUUID().String(), AggregateType: kind, AggregateID: id, AggregateVersion: 1,
+		Operation: app.AuditCreated, Actor: app.ActorFrom(ctx), Channel: app.Channel(ctx), CorrelationID: app.CorrelationID(ctx),
+		At: fw.Now(), Changes: traits.Diff(nil, fields)})
 }
 
 func (s service) relationshipTypes(ctx context.Context) (map[domain.RelationshipTypeID]domain.RelationshipType, error) {
@@ -444,13 +458,60 @@ func NewService(d Deps) *Service {
 		if err := cat.Admits(t); err != nil {
 			return RoleTypeDTO{}, err
 		}
-		if err := s.Catalogs.AddRoleType(ctx, t); err != nil {
+		err = s.UoW.Do(ctx, func(ctx context.Context) error {
+			if err := s.Catalogs.AddRoleType(ctx, t); err != nil {
+				return err
+			}
+			return s.catalogAdded(ctx, domain.RoleTypeKind, t.ID.String(), map[string]any{"name": t.Name.String(), "code": t.Code,
+				"description": t.Description, "parent": t.Parent.String()})
+		})
+		if err != nil {
 			return RoleTypeDTO{}, err
 		}
 		if cat, err = s.roleCatalog(ctx); err != nil {
 			return RoleTypeDTO{}, err
 		}
 		return roleTypeDTO(cat, t), nil
+	})
+
+	svc.DefineRelationshipType = chain(PermRelationshipTypeDefine, func(ctx context.Context, c DefineRelationshipType) (RelationshipTypeDTO, error) {
+		if !scopeOf(ctx).global {
+			return RelationshipTypeDTO{}, fmt.Errorf("%w: the relationship catalog belongs to the whole installation", fw.ErrForbidden)
+		}
+		var v fw.Validation
+		from, err := parseRoleType(c.FromRole)
+		v.Require(err == nil, "fromRole", "format", "fromRole must be a role type id")
+		to, err := parseRoleType(c.ToRole)
+		v.Require(err == nil, "toRole", "format", "toRole must be a role type id")
+		if err := v.Err(); err != nil {
+			return RelationshipTypeDTO{}, err
+		}
+		t, err := domain.NewRelationshipType(domain.RelationshipTypeID{UUID: fw.NewUUID()}, c.Name, c.Description, c.Code, from, to)
+		if err != nil {
+			return RelationshipTypeDTO{}, err
+		}
+		roles, err := s.roleCatalog(ctx)
+		if err != nil {
+			return RelationshipTypeDTO{}, err
+		}
+		types, err := s.relationshipTypes(ctx)
+		if err != nil {
+			return RelationshipTypeDTO{}, err
+		}
+		if err := domain.AdmitsRelationshipType(roles, types, t); err != nil {
+			return RelationshipTypeDTO{}, err
+		}
+		err = s.UoW.Do(ctx, func(ctx context.Context) error {
+			if err := s.Catalogs.AddRelationshipType(ctx, t); err != nil {
+				return err
+			}
+			return s.catalogAdded(ctx, domain.RelationshipTypeKind, t.ID.String(), map[string]any{"name": t.Name.String(), "code": t.Code,
+				"description": t.Description, "fromRole": t.FromRole.String(), "toRole": t.ToRole.String()})
+		})
+		if err != nil {
+			return RelationshipTypeDTO{}, err
+		}
+		return relationshipTypeDTO(t), nil
 	})
 
 	svc.ListRelationshipTypes = chain(PermPartyRead, func(ctx context.Context, _ ListRelationshipTypes) ([]RelationshipTypeDTO, error) {
@@ -460,8 +521,7 @@ func NewService(d Deps) *Service {
 		}
 		out := make([]RelationshipTypeDTO, len(types))
 		for i, t := range types {
-			out[i] = RelationshipTypeDTO{ID: t.ID.String(), Code: t.Code, Name: t.Name.String(), Description: t.Description,
-				FromRole: t.FromRole.String(), ToRole: t.ToRole.String(), Hierarchical: t.Hierarchical}
+			out[i] = relationshipTypeDTO(t)
 		}
 		return out, nil
 	})

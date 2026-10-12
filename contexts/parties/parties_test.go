@@ -54,7 +54,7 @@ type env struct {
 	admin, reader, clerk, viewer, outsider, seller string
 }
 
-var allPerms = append(slices.Clone(sellerPerms), papp.PermRelationshipSetTrial, papp.PermRoleTypeDefine)
+var allPerms = append(slices.Clone(sellerPerms), papp.PermRelationshipSetTrial, papp.PermRoleTypeDefine, papp.PermRelationshipTypeDefine)
 
 var readerPerms = []authz.Permission{papp.PermPartyRead, papp.PermRelationshipRead}
 
@@ -754,6 +754,65 @@ func (e *env) roleTypes(tag string) {
 	if guarantors.Total != 1 || guarantors.Items[0].ID != person.ID {
 		t.Fatalf("parties playing the new role: %+v", guarantors.Items)
 	}
+
+	// Who added it, and what it said, stays in the audit log.
+	trail, err := e.mod.Audit.Trail(context.Background(), domain.RoleTypeKind, added.ID)
+	if err != nil || len(trail) != 1 || trail[0].Operation != "created" || trail[0].Actor.Name != "ana.admin" || len(trail[0].Changes) != 4 {
+		t.Fatalf("audit of the new role type: %+v %v", trail, err)
+	}
+
+	// A relationship type is added the same way: which role each side plays.
+	var relTypes []papp.RelationshipTypeDTO
+	e.must(e.do("GET", "/api/catalogs/party-relationship-types", e.reader, nil, &relTypes), 200, "relationship types")
+	for _, rt := range relTypes {
+		if !rt.WellKnown {
+			t.Fatalf("a relationship type of the program not marked as such: %+v", rt)
+		}
+	}
+	guarantee := map[string]any{"name": "Guarantee", "description": "A guarantor answers for a customer", "code": "guarantee",
+		"fromRole": added.ID, "toRole": domain.RoleCustomer.String()}
+	e.must(e.do("POST", "/api/catalogs/party-relationship-types", e.reader, guarantee, nil), 403, "without the permission")
+	e.must(e.do("POST", "/api/catalogs/party-relationship-types", e.clerk, guarantee, nil), 403, "the catalog is of the whole installation")
+	var relType papp.RelationshipTypeDTO
+	e.must(e.do("POST", "/api/catalogs/party-relationship-types", e.admin, guarantee, &relType), 201, "a relationship type")
+	if relType.Name != "Guarantee" || relType.Code != "guarantee" || relType.FromRole != added.ID || relType.Hierarchical || relType.WellKnown {
+		t.Fatalf("added relationship type: %+v", relType)
+	}
+	for what, body := range map[string]map[string]any{
+		"the same name": {"name": "guarantee", "fromRole": added.ID, "toRole": domain.RoleCustomer.String()},
+		"the name of one of the program": {"name": "EMPLOYMENT", "fromRole": added.ID, "toRole": domain.RoleCustomer.String()},
+		"the same code": {"name": "Aval", "code": "guarantee", "fromRole": added.ID, "toRole": domain.RoleCustomer.String()},
+		"the code of one of the program": {"name": "Aval", "code": "prospect", "fromRole": added.ID, "toRole": domain.RoleCustomer.String()},
+	} {
+		e.must(e.do("POST", "/api/catalogs/party-relationship-types", e.admin, body, nil), 422, what)
+	}
+	for what, body := range map[string]map[string]any{
+		"no roles":           {"name": "Aval"},
+		"a role nobody has":  {"name": "Aval", "fromRole": added.ID, "toRole": fw.NewUUID().String()},
+		"a role that is not an id": {"name": "Aval", "fromRole": "guarantor", "toRole": domain.RoleCustomer.String()},
+	} {
+		e.must(e.do("POST", "/api/catalogs/party-relationship-types", e.admin, body, nil), 400, what)
+	}
+	e.must(e.do("GET", "/api/catalogs/party-relationship-types", e.reader, nil, &relTypes), 200, "relationship types again")
+	if len(relTypes) != len(domain.WellKnownRelationshipTypes())+1 {
+		t.Fatalf("relationship types after adding one: %d", len(relTypes))
+	}
+	if trail, err = e.mod.Audit.Trail(context.Background(), domain.RelationshipTypeKind, relType.ID); err != nil || len(trail) != 1 {
+		t.Fatalf("audit of the new relationship type: %+v %v", trail, err)
+	}
+
+	// And relates parties like any other: each side has to play its role.
+	var debtor papp.PartyDTO
+	e.must(e.do("POST", "/api/persons", e.admin, map[string]any{"givenName": "Dora", "firstSurname": "Deudora " + tag,
+		"roles": []string{domain.RoleCustomer.String()}}, &debtor), 201, "a customer")
+	var rel papp.RelationshipDTO
+	e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": relType.ID, "fromParty": person.ID, "toParty": debtor.ID}, &rel),
+		201, "a relationship of the new type")
+	if rel.TypeName != "Guarantee" || !rel.Active || rel.FromRole != added.ID {
+		t.Fatalf("relationship of the new type: %+v", rel)
+	}
+	e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": relType.ID, "fromParty": debtor.ID, "toParty": person.ID}, nil),
+		422, "the sides the other way round do not play the roles")
 }
 
 func endToEnd(t *testing.T, newDirectory func(*testing.T) directory) {

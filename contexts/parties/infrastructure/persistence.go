@@ -439,6 +439,12 @@ func (c SQLCatalogs) RelationshipTypes(ctx context.Context) ([]domain.Relationsh
 	return out, nil
 }
 
+// AddRelationshipType implements domain.Catalogs.
+func (c SQLCatalogs) AddRelationshipType(ctx context.Context, t domain.RelationshipType) error {
+	return c.db.Insert(ctx, "relationship_types", sqlrepo.Values{"id": t.ID, "name": t.Name.String(), "description": nullable(t.Description),
+		"from_role": t.FromRole, "to_role": t.ToRole, "hierarchical": t.Hierarchical, "code": nullable(t.Code)})
+}
+
 // DocumentTypes implements domain.Catalogs.
 func (c SQLCatalogs) DocumentTypes(ctx context.Context) ([]domain.DocumentType, error) {
 	rows, err := c.db.Select(ctx, "document_types", []string{"id", "code", "name", "default_pattern", "requires_expiry",
@@ -547,8 +553,9 @@ func (c SQLCatalogs) FacilityRoleTypes(ctx context.Context) ([]domain.FacilityRo
 type WellKnownCatalogs struct{ added *addedRoleTypes }
 
 type addedRoleTypes struct {
-	mu    sync.Mutex
-	types []domain.RoleType
+	mu            sync.Mutex
+	types         []domain.RoleType
+	relationships []domain.RelationshipType
 }
 
 // memoryCatalogs holds the role types added to each memory store.
@@ -577,8 +584,25 @@ func (c WellKnownCatalogs) AddRoleType(_ context.Context, t domain.RoleType) err
 }
 
 // RelationshipTypes implements domain.Catalogs.
-func (WellKnownCatalogs) RelationshipTypes(context.Context) ([]domain.RelationshipType, error) {
-	return domain.WellKnownRelationshipTypes(), nil
+func (c WellKnownCatalogs) RelationshipTypes(context.Context) ([]domain.RelationshipType, error) {
+	out := domain.WellKnownRelationshipTypes()
+	if c.added != nil {
+		c.added.mu.Lock()
+		defer c.added.mu.Unlock()
+		out = append(out, c.added.relationships...)
+	}
+	return out, nil
+}
+
+// AddRelationshipType implements domain.Catalogs.
+func (c WellKnownCatalogs) AddRelationshipType(_ context.Context, t domain.RelationshipType) error {
+	if c.added == nil {
+		return fmt.Errorf("%w: these catalogs are the seed alone and take no relationship types", fw.ErrUnsupported)
+	}
+	c.added.mu.Lock()
+	defer c.added.mu.Unlock()
+	c.added.relationships = append(c.added.relationships, t)
+	return nil
 }
 
 // DocumentTypes implements domain.Catalogs.
@@ -648,6 +672,10 @@ func SwappableCatalogs(sw *hotswap.Switch) domain.Catalogs {
 
 type swappableCatalogs struct {
 	b *hotswap.Binding[domain.Catalogs]
+}
+
+func (c swappableCatalogs) AddRelationshipType(ctx context.Context, t domain.RelationshipType) error {
+	return c.b.With(ctx, func(ctx context.Context, x domain.Catalogs) error { return x.AddRelationshipType(ctx, t) })
 }
 
 func (c swappableCatalogs) AddRoleType(ctx context.Context, t domain.RoleType) error {

@@ -77,6 +77,19 @@ func TestPartiesContext(t *testing.T) {
 			if types, err = svc.ListRoleTypes.Handle(ctx, papp.ListRoleTypes{}); err != nil || len(types) != len(domain.WellKnownRoleTypes())+1 {
 				t.Fatalf("role types after adding one: %d %v", len(types), err)
 			}
+			guarantee, err := svc.DefineRelationshipType.Handle(ctx, papp.DefineRelationshipType{Name: "Guarantee", Code: "guarantee",
+				FromRole: guarantor.ID, ToRole: domain.RoleCustomer.String()})
+			if err != nil || guarantee.WellKnown || guarantee.Hierarchical || guarantee.FromRole != guarantor.ID {
+				t.Fatalf("adding a relationship type: %+v %v", guarantee, err)
+			}
+			if _, err := svc.DefineRelationshipType.Handle(ctx, papp.DefineRelationshipType{Name: "Aval", Code: "guarantee",
+				FromRole: guarantor.ID, ToRole: domain.RoleCustomer.String()}); !errors.Is(err, fw.ErrRuleViolation) {
+				t.Fatalf("a relationship type code already taken: %v", err)
+			}
+			relTypes, err := svc.ListRelationshipTypes.Handle(ctx, papp.ListRelationshipTypes{})
+			if err != nil || len(relTypes) != len(domain.WellKnownRelationshipTypes())+1 {
+				t.Fatalf("relationship types after adding one: %d %v", len(relTypes), err)
+			}
 			acme, err := svc.RegisterOrganization.Handle(ctx, papp.RegisterOrganization{LegalName: "Acme Sociedad Anónima", TradeName: "Acme",
 				Roles: []string{domain.RoleInternalOrganization.String()}})
 			if err != nil {

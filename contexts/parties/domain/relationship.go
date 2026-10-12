@@ -31,6 +31,54 @@ type RelationshipType struct {
 	Code string
 }
 
+// NewRelationshipType builds a relationship type somebody adds to the catalog: which role each
+// side plays. It carries no data of its own and is not hierarchical (the types that are have
+// rules of the program hanging from them). Whether the roles exist, and whether the name and the
+// code are free, is checked against the catalogs (AdmitsRelationshipType).
+func NewRelationshipType(id RelationshipTypeID, name, description, code string, from, to RoleTypeID) (RelationshipType, error) {
+	var v fw.Validation
+	n, err := vocab.NewName(name)
+	v.Merge("", err)
+	description = strings.Join(strings.Fields(description), " ")
+	v.Require(len([]rune(description)) <= 500, "description", "length", "description must have at most 500 characters")
+	code = strings.TrimSpace(code)
+	v.Require(code == "" || (len(code) <= MaxTypeCode && typeCode.MatchString(code)), "code", "format",
+		"code is written in lower case letters, digits and hyphens, starts with a letter and has at most 40 characters")
+	v.Require(!id.IsZero(), "id", "required", "id is required")
+	v.Require(!from.IsZero(), "fromRole", "required", "the role of the first side is required")
+	v.Require(!to.IsZero(), "toRole", "required", "the role of the second side is required")
+	if err := v.Err(); err != nil {
+		return RelationshipType{}, err
+	}
+	return RelationshipType{ID: id, Code: code, Name: n, Description: description, FromRole: from, ToRole: to}, nil
+}
+
+// AdmitsRelationshipType checks that a new relationship type fits the catalogs: its roles exist,
+// and no relationship type has its name (whatever the case) or its code.
+func AdmitsRelationshipType(roles RoleCatalog, types map[RelationshipTypeID]RelationshipType, t RelationshipType) error {
+	var v fw.Validation
+	for field, role := range map[string]RoleTypeID{"fromRole": t.FromRole, "toRole": t.ToRole} {
+		if _, ok := roles.RoleType(role); !ok {
+			v.Add(field, "unknown", "unknown role type "+role.String())
+		}
+	}
+	if err := v.Err(); err != nil {
+		return err
+	}
+	if _, dup := types[t.ID]; dup {
+		return fw.Violation("parties.relationship_type_exists", "the relationship type "+t.ID.String()+" already exists")
+	}
+	for _, other := range types {
+		if strings.EqualFold(other.Name.String(), t.Name.String()) {
+			return fw.Violation("parties.relationship_type_name_taken", "there is already a relationship type called "+other.Name.String())
+		}
+		if t.Code != "" && other.Code == t.Code {
+			return fw.Violation("parties.relationship_type_code_taken", "there is already a relationship type with the code "+t.Code)
+		}
+	}
+	return nil
+}
+
 // IndexRelationshipTypes indexes the catalog by id, refusing two types with the same code.
 func IndexRelationshipTypes(types []RelationshipType) (map[RelationshipTypeID]RelationshipType, error) {
 	out := make(map[RelationshipTypeID]RelationshipType, len(types))

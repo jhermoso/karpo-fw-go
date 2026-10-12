@@ -21,6 +21,12 @@ const (
 	AppliesToOrganization Applicability = "organization"
 )
 
+// RoleTypeKind and RelationshipTypeKind name the catalog entries in the audit log.
+const (
+	RoleTypeKind         = "parties.role_type"
+	RelationshipTypeKind = "parties.relationship_type"
+)
+
 // RoleType is an entry of the role type catalog. Categories group roles and cannot be assigned
 // (the C# IsTag). A role type may have one parent; a party playing a role also plays every
 // ancestor role (virtual inheritance: ancestors are derived, never stored).

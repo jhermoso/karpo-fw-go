@@ -154,6 +154,17 @@ func WellKnownRoleCatalog() *Catalog {
 	return c
 }
 
+// IsWellKnownRelationshipType reports whether a relationship type comes with the program rather
+// than having been added to the catalog.
+func IsWellKnownRelationshipType(id RelationshipTypeID) bool {
+	for _, t := range WellKnownRelationshipTypes() {
+		if t.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
 // WellKnownRelationshipTypes returns the seed of the relationship type catalog.
 func WellKnownRelationshipTypes() []RelationshipType {
 	return []RelationshipType{
