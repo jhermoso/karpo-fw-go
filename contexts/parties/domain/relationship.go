@@ -57,9 +57,12 @@ func NewRelationshipType(id RelationshipTypeID, name, description, code string, 
 // and no relationship type has its name (whatever the case) or its code.
 func AdmitsRelationshipType(roles RoleCatalog, types map[RelationshipTypeID]RelationshipType, t RelationshipType) error {
 	var v fw.Validation
-	for field, role := range map[string]RoleTypeID{"fromRole": t.FromRole, "toRole": t.ToRole} {
-		if _, ok := roles.RoleType(role); !ok {
-			v.Add(field, "unknown", "unknown role type "+role.String())
+	for _, side := range []struct {
+		field string
+		role  RoleTypeID
+	}{{"fromRole", t.FromRole}, {"toRole", t.ToRole}} {
+		if _, ok := roles.RoleType(side.role); !ok {
+			v.Add(side.field, "unknown", "unknown role type "+side.role.String())
 		}
 	}
 	if err := v.Err(); err != nil {

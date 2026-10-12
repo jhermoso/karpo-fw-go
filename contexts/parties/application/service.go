@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"fmt"
+	"sync"
 	"strings"
 	"time"
 
@@ -97,6 +98,12 @@ func (s service) roleCatalog(ctx context.Context) (*domain.Catalog, error) {
 	}
 	return domain.NewRoleCatalog(types, domain.RolePersonCategory, domain.RoleOrganizationCategory)
 }
+
+// catalogMu lets one addition to a catalog in at a time. That a name and a code are free is
+// read before writing, and a catalog with a code twice cannot be loaded: two additions at once
+// with the same code would both fit and leave every use case of the context failing. It holds
+// while there is one process (docs/ANFITRION.md); several need a unique index (BACKLOG.md).
+var catalogMu sync.Mutex
 
 // catalogAdded leaves in the audit log, in the unit of work of ctx, that somebody added an entry
 // to a catalog: who, when and what it says. A catalog entry is not an aggregate, so nobody else
@@ -441,6 +448,8 @@ func NewService(d Deps) *Service {
 		if !scopeOf(ctx).global {
 			return RoleTypeDTO{}, fmt.Errorf("%w: the role catalog belongs to the whole installation", fw.ErrForbidden)
 		}
+		catalogMu.Lock()
+		defer catalogMu.Unlock()
 		parent, err := parseRoleType(c.Parent)
 		if err != nil {
 			var v fw.Validation
@@ -478,6 +487,8 @@ func NewService(d Deps) *Service {
 		if !scopeOf(ctx).global {
 			return RelationshipTypeDTO{}, fmt.Errorf("%w: the relationship catalog belongs to the whole installation", fw.ErrForbidden)
 		}
+		catalogMu.Lock()
+		defer catalogMu.Unlock()
 		var v fw.Validation
 		from, err := parseRoleType(c.FromRole)
 		v.Require(err == nil, "fromRole", "format", "fromRole must be a role type id")
