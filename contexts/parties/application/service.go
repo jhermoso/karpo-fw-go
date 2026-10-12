@@ -57,6 +57,7 @@ type Service struct {
 	SetProspectTrial      app.CommandHandler[SetProspectTrial, RelationshipDTO]
 	SetOwnershipShare     app.CommandHandler[SetOwnershipShare, RelationshipDTO]
 	SetPromotionCode      app.CommandHandler[SetPromotionCode, RelationshipDTO]
+	SetCustomerNumber     app.CommandHandler[SetCustomerNumber, RelationshipDTO]
 	AddIdentification     app.CommandHandler[AddIdentification, PartyDTO]
 	RemoveIdentification  app.CommandHandler[RemoveIdentification, PartyDTO]
 	AddContact            app.CommandHandler[AddContact, PartyDTO]

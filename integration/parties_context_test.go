@@ -224,6 +224,34 @@ func TestPartiesContext(t *testing.T) {
 			if err != nil || len(pedro.Organizations) != 1 || pedro.Organizations[0] != acme.ID {
 				t.Fatalf("register in scope: %+v %v", pedro, err)
 			}
+			// Migration 17: the customer number is a detail of the customer relationship.
+			pedroID, _ := domain.ParsePartyID(pedro.ID)
+			buys, err := svc.Relationships.Handle(clerkCtx, papp.PartyRelationships{PartyID: pedroID, ActiveOnly: true})
+			if err != nil || len(buys) != 1 || buys[0].Customer == nil || buys[0].Customer.Number != "" {
+				t.Fatalf("pedro's customer relationship: %+v %v", buys, err)
+			}
+			buysID, _ := domain.ParseRelationshipID(buys[0].ID)
+			numbered, err := svc.SetCustomerNumber.Handle(clerkCtx, papp.SetCustomerNumber{ID: buysID, CustomerNumber: " c-4300001 "})
+			if err != nil || numbered.Customer.Number != "C-4300001" {
+				t.Fatalf("numbering a customer: %+v %v", numbered, err)
+			}
+			if again, err := svc.Relationships.Handle(clerkCtx, papp.PartyRelationships{PartyID: pedroID}); err != nil || again[0].Customer.Number != "C-4300001" {
+				t.Fatalf("the customer number read back: %+v %v", again, err)
+			}
+			rival, err := svc.RegisterOrganization.Handle(clerkCtx, papp.RegisterOrganization{LegalName: "Rival Sociedad Limitada",
+				Affiliation: &papp.NewAffiliation{Organization: acme.ID, RelationshipType: domain.RelCustomer.String()}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			rivalID, _ := domain.ParsePartyID(rival.ID)
+			hers, err := svc.Relationships.Handle(clerkCtx, papp.PartyRelationships{PartyID: rivalID})
+			if err != nil || len(hers) != 1 {
+				t.Fatalf("the rival's customer relationship: %+v %v", hers, err)
+			}
+			hersID, _ := domain.ParseRelationshipID(hers[0].ID)
+			if _, err := svc.SetCustomerNumber.Handle(clerkCtx, papp.SetCustomerNumber{ID: hersID, CustomerNumber: "C-4300001"}); !errors.Is(err, fw.ErrRuleViolation) {
+				t.Fatalf("the number of another customer of the organization: %v", err)
+			}
 			seen, err := svc.Search.Handle(clerkCtx, papp.SearchParties{Kind: "person"})
 			if err != nil || seen.Total != 1 || seen.Items[0].ID != pedro.ID { // ana's employment was terminated; luis never related
 				names := []string{}

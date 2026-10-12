@@ -200,6 +200,10 @@ func Migrations() sqlrepo.MigrationSet {
 		// A stable code for the role types, as the relationship types have (docs/EXTENSIBILIDAD.md, X-3).
 		{Version: 16, Name: "role type codes", Up: sqlrepo.RenderDDLAll(
 			`ALTER TABLE role_types {add:code} {str:40}{addEnd}`), Run: seedRoleCodes},
+		// The number an organization knows its customer by belongs to the pair (docs/PARTIES-MODELO-COMUN.md, D-10).
+		{Version: 17, Name: "customer relationship details: customer number", Up: sqlrepo.RenderDDLAll(
+			`ALTER TABLE party_relationships {add:customer_number} {str:20}{addEnd}`,
+			`CREATE INDEX ix_party_rel_customer_no ON party_relationships (to_party, customer_number)`)},
 	}}
 }
 

@@ -31,6 +31,35 @@ func addRelationshipDetails(svc *Service, s service) {
 		})
 	}, pipeline.RetryOnConflict[SetOwnershipShare, RelationshipDTO](3, 10*time.Millisecond))
 
+	svc.SetCustomerNumber = chain(PermRelationshipUpdate, func(ctx context.Context, c SetCustomerNumber) (RelationshipDTO, error) {
+		number := domain.NormalizeCustomerNumber(c.CustomerNumber)
+		if number != "" {
+			// A number tells one customer of the organization from the others, for good: it is
+			// not handed to another customer when the relationship ends, and the same customer
+			// keeps it if it comes back. Asked before the change, with its own read: who may not
+			// see the relationship is told so below.
+			if r, err := s.relationships.Repository().Get(ctx, c.ID); err == nil {
+				same, err := s.relationships.Repository().Find(ctx, spec.And(domain.RelFieldType.Eq(r.Type()), domain.RelFieldTo.Eq(r.To()),
+					domain.RelFieldCustomerNumber.Eq(number)))
+				if err != nil {
+					return RelationshipDTO{}, err
+				}
+				for _, o := range same {
+					if o.From() != r.From() {
+						if _, _, _, err := s.writableRelationship(ctx, c.ID); err != nil {
+							return RelationshipDTO{}, err
+						}
+						return RelationshipDTO{}, fw.Violation("parties.duplicate_customer_number",
+							"another customer of the organization has, or had, that customer number")
+					}
+				}
+			}
+		}
+		return s.changeDetails(ctx, c.ID, func(r *domain.Relationship, rt domain.RelationshipType) error {
+			return r.SetCustomerNumber(rt, number)
+		})
+	}, pipeline.RetryOnConflict[SetCustomerNumber, RelationshipDTO](3, 10*time.Millisecond))
+
 	svc.SetPromotionCode = chain(PermRelationshipUpdate, func(ctx context.Context, c SetPromotionCode) (RelationshipDTO, error) {
 		code := domain.NormalizePromotionCode(c.PromotionCode)
 		if code != "" {

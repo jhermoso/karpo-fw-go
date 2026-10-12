@@ -210,6 +210,13 @@ type SetOwnershipShare struct {
 	Share *string               `json:"share"`
 }
 
+// SetCustomerNumber gives a customer its number in the organization, changes it or (with an
+// empty number) takes it away.
+type SetCustomerNumber struct {
+	ID             domain.RelationshipID `json:"-"`
+	CustomerNumber string                `json:"customerNumber"`
+}
+
 // SetPromotionCode gives a collaborator its promotion code, changes it or (with an empty code)
 // takes it away.
 type SetPromotionCode struct {

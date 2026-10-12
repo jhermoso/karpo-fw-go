@@ -118,7 +118,23 @@ type RelationshipDetails struct {
 	Prospect     ProspectDetails     // types with code CodeProspect
 	Ownership    OwnershipDetails    // types with code CodeOwnership
 	Collaborator CollaboratorDetails // types with code CodeCollaborator
+	Customer     CustomerDetails     // types with code CodeCustomer
 }
+
+// CustomerDetails are the data of a customer relationship: the number the internal organization
+// knows the customer by. Each organization numbers its own customers, so the number belongs to
+// the pair and not to the customer (in the C# it was in the Customer role, one for everybody, and
+// again in the commercial profile of the relationship).
+type CustomerDetails struct {
+	// Number is written in capitals; empty when the organization has given none.
+	Number string
+}
+
+// MaxCustomerNumber is the length of the longest customer number.
+const MaxCustomerNumber = 20
+
+// NormalizeCustomerNumber writes a customer number as it is kept and compared.
+func NormalizeCustomerNumber(s string) string { return strings.ToUpper(strings.TrimSpace(s)) }
 
 // CollaboratorDetails are the data of a collaborator relationship: the code the collaborator
 // gives to whom it refers, by which the internal organization knows whose a piece of business is.
@@ -376,6 +392,35 @@ func (r *Relationship) SetPromotionCode(t RelationshipType, code string) error {
 	return nil
 }
 
+// CustomerNumber returns the number the organization knows the customer by ("" when none or not
+// a customer relationship).
+func (r *Relationship) CustomerNumber() string { return r.details.Customer.Number }
+
+// SetCustomerNumber gives the customer its number in the organization, changes it or (with "")
+// takes it away: up to 20 letters, digits, dashes, dots, slashes and underscores. t is the type
+// of the relationship: only the types with code CodeCustomer carry one. That no other customer of
+// the organization has the number is for who calls to check.
+func (r *Relationship) SetCustomerNumber(t RelationshipType, number string) error {
+	if t.ID != r.relType || t.Code != CodeCustomer {
+		return fw.Violation("parties.not_a_customer_relationship", "only a customer relationship has a customer number")
+	}
+	if err := r.requireOpen(); err != nil {
+		return err
+	}
+	number = NormalizeCustomerNumber(number)
+	valid := len(number) <= MaxCustomerNumber
+	for _, c := range number {
+		valid = valid && (c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '_' || c == '.' || c == '/')
+	}
+	if !valid {
+		var v fw.Validation
+		v.Add("customerNumber", "format", "up to 20 letters, digits, dashes, dots, slashes and underscores")
+		return v.Err()
+	}
+	r.details.Customer.Number = number
+	return nil
+}
+
 // AuditSnapshot implements traits.Snapshotter.
 func (r *Relationship) AuditSnapshot() map[string]any {
 	format := func(t *time.Time) string {
@@ -386,7 +431,8 @@ func (r *Relationship) AuditSnapshot() map[string]any {
 	}
 	return map[string]any{"type": r.relType.String(), "from": r.from.String(), "to": r.to.String(),
 		"since": r.Since().Format(time.RFC3339), "until": format(r.Until()), "remark": r.remark,
-		"trialUntil": format(r.TrialUntil()), "share": shareText(r.OwnershipShare()), "promotionCode": r.PromotionCode()}
+		"trialUntil": format(r.TrialUntil()), "share": shareText(r.OwnershipShare()), "promotionCode": r.PromotionCode(),
+		"customerNumber": r.CustomerNumber()}
 }
 
 // shareText renders a stake with two decimals ("" for nil).
