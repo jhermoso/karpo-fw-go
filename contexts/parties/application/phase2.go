@@ -31,8 +31,8 @@ type RemoveIdentification struct {
 
 // AddressDTO is the transport representation of a postal address.
 type AddressDTO struct {
-	StreetType    string `json:"streetType,omitempty"`
-	Line1         string `json:"line1"`
+	StreetType string `json:"streetType,omitempty"`
+	Line1      string `json:"line1"`
 	// Where in the street, piece by piece (Spanish forms ask for them one by one). All optional.
 	Number          string `json:"number,omitempty"`
 	NumberQualifier string `json:"numberQualifier,omitempty"` // bis, duplicado
@@ -41,14 +41,14 @@ type AddressDTO struct {
 	Staircase       string `json:"staircase,omitempty"`
 	Floor           string `json:"floor,omitempty"`
 	Door            string `json:"door,omitempty"`
-	Line2         string `json:"line2,omitempty"`
-	Directions    string `json:"directions,omitempty"`
-	PostalCode    string `json:"postalCode,omitempty"`
-	Locality      string `json:"locality,omitempty"`
-	Region        string `json:"region,omitempty"`
-	Country       string `json:"country"`
-	GeoPostalCode string `json:"geoPostalCode,omitempty"` // Geography context ids
-	GeoBoundary   string `json:"geoBoundary,omitempty"`
+	Line2           string `json:"line2,omitempty"`
+	Directions      string `json:"directions,omitempty"`
+	PostalCode      string `json:"postalCode,omitempty"`
+	Locality        string `json:"locality,omitempty"`
+	Region          string `json:"region,omitempty"`
+	Country         string `json:"country"`
+	GeoPostalCode   string `json:"geoPostalCode,omitempty"` // Geography context ids
+	GeoBoundary     string `json:"geoBoundary,omitempty"`
 }
 
 // AddContact adds a contact to a party.

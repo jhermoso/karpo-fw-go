@@ -133,10 +133,14 @@ func TestRoleTypes_CodesAndAdding(t *testing.T) {
 		t.Fatalf("a new role type under Person fits: %v", err)
 	}
 	for what, bad := range map[string]func() (domain.RoleType, error){
-		"no name":        func() (domain.RoleType, error) { return domain.NewRoleType(id, " ", "", "", domain.RolePersonCategory) },
-		"no parent":      func() (domain.RoleType, error) { return domain.NewRoleType(id, "X", "", "", domain.RoleTypeID{}) },
-		"code in capitals": func() (domain.RoleType, error) { return domain.NewRoleType(id, "X", "", "Guarantor", domain.RolePersonCategory) },
-		"code ending in a hyphen": func() (domain.RoleType, error) { return domain.NewRoleType(id, "X", "", "guarantor-", domain.RolePersonCategory) },
+		"no name":   func() (domain.RoleType, error) { return domain.NewRoleType(id, " ", "", "", domain.RolePersonCategory) },
+		"no parent": func() (domain.RoleType, error) { return domain.NewRoleType(id, "X", "", "", domain.RoleTypeID{}) },
+		"code in capitals": func() (domain.RoleType, error) {
+			return domain.NewRoleType(id, "X", "", "Guarantor", domain.RolePersonCategory)
+		},
+		"code ending in a hyphen": func() (domain.RoleType, error) {
+			return domain.NewRoleType(id, "X", "", "guarantor-", domain.RolePersonCategory)
+		},
 	} {
 		if _, err := bad(); !errors.Is(err, fw.ErrValidation) {
 			t.Errorf("%s: %v", what, err)
