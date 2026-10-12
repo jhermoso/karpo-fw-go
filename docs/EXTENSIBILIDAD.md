@@ -1,9 +1,8 @@
 # Extensibilidad: añadir datos a una entidad sin una versión nueva del programa
 
-> **Estado: el requisito está decidido; el cómo y el dónde, no.** Segunda versión, del
-> 2026-10-12. La primera recomendaba empezar por la extensión hecha con código; Javier decidió
-> lo contrario (§1) y esta versión parte de lo que Trench ya tiene funcionando (§3).
-> Lo que queda por definir con él está en §6.
+> **Estado: definida con Javier el 2026-10-12** (§1 y §6). Sin implementar. Tercera versión: la
+> primera recomendaba empezar por la extensión hecha con código; Javier decidió lo contrario, y
+> el diseño parte de lo que Trench ya tiene funcionando (§3). Los pasos están en §7.
 >
 > Viene de [PARTIES-MODELO-COMUN.md](PARTIES-MODELO-COMUN.md), decisiones D-6, D-12 y D-16.
 
@@ -18,6 +17,18 @@
 | 5 | Los datos nuevos van en **tablas uno a uno** con la entidad (D-6) |
 | 6 | Es un **requisito del programa generado**, no de Theros: primero la implementan Karpo y Trench, y de ahí salen las plantillas (D-12) |
 | 7 | Hay que **llevarla también a Trench** (fuera del sector financiero, donde ya está) |
+| 8 | **Un campo es de toda la instalación o de una empresa** (los dos ámbitos). Ejemplo: «matrícula» para todo el grupo; «código de obra» sólo para la constructora |
+| 9 | **La pantalla es un apartado de administración**, «Campos personalizados», con una entrada por entidad y **un permiso propio**, distinto del de administrar usuarios |
+| 10 | **Reglas, para empezar, las de Trench**: tipo de valor de una lista cerrada, obligatorio y «obligatorio si aquel otro campo sí/no vale sí». Sin lenguaje de expresiones |
+| 11 | **Más adelante** se estudia añadir tipos que sean objetos valor o colecciones de entidades. Eso equivale a añadir relaciones y no sólo campos, así que **se piensa antes de intentarlo**: no está diseñado |
+| 12 | **La primera entidad** fuera del sector financiero es **el tipo de rol de Parties**: «Avalista» con el campo «importe máximo» |
+| 13 | **Lo generaliza primero Trench**, que ya lo tiene hecho; Go lo implementa después contra el mismo contrato |
+
+Se heredan de Trench, sin que Javier haya dicho otra cosa (§3.2): retirar un campo lo quita de
+la definición y conserva la columna y sus datos; y el programa enseña el plan antes de aplicarlo.
+
+Tomado por defecto, pendiente de que Javier lo confirme: los campos de la instalación sólo los
+crea un administrador global; los de una empresa, también el administrador de esa empresa.
 
 ## 2. El problema, con tres ejemplos
 
@@ -144,28 +155,49 @@ framework, igual en Go, en Karpo C# y en Trench.
 6. **El «color» de Theros.** Una tabla de extensión es, para C#, una tabla más de las de
    herencia por tabla; para Go es una tabla nueva. Vale para los dos.
 
-## 6. Lo que queda por definir con Javier
+## 6. Cómo queda, con el ejemplo elegido
 
-Las tres primeras son las del recordatorio; las otras dos salen de leer Trench.
+Un administrador abre «Campos personalizados → Tipo de rol → Avalista» y añade «importe
+máximo», decimal y obligatorio, para toda la instalación.
 
-1. **¿Dónde vive la pantalla, y con qué permiso?** Recomiendo un apartado de administración por
-   entidad («Campos de Pedido»), con un permiso propio distinto del de administrar usuarios.
-   *Alternativa:* un botón «añadir campo» en cada formulario, visible sólo con el permiso.
-2. **¿Los campos son por empresa, como en Trench, o también para toda la instalación?**
-   Recomiendo los dos ámbitos: un campo de la instalación lo ven todas las empresas; uno de una
-   empresa, sólo ella. *Ejemplo:* «matrícula» para todo el grupo; «código de obra» sólo para
-   la constructora.
-3. **¿Cuál es la primera entidad fuera del sector financiero?** Recomiendo el tipo de rol de
-   Parties («Avalista con importe»), porque es el caso de D-6 y ejercita campos por tipo.
-   *Alternativa:* el pedido de ventas.
-4. **¿Se mantiene «sin lenguaje de reglas»?** En Trench lo decidiste así. Recomiendo
-   mantenerlo: tipo, obligatorio y «obligatorio si». Lo que pida más es código.
-5. **¿Quién lo generaliza primero?** Trench tiene el mecanismo hecho y es quien menos tiene
-   que escribir; Go tiene que escribirlo entero. Recomiendo que Trench lo saque de
-   `FinancialKernel` a su framework y que Go lo implemente contra el mismo contrato, para que
-   el documento de campos sea el mismo en los tres.
+1. El programa le enseña el plan: «se creará la tabla de extensión de los roles de party, con
+   la columna `importe_maximo`».
+2. Al aplicar, la tabla existe. Nadie ha instalado una versión nueva.
+3. Desde ese momento, asignar el rol «Avalista» pide el importe; sin él, la asignación se
+   rechaza nombrando el campo. Asignar cualquier otro rol no lo pide.
+4. Al leer la party, el rol trae su bloque de campos añadidos.
+5. Si un día se retira el campo, deja de pedirse y de enseñarse; lo guardado se conserva.
 
-## 7. Límites
+La empresa constructora del grupo añade después «código de obra» sólo para ella: va a su propia
+tabla de extensión, y las demás empresas ni lo ven ni lo piden.
+
+**Lo que este ejemplo obliga a resolver** y Trench no tiene (allí los campos cuelgan de un
+producto, no de un tipo de catálogo):
+
+- Que una definición de campos se enganche a **un tipo** de una entidad, no a la entidad entera.
+  Hace falta dar un código estable a los tipos de rol, como ya lo tienen los de relación.
+- Que convivan **dos tablas** de extensión por entidad: la de la instalación y la de cada
+  empresa.
+- Qué empresa «es» la de un rol de party, para saber qué campos de empresa se le aplican. Un
+  rol no pertenece a una empresa; una relación sí. **Sin resolver**: puede que los campos por
+  empresa sólo tengan sentido en entidades que ya son de una empresa (relaciones, pedidos) y que
+  en los roles sólo quepan los de la instalación.
+
+## 7. Pasos
+
+| # | Paso | Quién | Hecho cuando |
+|---|---|---|---|
+| X-1 | Escribir el **contrato común**: el documento que declara los campos (el de §3.1, sin lo que es propio de un producto financiero) y las rutas de administración | Trench, que parte del suyo; Go lo revisa | Las dos sesiones dan el mismo documento por bueno |
+| X-2 | Sacar el mecanismo de `FinancialKernel` al framework de Trench, con los dos ámbitos y el enganche a un tipo | Trench | El caso «Avalista» funciona en Trench |
+| X-3 | Código estable en los tipos de rol; añadir por HTTP un tipo de rol sin campos (D-6, caso 1) | Go | Un tipo de rol nuevo con su padre se crea y se asigna; uno que cierra un ciclo se rechaza |
+| X-4 | El mecanismo en el framework de Go contra el contrato de X-1: definición, plan, aplicación en los motores, validación, lectura compuesta | Go | El caso «Avalista» funciona en Go, en memoria y en los motores |
+| X-5 | Karpo C# lo recibe de Trench | Karpo C# | El mismo caso funciona allí |
+| X-6 | La pantalla de administración en el front | Front de Karpo | Un administrador añade el campo sin tocar código |
+| X-7 | Plantillas en Theros, cuando las tres implementaciones coincidan | Theros | Lo generado pasa la batería de X-4 |
+
+No he estimado tiempos. X-3 no depende de nadie y se puede empezar ya en Go.
+
+## 8. Límites
 
 - De Trench he leído los contratos (`ExtensionSchemaContracts.cs`), la forma normalizada de
   la definición (`DefinitionShape.cs`), el portador de valores y las secciones §45.2 y §46.6.1
