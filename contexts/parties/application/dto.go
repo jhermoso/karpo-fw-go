@@ -209,7 +209,7 @@ type RelationshipDTO struct {
 	Collaborator *CollaboratorDTO `json:"collaborator,omitempty"`
 	// Customer is present in customer relationships only.
 	Customer *CustomerDTO `json:"customer,omitempty"`
-	Version      int64            `json:"version"`
+	Version  int64        `json:"version"`
 }
 
 // CustomerDTO are the details of a customer relationship.
