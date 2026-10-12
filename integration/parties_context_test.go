@@ -86,9 +86,8 @@ func TestPartiesContext(t *testing.T) {
 				FromRole: guarantor.ID, ToRole: domain.RoleCustomer.String()}); !errors.Is(err, fw.ErrRuleViolation) {
 				t.Fatalf("a relationship type code already taken: %v", err)
 			}
-			relTypes, err := svc.ListRelationshipTypes.Handle(ctx, papp.ListRelationshipTypes{})
-			if err != nil || len(relTypes) != len(domain.WellKnownRelationshipTypes())+1 {
-				t.Fatalf("relationship types after adding one: %d %v", len(relTypes), err)
+			if all, err := svc.ListRelationshipTypes.Handle(ctx, papp.ListRelationshipTypes{}); err != nil || len(all) != len(domain.WellKnownRelationshipTypes())+1 {
+				t.Fatalf("relationship types after adding one: %d %v", len(all), err)
 			}
 			acme, err := svc.RegisterOrganization.Handle(ctx, papp.RegisterOrganization{LegalName: "Acme Sociedad Anónima", TradeName: "Acme",
 				Roles: []string{domain.RoleInternalOrganization.String()}})
@@ -266,7 +265,7 @@ func TestPartiesContext(t *testing.T) {
 			// Details by relationship type (docs/PARTIES-UDM.md): the codes read from SQL, the
 			// prospect relationship added by migration 11 and its trial in a nullable column.
 			relTypes, err := svc.ListRelationshipTypes.Handle(ctx, papp.ListRelationshipTypes{})
-			if err != nil || len(relTypes) != len(domain.WellKnownRelationshipTypes()) {
+			if err != nil || len(relTypes) != len(domain.WellKnownRelationshipTypes())+1 { // the seed and the one added above
 				t.Fatalf("seeded relationship types: %d %v", len(relTypes), err)
 			}
 			for _, rt := range relTypes {
