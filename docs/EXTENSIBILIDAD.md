@@ -23,12 +23,13 @@
 | 11 | **Más adelante** se estudia añadir tipos que sean objetos valor o colecciones de entidades. Eso equivale a añadir relaciones y no sólo campos, así que **se piensa antes de intentarlo**: no está diseñado |
 | 12 | **La primera entidad** fuera del sector financiero es **el tipo de rol de Parties**: «Avalista» con el campo «importe máximo» |
 | 13 | **Lo generaliza primero Trench**, que ya lo tiene hecho; Go lo implementa después contra el mismo contrato |
+| 14 | **Los campos por empresa sólo caben en entidades que son de una empresa** (relaciones, pedidos, reservas). En las que no lo son, como un rol de party, sólo caben campos de la instalación |
 
 Se heredan de Trench, sin que Javier haya dicho otra cosa (§3.2): retirar un campo lo quita de
 la definición y conserva la columna y sus datos; y el programa enseña el plan antes de aplicarlo.
 
-Tomado por defecto, pendiente de que Javier lo confirme: los campos de la instalación sólo los
-crea un administrador global; los de una empresa, también el administrador de esa empresa.
+Tomado por defecto, sin que Javier lo haya corregido: los campos de la instalación sólo los crea
+un administrador global; los de una empresa, también el administrador de esa empresa.
 
 ## 2. El problema, con tres ejemplos
 
@@ -168,8 +169,9 @@ máximo», decimal y obligatorio, para toda la instalación.
 4. Al leer la party, el rol trae su bloque de campos añadidos.
 5. Si un día se retira el campo, deja de pedirse y de enseñarse; lo guardado se conserva.
 
-La empresa constructora del grupo añade después «código de obra» sólo para ella: va a su propia
-tabla de extensión, y las demás empresas ni lo ven ni lo piden.
+La empresa constructora del grupo añade después «código de obra» a **sus pedidos**: va a su
+propia tabla de extensión, y las demás empresas ni lo ven ni lo piden. No puede añadirlo a un
+rol de party, porque un rol no es de ninguna empresa (decisión 14).
 
 **Lo que este ejemplo obliga a resolver** y Trench no tiene (allí los campos cuelgan de un
 producto, no de un tipo de catálogo):
@@ -178,10 +180,8 @@ producto, no de un tipo de catálogo):
   Hace falta dar un código estable a los tipos de rol, como ya lo tienen los de relación.
 - Que convivan **dos tablas** de extensión por entidad: la de la instalación y la de cada
   empresa.
-- Qué empresa «es» la de un rol de party, para saber qué campos de empresa se le aplican. Un
-  rol no pertenece a una empresa; una relación sí. **Sin resolver**: puede que los campos por
-  empresa sólo tengan sentido en entidades que ya son de una empresa (relaciones, pedidos) y que
-  en los roles sólo quepan los de la instalación.
+- Que cada entidad extensible declare **si es de una empresa** y, si lo es, cuál es el dato que
+  lo dice. De eso depende qué ámbitos admite (decisión 14).
 
 ## 7. Pasos
 
