@@ -255,9 +255,10 @@ func (p *Party) AddIdentification(policy *DocumentPolicy, d IdentificationData, 
 		}
 	}
 	p.identifications = append(ids, id)
-	if d.Type != DocOther {
-		// A document that passed its checks answers the mark of a refused one. An "other
-		// document" is not checked, so it answers nothing.
+	if d.Type == DocNationalID || d.Type == DocTaxID || d.Type == DocAlienRegistation {
+		// A national, tax or foreigner's document that passed its checks answers the mark of a
+		// refused one. A passport, a licence or an "other document" answers nothing: it is not
+		// the document that was wrong.
 		p.documentIssue = DocumentIssue{}
 	}
 	p.Raise(IdentificationAdded{EventMeta: p.NewEventMeta(), IdentificationID: id.ID.String(), DocumentType: d.Type.String(),

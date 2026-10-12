@@ -119,6 +119,14 @@ Hallazgos menores de la revisión independiente (G-6) que no se arreglaron en la
 `integra/2026-10-11`, más lo que dejaron pendiente los arreglos que sí se hicieron (ver
 [docs/integracion-2026-10-11.md](docs/integracion-2026-10-11.md), «Arreglos tras la revisión»).
 
+- **Unicidad del código de un tipo de rol o de relación** — `contexts/parties/application/service.go`
+  (`catalogMu`): las altas de catálogo pasan de una en una dentro del proceso, porque un catálogo
+  con un código repetido no se puede cargar y deja fallando a todo Parties. Con más de un proceso
+  hace falta un índice único sobre `role_types.code` y `relationship_types.code` (filtrado en SQL
+  Server, que trata los vacíos como iguales). Lo mismo si una versión futura siembra un tipo con
+  un código que un administrador ya usó: conviene reservar un prefijo para los añadidos.
+- **Historial de números de cliente** — `contexts/parties/application/details.go`: un número que
+  se cambia o se retira a un cliente vigente queda libre para otro (`docs/PARTIES.md` §9).
 - **Unicidad del código de promoción** — `contexts/parties/application/details.go:40`: se
   comprueba con una lectura antes de escribir y no hay índice único sobre `promotion_code`
   (`contexts/parties/infrastructure/schema.go:189`); dos altas simultáneas en relaciones distintas

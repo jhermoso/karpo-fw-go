@@ -374,7 +374,7 @@ func (p *Party) PlaysAt(c RoleCatalog, roleType RoleTypeID, t time.Time) bool {
 func (p *Party) AuditSnapshot() map[string]any {
 	s := map[string]any{"kind": string(p.kind), "name": p.Name(), "active": p.IsActive(), "test": p.IsTest()}
 	if !p.documentIssue.IsZero() {
-		s["documentIssue"] = strings.TrimSpace(p.documentIssue.Number + ": " + p.documentIssue.Reason)
+		s["documentIssue"] = strings.TrimPrefix(p.documentIssue.Number+": "+p.documentIssue.Reason, ": ")
 	}
 	docs := make([]string, 0, len(p.identifications))
 	for _, i := range p.identifications {

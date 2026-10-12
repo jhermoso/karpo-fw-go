@@ -343,9 +343,11 @@ POST /api/catalogs/party-role-types
   propios, que son el resto de la extensibilidad.
 - **Decisiones técnicas tomadas** (reversibles): la unicidad del nombre y del código se comprueba
   antes de escribir y no con un índice único (un índice único sobre una columna que admite vacíos
-  no se comporta igual en todos los motores), así que dos altas simultáneas con el mismo código
-  podrían entrar las dos; y en el almacén de memoria los tipos añadidos no sobreviven a un cambio
-  de almacén.
+  no se comporta igual en todos los motores). Para que dos altas simultáneas con el mismo código
+  no entren las dos —un catálogo con un código repetido no se puede cargar, y dejaría fallando
+  a todo Parties— las altas de catálogo pasan **de una en una** dentro del proceso. Vale mientras
+  haya un solo proceso; con varios hará falta el índice único (`BACKLOG.md` §2d). En el almacén
+  de memoria los tipos añadidos no sobreviven a un cambio de almacén.
 
 ## 9. Número de cliente (2026-10-13)
 
@@ -365,12 +367,16 @@ PUT /api/party-relationships/{id}/customer-number
   `party_relationships.customer_number` (migración 17), y la relación lo devuelve en
   `customer: { number }`. Pedirlo a una relación de otro tipo es un 422.
 - Hasta 20 letras, cifras, guiones, puntos, barras y guiones bajos; se guarda en mayúsculas. Un
-  número vacío lo retira. Permiso `Parties.Relationship.Update`.
-- **Decisión técnica tomada** (reversible): el número es de un cliente **para siempre** dentro
-  de la empresa. No se da a otro cliente aunque la relación del primero haya terminado, y el
-  mismo cliente lo recupera si vuelve. (El código de promoción hace lo contrario: queda libre al
-  terminar la relación.) Los números de cliente aparecen en facturas ya emitidas, y reutilizarlos
-  confundiría a dos clientes.
+  número vacío lo retira. Permiso `Parties.Relationship.Update`, y además **poder escribir en la
+  empresa que numera** (el lado que vende): el número es de su numeración, no del cliente.
+- **Decisión técnica tomada** (reversible): un número no se da a otro cliente **mientras alguna
+  relación del primero lo lleve, vigente o terminada**, y el mismo cliente lo recupera si vuelve.
+  (El código de promoción hace lo contrario: queda libre al terminar la relación.) Una relación
+  terminada ya no se puede cambiar, así que el número de un cliente que se fue es suyo para
+  siempre.
+- **Lo que esa regla no cubre:** si a un cliente **vigente** se le cambia o se le retira el
+  número, el antiguo queda libre y otro cliente puede recibirlo, aunque aparezca en facturas ya
+  emitidas. Impedirlo exige guardar el historial de números; no está hecho.
 - **Lo que no hay:** numeración automática (el número lo da quien da de alta); que el alta de la
   party o de la relación lo traiga ya puesto; un evento cuando cambia; y un puerto para que
   Facturación o Pedidos lo lean. Tampoco se comprueba con un índice único, como el código de
@@ -391,7 +397,7 @@ con la marca «the CIF does not pass its check digits» y el número tal como vi
 | La marca | `documentIssue: { number, reason }` en la party. El número es el que vino, para quien corrige; **no identifica a nadie** |
 | Ponerla | `PUT /api/parties/{id}/document-issue` con `reason` (obligatorio) y `number`. La pone la importación; también puede ponerla una persona |
 | Buscar las marcadas | `GET /api/parties?documentIssue=true` |
-| Quitarla | Se quita sola al añadir a la party un documento que pasa sus comprobaciones (un DNI, un NIF…), o a mano con `DELETE /api/parties/{id}/document-issue` |
+| Quitarla | Se quita sola al añadir a la party un documento nacional, fiscal o de extranjero que pasa sus comprobaciones (un DNI, un NIF, un NIE). Un pasaporte o un «otro documento» no la quitan: no son el documento que estaba mal. También a mano, con `DELETE /api/parties/{id}/document-issue` |
 | Permiso | `Parties.Party.Update`, y el ámbito de siempre |
 | Esquema | Migración 18: `parties.doc_issue`, `doc_issue_number` y `doc_issue_reason` |
 
@@ -406,6 +412,10 @@ con la marca «the CIF does not pass its check digits» y el número tal como vi
   fiscal. Si se prefiere no guardarlo, hay que dar a la importación otra forma de reconocer a
   quien ya cargó.
 - Un pasaporte o un documento extranjero también se guardan como «otro documento», pero **no
-  marcan**: lo son por lo que son, no por estar mal.
+  marcan**: lo son por lo que son, no por estar mal. Tampoco marca un número que no está escrito
+  como un documento español (un NIF francés, o uno con `ES` delante).
+- **Quien ya estaba cargado también se marca.** Si la importación encuentra a alguien que ya
+  existe y su registro trae un documento erróneo, lo marca si no lo estaba. Consecuencia: una
+  marca quitada a mano vuelve en la siguiente importación mientras el documento no se corrija.
 - **Lo que no hay:** la marca no bloquea nada (se puede facturar a una party marcada); eso sería
   una regla de Facturación.
