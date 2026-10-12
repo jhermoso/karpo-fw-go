@@ -49,8 +49,8 @@ type Deps struct {
 
 // LocationDTO is the transport form of a location.
 type LocationDTO struct {
-	StreetType    string `json:"streetType,omitempty"`
-	Line1         string `json:"line1,omitempty"`
+	StreetType string `json:"streetType,omitempty"`
+	Line1      string `json:"line1,omitempty"`
 	// Where in the street, piece by piece (Spanish forms ask for them one by one). All optional.
 	Number          string `json:"number,omitempty"`
 	NumberQualifier string `json:"numberQualifier,omitempty"` // bis, duplicado
@@ -59,15 +59,15 @@ type LocationDTO struct {
 	Staircase       string `json:"staircase,omitempty"`
 	Floor           string `json:"floor,omitempty"`
 	Door            string `json:"door,omitempty"`
-	Line2         string `json:"line2,omitempty"`
-	PostalCode    string `json:"postalCode,omitempty"`
-	Locality      string `json:"locality,omitempty"`
-	Region        string `json:"region,omitempty"`
-	Country       string `json:"country,omitempty"`
-	GeoPostalCode string `json:"geoPostalCode,omitempty"`
-	GeoBoundary   string `json:"geoBoundary,omitempty"`
-	Phone         string `json:"phone,omitempty"`
-	Email         string `json:"email,omitempty"`
+	Line2           string `json:"line2,omitempty"`
+	PostalCode      string `json:"postalCode,omitempty"`
+	Locality        string `json:"locality,omitempty"`
+	Region          string `json:"region,omitempty"`
+	Country         string `json:"country,omitempty"`
+	GeoPostalCode   string `json:"geoPostalCode,omitempty"`
+	GeoBoundary     string `json:"geoBoundary,omitempty"`
+	Phone           string `json:"phone,omitempty"`
+	Email           string `json:"email,omitempty"`
 }
 
 // RegisterFacility registers a facility of an internal organization.
