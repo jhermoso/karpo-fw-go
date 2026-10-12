@@ -41,69 +41,64 @@ un administrador global; los de una empresa, también el administrador de esa em
 En los tres, el dueño de la entidad no sabe nada del dato nuevo, y no debería tener que
 cambiar para admitirlo.
 
-## 3. Lo que Trench ya tiene (leído en su código y en su plan)
+## 3. Lo que Trench ya tiene, y el contrato común
 
-El sector financiero de Trench lo resolvió entre agosto y septiembre, y **Javier ya tomó
-allí las decisiones de fondo** (`doc/Plan_Legs_Autoconocimiento_2026-08-31.md`, §45 y §46.6.1,
-8 de septiembre). Es más de lo que yo había visto al escribir la primera versión.
+> **Reescrita el 2026-10-13.** La versión anterior de esta sección describía la *propuesta* del
+> plan de Trench como si fuera su código. La sesión de Trench la corrigió punto por punto
+> (catorce correcciones) al escribir el contrato común. **La fuente es ese contrato**, no esta
+> sección: `doc/Contrato_Extensibilidad_Campos_Personalizados_2026-10-13.md`, PR
+> [Trench#27](https://github.com/Trench/pull/27). Lo de aquí es un
+> resumen de lo que dice, leído el 13 de octubre; ni el contrato ni este resumen están aprobados
+> por Javier.
 
-### 3.1 Cómo funciona
+### 3.1 Cómo es hoy en Trench (según su sesión, leyendo su código)
 
-1. **Un documento declara los campos.** La definición de un producto (un JSON que se diseña en
-   una pantalla del front, `views/product-designer`) lleva una lista de campos. Cada uno tiene
-   nombre, tipo de valor de una lista cerrada, ámbito (el pedido o cada línea), si es
-   obligatorio, y sus opciones si es una lista.
-
-   ```jsonc
-   { "name": "Motivo del viaje", "kind": "Marker", "valueType": "enumerated", "scope": "order",
-     "options": ["Turismo", "Negocios", "Estudios"], "required": true }
-   ```
-
-2. **Cada campo dice dónde se guarda**, y el programa lo deduce:
-
-   | Dónde | Cuándo | Ejemplo |
-   |---|---|---|
-   | En un atributo que **ya existe** | El campo cita una entidad y un atributo reales | «Nota del coleccionista» se guarda en el comentario de la línea del pedido |
-   | En una **tabla de extensión** | El campo declara que extiende una entidad | «Coleccionista» va a una tabla nueva junto a la línea del pedido |
-
-3. **Al publicar la definición, el programa crea las tablas.** Por cada entidad extendida, una
-   tabla uno a uno **por entidad y por empresa**, llamada `<tabla>_ext_<acrónimo de la empresa>`,
-   con la misma clave que la entidad y una columna por campo. Esto es «DDL en caliente»: el
-   programa ejecuta `CREATE TABLE` y `ALTER TABLE` mientras está en marcha, en vez de esperar a
-   una versión nueva.
-
-   *Ejemplo:* la empresa con acrónimo `mac` extiende las líneas de pedido financiero y obtiene
-   `financial_order_leg_ext_mac` con la columna `coleccionista`.
-
-4. **Primero se planifica, luego se aplica.** El programa compara lo que la definición pide con
-   lo que hay en la base y enseña el plan (qué crearía, qué conservaría) antes de ejecutar nada.
-   Aplicar dos veces da el mismo resultado.
-
-5. **Al operar, los valores se validan contra la definición.** Un campo no declarado se
-   rechaza nombrándolo; un valor que no casa con su tipo, también; un obligatorio vacío,
-   también. La única regla entre campos admitida es «obligatorio si aquel otro campo, que es un
-   sí/no, vale sí».
-
-### 3.2 Lo que Javier decidió allí
-
-| Decisión (Trench, 2026-09-08) | Qué significa |
+| Tema | Cómo es |
 |---|---|
-| Tabla uno a uno **por entidad y por empresa** | Cada empresa del grupo tiene sus propios campos; no se pisan |
-| **El ciclo de vida de la definición y el de los datos son distintos** | Retirar un campo lo quita de la definición: deja de pedirse y de enseñarse. La columna y sus datos **se conservan**. Sólo se borra de verdad una columna que nunca recibió un valor |
-| Se diseña contra una copia de preproducción y se **importa el JSON** en producción cuando está probado | El documento es portable entre instalaciones |
-| **No hay lenguaje de reglas**: sólo tipo, obligatorio y «obligatorio si» | Una regla de verdad es código, no configuración |
+| Dónde se declara un campo | Sólo dentro de la definición de un **producto financiero** (formato `schema 4`): un campo `kind: "Field"` con `extends: { entity }` |
+| Tipos de valor | Once: sí/no, entero, decimal, porcentaje, texto, fecha, lista, y cuatro referencias a catálogo por identificador (país, divisa, instalación, transportista) que no se comprueba que existan |
+| Dónde se guarda | Tabla uno a uno `<tabla>_ext_<acrónimo>`, creada **al publicar** el producto. La empresa es la que oferta el producto |
+| Motores | Oracle, SQL Server y PostgreSQL (SQLite sólo en pruebas) |
+| Plan antes de aplicar | Se puede pedir, pero publicar **lo recalcula**: no se aplica «el plan que se enseñó». Si falla a medias, lo ya creado queda |
+| Valores | Se guardan **sólo para el pedido y sus líneas**, **sólo en el alta** y **fuera de la transacción** del pedido |
+| Retirar un campo | La columna se conserva si tiene valores y **se borra si nunca los tuvo** (decisión de Javier del 8 de septiembre) |
+| Reglas | Tipo, obligatorio y «obligatorio si aquel otro sí/no vale sí», este último sólo entre campos del mismo bloque |
+| Permisos | Ninguno propio: basta con estar autenticado |
+| Pantalla | El diseñador de operaciones financieras declara los campos; el asistente los pinta y evalúa «obligatorio si» en vivo |
 
-### 3.3 Lo que le falta para ser «para cualquier entidad»
+### 3.2 Lo que propone el contrato común
 
-| Límite de hoy | Por qué importa |
+| Tema | Propuesta |
 |---|---|
-| Los campos se declaran **dentro de la definición de un producto financiero**. No hay forma de declarar un campo para una entidad sin pasar por un producto | Un rol de Parties o un pedido de ventas no tienen «definición de producto» |
-| Sólo se extienden **las entidades que toca una operación financiera** (el pedido y sus líneas) | Hay que poder nombrar cualquier entidad extensible |
-| Vive en `FinancialKernel`, no en el framework | Karpo C# no lo tiene; Go tampoco |
-| La pantalla es el diseñador de productos | Hace falta un sitio general de administración |
+| Documento | Uno por **(entidad, ámbito, empresa)**, formato `custom-fields` versión 1 |
+| Campo | `code` estable (es el nombre de la columna y la clave del valor, y no cambia), etiqueta, tipo, opciones, `required`, `requiredIf`, y `onlyForType` para engancharlo a un tipo |
+| Tipos de valor | Seis para empezar: sí/no, entero, decimal, texto, fecha y lista |
+| Entidades | Cada contexto registra **en código** cuáles admite, si son de una empresa y si tienen tipos. Se registra la base de una jerarquía, nunca la subclase: `parties.relationship` con el tipo `customer`, no «relación de cliente» |
+| Tablas | `<tabla>_ext` para la instalación y `<tabla>_ext_<acrónimo>` para cada empresa. El tipo no crea tabla |
+| Ciclo | Borrador → plan con huella → aplicar (exige la huella del plan enseñado) → retirar, que no ejecuta nada en la base |
+| Valores | En un bloque plano `customFields` de la propia entidad, en su misma transacción, al crear y al modificar |
+| Permisos | Ver, gestionar los de la instalación y gestionar los de una empresa |
+| Rutas | Bajo `/api/custom-fields` |
 
-No he ejecutado nada de esto: lo describo por el código, sus contratos y el plan. No he mirado
-cómo pinta el front los campos al capturar ni si se pueden filtrar listas por ellos.
+Esta sesión revisó el contrato y Trench incorporó los siete puntos (su §6): la base tipada en
+vez de la subclase; claves de varias columnas y sin exigir borrado en cascada; los códigos de tipo
+de Go; el acrónimo de empresa como requisito previo de los tres; fijar los códigos de regla y no
+la forma del error; el permiso de lectura con un nombre que la regla estándar no reparte; y los
+tipos de columna, orientativos para Go.
+
+### 3.3 Lo que Go tiene que resolver antes de implementarlo
+
+| # | Qué | Por qué |
+|---|---|---|
+| 1 | **Las filas hijas se borran y se reinsertan en cada guardado.** Así guarda Go un agregado (`sqlrepo`, `replaceChildren`) | Un rol es hijo de la party. Con una tabla de extensión enganchada al rol, guardar la party por cualquier motivo se llevaría los campos añadidos de todos sus roles. O el guardado del agregado escribe también la extensión, o el repositorio deja de reemplazar hijos |
+| 2 | **El servidor crea tablas mientras sirve.** Hoy migrar y servir están separados y el servidor no arranca con un esquema que no es el suyo | Las tablas de extensión tienen que quedar fuera de esa comprobación, y el usuario de base de datos necesita permiso para crear tablas |
+| 3 | **Acrónimo de empresa.** Go no lo tiene | Es parte del nombre de las tablas por empresa |
+| 4 | **Decimales.** Go guarda todos como texto exacto | Para ordenar y filtrar por un campo decimal conviene una columna numérica; falta comprobar que la persistencia la lee sin pasar por coma flotante |
+| 5 | **Cinco motores.** El contrato cubre tres; Go promete además MySQL y SQLite | En MySQL crear o cambiar una tabla confirma la transacción en curso |
+| 6 | **Consultas por un campo añadido.** Go escribe las consultas a partir de campos conocidos al compilar | Hace falta decidir si se puede filtrar y ordenar por ellos, y cómo |
+
+Hecho ya en Go, y que el contrato adopta: código estable en los tipos de rol y de relación, y el
+alta de un tipo sin campos desde la aplicación ([PARTIES.md](PARTIES.md) §8).
 
 ## 4. Los otros mecanismos que existen, para no confundirlos
 
@@ -115,6 +110,9 @@ cómo pinta el front los campos al capturar ni si se pueden filtrar listas por e
 | **Perfil por pareja** en Go | `receivables`, `purchases` | Un agregado en otro contexto, por empresa y tercero | Se queda: no extiende una entidad, sino una pareja |
 
 ## 5. Propuesta: generalizar lo de Trench
+
+> Esta sección es anterior al contrato común y queda como contexto. Donde difiera de él, manda el
+> contrato: por ejemplo, el bloque de valores se llama `customFields`, no `extensions`.
 
 La idea es sacar el mecanismo de §3 del sector financiero y dejarlo como una pieza del
 framework, igual en Go, en Karpo C# y en Trench.
