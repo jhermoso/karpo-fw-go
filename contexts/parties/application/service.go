@@ -3,8 +3,8 @@ package application
 import (
 	"context"
 	"fmt"
-	"sync"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/parties/domain"
@@ -13,8 +13,8 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/application/orchestration"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/pipeline"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
-	"github.com/jhermoso/karpo-fw-go/pkg/domain/traits"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
+	"github.com/jhermoso/karpo-fw-go/pkg/domain/traits"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
