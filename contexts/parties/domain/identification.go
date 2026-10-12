@@ -255,6 +255,11 @@ func (p *Party) AddIdentification(policy *DocumentPolicy, d IdentificationData, 
 		}
 	}
 	p.identifications = append(ids, id)
+	if d.Type != DocOther {
+		// A document that passed its checks answers the mark of a refused one. An "other
+		// document" is not checked, so it answers nothing.
+		p.documentIssue = DocumentIssue{}
+	}
 	p.Raise(IdentificationAdded{EventMeta: p.NewEventMeta(), IdentificationID: id.ID.String(), DocumentType: d.Type.String(),
 		Country: d.Country.String(), Number: number, Primary: id.Primary})
 	return id.ID, nil

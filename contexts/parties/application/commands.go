@@ -98,6 +98,19 @@ type SetShared struct {
 	Shared bool           `json:"shared"`
 }
 
+// FlagDocumentIssue marks a party whose identity document was refused: the number as it came and
+// why. An import does it for what it loads; a person may do it too.
+type FlagDocumentIssue struct {
+	ID     domain.PartyID `json:"-"`
+	Number string         `json:"number,omitempty"`
+	Reason string         `json:"reason"`
+}
+
+// ClearDocumentIssue takes the mark of a refused identity document away.
+type ClearDocumentIssue struct {
+	ID domain.PartyID `json:"-"`
+}
+
 // ListInternalOrganizations lists the internal organizations of the caller's scope.
 type ListInternalOrganizations struct{}
 
@@ -251,6 +264,7 @@ type SearchParties struct {
 	Facility       string // facility id: parties with a role at it now
 	Classification string // classification type id: parties classified so now
 	ActiveOnly     bool
+	DocumentIssue  bool // only the parties marked with a refused identity document
 	Page, Size     int
 }
 

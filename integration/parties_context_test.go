@@ -224,6 +224,23 @@ func TestPartiesContext(t *testing.T) {
 			if err != nil || len(pedro.Organizations) != 1 || pedro.Organizations[0] != acme.ID {
 				t.Fatalf("register in scope: %+v %v", pedro, err)
 			}
+			// Migration 18: the mark of a refused identity document, and the search by it.
+			flagged, err := svc.FlagDocumentIssue.Handle(clerkCtx, papp.FlagDocumentIssue{ID: mustParty(t, pedro.ID), Number: "12345678A",
+				Reason: "the DNI does not pass its check digits"})
+			if err != nil || flagged.DocumentIssue == nil || flagged.DocumentIssue.Number != "12345678A" {
+				t.Fatalf("marking a refused document: %+v %v", flagged.DocumentIssue, err)
+			}
+			marked, err := svc.Search.Handle(clerkCtx, papp.SearchParties{DocumentIssue: true})
+			if err != nil || marked.Total != 1 || marked.Items[0].ID != pedro.ID || marked.Items[0].DocumentIssue == nil {
+				t.Fatalf("parties with a refused document: %+v %v", marked.Items, err)
+			}
+			if cleared, err := svc.ClearDocumentIssue.Handle(clerkCtx, papp.ClearDocumentIssue{ID: mustParty(t, pedro.ID)}); err != nil || cleared.DocumentIssue != nil {
+				t.Fatalf("taking the mark away: %+v %v", cleared.DocumentIssue, err)
+			}
+			if marked, err = svc.Search.Handle(clerkCtx, papp.SearchParties{DocumentIssue: true}); err != nil || marked.Total != 0 {
+				t.Fatalf("nobody is marked now: %d %v", marked.Total, err)
+			}
+
 			// Migration 17: the customer number is a detail of the customer relationship.
 			pedroID, _ := domain.ParsePartyID(pedro.ID)
 			buys, err := svc.Relationships.Handle(clerkCtx, papp.PartyRelationships{PartyID: pedroID, ActiveOnly: true})
@@ -473,4 +490,13 @@ func TestPartiesContext(t *testing.T) {
 			}
 		})
 	}
+}
+
+func mustParty(t *testing.T, id string) domain.PartyID {
+	t.Helper()
+	p, err := domain.ParsePartyID(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
 }

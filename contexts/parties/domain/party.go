@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/traits"
@@ -74,7 +75,26 @@ type Party struct {
 	affiliations    []Affiliation
 	facilityRoles   []FacilityRole
 	shared          bool
+	documentIssue   DocumentIssue
 }
+
+// DocumentIssue marks a party whose identity document was refused: the number as it came and why
+// it was not taken. It is how a party loaded by an import with a wrong document stays in sight
+// until somebody corrects it (docs/PARTIES-MODELO-COMUN.md, D-5 and D-9). The zero value is no
+// issue.
+type DocumentIssue struct {
+	Number string // as it came, for who corrects it; it identifies nobody
+	Reason string
+}
+
+// IsZero reports whether there is no issue.
+func (d DocumentIssue) IsZero() bool { return d == DocumentIssue{} }
+
+// Limits of a document issue.
+const (
+	MaxDocumentIssueNumber = 60
+	MaxDocumentIssueReason = 200
+)
 
 // RegisterPerson creates a person.
 func RegisterPerson(id PartyID, d PersonDetails) (*Party, error) {
@@ -126,6 +146,7 @@ type PartyState struct {
 	Affiliations []Affiliation
 	Facilities   []FacilityRole
 	Shared       bool
+	Issue        DocumentIssue
 	Active       bool
 	Test         bool
 	Audit        traits.AuditStamp
@@ -154,11 +175,36 @@ func Reconstitute(id PartyID, s PartyState) (*Party, error) {
 	p.affiliations = slices.Clone(s.Affiliations)
 	p.facilityRoles = slices.Clone(s.Facilities)
 	p.shared = s.Shared
+	p.documentIssue = s.Issue
 	p.Activation = traits.RestoredActivation(s.Active)
 	p.Audited = traits.RestoredAudit(s.Audit)
 	p.TestFlag = traits.RestoredTestFlag(s.Test)
 	return p, nil
 }
+
+// DocumentIssue returns the mark of a refused identity document (zero when there is none).
+func (p *Party) DocumentIssue() DocumentIssue { return p.documentIssue }
+
+// HasDocumentIssue reports whether the party is marked with a refused identity document.
+func (p *Party) HasDocumentIssue() bool { return !p.documentIssue.IsZero() }
+
+// FlagDocumentIssue marks the party: its identity document was refused, for that reason. A new
+// mark replaces the one there was.
+func (p *Party) FlagDocumentIssue(number, reason string) error {
+	number, reason = strings.Join(strings.Fields(number), " "), strings.Join(strings.Fields(reason), " ")
+	var v fw.Validation
+	v.Require(reason != "", "reason", "required", "say why the document was refused")
+	v.Require(utf8.RuneCountInString(number) <= MaxDocumentIssueNumber, "number", "length", "number must have at most 60 characters")
+	v.Require(utf8.RuneCountInString(reason) <= MaxDocumentIssueReason, "reason", "length", "reason must have at most 200 characters")
+	if err := v.Err(); err != nil {
+		return err
+	}
+	p.documentIssue = DocumentIssue{Number: number, Reason: reason}
+	return nil
+}
+
+// ClearDocumentIssue takes the mark away: somebody looked at it.
+func (p *Party) ClearDocumentIssue() { p.documentIssue = DocumentIssue{} }
 
 // Kind returns the party kind.
 func (p *Party) Kind() Kind { return p.kind }
@@ -327,6 +373,9 @@ func (p *Party) PlaysAt(c RoleCatalog, roleType RoleTypeID, t time.Time) bool {
 // AuditSnapshot implements traits.Snapshotter.
 func (p *Party) AuditSnapshot() map[string]any {
 	s := map[string]any{"kind": string(p.kind), "name": p.Name(), "active": p.IsActive(), "test": p.IsTest()}
+	if !p.documentIssue.IsZero() {
+		s["documentIssue"] = strings.TrimSpace(p.documentIssue.Number + ": " + p.documentIssue.Reason)
+	}
 	docs := make([]string, 0, len(p.identifications))
 	for _, i := range p.identifications {
 		docs = append(docs, i.Country.String()+":"+i.Number)

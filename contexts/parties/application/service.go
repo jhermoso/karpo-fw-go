@@ -49,6 +49,8 @@ type Service struct {
 	UpdatePerson          app.CommandHandler[UpdatePerson, PartyDTO]
 	SetActive             app.CommandHandler[SetPartyActive, PartyDTO]
 	SetLegalForm          app.CommandHandler[SetLegalForm, PartyDTO]
+	FlagDocumentIssue  app.CommandHandler[FlagDocumentIssue, PartyDTO]
+	ClearDocumentIssue app.CommandHandler[ClearDocumentIssue, PartyDTO]
 	SetShared             app.CommandHandler[SetShared, PartyDTO]
 	AssignRole            app.CommandHandler[AssignRole, PartyDTO]
 	EndRole               app.CommandHandler[EndRole, PartyDTO]
@@ -237,6 +239,14 @@ func NewService(d Deps) *Service {
 		return s.updateParty(ctx, c.ID, func(p *domain.Party, _ *domain.Catalog) error { return p.SetLegalForm(f) })
 	}, pipeline.RetryOnConflict[SetLegalForm, PartyDTO](retry, backoff))
 
+	svc.FlagDocumentIssue = chain(PermPartyUpdate, func(ctx context.Context, c FlagDocumentIssue) (PartyDTO, error) {
+		return s.updateParty(ctx, c.ID, func(p *domain.Party, _ *domain.Catalog) error { return p.FlagDocumentIssue(c.Number, c.Reason) })
+	}, pipeline.RetryOnConflict[FlagDocumentIssue, PartyDTO](retry, backoff))
+
+	svc.ClearDocumentIssue = chain(PermPartyUpdate, func(ctx context.Context, c ClearDocumentIssue) (PartyDTO, error) {
+		return s.updateParty(ctx, c.ID, func(p *domain.Party, _ *domain.Catalog) error { p.ClearDocumentIssue(); return nil })
+	}, pipeline.RetryOnConflict[ClearDocumentIssue, PartyDTO](retry, backoff))
+
 	// Only global administrators decide which parties every organization sees.
 	svc.SetShared = chain(PermPartyUpdate, func(ctx context.Context, c SetShared) (PartyDTO, error) {
 		if sc := scopeOf(ctx); !sc.global {
@@ -343,6 +353,9 @@ func NewService(d Deps) *Service {
 		}
 		if q.ActiveOnly {
 			parts = append(parts, domain.Active())
+		}
+		if q.DocumentIssue {
+			parts = append(parts, domain.FieldDocumentIssue.Eq(true))
 		}
 		if q.Role != "" {
 			role, err := parseRoleType(q.Role)

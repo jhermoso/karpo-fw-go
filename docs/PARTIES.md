@@ -375,3 +375,37 @@ PUT /api/party-relationships/{id}/customer-number
   party o de la relación lo traiga ya puesto; un evento cuando cambia; y un puerto para que
   Facturación o Pedidos lo lean. Tampoco se comprueba con un índice único, como el código de
   promoción (`BACKLOG.md` §2d).
+
+## 10. Marca de documento identificativo erróneo (2026-10-13)
+
+Decidido por Javier el 2026-10-11 ([PARTIES-MODELO-COMUN.md](PARTIES-MODELO-COMUN.md), D-5 y D-9):
+un documento de identidad inválido se rechaza; en una importación la party entra igualmente,
+**marcada** con el error, hay un filtro para encontrar las marcadas y queda en el informe.
+
+*Ejemplo:* de 400 clientes de Sage, 12 traen el NIF con la letra mal. Los 12 entran, cada uno
+con la marca «the CIF does not pass its check digits» y el número tal como vino, y
+`GET /api/parties?documentIssue=true` los lista para que alguien los corrija.
+
+| Qué | Cómo |
+|---|---|
+| La marca | `documentIssue: { number, reason }` en la party. El número es el que vino, para quien corrige; **no identifica a nadie** |
+| Ponerla | `PUT /api/parties/{id}/document-issue` con `reason` (obligatorio) y `number`. La pone la importación; también puede ponerla una persona |
+| Buscar las marcadas | `GET /api/parties?documentIssue=true` |
+| Quitarla | Se quita sola al añadir a la party un documento que pasa sus comprobaciones (un DNI, un NIF…), o a mano con `DELETE /api/parties/{id}/document-issue` |
+| Permiso | `Parties.Party.Update`, y el ámbito de siempre |
+| Esquema | Migración 18: `parties.doc_issue`, `doc_issue_number` y `doc_issue_reason` |
+
+- **Lo que hace la importación** ([IMPORTACION.md](IMPORTACION.md), fuentes de Sage y de Apiscore):
+  un documento español (DNI, NIF, CIF, NIE) con el dígito de control mal se sigue guardando como
+  «otro documento», marca a la party, y añade un aviso al informe de la ejecución
+  (`sage.wrong_document`, `apiscore.wrong_document`).
+- **Decisión técnica tomada, y por qué no es exactamente «no se guarda»:** el número erróneo se
+  **conserva como «otro documento»** además de la marca. La importación encuentra a quien ya
+  existe por su número de documento; si el número erróneo no se guardara, cada reimportación
+  crearía otra vez al mismo cliente. «Otro documento» no se valida ni cuenta como identificación
+  fiscal. Si se prefiere no guardarlo, hay que dar a la importación otra forma de reconocer a
+  quien ya cargó.
+- Un pasaporte o un documento extranjero también se guardan como «otro documento», pero **no
+  marcan**: lo son por lo que son, no por estar mal.
+- **Lo que no hay:** la marca no bloquea nada (se puede facturar a una party marcada); eso sería
+  una regla de Facturación.

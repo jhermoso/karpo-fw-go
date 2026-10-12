@@ -11,6 +11,8 @@ import (
 func (m *Module) registerPhase3(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/parties/{id}/legal-form", m.setLegalForm)
 	mux.HandleFunc("PUT /api/parties/{id}/shared", m.setShared)
+	mux.HandleFunc("PUT /api/parties/{id}/document-issue", m.flagDocumentIssue)
+	mux.HandleFunc("DELETE /api/parties/{id}/document-issue", m.clearDocumentIssue)
 	mux.HandleFunc("GET /api/internal-organizations", m.internalOrganizations)
 	mux.HandleFunc("POST /api/parties/{id}/facility-roles", m.assignFacilityRole)
 	mux.HandleFunc("POST /api/parties/{id}/facility-roles/{roleId}/end", m.endFacilityRole)
@@ -64,6 +66,29 @@ func (m *Module) setLegalForm(w http.ResponseWriter, r *http.Request) {
 		c.ID = id
 		return m.svc.SetLegalForm.Handle(r.Context(), c)
 	})
+}
+
+func (m *Module) flagDocumentIssue(w http.ResponseWriter, r *http.Request) {
+	id, err := pathParty(r)
+	if err != nil {
+		distribution.WriteError(w, r, err)
+		return
+	}
+	c := papp.FlagDocumentIssue{}
+	handle(w, r, &c, true, http.StatusOK, func(c papp.FlagDocumentIssue) (papp.PartyDTO, error) {
+		c.ID = id
+		return m.svc.FlagDocumentIssue.Handle(r.Context(), c)
+	})
+}
+
+func (m *Module) clearDocumentIssue(w http.ResponseWriter, r *http.Request) {
+	id, err := pathParty(r)
+	if err != nil {
+		distribution.WriteError(w, r, err)
+		return
+	}
+	dto, err := m.svc.ClearDocumentIssue.Handle(r.Context(), papp.ClearDocumentIssue{ID: id})
+	distribution.Respond(w, r, dto, err, http.StatusOK)
 }
 
 func (m *Module) setShared(w http.ResponseWriter, r *http.Request) {

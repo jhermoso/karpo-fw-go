@@ -204,6 +204,11 @@ func Migrations() sqlrepo.MigrationSet {
 		{Version: 17, Name: "customer relationship details: customer number", Up: sqlrepo.RenderDDLAll(
 			`ALTER TABLE party_relationships {add:customer_number} {str:20}{addEnd}`,
 			`CREATE INDEX ix_party_rel_customer_no ON party_relationships (to_party, customer_number)`)},
+		// The mark of a party whose identity document was refused (docs/PARTIES-MODELO-COMUN.md, D-9).
+		{Version: 18, Name: "mark of a refused identity document", Up: sqlrepo.RenderDDLAll(
+			`ALTER TABLE parties {add:doc_issue} {bool} DEFAULT {false} NOT NULL{addEnd}`,
+			`ALTER TABLE parties {add:doc_issue_number} {str:60}{addEnd}`,
+			`ALTER TABLE parties {add:doc_issue_reason} {str:200}{addEnd}`)},
 	}}
 }
 
