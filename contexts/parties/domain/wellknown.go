@@ -82,8 +82,28 @@ const (
 
 func parent(id RoleTypeID) *RoleTypeID { return &id }
 
-// WellKnownRoleTypes returns the seed of the role type catalog.
+// WellKnownRoleTypes returns the seed of the role type catalog. The code of each one is its
+// name in lower case and hyphens ("internal-organization").
 func WellKnownRoleTypes() []RoleType {
+	types := wellKnownRoleTypes()
+	for i := range types {
+		types[i].Code = CodeOf(types[i].Name.String())
+	}
+	return types
+}
+
+// IsWellKnownRoleType reports whether a role type comes with the program (and has rules of the
+// code hanging from it) rather than having been added to the catalog.
+func IsWellKnownRoleType(id RoleTypeID) bool {
+	for _, t := range wellKnownRoleTypes() {
+		if t.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+func wellKnownRoleTypes() []RoleType {
 	return []RoleType{
 		{ID: RolePartyRoot, Name: vocab.MustName("Party"), Description: "Root of the role type hierarchy", Category: true, Parent: nil},
 		{ID: RolePersonCategory, Name: vocab.MustName("Person"), Description: "Roles exclusive to persons", Category: true, Parent: parent(RolePartyRoot)},

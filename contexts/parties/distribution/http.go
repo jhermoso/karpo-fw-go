@@ -44,6 +44,7 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/party-relationships", m.establish)
 	mux.HandleFunc("POST /api/party-relationships/{id}/terminate", m.terminate)
 	mux.HandleFunc("GET /api/catalogs/party-role-types", m.roleTypes)
+	mux.HandleFunc("POST /api/catalogs/party-role-types", m.defineRoleType)
 	mux.HandleFunc("GET /api/catalogs/party-relationship-types", m.relationshipTypes)
 	mux.Handle("POST /api/parties/directory/resolve", distribution.RequirePermission(papp.PermPartyRead, http.HandlerFunc(m.resolve)))
 	mux.Handle("GET /api/parties/directory/search-ids", distribution.RequirePermission(papp.PermPartyRead, http.HandlerFunc(m.searchIDs)))
@@ -229,6 +230,13 @@ func (m *Module) terminate(w http.ResponseWriter, r *http.Request) {
 func (m *Module) roleTypes(w http.ResponseWriter, r *http.Request) {
 	out, err := m.svc.ListRoleTypes.Handle(r.Context(), papp.ListRoleTypes{})
 	distribution.Respond(w, r, out, err, http.StatusOK)
+}
+
+func (m *Module) defineRoleType(w http.ResponseWriter, r *http.Request) {
+	var c papp.DefineRoleType
+	handle(w, r, &c, true, http.StatusCreated, func(c papp.DefineRoleType) (papp.RoleTypeDTO, error) {
+		return m.svc.DefineRoleType.Handle(r.Context(), c)
+	})
 }
 
 func (m *Module) relationshipTypes(w http.ResponseWriter, r *http.Request) {

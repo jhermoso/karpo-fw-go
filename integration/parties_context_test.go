@@ -61,6 +61,22 @@ func TestPartiesContext(t *testing.T) {
 			if err != nil || len(types) != len(domain.WellKnownRoleTypes()) {
 				t.Fatalf("seeded role types: %d %v", len(types), err)
 			}
+			// Migration 16: every role type of the program has its code, and one can be added.
+			for _, rt := range types {
+				if rt.Code != domain.CodeOf(rt.Name) || !rt.WellKnown {
+					t.Fatalf("role type %s: code %q", rt.Name, rt.Code)
+				}
+			}
+			guarantor, err := svc.DefineRoleType.Handle(ctx, papp.DefineRoleType{Name: "Guarantor", Code: "guarantor", Parent: domain.RolePersonCategory.String()})
+			if err != nil || guarantor.Applicability != "person" || guarantor.WellKnown {
+				t.Fatalf("adding a role type: %+v %v", guarantor, err)
+			}
+			if _, err := svc.DefineRoleType.Handle(ctx, papp.DefineRoleType{Name: "Avalista", Code: "guarantor", Parent: domain.RolePersonCategory.String()}); !errors.Is(err, fw.ErrRuleViolation) {
+				t.Fatalf("a code already taken: %v", err)
+			}
+			if types, err = svc.ListRoleTypes.Handle(ctx, papp.ListRoleTypes{}); err != nil || len(types) != len(domain.WellKnownRoleTypes())+1 {
+				t.Fatalf("role types after adding one: %d %v", len(types), err)
+			}
 			acme, err := svc.RegisterOrganization.Handle(ctx, papp.RegisterOrganization{LegalName: "Acme Sociedad Anónima", TradeName: "Acme",
 				Roles: []string{domain.RoleInternalOrganization.String()}})
 			if err != nil {

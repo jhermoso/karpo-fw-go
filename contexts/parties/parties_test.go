@@ -54,7 +54,7 @@ type env struct {
 	admin, reader, clerk, viewer, outsider, seller string
 }
 
-var allPerms = append(slices.Clone(sellerPerms), papp.PermRelationshipSetTrial)
+var allPerms = append(slices.Clone(sellerPerms), papp.PermRelationshipSetTrial, papp.PermRoleTypeDefine)
 
 var readerPerms = []authz.Permission{papp.PermPartyRead, papp.PermRelationshipRead}
 
@@ -687,6 +687,75 @@ func TestParties_EndToEnd_MemoryThenSQLite(t *testing.T) {
 	t.Run("Security directory", func(t *testing.T) { endToEnd(t, newSecurityDirectory) })
 }
 
+// roleTypes adds role types to the catalog: a role without data of its own is a row placed under
+// its parent, and from then on it is assigned like any other.
+func (e *env) roleTypes(tag string) {
+	t := e.t
+	t.Helper()
+	var all []papp.RoleTypeDTO
+	e.must(e.do("GET", "/api/catalogs/party-role-types", e.reader, nil, &all), 200, "role types")
+	seeded := len(all)
+	customer := papp.RoleTypeDTO{}
+	for _, rt := range all {
+		if rt.ID == domain.RoleCustomer.String() {
+			customer = rt
+		}
+		if rt.Code == "" || !rt.WellKnown {
+			t.Fatalf("a role type of the program without its code: %+v", rt)
+		}
+	}
+	if customer.Code != "customer" {
+		t.Fatalf("the code of Customer: %+v", customer)
+	}
+
+	guarantor := map[string]any{"name": "  Guarantor ", "description": "A person who answers for the debt of another", "code": "guarantor",
+		"parent": domain.RolePersonCategory.String()}
+	e.must(e.do("POST", "/api/catalogs/party-role-types", e.reader, guarantor, nil), 403, "without the permission")
+	e.must(e.do("POST", "/api/catalogs/party-role-types", e.clerk, guarantor, nil), 403, "the catalog is of the whole installation")
+	var added papp.RoleTypeDTO
+	e.must(e.do("POST", "/api/catalogs/party-role-types", e.admin, guarantor, &added), 201, "a role type under Person")
+	if added.Name != "Guarantor" || added.Code != "guarantor" || added.Parent != domain.RolePersonCategory.String() || added.Category ||
+		added.WellKnown || added.Applicability != "person" {
+		t.Fatalf("added: %+v", added)
+	}
+	e.must(e.do("GET", "/api/catalogs/party-role-types", e.reader, nil, &all), 200, "role types again")
+	if len(all) != seeded+1 {
+		t.Fatalf("role types after adding one: %d, were %d", len(all), seeded)
+	}
+
+	// What does not fit the catalog.
+	for what, body := range map[string]map[string]any{
+		"the same name, whatever the case": {"name": "GUARANTOR", "parent": domain.RolePersonCategory.String()},
+		"the name of a role of the program": {"name": "customer", "parent": domain.RolePartyRoot.String()},
+		"the same code":                    {"name": "Avalista", "code": "guarantor", "parent": domain.RolePersonCategory.String()},
+	} {
+		e.must(e.do("POST", "/api/catalogs/party-role-types", e.admin, body, nil), 422, what)
+	}
+	for what, body := range map[string]map[string]any{
+		"no parent":           {"name": "Orphan"},
+		"a parent nobody has": {"name": "Orphan", "parent": fw.NewUUID().String()},
+		"no name":             {"name": " ", "parent": domain.RolePersonCategory.String()},
+		"a code with spaces":  {"name": "Orphan", "code": "Not A Code", "parent": domain.RolePersonCategory.String()},
+	} {
+		e.must(e.do("POST", "/api/catalogs/party-role-types", e.admin, body, nil), 400, what)
+	}
+
+	// It is assigned like any other, to whom its place in the hierarchy says.
+	var person, company papp.PartyDTO
+	e.must(e.do("POST", "/api/persons", e.admin, map[string]any{"givenName": "Gus", "firstSurname": "Avalista " + tag,
+		"roles": []string{added.ID}}, &person), 201, "a person with the new role")
+	if len(person.Roles) != 1 || person.Roles[0].Name != "Guarantor" {
+		t.Fatalf("the new role on a person: %+v", person.Roles)
+	}
+	e.must(e.do("POST", "/api/organizations", e.admin, map[string]any{"legalName": "Avales " + tag, "roles": []string{added.ID}}, &company),
+		422, "a role under Person is not for an organization")
+	var guarantors fw.Page[papp.PartyDTO]
+	e.must(e.do("GET", "/api/parties?role="+added.ID, e.admin, nil, &guarantors), 200, "who plays the new role")
+	if guarantors.Total != 1 || guarantors.Items[0].ID != person.ID {
+		t.Fatalf("parties playing the new role: %+v", guarantors.Items)
+	}
+}
+
 func endToEnd(t *testing.T, newDirectory func(*testing.T) directory) {
 	e := compose(t, newDirectory)
 	ctx := context.Background()
@@ -697,6 +766,7 @@ func endToEnd(t *testing.T, newDirectory func(*testing.T) directory) {
 	if len(roleTypes) != len(domain.WellKnownRoleTypes()) {
 		t.Fatalf("role types: %d", len(roleTypes))
 	}
+	e.roleTypes("mem")
 
 	// A migrated SQLite database is swapped in while the service keeps running.
 	raw, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "parties.db")+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)")
@@ -725,6 +795,10 @@ func endToEnd(t *testing.T, newDirectory func(*testing.T) directory) {
 	_ = raw.QueryRow("SELECT COUNT(*) FROM role_types").Scan(&n)
 	if n != len(domain.WellKnownRoleTypes()) {
 		t.Fatalf("seeded role types: %d", n)
+	}
+	_ = raw.QueryRow("SELECT COUNT(*) FROM role_types WHERE code IS NULL OR code = ''").Scan(&n)
+	if n != 0 {
+		t.Fatalf("seeded role types without a code: %d", n)
 	}
 	_ = raw.QueryRow("SELECT COUNT(*) FROM party_roles WHERE party_id = (SELECT id FROM parties WHERE name LIKE 'Ana sql%')").Scan(&n)
 	if n != 2 {
@@ -776,6 +850,13 @@ func endToEnd(t *testing.T, newDirectory func(*testing.T) directory) {
 	if len(trials) != 4 || trials[0].Organization != acme.ID || trials[0].TrialUntil == nil || trials[3].TrialUntil != nil ||
 		!trials[1].TrialUntil.After(*trials[0].TrialUntil) || trials[2].Prospect != trials[3].Prospect {
 		t.Fatalf("trial events: %+v", trials)
+	}
+
+	// Last, so that the party it registers is not among the ones counted above.
+	e.roleTypes("sql")
+	_ = raw.QueryRow("SELECT COUNT(*) FROM role_types WHERE code = 'guarantor' AND category = 0").Scan(&n)
+	if n != 1 {
+		t.Fatalf("the role type added to the catalog, in SQL: %d", n)
 	}
 }
 

@@ -2,7 +2,9 @@ package domain
 
 import (
 	"fmt"
+	"regexp"
 	"slices"
+	"strings"
 
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
@@ -23,11 +25,58 @@ const (
 // (the C# IsTag). A role type may have one parent; a party playing a role also plays every
 // ancestor role (virtual inheritance: ancestors are derived, never stored).
 type RoleType struct {
-	ID          RoleTypeID
+	ID RoleTypeID
+	// Code is the stable, readable key of the type ("customer"); optional and unique. It is what
+	// a model, a seed or an extension names the type by, instead of its identifier.
+	Code        string
 	Name        vocab.Name
 	Description string
 	Parent      *RoleTypeID
 	Category    bool
+}
+
+// MaxTypeCode is the length of the longest code of a catalog type.
+const MaxTypeCode = 40
+
+var typeCode = regexp.MustCompile(`^[a-z][a-z0-9]*(-[a-z0-9]+)*$`)
+
+// CodeOf derives a code from a name: "Bill-To Customer" is "bill-to-customer".
+func CodeOf(name string) string {
+	var b strings.Builder
+	dash := false
+	for _, r := range strings.ToLower(name) {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			if dash && b.Len() > 0 {
+				b.WriteByte('-')
+			}
+			b.WriteRune(r)
+			dash = false
+			continue
+		}
+		dash = true
+	}
+	return b.String()
+}
+
+// NewRoleType builds a role type somebody adds to the catalog: a role that can be assigned,
+// placed in the hierarchy under its parent. It carries no data of its own (a type that needs
+// some is an extension, docs/EXTENSIBILIDAD.md). Whether the parent exists, and whether the name
+// and the code are free, is checked against the catalog (Catalog.Admits).
+func NewRoleType(id RoleTypeID, name, description, code string, parent RoleTypeID) (RoleType, error) {
+	var v fw.Validation
+	n, err := vocab.NewName(name)
+	v.Merge("", err)
+	description = strings.Join(strings.Fields(description), " ")
+	v.Require(len([]rune(description)) <= 500, "description", "length", "description must have at most 500 characters")
+	code = strings.TrimSpace(code)
+	v.Require(code == "" || (len(code) <= MaxTypeCode && typeCode.MatchString(code)), "code", "format",
+		"code is written in lower case letters, digits and hyphens, starts with a letter and has at most 40 characters")
+	v.Require(!id.IsZero(), "id", "required", "id is required")
+	v.Require(!parent.IsZero(), "parent", "required", "a role type hangs from a parent in the hierarchy")
+	if err := v.Err(); err != nil {
+		return RoleType{}, err
+	}
+	return RoleType{ID: id, Code: code, Name: n, Description: description, Parent: &parent}, nil
 }
 
 // RoleCatalog answers questions about role types. It is a domain service built from the
@@ -44,6 +93,7 @@ type RoleCatalog interface {
 // no cycles.
 type Catalog struct {
 	types      map[RoleTypeID]RoleType
+	codes      map[string]RoleTypeID
 	ancestors  map[RoleTypeID][]RoleTypeID
 	appliesTo  map[RoleTypeID]Applicability
 	personCat  RoleTypeID
@@ -56,7 +106,7 @@ var _ RoleCatalog = (*Catalog)(nil)
 // NewRoleCatalog builds a catalog. personCategory and organizationCategory are the categories
 // whose descendants may only be played by people or by organizations.
 func NewRoleCatalog(types []RoleType, personCategory, organizationCategory RoleTypeID) (*Catalog, error) {
-	c := &Catalog{types: map[RoleTypeID]RoleType{}, ancestors: map[RoleTypeID][]RoleTypeID{},
+	c := &Catalog{types: map[RoleTypeID]RoleType{}, codes: map[string]RoleTypeID{}, ancestors: map[RoleTypeID][]RoleTypeID{},
 		appliesTo: map[RoleTypeID]Applicability{}, personCat: personCategory, orgCat: organizationCategory}
 	for _, t := range types {
 		if t.ID.IsZero() {
@@ -64,6 +114,12 @@ func NewRoleCatalog(types []RoleType, personCategory, organizationCategory RoleT
 		}
 		if _, dup := c.types[t.ID]; dup {
 			return nil, fmt.Errorf("%w: role type %s declared twice", fw.ErrValidation, t.ID)
+		}
+		if other, dup := c.codes[t.Code]; dup && t.Code != "" {
+			return nil, fmt.Errorf("%w: role types %s and %s share the code %q", fw.ErrValidation, other, t.ID, t.Code)
+		}
+		if t.Code != "" {
+			c.codes[t.Code] = t.ID
 		}
 		c.types[t.ID] = t
 		c.typesOrder = append(c.typesOrder, t.ID)
@@ -97,6 +153,37 @@ func NewRoleCatalog(types []RoleType, personCategory, organizationCategory RoleT
 
 // RoleType implements RoleCatalog.
 func (c *Catalog) RoleType(id RoleTypeID) (RoleType, bool) { t, ok := c.types[id]; return t, ok }
+
+// ByCode returns the role type with a code.
+func (c *Catalog) ByCode(code string) (RoleType, bool) {
+	id, ok := c.codes[code]
+	return c.types[id], ok && code != ""
+}
+
+// Admits checks that a new role type fits the catalog: its parent exists, and nobody has its
+// name (whatever the case) or its code.
+func (c *Catalog) Admits(t RoleType) error {
+	if t.Parent == nil {
+		return fw.Violation("parties.role_type_without_parent", "a role type hangs from a parent in the hierarchy")
+	}
+	if _, ok := c.types[*t.Parent]; !ok {
+		var v fw.Validation
+		v.Add("parent", "unknown", "unknown role type "+t.Parent.String())
+		return v.Err()
+	}
+	if _, dup := c.types[t.ID]; dup {
+		return fw.Violation("parties.role_type_exists", "the role type "+t.ID.String()+" already exists")
+	}
+	for _, other := range c.types {
+		if strings.EqualFold(other.Name.String(), t.Name.String()) {
+			return fw.Violation("parties.role_type_name_taken", "there is already a role type called "+other.Name.String())
+		}
+	}
+	if _, dup := c.codes[t.Code]; dup && t.Code != "" {
+		return fw.Violation("parties.role_type_code_taken", "there is already a role type with the code "+t.Code)
+	}
+	return nil
+}
 
 // IsA implements RoleCatalog.
 func (c *Catalog) IsA(role, ancestor RoleTypeID) bool {

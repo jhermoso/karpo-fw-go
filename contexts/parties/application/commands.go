@@ -28,12 +28,16 @@ var (
 	// create, update) does not hand it to every standard user: giving time away is a commercial
 	// decision.
 	PermRelationshipSetTrial = authz.MustPermission("Parties.Relationship.SetTrial")
+	// Adding a type to the role catalog changes it for the whole installation: an action of its
+	// own (the standard rule of Security would hand out a "Create"), and only for a global
+	// administrator.
+	PermRoleTypeDefine = authz.MustPermission("Parties.RoleType.Define")
 )
 
 // Permissions returns the permissions this context declares to the Security catalog.
 func Permissions() []authz.Permission {
 	return []authz.Permission{PermPartyRead, PermPartyCreate, PermPartyUpdate, PermRoleAssign, PermRelationshipRead,
-		PermRelationshipCreate, PermRelationshipEnd, PermRelationshipUpdate, PermRelationshipSetTrial}
+		PermRelationshipCreate, PermRelationshipEnd, PermRelationshipUpdate, PermRelationshipSetTrial, PermRoleTypeDefine}
 }
 
 // RegisterPerson registers a person, optionally with initial roles (the C# CreatePartyWithRole).
@@ -249,6 +253,15 @@ type PartyRelationships struct {
 
 // ListRoleTypes lists the role type catalog.
 type ListRoleTypes struct{}
+
+// DefineRoleType adds a role type to the catalog: a role that can be assigned and carries no
+// data of its own, placed in the hierarchy under its parent.
+type DefineRoleType struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	Code        string `json:"code,omitempty"` // optional; unique
+	Parent      string `json:"parent"`         // role type id
+}
 
 // ListRelationshipTypes lists the relationship type catalog.
 type ListRelationshipTypes struct{}

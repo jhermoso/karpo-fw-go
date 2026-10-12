@@ -197,7 +197,20 @@ func Migrations() sqlrepo.MigrationSet {
 			`ALTER TABLE party_contacts {add:addr_staircase} {str:10}{addEnd}`,
 			`ALTER TABLE party_contacts {add:addr_floor} {str:10}{addEnd}`,
 			`ALTER TABLE party_contacts {add:addr_door} {str:10}{addEnd}`)},
+		// A stable code for the role types, as the relationship types have (docs/EXTENSIBILIDAD.md, X-3).
+		{Version: 16, Name: "role type codes", Up: sqlrepo.RenderDDLAll(
+			`ALTER TABLE role_types {add:code} {str:40}{addEnd}`), Run: seedRoleCodes},
 	}}
+}
+
+// seedRoleCodes gives the well-known role types their code.
+func seedRoleCodes(ctx context.Context, db *sqlrepo.DB) error {
+	for _, t := range domain.WellKnownRoleTypes() {
+		if _, err := db.Update(ctx, "role_types", sqlrepo.Values{"code": t.Code}, sqlrepo.Values{"id": t.ID}); err != nil {
+			return fmt.Errorf("coding role type %s: %w", t.Name, err)
+		}
+	}
+	return nil
 }
 
 // seedRelationshipCodes gives the well-known relationship types their code and adds the prospect

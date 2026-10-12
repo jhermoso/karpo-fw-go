@@ -304,3 +304,36 @@ puede sacar la planta para una casilla.
   ([INSTALACIONES.md](INSTALACIONES.md)).
 - **Pendiente:** la región de la dirección sigue siendo texto libre aunque la dirección lleve
   los identificadores de Geografía (ver [GEOGRAFIA-NUTS.md](GEOGRAFIA-NUTS.md)).
+
+## 8. Tipos de rol: código estable y alta desde la aplicación (2026-10-12)
+
+Primer paso de la extensibilidad en Go ([EXTENSIBILIDAD.md](EXTENSIBILIDAD.md), X-3), y el primer
+caso de la decisión sobre catálogos: un tipo de rol **sin datos propios** se añade como dato,
+diciendo quién es su padre.
+
+*Ejemplo:* un administrador añade «Guarantor» (avalista) debajo de «Person». Desde ese momento se
+asigna como cualquier otro rol, y sólo a personas, porque cuelga de «Person».
+
+```
+POST /api/catalogs/party-role-types
+{ "name": "Guarantor", "code": "guarantor", "parent": "<id de Person>" }
+```
+
+- **Código estable.** Cada tipo de rol tiene un `code` opcional y único, como ya lo tenían los
+  de relación. Los 37 del programa llevan el suyo, que es su nombre en minúsculas y con guiones
+  (`customer`, `internal-organization`, `bill-to-customer`). Es por lo que un modelo, una semilla
+  o una extensión nombran el tipo sin usar su identificador. Migración 16.
+- **Qué se comprueba al añadir:** que el padre existe, y que nadie tiene ya ese nombre (sin
+  distinguir mayúsculas) ni ese código. El tipo nuevo siempre se puede asignar: no se crean
+  categorías. A quién se puede asignar sale de su sitio en la jerarquía.
+- **Quién.** Permiso propio, `Parties.RoleType.Define`, y además hay que ser administrador
+  global: el catálogo es de toda la instalación. La acción no se llama «Create» a propósito,
+  porque la regla estándar de Security reparte «Create» a cualquier usuario.
+- **`wellKnown`** distingue en el listado los tipos del programa de los añadidos.
+- **Lo que no hay todavía:** cambiar o retirar un tipo añadido; añadir tipos de relación; y los
+  tipos **con** datos propios, que son el resto de la extensibilidad.
+- **Decisiones técnicas tomadas** (reversibles): la unicidad del nombre y del código se comprueba
+  antes de escribir y no con un índice único (un índice único sobre una columna que admite vacíos
+  no se comporta igual en todos los motores), así que dos altas simultáneas con el mismo código
+  podrían entrar las dos; el alta no deja traza en la auditoría, porque el catálogo no es un
+  agregado; y en el almacén de memoria los tipos añadidos no sobreviven a un cambio de almacén.

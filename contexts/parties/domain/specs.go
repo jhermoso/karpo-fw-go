@@ -20,6 +20,8 @@ type (
 // phase) and through migrations.
 type Catalogs interface {
 	RoleTypes(ctx context.Context) ([]RoleType, error)
+	// AddRoleType adds a role type to the catalog. The caller has checked that it fits.
+	AddRoleType(ctx context.Context, t RoleType) error
 	RelationshipTypes(ctx context.Context) ([]RelationshipType, error)
 	DocumentTypes(ctx context.Context) ([]DocumentType, error)
 	CountryDocumentRules(ctx context.Context) ([]CountryDocumentRule, error)

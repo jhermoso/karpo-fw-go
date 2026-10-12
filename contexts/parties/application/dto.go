@@ -252,11 +252,23 @@ func RelationshipToDTO(r *domain.Relationship, types map[domain.RelationshipType
 // RoleTypeDTO is an entry of the role type catalog.
 type RoleTypeDTO struct {
 	ID            string `json:"id"`
+	Code          string `json:"code,omitempty"`
 	Name          string `json:"name"`
 	Description   string `json:"description,omitempty"`
 	Parent        string `json:"parent,omitempty"`
 	Category      bool   `json:"category"`
 	Applicability string `json:"applicability"`
+	// WellKnown tells the types that come with the program from the ones added to the catalog.
+	WellKnown bool `json:"wellKnown"`
+}
+
+func roleTypeDTO(cat *domain.Catalog, t domain.RoleType) RoleTypeDTO {
+	dto := RoleTypeDTO{ID: t.ID.String(), Code: t.Code, Name: t.Name.String(), Description: t.Description, Category: t.Category,
+		Applicability: string(cat.Applicability(t.ID)), WellKnown: domain.IsWellKnownRoleType(t.ID)}
+	if t.Parent != nil {
+		dto.Parent = t.Parent.String()
+	}
+	return dto
 }
 
 // RelationshipTypeDTO is an entry of the relationship type catalog.

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/parties/domain"
@@ -381,7 +382,7 @@ var _ domain.Catalogs = SQLCatalogs{}
 
 // RoleTypes implements domain.Catalogs.
 func (c SQLCatalogs) RoleTypes(ctx context.Context) ([]domain.RoleType, error) {
-	rows, err := c.db.Select(ctx, "role_types", []string{"id", "name", "description", "parent_id", "category"}, "name")
+	rows, err := c.db.Select(ctx, "role_types", []string{"id", "name", "description", "parent_id", "category", "code"}, "name")
 	if err != nil {
 		return nil, err
 	}
@@ -391,7 +392,7 @@ func (c SQLCatalogs) RoleTypes(ctx context.Context) ([]domain.RoleType, error) {
 		if err != nil {
 			return nil, err
 		}
-		t := domain.RoleType{ID: domain.RoleTypeID{UUID: r.UUID("id")}, Name: name,
+		t := domain.RoleType{ID: domain.RoleTypeID{UUID: r.UUID("id")}, Name: name, Code: r.String("code"),
 			Description: r.String("description"), Category: r.Bool("category")}
 		if !r.IsNull("parent_id") {
 			p := domain.RoleTypeID{UUID: r.UUID("parent_id")}
@@ -403,6 +404,16 @@ func (c SQLCatalogs) RoleTypes(ctx context.Context) ([]domain.RoleType, error) {
 		out = append(out, t)
 	}
 	return out, nil
+}
+
+// AddRoleType implements domain.Catalogs.
+func (c SQLCatalogs) AddRoleType(ctx context.Context, t domain.RoleType) error {
+	var parent any
+	if t.Parent != nil {
+		parent = *t.Parent
+	}
+	return c.db.Insert(ctx, "role_types", sqlrepo.Values{"id": t.ID, "name": t.Name.String(), "description": nullable(t.Description),
+		"parent_id": parent, "category": t.Category, "code": nullable(t.Code)})
 }
 
 // RelationshipTypes implements domain.Catalogs.
@@ -530,12 +541,39 @@ func (c SQLCatalogs) FacilityRoleTypes(ctx context.Context) ([]domain.FacilityRo
 	return out, nil
 }
 
-// WellKnownCatalogs serves the seed catalogs from memory (in-memory backend and tests).
-type WellKnownCatalogs struct{}
+// WellKnownCatalogs serves the seed catalogs from memory (in-memory backend and tests), plus the
+// role types added to it. The zero value is ready to use; the catalogs of a memory store are
+// shared by everybody who asks for them (CatalogsFor).
+type WellKnownCatalogs struct{ added *addedRoleTypes }
+
+type addedRoleTypes struct {
+	mu    sync.Mutex
+	types []domain.RoleType
+}
+
+// memoryCatalogs holds the role types added to each memory store.
+var memoryCatalogs sync.Map // *memory.Store -> *addedRoleTypes
 
 // RoleTypes implements domain.Catalogs.
-func (WellKnownCatalogs) RoleTypes(context.Context) ([]domain.RoleType, error) {
-	return domain.WellKnownRoleTypes(), nil
+func (c WellKnownCatalogs) RoleTypes(context.Context) ([]domain.RoleType, error) {
+	out := domain.WellKnownRoleTypes()
+	if c.added != nil {
+		c.added.mu.Lock()
+		defer c.added.mu.Unlock()
+		out = append(out, c.added.types...)
+	}
+	return out, nil
+}
+
+// AddRoleType implements domain.Catalogs.
+func (c WellKnownCatalogs) AddRoleType(_ context.Context, t domain.RoleType) error {
+	if c.added == nil {
+		return fmt.Errorf("%w: these catalogs are the seed alone and take no role types", fw.ErrUnsupported)
+	}
+	c.added.mu.Lock()
+	defer c.added.mu.Unlock()
+	c.added.types = append(c.added.types, t)
+	return nil
 }
 
 // RelationshipTypes implements domain.Catalogs.
@@ -597,7 +635,8 @@ func CatalogsFor(b hotswap.Backend) (domain.Catalogs, error) {
 	case *sqlrepo.DB:
 		return SQLCatalogs{db: db}, nil
 	case *memory.Store:
-		return WellKnownCatalogs{}, nil
+		added, _ := memoryCatalogs.LoadOrStore(db, &addedRoleTypes{})
+		return WellKnownCatalogs{added: added.(*addedRoleTypes)}, nil
 	}
 	return nil, unsupported(b)
 }
@@ -609,6 +648,10 @@ func SwappableCatalogs(sw *hotswap.Switch) domain.Catalogs {
 
 type swappableCatalogs struct {
 	b *hotswap.Binding[domain.Catalogs]
+}
+
+func (c swappableCatalogs) AddRoleType(ctx context.Context, t domain.RoleType) error {
+	return c.b.With(ctx, func(ctx context.Context, x domain.Catalogs) error { return x.AddRoleType(ctx, t) })
 }
 
 func (c swappableCatalogs) RoleTypes(ctx context.Context) (out []domain.RoleType, err error) {

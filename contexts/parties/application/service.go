@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -69,6 +70,7 @@ type Service struct {
 	Relationships           app.QueryHandler[PartyRelationships, []RelationshipDTO]
 	InternalOrganizations   app.QueryHandler[ListInternalOrganizations, []PartyDTO]
 	ListRoleTypes           app.QueryHandler[ListRoleTypes, []RoleTypeDTO]
+	DefineRoleType          app.CommandHandler[DefineRoleType, RoleTypeDTO]
 	ListRelationshipTypes   app.QueryHandler[ListRelationshipTypes, []RelationshipTypeDTO]
 	DocumentOptions         app.QueryHandler[DocumentOptions, []DocumentOptionDTO]
 	ListClassificationTypes app.QueryHandler[ListClassificationTypes, []ClassificationTypeDTO]
@@ -416,14 +418,39 @@ func NewService(d Deps) *Service {
 		}
 		out := []RoleTypeDTO{}
 		for _, t := range cat.All() {
-			dto := RoleTypeDTO{ID: t.ID.String(), Name: t.Name.String(), Description: t.Description, Category: t.Category,
-				Applicability: string(cat.Applicability(t.ID))}
-			if t.Parent != nil {
-				dto.Parent = t.Parent.String()
-			}
-			out = append(out, dto)
+			out = append(out, roleTypeDTO(cat, t))
 		}
 		return out, nil
+	})
+
+	svc.DefineRoleType = chain(PermRoleTypeDefine, func(ctx context.Context, c DefineRoleType) (RoleTypeDTO, error) {
+		if !scopeOf(ctx).global {
+			return RoleTypeDTO{}, fmt.Errorf("%w: the role catalog belongs to the whole installation", fw.ErrForbidden)
+		}
+		parent, err := parseRoleType(c.Parent)
+		if err != nil {
+			var v fw.Validation
+			v.Add("parent", "format", "parent must be a role type id")
+			return RoleTypeDTO{}, v.Err()
+		}
+		t, err := domain.NewRoleType(domain.RoleTypeID{UUID: fw.NewUUID()}, c.Name, c.Description, c.Code, parent)
+		if err != nil {
+			return RoleTypeDTO{}, err
+		}
+		cat, err := s.roleCatalog(ctx)
+		if err != nil {
+			return RoleTypeDTO{}, err
+		}
+		if err := cat.Admits(t); err != nil {
+			return RoleTypeDTO{}, err
+		}
+		if err := s.Catalogs.AddRoleType(ctx, t); err != nil {
+			return RoleTypeDTO{}, err
+		}
+		if cat, err = s.roleCatalog(ctx); err != nil {
+			return RoleTypeDTO{}, err
+		}
+		return roleTypeDTO(cat, t), nil
 	})
 
 	svc.ListRelationshipTypes = chain(PermPartyRead, func(ctx context.Context, _ ListRelationshipTypes) ([]RelationshipTypeDTO, error) {
