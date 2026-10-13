@@ -356,11 +356,11 @@ anteriores donde difieran.** Nada de esto está aprobado por Javier.
 - Fuera de ámbito, **404**; dentro pero sin poder escribir, **403**. Escribir exige acceso
   completo.
 - El alta con su relación comprueba la empresa antes de crear, y es todo o nada.
-- **Quién ve a una party** se escribe una sola vez, para los dos backs. **Aquí hay un choque con
-  una decisión de Javier:** C# propone «propia empresa, relación vigente o compartida»; Javier
-  decidió el 12 de octubre que la visibilidad **no** depende de la vigencia de la relación, sino
-  de que la party esté activada (D-15), y esa decisión tiene tres preguntas sin contestar
-  ([PARTIES-MODELO-COMUN.md](PARTIES-MODELO-COMUN.md) §1 bis).
+- **Quién ve a una party** se escribe una sola vez, para los dos backs, y **la regla es la de
+  D-15**: la visibilidad no depende de la vigencia de la relación, sino de que la party esté
+  activada. C# había propuesto aquí «relación vigente» y **lo ha retirado** (2026-10-13). D-15
+  tiene tres preguntas sin contestar (`DECISIONES-COMUNES.md` §2); hasta entonces la regla no se
+  puede escribir entera. Ninguno de los tres la cumple hoy.
 
 ### Lo que C# no puede cumplir todavía
 
