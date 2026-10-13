@@ -119,6 +119,14 @@ fusionar, sin probar en Oracle ni SQL Server):
 Reafirmada también allí D-7: «el límite de crédito siempre pertenece a la pareja de empresa interna
 y customer». No dice en qué contexto debe vivir.
 
+### 1.1 quater Catálogo de tipos de rol (sesión de Karpo C#)
+
+**Transmitida** por la sesión de Karpo C# el 2026-10-14. Sin confirmar aquí todavía.
+
+| # | Decisión | Lo que dijo Javier | Contexto |
+|---|---|---|---|
+| D-54 | **El tipo de rol `10000000-0000-0000-0001-000000000037` se llama «Team»** y su código estable es `team` | «2 team», a la pregunta «"Team" u "Other Organization Unit" para el identificador …0037» | Las semillas SQL de Trench y de Karpo C# lo llaman «Team»; los catálogos en código de Karpo C# y de Karpo Go, «Other Organization Unit». Salió al preparar los códigos estables (Trench PR 36), que se rellenan por identificador |
+
 ### 1.2 Extensibilidad
 
 Detalle en [EXTENSIBILIDAD.md](EXTENSIBILIDAD.md) §1.
@@ -189,6 +197,7 @@ empresa es un envío o un trabajo; y cómo se añade un valor de catálogo en SQ
 | D-47 | Cuándo y cómo lo hereda Go (Security de Go tiene su propio diseño de contraseñas) |
 | — | Supresión de datos personales (RGPD): sin decidir, pendiente de consulta legal |
 | D-49 | **¿Cómo se lee «si la cambiamos en go»?** Si es «sí», Go y Karpo C# cambian una regla ya implantada: establecer una relación dejaría de exigir que cada lado juegue su rol, y lo asignaría |
+| D-54 | ¿Entran en el catálogo común los tipos que el código de Karpo C# no siembra (Club, Group, los de comunicación, caso y esfuerzo, Department Assignment, Collaborator Contact)? El catálogo de Karpo Go tampoco tiene Club, Group, Department Assignment ni Collaborator Contact |
 | D-53 | Si una persona puede ser organización interna: ¿puede entonces emitir facturas, tener plan contable y empleados, como cualquier empresa del grupo? ¿Y un autónomo proveedor se identifica con su NIF de persona? |
 
 ## 3. Propuestas en curso (no son decisiones)
@@ -273,6 +282,7 @@ Lo que Go no cumple todavía de lo decidido. Cada sesión lleva la suya en su re
 | D-49 | Al revés: establecer una relación exige que cada lado ya juegue su rol y la rechaza si no (422). Sólo el alta de una party con su afiliación asigna el rol | Esperar la confirmación de la lectura; después, cambiar la regla |
 | D-50 | Cumple: índice único sobre tipo, país y número | — |
 | D-51 | No hay búsqueda de relaciones ni vista por pareja | Entra con el contrato HTTP |
+| D-54 | Al revés: el tipo …0037 se llama «Other Organization Unit», con código `other-organization-unit` | Migración de datos que cambie nombre y código, y renombrar la constante `RoleOtherOrganizationUnit` |
 | D-53 | Al revés: «Supplier» e «Internal Organization» cuelgan de la rama de organizaciones del catálogo de roles, así que una persona no puede jugarlos | Mover los dos tipos de rol en el catálogo (migración de datos) y revisar lo que da por hecho que una empresa del grupo es una organización: Fiscal, Contabilidad, Facturación |
 | D-40 | Cumple los tres, y prueba además en MySQL y SQLite | — |
 | D-45 | Cumple: cada caso de uso comprueba su permiso | — |
