@@ -60,7 +60,14 @@ en cada lado, en [PARTIES-MODELO-COMUN.md](PARTIES-MODELO-COMUN.md).
 ### 1.1 bis Clientes y proveedores como relaciones (sesión de Trench)
 
 Todas **transmitidas** por la sesión de Trench el 2026-10-13, con la respuesta literal de Javier
-cuando la dio. La fecha exacta de cada una no consta; son de la semana del 12 de octubre.
+cuando la dio. Fechas, según la hora de cada mensaje de Javier en esa sesión (hora peninsular):
+D-28 y D-29, el 11 de octubre; D-30, D-31, D-32, D-33, D-34 y D-35, el 12 de octubre.
+
+Sobre **D-17**: en la sesión de Trench no hay una frase de Javier con las palabras «los clientes
+son relaciones»; lo que hay es su encargo del 12 de octubre de sustituir «Clientes» por «Relaciones
+de clientes» (D-30). La frase literal es la que dijo en la sesión de Karpo C# el 13 de octubre:
+«La primera es la que afecta a si los clientes son roles o relaciones. Son relaciones tal y como le
+dije al orquestador de trench».
 
 | # | Decisión | Lo que dijo Javier | Sesión |
 |---|---|---|---|
