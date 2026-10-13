@@ -405,7 +405,7 @@ con la marca «the CIF does not pass its check digits» y el número tal como vi
   un documento español (DNI, NIF, CIF, NIE) con el dígito de control mal se sigue guardando como
   «otro documento», marca a la party, y añade un aviso al informe de la ejecución
   (`sage.wrong_document`, `apiscore.wrong_document`).
-- **Decisión técnica tomada, y por qué no es exactamente «no se guarda»:** el número erróneo se
+- **Confirmado por Javier el 2026-10-13, y por qué no es exactamente «no se guarda»:** el número erróneo se
   **conserva como «otro documento»** además de la marca. La importación encuentra a quien ya
   existe por su número de documento; si el número erróneo no se guardara, cada reimportación
   crearía otra vez al mismo cliente. «Otro documento» no se valida ni cuenta como identificación
