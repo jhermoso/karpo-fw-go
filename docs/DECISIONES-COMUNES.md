@@ -103,6 +103,19 @@ este registro tenía abiertas. Sin confirmar aquí todavía.
 | D-52 | **En el filtro de roles no hay paréntesis por ahora**: se usa la precedencia de los operadores («y» liga más que «o»). El árbol de la expresión se mantiene; los paréntesis, más adelante, sobre la línea donde se ve la expresión | «de momento no podemos meter paréntesis vamos a utilizar la precedencia de los operadores…» | — |
 | D-53 | **Una persona puede ser proveedor** (un autónomo), **e incluso organización interna** | «si, si puede, incluso puede ser organización interna» | — |
 
+**El filtro de D-48, según Trench** (2026-10-13; hecho allí en Trench PR 34, sin
+fusionar, sin probar en Oracle ni SQL Server):
+
+- Campo `includeEndedRoles`, booleano opcional, en el filtro de búsqueda de parties, hermano de
+  `expression`. Ausente o `false`: sólo vigentes. No va dentro de `FilterExpressionDto`, que sigue
+  en versión 1.
+- «Vigente»: fecha de inicio ≤ ahora (UTC) y fecha de caducidad nula o posterior a ahora. Con
+  `true` entran los terminados **y los que aún no han empezado**.
+- Lo respetan los filtros planos de rol, la hoja `roleType`, las búsquedas de relaciones de cliente
+  y de proveedor, y el recuento de roles más usados.
+- D-52 en la interfaz: la lista de botones `&` / `|` se convierte siempre en una «o» de grupos «y»
+  (`A | B & C` = `A o (B y C)`), tres niveles como mucho. El árbol no cambia.
+
 Reafirmada también allí D-7: «el límite de crédito siempre pertenece a la pareja de empresa interna
 y customer». No dice en qué contexto debe vivir.
 
@@ -177,7 +190,6 @@ empresa es un envío o un trabajo; y cómo se añade un valor de catálogo en SQ
 | — | Supresión de datos personales (RGPD): sin decidir, pendiente de consulta legal |
 | D-49 | **¿Cómo se lee «si la cambiamos en go»?** Si es «sí», Go y Karpo C# cambian una regla ya implantada: establecer una relación dejaría de exigir que cada lado juegue su rol, y lo asignaría |
 | D-53 | Si una persona puede ser organización interna: ¿puede entonces emitir facturas, tener plan contable y empleados, como cualquier empresa del grupo? ¿Y un autónomo proveedor se identifica con su NIF de persona? |
-| D-48 | El nombre del filtro para incluir los no vigentes: lo pondrá Trench y se usará el mismo |
 
 ## 3. Propuestas en curso (no son decisiones)
 
@@ -257,7 +269,7 @@ Lo que Go no cumple todavía de lo decidido. Cada sesión lleva la suya en su re
 | D-30 a D-35 | No hay búsqueda de relaciones, ni vista por pareja, ni expresión de filtro. Go no tiene front | La búsqueda de relaciones y la expresión, cuando se apruebe el contrato HTTP |
 | D-24 | Go sirve sus rutas, no el contrato | El contrato está sin aprobar |
 | D-39, D-44 | Un solo proceso; el broker NATS está aparcado en una rama sin fusionar | Decidir qué variantes cuentan en Go |
-| D-48 | Cumple en lo principal: sólo cuentan los roles vigentes. No hay filtro para incluir los pasados | Añadirlo con el nombre que fije Trench |
+| D-48 | Cumple en lo principal: sólo cuentan los roles vigentes. No hay filtro para incluir los pasados | Añadir `includeEndedRoles` con la definición de §1.1 ter |
 | D-49 | Al revés: establecer una relación exige que cada lado ya juegue su rol y la rechaza si no (422). Sólo el alta de una party con su afiliación asigna el rol | Esperar la confirmación de la lectura; después, cambiar la regla |
 | D-50 | Cumple: índice único sobre tipo, país y número | — |
 | D-51 | No hay búsqueda de relaciones ni vista por pareja | Entra con el contrato HTTP |
