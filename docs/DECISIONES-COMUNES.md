@@ -299,13 +299,13 @@ Lo que Go no cumple todavía de lo decidido. Cada sesión lleva la suya en su re
 | D-24 | Go sirve sus rutas, no el contrato | El contrato está sin aprobar |
 | D-39, D-44 | Un solo proceso; el broker NATS está aparcado en una rama sin fusionar | Decidir qué variantes cuentan en Go |
 | D-48 | Cumple en lo principal: sólo cuentan los roles vigentes. No hay filtro para incluir los pasados | Añadir `includeEndedRoles` con la definición de §1.1 ter |
-| D-49 | Al revés: establecer una relación exige que cada lado ya juegue su rol y la rechaza si no (422). Sólo el alta de una party con su afiliación asigna el rol | Cambiar la regla |
+| D-49 | **Hecho** (rama `feat/parties-relacion-asigna-roles`, sin fusionar): el caso de uso asigna el rol que falte antes de establecer la relación. Excepción decidida en esta sesión, no por Javier: «Internal Organization» no se asigna así, porque decide el ámbito | Que Javier confirme la excepción; proponerla a Trench y Karpo C# |
 | D-55, D-56 | `EXTENSIBILIDAD.md` dice lo contrario en los dos puntos (retirar sin DDL; sólo el tipo exacto). El mecanismo no está implementado | Corregir el diseño |
 | D-59 | La empresa no tiene acrónimo | Dato nuevo, requisito previo de la extensibilidad |
 | D-50 | Cumple: índice único sobre tipo, país y número | — |
 | D-51 | No hay búsqueda de relaciones ni vista por pareja | Entra con el contrato HTTP |
-| D-54 | Al revés: el tipo …0037 se llama «Other Organization Unit», con código `other-organization-unit` | Migración de datos que cambie nombre y código, y renombrar la constante `RoleOtherOrganizationUnit` |
-| D-53 | Al revés: «Supplier» e «Internal Organization» cuelgan de la rama de organizaciones del catálogo de roles, así que una persona no puede jugarlos | Mover los dos tipos de rol en el catálogo (migración de datos) y revisar lo que da por hecho que una empresa del grupo es una organización: Fiscal, Contabilidad, Facturación, Recursos Humanos |
+| D-54 | **Hecho** (rama `feat/parties-rol-team`, migración 19). Sigue colgando de «Organization Unit» | Decidir de qué cuelga (§2) |
+| D-53 | **Hecho** (rama `feat/parties-persona-proveedor-o-empresa`, migración 20): los dos tipos cuelgan de la raíz. Los demás contextos guardan a la empresa por identificador y no cambian. Una persona empresa no puede tener unidades organizativas debajo | El documento que identifica al autónomo; que la importación de proveedores cargue personas |
 | D-40 | Cumple los tres, y prueba además en MySQL y SQLite | — |
 | D-45 | Cumple: cada caso de uso comprueba su permiso | — |
 | D-46 | Una sesión de orquestación; revisión independiente de lo delegado y de los cambios grandes. **No** se hacen tres pasadas completas en verde antes de cada subida, sino una local y una contra los motores | Ajustar si Javier lo quiere así también para los PR en borrador |
