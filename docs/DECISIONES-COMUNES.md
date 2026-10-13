@@ -89,6 +89,23 @@ islas, niveles y piezas de dirección, después, en un tramo coordinado con Karp
 extensibilidad en ejecución; en Trench el orden es terminar el alta, luego el contrato, luego
 la navegación).
 
+### 1.1 ter Respuestas del 13 de octubre (sesión de Trench)
+
+**Transmitidas** por la sesión de Trench el 2026-10-13; Javier contestó allí a preguntas que
+este registro tenía abiertas. Sin confirmar aquí todavía.
+
+| # | Decisión | Lo que dijo Javier | Cierra |
+|---|---|---|---|
+| D-48 | **«Tiene el rol X» mira sólo los roles vigentes.** Para incluir los que ya no lo son, un filtro adicional en cada agregado o entidad, igual para todos | «roles sólo vigentes» · «Esto podemos solucionarlo para todos por igual añadiendo un filtro adicional en cada agregado o entidad que incluya o no los vigentes» | La pregunta de D-35 y la tercera de Theros |
+| D-49 | **La relación asigna los roles si faltan**, y la regla contraria de Go se cambia. **Lectura dudosa:** la frase puede leerse como «sí, la cambiamos en Go» o como condicional. Sin confirmar; no se toca la regla de Go hasta entonces | «si la cambiamos en go» | La pregunta 2 de D-17, si se confirma |
+| D-50 | **Un documento no puede estar en dos parties**: la regla de unicidad se mantiene, y Trench limpia sus duplicados antes de converger | «limpiamos trench antes de converger» | «¿Un documento en dos parties?» |
+| D-51 | **La vista por pareja («Relaciones de clientes / proveedores») es común a todos**: el contrato HTTP común lleva esas rutas | «preferiría que fuera común a todos» | La decisión 6 del contrato HTTP |
+| D-52 | **En el filtro de roles no hay paréntesis por ahora**: se usa la precedencia de los operadores («y» liga más que «o»). El árbol de la expresión se mantiene; los paréntesis, más adelante, sobre la línea donde se ve la expresión | «de momento no podemos meter paréntesis vamos a utilizar la precedencia de los operadores…» | — |
+| D-53 | **Una persona puede ser proveedor** (un autónomo), **e incluso organización interna** | «si, si puede, incluso puede ser organización interna» | — |
+
+Reafirmada también allí D-7: «el límite de crédito siempre pertenece a la pareja de empresa interna
+y customer». No dice en qué contexto debe vivir.
+
 ### 1.2 Extensibilidad
 
 Detalle en [EXTENSIBILIDAD.md](EXTENSIBILIDAD.md) §1.
@@ -158,7 +175,9 @@ empresa es un envío o un trabajo; y cómo se añade un valor de catálogo en SQ
 | D-44 | ¿Se termina entonces el broker NATS de Go, que está aparcado en una rama? |
 | D-47 | Cuándo y cómo lo hereda Go (Security de Go tiene su propio diseño de contraseñas) |
 | — | Supresión de datos personales (RGPD): sin decidir, pendiente de consulta legal |
-| — | ¿Un documento puede estar en dos parties? Go lo impide; Trench tiene duplicados reales y Karpo C# no tiene índice único |
+| D-49 | **¿Cómo se lee «si la cambiamos en go»?** Si es «sí», Go y Karpo C# cambian una regla ya implantada: establecer una relación dejaría de exigir que cada lado juegue su rol, y lo asignaría |
+| D-53 | Si una persona puede ser organización interna: ¿puede entonces emitir facturas, tener plan contable y empleados, como cualquier empresa del grupo? ¿Y un autónomo proveedor se identifica con su NIF de persona? |
+| D-48 | El nombre del filtro para incluir los no vigentes: lo pondrá Trench y se usará el mismo |
 
 ## 3. Propuestas en curso (no son decisiones)
 
@@ -238,6 +257,11 @@ Lo que Go no cumple todavía de lo decidido. Cada sesión lleva la suya en su re
 | D-30 a D-35 | No hay búsqueda de relaciones, ni vista por pareja, ni expresión de filtro. Go no tiene front | La búsqueda de relaciones y la expresión, cuando se apruebe el contrato HTTP |
 | D-24 | Go sirve sus rutas, no el contrato | El contrato está sin aprobar |
 | D-39, D-44 | Un solo proceso; el broker NATS está aparcado en una rama sin fusionar | Decidir qué variantes cuentan en Go |
+| D-48 | Cumple en lo principal: sólo cuentan los roles vigentes. No hay filtro para incluir los pasados | Añadirlo con el nombre que fije Trench |
+| D-49 | Al revés: establecer una relación exige que cada lado ya juegue su rol y la rechaza si no (422). Sólo el alta de una party con su afiliación asigna el rol | Esperar la confirmación de la lectura; después, cambiar la regla |
+| D-50 | Cumple: índice único sobre tipo, país y número | — |
+| D-51 | No hay búsqueda de relaciones ni vista por pareja | Entra con el contrato HTTP |
+| D-53 | Al revés: «Supplier» e «Internal Organization» cuelgan de la rama de organizaciones del catálogo de roles, así que una persona no puede jugarlos | Mover los dos tipos de rol en el catálogo (migración de datos) y revisar lo que da por hecho que una empresa del grupo es una organización: Fiscal, Contabilidad, Facturación |
 | D-40 | Cumple los tres, y prueba además en MySQL y SQLite | — |
 | D-45 | Cumple: cada caso de uso comprueba su permiso | — |
 | D-46 | Una sesión de orquestación; revisión independiente de lo delegado y de los cambios grandes. **No** se hacen tres pasadas completas en verde antes de cada subida, sino una local y una contra los motores | Ajustar si Javier lo quiere así también para los PR en borrador |
