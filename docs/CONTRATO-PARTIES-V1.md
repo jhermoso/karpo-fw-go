@@ -177,6 +177,46 @@ Es la ruta de la que viven las siete pantallas principales.
 - **No está** «sólo documentos duplicados» (`onlyDuplicatedIdentifications`): el modelo común dice
   que un documento identifica a una sola party, así que no puede haber duplicados que buscar.
 
+### 3.1 bis Filtrar por roles con «y», «o» y «no»: la expresión de Trench
+
+> Añadido el 2026-10-13, después de escribir lo anterior. Trench tiene en su rama principal un
+> formato para esto, `FilterExpressionDto`, y Javier ha pedido a los demás proyectos que lo tomen
+> como ejemplo. Conviene que sea **idéntico** en los tres, así que este contrato lo adopta en
+> lugar de inventar otro. Lo he leído en su código (`main`, `e6d157c9`); no lo he ejecutado.
+
+`rolesAny` y `rolesAll` sólo saben decir «alguno» o «todos». La expresión dice cualquier
+combinación, y viaja en `filter.expression`:
+
+```json
+{ "version": 1,
+  "root": { "op": "or", "args": [
+      { "op": "and", "args": [
+          { "op": "leaf", "kind": "roleType", "value": "10000000-0000-0000-0001-000000000002" },
+          { "op": "leaf", "kind": "roleType", "value": "10000000-0000-0000-0001-000000000003" } ] },
+      { "op": "leaf", "kind": "roleType", "value": "10000000-0000-0000-0001-000000000010" } ] } }
+```
+
+*Se lee:* «(cliente **y** proveedor) **o** empleado».
+
+| Regla | Valor |
+|---|---|
+| Nodos | `and` y `or` (uno o más hijos en `args`), `not` (exactamente uno) y `leaf` |
+| Hoja de hoy | `kind: "roleType"`, con el identificador del tipo de rol en `value` |
+| Límites | Profundidad 8 y 16 hojas; más es un 400 |
+| Hoja desconocida | 400. Un servidor nunca la ignora |
+| Versión | Añadir un tipo de hoja no la sube; cambiar la forma del árbol, sí |
+
+Con esto, `rolesAny` y `rolesAll` de §3.1 sobran: se quedan como atajo sólo si alguien los pide.
+
+Dos cosas por aclarar con Trench antes de darlo por igual en los tres:
+
+1. **¿«Tiene el rol X» incluye los roles que están por debajo de X?** En Go sí: quien es «cliente
+   de facturación» es «cliente». No he leído qué hace Trench.
+2. **El valor es el identificador del tipo de rol, no su código.** Para los tipos del programa da
+   igual, porque los identificadores son los mismos en los tres. Para un tipo que añada un
+   administrador, el identificador es de esa instalación. Una hoja `roleTypeCode` lo haría
+   portable; es añadir un tipo de hoja, que el formato ya prevé.
+
 ### 3.2 Orden
 
 `name` (por defecto), `birthDate`, `createdAt`. Nada más en la versión 1: ordenar por una columna
