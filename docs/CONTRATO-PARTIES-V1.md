@@ -326,6 +326,82 @@ Decisiones que esto añade a las de §7:
    hace falta la fusión de duplicados; si no, la importación de datos reales necesita un paso
    previo de limpieza.
 
+## 7 ter. Revisión de Karpo C# (2026-10-13)
+
+La sesión de Karpo C# revisó el contrato contra su código (`main`, `6c36c40f`) y contra el front,
+sólo leyendo. Su detalle, con fichero y línea, está en su repositorio:
+`000-Docs/design/Karpo_Respuesta_Contrato_Parties_V1.md`. **Esta sección manda sobre las
+anteriores donde difieran.** Nada de esto está aprobado por Javier.
+
+### Lo que se cambia en el contrato (aceptado aquí; es técnico)
+
+| # | Cambio | Por qué |
+|---|---|---|
+| 1 | **La fila de búsqueda no lleva relaciones con nombre.** `relationships` pasa a ser `[{ typeCode, typeName, count }]`; las relaciones con el nombre de la otra parte van en el detalle y en la ruta 10 | Una empresa del grupo tiene miles de relaciones; C# quitó ese dato de la fila en agosto por eso |
+| 2 | **Se puede ordenar también por `active`** (§3.2) | El front ordena hoy por ese campo |
+| 3 | **Faltaban las rutas para escribir lo que §2.1 devuelve.** Entran: `POST /api/parties/{id}/identifications` y `DELETE …/{identId}`; `POST /api/parties/{id}/contacts`, `PUT …/{contactId}/purposes` y `POST …/{contactId}/end`; `POST /api/parties/{id}/classifications` y `POST …/{classId}/end` | Existen ya en Go con esa forma; el contrato las había dejado fuera sin decirlo |
+| 4 | **`organization.legalForm` tiene seis valores:** `corporation`, `government-agency`, `non-profit`, `partnership`, `sole-proprietorship`, `team` | C# pidió la lista |
+| 5 | **`taxId` es la identificación fiscal principal**, no la principal a secas; `country` es el código ISO de la dirección postal vigente | En C# hoy salen de otros sitios y `country` es un nombre en inglés |
+| 6 | **Roles y relaciones de la fila y del filtro son los vigentes hoy** | En C# hoy no se filtra por vigencia; es el mismo roce que con Trench |
+| 7 | **El contrato tiene que decir permisos y ámbito** (ver abajo) | No decía nada |
+
+### Permisos y ámbito (sección nueva, propuesta por C#)
+
+- Cada ruta exige una acción con nombre. Leer: `Parties.Party.Read`, `Parties.Relationship.Read`.
+  Crear: `Parties.Party.Create`. Cambiar: `Parties.Party.Update`. Roles:
+  `Parties.PartyRole.Assign`. Relaciones: `Parties.Relationship.Create`, `…Terminate`,
+  `…Update`. (Son los nombres de Go; C# propone los suyos y hay que casarlos.)
+- La cabecera `X-Organization-Scope` **nunca amplía** lo que quien llama puede ver; sólo lo
+  reduce.
+- Fuera de ámbito, **404**; dentro pero sin poder escribir, **403**. Escribir exige acceso
+  completo.
+- El alta con su relación comprueba la empresa antes de crear, y es todo o nada.
+- **Quién ve a una party** se escribe una sola vez, para los dos backs. **Aquí hay un choque con
+  una decisión de Javier:** C# propone «propia empresa, relación vigente o compartida»; Javier
+  decidió el 12 de octubre que la visibilidad **no** depende de la vigencia de la relación, sino
+  de que la party esté activada (D-15), y esa decisión tiene tres preguntas sin contestar
+  ([PARTIES-MODELO-COMUN.md](PARTIES-MODELO-COMUN.md) §1 bis).
+
+### Lo que C# no puede cumplir todavía
+
+| Qué | Detalle |
+|---|---|
+| **Los datos de persona y organización** | C# guarda un solo nombre de 120 caracteres: no tiene nombre y apellidos por separado, estado civil, nombre comercial ni forma jurídica. Sin un cambio de esquema previo (el paso P-30/P-31 de su estudio), cumpliría devolviendo vacíos |
+| **Códigos de tipo de rol y de relación** | No los tiene |
+| **Terminar una relación** | Sólo tiene borrar |
+| **`version`, rechazo de campos desconocidos, `code`, `correlationId` y `errors` como lista** | No por HTTP hoy |
+| **422 para una regla de negocio** | Devuelve 409. Lo cambiaría sólo en las rutas nuevas |
+
+### Lo que cambia mi inventario del front
+
+- **Son unas 85 plantillas de ruta, no «unas 50»**, contando como yo las 41 configuraciones. La
+  conclusión se mantiene: las siete pantallas viven de una docena.
+- **`POST /customers/quick-create` no existe en el back de C#**, ni las rutas para borrar
+  personas, organizaciones o clientes: parte de lo que el contrato quita ya no funciona hoy.
+- **Cambios recientes que el inventario no conocía:** el alta de participante va ya a
+  `/persons` u `/organizations` con `{ name }`, y en organizaciones **el cliente genera el
+  identificador**.
+- **El front construye la petición de búsqueda en seis sitios y traduce la fila en cuatro.** Hay
+  que juntarlos antes de adaptarlo. Tamaño en el front: medio-grande, no medio.
+- **No se adapta sin rediseñar:** editar con `PUT {ruta}/{id}`, el nombre en un solo campo, el
+  alta de rol y de relación desde las pestañas, «añadir relación» (su formulario exige estado y
+  prioridad) y los recuentos por número de roles o de relaciones.
+- Configuraciones a tocar: **ocho** (las siete pantallas y la de pedidos).
+
+### Decisiones que esto añade para Javier
+
+8. **Prefijo de convivencia.** En C#, diez de estas rutas chocan en método y plantilla con las
+   actuales, con otra forma, y `/api/v1` no sirve porque todo lo recorta a `/api`. C# propone un
+   segmento propio, por ejemplo `/api/c1/…`, fijado en el contrato. A Go le da igual servir un
+   prefijo u otro.
+9. **¿El cliente puede mandar el identificador al crear?** El front ya lo hace en organizaciones.
+   C# recomienda que sí. En Go hoy lo genera el servidor.
+10. **La regulación de la corporación** (fuente, vigencia, descripción) está en C# y no en §2.1.
+    ¿Entra?
+11. **Hacer antes en C# el cambio de esquema de persona y organización**, para que la forma de
+    §2.1 no salga vacía.
+12. **409 o 422** para una regla de negocio rota. Go usa 422; C#, 409.
+
 ## 8. Límites
 
 - Nadie de C# ni de Trench ha revisado esto todavía.
