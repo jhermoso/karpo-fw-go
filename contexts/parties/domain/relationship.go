@@ -166,7 +166,8 @@ type ProspectDetails struct {
 
 // Establish creates a relationship between two parties, checking what the C# left to stubs:
 // the parties differ, are active, and play the roles required by the type (or roles below them
-// in the hierarchy) when the relationship starts. The parties are read, never modified.
+// in the hierarchy) when the relationship starts. The parties are read, never modified: giving a
+// side the role it lacks is the use case's business, before coming here.
 func Establish(id RelationshipID, t RelationshipType, from, to *Party, c RoleCatalog, since time.Time, remark string) (*Relationship, error) {
 	if from.ID() == to.ID() {
 		return nil, fw.Violation("parties.self_relationship", "a party cannot be related to itself")

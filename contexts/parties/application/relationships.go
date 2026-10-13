@@ -122,9 +122,10 @@ func (s service) register(ctx context.Context, build func(domain.PartyID) (*doma
 	return n.dto(p), nil
 }
 
-// establish creates a relationship and projects it into the parties: a party related to an
-// internal organization becomes affiliated with it (visibility, membership). Hierarchical types
-// keep one parent per child and no cycles. Everything happens in the caller's unit of work.
+// establish creates a relationship and projects it into the parties: a side that lacks the role
+// of the type is given it, and a party related to an internal organization becomes affiliated
+// with it (visibility, membership). Hierarchical types keep one parent per child and no cycles.
+// Everything happens in the caller's unit of work.
 func (s service) establish(ctx context.Context, rt domain.RelationshipType, from, to *domain.Party, since time.Time, remark string,
 	details RelationshipDetailsInput) (*domain.Relationship, error) {
 	cat, err := s.roleCatalog(ctx)
@@ -140,6 +141,12 @@ func (s service) establish(ctx context.Context, rt domain.RelationshipType, from
 		return nil, err
 	} else if dup {
 		return nil, fw.Violation("parties.duplicate_relationship", "the parties already have this relationship in that period")
+	}
+	if from, err = s.playing(ctx, cat, from, rt.FromRole, since); err != nil {
+		return nil, err
+	}
+	if to, err = s.playing(ctx, cat, to, rt.ToRole, since); err != nil {
+		return nil, err
 	}
 	r, err := domain.Establish(domain.NewRelationshipID(), rt, from, to, cat, since, remark)
 	if err != nil {
@@ -169,6 +176,23 @@ func (s service) establish(ctx context.Context, rt domain.RelationshipType, from
 		}
 	}
 	return r, nil
+}
+
+// playing returns the party playing the role a relationship asks of it, giving it the role when
+// it lacks it (docs/DECISIONES-COMUNES.md, D-49). Two roles are never given this way, and the
+// relationship is refused as before: a category, which nobody is assigned, and Internal
+// Organization, which decides who sees and writes what and is only given on purpose.
+func (s service) playing(ctx context.Context, cat *domain.Catalog, p *domain.Party, role domain.RoleTypeID, since time.Time) (*domain.Party, error) {
+	if p.PlaysAt(cat, role, since) || role == domain.RoleInternalOrganization {
+		return p, nil
+	}
+	if t, ok := cat.RoleType(role); !ok || t.Category {
+		return p, nil
+	}
+	return s.parties.Update(ctx, p.ID(), func(_ context.Context, p *domain.Party) error {
+		_, err := p.AssignRole(cat, role, since)
+		return err
+	})
 }
 
 // checkHierarchy refuses a second current parent and cycles (the parent's ancestors must not
