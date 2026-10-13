@@ -91,13 +91,15 @@ la navegación).
 
 ### 1.1 ter Respuestas del 13 de octubre (sesión de Trench)
 
-**Transmitidas** por la sesión de Trench el 2026-10-13; Javier contestó allí a preguntas que
-este registro tenía abiertas. Sin confirmar aquí todavía.
+Tomadas en la sesión de Trench el 2026-10-13; Javier contestó allí a preguntas que este
+registro tenía abiertas. **Confirmadas aquí el 2026-10-14** («sí a las 3»), con dos precisiones:
+D-49 se lee como «sí, la cambiamos en Go», y en D-53 la persona que es organización interna se
+comporta como cualquier empresa del grupo (emite facturas, tiene plan contable y empleados).
 
 | # | Decisión | Lo que dijo Javier | Cierra |
 |---|---|---|---|
 | D-48 | **«Tiene el rol X» mira sólo los roles vigentes.** Para incluir los que ya no lo son, un filtro adicional en cada agregado o entidad, igual para todos | «roles sólo vigentes» · «Esto podemos solucionarlo para todos por igual añadiendo un filtro adicional en cada agregado o entidad que incluya o no los vigentes» | La pregunta de D-35 y la tercera de Theros |
-| D-49 | **La relación asigna los roles si faltan**, y la regla contraria de Go se cambia. **Lectura dudosa:** la frase puede leerse como «sí, la cambiamos en Go» o como condicional. Sin confirmar; no se toca la regla de Go hasta entonces | «si la cambiamos en go» | La pregunta 2 de D-17, si se confirma |
+| D-49 | **La relación asigna los roles si faltan**, y la regla contraria de Go se cambia. Leída como «sí, la cambiamos en Go»; confirmado aquí el 2026-10-14 | «si la cambiamos en go» | La pregunta 2 de D-17, si se confirma |
 | D-50 | **Un documento no puede estar en dos parties**: la regla de unicidad se mantiene, y Trench limpia sus duplicados antes de converger | «limpiamos trench antes de converger» | «¿Un documento en dos parties?» |
 | D-51 | **La vista por pareja («Relaciones de clientes / proveedores») es común a todos**: el contrato HTTP común lleva esas rutas | «preferiría que fuera común a todos» | La decisión 6 del contrato HTTP |
 | D-52 | **En el filtro de roles no hay paréntesis por ahora**: se usa la precedencia de los operadores («y» liga más que «o»). El árbol de la expresión se mantiene; los paréntesis, más adelante, sobre la línea donde se ve la expresión | «de momento no podemos meter paréntesis vamos a utilizar la precedencia de los operadores…» | — |
@@ -121,7 +123,8 @@ y customer». No dice en qué contexto debe vivir.
 
 ### 1.1 quater Catálogo de tipos de rol (sesión de Karpo C#)
 
-**Transmitida** por la sesión de Karpo C# el 2026-10-14. Sin confirmar aquí todavía.
+Tomada en las sesiones de Karpo C# y de Trench el 2026-10-14 («2 team» en las dos).
+**Confirmada aquí el 2026-10-14.** Decide el nombre y el código; **no decide de qué cuelga** (§2).
 
 | # | Decisión | Lo que dijo Javier | Contexto |
 |---|---|---|---|
@@ -139,6 +142,21 @@ Detalle en [EXTENSIBILIDAD.md](EXTENSIBILIDAD.md) §1.
 | D-21 | 2026-10-12 | La primera entidad fuera del sector financiero es el tipo de rol de Parties | Karpo Go |
 | D-22 | 2026-10-12 | Lo generaliza primero Trench; Go lo implementa después contra el mismo contrato; Karpo C# lo recibe de Trench | Karpo Go |
 | D-23 | 2026-10-12 | Los campos por empresa sólo caben en entidades que son de una empresa (relaciones, pedidos, reservas) | Karpo Go |
+
+### 1.2 bis Contrato de extensibilidad (sesión de Trench)
+
+**Transmitidas** por la sesión de Trench (2026-10-13 tarde y 2026-10-14). Sin confirmar aquí
+todavía. Entre paréntesis, el número que llevan en el contrato de Trench (§4.1 y §4.1 bis).
+
+| # | Decisión | Lo que dijo Javier |
+|---|---|---|
+| D-55 (1) | **La columna de un campo retirado se borra sólo si nunca tuvo valores**; si los tiene no se borra y se dice cuántos lo impiden. Sustituye a «retirar sin DDL» (decisión 8 de `EXTENSIBILIDAD.md`) | «1 b y se avisa cuantos valores existen que impiden el borrado» |
+| D-56 (3) | **Los tipos hijos heredan los campos de los padres.** Sustituye a «sólo el tipo exacto» | «3 b los roles hijos heredan los campos de los padres» |
+| D-57 (2) | **Un campo que pasa a obligatorio se exige en la siguiente modificación de cada registro**; el plan enseña cuántos quedan sin valor | «2 a y el aviso recomendado» |
+| D-58 (5) | **Las referencias a catálogo (país, divisa) entran en la primera versión**, como un tipo de campo más | «5 dentro, confirmo» |
+| D-59 (6) | **El acrónimo de empresa es obligatorio e inmutable**, y hay una función para que un administrador los cree en lote para una selección de registros. Sólo afecta a las organizaciones internas | «6 a, aunque el uso del acrónimo solo afecta en este caso a las organizaciones internas deberíamos facilitar una función para crearlos para una selección de registros por parte de un administrador» |
+| D-60 (7) | **Trench da código estable a sus tipos de rol y de relación con la regla y los valores de Karpo Go** (nombre en minúsculas con guiones). Hecho en Trench PR 36, sin fusionar | «7 sí» · «arranca ya los códigos estables y coordínalo con Karpo C#» |
+| D-61 (4) | **Los campos de un producto financiero tienen una sola puerta**: se declaran en «Campos personalizados» y el producto los cita. Sólo afecta a quien tenga configuradores de producto | «4 b» |
 
 ### 1.3 Contrato HTTP y datos
 
@@ -196,9 +214,11 @@ empresa es un envío o un trabajo; y cómo se añade un valor de catálogo en SQ
 | D-44 | ¿Se termina entonces el broker NATS de Go, que está aparcado en una rama? |
 | D-47 | Cuándo y cómo lo hereda Go (Security de Go tiene su propio diseño de contraseñas) |
 | — | Supresión de datos personales (RGPD): sin decidir, pendiente de consulta legal |
-| D-49 | **¿Cómo se lee «si la cambiamos en go»?** Si es «sí», Go y Karpo C# cambian una regla ya implantada: establecer una relación dejaría de exigir que cada lado juegue su rol, y lo asignaría |
-| D-54 | ¿Entran en el catálogo común los tipos que el código de Karpo C# no siembra (Club, Group, los de comunicación, caso y esfuerzo, Department Assignment, Collaborator Contact)? El catálogo de Karpo Go tampoco tiene Club, Group, Department Assignment ni Collaborator Contact |
-| D-53 | Si una persona puede ser organización interna: ¿puede entonces emitir facturas, tener plan contable y empleados, como cualquier empresa del grupo? ¿Y un autónomo proveedor se identifica con su NIF de persona? |
+| D-54 | **¿De qué cuelga «Team»?** En las bases de Trench y de Karpo C# cuelga de «Informal» (un equipo informal, junto a Club y Group); en Karpo Go, de «Organization Unit», y el programa de Trench lo usa justo así: le asigna los centros importados de Personio. En Trench, `D-ROLTYPE-0037-TEAM-VS-OTRA-UNIDAD` |
+| D-54 | ¿Entran en el catálogo común los tipos de rol que siembra la base de Trench y no el código de Karpo C# ni el de Karpo Go? Son, entre otros: Club y Group (informales); App User; Caller, Callee, Sender y Recipient (comunicaciones); Worker y Project Manager (esfuerzos de trabajo); y los de pedidos. Trench cuenta 20 que sólo tiene ella, de 56. Lo mismo para los tipos de relación `collaborator-contact`, `department-assignment`, `duplicate-of`, `subsidiary` y `legal-representation`; y al revés, la relación `prospect` de Go no existe en Trench |
+| D-53 | ¿Un autónomo proveedor u organización interna se identifica con su NIF de persona? |
+| D-56 | Que un tipo hijo no pueda declarar un código de campo que ya declara un ancestro, y qué pasa con los valores si un tipo cambia de padre. Por fijar entre Trench y Go |
+| D-58 | Cómo se identifica entre instalaciones el valor de una referencia a catálogo (lo natural, el código ISO) |
 
 ## 3. Propuestas en curso (no son decisiones)
 
@@ -279,11 +299,13 @@ Lo que Go no cumple todavía de lo decidido. Cada sesión lleva la suya en su re
 | D-24 | Go sirve sus rutas, no el contrato | El contrato está sin aprobar |
 | D-39, D-44 | Un solo proceso; el broker NATS está aparcado en una rama sin fusionar | Decidir qué variantes cuentan en Go |
 | D-48 | Cumple en lo principal: sólo cuentan los roles vigentes. No hay filtro para incluir los pasados | Añadir `includeEndedRoles` con la definición de §1.1 ter |
-| D-49 | Al revés: establecer una relación exige que cada lado ya juegue su rol y la rechaza si no (422). Sólo el alta de una party con su afiliación asigna el rol | Esperar la confirmación de la lectura; después, cambiar la regla |
+| D-49 | Al revés: establecer una relación exige que cada lado ya juegue su rol y la rechaza si no (422). Sólo el alta de una party con su afiliación asigna el rol | Cambiar la regla |
+| D-55, D-56 | `EXTENSIBILIDAD.md` dice lo contrario en los dos puntos (retirar sin DDL; sólo el tipo exacto). El mecanismo no está implementado | Corregir el diseño |
+| D-59 | La empresa no tiene acrónimo | Dato nuevo, requisito previo de la extensibilidad |
 | D-50 | Cumple: índice único sobre tipo, país y número | — |
 | D-51 | No hay búsqueda de relaciones ni vista por pareja | Entra con el contrato HTTP |
 | D-54 | Al revés: el tipo …0037 se llama «Other Organization Unit», con código `other-organization-unit` | Migración de datos que cambie nombre y código, y renombrar la constante `RoleOtherOrganizationUnit` |
-| D-53 | Al revés: «Supplier» e «Internal Organization» cuelgan de la rama de organizaciones del catálogo de roles, así que una persona no puede jugarlos | Mover los dos tipos de rol en el catálogo (migración de datos) y revisar lo que da por hecho que una empresa del grupo es una organización: Fiscal, Contabilidad, Facturación |
+| D-53 | Al revés: «Supplier» e «Internal Organization» cuelgan de la rama de organizaciones del catálogo de roles, así que una persona no puede jugarlos | Mover los dos tipos de rol en el catálogo (migración de datos) y revisar lo que da por hecho que una empresa del grupo es una organización: Fiscal, Contabilidad, Facturación, Recursos Humanos |
 | D-40 | Cumple los tres, y prueba además en MySQL y SQLite | — |
 | D-45 | Cumple: cada caso de uso comprueba su permiso | — |
 | D-46 | Una sesión de orquestación; revisión independiente de lo delegado y de los cambios grandes. **No** se hacen tres pasadas completas en verde antes de cada subida, sino una local y una contra los motores | Ajustar si Javier lo quiere así también para los PR en borrador |
