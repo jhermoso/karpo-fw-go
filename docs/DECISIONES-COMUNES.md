@@ -3,7 +3,9 @@
 > **Qué es.** El sitio donde se anota cada decisión de Javier que vale para más de un proyecto
 > (Trench, Karpo C#, Karpo Go, Theros). Lo mantiene la sesión de orquestación de Karpo Go.
 > Javier lo encargó así el 2026-10-13, a través de la sesión de Karpo C# («acepto usar un único
-> registro para decisiones comunes y que sea Karpo Go»); **falta que lo confirme en esta sesión**.
+> registro para decisiones comunes y que sea Karpo Go»), y **lo confirmó en esta sesión ese mismo
+> día**, junto con todas las decisiones transmitidas hasta D-47 («confirmo el registro y las
+> decisiones transmitidas»).
 >
 > **Dónde.** Repositorio `jhermoso/karpo-fw-go`, rama `docs/parties-modelo-comun`, fichero
 > `docs/DECISIONES-COMUNES.md` (PR en borrador 11). Cuando se fusione, estará en la rama principal
@@ -21,7 +23,9 @@
    detalle y en qué sesión se tomó.
 3. **Confirmación.** Una decisión que llega por otra sesión se anota como «**transmitida**» hasta
    que Javier la confirma aquí o consta en un documento suyo. Las demás sesiones pueden apoyarse en
-   ella, sabiendo que es transmitida.
+   ella, sabiendo que es transmitida. **Estado a 2026-10-13: de D-1 a D-47, todas confirmadas.**
+   Donde abajo dice «transmitida por…» léase «tomada en la sesión de…, confirmada aquí el
+   2026-10-13».
 4. **Nunca se borra.** Si una decisión cambia, se anota la nueva y la antigua queda con «sustituida
    por D-n».
 5. **Numeración.** `D-n`, una sola serie para todas las áreas. Las D-1 a D-16 son las del modelo
@@ -55,7 +59,7 @@ en cada lado, en [PARTIES-MODELO-COMUN.md](PARTIES-MODELO-COMUN.md).
 | D-14 | 2026-10-12 | La dirección postal lleva los campos españoles, y la geografía se apoya en NUTS para traducir los niveles entre países | Karpo Go |
 | D-15 | 2026-10-12 | La visibilidad de una party no depende de la vigencia de su relación, sino de que esté activada. **Tres preguntas abiertas** (§2) | Karpo Go |
 | D-16 | 2026-10-12 | La extensibilidad se hace en ejecución, por un administrador, para cualquier entidad, desde un espacio del front; el modelo son los configuradores de producto de Trench | Karpo Go |
-| D-17 | 2026-10-13 | **Los clientes son relaciones, no roles.** Un cliente es la pareja parte–empresa con su perfil comercial; las condiciones comerciales (riesgo, bloqueo, número de cliente) son de la pareja. Es lo que Trench tiene como «Relaciones de clientes / proveedores». **Transmitida** por Karpo C#. **Preguntas abiertas** (§2) | Trench |
+| D-17 | 2026-10-13 | **Los clientes son relaciones, no roles.** Un cliente es la pareja parte–empresa con su perfil comercial; las condiciones comerciales (riesgo, bloqueo, número de cliente) son de la pareja. Es lo que Trench tiene como «Relaciones de clientes / proveedores». Confirmada aquí el 2026-10-13. **Preguntas abiertas** (§2) | Trench |
 
 ### 1.1 bis Clientes y proveedores como relaciones (sesión de Trench)
 
@@ -110,7 +114,7 @@ Detalle en [EXTENSIBILIDAD.md](EXTENSIBILIDAD.md) §1.
 
 | # | Fecha | Decisión | Sesión |
 |---|---|---|---|
-| D-27 | 2026-10-13 | Hay un único registro de decisiones comunes y lo mantiene Karpo Go (este documento). **Transmitida** por Karpo C# | Karpo C# |
+| D-27 | 2026-10-13 | Hay un único registro de decisiones comunes y lo mantiene Karpo Go (este documento). Confirmada aquí el 2026-10-13 | Karpo C# |
 
 ### 1.5 Generales (sesión de Karpo C#)
 
