@@ -38,7 +38,7 @@ var (
 	RoleDepartment                  = MustRoleTypeID("10000000-0000-0000-0001-000000000009")
 	RoleSubsidiary                  = MustRoleTypeID("10000000-0000-0000-0001-000000000033")
 	RoleParentOrganization          = MustRoleTypeID("10000000-0000-0000-0001-000000000036")
-	RoleOtherOrganizationUnit       = MustRoleTypeID("10000000-0000-0000-0001-000000000037")
+	RoleTeam                        = MustRoleTypeID("10000000-0000-0000-0001-000000000037")
 	RoleAgent                       = MustRoleTypeID("10000000-0000-0000-0001-000000000022")
 	RoleDistributor                 = MustRoleTypeID("10000000-0000-0000-0001-000000000023")
 	RoleEmployee                    = MustRoleTypeID("10000000-0000-0000-0001-000000000010")
@@ -126,7 +126,7 @@ func wellKnownRoleTypes() []RoleType {
 		{ID: RoleDepartment, Name: vocab.MustName("Department"), Description: "A department within an organization", Category: false, Parent: parent(RoleOrganizationUnitCategory)},
 		{ID: RoleSubsidiary, Name: vocab.MustName("Subsidiary"), Description: "A subsidiary organization", Category: false, Parent: parent(RoleOrganizationUnitCategory)},
 		{ID: RoleParentOrganization, Name: vocab.MustName("Parent Organization"), Description: "An organization that contains other organization units", Category: false, Parent: parent(RoleOrganizationUnitCategory)},
-		{ID: RoleOtherOrganizationUnit, Name: vocab.MustName("Other Organization Unit"), Description: "An organization unit that does not fit standard categories", Category: false, Parent: parent(RoleOrganizationUnitCategory)},
+		{ID: RoleTeam, Name: vocab.MustName("Team"), Description: "A team organized for a specific project or function", Category: false, Parent: parent(RoleOrganizationUnitCategory)},
 		{ID: RoleAgent, Name: vocab.MustName("Agent"), Description: "A party acting on behalf of another", Category: false, Parent: parent(RoleDistributionChannelCategory)},
 		{ID: RoleDistributor, Name: vocab.MustName("Distributor"), Description: "A party that distributes products", Category: false, Parent: parent(RoleDistributionChannelCategory)},
 		{ID: RoleEmployee, Name: vocab.MustName("Employee"), Description: "A person employed by an organization", Category: false, Parent: parent(RolePersonCategory)},
