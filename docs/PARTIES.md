@@ -441,3 +441,28 @@ rol, con la misma fecha de inicio que la relación.
   Es una excepción decidida aquí, no por Javier; está trasladada a las otras sesiones.
 - **Terminar la relación no quita el rol.** Quien fue cliente por una relación sigue teniendo el
   rol de cliente cuando la relación termina, hasta que alguien se lo cierre.
+- **Consecuencia que conviene saber:** el rol es de la party, no de la pareja. Quien puede escribir
+  en Acme y da de alta a un tercero compartido como cliente de Acme le deja el rol de cliente a la
+  vista de todas las empresas que lo ven. Antes hacía falta poder escribir en esa party para darle
+  el rol.
+
+## 12. Una persona puede ser proveedor, y organización interna
+
+Decisión de Javier (D-53, confirmada el 2026-10-14): un autónomo puede ser proveedor, y una
+persona puede ser organización interna y comportarse como cualquier empresa del grupo (emite
+facturas, tiene plan contable y empleados).
+
+| Qué | Cómo |
+|---|---|
+| Catálogo | «Supplier» e «Internal Organization» dejan la rama «Organization → Legal» y cuelgan de la raíz, como «Customer»: los puede jugar cualquier party |
+| Esquema | Migración 20, de datos: cambia el padre de los dos tipos. Los identificadores y los códigos no cambian |
+| Tipos que piden «una organización» | El «Organization Rollup» (una unidad bajo su organización) pide en el destino la categoría «Organization». Como una empresa del grupo ya no la hereda de su rol, esa categoría se cumple por **lo que la party es**: cualquier organización vale, juegue los roles que juegue |
+| Los demás contextos | Fiscal, Contabilidad, Facturación, Recursos Humanos y el resto guardan a la empresa por su identificador y no miran si es persona u organización: no cambian |
+
+- **Lo que una persona empresa no puede todavía:** tener unidades organizativas debajo (el
+  «Organization Rollup» pide una organización), ni forma jurídica o nombre comercial, que son datos
+  de organización. Su nombre es el de la persona.
+- **Buscar por la categoría «Organization» o «Legal»** ya no devuelve a quien sólo juega
+  «Supplier» o «Internal Organization»; para eso está el tipo de party (`kind`).
+- **Sin decidir:** con qué documento se identifica un autónomo (su NIF de persona, D-53 en §2 del
+  registro), y que la importación de proveedores cargue personas.
