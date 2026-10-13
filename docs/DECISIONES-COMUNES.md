@@ -184,9 +184,40 @@ repositorio.
 | D-15 | Sin comprobar |
 | D-12, D-16 | Contrato escrito y en su rama principal; sin implementar |
 
-**Karpo C#** (2026-10-13): está haciendo su comprobación; ha adelantado que hoy el **estado** de la
-relación decide la visibilidad (leer por identificador exige relación «activa»), lo que toca a
-D-11 y a D-15 a la vez.
+**Karpo C#** (2026-10-13, sobre D-1 a D-35; sólo leyendo). De 35: cumple 3, a medias 4, diverge
+20, no aplica 6, sin comprobar 2. De las 20, once tocan esquema. Su detalle:
+`000-Docs/design/Karpo_Divergencias_Con_El_Registro_Comun_2026-10-13.md` en su repositorio.
+
+| Decisión | Estado en Karpo C# |
+|---|---|
+| D-3 | No: el contacto es una entidad enlazada a varias parties (10 tablas) |
+| D-4, D-8, D-13 | No: se borran rol, relación, identificación y contacto; no hay «terminar relación» ni «anular» |
+| D-5, D-25 | No: el documento inválido se guarda marcado y sigue contando como identificación; sin índice único |
+| D-9 | A medias: la marca está en la identificación, no en la party; sin filtro |
+| D-6 | A medias: se crean tipos de rol por HTTP, sin código estable ni protección de los del programa |
+| D-7, D-10, D-28 | No: el límite está en tres sitios; el número y el motivo de bloqueo, sólo en el rol |
+| D-29 | A medias: el perfil tiene el código de Sage; falta el de Apiscore |
+| D-11 | No: estado y prioridad son obligatorios, **y el estado decide la visibilidad** |
+| D-15 | No: leer por identificador exige relación «activa» y sin caducar; ninguna ruta mira si la party está activa |
+| D-12, D-16 | Sin empezar |
+| D-14, D-26 | No: la dirección no tiene ninguna de las siete piezas; siguen los tres códigos insulares erróneos; sin islas ni niveles |
+| D-17, D-30 | No: «cliente» es un rol con datos, pantalla propia y diez rutas. Proveedores ya van por la relación |
+| D-33 | No: el alta de cliente crea party y rol sin empresa |
+| D-35 | No: sólo «alguno» y «todos» |
+| D-31, D-32, D-34 | Sin comprobar o sin encontrar |
+| D-1, D-22, D-27 | Cumple |
+
+**Dos bandos en una pregunta abierta de D-17.** Go y Karpo C# rechazan una relación si a un lado
+le falta su rol (en C# desde el 7 de octubre, «como en Go»); Trench lo asigna.
+
+**En «¿un documento en dos parties?»**, Karpo C# está con Trench: sin índice único y con filtro
+de duplicados. Go es el único que lo impide.
+
+**Reglas que Karpo C# propone como comunes** (las decidió su sesión al cerrar hallazgos de
+revisión; **no son decisiones de Javier**, por eso no llevan número): un riesgo máximo vacío es
+«sin límite» y un 0 es 0; toda ruta declara su permiso, lecturas incluidas; la cabecera de ámbito
+nunca amplía; un pedido sin empresa toma la única en la que el usuario puede escribir, y si no hay
+exactamente una, se rechaza. Las dos primeras ya son así en Go.
 
 ## 4. Divergencias de Karpo Go
 

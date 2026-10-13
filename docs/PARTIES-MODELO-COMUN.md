@@ -115,7 +115,7 @@ Trench.
 | 22 | Una relación exige partes distintas que jueguen el rol de su lado (R7) | Hecho en la ruta principal de Karpo C# |
 | 23 | La jerarquía de roles tiene una sola fuente (R5) | Hecho en Karpo C# |
 | 24 | La jerarquía organizativa cuenta sólo lo vigente (R18) | Hecho en Karpo C# |
-| 25 | Familias de clasificación exclusivas: una hoja vigente a la vez (R14) | Sin hacer |
+| 25 | Familias de clasificación exclusivas: una hoja vigente a la vez (R14) | **Hecho en Karpo C#** (P-14), según su sesión el 2026-10-13 |
 | 26 | El alta lleva la relación con la empresa, en una sola transacción (R16) | Sin hacer: el alta rápida puede quedar a medias |
 | 27 | Un documento identifica a una sola party (R11) | Se comprueba en la aplicación, sin índice único |
 | 28 | Un propósito de contacto tiene un titular vigente por tipo (R13) | No existe |
