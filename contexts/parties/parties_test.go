@@ -293,6 +293,21 @@ func (e *env) scenario(prefix string) (acme, ana papp.PartyDTO) {
 		e.t.Fatalf("customers: %+v", customers)
 	}
 
+	// A role that ended does not count, unless the search asks for the ended ones too (D-48).
+	e.must(e.do("POST", "/api/parties/"+ana.ID+"/roles", e.admin, map[string]any{"roleType": domain.RoleContractor.String()}, &ana), 200, "ana, contractor")
+	contract := ana.Roles[slices.IndexFunc(ana.Roles, func(r papp.RoleDTO) bool { return r.RoleType == domain.RoleContractor.String() })].ID
+	e.must(e.do("POST", "/api/parties/"+ana.ID+"/roles/"+contract+"/end", e.admin, map[string]any{}, &ana), 200, "no longer a contractor")
+	var contractors fw.Page[papp.PartyDTO]
+	byRole := "/api/parties?role=" + domain.RoleContractor.String() + "&q=" + prefix
+	e.must(e.do("GET", byRole, e.reader, nil, &contractors), 200, "contractors now")
+	if contractors.Total != 0 {
+		e.t.Fatalf("an ended role counted: %+v", contractors)
+	}
+	e.must(e.do("GET", byRole+"&includeEndedRoles=true", e.reader, nil, &contractors), 200, "contractors ever")
+	if contractors.Total != 1 || contractors.Items[0].ID != ana.ID {
+		e.t.Fatalf("contractors ever: %+v", contractors)
+	}
+
 	// The reader may read but not write.
 	e.must(e.do("PUT", "/api/parties/"+acme.ID+"/name", e.reader, map[string]any{"legalName": "Nope"}, nil), 403, "reader cannot rename")
 	e.must(e.do("GET", "/api/parties/"+acme.ID, "", nil, nil), 401, "anonymous")
@@ -971,7 +986,7 @@ func endToEnd(t *testing.T, newDirectory func(*testing.T) directory) {
 		t.Fatalf("seeded role types without a code: %d", n)
 	}
 	_ = raw.QueryRow("SELECT COUNT(*) FROM party_roles WHERE party_id = (SELECT id FROM parties WHERE name LIKE 'Ana sql%')").Scan(&n)
-	if n != 3 { // employee, customer by the relationship, bill-to customer
+	if n != 4 { // employee, customer by the relationship, bill-to customer, contractor (ended)
 		t.Fatalf("ana's roles in SQL: %d", n)
 	}
 
@@ -1010,7 +1025,7 @@ func endToEnd(t *testing.T, newDirectory func(*testing.T) directory) {
 	if _, err := e.mod.Relay(broker).RelayOnce(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if len(seen) != 15 || roles != 3 {
+	if len(seen) != 15 || roles != 4 {
 		t.Fatalf("published: %v, roles %d", seen, roles)
 	}
 	if len(shares) != 3 || shares[0] != "30.00" || shares[1] != "45.50" || shares[2] != "" {

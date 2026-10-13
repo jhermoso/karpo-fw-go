@@ -362,7 +362,11 @@ func NewService(d Deps) *Service {
 			if err != nil {
 				return fw.Page[PartyDTO]{}, err
 			}
-			parts = append(parts, domain.PlaysAt(now, n.Roles.Descendants(role)...))
+			if q.IncludeEndedRoles {
+				parts = append(parts, domain.HasPlayed(n.Roles.Descendants(role)...))
+			} else {
+				parts = append(parts, domain.PlaysAt(now, n.Roles.Descendants(role)...))
+			}
 		}
 		if doc := strings.TrimSpace(q.Document); doc != "" {
 			parts = append(parts, domain.WithDocumentNumber(vocab.NormalizeDocumentNumber(doc)).Or(

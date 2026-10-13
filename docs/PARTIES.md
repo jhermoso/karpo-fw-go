@@ -493,3 +493,14 @@ Lo que **no** ha entrado, y por qué:
   que los use.
 - Los tipos nuevos sólo se siembran: ningún caso de uso hace todavía nada especial con ellos
   (una «Department Assignment» no da ámbito, como sí hace en Trench).
+
+## 14. Buscar por rol: sólo los vigentes, salvo que se pida
+
+Decisión de Javier (D-48). `GET /api/parties?role=<tipo>` devuelve a quien juega ese rol (o uno
+por debajo) **ahora**: empezó ya y no ha terminado. Con `includeEndedRoles=true` entran también los
+roles terminados y los que aún no han empezado. El nombre y la definición son los de Trench
+(Trench PR 34), para que el mismo front sirva a los dos.
+
+- *Ejemplo:* Luis fue empleado hasta diciembre y hoy sólo es cliente. `?role=Employee` no lo
+  devuelve; `?role=Employee&includeEndedRoles=true`, sí.
+- El parámetro sólo afecta al filtro por rol; no cambia el de organización ni el de instalación.
