@@ -1,0 +1,278 @@
+# Contrato HTTP común de Parties, versión 1 (propuesta)
+
+> **Estado: propuesta, sin aprobar ni revisar.** Escrita el 2026-10-13 en la sesión de Karpo Go.
+> Javier eligió ese día que el contrato HTTP común sea **uno nuevo y limpio, escrito una vez**, que
+> sirvan el back de C# y el de Go, empezando por lo que usan las pantallas principales
+> ([CONTRATO-HTTP-PARTIES.md](CONTRATO-HTTP-PARTIES.md), opción C). Falta que lo revisen las
+> sesiones de Karpo C# y de Trench, como se hizo con el contrato de extensibilidad, y que
+> Javier conteste las cinco decisiones de §7.
+>
+> Las tablas de cada back pueden ser distintas (decisión D-1 del modelo común). Lo que este
+> documento fija es lo que se ve por HTTP.
+
+## 0. Lo esencial
+
+1. **Catorce rutas del front de hoy se quedan en quince del contrato**, casi todas las que Go ya
+   tiene, más una búsqueda nueva que ninguno de los dos tiene con esta forma.
+2. **Una sola forma de lista, una sola forma de error y ninguna barra final.** Hoy el front
+   acepta cuatro nombres para el total y lee el error de cuatro sitios.
+3. **Lo que el front hace y ya no se hace** (borrar, estado y prioridad de la relación) no está
+   en el contrato. Qué pone en esos botones es la decisión 2 de §7.
+4. El contrato **no** cubre las demás pantallas de Parties (cuentas bancarias, comunicaciones,
+   perfiles…). Van después, con el mismo método.
+
+## 1. Convenciones
+
+| Tema | Regla | Hoy en el front |
+|---|---|---|
+| Base | `/api`. Si la pasarela antepone `/v1`, lo quita ella | `/api/v1` casi siempre, `/api` a veces |
+| Barra final | Nunca | El detalle se pide con barra final en un camino |
+| Identificadores | UUID en texto, en minúsculas | Igual |
+| Fechas | Día: `yyyy-MM-dd`. Instante: ISO 8601 en UTC, con `Z` | Sin fijar |
+| Importes y porcentajes | Texto decimal (`"30.00"`), nunca número de coma flotante | — |
+| Empresa activa | Cabecera `X-Organization-Scope`: identificadores separados por comas | Igual |
+| Campos vacíos | Se omiten; una lista vacía es `[]`, nunca falta | Mezclado |
+| Campos desconocidos al escribir | Se rechazan (400) | Se ignoran |
+| Versión del recurso | Lo que se puede cambiar lleva `version`; cambiarlo con una versión vieja es 409 | Sólo en C# en parte |
+
+### 1.1 Listas
+
+Una sola forma, en todas las rutas que devuelven varias filas:
+
+```json
+{ "items": [ … ], "total": 1234, "nextCursor": "…" }
+```
+
+- `total` es el número de filas que cumplen el filtro, no las de la página.
+- `nextCursor` sólo aparece si hay más filas y la petición usó cursor.
+
+### 1.2 Paginación
+
+En el cuerpo de las búsquedas, una de las dos:
+
+```json
+{ "page": { "number": 1, "size": 25 } }
+{ "page": { "size": 25, "after": "<nextCursor de la respuesta anterior>" } }
+```
+
+`number` empieza en 1. `size` va de 1 a 500; por defecto, 25. Un número de página fuera de rango
+devuelve una lista vacía, no un error. El cursor es opaco: el cliente no lo interpreta.
+
+### 1.3 Orden
+
+```json
+{ "sort": { "by": "name", "ascending": true } }
+```
+
+Cada búsqueda dice por qué campos se puede ordenar. Pedir otro es un 400 que los enumera.
+
+### 1.4 Errores
+
+`application/problem+json` (RFC 9457: un JSON normalizado de error) en todas las rutas:
+
+```json
+{ "title": "Validation Failed", "status": 400, "detail": "One or more fields are invalid",
+  "code": "parties.role_overlap", "correlationId": "…",
+  "errors": [ { "field": "address.floor", "code": "length", "message": "too long" } ] }
+```
+
+| Estado | Cuándo |
+|---|---|
+| 400 | La petición está mal formada o un campo no vale. `errors` dice cuáles |
+| 401 | No hay sesión válida |
+| 403 | Se ve el recurso pero no se puede hacer eso |
+| 404 | No existe **o está fuera del ámbito de quien llama**. No se distingue |
+| 409 | La versión enviada ya no es la actual |
+| 422 | La petición es correcta pero rompe una regla de negocio. `code` dice cuál; los códigos son parte del contrato |
+
+El texto de `detail` y de `message` no es contrato: puede cambiar y traducirse. El front decide
+por `status`, `code` y `errors[].field`.
+
+## 2. La party
+
+### 2.1 Forma
+
+Una party es una persona o una organización. Lo que es además —cliente, proveedor, empresa del
+grupo— son **roles**, no tipos.
+
+```json
+{ "id": "…", "kind": "organization", "name": "Talleres Pérez",
+  "organization": { "legalName": "Talleres Pérez, S.L.", "tradeName": "Talleres Pérez", "legalForm": "corporation" },
+  "active": true, "test": false, "shared": false,
+  "organizations": ["<empresas del grupo a las que pertenece hoy>"],
+  "roles":           [ { "id": "…", "roleType": "…", "code": "customer", "name": "Customer", "from": "…", "until": null, "active": true } ],
+  "identifications": [ { "id": "…", "documentType": "…", "code": "TXID", "country": "ES", "number": "B12345674", "primary": true } ],
+  "contacts":        [ { "id": "…", "kind": "postal", "address": { … }, "purposes": ["billing"], "active": true } ],
+  "classifications": [ { "id": "…", "type": "…", "name": "Corporate", "active": true } ],
+  "documentIssue": { "number": "B12345678", "reason": "…" },
+  "version": 7 }
+```
+
+Una persona lleva `person: { givenName, firstSurname, secondSurname, gender, birthDate, maritalStatus }`
+en lugar de `organization`. Es la forma que Go devuelve hoy; `code` en cada rol es nuevo.
+
+| Campo del front de hoy | En el contrato |
+|---|---|
+| `partyType`: `Person`, `Organization`, `LegalOrganization`, `Corporation`, `InternalOrganization` | `kind` (dos valores), `organization.legalForm` y el rol `internal-organization`. Ver decisión 3 de §7 |
+| `isActive`, `isTest` | `active`, `test` |
+| `taxIdentity` | La identificación fiscal principal: `identifications[]` con `primary`, y en la búsqueda, `taxId` |
+| `rolesDisplay`, `relationshipsDisplay`, `displayName` | No vienen: el front ya los calcula él |
+
+### 2.2 Rutas
+
+| # | Ruta | Qué hace | Sustituye en el front de hoy a |
+|---|---|---|---|
+| 1 | `POST /api/parties/search` | Buscar (§3) | `POST /parties/search/enriched` y `…/cursor`, y los `…/search` de personas, organizaciones, clientes, empleados |
+| 2 | `POST /api/parties/search/stats` | Recuentos (§3.4) | `POST /parties/search/stats` |
+| 3 | `GET /api/parties/{id}` | La party entera (§2.1) | `GET /parties/{id}/aggregate`, con y sin barra, y `GET /catalogs/party-classifications/by-party/{id}` |
+| 4 | `POST /api/persons` · `POST /api/organizations` | Alta, con su relación con una empresa del grupo en la misma petición | `POST /persons`, `/organizations`, `/customers/quick-create` |
+| 5 | `PUT /api/parties/{id}/name` | Cambiar el nombre: `{ givenName, firstSurname, secondSurname }` o `{ legalName, tradeName }` | `POST /parties/rename` `{id, name}` |
+| 6 | `PUT /api/parties/{id}/active` | `{ "active": false }` | `POST /parties/toggle` `{id, enable}` |
+| 7 | `PUT /api/parties/{id}/test` | `{ "test": true }` | `PUT /parties/{id}/test-flag` |
+| 8 | `POST /api/parties/{id}/roles` | Asignar un rol: `{ roleType, from? }` | `POST /party-roles` |
+| 9 | `POST /api/parties/{id}/roles/{roleId}/end` | Terminarlo: `{ at? }` | `PUT /party-roles/{id}` con fecha de fin, y `DELETE /party-roles/{id}` |
+| 10 | `GET /api/parties/{id}/relationships?active=true` | Sus relaciones, en los dos sentidos | Las listas hijas de roles y relaciones del detalle |
+| 11 | `POST /api/party-relationships` | Establecer una relación | Igual |
+| 12 | `POST /api/party-relationships/{id}/terminate` | Terminarla | `DELETE /party-relationships/{id}` |
+| 13 | `GET /api/catalogs/party-role-types` · `…/party-relationship-types` · `…/party-classifications` · `…/document-types?country=ES` | Catálogos | Los dos primeros, igual; los otros, `GET /catalogs/party-types` y los tipos de documento escritos a mano en el front |
+| 14 | `GET /api/internal-organizations` | Las empresas del grupo que ve quien llama | Igual |
+| 15 | `GET /api/reference/countries` | Países | `GET /catalogs/geographic-boundaries?type=Country` |
+
+Todas menos la 1, la 2 y la 7 existen ya en Go con esta forma.
+
+## 3. La búsqueda
+
+Es la ruta de la que viven las siete pantallas principales.
+
+### 3.1 Petición
+
+```json
+{ "filter": { "kinds": ["person"], "text": "ana", "active": true,
+              "rolesAny": ["customer"], "organizations": ["…"] },
+  "page": { "number": 1, "size": 25 },
+  "sort": { "by": "name", "ascending": true },
+  "include": ["relationships"] }
+```
+
+| Filtro | Tipo | Encuentra | Sustituye a |
+|---|---|---|---|
+| `text` | texto | Nombre que contiene el texto, sin distinguir mayúsculas | `nameContains` |
+| `kinds` | lista de `person`, `organization` | De alguna de esas clases | `partyTypes` |
+| `legalForms` | lista | Organizaciones con alguna de esas formas jurídicas | `partyTypes` (`LegalOrganization`, `Corporation`) |
+| `active` | sí/no | Activas o inactivas. Si falta, todas | `isActive` |
+| `test` | sí/no | De pruebas o no | `isTest` |
+| `rolesAny` | lista de **códigos** de tipo de rol | Juegan hoy alguno de esos roles, o uno por debajo en la jerarquía | `roleTypeIdsAny` |
+| `rolesAll` | lista de códigos | Juegan hoy todos | `roleTypeIdsAll` |
+| `classificationsAny` | lista de identificadores | Clasificadas hoy con alguna | `classificationTypeIdsAny` |
+| `organizations` | lista de identificadores | Pertenecen hoy a alguna de esas empresas del grupo | `internalOrganizationIds` |
+| `document` | texto | Tienen ese número de documento | `identificationValue` |
+| `documentCountry` | código ISO de dos letras | Tienen un documento de ese país | `issuingCountryBoundaryId` |
+| `documentIssue` | sí/no | Marcadas con un documento erróneo | (nuevo) |
+| `bornOn` | `{ from?, to? }` | Personas nacidas en ese intervalo | `birthDate` |
+
+- Varios filtros se combinan con «y». Un filtro desconocido es un 400.
+- Los roles se piden por **código** (`customer`), no por identificador: es lo que hace portable una
+  pantalla entre instalaciones. Go ya tiene los códigos; C# tendría que dárselos (decisión D-7 del
+  contrato de extensibilidad de Trench).
+- **No está** «sólo documentos duplicados» (`onlyDuplicatedIdentifications`): el modelo común dice
+  que un documento identifica a una sola party, así que no puede haber duplicados que buscar.
+
+### 3.2 Orden
+
+`name` (por defecto), `birthDate`, `createdAt`. Nada más en la versión 1: ordenar por una columna
+calculada (número de roles, país) obliga a los dos backs a calcularla igual.
+
+### 3.3 Respuesta
+
+Cada fila es un **resumen**, no la party entera:
+
+```json
+{ "items": [
+    { "id": "…", "kind": "person", "name": "Ana García López", "active": true, "test": false,
+      "birthDate": "1990-04-12", "taxId": "12345678Z", "country": "ES",
+      "roles": [ { "code": "customer", "name": "Customer" } ], "roleCount": 1,
+      "relationships": [ { "typeCode": "customer", "typeName": "Customer Relationship",
+                           "otherParty": "…", "otherPartyName": "Acme", "direction": "from" } ],
+      "relationshipCount": 1,
+      "organizations": ["…"], "documentIssue": false } ],
+  "total": 1 }
+```
+
+| Campo | Regla |
+|---|---|
+| `roles` | Los que juega hoy, por nombre; como mucho diez, y `roleCount` dice cuántos son |
+| `relationships` | Sólo si se pide en `include`; las vigentes, como mucho cinco, y `relationshipCount` dice cuántas son |
+| `taxId` | El número de su identificación fiscal principal, si tiene |
+| `country` | El país de su dirección postal vigente (la de facturación primero), si tiene |
+
+### 3.4 Recuentos
+
+`POST /api/parties/search/stats` con `{ "filter": { … }, "groupBy": ["kind", "active"] }` devuelve
+
+```json
+{ "total": 1234, "groups": { "kind": { "person": 900, "organization": 334 }, "active": { "true": 1200, "false": 34 } } }
+```
+
+Se agrupa por `kind`, `active`, `test`, `legalForm` y `role` (código). Es obligatoria en el
+contrato; hoy el front tolera que falte.
+
+## 4. Lo que no está en el contrato, a propósito
+
+| Qué hace el front hoy | Por qué no está |
+|---|---|
+| Borrar una persona, una organización, un cliente, un rol o una relación | Decidido: se termina o se desactiva, y los errores de alta se anulan (D-4, D-8). El comando de anular está sin diseñar; cuando lo esté, entra |
+| Estado y prioridad de una relación, y sus catálogos | Decidido: fuera del modelo (D-11) |
+| Editar un rol entero con `PUT` | Un rol sólo tiene tipo y periodo: se asigna y se termina |
+| `GET /parties/{id}/positions` | Los puestos son de RRHH; irán en su contrato |
+| «Clientes» y «empleados» como recursos (`/customers`, `/employees`) | Son parties con un rol: `rolesAny: ["customer"]`. El empleo, con sus fechas, es de RRHH |
+| Validar el formato de un documento sin guardarlo (`…/validate-format`) | Lo usa el registro público. Va con el contrato de Security |
+| Exportar | Tiene su propio contexto y su contrato |
+
+## 5. Qué tendría que hacer cada uno
+
+| Quién | Qué | Tamaño (estimación) |
+|---|---|---|
+| **Go** | La búsqueda con filtros de varios valores, orden, cursor y fila resumida; los recuentos; la ruta de «de pruebas»; `code` en los roles de la party; filtrar por código de rol | Medio |
+| **Karpo C# y Trench** | Las quince rutas junto a las suyas (no quitan nada), con la forma de party de §2.1, la lista y el error únicos, y códigos en los tipos de rol | Medio. La forma de la party es lo delicado: hoy la persona y la organización salen de clases distintas |
+| **Front** | Siete configuraciones de pantalla; que el motor genérico lea campos anidados (`person.birthDate`), mande el filtro y la página con esta forma y lea el error de un solo sitio; y lo que se decida de los botones de borrar | Medio |
+
+Una **batería de pruebas de contrato** —peticiones HTTP y respuestas esperadas, sin saber qué back
+hay detrás— es lo que dice si los dos lo cumplen. La de Go existe en parte
+(`contexts/parties/parties_test.go`); habría que sacarla a un formato que también pueda ejecutarse
+contra C#.
+
+## 6. Cómo se ha llegado a cada elección
+
+| Elección | Por qué | Alternativa |
+|---|---|---|
+| Partir de las rutas de Go | Trece de quince ya existen así y expresan intención (`…/end`, `…/terminate`) en vez de un `PUT` genérico | Partir de las del front: hereda `rename`/`toggle` con el identificador en el cuerpo |
+| Hijos bajo la party (`/parties/{id}/roles`) | Un rol no existe sin su party, y el ámbito se comprueba una vez | Recursos de primer nivel (`/party-roles`), como hoy el front |
+| Una búsqueda para todas las pantallas | Persona, cliente o empleado son filtros, no recursos | Una búsqueda por pantalla, como hoy C# |
+| Filtros con nombre propio, no por columna | Cada filtro es una regla que los dos backs implementan igual | Filtro genérico por cualquier campo: cada back lo traduciría a su esquema de forma distinta |
+| Página o cursor, a elegir | El front usa los dos hoy | Sólo cursor: más simple de servir, obliga a cambiar el modo «ir a la página N» |
+| Roles por código en el filtro | Portabilidad entre instalaciones | Por identificador, como hoy |
+
+## 7. Decisiones que tocan a Javier
+
+1. **¿Vale partir de la forma de Go** (§2, §6), o prefieres conservar las rutas que el front usa
+   hoy y limpiar sólo listas y errores? Lo segundo deja el front casi intacto y obliga a Go a
+   servir recursos que no tiene (`/customers`, `/party-roles`).
+2. **Los botones de borrar.** Propongo que el front los cambie por «desactivar» en la party y
+   «terminar» en roles y relaciones, y que «eliminar» vuelva, sólo para errores de alta, cuando
+   exista el comando de anular.
+3. **Los tipos de party.** Propongo `kind` con dos valores, forma jurídica y roles (§2.1). La
+   alternativa es conservar los cinco tipos del front, que mezclan qué es (persona u organización),
+   qué forma tiene (sociedad) y qué papel juega (empresa del grupo).
+4. **La forma del error** (§1.4). Propongo la de Go, que es el estándar RFC 9457. El contrato de
+   extensibilidad de Trench dejó esto pendiente de esta decisión.
+5. **¿Página y cursor, o sólo cursor?** Propongo los dos.
+
+## 8. Límites
+
+- Nadie de C# ni de Trench ha revisado esto todavía.
+- No he comprobado que C# pueda servir la fila resumida de §3.3 con sus datos de hoy (por ejemplo,
+  `country` y `taxId` salen en C# de otra parte).
+- `GET /api/internal-organizations` existe en los dos con la misma ruta; no he comparado la forma.
+- El contrato sale del inventario de [CONTRATO-HTTP-PARTIES.md](CONTRATO-HTTP-PARTIES.md), que
+  comprobé sólo en parte.
+- Los tamaños de §5 son estimaciones mías.
