@@ -39,6 +39,8 @@ var (
 	RoleSubsidiary                  = MustRoleTypeID("10000000-0000-0000-0001-000000000033")
 	RoleParentOrganization          = MustRoleTypeID("10000000-0000-0000-0001-000000000036")
 	RoleTeam                        = MustRoleTypeID("10000000-0000-0000-0001-000000000037")
+	RoleClub                        = MustRoleTypeID("10000000-0000-0000-0001-000000000038")
+	RoleGroup                       = MustRoleTypeID("10000000-0000-0000-0001-000000000039")
 	RoleAgent                       = MustRoleTypeID("10000000-0000-0000-0001-000000000022")
 	RoleDistributor                 = MustRoleTypeID("10000000-0000-0000-0001-000000000023")
 	RoleEmployee                    = MustRoleTypeID("10000000-0000-0000-0001-000000000010")
@@ -68,6 +70,10 @@ var (
 	RelOwnership               = MustRelationshipTypeID("10000000-0000-0000-0002-000000000007")
 	RelAgent                   = MustRelationshipTypeID("10000000-0000-0000-0002-000000000008")
 	RelContact                 = MustRelationshipTypeID("10000000-0000-0000-0002-000000000009")
+	RelSubsidiary              = MustRelationshipTypeID("10000000-0000-0000-0002-000000000010")
+	RelLegalRepresentation     = MustRelationshipTypeID("10000000-0000-0000-0002-000000000011")
+	RelDepartmentAssignment    = MustRelationshipTypeID("10000000-0000-0000-0002-000000000012")
+	RelCollaboratorContact     = MustRelationshipTypeID("10000000-0000-0000-0002-000000000013")
 	RelCollaborator            = MustRelationshipTypeID("10000000-0000-0000-0002-000000000014")
 	RelCollaboratorOrigination = MustRelationshipTypeID("10000000-0000-0000-0002-000000000015")
 	RelProspect                = MustRelationshipTypeID("10000000-0000-0000-0002-000000000016")
@@ -126,7 +132,9 @@ func wellKnownRoleTypes() []RoleType {
 		{ID: RoleDepartment, Name: vocab.MustName("Department"), Description: "A department within an organization", Category: false, Parent: parent(RoleOrganizationUnitCategory)},
 		{ID: RoleSubsidiary, Name: vocab.MustName("Subsidiary"), Description: "A subsidiary organization", Category: false, Parent: parent(RoleOrganizationUnitCategory)},
 		{ID: RoleParentOrganization, Name: vocab.MustName("Parent Organization"), Description: "An organization that contains other organization units", Category: false, Parent: parent(RoleOrganizationUnitCategory)},
-		{ID: RoleTeam, Name: vocab.MustName("Team"), Description: "A team organized for a specific project or function", Category: false, Parent: parent(RoleOrganizationUnitCategory)},
+		{ID: RoleTeam, Name: vocab.MustName("Team"), Description: "A team organized for a specific project or function", Category: false, Parent: parent(RoleInformalCategory)},
+		{ID: RoleClub, Name: vocab.MustName("Club"), Description: "A club or social organization", Category: false, Parent: parent(RoleInformalCategory)},
+		{ID: RoleGroup, Name: vocab.MustName("Group"), Description: "A generic informal group", Category: false, Parent: parent(RoleInformalCategory)},
 		{ID: RoleAgent, Name: vocab.MustName("Agent"), Description: "A party acting on behalf of another", Category: false, Parent: parent(RoleDistributionChannelCategory)},
 		{ID: RoleDistributor, Name: vocab.MustName("Distributor"), Description: "A party that distributes products", Category: false, Parent: parent(RoleDistributionChannelCategory)},
 		{ID: RoleEmployee, Name: vocab.MustName("Employee"), Description: "A person employed by an organization", Category: false, Parent: parent(RolePersonCategory)},
@@ -181,6 +189,12 @@ func WellKnownRelationshipTypes() []RelationshipType {
 		{ID: RelContact, Code: "contact", Name: vocab.MustName("Contact Relationship"), Description: "Contact person for a customer", FromRole: RoleContact, ToRole: RoleCustomer},
 		{ID: RelCollaborator, Code: "collaborator", Name: vocab.MustName("Collaborator Relationship"), Description: "Collaborator refers business for an internal organization", FromRole: RoleCollaborator, ToRole: RoleInternalOrganization},
 		{ID: RelCollaboratorOrigination, Code: "collaborator-origination", Name: vocab.MustName("Collaborator Origination"), Description: "Salesperson who originated the collaborator", FromRole: RoleSalesperson, ToRole: RoleCollaborator},
+		// The four that the seed of Trench has and this catalog lacked (docs/DECISIONES-COMUNES.md, D-62).
+		{ID: RelSubsidiary, Code: "subsidiary", Name: vocab.MustName("Subsidiary"), Description: "Internal organization owns a subsidiary", FromRole: RoleInternalOrganization, ToRole: RoleSubsidiary},
+		{ID: RelLegalRepresentation, Code: "legal-representation", Name: vocab.MustName("Legal Representation"), Description: "Authorized representative acts for an internal organization",
+			FromRole: RoleAuthorizedRepresentative, ToRole: RoleInternalOrganization},
+		{ID: RelDepartmentAssignment, Code: "department-assignment", Name: vocab.MustName("Department Assignment"), Description: "Employee is assigned to a department", FromRole: RoleEmployee, ToRole: RoleDepartment},
+		{ID: RelCollaboratorContact, Code: "collaborator-contact", Name: vocab.MustName("Collaborator Contact"), Description: "Contact person for a collaborator", FromRole: RoleContact, ToRole: RoleCollaborator},
 		{ID: RelProspect, Code: CodeProspect, Name: vocab.MustName("Prospect Relationship"), Description: "Prospect may become a customer of an internal organization", FromRole: RoleProspect, ToRole: RoleInternalOrganization},
 	}
 }

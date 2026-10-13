@@ -438,7 +438,7 @@ rol, con la misma fecha de inicio que la relación.
 - **Por qué «Internal Organization» no se asigna así:** ese rol decide quién ve y quién escribe
   qué (las afiliaciones cuelgan de él). Si una relación lo diera, cualquiera con permiso para crear
   relaciones podría convertir a un tercero en empresa del grupo. Se sigue dando a propósito.
-  Es una excepción decidida aquí, no por Javier; está trasladada a las otras sesiones.
+  Excepción confirmada por Javier el 2026-10-14.
 - **Terminar la relación no quita el rol.** Quien fue cliente por una relación sigue teniendo el
   rol de cliente cuando la relación termina, hasta que alguien se lo cierre.
 - **Consecuencia que conviene saber:** el rol es de la party, no de la pareja. Quien puede escribir
@@ -466,3 +466,30 @@ facturas, tiene plan contable y empleados).
   «Supplier» o «Internal Organization»; para eso está el tipo de party (`kind`).
 - **Sin decidir:** con qué documento se identifica un autónomo (su NIF de persona, D-53 en §2 del
   registro), y que la importación de proveedores cargue personas.
+
+## 13. El catálogo común de tipos
+
+Decisión de Javier (D-62, 2026-10-14): los cuatro proyectos siembran los mismos tipos de rol y de
+relación, con los mismos identificadores y códigos; y «Team» cuelga de «Informal».
+
+| Qué | Tipos | De dónde salen |
+|---|---|---|
+| Tipos de rol nuevos | «Club» (`…0001-…0038`, `club`) y «Group» (`…0001-…0039`, `group`), bajo «Informal» | Semilla de Trench |
+| «Team» | Pasa de «Organization Unit» a «Informal» | D-62 |
+| Tipos de relación nuevos | «Subsidiary» (`…0002-…0010`, `subsidiary`: organización interna → filial); «Legal Representation» (`…0011`, `legal-representation`: representante autorizado → organización interna); «Department Assignment» (`…0012`, `department-assignment`: empleado → departamento); «Collaborator Contact» (`…0013`, `collaborator-contact`: contacto → colaborador) | Semilla de Trench |
+| Esquema | Migración 21, de datos: añade a una base ya sembrada los tipos que le faltan y mueve «Team». No toca los que ya están |
+
+Lo que **no** ha entrado, y por qué:
+
+- **«Duplicate Of»** (el tipo de relación con que Trench une un registro duplicado al que
+  sobrevive). En Trench lleva el identificador `…0002-…0016`, **el mismo que aquí tiene
+  «Prospect Relationship»**. Un mismo identificador no puede ser dos tipos: uno de los dos tiene
+  que cambiar, y es una decisión entre proyectos.
+- **«App User»**: en la semilla de Trench está comentado; no se siembra allí.
+- **Caller, Callee, Sender, Recipient, Worker, Project Manager, Reporter, Owner, Resolver** y los de
+  pedidos: en Trench no son tipos de rol *de party*, sino de un evento de comunicación, de un
+  esfuerzo de trabajo, de un caso o de un pedido (otra clase de tipo de rol, en la misma tabla).
+  Aquí `role_types` es sólo el catálogo de lo que una party puede ser; entrarán con el contexto
+  que los use.
+- Los tipos nuevos sólo se siembran: ningún caso de uso hace todavía nada especial con ellos
+  (una «Department Assignment» no da ámbito, como sí hace en Trench).
