@@ -130,6 +130,14 @@ Tomada en las sesiones de Karpo C# y de Trench el 2026-10-14 («2 team» en las 
 |---|---|---|---|
 | D-54 | **El tipo de rol `10000000-0000-0000-0001-000000000037` se llama «Team»** y su código estable es `team` | «2 team», a la pregunta «"Team" u "Other Organization Unit" para el identificador …0037» | Las semillas SQL de Trench y de Karpo C# lo llaman «Team»; los catálogos en código de Karpo C# y de Karpo Go, «Other Organization Unit». Salió al preparar los códigos estables (Trench PR 36), que se rellenan por identificador |
 
+| D-62 | **Los cuatro proyectos siembran los mismos tipos de rol y de relación**, con los mismos identificadores y códigos; y **«Team» cuelga de «Informal»**. Confirma también la excepción de D-49: una relación nunca asigna «Internal Organization» | «sí a las 2 primeras, team cuelga de informal siembra los mismos tipos en todos» (esta sesión, 2026-10-14) | Cierra de qué cuelga «Team» (en Trench, `D-ROLTYPE-0037-TEAM-VS-OTRA-UNIDAD`) y la pregunta de los tipos sin sembrar |
+
+**El catálogo común, a 2026-10-14** (ids de la semilla de Trench):
+
+- Tipos de rol: los 37 de Karpo Go, más «Club» (`…0001-…0038`, `club`) y «Group» (`…0039`, `group`), bajo «Informal» junto a «Team».
+- Tipos de relación: los 12 de Karpo Go, más «Subsidiary» (`…0002-…0010`, `subsidiary`), «Legal Representation» (`…0011`, `legal-representation`), «Department Assignment» (`…0012`, `department-assignment`) y «Collaborator Contact» (`…0013`, `collaborator-contact`). Trench ha comprobado que lados y códigos coinciden.
+- No son tipos de rol de party y no entran en este catálogo: Caller, Callee, Sender, Recipient, Worker, Project Manager, Reporter, Owner, Resolver y los de pedidos (en Trench, otra clase de tipo de rol). «App User» está comentado en la semilla de Trench.
+
 ### 1.2 Extensibilidad
 
 Detalle en [EXTENSIBILIDAD.md](EXTENSIBILIDAD.md) §1.
@@ -214,8 +222,10 @@ empresa es un envío o un trabajo; y cómo se añade un valor de catálogo en SQ
 | D-44 | ¿Se termina entonces el broker NATS de Go, que está aparcado en una rama? |
 | D-47 | Cuándo y cómo lo hereda Go (Security de Go tiene su propio diseño de contraseñas) |
 | — | Supresión de datos personales (RGPD): sin decidir, pendiente de consulta legal |
-| D-54 | **¿De qué cuelga «Team»?** En las bases de Trench y de Karpo C# cuelga de «Informal» (un equipo informal, junto a Club y Group); en Karpo Go, de «Organization Unit», y el programa de Trench lo usa justo así: le asigna los centros importados de Personio. En Trench, `D-ROLTYPE-0037-TEAM-VS-OTRA-UNIDAD` |
-| D-54 | ¿Entran en el catálogo común los tipos de rol que siembra la base de Trench y no el código de Karpo C# ni el de Karpo Go? Son, entre otros: Club y Group (informales); App User; Caller, Callee, Sender y Recipient (comunicaciones); Worker y Project Manager (esfuerzos de trabajo); y los de pedidos. Trench cuenta 20 que sólo tiene ella, de 56. Lo mismo para los tipos de relación `collaborator-contact`, `department-assignment`, `duplicate-of`, `subsidiary` y `legal-representation`; y al revés, la relación `prospect` de Go no existe en Trench |
+| D-62 | **Choque de identificador:** `10000000-0000-0000-0002-000000000016` es «Duplicate Of» en Trench y «Prospect Relationship» en Karpo Go. Uno de los dos cambia. Datos: Trench tiene 0 relaciones «Duplicate Of» en su base local, pero el id está en su catálogo, en las semillas de seis layouts y en el paquete de códigos ya aplicado; Karpo C# no tiene nada en ese id y no usa «Prospect Relationship» (un cliente potencial es allí una relación de cliente en estado «Potential»); Karpo Go no tiene datos en producción |
+| D-62 | **Dos tipos de relación con los lados distintos.** «Agent Relationship» (`…0008`): Agent → Internal Organization en Trench, Agent → Customer en Go. «Organization Rollup» (`…0005`): Department → Internal Organization en Trench; en Go, cualquier unidad organizativa → cualquier organización |
+| D-62 | «Salesperson» (`…0001-…00C3`) es en Trench un rol de pedido, no de party; en Go es un rol de party. La relación `prospect` sólo existe en Go |
+| D-62 | El programa de Trench asigna «Team» a los centros importados de Personio, que son unidades organizativas: con «Team» bajo «Informal», ¿qué rol llevan? |
 | D-53 | ¿Un autónomo proveedor u organización interna se identifica con su NIF de persona? |
 | D-56 | Que un tipo hijo no pueda declarar un código de campo que ya declara un ancestro, y qué pasa con los valores si un tipo cambia de padre. Por fijar entre Trench y Go |
 | D-58 | Cómo se identifica entre instalaciones el valor de una referencia a catálogo (lo natural, el código ISO) |
@@ -299,12 +309,12 @@ Lo que Go no cumple todavía de lo decidido. Cada sesión lleva la suya en su re
 | D-24 | Go sirve sus rutas, no el contrato | El contrato está sin aprobar |
 | D-39, D-44 | Un solo proceso; el broker NATS está aparcado en una rama sin fusionar | Decidir qué variantes cuentan en Go |
 | D-48 | Cumple en lo principal: sólo cuentan los roles vigentes. No hay filtro para incluir los pasados | Añadir `includeEndedRoles` con la definición de §1.1 ter |
-| D-49 | **Hecho** (rama `feat/parties-relacion-asigna-roles`, sin fusionar): el caso de uso asigna el rol que falte antes de establecer la relación. Excepción decidida en esta sesión, no por Javier: «Internal Organization» no se asigna así, porque decide el ámbito | Que Javier confirme la excepción; proponerla a Trench y Karpo C# |
+| D-49 | **Hecho** (PR 21, en borrador): el caso de uso asigna el rol que falte antes de establecer la relación; «Internal Organization» no se asigna así (excepción confirmada, D-62) | — |
 | D-55, D-56 | `EXTENSIBILIDAD.md` dice lo contrario en los dos puntos (retirar sin DDL; sólo el tipo exacto). El mecanismo no está implementado | Corregir el diseño |
 | D-59 | La empresa no tiene acrónimo | Dato nuevo, requisito previo de la extensibilidad |
 | D-50 | Cumple: índice único sobre tipo, país y número | — |
 | D-51 | No hay búsqueda de relaciones ni vista por pareja | Entra con el contrato HTTP |
-| D-54 | **Hecho** (rama `feat/parties-rol-team`, migración 19). Sigue colgando de «Organization Unit» | Decidir de qué cuelga (§2) |
+| D-54, D-62 | **Hecho** (PR 20 y rama `feat/parties-catalogo-comun`, migraciones 19 y 21): «Team» bajo «Informal»; sembrados Club, Group y los cuatro tipos de relación | «Duplicate Of», cuando se resuelva el choque de identificador (§2) |
 | D-53 | **Hecho** (rama `feat/parties-persona-proveedor-o-empresa`, migración 20): los dos tipos cuelgan de la raíz. Los demás contextos guardan a la empresa por identificador y no cambian. Una persona empresa no puede tener unidades organizativas debajo | El documento que identifica al autónomo; que la importación de proveedores cargue personas |
 | D-40 | Cumple los tres, y prueba además en MySQL y SQLite | — |
 | D-45 | Cumple: cada caso de uso comprueba su permiso | — |
