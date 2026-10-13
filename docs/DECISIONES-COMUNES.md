@@ -57,6 +57,27 @@ en cada lado, en [PARTIES-MODELO-COMUN.md](PARTIES-MODELO-COMUN.md).
 | D-16 | 2026-10-12 | La extensibilidad se hace en ejecución, por un administrador, para cualquier entidad, desde un espacio del front; el modelo son los configuradores de producto de Trench | Karpo Go |
 | D-17 | 2026-10-13 | **Los clientes son relaciones, no roles.** Un cliente es la pareja parte–empresa con su perfil comercial; las condiciones comerciales (riesgo, bloqueo, número de cliente) son de la pareja. Es lo que Trench tiene como «Relaciones de clientes / proveedores». **Transmitida** por Karpo C#. **Preguntas abiertas** (§2) | Trench |
 
+### 1.1 bis Clientes y proveedores como relaciones (sesión de Trench)
+
+Todas **transmitidas** por la sesión de Trench el 2026-10-13, con la respuesta literal de Javier
+cuando la dio. La fecha exacta de cada una no consta; son de la semana del 12 de octubre.
+
+| # | Decisión | Lo que dijo Javier | Sesión |
+|---|---|---|---|
+| D-28 | El **bloqueo** del cliente también es de la pareja, y la **fuente única** de límite, bloqueo y número es el perfil comercial de la relación (completa D-7 y D-10) | «1 sí, confirmo. 2 el perfil comercial. 3 entran los tres» | Trench |
+| D-29 | El perfil de la pareja lleva **dos identificadores externos**: el de Sage y el de Apiscore | «utiliza los dos… vamos a tener que integrarnos tarde o temprano con ambos sistemas» | Trench |
+| D-30 | Las pantallas «Clientes», «Cliente↔Empresa» y «Proveedores» (y más adelante empleados) se sustituyen por **«Relaciones de clientes / proveedores / …»**: listado, ficha y filtros por pareja parte–empresa (es la forma concreta de D-17) | — | Trench |
+| D-31 | El listado de relaciones de cliente enseña **toda** relación de cliente, no sólo las de quien tiene el rol de cliente | «1 toda relación de cliente» | Trench |
+| D-32 | Esa búsqueda sólo enseña relaciones con las **empresas a las que el usuario tiene acceso** | «2 sí es correcto, confirmo» | Trench |
+| D-33 | El alta de una relación **pide siempre la empresa**. Los símbolos de los filtros de rol son `&` y `\|` | «adelante con las dos recomendaciones» | Trench |
+| D-34 | En la ficha se navega a siguiente, anterior, primero y último **de la paginación y de la selección, no del fichero** | literal | Trench |
+| D-35 | Filtros rápidos por rol: los siete roles más usados, combinables con «y» / «o», con la expresión visible y **aplicada en la base de datos** mediante un DTO de especificación. De aquí sale `FilterExpressionDto` | — | Trench |
+
+Confirmadas también allí, sin número nuevo: D-14 (los tres códigos NUTS erróneos se corrigen ya;
+islas, niveles y piezas de dirección, después, en un tramo coordinado con Karpo C#) y D-16 (la
+extensibilidad en ejecución; en Trench el orden es terminar el alta, luego el contrato, luego
+la navegación).
+
 ### 1.2 Extensibilidad
 
 Detalle en [EXTENSIBILIDAD.md](EXTENSIBILIDAD.md) §1.
@@ -100,7 +121,9 @@ fecha y su texto.
 | D-8 | ¿Anular pide un permiso propio? ¿Qué cuenta como «depende»? |
 | D-13 | Cómo se declara en el dominio que una relación es de dependencia (el diseño no está hecho) |
 | D-15 | (1) Una party desactivada, ¿deja de verla también quien tendría que reactivarla? (2) Un antiguo cliente, ¿se puede editar desde la empresa o sólo ver? (3) ¿Cambia también lo que responde «a qué empresas pertenece hoy», que usan RRHH y Security? |
-| D-17 | (1) ¿El rol «cliente» sigue existiendo, como consecuencia de tener la relación, o desaparece? (2) Si sigue, ¿lo asigna la relación al establecerse (como en Trench) o tiene que existir antes (como en Go, que rechaza la relación si falta)? (3) ¿Vale lo mismo para proveedor, empleado y cliente potencial? (4) ¿La búsqueda de parties deja de poder filtrar «los que son cliente»? |
+| D-17 | (1) ¿El rol «cliente» sigue existiendo, como consecuencia de tener la relación, o desaparece? (2) Si sigue, ¿lo asigna la relación al establecerse o tiene que existir antes? **Javier dijo en Trench, sin cerrarlo:** «creo que podemos decir que es la relación la que asigna los roles si estos no están previamente». Trench lo hace así; Go rechaza la relación si el rol falta. (3) ¿Vale lo mismo para proveedor, empleado y cliente potencial? (4) ¿La búsqueda de parties deja de poder filtrar «los que son cliente»? |
+| D-31 | Si hay relaciones de cliente de quien no tiene el rol de cliente, ¿qué significa entonces el rol? (va con D-17) |
+| D-35 | ¿«Tiene el rol X» mira sólo los roles vigentes hoy (Go) o cualquiera que haya tenido (Trench)? Trench recomendará «sólo vigentes» |
 | — | Supresión de datos personales (RGPD): sin decidir, pendiente de consulta legal |
 | — | ¿Un documento puede estar en dos parties? Go lo impide; Trench tiene duplicados reales y Karpo C# no tiene índice único |
 
@@ -113,6 +136,29 @@ fecha y su texto.
 | Expresión de filtro (`FilterExpressionDto`) | Trench, en su rama principal | Adoptada tal cual en el contrato HTTP; falta acordar si mira sólo los roles vigentes |
 | Lo que falta del modelo de Parties | [PARTIES-MODELO-COMUN.md](PARTIES-MODELO-COMUN.md) §3 | Unas 35 filas sin decidir |
 
+## 3 bis. Lo que cada sesión dice que no cumple
+
+Comunicado por cada sesión; no lo ha comprobado nadie más. El detalle de cada una vive en su
+repositorio.
+
+**Trench** (2026-10-13; «no es una auditoría fila a fila»):
+
+| Decisión | Estado en Trench |
+|---|---|
+| D-3 | No: comparte mecanismos de contacto entre parties |
+| D-4, D-8, D-13 | No: hay borrados de party, rol y relación |
+| D-5, D-9 | A medias: guarda el estado de formato del documento; falta el filtro «con errores» |
+| D-6 | No: catálogo de roles y jerarquía fijos en el código, sin código estable ni alta desde la aplicación |
+| D-7, D-10, D-28 | Primera fase hecha (perfil por pareja, 1.888 números copiados, sólo en su PostgreSQL local); las columnas antiguas siguen hasta la segunda |
+| D-11 | No: tiene estado y prioridad en la relación |
+| D-14 | Sólo los tres códigos NUTS |
+| D-15 | Sin comprobar |
+| D-12, D-16 | Contrato escrito y en su rama principal; sin implementar |
+
+**Karpo C#** (2026-10-13): está haciendo su comprobación; ha adelantado que hoy el **estado** de la
+relación decide la visibilidad (leer por identificador exige relación «activa»), lo que toca a
+D-11 y a D-15 a la vez.
+
 ## 4. Divergencias de Karpo Go
 
 Lo que Go no cumple todavía de lo decidido. Cada sesión lleva la suya en su repositorio.
@@ -123,6 +169,9 @@ Lo que Go no cumple todavía de lo decidido. Cada sesión lleva la suya en su re
 | D-15 | La afiliación de una party a una empresa termina con su relación, y la empresa deja de verla | Esperar las tres respuestas |
 | D-16, D-18 a D-23 | Hecho sólo el alta de tipos de rol y de relación sin campos | El mecanismo entero, contra el contrato de Trench. Antes hay que resolver que Go guarda un agregado borrando y reinsertando sus filas hijas |
 | D-17 | «Cliente» es un rol **y además** un tipo de relación; la relación exige que el rol exista antes; el límite y el bloqueo están en `receivables` y el número de cliente en la relación (PR 17) | Esperar las cuatro respuestas. Los datos de la pareja ya están donde D-17 dice; lo que cambia es el papel del rol |
+| D-28 | No hay un perfil comercial único: el número está en Parties, el límite y el bloqueo en `receivables`, el perfil de proveedor en `purchases` | Decidir si en Go «fuente única» es un contexto o basta con que cada dato tenga un solo dueño |
+| D-29 | No hay identificadores externos en la pareja. La importación guarda la correspondencia con Sage y Apiscore en sus referencias (`imports`), por registro | Decidir si eso cumple |
+| D-30 a D-35 | No hay búsqueda de relaciones, ni vista por pareja, ni expresión de filtro. Go no tiene front | La búsqueda de relaciones y la expresión, cuando se apruebe el contrato HTTP |
 | D-24 | Go sirve sus rutas, no el contrato | El contrato está sin aprobar |
 | D-5, D-9, D-10, D-14, D-25, D-26 | **Cumple** (PR 13 a 18) | — |
 | D-1, D-2, D-3, D-6 (caso sin atributos), D-7, D-11 | **Cumple** | — |
