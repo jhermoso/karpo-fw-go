@@ -307,6 +307,25 @@ contra C#.
    extensibilidad de Trench dejó esto pendiente de esta decisión.
 5. **¿Página y cursor, o sólo cursor?** Propongo los dos.
 
+## 7 bis. Roces con lo que Trench acaba de publicar (2026-10-13)
+
+La sesión de Trench leyó este contrato y señaló tres puntos donde responde distinto que lo que
+entró ese día en su rama principal («Relaciones de clientes / proveedores»), que Javier ha pedido
+tomar como ejemplo. Los tres van a Javier; aquí queda cómo están.
+
+| # | Roce | Estado |
+|---|---|---|
+| 1 | **Filtro de roles**: este contrato tenía dos listas; Trench, un árbol «y» / «o» / «no» | **Resuelto**: el contrato adopta su expresión tal cual (§3.1 bis) |
+| 2 | **Clientes y proveedores**: aquí son parties con un rol; en Trench la pantalla es **una fila por pareja parte–empresa**, con los datos del perfil comercial de la pareja (código, número, límite, bloqueo) y un alta de la relación en un solo paso | **Abierto.** No se contradicen: son dos vistas. A este contrato le falta la segunda: una búsqueda de **relaciones** por tipo, con los datos de las dos partes y los de la pareja. Encaja con lo ya decidido (límite y número de cliente son de la pareja). En Go esos datos están repartidos: el número, en Parties; el límite y el bloqueo, en `receivables`; el perfil de proveedor, en `purchases` |
+| 3 | **Documentos duplicados**: aquí «un documento identifica a una sola party», y por eso no hay filtro de duplicados. En los datos reales de Trench **sí hay documentos repetidos** entre parties activas, existe la fusión de parties, y Javier ha pedido allí un filtro de duplicados | **Abierto, y es de modelo, no de rutas.** En Go la regla es de la fase 2 (aprobada el 2026-09-27) y la sostiene un índice único: una importación de esos datos rechazaría el documento del segundo. Hay que decidir si la regla se mantiene, y entonces los duplicados se resuelven antes de entrar, o si se admite el duplicado marcado y se añade la fusión |
+
+Decisiones que esto añade a las de §7:
+
+6. **¿Entra en la versión 1 la vista por pareja** (roce 2), o va en una segunda tanda?
+7. **¿Un documento puede estar en dos parties?** (roce 3). Si sí, cambia una regla aprobada de Go y
+   hace falta la fusión de duplicados; si no, la importación de datos reales necesita un paso
+   previo de limpieza.
+
 ## 8. Límites
 
 - Nadie de C# ni de Trench ha revisado esto todavía.
