@@ -504,3 +504,23 @@ roles terminados y los que aún no han empezado. El nombre y la definición son 
 - *Ejemplo:* Luis fue empleado hasta diciembre y hoy sólo es cliente. `?role=Employee` no lo
   devuelve; `?role=Employee&includeEndedRoles=true`, sí.
 - El parámetro sólo afecta al filtro por rol; no cambia el de organización ni el de instalación.
+
+## 15. No se desactiva a quien tiene relaciones sin terminar
+
+Decisión de Javier (D-4): «borrar» es desactivar, y no se puede desactivar algo de lo que dependen
+otras cosas vigentes; lo comprueba el comando antes de ejecutarse.
+
+| Qué | Cómo |
+|---|---|
+| Dónde | `PUT /api/parties/{id}/active` con `active: false` |
+| Qué bloquea | Cualquier relación de la party, en cualquiera de los dos lados, que no haya terminado: las vigentes y las que aún no han empezado |
+| Respuesta | 422, `parties.has_relationships`. Primero se terminan las relaciones (`POST /api/party-relationships/{id}/terminate`) |
+| Reactivar | No comprueba nada |
+
+- *Ejemplo:* Talleres Pérez es cliente de Acme. Desactivarlo se rechaza; se termina la relación
+  de cliente y entonces sí se puede.
+- **Los roles no bloquean.** Son parte de la party (D-13: su ciclo de vida depende de ella) y se
+  quedan como están; una party desactivada ya no cuenta para nada aunque conserve roles vigentes.
+- **Lo de otros contextos no bloquea todavía:** una factura pendiente o un pedido abierto no lo
+  sabe Parties. Queda como estaba propuesto: cada contexto escucha `PartyDeactivated` y avisa.
+- **Sin hacer de D-8:** el comando «anular» para un alta equivocada.

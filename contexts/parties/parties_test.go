@@ -308,6 +308,16 @@ func (e *env) scenario(prefix string) (acme, ana papp.PartyDTO) {
 		e.t.Fatalf("contractors ever: %+v", contractors)
 	}
 
+	// A party with relationships that have not ended is not deactivated (D-4); one without, is.
+	e.must(e.do("PUT", "/api/parties/"+ana.ID+"/active", e.admin, map[string]any{"active": false}, nil), 422, "ana works for acme and buys from it")
+	e.must(e.do("PUT", "/api/parties/"+acme.ID+"/active", e.admin, map[string]any{"active": false}, nil), 422, "acme has an employee and a customer")
+	var loner papp.PartyDTO
+	e.must(e.do("POST", "/api/persons", e.admin, map[string]any{"givenName": "Sola", "firstSurname": prefix}, &loner), 201, "somebody unrelated")
+	e.must(e.do("PUT", "/api/parties/"+loner.ID+"/active", e.admin, map[string]any{"active": false}, &loner), 200, "deactivate who nobody depends on")
+	if loner.Active {
+		e.t.Fatalf("still active: %+v", loner)
+	}
+
 	// The reader may read but not write.
 	e.must(e.do("PUT", "/api/parties/"+acme.ID+"/name", e.reader, map[string]any{"legalName": "Nope"}, nil), 403, "reader cannot rename")
 	e.must(e.do("GET", "/api/parties/"+acme.ID, "", nil, nil), 401, "anonymous")
@@ -1025,7 +1035,7 @@ func endToEnd(t *testing.T, newDirectory func(*testing.T) directory) {
 	if _, err := e.mod.Relay(broker).RelayOnce(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if len(seen) != 15 || roles != 4 {
+	if len(seen) != 16 || roles != 4 {
 		t.Fatalf("published: %v, roles %d", seen, roles)
 	}
 	if len(shares) != 3 || shares[0] != "30.00" || shares[1] != "45.50" || shares[2] != "" {

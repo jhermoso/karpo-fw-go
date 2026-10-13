@@ -184,6 +184,12 @@ func ActiveAt(t time.Time) spec.Spec[*Relationship] {
 	return RelFieldSince.AtOrBefore(t).And(RelFieldUntil.IsNull().Or(RelFieldUntil.After(t)))
 }
 
+// NotEndedAt matches the relationships that have not ended at t: the ones in force and the ones
+// that have not started yet.
+func NotEndedAt(t time.Time) spec.Spec[*Relationship] {
+	return RelFieldUntil.IsNull().Or(RelFieldUntil.After(t))
+}
+
 // SameRelationship matches relationships of the same type between the same parties (both
 // directions for symmetric types, where FromRole equals ToRole) still open or ending after t:
 // the duplicate check of Establish.
