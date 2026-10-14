@@ -82,6 +82,8 @@ var (
 	RoleFieldType  = spec.Comparable("role_type", func(r PartyRole) RoleTypeID { return r.RoleType })
 	RoleFieldFrom  = spec.Time("valid_from", func(r PartyRole) time.Time { return r.Period.From() })
 	RoleFieldUntil = spec.OptionalTime("valid_to", roleEnd)
+	// RoleFieldAnnulled tells the roles given by mistake and taken back, which count for nothing.
+	RoleFieldAnnulled = spec.Comparable("annulled", func(r PartyRole) bool { return r.Annulled })
 )
 
 // WithIDs matches the given parties.
@@ -136,7 +138,7 @@ func OfKind(k Kind) spec.Spec[*Party] { return FieldKind.Eq(k) }
 // HasPlayed matches parties with any of the role types, whenever: the ones in force, the ended
 // ones and the ones that have not started yet.
 func HasPlayed(roles ...RoleTypeID) spec.Spec[*Party] {
-	return FieldRoles.Any(RoleFieldType.In(roles...))
+	return FieldRoles.Any(spec.And(RoleFieldType.In(roles...), RoleFieldAnnulled.Eq(false)))
 }
 
 // Active matches active parties.

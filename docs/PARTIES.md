@@ -523,4 +523,27 @@ otras cosas vigentes; lo comprueba el comando antes de ejecutarse.
   quedan como están; una party desactivada ya no cuenta para nada aunque conserve roles vigentes.
 - **Lo de otros contextos no bloquea todavía:** una factura pendiente o un pedido abierto no lo
   sabe Parties. Queda como estaba propuesto: cada contexto escucha `PartyDeactivated` y avisa.
-- **Sin hacer de D-8:** el comando «anular» para un alta equivocada.
+- **D-8, el comando «anular»:** hecho para los roles (§16); falta para lo demás.
+
+## 16. Anular un rol dado por error
+
+Decisión de Javier (D-8): un alta equivocada se quita con un comando «anular», que mira qué
+depende del dato. Si nada depende, lo borra; si algo depende, lo deja marcado como anulado.
+
+| Qué | Cómo |
+|---|---|
+| Ruta | `POST /api/parties/{id}/roles/{roleId}/annul`, sin cuerpo |
+| Qué cuenta como «depende» | Una relación de la party, de cualquier fecha, en el lado que pide ese rol (o uno por encima de él) |
+| Si nada depende | El rol **se borra**, como si nunca se hubiera dado |
+| Si algo depende | El rol **termina en ese momento** y queda con `annulled: true` |
+| Permiso | `Parties.PartyRole.Annul`, propio: la regla estándar de Seguridad no lo reparte, así que de entrada sólo lo tiene el administrador |
+| Hacia fuera | Se publica `parties.party-role-ended.v1` en los dos casos: quien oyó que el rol se dio, oye que ya no se juega |
+| Esquema | Migración 22: `party_roles.annulled` |
+
+- *Ejemplo:* a Ana se le da «Proveedor» por error y se corrige al minuto: se borra. Si ya se
+  hubiera creado su relación de proveedor con Acme, el rol queda terminado y anulado.
+- **Un rol anulado no cuenta** al buscar por rol, tampoco con `includeEndedRoles=true`.
+- **La relación que dependía del rol no se toca.** Sigue donde estaba; si también fue un error,
+  se termina aparte. Anular relaciones, identificaciones o parties enteras no está hecho.
+- Decidido aquí, sin respuesta de Javier a las dos preguntas abiertas de D-8: el permiso propio, y
+  que «depende» son las relaciones.

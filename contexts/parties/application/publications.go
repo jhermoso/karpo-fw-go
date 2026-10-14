@@ -31,6 +31,10 @@ func Publications(r *messaging.Recorder) *messaging.Recorder {
 	messaging.On(r, func(_ context.Context, e domain.PartyRoleAssigned) ([]app.IntegrationEvent, error) {
 		return one(contracts.PartyRoleAssignedV1{PartyID: e.AggregateID, RoleID: e.RoleID, RoleType: e.RoleType, From: e.From})
 	})
+	// Who heard that the role was given hears that it is no longer played, removed or not.
+	messaging.On(r, func(_ context.Context, e domain.PartyRoleAnnulled) ([]app.IntegrationEvent, error) {
+		return one(contracts.PartyRoleEndedV1{PartyID: e.AggregateID, RoleID: e.RoleID, RoleType: e.RoleType, At: e.At})
+	})
 	messaging.On(r, func(_ context.Context, e domain.PartyRoleEnded) ([]app.IntegrationEvent, error) {
 		return one(contracts.PartyRoleEndedV1{PartyID: e.AggregateID, RoleID: e.RoleID, RoleType: e.RoleType, At: e.At})
 	})

@@ -131,7 +131,7 @@ func PartyMapping() sqlrepo.Mapping[domain.PartyID, *domain.Party] {
 					return nil, err
 				}
 				s.Roles = append(s.Roles, domain.PartyRole{ID: domain.PartyRoleID{UUID: c.UUID("id")},
-					RoleType: domain.RoleTypeID{UUID: c.UUID("role_type")}, Period: period})
+					RoleType: domain.RoleTypeID{UUID: c.UUID("role_type")}, Period: period, Annulled: c.Bool("annulled")})
 			}
 			byStart := func(fa, fb time.Time, ia, ib []byte) int {
 				if c := fa.Compare(fb); c != 0 {
@@ -255,7 +255,7 @@ func PartyMapping() sqlrepo.Mapping[domain.PartyID, *domain.Party] {
 			Name:       "roles",
 			Table:      "party_roles",
 			ForeignKey: "party_id",
-			Columns:    []string{"id", "role_type", "valid_from", "valid_to"},
+			Columns:    []string{"id", "role_type", "valid_from", "valid_to", "annulled"},
 			OrderBy:    []string{"valid_from", "id"},
 			Dehydrate: func(p *domain.Party) ([]sqlrepo.Values, error) {
 				out := []sqlrepo.Values{}
@@ -264,7 +264,8 @@ func PartyMapping() sqlrepo.Mapping[domain.PartyID, *domain.Party] {
 					if t, ok := r.Period.To(); ok {
 						to = t
 					}
-					out = append(out, sqlrepo.Values{"id": r.ID, "role_type": r.RoleType, "valid_from": r.Period.From(), "valid_to": to})
+					out = append(out, sqlrepo.Values{"id": r.ID, "role_type": r.RoleType, "valid_from": r.Period.From(), "valid_to": to,
+						"annulled": r.Annulled})
 				}
 				return out, nil
 			},

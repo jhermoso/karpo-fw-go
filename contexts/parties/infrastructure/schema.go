@@ -218,6 +218,9 @@ func Migrations() sqlrepo.MigrationSet {
 		// Every project seeds the same types: the ones this catalog lacked, and Team among the
 		// informal organizations (docs/DECISIONES-COMUNES.md, D-62).
 		{Version: 21, Name: "the common catalog of role and relationship types", Run: seedCommonCatalog},
+		// The mark of a role given by mistake that could not be removed (docs/DECISIONES-COMUNES.md, D-8).
+		{Version: 22, Name: "annulled roles", Up: sqlrepo.RenderDDLAll(
+			`ALTER TABLE party_roles {add:annulled} {bool} DEFAULT {false} NOT NULL{addEnd}`)},
 	}}
 }
 
