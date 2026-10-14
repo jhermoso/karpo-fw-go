@@ -444,6 +444,9 @@ Dos familias con el mismo molde, una por tipo de relación: `customer-relationsh
 | `GET /api/customer-relationships/{id}` | Una pareja |
 | `POST /api/customer-relationships` | Alta de la pareja, todo o nada |
 
+Las fichas fusionadas (duplicados, D-64) quedan fuera salvo `includeMergedParties=true`, igual que en
+la búsqueda de parties.
+
 Trench las tiene hoy como `…/search/enriched` y añade `…/search/top-role-types` (los roles más
 usados, para los botones); aquí el recuento va por §3.4.
 
@@ -491,11 +494,9 @@ Los datos de la pareja viven en tres contextos: el número de cliente en Parties
 bloqueo en `receivables`, el perfil de proveedor en `purchases`. La fila es una **lectura
 compuesta** que arma el anfitrión, como ya hace con otras; el contrato no tiene por qué notarlo.
 
-**Por decidir antes de implementarlo:** si en la versión 1 es obligatorio filtrar y ordenar por
-los campos de la pareja (número, bloqueo). En Trench se filtra y ordena por nombre, documento y
-código, y por bloqueo sí o no. En Go, ordenar por un campo de otro contexto obliga a traer las
-parejas y ordenar en memoria, o a una proyección de lectura; recomiendo dejar fuera de la versión
-1 el orden por campos de otro contexto.
+**Decidido por Javier (D-73, 2026-10-14):** en la versión 1 se filtra y se ordena también por los
+campos de la pareja (número de cliente, bloqueo). En Go eso pide una lectura compuesta de Parties,
+Cobros y Compras, o una proyección de lectura que junte la pareja; está sin implementar.
 
 ## 8. Límites
 
