@@ -565,7 +565,7 @@ se verá caso por caso.
 |---|---|
 | Marcar | Crear la relación «Duplicate Of» (`…0002-…0016`) del duplicado a la que sobrevive: `POST /api/party-relationships`. El duplicado queda con `duplicate: true` |
 | Deshacer | Terminar esa relación |
-| Buscar | `GET /api/parties` lo deja fuera; con `includeDuplicates=true`, entra. Leerlo por su identificador funciona siempre |
+| Buscar | `GET /api/parties` lo deja fuera; con `includeMergedParties=true`, entra (el nombre es el de Trench, su PR 45). Leerlo por su identificador funciona siempre |
 | Lo que se rechaza (422, `parties.duplicate`) | Cualquier cambio en la party (nombre, roles, documentos, contactos, activar o desactivar…), crearle relaciones y cambiar los datos de las que tiene |
 | Lo que se permite | Leerla y terminar sus relaciones, la de duplicado incluida |
 | Esquema | Migración 24: `parties.duplicate` |

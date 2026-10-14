@@ -282,10 +282,10 @@ type SearchParties struct {
 	Classification    string // classification type id: parties classified so now
 	ActiveOnly        bool
 	DocumentIssue     bool // only the parties marked with a refused identity document
-	// IncludeDuplicates brings the parties marked as the duplicate of another too, which a search
+	// IncludeMergedParties brings the parties marked as the duplicate of another too, which a search
 	// leaves out by default (docs/DECISIONES-COMUNES.md, D-64).
-	IncludeDuplicates bool
-	Page, Size        int
+	IncludeMergedParties bool
+	Page, Size           int
 }
 
 // PartyRelationships lists the relationships of a party.

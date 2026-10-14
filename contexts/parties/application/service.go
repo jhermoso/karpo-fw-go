@@ -405,7 +405,7 @@ func NewService(d Deps) *Service {
 		if q.DocumentIssue {
 			parts = append(parts, domain.FieldDocumentIssue.Eq(true))
 		}
-		if !q.IncludeDuplicates {
+		if !q.IncludeMergedParties {
 			parts = append(parts, domain.FieldDuplicate.Eq(false))
 		}
 		if q.Role != "" {

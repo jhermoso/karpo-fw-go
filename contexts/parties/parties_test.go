@@ -360,7 +360,7 @@ func (e *env) scenario(prefix string) (acme, ana papp.PartyDTO) {
 	if slices.ContainsFunc(found.Items, func(p papp.PartyDTO) bool { return p.ID == dup.ID }) {
 		e.t.Fatalf("a duplicate in a search by default: %+v", found)
 	}
-	e.must(e.do("GET", "/api/parties?q=Duplicada&includeDuplicates=true", e.admin, nil, &found), 200, "search with the duplicates")
+	e.must(e.do("GET", "/api/parties?q=Duplicada&includeMergedParties=true", e.admin, nil, &found), 200, "search with the duplicates")
 	if !slices.ContainsFunc(found.Items, func(p papp.PartyDTO) bool { return p.ID == dup.ID && p.Duplicate }) {
 		e.t.Fatalf("the duplicate was not found on request: %+v", found)
 	}
