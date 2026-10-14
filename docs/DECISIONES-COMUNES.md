@@ -174,6 +174,16 @@ Go no tiene lista de unidades organizativas y «Team» cuelga de «Informal».
 Abierto según Karpo C#: si «administrador de A» es el administrador de organización con acceso a A;
 el nombre del permiso que el global puede retirar; el diseño de la marca por campo.
 
+**Respuestas de Javier del 2026-10-14 (esta sesión)** a lo que D-64 dejaba abierto:
+
+| # | Decisión | Lo que dijo Javier |
+|---|---|---|
+| D-70 | **El bloqueo del duplicado alcanza a Facturación y Pedidos**: no se le factura ni se le hace un pedido | «el bloqueo sí alcanza a facturación y pedidos» |
+| D-71 | **La fusión bloquea la ficha, no la desactiva** (también en Trench, que hoy la desactiva) | «bloquear si» |
+| D-72 | **Karpo C# sigue con lo que tiene en marcha** antes de traer la fusión de Trench | «seguir con lo que tiene» |
+| D-73 | **La vista por pareja se puede filtrar y ordenar por los datos de la pareja** (número de cliente, bloqueo) desde la versión 1 | «si» a «¿es obligatorio en la primera versión ordenar la lista por número de cliente o por bloqueo?» |
+| D-74 | Sobre cómo guardar que una party la dio de alta una empresa: **quizá baste la historia del registro** (la auditoría de quién la creó), **y la relación se crea como en Karpo C#**. Lectura dudosa, por confirmar (§2) | «no se si hace falta decir quien le dio de alta mas alla de la información histórica del registro. y la relacion se crea como en karpo c#» |
+
 **D-64 en cada proyecto (2026-10-14):** en Trench, fusionado en `main` (su PR 45): lo que
 decide «es duplicado» es su columna `MergedIntoPartyId`, y la relación «Duplicate Of» se crea
 siempre con ella; filtro `includeMergedParties`. En Karpo Go, la relación «Duplicate Of» y su
@@ -281,7 +291,7 @@ empresa es un envío o un trabajo; y cómo se añade un valor de catálogo en SQ
 | D-62 | «Organization Unit» (`…0105`) cuelga de «Legal» en las semillas SQL de Trench y de «Organization» en su catálogo de código y en Karpo Go. «Entidad financiera» (`…00F1`) está en las semillas de Trench y otro script la borra |
 | D-62 | «Salesperson» (`…0001-…00C3`) es en Trench un rol de pedido, no de party; en Go es un rol de party. La relación `prospect` sólo existe en Go |
 | D-53 | ¿Un autónomo proveedor u organización interna se identifica con su NIF de persona? |
-| D-64 | ¿El bloqueo alcanza a los otros contextos (no facturarle, no hacerle pedidos)? Javier no lo ha dicho expresamente; «no puede intervenir en ninguna operación» apunta a que sí |
+| D-74 | **¿Cómo se lee?** (a) Go deja de guardar la marca de «nació con el alta» y la deduce de la auditoría (quién creó la party y desde qué empresa); (b) «la relación se crea como en Karpo C#»: ¿el tipo de relación nuevo «Alta en empresa» que propuso Karpo C#, o la relación de negocio que se elige al dar de alta, como hacen hoy Go y C#? |
 | D-53, D-67 | La primera mitad la contesta D-67 (sólo cuentan las relaciones de negocio). Falta qué tipos de relación son «de negocio» y el diseño de la marca por campo |
 | D-49 | Diferencias de Karpo C# (su PR 31, sin fusionar), de su sesión: responde 409 donde Go da 422; exige además el permiso de asignar roles; una party recién creada en C# no es escribible por su empresa hasta tener una relación (en Go el alta ya la afilia); C# da por escribible una party del catálogo público y Go nunca; el alta de relación en C# no lleva fecha de inicio |
 | D-56 | Que un tipo hijo no pueda declarar un código de campo que ya declara un ancestro, y qué pasa con los valores si un tipo cambia de padre. Por fijar entre Trench y Go |
