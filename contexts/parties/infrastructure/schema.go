@@ -246,6 +246,9 @@ func seedCommonCatalog(ctx context.Context, db *sqlrepo.DB) error {
 				return fmt.Errorf("moving role type %s: %w", t.Name, err)
 			}
 		case !roles[t.ID.String()]:
+			if err := codeTaken(ctx, db, "role_types", t.Code, t.ID.String()); err != nil {
+				return err
+			}
 			var parent any
 			if t.Parent != nil {
 				parent = *t.Parent
@@ -263,6 +266,9 @@ func seedCommonCatalog(ctx context.Context, db *sqlrepo.DB) error {
 	for _, t := range domain.WellKnownRelationshipTypes() {
 		if rels[t.ID.String()] {
 			continue
+		}
+		if err := codeTaken(ctx, db, "relationship_types", t.Code, t.ID.String()); err != nil {
+			return err
 		}
 		if err := db.Insert(ctx, "relationship_types", sqlrepo.Values{"id": t.ID, "name": t.Name.String(), "description": t.Description,
 			"from_role": t.FromRole, "to_role": t.ToRole, "hierarchical": t.Hierarchical, "code": t.Code}); err != nil {
@@ -286,11 +292,30 @@ func moveRolesOfAnyParty(ctx context.Context, db *sqlrepo.DB) error {
 	return nil
 }
 
+// codeTaken refuses to give a well-known type a code that a type added to the catalog already
+// has: two types with one code would leave the catalog unreadable, and the context with it.
+func codeTaken(ctx context.Context, db *sqlrepo.DB, table, code, id string) error {
+	rows, err := db.Select(ctx, table, []string{"id", "code"})
+	if err != nil {
+		return err
+	}
+	for _, r := range rows {
+		if r.String("code") == code && r.UUID("id").String() != id {
+			return fmt.Errorf("%s: the code %q that the program needs is used by %s: give that one another code and migrate again",
+				table, code, r.UUID("id"))
+		}
+	}
+	return nil
+}
+
 // renameTeamRole gives the role type its common name and code where an earlier seed left the old ones.
 func renameTeamRole(ctx context.Context, db *sqlrepo.DB) error {
 	for _, t := range domain.WellKnownRoleTypes() {
 		if t.ID != domain.RoleTeam {
 			continue
+		}
+		if err := codeTaken(ctx, db, "role_types", t.Code, t.ID.String()); err != nil {
+			return err
 		}
 		_, err := db.Update(ctx, "role_types", sqlrepo.Values{"name": t.Name.String(), "description": t.Description, "code": t.Code},
 			sqlrepo.Values{"id": t.ID})
