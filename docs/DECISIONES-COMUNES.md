@@ -144,6 +144,14 @@ nunca asigna organización interna»), D-48 en listados y estadísticas (PR 38) 
 la persona como organización interna**, que allí es grande. Karpo C# tiene todo ello sin aplicar,
 detrás de su PR de permisos de Parties.
 
+**Lo que hay que limpiar en Trench para D-50**, medido por su sesión en su PostgreSQL local el
+2026-10-14 (sólo lectura, parties activas y sin fusionar): con la clave de Go (tipo, país, número)
+no hay ningún documento repetido en las identificaciones. El problema está en que el CIF de una
+organización legal vive además en otra columna (`legal_organization.TaxIdentity`), y ahí hay 38
+CIF repetidos en 82 parties, probablemente la misma empresa importada dos veces. Además, 84
+documentos con formato inválido y 197 sin validar, de 5.461. No se ha tocado ningún dato; en
+Trench, `D-DUPLICADOS-LIMPIEZA-ANTES-DE-CONVERGER`.
+
 ### 1.2 Extensibilidad
 
 Detalle en [EXTENSIBILIDAD.md](EXTENSIBILIDAD.md) §1.
