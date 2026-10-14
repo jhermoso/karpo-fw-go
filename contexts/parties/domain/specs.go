@@ -149,6 +149,7 @@ func Active() spec.Spec[*Party] { return FieldActive.Eq(true) }
 func PlaysAt(t time.Time, roles ...RoleTypeID) spec.Spec[*Party] {
 	return FieldRoles.Any(spec.And(
 		RoleFieldType.In(roles...),
+		RoleFieldAnnulled.Eq(false),
 		RoleFieldFrom.AtOrBefore(t),
 		RoleFieldUntil.IsNull().Or(RoleFieldUntil.After(t)),
 	))

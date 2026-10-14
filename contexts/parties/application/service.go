@@ -308,7 +308,9 @@ func NewService(d Deps) *Service {
 				return fw.NotFound("parties.party_role", c.RoleID)
 			}
 			role := p.Roles()[i].RoleType
-			depended := slices.ContainsFunc(rels, func(r *domain.Relationship) bool {
+			// Internal Organization is never removed: grants and affiliations may point at the
+			// company, and that it once was one is worth keeping.
+			depended := cat.IsA(role, domain.RoleInternalOrganization) || slices.ContainsFunc(rels, func(r *domain.Relationship) bool {
 				return (r.From() == p.ID() && cat.IsA(role, r.FromRole())) || (r.To() == p.ID() && cat.IsA(role, r.ToRole()))
 			})
 			_, err := p.AnnulRole(c.RoleID, fw.Now(), depended)

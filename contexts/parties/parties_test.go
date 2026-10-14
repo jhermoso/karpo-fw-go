@@ -327,7 +327,7 @@ func (e *env) scenario(prefix string) (acme, ana papp.PartyDTO) {
 	}
 	e.must(e.do("POST", "/api/parties/"+ana.ID+"/roles", e.admin, map[string]any{"roleType": domain.RoleFamilyMember.String()}, &ana), 200, "a role by mistake")
 	mistake, _ := roleOf(ana, domain.RoleFamilyMember)
-	e.must(e.do("POST", "/api/parties/"+ana.ID+"/roles/"+mistake.ID+"/annul", e.reader, nil, nil), 403, "annulling has its own permission")
+	e.must(e.do("POST", "/api/parties/"+ana.ID+"/roles/"+mistake.ID+"/annul", e.seller, nil, nil), 403, "annulling has its own permission: who assigns roles does not have it")
 	e.must(e.do("POST", "/api/parties/"+ana.ID+"/roles/"+mistake.ID+"/annul", e.admin, nil, &ana), 200, "annul a role nothing depends on")
 	if _, still := roleOf(ana, domain.RoleFamilyMember); still {
 		e.t.Fatalf("the role was not removed: %+v", ana.Roles)
@@ -343,6 +343,9 @@ func (e *env) scenario(prefix string) (acme, ana papp.PartyDTO) {
 	if annulled.Total != 0 {
 		e.t.Fatalf("an annulled role counted: %+v", annulled)
 	}
+	// Not even for the days it lasted: the role can be given again from before.
+	e.must(e.do("POST", "/api/parties/"+ana.ID+"/roles", e.admin, map[string]any{"roleType": domain.RoleEmployee.String(),
+		"from": employee.From}, &ana), 200, "the role again, from when the annulled one started")
 
 	// A party with relationships that have not ended is not deactivated (D-4); one without, is.
 	e.must(e.do("PUT", "/api/parties/"+ana.ID+"/active", e.admin, map[string]any{"active": false}, nil), 422, "ana works for acme and buys from it")
@@ -1043,7 +1046,7 @@ func endToEnd(t *testing.T, newDirectory func(*testing.T) directory) {
 		t.Fatalf("seeded role types without a code: %d", n)
 	}
 	_ = raw.QueryRow("SELECT COUNT(*) FROM party_roles WHERE party_id = (SELECT id FROM parties WHERE name LIKE 'Ana sql%')").Scan(&n)
-	if n != 4 { // employee, customer by the relationship, bill-to customer, contractor (ended)
+	if n != 5 { // employee (annulled), customer by the relationship, bill-to customer, contractor (ended), employee again
 		t.Fatalf("ana's roles in SQL: %d", n)
 	}
 
@@ -1082,7 +1085,7 @@ func endToEnd(t *testing.T, newDirectory func(*testing.T) directory) {
 	if _, err := e.mod.Relay(broker).RelayOnce(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if len(seen) != 18 || roles != 5 {
+	if len(seen) != 18 || roles != 6 {
 		t.Fatalf("published: %v, roles %d", seen, roles)
 	}
 	if len(shares) != 3 || shares[0] != "30.00" || shares[1] != "45.50" || shares[2] != "" {

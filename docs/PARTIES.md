@@ -542,7 +542,11 @@ depende del dato. Si nada depende, lo borra; si algo depende, lo deja marcado co
 
 - *Ejemplo:* a Ana se le da «Proveedor» por error y se corrige al minuto: se borra. Si ya se
   hubiera creado su relación de proveedor con Acme, el rol queda terminado y anulado.
-- **Un rol anulado no cuenta** al buscar por rol, tampoco con `includeEndedRoles=true`.
+- **Un rol anulado no cuenta para nada, tampoco para los días que duró:** ni al buscar por rol
+  (ni con `includeEndedRoles=true`), ni para establecer una relación con fecha pasada, ni impide
+  volver a dar el mismo rol desde antes.
+- **«Internal Organization» nunca se borra**, aunque nada dependa: queda terminado y anulado, para
+  conservar que esa party fue empresa del grupo.
 - **La relación que dependía del rol no se toca.** Sigue donde estaba; si también fue un error,
   se termina aparte. Anular relaciones, identificaciones o parties enteras no está hecho.
 - Decidido aquí, sin respuesta de Javier a las dos preguntas abiertas de D-8: el permiso propio, y

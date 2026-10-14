@@ -333,7 +333,7 @@ func (p *Party) AssignRole(c RoleCatalog, roleType RoleTypeID, from time.Time) (
 		return PartyRoleID{}, err
 	}
 	for _, r := range p.roles {
-		if r.RoleType == roleType && r.Period.Overlaps(period) {
+		if !r.Annulled && r.RoleType == roleType && r.Period.Overlaps(period) {
 			return PartyRoleID{}, fw.Violation("parties.role_overlap", "the party already plays this role in that period")
 		}
 	}
@@ -357,19 +357,20 @@ func (p *Party) AnnulRole(id PartyRoleID, at time.Time, depended bool) (removed 
 		return false, nil
 	}
 	p.roles = slices.Clone(p.roles)
+	if at.Before(r.Period.From()) {
+		at = r.Period.From()
+	}
+	if end, closed := r.Period.To(); closed && !at.Before(end) {
+		at = end // it had ended already: that is when it stopped being played
+	}
 	if !depended {
 		p.roles = slices.Delete(p.roles, i, i+1)
 	} else {
-		if end, closed := r.Period.To(); !closed || at.Before(end) {
-			if at.Before(r.Period.From()) {
-				at = r.Period.From()
-			}
-			period, err := vocab.NewValidPeriod(r.Period.From(), &at)
-			if err != nil {
-				return false, err
-			}
-			p.roles[i].Period = period
+		period, err := vocab.NewValidPeriod(r.Period.From(), &at)
+		if err != nil {
+			return false, err
 		}
+		p.roles[i].Period = period
 		p.roles[i].Annulled = true
 	}
 	p.Raise(PartyRoleAnnulled{EventMeta: p.NewEventMeta(), RoleID: id.String(), RoleType: r.RoleType.String(), At: at.UTC(), Removed: !depended})
@@ -399,7 +400,7 @@ func (p *Party) EndRole(id PartyRoleID, at time.Time) error {
 // PlaysAt reports whether the party plays roleType, or a role below it in the hierarchy, at t.
 func (p *Party) PlaysAt(c RoleCatalog, roleType RoleTypeID, t time.Time) bool {
 	for _, r := range p.roles {
-		if r.IsActiveAt(t) && c.IsA(r.RoleType, roleType) {
+		if !r.Annulled && r.IsActiveAt(t) && c.IsA(r.RoleType, roleType) { // an annulled role counts for nothing, whenever
 			return true
 		}
 	}
