@@ -295,6 +295,9 @@ func (s service) orderUseCases(svc *Service) {
 		if err := scopeOf(ctx).check("parties.party", company, company, true); err != nil {
 			return OrderDTO{}, err
 		}
+		if err := s.notBlocked(ctx, customer); err != nil {
+			return OrderDTO{}, err
+		}
 		if st.Date.IsZero() {
 			st.Date = vocab.DateOf(fw.Now())
 		}
@@ -346,6 +349,9 @@ func (s service) orderUseCases(svc *Service) {
 			}
 			if terms.BlockOrders {
 				return fw.Violation("orders.customer_blocked", "the customer is blocked for orders")
+			}
+			if err := s.notBlocked(ctx, os.Customer); err != nil {
+				return err
 			}
 			// The credit of Receivables counts everything the customer owes, not this order alone
 			// (the C# compared the limit with the amount of the order being confirmed).

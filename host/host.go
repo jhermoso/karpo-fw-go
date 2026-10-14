@@ -208,7 +208,7 @@ func Compose(sw *hotswap.Switch, o Options) (*Host, error) {
 	h.Receivables = receivables.Compose(sw, &SellerCalendar{Parties: h.Parties, Geography: h.Geography, system: func() context.Context { return h.system }})
 	h.Inventory = inventory.Compose(sw, invinfra.ProductsCatalog{Catalog: h.Products.Catalog})
 	h.Orders = orders.Compose(sw, ordinfra.ProductsCatalog{Catalog: h.Products.Catalog, Pricing: h.Products.Pricing},
-		ordinfra.ReceivablesCredit{Exposure: h.Receivables.Credit})
+		ordinfra.ReceivablesCredit{Exposure: h.Receivables.Credit}, ordinfra.PartiesBlocks{TaxIdentities: h.Parties.TaxIdentities})
 	h.Billing = billing.Compose(sw, bilinfra.FiscalTaxes{Engine: h.Fiscal.TaxEngine}, bilinfra.PartiesIdentities{TaxIdentities: h.Parties.TaxIdentities})
 	h.Purchases = purchases.Compose(sw, purinfra.FiscalTaxes{Engine: h.Fiscal.TaxEngine})
 	h.Payments = payments.Compose(sw, payinfra.PayrollNetPay{Remittance: h.Payroll.Remittance})

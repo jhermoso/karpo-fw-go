@@ -222,6 +222,11 @@ func (s service) invoiceUseCases(svc *Service) {
 			}
 			st.Customer, st.EquivalenceSurcharge = os.Customer, os.EquivalenceSurcharge
 		}
+		if st.Kind == domain.Ordinary {
+			if err := s.notBlocked(ctx, st.Customer); err != nil {
+				return InvoiceDTO{}, err
+			}
+		}
 		inv, err := domain.DraftInvoice(domain.NewInvoiceID(), st)
 		if err != nil {
 			return InvoiceDTO{}, err
@@ -301,6 +306,11 @@ func (s service) invoiceUseCases(svc *Service) {
 			st := i.State()
 			if st.Status != domain.Draft {
 				return i.Issue(domain.Issuance{}) // reports that it is not a draft
+			}
+			if st.Kind == domain.Ordinary {
+				if err := s.notBlocked(ctx, st.Customer); err != nil {
+					return err
+				}
 			}
 			ids, err := s.Identities.Identities(ctx, []domain.PartyID{{UUID: st.Seller.UUID}, st.Customer})
 			if err != nil {

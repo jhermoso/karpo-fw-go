@@ -32,7 +32,8 @@ type Module struct {
 
 // Compose builds the context on sw. Orders needs the catalog and prices of Products and, when
 // credit is controlled, the exposure of Receivables (nil: no credit control): ports it owns.
-func Compose(sw *hotswap.Switch, catalog domain.Catalog, credit domain.CreditCheck) *Module {
+// blocks is optional: who answers whether a customer is blocked (Parties, in the host).
+func Compose(sw *hotswap.Switch, catalog domain.Catalog, credit domain.CreditCheck, blocks ...domain.Blocks) *Module {
 	integration := hotswap.Outbox(sw, infrastructure.IntegrationOutboxFactory)
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
 	d := oapp.Deps{
@@ -42,6 +43,9 @@ func Compose(sw *hotswap.Switch, catalog domain.Catalog, credit domain.CreditChe
 		Catalog: catalog, Credit: credit, UoW: sw, Audit: audit,
 		Recorder: outbox.Recorders(outbox.NewRecorder(hotswap.Outbox(sw, infrastructure.OutboxFactory)),
 			oapp.Publications(messaging.NewRecorder(contracts.Source, integration))),
+	}
+	if len(blocks) > 0 {
+		d.Blocks = blocks[0]
 	}
 	consumer := messaging.NewConsumer(contracts.Source, hotswap.Inbox(sw, infrastructure.InboxFactory), sw)
 	oapp.Subscribe(consumer, d)

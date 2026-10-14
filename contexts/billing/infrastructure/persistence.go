@@ -349,6 +349,17 @@ type PartiesIdentities struct{ TaxIdentities parties.TaxIdentities }
 
 var _ domain.Identities = PartiesIdentities{}
 
+var _ domain.Blocks = PartiesIdentities{}
+
+// Blocked implements domain.Blocks; a party Parties does not know is not blocked.
+func (p PartiesIdentities) Blocked(ctx context.Context, party domain.PartyID) (bool, error) {
+	m, err := p.TaxIdentities.TaxIdentities(ctx, []string{party.String()})
+	if err != nil {
+		return false, err
+	}
+	return m[party.String()].Blocked, nil
+}
+
 // Identities implements domain.Identities.
 func (p PartiesIdentities) Identities(ctx context.Context, ids []domain.PartyID) (map[domain.PartyID]domain.Identity, error) {
 	req := make([]string, 0, len(ids))

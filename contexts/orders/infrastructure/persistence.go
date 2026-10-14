@@ -9,6 +9,7 @@ import (
 	"slices"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/orders/domain"
+	parties "github.com/jhermoso/karpo-fw-go/contexts/parties/contracts"
 	products "github.com/jhermoso/karpo-fw-go/contexts/products/contracts"
 	receivables "github.com/jhermoso/karpo-fw-go/contexts/receivables/contracts"
 	"github.com/jhermoso/karpo-fw-go/pkg/application"
@@ -386,6 +387,20 @@ func (p ProductsCatalog) Price(ctx context.Context, company domain.OrganizationI
 	}
 	it.UnitPrice, it.Discount = price, discount
 	return it, true, nil
+}
+
+// PartiesBlocks adapts the Parties tax identities contract to the Orders port (ACL).
+type PartiesBlocks struct{ TaxIdentities parties.TaxIdentities }
+
+var _ domain.Blocks = PartiesBlocks{}
+
+// Blocked implements domain.Blocks; a party Parties does not know is not blocked.
+func (p PartiesBlocks) Blocked(ctx context.Context, party domain.PartyID) (bool, error) {
+	m, err := p.TaxIdentities.TaxIdentities(ctx, []string{party.String()})
+	if err != nil {
+		return false, err
+	}
+	return m[party.String()].Blocked, nil
 }
 
 // ReceivablesCredit adapts the Receivables Credit contract to the Orders port (ACL).
