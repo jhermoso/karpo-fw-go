@@ -137,6 +137,13 @@ Tomada en las sesiones de Karpo C# y de Trench el 2026-10-14 («2 team» en las 
 - Tipos de relación: los 12 de Karpo Go, más «Subsidiary» (`…0002-…0010`, `subsidiary`), «Legal Representation» (`…0011`, `legal-representation`), «Department Assignment» (`…0012`, `department-assignment`) y «Collaborator Contact» (`…0013`, `collaborator-contact`). Trench ha comprobado que lados y códigos coinciden.
 - No son tipos de rol de party y no entran en este catálogo: Caller, Callee, Sender, Recipient, Worker, Project Manager, Reporter, Owner, Resolver y los de pedidos (en Trench, otra clase de tipo de rol). «App User» está comentado en la semilla de Trench.
 
+**Estado en los otros proyectos, según sus sesiones (2026-10-14):** Trench tiene en PR sin
+fusionar la excepción de D-49 (su PR 37; Javier la confirmó también allí: «confirmo, una relación
+nunca asigna organización interna»), D-48 en listados y estadísticas (PR 38) y «Team», «Club» y
+«Group» en su catálogo de código (PR 39); tiene en marcha la persona como proveedor y **sin empezar
+la persona como organización interna**, que allí es grande. Karpo C# tiene todo ello sin aplicar,
+detrás de su PR de permisos de Parties.
+
 ### 1.2 Extensibilidad
 
 Detalle en [EXTENSIBILIDAD.md](EXTENSIBILIDAD.md) §1.
@@ -223,6 +230,7 @@ empresa es un envío o un trabajo; y cómo se añade un valor de catálogo en SQ
 | — | Supresión de datos personales (RGPD): sin decidir, pendiente de consulta legal |
 | D-62 | **Choque de identificador:** `10000000-0000-0000-0002-000000000016` es «Duplicate Of» en Trench y «Prospect Relationship» en Karpo Go. Uno de los dos cambia. Datos: Trench tiene 0 relaciones «Duplicate Of» en su base local, pero el id está en su catálogo, en las semillas de seis layouts y en el paquete de códigos ya aplicado, y su fusión de parties lo usa; Karpo C# no tiene nada en ese id y no usa «Prospect Relationship» (un cliente potencial es allí una relación de cliente en estado «Potential»); Karpo Go no tiene datos en producción. Recomendación de esta sesión: mover el de Go a `…0017` |
 | D-62 | **Dos tipos de relación con los lados distintos.** «Agent Relationship» (`…0008`): Agent → Internal Organization en Trench, Agent → Customer en Go. «Organization Rollup» (`…0005`): Department → Internal Organization en Trench; en Go, cualquier unidad organizativa → cualquier organización |
+| D-62 | «Organization Unit» (`…0105`) cuelga de «Legal» en las semillas SQL de Trench y de «Organization» en su catálogo de código y en Karpo Go. «Entidad financiera» (`…00F1`) está en las semillas de Trench y otro script la borra |
 | D-62 | «Salesperson» (`…0001-…00C3`) es en Trench un rol de pedido, no de party; en Go es un rol de party. La relación `prospect` sólo existe en Go |
 | D-53 | ¿Un autónomo proveedor u organización interna se identifica con su NIF de persona? |
 | D-56 | Que un tipo hijo no pueda declarar un código de campo que ya declara un ancestro, y qué pasa con los valores si un tipo cambia de padre. Por fijar entre Trench y Go |
@@ -298,7 +306,8 @@ Lo que Go no cumple todavía de lo decidido. Cada sesión lleva la suya en su re
 | Decisión | Qué hace Go hoy | Qué falta |
 |---|---|---|
 | D-4 | **Hecho** (rama `feat/parties-desactivar-con-relaciones`): una party con relaciones sin terminar no se desactiva (422). Los roles no bloquean; lo de otros contextos, tampoco todavía | — |
-| D-8, D-13 | No hay comando de anular ni declaración del ciclo de vida | Todo; D-13 necesita diseño |
+| D-8 | **Hecho para los roles** (rama `feat/parties-anular-rol`, migración 22): `POST /api/parties/{id}/roles/{roleId}/annul` borra el rol si ninguna relación depende de él y, si alguna depende, lo termina y lo marca anulado. Decidido en esta sesión, a falta de respuesta a las dos preguntas de §2: permiso propio `Parties.PartyRole.Annul`, y «depende» son las relaciones | Anular relaciones, identificaciones, contactos y parties |
+| D-13 | No hay declaración del ciclo de vida en el dominio | Necesita diseño |
 | D-15 | La afiliación de una party a una empresa termina con su relación, y la empresa deja de verla | Esperar las tres respuestas |
 | D-16, D-18 a D-23 | Hecho sólo el alta de tipos de rol y de relación sin campos | El mecanismo entero, contra el contrato de Trench. Antes hay que resolver que Go guarda un agregado borrando y reinsertando sus filas hijas |
 | D-17 | «Cliente» es un rol **y además** un tipo de relación; la relación exige que el rol exista antes; el límite y el bloqueo están en `receivables` y el número de cliente en la relación (PR 17) | Esperar las cuatro respuestas. Los datos de la pareja ya están donde D-17 dice; lo que cambia es el papel del rol |
