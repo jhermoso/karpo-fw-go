@@ -402,6 +402,28 @@ anteriores donde difieran.** Nada de esto está aprobado por Javier.
     §2.1 no salga vacía.
 12. **409 o 422** para una regla de negocio rota. Go usa 422; C#, 409.
 
+## 7 quater. Lo que cambian las decisiones del 13 y 14 de octubre
+
+Decisiones de Javier posteriores a este contrato (números del registro,
+`DECISIONES-COMUNES.md`). El cuerpo del documento **no está reescrito todavía**; esta sección dice
+qué cambia y qué falta para poder reescribirlo.
+
+| Decisión | Qué cambia en el contrato | Estado en Go |
+|---|---|---|
+| D-48 | La búsqueda lleva `includeEndedRoles` (booleano, hermano de `expression`). Ausente o `false`: sólo cuentan los roles vigentes. Afecta al filtro plano por rol y a la hoja `roleType` de la expresión | Hecho en `GET /api/parties`; la expresión no está implementada |
+| D-52 | La interfaz no ofrece paréntesis: construye siempre una «o» de grupos «y». El árbol de §3.1 bis no cambia | Nada que hacer en el back |
+| D-49 | Crear una relación ya no devuelve 422 porque a un lado le falte el rol: se le asigna. Se sigue rechazando para «Internal Organization», para un rol que la party no puede jugar y para una party que quien llama no puede escribir | Hecho |
+| D-51 | La vista por pareja («Relaciones de clientes», «Relaciones de proveedores») **entra en el contrato común**. Cierra la decisión 6 de §7 bis. Faltan sus rutas y su fila | Sin hacer: Go no tiene búsqueda de relaciones |
+| D-53 | Una persona puede ser proveedor y organización interna: el selector de empresa y la lista de proveedores no pueden dar por hecho `kind: organization` | Hecho en el catálogo |
+| D-4 | `PUT /api/parties/{id}/active` con `false` devuelve 422 (`parties.has_relationships`) si la party tiene relaciones sin terminar. El front debe ofrecer terminarlas, no un «Eliminar» | Hecho |
+| D-8 | Ruta nueva `POST /api/parties/{id}/roles/{roleId}/annul`; el rol lleva `annulled` | Hecho para roles |
+| D-62 | El catálogo de tipos es el mismo en todos: los desplegables de rol y de relación pueden fiarse de los códigos (`customer`, `supplier`, `team`…) | Hecho, salvo «Duplicate Of» |
+
+**Lo que sigue impidiendo reescribir la búsqueda** (§3): la primera pregunta de Theros (¿Talleres
+Pérez, que compra a Acme y a Acme Levante, sale una vez o dos en «Clientes»?) y las tres de D-15
+sobre visibilidad. Con D-51 decidida, la respuesta natural es «dos, en la vista por pareja; una, en
+la de parties», pero no la ha dado Javier.
+
 ## 8. Límites
 
 - Nadie de C# ni de Trench ha revisado esto todavía.
