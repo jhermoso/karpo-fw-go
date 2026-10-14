@@ -247,8 +247,7 @@ repositorio.
 | Decisión | Estado en Trench |
 |---|---|
 | D-3 | No: comparte mecanismos de contacto entre parties |
-| D-4 | **Hecho** (rama `feat/parties-desactivar-con-relaciones`): una party con relaciones sin terminar no se desactiva (422). Los roles no bloquean; lo de otros contextos, tampoco todavía | — |
-| D-8, D-13 | Sin hacer: el comando «anular» y la declaración del ciclo de vida en el dominio | — |
+| D-4, D-8, D-13 | No: hay borrados de party, rol y relación |
 | D-5, D-9 | A medias: guarda el estado de formato del documento; falta el filtro «con errores» |
 | D-6 | No: catálogo de roles y jerarquía fijos en el código, sin código estable ni alta desde la aplicación |
 | D-7, D-10, D-28 | Primera fase hecha (perfil por pareja, 1.888 números copiados, sólo en su PostgreSQL local); las columnas antiguas siguen hasta la segunda |
@@ -298,7 +297,8 @@ Lo que Go no cumple todavía de lo decidido. Cada sesión lleva la suya en su re
 
 | Decisión | Qué hace Go hoy | Qué falta |
 |---|---|---|
-| D-4, D-8, D-13 | Desactivar una party no comprueba nada. No hay comando de anular ni declaración del ciclo de vida | Todo; D-13 necesita diseño |
+| D-4 | **Hecho** (rama `feat/parties-desactivar-con-relaciones`): una party con relaciones sin terminar no se desactiva (422). Los roles no bloquean; lo de otros contextos, tampoco todavía | — |
+| D-8, D-13 | No hay comando de anular ni declaración del ciclo de vida | Todo; D-13 necesita diseño |
 | D-15 | La afiliación de una party a una empresa termina con su relación, y la empresa deja de verla | Esperar las tres respuestas |
 | D-16, D-18 a D-23 | Hecho sólo el alta de tipos de rol y de relación sin campos | El mecanismo entero, contra el contrato de Trench. Antes hay que resolver que Go guarda un agregado borrando y reinsertando sus filas hijas |
 | D-17 | «Cliente» es un rol **y además** un tipo de relación; la relación exige que el rol exista antes; el límite y el bloqueo están en `receivables` y el número de cliente en la relación (PR 17) | Esperar las cuatro respuestas. Los datos de la pareja ya están donde D-17 dice; lo que cambia es el papel del rol |
