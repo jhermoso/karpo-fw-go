@@ -228,10 +228,6 @@ func Migrations() sqlrepo.MigrationSet {
 		// The mark of a party that is the duplicate of another (docs/DECISIONES-COMUNES.md, D-64).
 		{Version: 24, Name: "mark of a duplicate party", Up: sqlrepo.RenderDDLAll(
 			`ALTER TABLE parties {add:duplicate} {bool} DEFAULT {false} NOT NULL{addEnd}`)},
-		// Whether the party was registered from the organization, which lets its users change it
-		// (docs/DECISIONES-COMUNES.md, D-65 and D-66). Existing affiliations are not known to be.
-		{Version: 25, Name: "affiliations born with the party", Up: sqlrepo.RenderDDLAll(
-			`ALTER TABLE party_affiliations {add:registered} {bool} DEFAULT {false} NOT NULL{addEnd}`)},
 	}}
 }
 

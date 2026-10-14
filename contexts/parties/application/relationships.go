@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/parties/domain"
+	app "github.com/jhermoso/karpo-fw-go/pkg/application"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
@@ -34,7 +35,13 @@ func (s scope) canRelate(from, to *domain.Party) bool {
 // register creates a party, gives it its roles and, when requested, its first relationship. A
 // caller who is not a global administrator must register the party inside its scope.
 func (s service) register(ctx context.Context, build func(domain.PartyID) (*domain.Party, error), roles []string, aff *NewAffiliation) (PartyDTO, error) {
-	sc := scopeOf(ctx)
+	// The party and its first relationship are one operation in the audit log: that is how it is
+	// known later that the organization registered it (D-74). A call without a correlation of
+	// its own gets one.
+	if app.CorrelationID(ctx) == "" {
+		ctx = app.WithCorrelationID(ctx, fw.NewUUID().String())
+	}
+	sc := s.scope(ctx)
 	if aff == nil && !sc.global {
 		var v fw.Validation
 		v.Add("affiliation", "required", "register the party with an internal organization of your scope")
@@ -117,7 +124,7 @@ func (s service) register(ctx context.Context, build func(domain.PartyID) (*doma
 		if !partyIsFrom {
 			from, to = org, p
 		}
-		if _, err := s.establish(ctx, rt, from, to, now, "", aff.RelationshipDetailsInput, p); err != nil {
+		if _, err := s.establish(ctx, rt, from, to, now, "", aff.RelationshipDetailsInput); err != nil {
 			return PartyDTO{}, err
 		}
 		if p, err = s.Parties.Get(ctx, p.ID()); err != nil {
@@ -132,7 +139,7 @@ func (s service) register(ctx context.Context, build func(domain.PartyID) (*doma
 // with it (visibility, membership). Hierarchical types keep one parent per child and no cycles.
 // Everything happens in the caller's unit of work.
 func (s service) establish(ctx context.Context, rt domain.RelationshipType, from, to *domain.Party, since time.Time, remark string,
-	details RelationshipDetailsInput, registered ...*domain.Party) (*domain.Relationship, error) {
+	details RelationshipDetailsInput) (*domain.Relationship, error) {
 	cat, err := s.roleCatalog(ctx)
 	if err != nil {
 		return nil, err
@@ -148,7 +155,7 @@ func (s service) establish(ctx context.Context, rt domain.RelationshipType, from
 		}
 	}
 	if rt.ID == domain.RelDuplicateOf {
-		if err := canMarkDuplicate(scopeOf(ctx), from); err != nil {
+		if err := canMarkDuplicate(s.scope(ctx), from); err != nil {
 			return nil, err
 		}
 	}
@@ -194,9 +201,6 @@ func (s service) establish(ctx context.Context, rt domain.RelationshipType, from
 			continue
 		}
 		if _, err := s.parties.Update(ctx, member.ID(), func(_ context.Context, p *domain.Party) error {
-			if len(registered) > 0 && registered[0].ID() == p.ID() {
-				return p.AffiliateOnRegistration(org.ID(), r.ID(), since)
-			}
 			return p.Affiliate(org.ID(), r.ID(), since)
 		}); err != nil {
 			return nil, err
@@ -217,7 +221,7 @@ func (s service) playing(ctx context.Context, cat *domain.Catalog, p *domain.Par
 	if t, ok := cat.RoleType(role); !ok || t.Category {
 		return p, nil
 	}
-	if !scopeOf(ctx).canWrite(p, fw.Now()) {
+	if !s.scope(ctx).canWrite(p, fw.Now()) {
 		return p, nil
 	}
 	return s.parties.Update(ctx, p.ID(), func(_ context.Context, p *domain.Party) error {
@@ -262,7 +266,7 @@ func (s service) checkHierarchy(ctx context.Context, rt domain.RelationshipType,
 // writableRelationship loads a relationship the caller is about to change, with its parties: 404
 // when it is out of scope, 403 when the caller may not relate its parties.
 func (s service) writableRelationship(ctx context.Context, id domain.RelationshipID) (r *domain.Relationship, from, to *domain.Party, err error) {
-	sc := scopeOf(ctx)
+	sc := s.scope(ctx)
 	if r, err = s.Relationships.Get(ctx, id); err != nil {
 		return nil, nil, nil, err
 	}

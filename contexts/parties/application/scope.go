@@ -19,13 +19,16 @@ import (
 //   - writing needs a Full grant on the party itself, or on an organization it is affiliated with
 //     and that registered it; an organization that only relates to it needs PermPartyUpdateRelated
 //     too, and nobody but its own users writes a party that is an internal organization
-//     (docs/DECISIONES-COMUNES.md, D-65 and D-66); shared catalog entries are written by global
-//     administrators only.
+//     (docs/DECISIONES-COMUNES.md, D-65, D-66 and D-74); shared catalog entries are written by
+//     global administrators only.
 type scope struct {
 	global  bool
 	ac      *authz.Context
 	orgs    []domain.PartyID
 	related bool // the caller may change the parties its organizations only relate to
+	// registered tells whether the party was registered together with the relationship behind
+	// the affiliation; the audit log answers it (D-74). nil: never.
+	registered func(p *domain.Party, a domain.Affiliation) bool
 }
 
 func scopeOf(ctx context.Context) scope {
@@ -88,7 +91,7 @@ func (s scope) canWrite(p *domain.Party, at time.Time) bool {
 		return false // an internal organization of others: only its own users write it
 	}
 	return slices.ContainsFunc(p.Affiliations(), func(a domain.Affiliation) bool {
-		return a.Period.IsActiveAt(at) && s.canWriteOrg(a.Organization) && (a.Registered || s.related)
+		return a.Period.IsActiveAt(at) && s.canWriteOrg(a.Organization) && (s.related || (s.registered != nil && s.registered(p, a)))
 	})
 }
 

@@ -90,7 +90,7 @@ func addFacilityRoles(svc *Service, s service) {
 		}
 		info, ok := found[facility]
 		// A facility of another organization does not exist for the caller (uniform 404).
-		if sc := scopeOf(ctx); !ok || (!sc.global && !slices.Contains(sc.orgs, domain.PartyID{UUID: info.Organization})) {
+		if sc := s.scope(ctx); !ok || (!sc.global && !slices.Contains(sc.orgs, domain.PartyID{UUID: info.Organization})) {
 			return PartyDTO{}, fw.NotFound("facilities.facility", facility)
 		}
 		if !info.Active {

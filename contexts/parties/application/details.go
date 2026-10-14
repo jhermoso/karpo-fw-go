@@ -40,7 +40,7 @@ func addRelationshipDetails(svc *Service, s service) {
 		if err != nil {
 			return RelationshipDTO{}, err
 		}
-		if sc := scopeOf(ctx); !sc.global && !sc.canWriteOrg(r.To()) {
+		if sc := s.scope(ctx); !sc.global && !sc.canWriteOrg(r.To()) {
 			return RelationshipDTO{}, fmt.Errorf("%w: the customer number is given by the organization that numbers its customers", fw.ErrForbidden)
 		}
 		if number != "" {
