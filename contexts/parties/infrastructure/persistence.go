@@ -24,10 +24,10 @@ func PartyMapping() sqlrepo.Mapping[domain.PartyID, *domain.Party] {
 		Table: "parties",
 		Columns: sqlrepo.WithAuditColumns("kind", "name", "given_name", "first_surname", "second_surname", "gender",
 			"birth_date", "marital_status", "legal_name", "trade_name", "legal_form", "active", "test", "shared",
-			"doc_issue", "doc_issue_number", "doc_issue_reason"),
+			"doc_issue", "doc_issue_number", "doc_issue_reason", "duplicate"),
 		Dehydrate: func(p *domain.Party) (sqlrepo.Values, error) {
 			v := sqlrepo.Values{"kind": p.Kind(), "name": p.Name(), "active": p.IsActive(), "test": p.IsTest(),
-				"shared": p.IsShared(), "legal_form": nil, "doc_issue": p.HasDocumentIssue(),
+				"shared": p.IsShared(), "legal_form": nil, "doc_issue": p.HasDocumentIssue(), "duplicate": p.IsDuplicate(),
 				"doc_issue_number": nullable(p.DocumentIssue().Number), "doc_issue_reason": nullable(p.DocumentIssue().Reason),
 				"given_name": nil, "first_surname": nil, "second_surname": nil, "gender": nil, "birth_date": nil,
 				"marital_status": nil, "legal_name": nil, "trade_name": nil}
@@ -47,7 +47,7 @@ func PartyMapping() sqlrepo.Mapping[domain.PartyID, *domain.Party] {
 		},
 		Hydrate: func(row *sqlrepo.Row, children sqlrepo.ChildRows) (*domain.Party, error) {
 			s := domain.PartyState{Kind: domain.Kind(row.String("kind")), Active: row.Bool("active"),
-				Test: row.Bool("test"), Shared: row.Bool("shared"), Audit: row.AuditStamp(),
+				Test: row.Bool("test"), Shared: row.Bool("shared"), Duplicate: row.Bool("duplicate"), Audit: row.AuditStamp(),
 				Issue: domain.DocumentIssue{Number: row.String("doc_issue_number"), Reason: row.String("doc_issue_reason")}}
 			switch s.Kind {
 			case domain.KindPerson:

@@ -125,7 +125,7 @@ func (m *Module) search(w http.ResponseWriter, r *http.Request) {
 	atoi := func(k string) int { n, _ := strconv.Atoi(q.Get(k)); return n }
 	page, err := m.svc.Search.Handle(r.Context(), papp.SearchParties{Text: q.Get("q"), Kind: q.Get("kind"), Role: q.Get("role"), IncludeEndedRoles: q.Get("includeEndedRoles") == "true",
 		Document: q.Get("document"), Classification: q.Get("classification"), Organization: q.Get("organization"), Facility: q.Get("facility"),
-		ActiveOnly: q.Get("active") == "true", DocumentIssue: q.Get("documentIssue") == "true", Page: atoi("page"), Size: atoi("size")})
+		ActiveOnly: q.Get("active") == "true", DocumentIssue: q.Get("documentIssue") == "true", IncludeDuplicates: q.Get("includeDuplicates") == "true", Page: atoi("page"), Size: atoi("size")})
 	distribution.Respond(w, r, page, err, http.StatusOK)
 }
 

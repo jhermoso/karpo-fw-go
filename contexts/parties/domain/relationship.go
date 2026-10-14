@@ -206,11 +206,11 @@ func Establish(id RelationshipID, t RelationshipType, from, to *Party, c RoleCat
 
 // Meets reports whether the party is what a relationship type asks of one of its sides at t: it
 // plays the role (or one below it), or the role is the category of a whole kind and the party is
-// of that kind. A type that asks for "an organization" asks for what the party is, whatever roles
+// of that kind; the root asks for any party (Duplicate Of). A type that asks for "an organization" asks for what the party is, whatever roles
 // it plays (an internal organization or a supplier may be a person too:
 // docs/DECISIONES-COMUNES.md, D-53).
 func (p *Party) Meets(c RoleCatalog, role RoleTypeID, t time.Time) bool {
-	return p.PlaysAt(c, role, t) ||
+	return p.PlaysAt(c, role, t) || role == RolePartyRoot ||
 		(role == RoleOrganizationCategory && p.kind == KindOrganization) || (role == RolePersonCategory && p.kind == KindPerson)
 }
 

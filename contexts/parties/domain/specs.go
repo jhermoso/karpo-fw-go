@@ -52,6 +52,8 @@ var (
 	FieldRoles  = spec.Collection("roles", (*Party).Roles)
 
 	FieldShared = spec.Comparable("shared", (*Party).IsShared)
+	// FieldDuplicate tells the parties marked as the duplicate of another (D-64).
+	FieldDuplicate = spec.Comparable("duplicate", (*Party).IsDuplicate)
 	// FieldDocumentIssue tells the parties marked with a refused identity document.
 	FieldDocumentIssue = spec.Comparable("doc_issue", (*Party).HasDocumentIssue)
 	FieldAffiliations  = spec.Collection("affiliations", (*Party).Affiliations)

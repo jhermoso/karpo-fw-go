@@ -553,3 +553,25 @@ depende del dato. Si nada depende, lo borra; si algo depende, lo deja marcado co
   se termina aparte. Anular relaciones, identificaciones o parties enteras no está hecho.
 - Decidido aquí, sin respuesta de Javier a las dos preguntas abiertas de D-8: el permiso propio, y
   que «depende» son las relaciones.
+
+## 17. El duplicado queda bloqueado
+
+Decisión de Javier (D-64): una party que es duplicado de otra se puede seguir encontrando y
+consultando, pero por norma se excluye al buscar y no puede intervenir en ninguna operación que no
+sea de consulta. Sus relaciones se quedan donde están; fusionar (pasarlas a la buena y retirar una)
+se verá caso por caso.
+
+| Qué | Cómo |
+|---|---|
+| Marcar | Crear la relación «Duplicate Of» (`…0002-…0016`) del duplicado a la que sobrevive: `POST /api/party-relationships`. El duplicado queda con `duplicate: true` |
+| Deshacer | Terminar esa relación |
+| Buscar | `GET /api/parties` lo deja fuera; con `includeDuplicates=true`, entra. Leerlo por su identificador funciona siempre |
+| Lo que se rechaza (422, `parties.duplicate`) | Cualquier cambio en la party (nombre, roles, documentos, contactos, activar o desactivar…), crearle relaciones y cambiar los datos de las que tiene |
+| Lo que se permite | Leerla y terminar sus relaciones, la de duplicado incluida |
+| Esquema | Migración 24: `parties.duplicate` |
+
+- Un duplicado lo es de una sola party, y una party marcada no puede ser la superviviente de otra.
+- **No es desactivar:** la party sigue activa y conserva sus relaciones, así que no choca con D-4.
+- **Sin hacer:** que los otros contextos (Facturación, Pedidos…) se nieguen a operar con un
+  duplicado; Javier no ha dicho todavía si el bloqueo llega hasta ellos.
+
