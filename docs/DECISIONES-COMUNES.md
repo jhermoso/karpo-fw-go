@@ -154,6 +154,17 @@ CIF repetidos en 82 parties, probablemente la misma empresa importada dos veces.
 documentos con formato inválido y 197 sin validar, de 5.461. No se ha tocado ningún dato; en
 Trench, `D-DUPLICADOS-LIMPIEZA-ANTES-DE-CONVERGER`.
 
+**Lo que hace hoy la fusión de Trench** (su sesión, leyendo su código el 2026-10-14; intención
+documentada, no comprobada en todas las lecturas): la ficha que cede no se borra ni cambia de
+identificador; apunta a la superviviente, queda **inactiva** y se registra una relación «Duplicate
+Of» hacia la superviviente, que se puede deshacer cerrándola. Sus documentos pasan a la
+superviviente. Sus relaciones vigentes **no se terminan ni se trasladan**: siguen apuntando a ella y
+«se resuelve por el puntero al leer». Según su código deja de ser elegible como cliente y toda
+escritura nueva va a la superviviente. **Diferencia con D-64:** no se excluye por defecto de las
+búsquedas ni de los listados por rol. **Choque con D-4:** si la fusión deja inactiva a una ficha con
+relaciones vigentes, contradice que no se puede desactivar algo de lo que dependen relaciones
+vigentes.
+
 ### 1.2 Extensibilidad
 
 Detalle en [EXTENSIBILIDAD.md](EXTENSIBILIDAD.md) §1.
