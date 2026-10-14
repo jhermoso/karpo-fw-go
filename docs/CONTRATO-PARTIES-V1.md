@@ -424,6 +424,79 @@ Pérez, que compra a Acme y a Acme Levante, sale una vez o dos en «Clientes»?)
 sobre visibilidad. Con D-51 decidida, la respuesta natural es «dos, en la vista por pareja; una, en
 la de parties», pero no la ha dado Javier.
 
+## 7 quinquies. La vista por pareja (borrador, D-51)
+
+Javier quiere que «Relaciones de clientes» y «Relaciones de proveedores» sean comunes a todos.
+Este borrador parte de lo que Trench sirve hoy (su sesión me pasó la forma exacta el
+2026-10-14) y lo ajusta a las convenciones de este contrato (§1). **No lo ha revisado nadie.**
+
+*Qué es:* una fila por cada pareja empresa–tercero. Talleres Pérez, que compra a Acme y a Acme
+Levante, sale **dos veces**, cada una con su número de cliente, su límite y su bloqueo.
+
+### Rutas
+
+Dos familias con el mismo molde, una por tipo de relación: `customer-relationships` y
+`supplier-relationships`.
+
+| Ruta | Qué hace |
+|---|---|
+| `POST /api/customer-relationships/search` | Lista de parejas, paginada. Cuerpo: `filter`, `sort`, `page` como en §3 |
+| `GET /api/customer-relationships/{id}` | Una pareja |
+| `POST /api/customer-relationships` | Alta de la pareja, todo o nada |
+
+Trench las tiene hoy como `…/search/enriched` y añade `…/search/top-role-types` (los roles más
+usados, para los botones); aquí el recuento va por §3.4.
+
+### Filtro
+
+El mismo de la búsqueda de parties (§3.1: texto, tipo, documento, roles, `expression`,
+`includeEndedRoles`), **aplicado al tercero**, más `internalOrganizationIds`, aplicado a la
+relación. Sólo relaciones vigentes, salvo que se pida otra cosa (por decidir el nombre del campo).
+
+### Fila
+
+| Campo | Qué es |
+|---|---|
+| `id` | El de la relación |
+| `partyId`, `name`, `kind`, `taxId`, `country`, `active`, `test` | El tercero, como en la fila resumida de §3.3 |
+| `roles` | Sus roles vigentes, si se piden |
+| `internalOrganizationId`, `internalOrganizationName` | La empresa del grupo |
+| Sólo cliente | `customerNumber`, `externalCode` (el código en la contabilidad de origen), `creditLimit` (nulo: sin límite), `blockOrders`, `blockDelivery`, `blockReason` |
+| Sólo proveedor | `externalCode`, `branch`, `blockOrders`, `blockReceipts`, `blockReason` |
+
+Nombres de Trench que cambian aquí, por coherencia con §2.1: `partyType` → `kind`,
+`taxIdentity` → `taxId`, `isActive` → `active`, `isTest` → `test`, `maxRisk` → `creditLimit`,
+`customerCodeInTenant` → `externalCode`. Son propuestas: si es más barato que Go adopte los de
+Trench, se hace al revés.
+
+### Alta
+
+`internalOrganizationId` (obligatoria) y, o bien `partyId` de un tercero que existe, o bien los
+datos de uno nuevo (tipo, nombre y, si se quiere, documento). El cliente admite además los datos
+de la pareja.
+
+| Regla | Respuesta |
+|---|---|
+| La relación asigna al tercero el rol que le falte (D-49) | — |
+| Nunca asigna «Internal Organization»: la empresa tiene que serlo ya | 422 (Trench: 400) |
+| La empresa no existe o está fuera del ámbito (se comprueba antes, para no revelar si es interna) | 404 |
+| La pareja ya tiene una relación vigente de ese tipo | 422 con el identificador de la existente (Trench: 409) |
+| El documento ya es de otra party (D-50) | 422 (Trench: 409) |
+
+Los códigos distintos son la decisión 12 de §7 ter (409 o 422), todavía abierta.
+
+### Lo que esto pide a Go
+
+Los datos de la pareja viven en tres contextos: el número de cliente en Parties, el límite y el
+bloqueo en `receivables`, el perfil de proveedor en `purchases`. La fila es una **lectura
+compuesta** que arma el anfitrión, como ya hace con otras; el contrato no tiene por qué notarlo.
+
+**Por decidir antes de implementarlo:** si en la versión 1 es obligatorio filtrar y ordenar por
+los campos de la pareja (número, bloqueo). En Trench se filtra y ordena por nombre, documento y
+código, y por bloqueo sí o no. En Go, ordenar por un campo de otro contexto obliga a traer las
+parejas y ordenar en memoria, o a una proyección de lectura; recomiendo dejar fuera de la versión
+1 el orden por campos de otro contexto.
+
 ## 8. Límites
 
 - Nadie de C# ni de Trench ha revisado esto todavía.
