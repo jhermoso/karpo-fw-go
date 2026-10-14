@@ -174,6 +174,14 @@ Go no tiene lista de unidades organizativas y «Team» cuelga de «Informal».
 Abierto según Karpo C#: si «administrador de A» es el administrador de organización con acceso a A;
 el nombre del permiso que el global puede retirar; el diseño de la marca por campo.
 
+**D-64 en cada proyecto (2026-10-14):** en Trench, fusionado en `main` (su PR 45): lo que
+decide «es duplicado» es su columna `MergedIntoPartyId`, y la relación «Duplicate Of» se crea
+siempre con ella; filtro `includeMergedParties`. En Karpo Go, la relación «Duplicate Of» y su
+proyección `parties.duplicate` (PR 28 y 29, en borrador), con el mismo filtro. **Karpo C# no tiene
+fusión de fichas** (sólo el tipo sembrado): para tomar D-64 tiene que traerla antes; el orden lo
+decide Javier. Divergencia de estructura entre los tres. Sigue abierto: la fusión de Trench
+**desactiva** la ficha y D-64 dice «bloqueada, no desactivada».
+
 **Lo que hace hoy la fusión de Trench** (su sesión, leyendo su código el 2026-10-14; intención
 documentada, no comprobada en todas las lecturas): la ficha que cede no se borra ni cambia de
 identificador; apunta a la superviviente, queda **inactiva** y se registra una relación «Duplicate
