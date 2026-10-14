@@ -241,6 +241,8 @@ empresa es un envío o un trabajo; y cómo se añade un valor de catálogo en SQ
 | D-62 | «Organization Unit» (`…0105`) cuelga de «Legal» en las semillas SQL de Trench y de «Organization» en su catálogo de código y en Karpo Go. «Entidad financiera» (`…00F1`) está en las semillas de Trench y otro script la borra |
 | D-62 | «Salesperson» (`…0001-…00C3`) es en Trench un rol de pedido, no de party; en Go es un rol de party. La relación `prospect` sólo existe en Go |
 | D-53 | ¿Un autónomo proveedor u organización interna se identifica con su NIF de persona? |
+| D-53 | **Una persona que es organización interna, ¿qué deja ver?** Hoy, en Go y en Karpo C#, una relación con una organización interna afilia al otro lado sin mirar el tipo de relación: si Luis es empresa del grupo, sus familiares y contactos pasan a ser visibles para los usuarios de «Luis». ¿Sólo afilian los tipos de negocio (cliente, proveedor, empleo…)? Y sus usuarios, ¿firman como la persona física? (Karpo C# no los aprovisiona mientras tanto) |
+| D-49 | Diferencias de Karpo C# (su PR 31, sin fusionar), de su sesión: responde 409 donde Go da 422; exige además el permiso de asignar roles; una party recién creada en C# no es escribible por su empresa hasta tener una relación (en Go el alta ya la afilia); C# da por escribible una party del catálogo público y Go nunca; el alta de relación en C# no lleva fecha de inicio |
 | D-56 | Que un tipo hijo no pueda declarar un código de campo que ya declara un ancestro, y qué pasa con los valores si un tipo cambia de padre. Por fijar entre Trench y Go |
 | D-58 | Cómo se identifica entre instalaciones el valor de una referencia a catálogo (lo natural, el código ISO) |
 
