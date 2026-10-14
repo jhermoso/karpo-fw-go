@@ -25,8 +25,23 @@
 | 13 | **Lo generaliza primero Trench**, que ya lo tiene hecho; Go lo implementa después contra el mismo contrato |
 | 14 | **Los campos por empresa sólo caben en entidades que son de una empresa** (relaciones, pedidos, reservas). En las que no lo son, como un rol de party, sólo caben campos de la instalación |
 
-Se heredan de Trench, sin que Javier haya dicho otra cosa (§3.2): retirar un campo lo quita de
-la definición y conserva la columna y sus datos; y el programa enseña el plan antes de aplicarlo.
+Se hereda de Trench, sin que Javier haya dicho otra cosa (§3.2): el programa enseña el plan
+antes de aplicarlo.
+
+### 1 bis. Las respuestas de Javier al contrato (2026-10-13 y 14)
+
+Las dio en la sesión de Trench, que las transmitió; **falta que las confirme en la sesión de
+Karpo Go**. Están en el registro común como D-55 a D-61. Dos cambian lo que este documento decía.
+
+| # | Decisión | Qué cambia aquí |
+|---|---|---|
+| D-55 | **La columna de un campo retirado se borra sólo si nunca tuvo valores.** Si los tiene, no se borra y se dice cuántos lo impiden | Antes: retirar no tocaba la base. Ahora retirar puede ejecutar un `DROP COLUMN`, y el plan tiene que contar valores |
+| D-56 | **Los tipos hijos heredan los campos de los padres** | Antes: un campo se enganchaba al tipo exacto. Ahora «Avalista solidario», hijo de «Avalista», pide también el «importe máximo». Por fijar: que un hijo no declare un código que ya declara un ancestro, y qué pasa con los valores si un tipo cambia de padre |
+| D-57 | Un campo que pasa a obligatorio se exige **en la siguiente modificación de cada registro**; el plan enseña cuántos quedan sin valor | Nada: es lo que había |
+| D-58 | Las **referencias a catálogo** (país, divisa) entran en la primera versión, como un tipo de campo más | Un séptimo tipo de valor. Por acordar cómo se identifica el valor entre instalaciones (lo natural, el código ISO) |
+| D-59 | El **acrónimo de empresa** es obligatorio e inmutable, con una función para crearlos en lote | Confirma el punto 3 de §3.3: es un dato nuevo en Go y requisito previo |
+| D-60 | Trench da a sus tipos de rol y de relación el **código estable con la regla de Go** | Hecho allí (PR 36). El catálogo es común desde D-62 |
+| D-61 | Los campos de un producto financiero tienen **una sola puerta**: se declaran en «Campos personalizados» y el producto los cita | Sólo afecta a quien tenga configuradores de producto; Go no los tiene |
 
 Tomado por defecto, sin que Javier lo haya corregido: los campos de la instalación sólo los crea
 un administrador global; los de una empresa, también el administrador de esa empresa.
@@ -71,11 +86,11 @@ cambiar para admitirlo.
 | Tema | Propuesta |
 |---|---|
 | Documento | Uno por **(entidad, ámbito, empresa)**, formato `custom-fields` versión 1 |
-| Campo | `code` estable (es el nombre de la columna y la clave del valor, y no cambia), etiqueta, tipo, opciones, `required`, `requiredIf`, y `onlyForType` para engancharlo a un tipo |
-| Tipos de valor | Seis para empezar: sí/no, entero, decimal, texto, fecha y lista |
+| Campo | `code` estable (es el nombre de la columna y la clave del valor, y no cambia), etiqueta, tipo, opciones, `required`, `requiredIf`, y `onlyForType` para engancharlo a un tipo **y a los que cuelgan de él** (D-56) |
+| Tipos de valor | Seis para empezar: sí/no, entero, decimal, texto, fecha y lista; más la referencia a catálogo (D-58) |
 | Entidades | Cada contexto registra **en código** cuáles admite, si son de una empresa y si tienen tipos. Se registra la base de una jerarquía, nunca la subclase: `parties.relationship` con el tipo `customer`, no «relación de cliente» |
 | Tablas | `<tabla>_ext` para la instalación y `<tabla>_ext_<acrónimo>` para cada empresa. El tipo no crea tabla |
-| Ciclo | Borrador → plan con huella → aplicar (exige la huella del plan enseñado) → retirar, que no ejecuta nada en la base |
+| Ciclo | Borrador → plan con huella → aplicar (exige la huella del plan enseñado) → retirar, que borra la columna sólo si nunca tuvo valores y, si los tiene, la conserva y dice cuántos (D-55) |
 | Valores | En un bloque plano `customFields` de la propia entidad, en su misma transacción, al crear y al modificar |
 | Permisos | Ver, gestionar los de la instalación y gestionar los de una empresa |
 | Rutas | Bajo `/api/custom-fields` |
@@ -165,7 +180,9 @@ máximo», decimal y obligatorio, para toda la instalación.
 3. Desde ese momento, asignar el rol «Avalista» pide el importe; sin él, la asignación se
    rechaza nombrando el campo. Asignar cualquier otro rol no lo pide.
 4. Al leer la party, el rol trae su bloque de campos añadidos.
-5. Si un día se retira el campo, deja de pedirse y de enseñarse; lo guardado se conserva.
+5. Si un día se retira el campo, deja de pedirse y de enseñarse. Si nadie llegó a rellenarlo, la
+   columna se borra; si hay valores, se conservan y el programa dice cuántos son (D-55).
+6. Si después se crea «Avalista solidario» colgando de «Avalista», también pide el importe (D-56).
 
 La empresa constructora del grupo añade después «código de obra» a **sus pedidos**: va a su
 propia tabla de extensión, y las demás empresas ni lo ven ni lo piden. No puede añadirlo a un
