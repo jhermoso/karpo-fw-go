@@ -54,7 +54,7 @@ type env struct {
 	admin, reader, clerk, viewer, outsider, seller string
 }
 
-var allPerms = append(slices.Clone(sellerPerms), papp.PermRelationshipSetTrial, papp.PermRoleTypeDefine, papp.PermRelationshipTypeDefine, papp.PermRoleAnnul)
+var allPerms = append(slices.Clone(sellerPerms), papp.PermRelationshipSetTrial, papp.PermRoleTypeDefine, papp.PermRelationshipTypeDefine, papp.PermRoleAnnul, papp.PermPartyUpdateRelated)
 
 var readerPerms = []authz.Permission{papp.PermPartyRead, papp.PermRelationshipRead}
 
@@ -702,6 +702,37 @@ func (e *env) prospects(acme, ana papp.PartyDTO) {
 	if back.Customer.Number != "C-4300001" {
 		e.t.Fatalf("the number of the customer that came back: %+v", back.Customer)
 	}
+
+	// Who changes a third party (D-65, D-66): the organization that registered it; one that only
+	// relates to it, with PermPartyUpdateRelated (the clerk has it, the seller not); and an
+	// internal organization of others, nobody of Acme.
+	var third, mine papp.PartyDTO
+	e.must(e.do("POST", "/api/persons", e.admin, map[string]any{"givenName": "Tercera", "firstSurname": acme.ID[:8]}, &third), 201, "a party from elsewhere")
+	e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelCustomer.String(),
+		"fromParty": third.ID, "toParty": acme.ID}, nil), 201, "which becomes a customer of acme")
+	rename := func(who, id string) int {
+		return e.do("PUT", "/api/parties/"+id+"/name", who, map[string]any{"givenName": "Tercera", "firstSurname": acme.ID[:8] + " bis"}, nil)
+	}
+	e.must(rename(e.seller, third.ID), 403, "a related party is only seen by who lacks the permission")
+	e.must(rename(e.clerk, third.ID), 200, "and changed by who has it")
+	e.must(e.do("POST", "/api/persons", e.seller, map[string]any{"givenName": "Mía", "firstSurname": acme.ID[:8],
+		"affiliation": map[string]any{"organization": acme.ID, "relationshipType": domain.RelCustomer.String()}}, &mine), 201, "registered from acme")
+	e.must(rename(e.seller, mine.ID), 200, "what acme registered, acme changes")
+	var relative papp.PartyDTO
+	e.must(e.do("POST", "/api/persons", e.admin, map[string]any{"givenName": "Pariente", "firstSurname": acme.ID[:8],
+		"roles": []string{domain.RoleFamilyMember.String()}}, &relative), 201, "a relative")
+	e.must(e.do("POST", "/api/parties/"+mine.ID+"/roles", e.admin, map[string]any{"roleType": domain.RoleFamilyMember.String()}, nil), 200, "mía in a family")
+	e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelFamily.String(),
+		"fromParty": relative.ID, "toParty": mine.ID}, nil), 201, "related as family")
+	e.must(e.do("GET", "/api/parties/"+relative.ID, e.clerk, nil, nil), 404, "a family relationship shows nobody (D-67)")
+	var other papp.PartyDTO
+	e.must(e.do("POST", "/api/organizations", e.admin, map[string]any{"legalName": "Otra Empresa " + acme.ID[:8],
+		"roles": []string{domain.RoleInternalOrganization.String()}}, &other), 201, "an internal organization of others")
+	e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelSupplier.String(),
+		"fromParty": acme.ID, "toParty": other.ID}, nil), 201, "acme buys from it")
+	e.must(e.do("GET", "/api/parties/"+other.ID, e.clerk, nil, nil), 200, "acme sees it")
+	e.must(e.do("PUT", "/api/parties/"+other.ID+"/name", e.clerk, map[string]any{"legalName": "Nope"}, nil), 403,
+		"but nobody of acme changes an internal organization of others, permission or not")
 }
 
 // phase3 covers organization scope (decision P1), registration inside the scope, the
@@ -1078,7 +1109,7 @@ func endToEnd(t *testing.T, newDirectory func(*testing.T) directory) {
 
 	// Audit trail and Published Language, both committed with the changes.
 	trail, err := e.mod.Audit.Trail(ctx, domain.PartyKind, acme.ID)
-	if err != nil || len(trail) != 5 || trail[1].Actor.Name != "ana.admin" || len(trail[3].Changes) != 1 || trail[3].Changes[0].Field != "contacts" ||
+	if err != nil || len(trail) != 6 || trail[1].Actor.Name != "ana.admin" || len(trail[3].Changes) != 1 || trail[3].Changes[0].Field != "contacts" ||
 		len(trail[4].Changes) != 1 || trail[4].Changes[0].Field != "classifications" {
 		t.Fatalf("audit: %+v %v", trail, err)
 	}

@@ -17,7 +17,12 @@ var (
 	PermPartyRead   = authz.MustPermission("Parties.Party.Read")
 	PermPartyCreate = authz.MustPermission("Parties.Party.Create")
 	PermPartyUpdate = authz.MustPermission("Parties.Party.Update")
-	PermRoleAssign  = authz.MustPermission("Parties.PartyRole.Assign")
+	// PermPartyUpdateRelated lets the caller change a party its organization only relates to:
+	// one it did not register and that is nobody's internal organization. An action of its own:
+	// the organization administrator has it, a standard user does not, and the global
+	// administrator can take it away (docs/DECISIONES-COMUNES.md, D-66).
+	PermPartyUpdateRelated = authz.MustPermission("Parties.Party.UpdateRelated")
+	PermRoleAssign         = authz.MustPermission("Parties.PartyRole.Assign")
 	// PermRoleAnnul takes back a role given by mistake, removing it when nothing depends on it:
 	// an action of its own, which the standard rule of Security does not hand out.
 	PermRoleAnnul          = authz.MustPermission("Parties.PartyRole.Annul")
@@ -42,7 +47,7 @@ var (
 func Permissions() []authz.Permission {
 	return []authz.Permission{PermPartyRead, PermPartyCreate, PermPartyUpdate, PermRoleAssign, PermRelationshipRead,
 		PermRelationshipCreate, PermRelationshipEnd, PermRelationshipUpdate, PermRelationshipSetTrial, PermRoleTypeDefine,
-		PermRelationshipTypeDefine, PermRoleAnnul}
+		PermRelationshipTypeDefine, PermRoleAnnul, PermPartyUpdateRelated}
 }
 
 // RegisterPerson registers a person, optionally with initial roles (the C# CreatePartyWithRole).

@@ -112,7 +112,7 @@ func (s service) register(ctx context.Context, build func(domain.PartyID) (*doma
 		if !partyIsFrom {
 			from, to = org, p
 		}
-		if _, err := s.establish(ctx, rt, from, to, now, "", aff.RelationshipDetailsInput); err != nil {
+		if _, err := s.establish(ctx, rt, from, to, now, "", aff.RelationshipDetailsInput, p); err != nil {
 			return PartyDTO{}, err
 		}
 		if p, err = s.Parties.Get(ctx, p.ID()); err != nil {
@@ -127,7 +127,7 @@ func (s service) register(ctx context.Context, build func(domain.PartyID) (*doma
 // with it (visibility, membership). Hierarchical types keep one parent per child and no cycles.
 // Everything happens in the caller's unit of work.
 func (s service) establish(ctx context.Context, rt domain.RelationshipType, from, to *domain.Party, since time.Time, remark string,
-	details RelationshipDetailsInput) (*domain.Relationship, error) {
+	details RelationshipDetailsInput, registered ...*domain.Party) (*domain.Relationship, error) {
 	cat, err := s.roleCatalog(ctx)
 	if err != nil {
 		return nil, err
@@ -175,12 +175,18 @@ func (s service) establish(ctx context.Context, rt domain.RelationshipType, from
 		}
 		return r, nil
 	}
+	if rt.ID == domain.RelFamily { // not a relationship of business: it shows nobody (D-67)
+		return r, nil
+	}
 	for _, side := range [][2]*domain.Party{{from, to}, {to, from}} {
 		member, org := side[0], side[1]
 		if !org.PlaysAt(cat, domain.RoleInternalOrganization, since) {
 			continue
 		}
 		if _, err := s.parties.Update(ctx, member.ID(), func(_ context.Context, p *domain.Party) error {
+			if len(registered) > 0 && registered[0].ID() == p.ID() {
+				return p.AffiliateOnRegistration(org.ID(), r.ID(), since)
+			}
 			return p.Affiliate(org.ID(), r.ID(), since)
 		}); err != nil {
 			return nil, err
