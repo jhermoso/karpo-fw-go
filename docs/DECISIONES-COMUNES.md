@@ -221,10 +221,9 @@ empresa es un envío o un trabajo; y cómo se añade un valor de catálogo en SQ
 | D-44 | ¿Se termina entonces el broker NATS de Go, que está aparcado en una rama? |
 | D-47 | Cuándo y cómo lo hereda Go (Security de Go tiene su propio diseño de contraseñas) |
 | — | Supresión de datos personales (RGPD): sin decidir, pendiente de consulta legal |
-| D-62 | **Choque de identificador:** `10000000-0000-0000-0002-000000000016` es «Duplicate Of» en Trench y «Prospect Relationship» en Karpo Go. Uno de los dos cambia. Datos: Trench tiene 0 relaciones «Duplicate Of» en su base local, pero el id está en su catálogo, en las semillas de seis layouts y en el paquete de códigos ya aplicado; Karpo C# no tiene nada en ese id y no usa «Prospect Relationship» (un cliente potencial es allí una relación de cliente en estado «Potential»); Karpo Go no tiene datos en producción |
+| D-62 | **Choque de identificador:** `10000000-0000-0000-0002-000000000016` es «Duplicate Of» en Trench y «Prospect Relationship» en Karpo Go. Uno de los dos cambia. Datos: Trench tiene 0 relaciones «Duplicate Of» en su base local, pero el id está en su catálogo, en las semillas de seis layouts y en el paquete de códigos ya aplicado, y su fusión de parties lo usa; Karpo C# no tiene nada en ese id y no usa «Prospect Relationship» (un cliente potencial es allí una relación de cliente en estado «Potential»); Karpo Go no tiene datos en producción. Recomendación de esta sesión: mover el de Go a `…0017` |
 | D-62 | **Dos tipos de relación con los lados distintos.** «Agent Relationship» (`…0008`): Agent → Internal Organization en Trench, Agent → Customer en Go. «Organization Rollup» (`…0005`): Department → Internal Organization en Trench; en Go, cualquier unidad organizativa → cualquier organización |
 | D-62 | «Salesperson» (`…0001-…00C3`) es en Trench un rol de pedido, no de party; en Go es un rol de party. La relación `prospect` sólo existe en Go |
-| D-62 | El programa de Trench asigna «Team» a los centros importados de Personio, que son unidades organizativas: con «Team» bajo «Informal», ¿qué rol llevan? |
 | D-53 | ¿Un autónomo proveedor u organización interna se identifica con su NIF de persona? |
 | D-56 | Que un tipo hijo no pueda declarar un código de campo que ya declara un ancestro, y qué pasa con los valores si un tipo cambia de padre. Por fijar entre Trench y Go |
 | D-58 | Cómo se identifica entre instalaciones el valor de una referencia a catálogo (lo natural, el código ISO) |
@@ -248,7 +247,8 @@ repositorio.
 | Decisión | Estado en Trench |
 |---|---|
 | D-3 | No: comparte mecanismos de contacto entre parties |
-| D-4, D-8, D-13 | No: hay borrados de party, rol y relación |
+| D-4 | **Hecho** (rama `feat/parties-desactivar-con-relaciones`): una party con relaciones sin terminar no se desactiva (422). Los roles no bloquean; lo de otros contextos, tampoco todavía | — |
+| D-8, D-13 | Sin hacer: el comando «anular» y la declaración del ciclo de vida en el dominio | — |
 | D-5, D-9 | A medias: guarda el estado de formato del documento; falta el filtro «con errores» |
 | D-6 | No: catálogo de roles y jerarquía fijos en el código, sin código estable ni alta desde la aplicación |
 | D-7, D-10, D-28 | Primera fase hecha (perfil por pareja, 1.888 números copiados, sólo en su PostgreSQL local); las columnas antiguas siguen hasta la segunda |
@@ -307,8 +307,8 @@ Lo que Go no cumple todavía de lo decidido. Cada sesión lleva la suya en su re
 | D-30 a D-35 | No hay búsqueda de relaciones, ni vista por pareja, ni expresión de filtro. Go no tiene front | La búsqueda de relaciones y la expresión, cuando se apruebe el contrato HTTP |
 | D-24 | Go sirve sus rutas, no el contrato | El contrato está sin aprobar |
 | D-39, D-44 | Un solo proceso; el broker NATS está aparcado en una rama sin fusionar | Decidir qué variantes cuentan en Go |
-| D-48 | Cumple en lo principal: sólo cuentan los roles vigentes. No hay filtro para incluir los pasados | Añadir `includeEndedRoles` con la definición de §1.1 ter |
-| D-49 | **Hecho** (PR 21, en borrador): el caso de uso asigna el rol que falte antes de establecer la relación; «Internal Organization» no se asigna así (excepción confirmada, D-62) | — |
+| D-48 | **Hecho** (rama `feat/parties-roles-terminados`): `GET /api/parties?role=…&includeEndedRoles=true` | — |
+| D-49 | **Hecho** (PR 21, más los arreglos de la revisión en `feat/parties-desactivar-con-relaciones`): el caso de uso asigna el rol que falte antes de establecer la relación. No se asigna «Internal Organization» ni un rol que cuelgue de él (D-62), ni ningún rol a una party que quien llama no puede escribir (decidido en esta sesión tras la revisión independiente) | Que Javier confirme la segunda restricción |
 | D-55, D-56 | `EXTENSIBILIDAD.md` dice lo contrario en los dos puntos (retirar sin DDL; sólo el tipo exacto). El mecanismo no está implementado | Corregir el diseño |
 | D-59 | La empresa no tiene acrónimo | Dato nuevo, requisito previo de la extensibilidad |
 | D-50 | Cumple: índice único sobre tipo, país y número | — |
