@@ -154,6 +154,20 @@ CIF repetidos en 82 parties, probablemente la misma empresa importada dos veces.
 documentos con formato inválido y 197 sin validar, de 5.461. No se ha tocado ningún dato; en
 Trench, `D-DUPLICADOS-LIMPIEZA-ANTES-DE-CONVERGER`.
 
+### 1.1 quinquies Quién modifica a un tercero (sesión de Karpo C#)
+
+**Transmitidas** por la sesión de Karpo C# el 2026-10-14. Sin confirmar aquí. Las palabras son de
+Javier; la lectura en negrita es de esa sesión, con dudas marcadas.
+
+| # | Decisión (lectura) | Lo que dijo Javier |
+|---|---|---|
+| D-65 | **El alta de una party la vincula a la empresa interna de quien la crea**, y los usuarios de esa empresa pueden modificarla | «1 sí» a «¿El alta de una party la vincula a la empresa de quien la crea?» |
+| D-66 | **Una relación con tu empresa da visibilidad sobre el tercero, no poder modificarlo**, salvo: si el tercero se dio de alta desde tu empresa (D-65), lo modificas; si existía y no es empresa interna de nadie, sólo lo modifica el administrador de tu empresa, con un permiso que el administrador global le puede retirar; si es empresa interna de otros, no lo modificas, salvo que seas usuario de ella o su administrador o el global te den permiso | «sí puede modificarlo si el tercero no es "empresa interna" y el usuario no lo es de dicha empresa […] 1- B no existe en el sistema, por tanto a puede modificarla sin problemas, 2- B existe en el sistema pero no es "internal organization" para nadie solo la puede modificar el administrador de A si el superglobal administrator no le retira el permiso para hacerlo. 3- La empresa B existe y además es internal organization para otros usuarios en los que no se incluye al usuario "a" en este caso el usuario "a" no la puede modificar y 4 la empresa existe, tiene el rol de "internal organization" y el usuario "a" sí es usuario de dicha empresa o el administrador de B o el superglobal le da permiso para modificarla. en este caso también puede modificarla» |
+| D-67 | **De una persona que es empresa interna, desde esa empresa sólo cuentan sus relaciones de negocio**; sus datos personales sólo se ven como party pública campo a campo, si la propia persona lo autoriza (hace falta una marca por campo) | «3 sí efectivamente. siempre y cuando la propia persona autorice a marcar como públicos los campos que desean que sean públicos como party (habrá que añadir algún tipo de flag para marcar los campos)» |
+
+Abierto según Karpo C#: si «administrador de A» es el administrador de organización con acceso a A;
+el nombre del permiso que el global puede retirar; el diseño de la marca por campo.
+
 **Lo que hace hoy la fusión de Trench** (su sesión, leyendo su código el 2026-10-14; intención
 documentada, no comprobada en todas las lecturas): la ficha que cede no se borra ni cambia de
 identificador; apunta a la superviviente, queda **inactiva** y se registra una relación «Duplicate
@@ -254,7 +268,7 @@ empresa es un envío o un trabajo; y cómo se añade un valor de catálogo en SQ
 | D-62 | «Salesperson» (`…0001-…00C3`) es en Trench un rol de pedido, no de party; en Go es un rol de party. La relación `prospect` sólo existe en Go |
 | D-53 | ¿Un autónomo proveedor u organización interna se identifica con su NIF de persona? |
 | D-64 | ¿«No puede intervenir en ninguna operación» alcanza a los otros contextos (no se le factura, no se le hace un pedido), que tendrían que preguntar a Parties o escuchar un aviso? ¿Y sus relaciones vigentes se terminan al marcarla como duplicado, o se trasladan a la que sobrevive? |
-| D-53 | **Una persona que es organización interna, ¿qué deja ver?** Hoy, en Go y en Karpo C#, una relación con una organización interna afilia al otro lado sin mirar el tipo de relación: si Luis es empresa del grupo, sus familiares y contactos pasan a ser visibles para los usuarios de «Luis». ¿Sólo afilian los tipos de negocio (cliente, proveedor, empleo…)? Y sus usuarios, ¿firman como la persona física? (Karpo C# no los aprovisiona mientras tanto) |
+| D-53, D-67 | La primera mitad la contesta D-67 (sólo cuentan las relaciones de negocio). Falta qué tipos de relación son «de negocio» y el diseño de la marca por campo |
 | D-49 | Diferencias de Karpo C# (su PR 31, sin fusionar), de su sesión: responde 409 donde Go da 422; exige además el permiso de asignar roles; una party recién creada en C# no es escribible por su empresa hasta tener una relación (en Go el alta ya la afilia); C# da por escribible una party del catálogo público y Go nunca; el alta de relación en C# no lleva fecha de inicio |
 | D-56 | Que un tipo hijo no pueda declarar un código de campo que ya declara un ancestro, y qué pasa con los valores si un tipo cambia de padre. Por fijar entre Trench y Go |
 | D-58 | Cómo se identifica entre instalaciones el valor de una referencia a catálogo (lo natural, el código ISO) |
@@ -347,6 +361,8 @@ Lo que Go no cumple todavía de lo decidido. Cada sesión lleva la suya en su re
 | D-51 | No hay búsqueda de relaciones ni vista por pareja | Entra con el contrato HTTP |
 | D-54, D-62 | **Hecho** (PR 20 y rama `feat/parties-catalogo-comun`, migraciones 19 y 21): «Team» bajo «Informal»; sembrados Club, Group y los cuatro tipos de relación | «Duplicate Of», cuando se resuelva el choque de identificador (§2) |
 | D-53 | **Hecho** (rama `feat/parties-persona-proveedor-o-empresa`, migración 20): los dos tipos cuelgan de la raíz. Los demás contextos guardan a la empresa por identificador y no cambian. Una persona empresa no puede tener unidades organizativas debajo | El documento que identifica al autónomo; que la importación de proveedores cargue personas |
+| D-65, D-66 | En Go **una relación con tu empresa da también poder modificar**: se puede escribir una party afiliada a una empresa en la que el usuario puede escribir, venga de un alta o de una relación. Tampoco hay distinción entre usuario y administrador de la empresa ni permiso que el global retire | Esperar la confirmación aquí; después, separar la afiliación del alta de la de una relación |
+| D-67 | Una relación con una empresa interna afilia el otro lado sea cual sea su tipo | Afiliar sólo con relaciones de negocio; la marca por campo, diseño |
 | D-40 | Cumple los tres, y prueba además en MySQL y SQLite | — |
 | D-45 | Cumple: cada caso de uso comprueba su permiso | — |
 | D-46 | Una sesión de orquestación; revisión independiente de lo delegado y de los cambios grandes. **No** se hacen tres pasadas completas en verde antes de cada subida, sino una local y una contra los motores | Ajustar si Javier lo quiere así también para los PR en borrador |
