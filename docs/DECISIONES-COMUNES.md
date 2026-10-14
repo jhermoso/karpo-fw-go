@@ -129,6 +129,8 @@ Tomada en las sesiones de Karpo C# y de Trench el 2026-10-14 («2 team» en las 
 | # | Decisión | Lo que dijo Javier | Contexto |
 |---|---|---|---|
 | D-54 | **El tipo de rol `10000000-0000-0000-0001-000000000037` se llama «Team»** y su código estable es `team` | «2 team», a la pregunta «"Team" u "Other Organization Unit" para el identificador …0037» | Las semillas SQL de Trench y de Karpo C# lo llaman «Team»; los catálogos en código de Karpo C# y de Karpo Go, «Other Organization Unit». Salió al preparar los códigos estables (Trench PR 36), que se rellenan por identificador |
+| D-63 | **«Prospect Relationship» de Karpo Go pasa a `10000000-0000-0000-0002-000000000017`** y `…0016` queda para «Duplicate Of» de Trench (Party → Party, `duplicate-of`), que siembran todos | «mueve prospect a 0017» (esta sesión, 2026-10-14) | Cierra el choque de identificador de D-62. Hecho en Go (rama `feat/parties-prospect-0017`, migración 23). Karpo C# no tiene ninguno de los dos |
+| D-64 | **Una party que es «duplicado de» otra está bloqueada**: se puede seguir encontrando y consultando (no es invisible), pero **por norma se excluye** al buscar o filtrar parties, también por rol, y **no puede intervenir en ninguna operación que no sea de consulta** | «uno es para decir que alguien es considerado como cliente potencial de la empresa y el otro es para indicar que esa party es un duplicado de otra y que por tanto no se puede operar con ella, es una forma de indicar que está bloqueado se puede seguir encontrando pero por norma general se debería excluir cuando se filtra o se busca en parties o parties con determinado rol. es diferente de ser invisible no es invisible, pero no puede intervenir en ninguna operación que no sea de consulta» (esta sesión, 2026-10-14) | Sin hacer en Go. Preguntas en §2 |
 | D-62 | **Los cuatro proyectos siembran los mismos tipos de rol y de relación**, con los mismos identificadores y códigos; y **«Team» cuelga de «Informal»**. Confirma también la excepción de D-49: una relación nunca asigna «Internal Organization» | «sí a las 2 primeras, team cuelga de informal siembra los mismos tipos en todos» (esta sesión, 2026-10-14) | Cierra de qué cuelga «Team» (en Trench, `D-ROLTYPE-0037-TEAM-VS-OTRA-UNIDAD`) y la pregunta de los tipos sin sembrar |
 
 **El catálogo común, a 2026-10-14** (ids de la semilla de Trench):
@@ -167,8 +169,8 @@ Detalle en [EXTENSIBILIDAD.md](EXTENSIBILIDAD.md) §1.
 
 ### 1.2 bis Contrato de extensibilidad (sesión de Trench)
 
-**Transmitidas** por la sesión de Trench (2026-10-13 tarde y 2026-10-14). Sin confirmar aquí
-todavía. Entre paréntesis, el número que llevan en el contrato de Trench (§4.1 y §4.1 bis).
+Tomadas en la sesión de Trench (2026-10-13 tarde y 2026-10-14). **Confirmadas aquí el
+2026-10-14** («confirmo D-55 a D-61»). Entre paréntesis, el número que llevan en el contrato de Trench (§4.1 y §4.1 bis).
 
 | # | Decisión | Lo que dijo Javier |
 |---|---|---|
@@ -236,11 +238,11 @@ empresa es un envío o un trabajo; y cómo se añade un valor de catálogo en SQ
 | D-44 | ¿Se termina entonces el broker NATS de Go, que está aparcado en una rama? |
 | D-47 | Cuándo y cómo lo hereda Go (Security de Go tiene su propio diseño de contraseñas) |
 | — | Supresión de datos personales (RGPD): sin decidir, pendiente de consulta legal |
-| D-62 | **Choque de identificador:** `10000000-0000-0000-0002-000000000016` es «Duplicate Of» en Trench y «Prospect Relationship» en Karpo Go. Uno de los dos cambia. Datos: Trench tiene 0 relaciones «Duplicate Of» en su base local, pero el id está en su catálogo, en las semillas de seis layouts y en el paquete de códigos ya aplicado, y su fusión de parties lo usa; Karpo C# no tiene nada en ese id y no usa «Prospect Relationship» (un cliente potencial es allí una relación de cliente en estado «Potential»); Karpo Go no tiene datos en producción. Recomendación de esta sesión: mover el de Go a `…0017` |
 | D-62 | **Dos tipos de relación con los lados distintos.** «Agent Relationship» (`…0008`): Agent → Internal Organization en Trench, Agent → Customer en Go. «Organization Rollup» (`…0005`): Department → Internal Organization en Trench; en Go, cualquier unidad organizativa → cualquier organización |
 | D-62 | «Organization Unit» (`…0105`) cuelga de «Legal» en las semillas SQL de Trench y de «Organization» en su catálogo de código y en Karpo Go. «Entidad financiera» (`…00F1`) está en las semillas de Trench y otro script la borra |
 | D-62 | «Salesperson» (`…0001-…00C3`) es en Trench un rol de pedido, no de party; en Go es un rol de party. La relación `prospect` sólo existe en Go |
 | D-53 | ¿Un autónomo proveedor u organización interna se identifica con su NIF de persona? |
+| D-64 | ¿«No puede intervenir en ninguna operación» alcanza a los otros contextos (no se le factura, no se le hace un pedido), que tendrían que preguntar a Parties o escuchar un aviso? ¿Y sus relaciones vigentes se terminan al marcarla como duplicado, o se trasladan a la que sobrevive? |
 | D-53 | **Una persona que es organización interna, ¿qué deja ver?** Hoy, en Go y en Karpo C#, una relación con una organización interna afilia al otro lado sin mirar el tipo de relación: si Luis es empresa del grupo, sus familiares y contactos pasan a ser visibles para los usuarios de «Luis». ¿Sólo afilian los tipos de negocio (cliente, proveedor, empleo…)? Y sus usuarios, ¿firman como la persona física? (Karpo C# no los aprovisiona mientras tanto) |
 | D-49 | Diferencias de Karpo C# (su PR 31, sin fusionar), de su sesión: responde 409 donde Go da 422; exige además el permiso de asignar roles; una party recién creada en C# no es escribible por su empresa hasta tener una relación (en Go el alta ya la afilia); C# da por escribible una party del catálogo público y Go nunca; el alta de relación en C# no lleva fecha de inicio |
 | D-56 | Que un tipo hijo no pueda declarar un código de campo que ya declara un ancestro, y qué pasa con los valores si un tipo cambia de padre. Por fijar entre Trench y Go |
