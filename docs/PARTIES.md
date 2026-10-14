@@ -570,6 +570,9 @@ se verá caso por caso.
 | Lo que se permite | Leerla y terminar sus relaciones, la de duplicado incluida |
 | Esquema | Migración 24: `parties.duplicate` |
 
+- **Quién marca y desmarca:** quien puede modificar el duplicado (§18); la superviviente sólo
+  tiene que verse. Una empresa interna sólo la marca el administrador global. Desmarcar pide lo
+  mismo, aunque la relación sea entre dos terceros.
 - Un duplicado lo es de una sola party, y una party marcada no puede ser la superviviente de otra.
 - **No es desactivar:** la party sigue activa y conserva sus relaciones, así que no choca con D-4.
 - **Sin hacer:** que los otros contextos (Facturación, Pedidos…) se nieguen a operar con un
@@ -594,5 +597,9 @@ modificarlo**. Ahora:
   party y quedan como relacionadas. En una instalación con datos habría que marcarlas.
 - **Sin hacer de D-67:** la marca por campo con la que una persona autoriza qué datos suyos se ven
   como party pública. Necesita diseño.
+- Dar de alta una party con una afiliación de familia o de duplicado se rechaza (400): no
+  afiliarían a nadie y quien la crea no la vería.
+- **Una salvedad:** «empresa interna» se mira por el tipo de rol exacto; un tipo de rol añadido
+  colgando de «Internal Organization» no cuenta como tal.
 - Esquema: migración 25, `party_affiliations.registered`.
 

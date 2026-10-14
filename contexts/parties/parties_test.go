@@ -733,6 +733,20 @@ func (e *env) prospects(acme, ana papp.PartyDTO) {
 	e.must(e.do("GET", "/api/parties/"+other.ID, e.clerk, nil, nil), 200, "acme sees it")
 	e.must(e.do("PUT", "/api/parties/"+other.ID+"/name", e.clerk, map[string]any{"legalName": "Nope"}, nil), 403,
 		"but nobody of acme changes an internal organization of others, permission or not")
+
+	// Marking a duplicate is changing it: who cannot change a party does not block it, nobody but
+	// the global administrator blocks a company, and who marked it can undo it.
+	e.must(e.do("POST", "/api/party-relationships", e.seller, map[string]any{"type": domain.RelDuplicateOf.String(),
+		"fromParty": third.ID, "toParty": mine.ID}, nil), 403, "the seller cannot change the related party, nor block it")
+	e.must(e.do("POST", "/api/party-relationships", e.clerk, map[string]any{"type": domain.RelDuplicateOf.String(),
+		"fromParty": acme.ID, "toParty": other.ID}, nil), 403, "nor a clerk its own company")
+	var dupMark papp.RelationshipDTO
+	e.must(e.do("POST", "/api/party-relationships", e.seller, map[string]any{"type": domain.RelDuplicateOf.String(),
+		"fromParty": mine.ID, "toParty": third.ID}, &dupMark), 201, "the seller blocks what acme registered")
+	e.must(e.do("POST", "/api/party-relationships/"+dupMark.ID+"/terminate", e.seller, nil, nil), 200, "and undoes it")
+	e.must(e.do("POST", "/api/persons", e.seller, map[string]any{"givenName": "Nadie", "firstSurname": acme.ID[:8],
+		"affiliation": map[string]any{"organization": acme.ID, "relationshipType": domain.RelFamily.String()}}, nil), 400,
+		"a family relationship affiliates nobody")
 }
 
 // phase3 covers organization scope (decision P1), registration inside the scope, the

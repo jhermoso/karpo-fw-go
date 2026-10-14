@@ -80,6 +80,8 @@ func (s scope) canWrite(p *domain.Party, at time.Time) bool {
 	if s.canWriteOrg(p.ID()) {
 		return true
 	}
+	// (Internal Organization by its id: a role type added below it would not count. The catalog
+	// refuses nothing there yet; see docs/PARTIES.md §18.)
 	if slices.ContainsFunc(p.Roles(), func(r domain.PartyRole) bool {
 		return r.RoleType == domain.RoleInternalOrganization && !r.Annulled && r.IsActiveAt(at)
 	}) {
