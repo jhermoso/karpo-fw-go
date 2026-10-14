@@ -48,6 +48,21 @@ func TestSeedCommonCatalog_CompletesAnEarlierSeed(t *testing.T) {
 		}
 		return n
 	}
+	// A database from before the move: Prospect Relationship at …0016, with a relationship.
+	for _, q := range []string{
+		`DELETE FROM relationship_types WHERE code = 'duplicate-of'`,
+		`UPDATE relationship_types SET id = '` + oldProspect + `' WHERE code = 'prospect'`,
+		`INSERT INTO parties (id, version, kind, name, active, test) VALUES ('0f0f0f0f-0000-0000-0000-0000000000a1', 1, 'person', 'Bea', 1, 0)`,
+		`INSERT INTO parties (id, version, kind, name, active, test) VALUES ('0f0f0f0f-0000-0000-0000-0000000000a2', 1, 'organization', 'Acme', 1, 0)`,
+		`INSERT INTO party_relationships (id, version, rel_type, from_party, to_party, from_role, to_role, valid_from)
+			VALUES ('0f0f0f0f-0000-0000-0000-0000000000b1', 1, '` + oldProspect + `', '0f0f0f0f-0000-0000-0000-0000000000a1',
+			'0f0f0f0f-0000-0000-0000-0000000000a2', '` + domain.RoleProspect.String() + `', '` + domain.RoleInternalOrganization.String() + `', '2026-10-01 00:00:00')`,
+	} {
+		if _, err := raw.Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
+
 	// A type somebody added with a code the program needs stops the step, with a message.
 	if _, err := raw.Exec(`INSERT INTO role_types (id, name, category, code) VALUES ('0f0f0f0f-0000-0000-0000-000000000001', 'Club', 0, 'club')`); err != nil {
 		t.Fatal(err)
@@ -71,6 +86,15 @@ func TestSeedCommonCatalog_CompletesAnEarlierSeed(t *testing.T) {
 		if n := count(`SELECT COUNT(*) FROM role_types WHERE code IN ('team', 'club', 'group')
 			AND parent_id = (SELECT id FROM role_types WHERE code = 'informal')`); n != 3 {
 			t.Fatalf("informal organizations: %d", n)
+		}
+		if n := count(`SELECT COUNT(*) FROM relationship_types WHERE code = 'prospect' AND id = '` + domain.RelProspect.String() + `'`); n != 1 {
+			t.Fatalf("prospect at its new id: %d", n)
+		}
+		if n := count(`SELECT COUNT(*) FROM party_relationships WHERE rel_type = '` + domain.RelProspect.String() + `'`); n != 1 {
+			t.Fatalf("the prospect relationship did not follow its type: %d", n)
+		}
+		if n := count(`SELECT COUNT(*) FROM relationship_types WHERE code = 'duplicate-of' AND id = '` + oldProspect + `'`); n != 1 {
+			t.Fatalf("duplicate of at the old id: %d", n)
 		}
 		if n := count(`SELECT COUNT(*) FROM relationship_types WHERE code IS NULL OR code = ''`); n != 0 {
 			t.Fatalf("relationship types without a code: %d", n)

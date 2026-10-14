@@ -42,6 +42,8 @@ func TestTheCatalogHasTheCommonTypes(t *testing.T) {
 		"legal-representation":  "10000000-0000-0000-0002-000000000011",
 		"department-assignment": "10000000-0000-0000-0002-000000000012",
 		"collaborator-contact":  "10000000-0000-0000-0002-000000000013",
+		"duplicate-of":          "10000000-0000-0000-0002-000000000016",
+		"prospect":              "10000000-0000-0000-0002-000000000017",
 	} {
 		if rels[code] != id {
 			t.Fatalf("relationship type %s has the id %q", code, rels[code])

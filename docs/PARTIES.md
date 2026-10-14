@@ -481,10 +481,12 @@ relación, con los mismos identificadores y códigos; y «Team» cuelga de «Inf
 
 Lo que **no** ha entrado, y por qué:
 
-- **«Duplicate Of»** (el tipo de relación con que Trench une un registro duplicado al que
-  sobrevive). En Trench lleva el identificador `…0002-…0016`, **el mismo que aquí tiene
-  «Prospect Relationship»**. Un mismo identificador no puede ser dos tipos: uno de los dos tiene
-  que cambiar, y es una decisión entre proyectos.
+- ~~«Duplicate Of»~~: entró después. Su identificador en Trench, `…0002-…0016`, era aquí el de
+  «Prospect Relationship». Javier decidió el 2026-10-14 (D-63) que se mueva el de Go: «Prospect
+  Relationship» pasa a `…0017` y «Duplicate Of» ocupa `…0016` (Party → Party, código
+  `duplicate-of`). La migración 23 copia el tipo al identificador nuevo, mueve sus relaciones y
+  borra la fila antigua; la 21 hace lo mismo en una base que llegue a ella sin haberla pasado.
+  Sólo se siembra: Go no tiene todavía fusión de parties.
 - **«App User»**: en la semilla de Trench está comentado; no se siembra allí.
 - **Caller, Callee, Sender, Recipient, Worker, Project Manager, Reporter, Owner, Resolver** y los de
   pedidos: en Trench no son tipos de rol *de party*, sino de un evento de comunicación, de un

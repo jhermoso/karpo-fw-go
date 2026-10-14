@@ -316,7 +316,9 @@ Recomendación: **opción A.**
   al cambiarlo.
 - Es lo que dice UDM, donde el cliente potencial es un rol, y lo que dice D29.
 
-El tipo nuevo llevaría el GUID `10000000-0000-0000-0002-000000000016`, libre en el catálogo y en
+(**Cambiado el 2026-10-14**: el tipo está ahora en `…0002-000000000017`; `…0016` es «Duplicate Of»
+de Trench, D-63 de `DECISIONES-COMUNES.md`.) El tipo nuevo llevaría el GUID
+`10000000-0000-0000-0002-000000000016`, libre en el catálogo y en
 la semilla SQL del C# (los `…10` a `…15` están ocupados). Como toda relación con una organización
 interna, afilia al cliente potencial y lo hace visible para ella; el alta dentro del ámbito
 (`affiliation`) lo admite sin cambios y aceptará la prueba.
