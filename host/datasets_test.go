@@ -14,12 +14,13 @@ import (
 	expdomain "github.com/jhermoso/karpo-fw-go/contexts/exports/domain"
 	geoinfra "github.com/jhermoso/karpo-fw-go/contexts/geography/infrastructure"
 	hrapp "github.com/jhermoso/karpo-fw-go/contexts/hr/application"
-	impapp "github.com/jhermoso/karpo-fw-go/contexts/imports/application"
+	hrdomain "github.com/jhermoso/karpo-fw-go/contexts/hr/domain"
 	parapp "github.com/jhermoso/karpo-fw-go/contexts/parties/application"
 	pardomain "github.com/jhermoso/karpo-fw-go/contexts/parties/domain"
 	"github.com/jhermoso/karpo-fw-go/host"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
+	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/memory"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
@@ -43,25 +44,82 @@ func datasetsScenario(t *testing.T, sw *hotswap.Switch) {
 	admin.GlobalAdmin = true
 	actx := authz.WithContext(ctx, admin)
 
-	org := "unitType,name,parentOrg\nInternalOrganization,Añil Cambios,\nInternalOrganization,Karpo Servicios,\nDepartment,Operaciones,Añil Cambios\n"
-	people := "employeeNumber,firstName,lastName,email,gender,legalEntity,hireDate,terminationDate\n" +
-		"P-1,Ana,\"García, de la O\",ana@financialdetail.test,F,Añil Cambios,2020-03-01,\n" +
-		"P-2,Luis,Pérez,luis@financialdetail.test,M,FinancialDetail / Karpo (PLURIEMPLEO),2021-05-10,2024-12-31\n" +
-		"P-3,Eva,=Ruiz,eva@karpo.test,F,Karpo Servicios,2025-02-03,\n"
-	run, err := h.Imports.Service.Execute.Handle(actx, impapp.RunImport{Source: "personio", Files: []impapp.FileDTO{
-		{Role: "org-units", Name: "org.csv", Content: org}, {Role: "people", Name: "people.csv", Content: people}}})
-	if err != nil || run.Status != "succeeded" {
-		t.Fatalf("import: %+v %v", run, err)
+	// The organization: two companies, and a department of the first one.
+	register := func(name string, role string) string {
+		t.Helper()
+		d, err := h.Parties.Service.RegisterOrganization.Handle(actx, parapp.RegisterOrganization{LegalName: name, Roles: []string{role}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return d.ID
 	}
-	companies, _ := h.Parties.Organizations.All(ctx)
-	id := map[string]string{}
-	for _, c := range companies {
-		id[c.Name] = c.ID
+	company := register("Añil Cambios", pardomain.RoleInternalOrganization.String())
+	karpo := register("Karpo Servicios", pardomain.RoleInternalOrganization.String())
+	department := register("Operaciones", pardomain.RoleDepartment.String())
+	if _, err := h.Parties.Service.EstablishRelationship.Handle(actx, parapp.EstablishRelationship{Type: pardomain.RelOrganizationRollup.String(),
+		From: department, To: company}); err != nil {
+		t.Fatal(err)
 	}
-	financialdetail, karpo := id["Añil Cambios"], id["Karpo Servicios"]
-	// A customer of FinancialDetail, with its tax number.
+	// People, registered with the company that hires them; hired by HR, and Luis by a second one.
+	person := func(given, surname, gender, employer string) string {
+		t.Helper()
+		p, err := h.Parties.Service.RegisterPerson.Handle(actx, parapp.RegisterPerson{GivenName: given, FirstSurname: surname, Gender: gender,
+			Affiliation: &parapp.NewAffiliation{Organization: employer, RelationshipType: pardomain.RelEmployment.String()}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p.ID
+	}
+	// As the import of the people did: when HR does not know yet that the company is one the person
+	// works for, Parties is told first, and that they are an employee if they are not one yet.
+	hireAt := func(who, employer, number, hired, left string) {
+		t.Helper()
+		start, _ := vocab.ParseDate(hired)
+		hire := hrapp.Hire{Person: who, Employer: employer, Number: number, Hired: start}
+		e, err := h.HR.Service.Hire.Handle(actx, hire)
+		var rule *fw.RuleViolationError
+		if errors.As(err, &rule) && rule.Code == "hr.not_affiliated" {
+			pid, _ := pardomain.ParsePartyID(who)
+			p, gerr := h.Parties.Service.Get.Handle(actx, parapp.GetParty{ID: pid})
+			if gerr != nil {
+				t.Fatal(gerr)
+			}
+			employee := false
+			for _, role := range p.Roles {
+				employee = employee || role.Active && role.RoleType == pardomain.RoleEmployee.String()
+			}
+			if !employee {
+				if _, err := h.Parties.Service.AssignRole.Handle(actx, parapp.AssignRole{PartyID: pid, RoleType: pardomain.RoleEmployee.String()}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := h.Parties.Service.EstablishRelationship.Handle(actx, parapp.EstablishRelationship{Type: pardomain.RelEmployment.String(),
+				From: who, To: employer}); err != nil {
+				t.Fatal(err)
+			}
+			e, err = h.HR.Service.Hire.Handle(actx, hire)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if left != "" {
+			end, _ := vocab.ParseDate(left)
+			eid, _ := hrdomain.ParseEmploymentID(e.ID)
+			if _, err := h.HR.Service.Terminate.Handle(actx, hrapp.Terminate{ID: eid, On: end, Reason: "seed"}); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	ana := person("Ana", "García, de la O", string(pardomain.GenderFemale), company)
+	luis := person("Luis", "Pérez", string(pardomain.GenderMale), company)
+	eva := person("Eva", "=Ruiz", string(pardomain.GenderFemale), karpo)
+	hireAt(ana, company, "P-1", "2020-03-01", "")
+	hireAt(luis, company, "P-2", "2021-05-10", "2024-12-31")
+	hireAt(luis, karpo, "P-2", "2021-05-10", "2024-12-31")
+	hireAt(eva, karpo, "P-3", "2025-02-03", "")
+	// A customer of the first company, with its tax number.
 	customer, err := h.Parties.Service.RegisterOrganization.Handle(actx, parapp.RegisterOrganization{LegalName: "Cliente Uno SL",
-		Roles: []string{pardomain.RoleCustomer.String()}, Affiliation: &parapp.NewAffiliation{Organization: financialdetail, RelationshipType: pardomain.RelCustomer.String()}})
+		Roles: []string{pardomain.RoleCustomer.String()}, Affiliation: &parapp.NewAffiliation{Organization: company, RelationshipType: pardomain.RelCustomer.String()}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,9 +174,9 @@ func datasetsScenario(t *testing.T, sw *hotswap.Switch) {
 		"Eva =Ruiz,Persona,Activo", "Luis Pérez,Persona,Activo")
 	same("persons called luis", export(actx, "persons", map[string]string{"name": "luis"}), "Nombre,Tipo,Estado", "Luis Pérez,Persona,Activo")
 	same("internal organizations", export(actx, "internal-organizations", nil), "Nombre,Tipo,Estado",
-		"Karpo Servicios,Organización,Activo", "Añil Cambios,Organización,Activo")
-	same("organizations", export(actx, "organizations", nil), "Nombre,Tipo,Estado", "Cliente Uno SL,Organización,Activo",
-		"Karpo Servicios,Organización,Activo", "Añil Cambios,Organización,Activo", "Operaciones,Organización,Activo")
+		"Añil Cambios,Organización,Activo", "Karpo Servicios,Organización,Activo")
+	same("organizations", export(actx, "organizations", nil), "Nombre,Tipo,Estado", "Añil Cambios,Organización,Activo", "Cliente Uno SL,Organización,Activo",
+		"Karpo Servicios,Organización,Activo", "Operaciones,Organización,Activo")
 	if all := export(actx, "parties", nil); len(all) != 1+7 {
 		t.Fatalf("parties: %v", all)
 	}
@@ -168,8 +226,8 @@ func datasetsScenario(t *testing.T, sw *hotswap.Switch) {
 	clerk := scoped(parapp.PermPartyRead, hrapp.PermEmploymentRead)
 	same("what the clerk of Karpo sees", export(clerk, "persons", nil), "Nombre,Tipo,Estado", "Eva =Ruiz,Persona,Activo", "Luis Pérez,Persona,Activo")
 	// Asking for another company narrows what one sees, it never widens it: Luis, whom the clerk
-	// sees because he also works for Karpo; not Ana, who works for FinancialDetail only.
-	same("asking for another company", export(clerk, "persons", map[string]string{"organization": financialdetail}), "Nombre,Tipo,Estado",
+	// sees because he also works for Karpo; not Ana, who works for the first company only.
+	same("asking for another company", export(clerk, "persons", map[string]string{"organization": company}), "Nombre,Tipo,Estado",
 		"Luis Pérez,Persona,Activo")
 	if emp := export(clerk, "employees", nil); len(emp) != 1+2 {
 		t.Fatalf("employees the clerk sees: %v", emp)

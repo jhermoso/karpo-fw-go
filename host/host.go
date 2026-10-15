@@ -48,10 +48,6 @@ import (
 	"github.com/jhermoso/karpo-fw-go/contexts/hr"
 	hrapp "github.com/jhermoso/karpo-fw-go/contexts/hr/application"
 	hrinfra "github.com/jhermoso/karpo-fw-go/contexts/hr/infrastructure"
-	"github.com/jhermoso/karpo-fw-go/contexts/imports"
-	impapp "github.com/jhermoso/karpo-fw-go/contexts/imports/application"
-	impdomain "github.com/jhermoso/karpo-fw-go/contexts/imports/domain"
-	impinfra "github.com/jhermoso/karpo-fw-go/contexts/imports/infrastructure"
 	"github.com/jhermoso/karpo-fw-go/contexts/inventory"
 	invapp "github.com/jhermoso/karpo-fw-go/contexts/inventory/application"
 	invinfra "github.com/jhermoso/karpo-fw-go/contexts/inventory/infrastructure"
@@ -112,9 +108,6 @@ type Options struct {
 	Files expapp.Files
 	// ServicePrincipals are the processes that call the API with their own token.
 	ServicePrincipals []authz.ServicePrincipal
-	// ApiscoreEntity names, as Parties does, the financial institution whose accounts the files of
-	// Apiscore hold: they do not say it themselves. Empty: an import of Apiscore is refused.
-	ApiscoreEntity string
 	// OnDeliveryGivenUp is told when a message is given up for a listener after too many tries:
 	// from then on it waits for a person. Nil: nobody is told.
 	OnDeliveryGivenUp func(context.Context, mailbox.DTO)
@@ -148,7 +141,6 @@ type Host struct {
 	Financial   *financial.Module
 	Exchange    *exchange.Module
 	Modules     *modules.Module
-	Imports     *imports.Module
 	Exports     *exports.Module
 	Audit       *audit.Module
 
@@ -171,7 +163,7 @@ func Migrations() []sqlrepo.MigrationSet {
 		fisinfra.Migrations(), hrinfra.Migrations(), prlinfra.Migrations(), recinfra.Migrations(), invinfra.Migrations(), ordinfra.Migrations(),
 		bilinfra.Migrations(), purinfra.Migrations(), payinfra.Migrations(), treinfra.Migrations(), accinfra.Migrations(), astinfra.Migrations(),
 		docinfra.Migrations(), shpinfra.Migrations(), wrkinfra.Migrations(), fininfra.Migrations(), exginfra.Migrations(), modinfra.Migrations(),
-		impinfra.Migrations(), expinfra.Migrations(), mailbox.Migrations()}
+		expinfra.Migrations(), mailbox.Migrations()}
 }
 
 // Permissions lists what every business context checks: what Security is told at start-up.
@@ -179,7 +171,7 @@ func Permissions() []authz.Permission {
 	return slices.Concat(geoapp.Permissions(), facapp.Permissions(), parapp.Permissions(), proapp.Permissions(), fisapp.Permissions(), hrapp.Permissions(),
 		prlapp.Permissions(), recapp.Permissions(), invapp.Permissions(), ordapp.Permissions(), bilapp.Permissions(), purapp.Permissions(),
 		payapp.Permissions(), treapp.Permissions(), accapp.Permissions(), astapp.Permissions(), docapp.Permissions(), shpapp.Permissions(),
-		wrkapp.Permissions(), finapp.Permissions(), exgapp.Permissions(), modapp.Permissions(), impapp.Permissions(), expapp.Permissions(),
+		wrkapp.Permissions(), finapp.Permissions(), exgapp.Permissions(), modapp.Permissions(), expapp.Permissions(),
 		audapp.Permissions())
 }
 
@@ -223,12 +215,6 @@ func Compose(sw *hotswap.Switch, o Options) (*Host, error) {
 	h.Financial = financial.Compose(sw, institutions)
 	h.Exchange = exchange.Compose(sw, PromotionCodes{Collaborators: h.Parties.Collaborators})
 	h.Modules = modules.Compose(sw, modules.WithDerivation(SectorCapabilities{Institutions: institutions}))
-	h.Imports = imports.Compose(sw).Offer(impdomain.Sage{}, impdomain.Apiscore{Entity: o.ApiscoreEntity}, impdomain.Holidays{}).Load(
-		LegalEntities{Parties: h.Parties}, Departments{Parties: h.Parties, UoW: sw},
-		WorkCenters{Facilities: h.Facilities}, People{Parties: h.Parties, UoW: sw}, Employments{HR: h.HR, Parties: h.Parties, UoW: sw},
-		Positions{HR: h.HR, UoW: sw}, WorkPlaces{Parties: h.Parties}, Customers(h.Parties, sw), Suppliers(h.Parties, sw),
-		TaxRates{Fiscal: h.Fiscal}, ChartAccounts{Accounting: h.Accounting}, OwnAccounts{Treasury: h.Treasury},
-		HeldAccounts{Financial: h.Financial, UoW: sw}, HolidayCalendar{Geography: h.Geography})
 	h.Exports = exports.Compose(sw, o.Files).Offer(CustomerAccounts{Financial: h.Financial}).Offer(PartyLists(h.Parties, h.HR)...).
 		Offer(TradeLists(h.Parties, h.Billing, h.Orders, h.Receivables, h.Purchases)...).
 		Offer(BookLists(h.Parties, h.Accounting, h.Payments, h.Assets)...)
@@ -246,7 +232,7 @@ func Compose(sw *hotswap.Switch, o Options) (*Host, error) {
 	for _, r := range []interface {
 		Relay(application.MessageSender, ...outbox.RelayOption) *outbox.Relay
 	}{h.Parties, h.Facilities, h.Security, h.Products, h.Fiscal, h.HR, h.Payroll, h.Receivables, h.Inventory, h.Orders, h.Billing, h.Purchases, h.Payments,
-		h.Treasury, h.Assets, h.Shipments, h.Work, h.Financial, h.Exchange, h.Modules, h.Imports} {
+		h.Treasury, h.Assets, h.Shipments, h.Work, h.Financial, h.Exchange, h.Modules} {
 		h.relays = append(h.relays, r.Relay(h.Broker))
 	}
 
@@ -295,7 +281,7 @@ func (h *Host) Handler() http.Handler {
 	protected := http.NewServeMux()
 	for _, m := range []distribution.EndpointModule{h.Geography.HTTP, h.Geography.HolidaysHTTP, h.Facilities, h.Parties.HTTP, h.Security.HTTP, h.Products, h.Fiscal, h.HR, h.Payroll,
 		h.Receivables, h.Inventory, h.Orders, h.Billing, h.Purchases, h.Payments, h.Treasury, h.Accounting, h.Assets, h.Documents, h.Shipments, h.Work,
-		h.Financial, h.Exchange, h.Modules, h.Imports, h.Exports, h.Audit, h.Deliveries} {
+		h.Financial, h.Exchange, h.Modules, h.Exports, h.Audit, h.Deliveries} {
 		m.RegisterRoutes(protected)
 	}
 	mux := http.NewServeMux()
@@ -327,7 +313,6 @@ func (h *Host) Deliver(ctx context.Context) (int, error) {
 
 // Chores is what a round of the scheduler did.
 type Chores struct {
-	ImportsClosed  int // runs whose process died
 	ExportsWritten int
 	ExportsExpired int
 	ExportsGivenUp int
@@ -359,10 +344,6 @@ func (h *Host) RunChores(ctx context.Context) (Chores, error) {
 	note("deliveries", err)
 	out.Redelivered = again.Delivered
 	ctx = authz.WithContext(ctx, authzOf(h.system))
-
-	closed, err := h.Imports.Service.CloseStale.Handle(ctx, impapp.CloseStale{})
-	note("imports", err)
-	out.ImportsClosed = len(closed.Runs)
 
 	for range MaxExportsPerRound {
 		ran, err := h.Exports.Service.RunNext.Handle(ctx, expapp.RunNext{})

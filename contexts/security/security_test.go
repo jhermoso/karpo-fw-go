@@ -31,7 +31,6 @@ import (
 	fisapp "github.com/jhermoso/karpo-fw-go/contexts/fiscal/application"
 	geoapp "github.com/jhermoso/karpo-fw-go/contexts/geography/application"
 	hrapp "github.com/jhermoso/karpo-fw-go/contexts/hr/application"
-	impapp "github.com/jhermoso/karpo-fw-go/contexts/imports/application"
 	invapp "github.com/jhermoso/karpo-fw-go/contexts/inventory/application"
 	modapp "github.com/jhermoso/karpo-fw-go/contexts/modules/application"
 	ordapp "github.com/jhermoso/karpo-fw-go/contexts/orders/application"
@@ -688,7 +687,7 @@ func TestCatalog_EveryContextDeclaresItsPermissions(t *testing.T) {
 		"Fiscal": fisapp.Permissions(), "Geography": geoapp.Permissions(), "HR": hrapp.Permissions(), "Inventory": invapp.Permissions(),
 		"Orders": ordapp.Permissions(), "Parties": papp.Permissions(), "Products": prdapp.Permissions(),
 		"Payments": payapp.Permissions(), "Payroll": prlapp.Permissions(), "Purchases": purapp.Permissions(),
-		"Receivables": recapp.Permissions(), "Treasury": treapp.Permissions(), "Financial": finapp.Permissions(), "Exports": expapp.Permissions(), "Imports": impapp.Permissions(), "Exchange": exgapp.Permissions(), "Audit": autapp.Permissions(), "Modules": modapp.Permissions(), "Shipments": shpapp.Permissions(), "Documents": docapp.Permissions(), "Work": wrkapp.Permissions(), sdomain.Namespace: sapp.Permissions(),
+		"Receivables": recapp.Permissions(), "Treasury": treapp.Permissions(), "Financial": finapp.Permissions(), "Exports": expapp.Permissions(), "Exchange": exgapp.Permissions(), "Audit": autapp.Permissions(), "Modules": modapp.Permissions(), "Shipments": shpapp.Permissions(), "Documents": docapp.Permissions(), "Work": wrkapp.Permissions(), sdomain.Namespace: sapp.Permissions(),
 	}
 	var all []authz.Permission
 	for namespace, perms := range declared {
@@ -699,7 +698,7 @@ func TestCatalog_EveryContextDeclaresItsPermissions(t *testing.T) {
 			all = append(all, p)
 		}
 	}
-	if len(all) != 155+len(sapp.Permissions()) || len(sapp.Permissions()) != 8 {
+	if len(all) != 152+len(sapp.Permissions()) || len(sapp.Permissions()) != 8 {
 		t.Fatalf("declared permissions: %d", len(all))
 	}
 
@@ -735,7 +734,7 @@ func TestCatalog_EveryContextDeclaresItsPermissions(t *testing.T) {
 	if len(granted["OrganizationAdmin"]) != len(all)-1 || slices.Contains(granted["OrganizationAdmin"], string(sapp.PermRoleUpdate)) {
 		t.Errorf("OrganizationAdmin holds everything but the roles: %d of %d", len(granted["OrganizationAdmin"]), len(all))
 	}
-	if len(granted["ReadOnlyUser"]) != 61+3 || !slices.Contains(std, "Billing.Invoice.Create") || len(granted["Customer"]) != 0 ||
+	if len(granted["ReadOnlyUser"]) != 61+1 || !slices.Contains(std, "Billing.Invoice.Create") || len(granted["Customer"]) != 0 ||
 		!slices.Equal(granted["GlobalSuperAdmin"], []string{"*.*.*"}) {
 		t.Errorf("read only %d, customer %d, global %v", len(granted["ReadOnlyUser"]), len(granted["Customer"]), granted["GlobalSuperAdmin"])
 	}
