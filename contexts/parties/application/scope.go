@@ -16,12 +16,16 @@ import (
 //   - a party is visible to the internal organizations of the effective scope when it is one of
 //     them, a shared catalog entry, or affiliated with one of them (an active relationship);
 //   - out of scope, a party does not exist (uniform 404);
-//   - writing needs a Full grant on the party itself or on an organization it is affiliated with;
-//     shared catalog entries are written by global administrators only.
+//   - writing needs a Full grant on the party itself, or on an organization it is affiliated with
+//     and that registered it; an organization that only relates to it needs PermPartyUpdateRelated
+//     too, and nobody but its own users writes a party that is an internal organization
+//     (docs/DECISIONES-COMUNES.md, D-65 and D-66); shared catalog entries are written by global
+//     administrators only.
 type scope struct {
-	global bool
-	ac     *authz.Context
-	orgs   []domain.PartyID
+	global  bool
+	ac      *authz.Context
+	orgs    []domain.PartyID
+	related bool // the caller may change the parties its organizations only relate to
 }
 
 func scopeOf(ctx context.Context) scope {
@@ -29,7 +33,7 @@ func scopeOf(ctx context.Context) scope {
 	if !ok {
 		return scope{}
 	}
-	s := scope{global: ac.GlobalAdmin, ac: ac}
+	s := scope{global: ac.GlobalAdmin, ac: ac, related: authz.Require(ctx, PermPartyUpdateRelated) == nil}
 	for _, u := range ac.EffectiveOrganizations {
 		s.orgs = append(s.orgs, domain.PartyID{UUID: u})
 	}
@@ -76,7 +80,16 @@ func (s scope) canWrite(p *domain.Party, at time.Time) bool {
 	if s.canWriteOrg(p.ID()) {
 		return true
 	}
-	return slices.ContainsFunc(p.OrganizationsAt(at), s.canWriteOrg)
+	// (Internal Organization by its id: a role type added below it would not count. The catalog
+	// refuses nothing there yet; see docs/PARTIES.md §18.)
+	if slices.ContainsFunc(p.Roles(), func(r domain.PartyRole) bool {
+		return r.RoleType == domain.RoleInternalOrganization && !r.Annulled && r.IsActiveAt(at)
+	}) {
+		return false // an internal organization of others: only its own users write it
+	}
+	return slices.ContainsFunc(p.Affiliations(), func(a domain.Affiliation) bool {
+		return a.Period.IsActiveAt(at) && s.canWriteOrg(a.Organization) && (a.Registered || s.related)
+	})
 }
 
 // visible returns the party or a uniform not-found error when it is out of scope.

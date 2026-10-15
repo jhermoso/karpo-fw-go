@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"time"
 
@@ -85,6 +86,10 @@ func (s service) register(ctx context.Context, build func(domain.PartyID) (*doma
 			v.Add("affiliation.relationshipType", "unknown", "unknown relationship type")
 			return PartyDTO{}, v.Err()
 		}
+		if rt.ID == domain.RelFamily || rt.ID == domain.RelDuplicateOf {
+			v.Add("affiliation.relationshipType", "not_an_affiliation", "this relationship type does not affiliate a party with an organization")
+			return PartyDTO{}, v.Err()
+		}
 		// The organization takes the side it plays; the new party the other one.
 		switch {
 		case org.Meets(n.Roles, rt.ToRole, now):
@@ -112,7 +117,7 @@ func (s service) register(ctx context.Context, build func(domain.PartyID) (*doma
 		if !partyIsFrom {
 			from, to = org, p
 		}
-		if _, err := s.establish(ctx, rt, from, to, now, "", aff.RelationshipDetailsInput); err != nil {
+		if _, err := s.establish(ctx, rt, from, to, now, "", aff.RelationshipDetailsInput, p); err != nil {
 			return PartyDTO{}, err
 		}
 		if p, err = s.Parties.Get(ctx, p.ID()); err != nil {
@@ -127,7 +132,7 @@ func (s service) register(ctx context.Context, build func(domain.PartyID) (*doma
 // with it (visibility, membership). Hierarchical types keep one parent per child and no cycles.
 // Everything happens in the caller's unit of work.
 func (s service) establish(ctx context.Context, rt domain.RelationshipType, from, to *domain.Party, since time.Time, remark string,
-	details RelationshipDetailsInput) (*domain.Relationship, error) {
+	details RelationshipDetailsInput, registered ...*domain.Party) (*domain.Relationship, error) {
 	cat, err := s.roleCatalog(ctx)
 	if err != nil {
 		return nil, err
@@ -139,6 +144,11 @@ func (s service) establish(ctx context.Context, rt domain.RelationshipType, from
 	}
 	for _, p := range []*domain.Party{from, to} {
 		if err := operable(p); err != nil {
+			return nil, err
+		}
+	}
+	if rt.ID == domain.RelDuplicateOf {
+		if err := canMarkDuplicate(scopeOf(ctx), from); err != nil {
 			return nil, err
 		}
 	}
@@ -175,12 +185,18 @@ func (s service) establish(ctx context.Context, rt domain.RelationshipType, from
 		}
 		return r, nil
 	}
+	if rt.ID == domain.RelFamily { // not a relationship of business: it shows nobody (D-67)
+		return r, nil
+	}
 	for _, side := range [][2]*domain.Party{{from, to}, {to, from}} {
 		member, org := side[0], side[1]
 		if !org.PlaysAt(cat, domain.RoleInternalOrganization, since) {
 			continue
 		}
 		if _, err := s.parties.Update(ctx, member.ID(), func(_ context.Context, p *domain.Party) error {
+			if len(registered) > 0 && registered[0].ID() == p.ID() {
+				return p.AffiliateOnRegistration(org.ID(), r.ID(), since)
+			}
 			return p.Affiliate(org.ID(), r.ID(), since)
 		}); err != nil {
 			return nil, err
@@ -250,14 +266,23 @@ func (s service) writableRelationship(ctx context.Context, id domain.Relationshi
 	if r, err = s.Relationships.Get(ctx, id); err != nil {
 		return nil, nil, nil, err
 	}
-	if !sc.relationships().IsSatisfiedBy(r) {
-		return nil, nil, nil, fw.NotFound(domain.RelationshipKind, id)
-	}
 	if from, err = s.Parties.Get(ctx, r.From()); err != nil {
 		return nil, nil, nil, err
 	}
 	if to, err = s.Parties.Get(ctx, r.To()); err != nil {
 		return nil, nil, nil, err
+	}
+	if r.Type() == domain.RelDuplicateOf { // whoever can write the duplicate reaches its mark
+		if !sc.sees(from, fw.Now()) {
+			return nil, nil, nil, fw.NotFound(domain.RelationshipKind, id)
+		}
+		if err := canMarkDuplicate(sc, from); err != nil {
+			return nil, nil, nil, err
+		}
+		return r, from, to, nil
+	}
+	if !sc.relationships().IsSatisfiedBy(r) {
+		return nil, nil, nil, fw.NotFound(domain.RelationshipKind, id)
 	}
 	if !sc.canRelate(from, to) {
 		return nil, nil, nil, fw.ErrForbidden
@@ -271,6 +296,22 @@ func (s service) writableRelationship(ctx context.Context, id domain.Relationshi
 func operable(p *domain.Party) error {
 	if p.IsDuplicate() {
 		return fw.Violation("parties.duplicate", "the party is the duplicate of another: it takes part in nothing but queries")
+	}
+	return nil
+}
+
+// canMarkDuplicate tells whether the caller may mark a party as a duplicate, or take the mark
+// away: blocking a party is changing it, so it needs to be able to write it; and an internal
+// organization is blocked by the global administrator only.
+func canMarkDuplicate(sc scope, p *domain.Party) error {
+	if sc.global {
+		return nil
+	}
+	if !sc.canWrite(p, fw.Now()) {
+		return fmt.Errorf("%w: marking a party as a duplicate needs to be able to change it", fw.ErrForbidden)
+	}
+	if slices.ContainsFunc(p.Roles(), func(r domain.PartyRole) bool { return r.RoleType == domain.RoleInternalOrganization && !r.Annulled }) {
+		return fmt.Errorf("%w: only the global administrator marks an internal organization as a duplicate", fw.ErrForbidden)
 	}
 	return nil
 }

@@ -18,10 +18,25 @@ type Affiliation struct {
 	Organization PartyID
 	Relationship RelationshipID
 	Period       vocab.ValidPeriod
+	// Registered tells the affiliation the party was born with: somebody of the organization
+	// registered it. It lets the organization's users change the party; one that came later,
+	// with a relationship to a party that already existed, only lets them see it
+	// (docs/DECISIONES-COMUNES.md, D-65 and D-66).
+	Registered bool
 }
 
 // Affiliate records an affiliation from a relationship (idempotent per relationship).
 func (p *Party) Affiliate(org PartyID, rel RelationshipID, from time.Time) error {
+	return p.affiliate(org, rel, from, false)
+}
+
+// AffiliateOnRegistration records the affiliation a party is born with, from the relationship
+// registered together with it.
+func (p *Party) AffiliateOnRegistration(org PartyID, rel RelationshipID, from time.Time) error {
+	return p.affiliate(org, rel, from, true)
+}
+
+func (p *Party) affiliate(org PartyID, rel RelationshipID, from time.Time, registered bool) error {
 	if org == p.ID() {
 		return nil
 	}
@@ -32,7 +47,7 @@ func (p *Party) Affiliate(org PartyID, rel RelationshipID, from time.Time) error
 	if err != nil {
 		return err
 	}
-	p.affiliations = append(slices.Clone(p.affiliations), Affiliation{Organization: org, Relationship: rel, Period: period})
+	p.affiliations = append(slices.Clone(p.affiliations), Affiliation{Organization: org, Relationship: rel, Period: period, Registered: registered})
 	p.Raise(PartyAffiliated{EventMeta: p.NewEventMeta(), Organization: org.String(), Relationship: rel.String(), From: period.From()})
 	return nil
 }

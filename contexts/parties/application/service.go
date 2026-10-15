@@ -350,7 +350,9 @@ func NewService(d Deps) *Service {
 		if err != nil {
 			return RelationshipDTO{}, err
 		}
-		if !sc.canRelate(from, to) {
+		// A Duplicate Of asks to be able to change the duplicate only (establish checks it); the
+		// survivor is just pointed at.
+		if rt.ID != domain.RelDuplicateOf && !sc.canRelate(from, to) {
 			return RelationshipDTO{}, fw.ErrForbidden
 		}
 		r, err := s.establish(ctx, rt, from, to, nowOr(c.Since), strings.TrimSpace(c.Remark), c.RelationshipDetailsInput)
@@ -403,7 +405,7 @@ func NewService(d Deps) *Service {
 		if q.DocumentIssue {
 			parts = append(parts, domain.FieldDocumentIssue.Eq(true))
 		}
-		if !q.IncludeDuplicates {
+		if !q.IncludeMergedParties {
 			parts = append(parts, domain.FieldDuplicate.Eq(false))
 		}
 		if q.Role != "" {

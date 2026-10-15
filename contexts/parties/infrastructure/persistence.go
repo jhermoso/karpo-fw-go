@@ -115,7 +115,7 @@ func PartyMapping() sqlrepo.Mapping[domain.PartyID, *domain.Party] {
 					return nil, err
 				}
 				s.Affiliations = append(s.Affiliations, domain.Affiliation{Organization: domain.PartyID{UUID: c.UUID("organization")},
-					Relationship: domain.RelationshipID{UUID: c.UUID("relationship_id")}, Period: period})
+					Relationship: domain.RelationshipID{UUID: c.UUID("relationship_id")}, Period: period, Registered: c.Bool("registered")})
 			}
 			for _, c := range children.Of("classifications") {
 				period, err := vocab.NewValidPeriod(c.Time("valid_from"), c.NullTime("valid_to"))
@@ -175,7 +175,7 @@ func PartyMapping() sqlrepo.Mapping[domain.PartyID, *domain.Party] {
 			Name:       "affiliations",
 			Table:      "party_affiliations",
 			ForeignKey: "party_id",
-			Columns:    []string{"relationship_id", "organization", "valid_from", "valid_to"},
+			Columns:    []string{"relationship_id", "organization", "valid_from", "valid_to", "registered"},
 			OrderBy:    []string{"valid_from", "relationship_id"},
 			Dehydrate: func(p *domain.Party) ([]sqlrepo.Values, error) {
 				out := []sqlrepo.Values{}
@@ -185,7 +185,7 @@ func PartyMapping() sqlrepo.Mapping[domain.PartyID, *domain.Party] {
 						to = t
 					}
 					out = append(out, sqlrepo.Values{"relationship_id": a.Relationship, "organization": a.Organization,
-						"valid_from": a.Period.From(), "valid_to": to})
+						"valid_from": a.Period.From(), "valid_to": to, "registered": a.Registered})
 				}
 				return out, nil
 			},

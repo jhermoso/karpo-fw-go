@@ -565,13 +565,41 @@ se verá caso por caso.
 |---|---|
 | Marcar | Crear la relación «Duplicate Of» (`…0002-…0016`) del duplicado a la que sobrevive: `POST /api/party-relationships`. El duplicado queda con `duplicate: true` |
 | Deshacer | Terminar esa relación |
-| Buscar | `GET /api/parties` lo deja fuera; con `includeDuplicates=true`, entra. Leerlo por su identificador funciona siempre |
+| Buscar | `GET /api/parties` lo deja fuera; con `includeMergedParties=true`, entra (el nombre es el de Trench, su PR 45). Leerlo por su identificador funciona siempre |
 | Lo que se rechaza (422, `parties.duplicate`) | Cualquier cambio en la party (nombre, roles, documentos, contactos, activar o desactivar…), crearle relaciones y cambiar los datos de las que tiene |
 | Lo que se permite | Leerla y terminar sus relaciones, la de duplicado incluida |
 | Esquema | Migración 24: `parties.duplicate` |
 
+- **Quién marca y desmarca:** quien puede modificar el duplicado (§18); la superviviente sólo
+  tiene que verse. Una empresa interna sólo la marca el administrador global. Desmarcar pide lo
+  mismo, aunque la relación sea entre dos terceros.
 - Un duplicado lo es de una sola party, y una party marcada no puede ser la superviviente de otra.
 - **No es desactivar:** la party sigue activa y conserva sus relaciones, así que no choca con D-4.
 - **Sin hacer:** que los otros contextos (Facturación, Pedidos…) se nieguen a operar con un
   duplicado; Javier no ha dicho todavía si el bloqueo llega hasta ellos.
+
+## 18. Quién modifica a un tercero
+
+Decisiones de Javier D-65 a D-67 (tomadas en la sesión de Karpo C# y confirmadas aquí el
+2026-10-14). Antes, cualquier relación de un tercero con tu empresa te dejaba verlo **y
+modificarlo**. Ahora:
+
+| Caso | Quién lo modifica |
+|---|---|
+| Se dio de alta desde tu empresa (la afiliación nació con la party) | Los usuarios de tu empresa con acceso completo |
+| Ya existía y tu empresa sólo se relaciona con él | Sólo quien tenga además `Parties.Party.UpdateRelated`: de entrada el administrador de organización, no el usuario estándar; el administrador global se lo puede retirar |
+| Es empresa interna de otros | Nadie de tu empresa, tenga el permiso que tenga. Sí sus propios usuarios, o quien reciba acceso a esa empresa |
+| Compartida (catálogo común) | Sólo el administrador global, como antes |
+
+- **Verlo no cambia:** cualquier relación con tu empresa te deja verlo, salvo las de familia: una
+  relación de familia no hace visible a nadie (D-67, pensado para la persona que es empresa).
+- **Lo que ya había:** las afiliaciones anteriores a la migración 25 no se sabe si nacieron con la
+  party y quedan como relacionadas. En una instalación con datos habría que marcarlas.
+- **Sin hacer de D-67:** la marca por campo con la que una persona autoriza qué datos suyos se ven
+  como party pública. Necesita diseño.
+- Dar de alta una party con una afiliación de familia o de duplicado se rechaza (400): no
+  afiliarían a nadie y quien la crea no la vería.
+- **Una salvedad:** «empresa interna» se mira por el tipo de rol exacto; un tipo de rol añadido
+  colgando de «Internal Organization» no cuenta como tal.
+- Esquema: migración 25, `party_affiliations.registered`.
 
