@@ -575,8 +575,11 @@ se verá caso por caso.
   mismo, aunque la relación sea entre dos terceros.
 - Un duplicado lo es de una sola party, y una party marcada no puede ser la superviviente de otra.
 - **No es desactivar:** la party sigue activa y conserva sus relaciones, así que no choca con D-4.
-- **Sin hacer:** que los otros contextos (Facturación, Pedidos…) se nieguen a operar con un
-  duplicado; Javier no ha dicho todavía si el bloqueo llega hasta ellos.
+- **Facturación y Pedidos también lo bloquean** (D-70): no se le hace un presupuesto ni un pedido,
+  ni se confirma uno que ya tuviera; no se le prepara ni se le emite una factura ordinaria. Sí una
+  rectificativa: corregir lo facturado es una obligación. Lo saben preguntando a Parties por el
+  contrato de identidades fiscales, que lleva `blocked`. Los demás contextos (Compras,
+  Cobros, Tesorería) no lo miran todavía.
 
 ## 18. Quién modifica a un tercero
 

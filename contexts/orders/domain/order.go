@@ -729,6 +729,12 @@ type Credit struct {
 	Available vocab.Decimal
 }
 
+// Blocks answers whether a party takes part in nothing but queries (the duplicate of another, in
+// Parties): it is not sold to (docs/DECISIONES-COMUNES.md, D-70). nil: nobody is blocked.
+type Blocks interface {
+	Blocked(ctx context.Context, party PartyID) (bool, error)
+}
+
 // CreditCheck answers the credit of a customer on a date; nil: no credit control.
 type CreditCheck interface {
 	Credit(ctx context.Context, company OrganizationID, customer PartyID, on vocab.Date) (Credit, error)

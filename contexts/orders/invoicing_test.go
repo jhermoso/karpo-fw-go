@@ -64,7 +64,8 @@ func composeChain(t *testing.T) *chain {
 	dm := products.Compose(sw)
 	im := inventory.Compose(sw, iinfra.ProductsCatalog{Catalog: dm.Catalog})
 	rm := receivables.Compose(sw, nil)
-	om := orders.Compose(sw, oinfra.ProductsCatalog{Catalog: dm.Catalog, Pricing: dm.Pricing}, oinfra.ReceivablesCredit{Exposure: rm.Credit})
+	om := orders.Compose(sw, oinfra.ProductsCatalog{Catalog: dm.Catalog, Pricing: dm.Pricing}, oinfra.ReceivablesCredit{Exposure: rm.Credit},
+		oinfra.PartiesBlocks{TaxIdentities: pm.TaxIdentities})
 	bm := billing.Compose(sw, binfra.FiscalTaxes{Engine: fm.TaxEngine}, binfra.PartiesIdentities{TaxIdentities: pm.TaxIdentities})
 	broker := inprocess.NewBroker()
 	broker.Subscribe("inventory", im.Consumer)
@@ -135,6 +136,15 @@ func (c *chain) scenario(tag string) {
 	limit := "200"
 	_, err = c.rm.Service.SetCredit.Handle(ctx, rapp.SetCredit{Seller: acme.ID, Customer: ana.ID, Limit: &limit})
 	c.ok(err)
+
+	// The duplicate of another party is not sold to (D-70).
+	dup, err := c.pm.Service.RegisterPerson.Handle(ctx, papp.RegisterPerson{GivenName: "Duplicada", FirstSurname: tag})
+	c.ok(err)
+	_, err = c.pm.Service.EstablishRelationship.Handle(ctx, papp.EstablishRelationship{Type: pdomain.RelDuplicateOf.String(), From: dup.ID, To: ana.ID})
+	c.ok(err)
+	if _, err := c.om.Service.DraftOrder.Handle(ctx, oapp.DraftOrder{Company: acme.ID, Customer: dup.ID, Date: vocab.MustDate(2026, 10, 4)}); !isViolation(err, "orders.customer_blocked") {
+		t.Fatalf("an order for a duplicate: %v", err)
+	}
 
 	order := func(lines map[string]string) (odomain.OrderID, error) {
 		o, err := c.om.Service.DraftOrder.Handle(ctx, oapp.DraftOrder{Company: acme.ID, Customer: ana.ID, Date: vocab.MustDate(2026, 10, 4), Warehouse: wh.ID})

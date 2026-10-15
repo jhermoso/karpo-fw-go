@@ -175,6 +175,16 @@ func (h *host) scenario(tag string) {
 	h.must(h.do("POST", "/api/billing/series", "clerk", map[string]any{"seller": acme.ID, "code": "R", "year": 2026, "corrective": true}, &rs), 201, "corrective series")
 	h.must(h.do("POST", "/api/billing/series", "outsider", map[string]any{"seller": acme.ID, "code": "X", "year": 2026}, nil), 404, "outsider")
 
+	// The duplicate of another party is not invoiced (D-70): neither drafted nor issued.
+	carla := person("Carla", "11111111H")
+	var pending bapp.InvoiceDTO
+	h.must(h.do("POST", "/api/billing/invoices", "clerk", map[string]any{"seller": acme.ID, "customer": carla.ID, "dueDate": "2026-10-28"}, &pending), 201, "draft for carla")
+	h.must(h.do("POST", "/api/billing/invoices/"+pending.ID+"/lines", "clerk", map[string]any{"description": "Hora", "quantity": "1", "unitPrice": "10", "taxCode": "G21"}, nil), 200, "a line")
+	_, err = ps.EstablishRelationship.Handle(ctx, papp.EstablishRelationship{Type: pdomain.RelDuplicateOf.String(), From: carla.ID, To: bea.ID})
+	h.ok(err)
+	h.must(h.do("POST", "/api/billing/invoices/"+pending.ID+"/issue", "issuer", map[string]any{"series": fa.ID, "date": "2026-09-28"}, nil), 422, "carla turned out a duplicate")
+	h.must(h.do("POST", "/api/billing/invoices", "clerk", map[string]any{"seller": acme.ID, "customer": carla.ID, "dueDate": "2026-10-28"}, nil), 422, "nor a new draft for her")
+
 	// An invoice with three rates: taxes on the aggregated base per rate.
 	var inv bapp.InvoiceDTO
 	h.must(h.do("POST", "/api/billing/invoices", "clerk", map[string]any{"seller": acme.ID, "customer": ana.ID, "dueDate": "2026-10-28"}, &inv), 201, "draft")

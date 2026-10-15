@@ -35,7 +35,7 @@ var (
 	PermTermsUpdate  = authz.MustPermission("Orders.Terms.Update")
 )
 
-// Deps are the ports the use cases need; Credit, Recorder and Audit are optional.
+// Deps are the ports the use cases need; Credit, Blocks, Recorder and Audit are optional.
 type Deps struct {
 	Orders     domain.OrderRepository
 	Deliveries domain.DeliveryRepository
@@ -44,6 +44,7 @@ type Deps struct {
 	Quotes     domain.QuoteRepository
 	Catalog    domain.Catalog
 	Credit     domain.CreditCheck
+	Blocks     domain.Blocks
 	UoW        fw.UnitOfWork
 	Recorder   app.EventRecorder
 	Audit      app.AuditLog
@@ -205,6 +206,21 @@ func (s service) number(ctx context.Context, company domain.OrganizationID, seri
 }
 
 // termsOf returns the terms of a customer (the zero terms when it has none).
+// notBlocked refuses a customer that takes part in nothing but queries.
+func (s service) notBlocked(ctx context.Context, customer domain.PartyID) error {
+	if s.Blocks == nil {
+		return nil
+	}
+	blocked, err := s.Blocks.Blocked(ctx, customer)
+	if err != nil {
+		return err
+	}
+	if blocked {
+		return fw.Violation("orders.customer_blocked", "the customer is the duplicate of another party: nothing is sold to it")
+	}
+	return nil
+}
+
 func (s service) termsOf(ctx context.Context, company domain.OrganizationID, customer domain.PartyID) (domain.TermsState, error) {
 	ts, err := s.Terms.Find(ctx, spec.And(domain.TrmFieldCompany.Eq(company), domain.TrmFieldCustomer.Eq(customer)))
 	if err != nil || len(ts) == 0 {

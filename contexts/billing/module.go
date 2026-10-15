@@ -40,6 +40,9 @@ func Compose(sw *hotswap.Switch, taxes domain.Taxes, identities domain.Identitie
 		Recorder: outbox.Recorders(outbox.NewRecorder(hotswap.Outbox(sw, infrastructure.OutboxFactory)),
 			bapp.Publications(messaging.NewRecorder(contracts.Source, integration))),
 	}
+	if b, ok := identities.(domain.Blocks); ok { // Parties answers both
+		d.Blocks = b
+	}
 	consumer := messaging.NewConsumer(contracts.Source, hotswap.Inbox(sw, infrastructure.InboxFactory), sw)
 	bapp.Subscribe(consumer, d)
 	return &Module{Service: bapp.NewService(d), IntegrationOutbox: integration, Audit: audit, Consumer: consumer}

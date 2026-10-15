@@ -38,6 +38,7 @@ type Deps struct {
 	Invoices   domain.InvoiceRepository
 	Taxes      domain.Taxes
 	Identities domain.Identities
+	Blocks     domain.Blocks // optional
 	UoW        fw.UnitOfWork
 	Recorder   app.EventRecorder
 	Audit      app.AuditLog
@@ -97,6 +98,21 @@ func within[T any](s scope, field spec.Field[T, domain.OrganizationID]) spec.Spe
 		return spec.None[T]()
 	}
 	return field.In(s.orgs...)
+}
+
+// notBlocked refuses a customer that takes part in nothing but queries.
+func (s service) notBlocked(ctx context.Context, customer domain.PartyID) error {
+	if s.Blocks == nil {
+		return nil
+	}
+	blocked, err := s.Blocks.Blocked(ctx, customer)
+	if err != nil {
+		return err
+	}
+	if blocked {
+		return fw.Violation("billing.customer_blocked", "the customer is the duplicate of another party: it is not invoiced")
+	}
+	return nil
 }
 
 type service struct {

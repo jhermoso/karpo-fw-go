@@ -222,7 +222,7 @@ func (t TaxIdentities) TaxIdentities(ctx context.Context, partyIDs []string) (ma
 	}
 	now := fw.Now()
 	for _, p := range ps {
-		ti := contracts.TaxIdentity{PartyID: p.ID().String(), Name: p.Name()}
+		ti := contracts.TaxIdentity{PartyID: p.ID().String(), Name: p.Name(), Blocked: p.IsDuplicate()}
 		rank := func(i domain.Identification) int {
 			for k, d := range taxDocuments {
 				if d.id == i.Type {

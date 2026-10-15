@@ -89,6 +89,9 @@ type TaxIdentity struct {
 	Number       string `json:"number,omitempty"`
 	DocumentType string `json:"documentType,omitempty"` // TXID | NIDN | ARNU
 	Province     string `json:"province,omitempty"`
+	// Blocked tells a party that takes part in nothing but queries: the duplicate of another
+	// (docs/DECISIONES-COMUNES.md, D-64 and D-70). It is not invoiced nor sold to.
+	Blocked bool `json:"blocked,omitempty"`
 }
 
 // TaxIdentities resolves tax identities in batches (at most MaxDirectoryBatch ids). Missing

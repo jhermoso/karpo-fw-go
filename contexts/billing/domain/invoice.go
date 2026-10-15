@@ -404,6 +404,13 @@ type Identities interface {
 	Identities(ctx context.Context, parties []PartyID) (map[PartyID]Identity, error)
 }
 
+// Blocks answers whether a party takes part in nothing but queries (the duplicate of another, in
+// Parties): an ordinary invoice is not drafted nor issued to it (docs/DECISIONES-COMUNES.md,
+// D-70). A corrective one is: correcting what was invoiced is an obligation.
+type Blocks interface {
+	Blocked(ctx context.Context, party PartyID) (bool, error)
+}
+
 // TaxableLines returns the lines of the invoice as the tax engine needs them.
 func (i *Invoice) TaxableLines() []TaxableLine {
 	out := make([]TaxableLine, 0, len(i.s.Lines))

@@ -196,6 +196,9 @@ func (s service) quoteUseCases(svc *Service) {
 		if err := scopeOf(ctx).check("parties.party", company, company, true); err != nil {
 			return QuoteDTO{}, err
 		}
+		if err := s.notBlocked(ctx, customer); err != nil {
+			return QuoteDTO{}, err
+		}
 		st := domain.QuoteState{Company: company, Customer: customer, Date: c.Date, ValidUntil: c.ValidUntil, Reference: c.Reference, Notes: c.Notes}
 		if st.Date.IsZero() {
 			st.Date = vocab.DateOf(fw.Now())
