@@ -207,7 +207,14 @@ type RelationshipDTO struct {
 	Ownership *OwnershipDTO `json:"ownership,omitempty"`
 	// Collaborator is present in collaborator relationships only.
 	Collaborator *CollaboratorDTO `json:"collaborator,omitempty"`
-	Version      int64            `json:"version"`
+	// Customer is present in customer relationships only.
+	Customer *CustomerDTO `json:"customer,omitempty"`
+	Version  int64        `json:"version"`
+}
+
+// CustomerDTO are the details of a customer relationship.
+type CustomerDTO struct {
+	Number string `json:"number,omitempty"`
 }
 
 // CollaboratorDTO are the details of a collaborator relationship.
@@ -244,6 +251,8 @@ func RelationshipToDTO(r *domain.Relationship, types map[domain.RelationshipType
 			}
 		case domain.CodeCollaborator:
 			d.Collaborator = &CollaboratorDTO{PromotionCode: r.PromotionCode()}
+		case domain.CodeCustomer:
+			d.Customer = &CustomerDTO{Number: r.CustomerNumber()}
 		}
 	}
 	return d

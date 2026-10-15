@@ -346,3 +346,32 @@ POST /api/catalogs/party-role-types
   no se comporta igual en todos los motores), así que dos altas simultáneas con el mismo código
   podrían entrar las dos; y en el almacén de memoria los tipos añadidos no sobreviven a un cambio
   de almacén.
+
+## 9. Número de cliente (2026-10-13)
+
+Decidido por Javier el 2026-10-11 ([PARTIES-MODELO-COMUN.md](PARTIES-MODELO-COMUN.md), D-10): el
+número de cliente es de la pareja empresa–cliente, porque cada empresa numera a los suyos. En C#
+estaba en el rol de cliente (uno para todas las empresas) y otra vez en el perfil comercial.
+
+*Ejemplo:* Talleres Pérez es el cliente `4301` de Acme y el `0017` de Acme Levante.
+
+```
+PUT /api/party-relationships/{id}/customer-number
+{ "customerNumber": "C-4300001" }
+```
+
+- Es un **detalle de la relación de cliente**, con el mismo mecanismo que la prueba del cliente
+  potencial o el código de promoción ([PARTIES-UDM.md](PARTIES-UDM.md)): columna
+  `party_relationships.customer_number` (migración 17), y la relación lo devuelve en
+  `customer: { number }`. Pedirlo a una relación de otro tipo es un 422.
+- Hasta 20 letras, cifras, guiones, puntos, barras y guiones bajos; se guarda en mayúsculas. Un
+  número vacío lo retira. Permiso `Parties.Relationship.Update`.
+- **Decisión técnica tomada** (reversible): el número es de un cliente **para siempre** dentro
+  de la empresa. No se da a otro cliente aunque la relación del primero haya terminado, y el
+  mismo cliente lo recupera si vuelve. (El código de promoción hace lo contrario: queda libre al
+  terminar la relación.) Los números de cliente aparecen en facturas ya emitidas, y reutilizarlos
+  confundiría a dos clientes.
+- **Lo que no hay:** numeración automática (el número lo da quien da de alta); que el alta de la
+  party o de la relación lo traiga ya puesto; un evento cuando cambia; y un puerto para que
+  Facturación o Pedidos lo lean. Tampoco se comprueba con un índice único, como el código de
+  promoción (`BACKLOG.md` §2d).

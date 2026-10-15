@@ -505,6 +505,54 @@ func (e *env) prospects(acme, ana papp.PartyDTO) {
 	if _, found, _ := e.mod.Collaborators.ByPromotionCode(context.Background(), acme.ID, "SOL-1"); found || refers.Collaborator.PromotionCode != "" {
 		e.t.Fatalf("a code taken away is nobody's: %+v", refers.Collaborator)
 	}
+
+	// Customer number: each organization numbers its own customers, so it is a detail of the
+	// customer relationship. It is of one customer for good.
+	customerOf := func(name string) (papp.PartyDTO, papp.RelationshipDTO) {
+		var p papp.PartyDTO
+		e.must(e.do("POST", "/api/organizations", e.admin, map[string]any{"legalName": name + " " + acme.ID[:8],
+			"roles": []string{domain.RoleCustomer.String()}}, &p), 201, "register "+name)
+		var r papp.RelationshipDTO
+		e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelCustomer.String(), "fromParty": p.ID,
+			"toParty": acme.ID}, &r), 201, name+" buys from acme")
+		return p, r
+	}
+	talleres, buys := customerOf("Talleres")
+	_, buysToo := customerOf("Ferreteria")
+	if buys.Customer == nil || buys.Customer.Number != "" || buys.Collaborator != nil {
+		e.t.Fatalf("customer: %+v", buys)
+	}
+	number := "/api/party-relationships/" + buys.ID + "/customer-number"
+	e.must(e.do("PUT", number, e.viewer, map[string]any{"customerNumber": "4300001"}, nil), 403, "a read-only grant cannot number a customer")
+	e.must(e.do("PUT", number, e.clerk, map[string]any{"customerNumber": "43 00001"}, nil), 400, "no spaces")
+	e.must(e.do("PUT", number, e.clerk, map[string]any{"customerNumber": "430000000000000000001"}, nil), 400, "twenty characters at most")
+	e.must(e.do("PUT", "/api/party-relationships/"+refers.ID+"/customer-number", e.clerk, map[string]any{"customerNumber": "1"}, nil), 422,
+		"a collaborator has no customer number")
+	buys = papp.RelationshipDTO{}
+	e.must(e.do("PUT", number, e.clerk, map[string]any{"customerNumber": " c-4300001 "}, &buys), 200, "the number, kept in capitals")
+	if buys.Customer.Number != "C-4300001" {
+		e.t.Fatalf("customer number: %+v", buys.Customer)
+	}
+	e.must(e.do("PUT", number, e.clerk, map[string]any{"customerNumber": "C-4300001"}, nil), 200, "the same number again")
+	e.must(e.do("PUT", "/api/party-relationships/"+buysToo.ID+"/customer-number", e.clerk, map[string]any{"customerNumber": "c-4300001"}, nil), 422,
+		"the number of another customer of acme")
+	e.must(e.do("PUT", "/api/party-relationships/"+buysToo.ID+"/customer-number", e.clerk, map[string]any{"customerNumber": "C-4300002"}, nil), 200,
+		"its own number")
+
+	// The number stays with the customer when the relationship ends: it is not handed to another
+	// one, and the customer gets it again if it comes back.
+	e.must(e.do("POST", "/api/party-relationships/"+buys.ID+"/terminate", e.admin, map[string]any{}, nil), 200, "talleres stops buying")
+	e.must(e.do("PUT", number, e.clerk, map[string]any{"customerNumber": "C-9"}, nil), 422, "an ended relationship keeps its number")
+	e.must(e.do("PUT", "/api/party-relationships/"+buysToo.ID+"/customer-number", e.clerk, map[string]any{"customerNumber": "C-4300001"}, nil), 422,
+		"the number of a customer that left is still its own")
+	var back papp.RelationshipDTO
+	e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelCustomer.String(), "fromParty": talleres.ID,
+		"toParty": acme.ID}, &back), 201, "talleres comes back")
+	e.must(e.do("PUT", "/api/party-relationships/"+back.ID+"/customer-number", e.clerk, map[string]any{"customerNumber": "C-4300001"}, &back), 200,
+		"and has its number again")
+	if back.Customer.Number != "C-4300001" {
+		e.t.Fatalf("the number of the customer that came back: %+v", back.Customer)
+	}
 }
 
 // phase3 covers organization scope (decision P1), registration inside the scope, the
@@ -899,7 +947,7 @@ func endToEnd(t *testing.T, newDirectory func(*testing.T) directory) {
 	if _, err := e.mod.Relay(broker).RelayOnce(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if len(seen) != 13 || roles != 2 {
+	if len(seen) != 15 || roles != 2 {
 		t.Fatalf("published: %v, roles %d", seen, roles)
 	}
 	if len(shares) != 3 || shares[0] != "30.00" || shares[1] != "45.50" || shares[2] != "" {

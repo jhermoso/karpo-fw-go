@@ -16,6 +16,20 @@ func (m *Module) registerDetails(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/party-relationships/{id}/trial", m.setProspectTrial)
 	mux.HandleFunc("PUT /api/party-relationships/{id}/ownership", m.setOwnershipShare)
 	mux.HandleFunc("PUT /api/party-relationships/{id}/promotion-code", m.setPromotionCode)
+	mux.HandleFunc("PUT /api/party-relationships/{id}/customer-number", m.setCustomerNumber)
+}
+
+func (m *Module) setCustomerNumber(w http.ResponseWriter, r *http.Request) {
+	id, err := pathRelationship(r)
+	if err != nil {
+		distribution.WriteError(w, r, err)
+		return
+	}
+	c := papp.SetCustomerNumber{}
+	handle(w, r, &c, true, http.StatusOK, func(c papp.SetCustomerNumber) (papp.RelationshipDTO, error) {
+		c.ID = id
+		return m.svc.SetCustomerNumber.Handle(r.Context(), c)
+	})
 }
 
 func (m *Module) setPromotionCode(w http.ResponseWriter, r *http.Request) {
