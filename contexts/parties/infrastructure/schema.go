@@ -221,12 +221,19 @@ func Migrations() sqlrepo.MigrationSet {
 		// The mark of a role given by mistake that could not be removed (docs/DECISIONES-COMUNES.md, D-8).
 		{Version: 22, Name: "annulled roles", Up: sqlrepo.RenderDDLAll(
 			`ALTER TABLE party_roles {add:annulled} {bool} DEFAULT {false} NOT NULL{addEnd}`)},
+		// Prospect Relationship leaves …0016 to Trench's Duplicate Of, which every project seeds
+		// (docs/DECISIONES-COMUNES.md, D-62). Migration 21 does the same on a database it meets
+		// first; here it reaches the ones that had already passed it.
+		{Version: 23, Name: "prospect relationship moves to …0017; duplicate of", Run: seedCommonCatalog},
 	}}
 }
 
 // seedCommonCatalog adds the well-known types a database seeded earlier does not have, and hangs
 // Team from where the seed says now. A database seeded with this version already has them all.
 func seedCommonCatalog(ctx context.Context, db *sqlrepo.DB) error {
+	if err := moveProspect(ctx, db); err != nil {
+		return err
+	}
 	has := func(table string) (map[string]bool, error) {
 		rows, err := db.Select(ctx, table, []string{"id"})
 		if err != nil {
@@ -276,6 +283,40 @@ func seedCommonCatalog(ctx context.Context, db *sqlrepo.DB) error {
 		if err := db.Insert(ctx, "relationship_types", sqlrepo.Values{"id": t.ID, "name": t.Name.String(), "description": t.Description,
 			"from_role": t.FromRole, "to_role": t.ToRole, "hierarchical": t.Hierarchical, "code": t.Code}); err != nil {
 			return fmt.Errorf("seeding relationship type %s: %w", t.Name, err)
+		}
+	}
+	return nil
+}
+
+// oldProspect is where Prospect Relationship was until Duplicate Of took its id.
+const oldProspect = "10000000-0000-0000-0002-000000000016"
+
+// moveProspect gives Prospect Relationship its new id where a database still has it at the old
+// one: the type is copied, its relationships follow it, and the old row goes. Nothing happens
+// where the old id holds another type (a database seeded with Duplicate Of there).
+func moveProspect(ctx context.Context, db *sqlrepo.DB) error {
+	rows, err := db.Select(ctx, "relationship_types", []string{"id", "name", "description", "from_role", "to_role", "hierarchical", "code"})
+	if err != nil {
+		return err
+	}
+	for _, r := range rows {
+		if r.UUID("id").String() != oldProspect || r.String("code") != domain.CodeProspect {
+			continue
+		}
+		if err := db.Insert(ctx, "relationship_types", sqlrepo.Values{"id": domain.RelProspect, "name": r.String("name"),
+			"description": r.String("description"), "from_role": r.UUID("from_role"), "to_role": r.UUID("to_role"),
+			"hierarchical": r.Bool("hierarchical"), "code": domain.CodeProspect}); err != nil {
+			return fmt.Errorf("moving the prospect relationship type: %w", err)
+		}
+		old, err := domain.ParseRelationshipTypeID(oldProspect)
+		if err != nil {
+			return err
+		}
+		if _, err := db.Update(ctx, "party_relationships", sqlrepo.Values{"rel_type": domain.RelProspect}, sqlrepo.Values{"rel_type": old}); err != nil {
+			return fmt.Errorf("moving the prospect relationships: %w", err)
+		}
+		if _, err := db.Delete(ctx, "relationship_types", sqlrepo.Values{"id": old}); err != nil {
+			return fmt.Errorf("removing the old prospect relationship type: %w", err)
 		}
 	}
 	return nil

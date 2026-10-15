@@ -292,6 +292,40 @@ func (db *DB) Update(ctx context.Context, table string, set, where Values) (int6
 	return res.RowsAffected()
 }
 
+// Delete removes the rows of table matching every column of where, joining the unit of work in
+// ctx, and returns how many it removed. Meant for data migrations; aggregates are removed through
+// their repository.
+func (db *DB) Delete(ctx context.Context, table string, where Values) (int64, error) {
+	if err := checkIdent("table", table); err != nil {
+		return 0, err
+	}
+	if len(where) == 0 {
+		return 0, fmt.Errorf("sqlrepo: delete from %s needs a condition", table)
+	}
+	b := &Builder{d: db.d}
+	cols := make([]string, 0, len(where))
+	for c := range where {
+		if err := checkIdent("column", c); err != nil {
+			return 0, err
+		}
+		cols = append(cols, c)
+	}
+	slices.Sort(cols)
+	conds := make([]string, len(cols))
+	for i, c := range cols {
+		ph, err := b.Arg(where[c])
+		if err != nil {
+			return 0, err
+		}
+		conds[i] = db.d.Quote(c) + " = " + ph
+	}
+	res, err := db.executor(ctx).ExecContext(ctx, fmt.Sprintf("DELETE FROM %s WHERE %s", db.d.Quote(table), strings.Join(conds, " AND ")), b.args...)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
 // maxBatchParams keeps every batch under the smallest parameter limit (SQL Server: 2100).
 const maxBatchParams = 2000
 

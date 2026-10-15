@@ -8,9 +8,10 @@
 //   - Organization Rollup relates any organization unit to any organization and is hierarchical
 //     (one parent, no cycles). The C# row said Department -> Division, yet the C#
 //     IOrganizationHierarchy walked rollups down from the legal organizations.
-//   - Prospect Relationship (…0002-000000000016) and the codes of the relationship types do not
+//   - Prospect Relationship (…0002-000000000017) and the codes of the relationship types do not
 //     exist in C#, where "potential" is a status of the customer relationship (docs/PARTIES-UDM.md,
-//     decision PU-5).
+//     decision PU-5). It was …0016 until Javier gave that id back to Trench's Duplicate Of
+//     (docs/DECISIONES-COMUNES.md, D-62).
 
 package domain
 
@@ -76,7 +77,8 @@ var (
 	RelCollaboratorContact     = MustRelationshipTypeID("10000000-0000-0000-0002-000000000013")
 	RelCollaborator            = MustRelationshipTypeID("10000000-0000-0000-0002-000000000014")
 	RelCollaboratorOrigination = MustRelationshipTypeID("10000000-0000-0000-0002-000000000015")
-	RelProspect                = MustRelationshipTypeID("10000000-0000-0000-0002-000000000016")
+	RelDuplicateOf             = MustRelationshipTypeID("10000000-0000-0000-0002-000000000016")
+	RelProspect                = MustRelationshipTypeID("10000000-0000-0000-0002-000000000017")
 )
 
 // Codes of the relationship types whose relationships carry details of their own.
@@ -195,6 +197,8 @@ func WellKnownRelationshipTypes() []RelationshipType {
 			FromRole: RoleAuthorizedRepresentative, ToRole: RoleInternalOrganization},
 		{ID: RelDepartmentAssignment, Code: "department-assignment", Name: vocab.MustName("Department Assignment"), Description: "Employee is assigned to a department", FromRole: RoleEmployee, ToRole: RoleDepartment},
 		{ID: RelCollaboratorContact, Code: "collaborator-contact", Name: vocab.MustName("Collaborator Contact"), Description: "Contact person for a collaborator", FromRole: RoleContact, ToRole: RoleCollaborator},
+		{ID: RelDuplicateOf, Code: "duplicate-of", Name: vocab.MustName("Duplicate Of"), Description: "Duplicate record merged into the survivor",
+			FromRole: RolePartyRoot, ToRole: RolePartyRoot},
 		{ID: RelProspect, Code: CodeProspect, Name: vocab.MustName("Prospect Relationship"), Description: "Prospect may become a customer of an internal organization", FromRole: RoleProspect, ToRole: RoleInternalOrganization},
 	}
 }
