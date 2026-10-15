@@ -472,6 +472,39 @@ func (e *env) prospects(acme, ana papp.PartyDTO) {
 	if own.Ownership == nil || own.Ownership.Share != "" {
 		e.t.Fatalf("cleared share: %+v", own.Ownership)
 	}
+
+	// Promotion code: the code of a collaborator is a detail of its relationship with the company.
+	var agency papp.PartyDTO
+	e.must(e.do("POST", "/api/organizations", e.admin, map[string]any{"legalName": "Agencia " + acme.ID[:8],
+		"roles": []string{domain.RoleCollaborator.String()}}, &agency), 201, "register the agency")
+	var refers papp.RelationshipDTO
+	e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelCollaborator.String(), "fromParty": agency.ID,
+		"toParty": acme.ID}, &refers), 201, "the agency refers business for acme")
+	if refers.Collaborator == nil || refers.Collaborator.PromotionCode != "" || refers.Ownership != nil {
+		e.t.Fatalf("collaborator: %+v", refers)
+	}
+	promo := "/api/party-relationships/" + refers.ID + "/promotion-code"
+	e.must(e.do("PUT", promo, e.viewer, map[string]any{"promotionCode": "SOL-1"}, nil), 403, "a read-only grant cannot give a code")
+	e.must(e.do("PUT", promo, e.clerk, map[string]any{"promotionCode": "sol 1"}, nil), 400, "no spaces")
+	e.must(e.do("PUT", promo, e.clerk, map[string]any{"promotionCode": "ABCDEFGHIJKLMNOP"}, nil), 400, "fifteen characters at most")
+	e.must(e.do("PUT", "/api/party-relationships/"+own.ID+"/promotion-code", e.clerk, map[string]any{"promotionCode": "X1"}, nil), 422, "an ownership has no promotion code")
+	refers = papp.RelationshipDTO{}
+	e.must(e.do("PUT", promo, e.clerk, map[string]any{"promotionCode": " sol-1 "}, &refers), 200, "the code, kept in capitals")
+	if refers.Collaborator.PromotionCode != "SOL-1" {
+		e.t.Fatalf("promotion code: %+v", refers.Collaborator)
+	}
+	who, found, err := e.mod.Collaborators.ByPromotionCode(context.Background(), acme.ID, "Sol-1")
+	if err != nil || !found || who.PartyID != agency.ID || who.RelationshipID != refers.ID {
+		e.t.Fatalf("whose the code is: %+v %v %v", who, found, err)
+	}
+	if _, found, _ := e.mod.Collaborators.ByPromotionCode(context.Background(), agency.ID, "SOL-1"); found {
+		e.t.Fatal("the code is of the collaborators of acme, of nobody else's")
+	}
+	refers = papp.RelationshipDTO{}
+	e.must(e.do("PUT", promo, e.clerk, map[string]any{"promotionCode": ""}, &refers), 200, "take the code away")
+	if _, found, _ := e.mod.Collaborators.ByPromotionCode(context.Background(), acme.ID, "SOL-1"); found || refers.Collaborator.PromotionCode != "" {
+		e.t.Fatalf("a code taken away is nobody's: %+v", refers.Collaborator)
+	}
 }
 
 // phase3 covers organization scope (decision P1), registration inside the scope, the
@@ -711,7 +744,7 @@ func endToEnd(t *testing.T, newDirectory func(*testing.T) directory) {
 	if _, err := e.mod.Relay(broker).RelayOnce(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if len(seen) != 12 || roles != 2 {
+	if len(seen) != 13 || roles != 2 {
 		t.Fatalf("published: %v, roles %d", seen, roles)
 	}
 	if len(shares) != 3 || shares[0] != "30.00" || shares[1] != "45.50" || shares[2] != "" {

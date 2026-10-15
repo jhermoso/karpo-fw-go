@@ -289,7 +289,6 @@ func (p *Position) AuditSnapshot() map[string]any {
 		"holder": holder.String(), "reportsTo": sup.String()}
 }
 
-
 func until(p vocab.ValidPeriod) *time.Time {
 	if t, ok := p.To(); ok {
 		return &t

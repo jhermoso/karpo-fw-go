@@ -204,6 +204,13 @@ type SetOwnershipShare struct {
 	Share *string               `json:"share"`
 }
 
+// SetPromotionCode gives a collaborator its promotion code, changes it or (with an empty code)
+// takes it away.
+type SetPromotionCode struct {
+	ID            domain.RelationshipID `json:"-"`
+	PromotionCode string                `json:"promotionCode"`
+}
+
 // SetProspectTrial grants, extends, shortens or (with a null end) withdraws the trial of a
 // prospect relationship.
 type SetProspectTrial struct {

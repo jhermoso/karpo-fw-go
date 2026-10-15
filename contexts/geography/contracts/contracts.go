@@ -67,6 +67,13 @@ type CountryInfo struct {
 	TimeZones     []string `json:"timeZones"`  // IANA, primary first
 }
 
+// Calendar tells the holidays of a place: those declared in the boundary and in the ones that
+// contain it (the municipality, its province, its region, its country). Weekends are not
+// holidays: whether they count is for who asks to decide. The day is written YYYY-MM-DD.
+type Calendar interface {
+	IsHoliday(ctx context.Context, boundary, day string) (bool, error)
+}
+
 // Reference answers country questions.
 type Reference interface {
 	Country(ctx context.Context, alpha2 string) (CountryInfo, error)

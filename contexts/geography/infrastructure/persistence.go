@@ -56,7 +56,7 @@ var schemaDDL = []string{
 }
 
 // Tables of the context, children first (DropAll).
-var tables = []string{"geo_country_time_zones", "geo_country_languages", "geo_country_currencies", "geo_countries", "geo_postal_codes",
+var tables = []string{"geo_holidays", "geo_country_time_zones", "geo_country_languages", "geo_country_currencies", "geo_countries", "geo_postal_codes",
 	"geo_boundary_links", "geo_boundaries", "geo_boundary_types", "geo_street_types", "geo_time_zones", "geo_languages", "geo_currencies"}
 
 // Migrations is the versioned schema of the context: the tables, then the Karpo seed.
@@ -64,6 +64,8 @@ func Migrations() sqlrepo.MigrationSet {
 	return sqlrepo.MigrationSet{Context: Context, Migrations: []sqlrepo.Migration{
 		{Version: 1, Name: "boundaries, postal codes and reference data", Up: sqlrepo.RenderDDLAll(schemaDDL...)},
 		{Version: 2, Name: "Karpo geography and reference seed", Run: seedDatabase},
+		{Version: 3, Name: "calendar of holidays", Up: sqlrepo.RenderDDLAll(holidayDDL...)},
+		{Version: 4, Name: "boundary names with broken encoding", Run: fixBoundaryNames},
 	}}
 }
 
@@ -189,6 +191,24 @@ func seedDatabase(ctx context.Context, db *sqlrepo.DB) error {
 		return err
 	}
 	return insert("geo_country_time_zones", []string{"country_id", "id", "time_zone", "is_primary"}, zones)
+}
+
+// boundaryNameFixes are the names the seed carried with a broken encoding (UTF-8 read as Latin-1
+// and encoded again): the province of geo code 15 was "CoruÃ±a, A".
+var boundaryNameFixes = []struct{ id, name string }{
+	{"b3100000-0003-0000-0003-00000000000f", "Coruña, A"},
+}
+
+// fixBoundaryNames renames the boundaries of a database seeded before the seed was corrected; one
+// seeded afterwards already holds these names.
+func fixBoundaryNames(ctx context.Context, db *sqlrepo.DB) error {
+	for _, f := range boundaryNameFixes {
+		id := domain.BoundaryID{UUID: fw.MustParseUUID(f.id)}
+		if _, err := db.Update(ctx, "geo_boundaries", sqlrepo.Values{"name": f.name}, sqlrepo.Values{"id": id}); err != nil {
+			return fmt.Errorf("fixing the name of boundary %s: %w", f.id, err)
+		}
+	}
+	return nil
 }
 
 var countryColumns = []string{"id", "version", "boundary", "alpha2", "alpha3", "numeric_code", "calling_code", "trunk_prefix", "default_locale",
@@ -451,6 +471,45 @@ var memoryRepos = struct {
 	countries: perStore(func(s *memory.Store) *memory.Repository[domain.CountryID, *domain.Country] {
 		return memory.NewRepository[domain.CountryID, *domain.Country](s)
 	}),
+}
+
+var holidayDDL = []string{
+	`CREATE TABLE geo_holidays (id {uuid} NOT NULL PRIMARY KEY, version {bigint} NOT NULL, boundary {uuid} NOT NULL, holiday_date {date} NOT NULL,
+	name {str:120} NOT NULL, created_at {ts}, created_by_id {str:64}, created_by_name {str:200}, modified_at {ts}, modified_by_id {str:64},
+	modified_by_name {str:200}, FOREIGN KEY (boundary) REFERENCES geo_boundaries (id))`,
+	`CREATE UNIQUE INDEX ux_geo_holidays ON geo_holidays (boundary, holiday_date)`,
+	`CREATE INDEX ix_geo_holidays_date ON geo_holidays (holiday_date)`,
+}
+
+// HolidayMapping maps Holiday to geo_holidays: the one table of the context that is written to.
+func HolidayMapping() sqlrepo.Mapping[domain.HolidayID, *domain.Holiday] {
+	return sqlrepo.Mapping[domain.HolidayID, *domain.Holiday]{
+		Table:   "geo_holidays",
+		Columns: sqlrepo.WithAuditColumns("boundary", "holiday_date", "name"),
+		Dehydrate: func(h *domain.Holiday) (sqlrepo.Values, error) {
+			s := h.State()
+			return sqlrepo.AuditStampValues(sqlrepo.Values{"boundary": s.Boundary, "holiday_date": s.Date, "name": s.Name}, h.AuditStamp()), nil
+		},
+		Hydrate: func(r *sqlrepo.Row, _ sqlrepo.ChildRows) (*domain.Holiday, error) {
+			s := domain.HolidayState{Boundary: domain.BoundaryID{UUID: r.UUID("boundary")}, Date: r.Date("holiday_date"), Name: r.String("name"),
+				Audit: r.AuditStamp()}
+			if err := r.Err(); err != nil {
+				return nil, err
+			}
+			return domain.ReconstituteHoliday(domain.HolidayID{UUID: r.UUID("id")}, s)
+		},
+	}
+}
+
+// HolidayRepositoryFactory builds the repository of the holidays.
+func HolidayRepositoryFactory(b hotswap.Backend) (domain.HolidayRepository, error) {
+	switch db := b.(type) {
+	case *sqlrepo.DB:
+		return sqlrepo.NewRepository(db, HolidayMapping())
+	case *memory.Store:
+		return memory.NewRepository[domain.HolidayID, *domain.Holiday](db), nil
+	}
+	return nil, unsupported(b)
 }
 
 // BoundaryRepositoryFactory builds the boundary repository.

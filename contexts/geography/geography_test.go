@@ -39,13 +39,16 @@ type env struct {
 	sw           *hotswap.Switch
 	mod          *geography.Module
 	token, other string
+	// reader reads boundaries and nothing of the calendar; keeper keeps the calendar.
+	reader, keeper string
 }
 
 func compose(t *testing.T) *env {
 	ctx := context.Background()
 	jwt, _ := jwtauth.New(jwtauth.Config{Secret: []byte("geography-test")})
 	dir := authorization.NewMemoryDirectory()
-	reader, stranger := fw.NewUUID(), fw.NewUUID()
+	reader, stranger, keeper := fw.NewUUID(), fw.NewUUID(), fw.NewUUID()
+	dir.Put(keeper, authz.Subject{Active: true, Permissions: []authz.Permission{gapp.PermBoundaryRead, gapp.PermHolidayRead, gapp.PermHolidayUpdate}})
 	dir.Put(reader, authz.Subject{Active: true, Permissions: []authz.Permission{gapp.PermBoundaryRead, gapp.PermReferenceRead}})
 	dir.Put(stranger, authz.Subject{Active: true})
 	token := func(sub fw.UUID) string {
@@ -61,10 +64,11 @@ func compose(t *testing.T) *env {
 	mod := geography.Compose(sw)
 	mux := http.NewServeMux()
 	mod.HTTP.RegisterRoutes(mux)
+	mod.HolidaysHTTP.RegisterRoutes(mux)
 	srv := httptest.NewServer(distribution.Chain(mux, distribution.Authorize(jwt, authorization.NewResolver(dir, authorization.Options{}))))
 	t.Cleanup(srv.Close)
 	t.Cleanup(func() { _ = sw.Close(ctx) })
-	return &env{t: t, srv: srv, sw: sw, mod: mod, token: token(reader), other: token(stranger)}
+	return &env{t: t, srv: srv, sw: sw, mod: mod, token: token(reader), other: token(stranger), reader: token(reader), keeper: token(keeper)}
 }
 
 func (e *env) do(method, path, auth string, body, out any) int {
@@ -200,6 +204,7 @@ func detailGrouping(t *testing.T, e *env, spain string) string {
 func TestGeography_MemoryThenSQLite(t *testing.T) {
 	e := compose(t)
 	e.scenario()
+	e.holidays()
 
 	ctx := context.Background()
 	raw, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "geo.db")+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)")
@@ -222,6 +227,7 @@ func TestGeography_MemoryThenSQLite(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.scenario()
+	e.holidays()
 }
 
 func TestGeography_LayersRespectTheArchitecture(t *testing.T) {

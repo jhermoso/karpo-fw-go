@@ -26,12 +26,12 @@ import (
 	docapp "github.com/jhermoso/karpo-fw-go/contexts/documents/application"
 	exgapp "github.com/jhermoso/karpo-fw-go/contexts/exchange/application"
 	expapp "github.com/jhermoso/karpo-fw-go/contexts/exports/application"
-	finapp "github.com/jhermoso/karpo-fw-go/contexts/financial/application"
-	impapp "github.com/jhermoso/karpo-fw-go/contexts/imports/application"
 	facapp "github.com/jhermoso/karpo-fw-go/contexts/facilities/application"
+	finapp "github.com/jhermoso/karpo-fw-go/contexts/financial/application"
 	fisapp "github.com/jhermoso/karpo-fw-go/contexts/fiscal/application"
 	geoapp "github.com/jhermoso/karpo-fw-go/contexts/geography/application"
 	hrapp "github.com/jhermoso/karpo-fw-go/contexts/hr/application"
+	impapp "github.com/jhermoso/karpo-fw-go/contexts/imports/application"
 	invapp "github.com/jhermoso/karpo-fw-go/contexts/inventory/application"
 	modapp "github.com/jhermoso/karpo-fw-go/contexts/modules/application"
 	ordapp "github.com/jhermoso/karpo-fw-go/contexts/orders/application"
@@ -680,7 +680,7 @@ func TestPasswordHasher(t *testing.T) {
 	}
 }
 
-// Every bounded context declares its permissions and the host passes them to the catalog: the 143
+// Every bounded context declares its permissions and the host passes them to the catalog: the 151
 // codes the twenty-five business contexts check, plus the eight of Security and the wildcard.
 func TestCatalog_EveryContextDeclaresItsPermissions(t *testing.T) {
 	declared := map[string][]authz.Permission{
@@ -699,7 +699,7 @@ func TestCatalog_EveryContextDeclaresItsPermissions(t *testing.T) {
 			all = append(all, p)
 		}
 	}
-	if len(all) != 143+len(sapp.Permissions()) || len(sapp.Permissions()) != 8 {
+	if len(all) != 151+len(sapp.Permissions()) || len(sapp.Permissions()) != 8 {
 		t.Fatalf("declared permissions: %d", len(all))
 	}
 
@@ -735,7 +735,7 @@ func TestCatalog_EveryContextDeclaresItsPermissions(t *testing.T) {
 	if len(granted["OrganizationAdmin"]) != len(all)-1 || slices.Contains(granted["OrganizationAdmin"], string(sapp.PermRoleUpdate)) {
 		t.Errorf("OrganizationAdmin holds everything but the roles: %d of %d", len(granted["OrganizationAdmin"]), len(all))
 	}
-	if len(granted["ReadOnlyUser"]) != 57+3 || !slices.Contains(std, "Billing.Invoice.Create") || len(granted["Customer"]) != 0 ||
+	if len(granted["ReadOnlyUser"]) != 61+3 || !slices.Contains(std, "Billing.Invoice.Create") || len(granted["Customer"]) != 0 ||
 		!slices.Equal(granted["GlobalSuperAdmin"], []string{"*.*.*"}) {
 		t.Errorf("read only %d, customer %d, global %v", len(granted["ReadOnlyUser"]), len(granted["Customer"]), granted["GlobalSuperAdmin"])
 	}

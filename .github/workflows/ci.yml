@@ -25,7 +25,7 @@ jobs:
 
       - name: gofmt
         run: |
-          unformatted=$(gofmt -l pkg examples integration)
+          unformatted=$(gofmt -l pkg examples integration host cmd contexts)
           if [ -n "$unformatted" ]; then
             echo "Files not formatted with gofmt:"; echo "$unformatted"; exit 1
           fi
@@ -33,8 +33,14 @@ jobs:
       - name: go vet
         run: go vet ./...
 
+      # Without the tag: the smoke publisher is not compiled, and the rule that keeps it behind
+      # its tag (pkg/testing/archtest, rules 10 and 11) runs here.
       - name: go test -race
         run: go test -race -count=1 ./...
+
+      # The smoke publisher (development only, build tag smoke): it compiles and its barriers hold.
+      - name: Smoke publisher (go vet and its tests, with the tag)
+        run: go vet -tags smoke ./... && go test -tags smoke -count=1 ./host/smoke/... ./cmd/karpo-smoke/...
 
   integration:
     name: Integration (PostgreSQL, SQL Server, Oracle, MySQL)
@@ -111,4 +117,13 @@ jobs:
           # Every engine must actually run: a missing DSN or server would only skip.
           if grep -q -- "--- SKIP" integration.log; then
             echo "Some engines were skipped"; exit 1
+          fi
+
+      - name: The PostgreSQL program (vet, and run against the real server)
+        working-directory: cmd/karpo-postgres
+        run: |
+          go vet ./...
+          go test -count=1 -v ./... | tee program.log
+          if grep -q -- "--- SKIP" program.log; then
+            echo "The program was not run"; exit 1
           fi

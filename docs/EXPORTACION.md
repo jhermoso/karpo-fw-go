@@ -7,10 +7,12 @@ Sirve para **llevarse un listado a un fichero** (CSV o XLSX): se pide, un trabaj
 segundo plano y quien lo pidió lo descarga. Es lo único de lo que quedaba por portar que usa el
 frontal: la rejilla lo llama cuando el listado tiene más filas de las que maneja el navegador.
 
-> **Alcance de esta fase.** Están los trabajos, los escritores de CSV y XLSX, el almacén de
-> ficheros y las rutas. **Todavía no hay listados reales**: cada listado es una pieza del
-> anfitrión sobre las consultas del contexto dueño, y aún no existe ninguna (en las pruebas la
-> hace un doble). Tampoco está el trabajador que llama a `RunNext` y `Purge`.
+> **Alcance.** Están los trabajos, los escritores de CSV y XLSX, el almacén de ficheros y las
+> rutas. El anfitrión ofrece **dieciséis listados reales** (los de Parties que usa la rejilla,
+> empleados, cuentas de clientes, facturas, pedidos, vencimientos de cobro y de pago, facturas de
+> proveedor, libro diario e inmovilizado) y hace de trabajador: llama a `RunNext` y `Purge` en
+> cada ronda de tareas. Ver «Listados de Parties», «Listados de ventas y compras» y «Listados
+> de los libros».
 
 ## Método
 
@@ -181,11 +183,138 @@ Además:
   administrador global; límite de trabajos; lista larga con progreso anotado y cancelada a
   mitad; caducidad con el reloj adelantado; listados y auditoría.
 
+## Listados de Parties (en el anfitrión)
+
+Añadidos el 2026-10-08, en `host/datasets.go`. Son los listados que la rejilla del frontal pide
+exportar hoy; con ellos **la exportación ya saca datos reales**.
+
+| Listado | De dónde sale | Columnas | Permiso |
+|---|---|---|---|
+| `parties` | búsqueda de Parties | Nombre, Tipo, Estado | `Parties.Party.Read` |
+| `persons` | lo mismo, solo personas | Nombre, Tipo, Estado | `Parties.Party.Read` |
+| `organizations` | lo mismo, solo organizaciones | Nombre, Tipo, Estado | `Parties.Party.Read` |
+| `internal-organizations` | lo mismo, con rol de organización interna | Nombre, Tipo, Estado | `Parties.Party.Read` |
+| `customers` | lo mismo, con rol de cliente | Nombre, Tipo, CIF/NIF, Estado | `Parties.Party.Read` |
+| `party-roles` | los roles de cada participante, una fila por rol | Participante, Tipo de rol, Fecha inicio, Fecha expiración, Activo | `Parties.Party.Read` |
+| `party-relationships` | las relaciones de cada participante, cada una una vez | Tipo de relación, Origen, Destino, Fecha inicio, Fecha expiración, Estado, Observaciones | `Parties.Relationship.Read` |
+| `employees` | empleos de RRHH, con el nombre de Parties | Nombre, Número empleado, Fecha contratación, Fecha baja, Activo | `HR.Employment.Read` |
+
+Más `customer-accounts`, del sectorial financiero, que ya estaba.
+
+- **Mismas columnas y cabeceras que en C#**, con dos diferencias: el CIF/NIF de clientes ahora sí
+  sale (en C# la columna existía y quedaba siempre vacía), y las relaciones llevan fecha de
+  inicio en lugar de prioridad, que en Go no existe.
+- **Filtros** de los listados de Parties: `name`, `document`, `organization`, `active` y `role`.
+  De `employees`: `organization`, `number` y `active`. En C# los filtros de relaciones y de
+  roles se ignoraban; aquí se aplican.
+- **Cada fichero lleva lo que puede ver quien lo pidió.** Los listados leen por las búsquedas del
+  contexto dueño, con el ámbito de esa persona. Filtrar por otra empresa estrecha lo que ve,
+  nunca lo ensancha.
+
+Decisiones (aprobadas por Javier el 2026-10-08):
+
+1. **`employees` sale de RRHH**, no de Parties: una fila por empleo, así que quien trabaja para
+   dos empresas sale dos veces, y pide el permiso de RRHH. En C# salía de Parties (personas con
+   rol de empleado) con datos del perfil de empleado. Sugerencia: sí; el número y las fechas son
+   de RRHH.
+2. **`legal-organizations` no se ofrece.** En C# filtraba por un tipo de participante
+   «organización legal» que en Go no existe como tipo aparte. Sugerencia: sí; si la rejilla lo
+   usa, se cubre con `organizations` y el filtro `role`.
+3. **Las relaciones se leen participante a participante**, porque Parties no tiene una búsqueda
+   de relaciones. El fichero es correcto pero tarda más que los demás. Sugerencia: sí por ahora;
+   si se exportan a menudo, lo propio es añadir esa búsqueda a Parties.
+4. **Cabeceras y valores en castellano, fijos** («Activo», «Persona», «Organización»), como en
+   C#. Sugerencia: sí, hasta que haya idioma por usuario.
+
+Validación:
+
+- **Anfitrión** (en memoria y en SQLite), tras una importación real de dos empresas con su gente
+  y un cliente con NIF: los nueve listados ofrecidos; cada fichero comparado línea a línea
+  (apellido con coma entre comillas, filtros por empresa y por nombre, el NIF del cliente,
+  empleados con sus fechas y quien trabaja en dos empresas dos veces, roles, y relaciones
+  contadas por tipo); quien solo ve una empresa recibe solo lo de esa empresa, también cuando
+  filtra por otra; sin el permiso del listado, 403; filtro que el listado no tiene, 400.
+- **Integración** en PostgreSQL, SQL Server, Oracle y MySQL: personas, empleados y relaciones
+  exportados a través del anfitrión.
+
+## Listados de ventas y compras (en el anfitrión)
+
+Añadidos el 2026-10-08, en `host/datasets_trade.go`. El C# no exportaba ninguno: son nuevos.
+
+| Listado | De dónde sale | Columnas | Filtros | Permiso |
+|---|---|---|---|---|
+| `invoices` | búsqueda de Facturación | Número, Tipo, Estado, Fecha, Vencimiento, Cliente, CIF/NIF, Base, Cuota, Total, Divisa | `seller`, `customer`, `status`, `from`, `to` | `Billing.Invoice.Read` |
+| `orders` | búsqueda de Pedidos | Número, Fecha, Cliente, Referencia, Estado, Total, Pendiente | `company`, `customer`, `status` | `Orders.Order.Read` |
+| `receivables` | búsqueda de Cobros, una fila por plazo | Factura, Cliente, Fecha factura, Plazo, Vencimiento, Importe, Cobrado, Pendiente | `seller`, `customer`, `open` | `Receivables.Receivable.Read` |
+| `purchase-invoices` | búsqueda de Compras | Registro, Nº proveedor, Proveedor, Fecha, Recepción, Vencimiento, Base, Cuota, Total, Retención, A pagar, Anulada | `company`, `supplier`, `from`, `to` | `Purchases.Invoice.Read` |
+
+- Los nombres de clientes y proveedores los da Parties. En una factura emitida, el nombre y el
+  CIF son los que quedaron fijados al emitirla.
+- Como los demás listados, cada fichero lleva lo que puede ver quien lo pidió.
+- Los filtros `seller`, `company`, `customer` y `supplier` son identificadores, no nombres.
+
+Decisiones (aprobadas por Javier el 2026-10-08):
+
+1. **Los borradores salen en `invoices`**, sin número ni fecha y con «Borrador» en Estado. Se
+   quitan con el filtro `status`. Sugerencia: sí; es lo que muestra la rejilla.
+2. **`receivables` lleva una fila por plazo**, no por factura: es lo que se usa para reclamar y
+   para conciliar. El total de la factura no sale; sale el importe de cada plazo. Sugerencia: sí.
+3. **El estado de los pedidos y el tipo de factura salen como los guarda Karpo** (`draft`,
+   `confirmed`…), sin traducir; el estado de las facturas sí va en castellano. Sugerencia:
+   traducirlos todos cuando haya idioma por usuario; mientras, dime si prefieres castellano fijo
+   también aquí.
+4. **Una fila por factura, sin líneas.** Un listado de líneas de factura o de pedido sería otro
+   listado. Sugerencia: sí por ahora.
+
+Validación:
+
+- **Anfitrión** (en memoria y en SQLite): una empresa emite una factura con IVA real, deja otra
+  en borrador, abre un pedido y registra una factura de proveedor; los cuatro ficheros comparados
+  línea a línea (cliente con coma entre comillas, filtros por estado y fechas, el plazo que
+  Cobros creó al enterarse de la factura); otra empresa recibe el fichero vacío; sin el permiso
+  del listado, 403.
+- **Integración** en PostgreSQL, SQL Server, Oracle y MySQL: pedidos, facturas y vencimientos del
+  cliente que trajo Sage, exportados a través del anfitrión.
+
+## Listados de los libros (en el anfitrión)
+
+Añadidos el 2026-10-09, en `host/datasets_books.go`. Tampoco existían en C#.
+
+| Listado | De dónde sale | Columnas | Filtros | Permiso |
+|---|---|---|---|---|
+| `journal` | asientos de Contabilidad, una fila por apunte | Ejercicio, Asiento, Fecha, Cuenta, Tercero, Concepto, Debe, Haber, Origen | `company`, `from`, `to` | `Accounting.Entry.Read` |
+| `payables` | búsqueda de Pagos | Documento, Tipo, Acreedor, Concepto, Fecha, Vencimiento, Importe, Pagado, Pendiente, Anulado | `company`, `payee`, `kind`, `dueTo`, `open` | `Payments.Payable.Read` |
+| `assets` | registro de Activos | Código, Nombre, Clase, Nº serie, Adquisición, Puesta en servicio, Coste, Valor residual, Vida (meses), Amortización acumulada, Valor neto, Estado, Baja | `company`, `class`, `inService` | `Assets.Asset.Read` |
+
+- En el diario, el concepto de cada apunte es el suyo o, si no tiene, el del asiento.
+- En los vencimientos de pago, el acreedor que no es un participante (Hacienda, la Seguridad
+  Social) sale con el nombre que le da Pagos.
+
+Decisiones (aprobadas por Javier el 2026-10-09):
+
+1. **El diario sale apunte a apunte**, con ejercicio y número de asiento en cada fila, que es
+   como lo piden un auditor o una gestoría. Sugerencia: sí.
+2. **El diario lleva el código de la cuenta, no su nombre.** Sugerencia: sí; el nombre se cruza
+   con el plan de cuentas. Si lo prefieres en el fichero, es una columna más.
+3. **Tipo de vencimiento, clase y estado de un activo salen como los guarda Karpo**
+   (`supplier-invoice`, `vehicles`, `in-service`), igual que el estado de los pedidos.
+   Sugerencia: traducirlos todos a la vez cuando haya idioma por usuario.
+4. **Quedan sin listado**: nóminas, movimientos de almacén, pagos emitidos, cobros y
+   presupuestos. Sugerencia: hacerlos cuando alguien los pida; el patrón ya está.
+
+Validación:
+
+- **Anfitrión** (en memoria y en SQLite): una empresa con libro, un asiento a mano con tercero,
+  la factura de un proveedor que Pagos convierte en vencimiento y un activo; los tres ficheros
+  comparados línea a línea; otra empresa recibe el fichero vacío; sin el permiso del listado, 403.
+
 ## Pendiente
 
-- **Listados reales**: Parties (participantes, organizaciones, clientes, empleados, relaciones,
-  roles) son los que usa hoy la rejilla; después facturas, pedidos, movimientos…
-- **El trabajador** que llama a `RunNext` y `Purge` al montar el servidor, con su tiempo máximo.
+- ~~Listados de Parties y el trabajador~~: hechos, ver «Listados de Parties» y
+  [ANFITRION.md](ANFITRION.md). También los de facturas, pedidos, vencimientos y facturas de
+  proveedor, y los de los libros (diario, vencimientos de pago, inmovilizado). Siguen
+  nóminas, movimientos de almacén, pagos y cobros.
+- Un tiempo máximo por trabajo de exportación (hoy solo lo corta la limpieza a los 30 minutos).
 - Adaptar el frontal a las rutas y estados nuevos (decisión 10).
 - Un almacén en depósito de objetos para despliegues sin disco compartido.
 - Total de filas para mostrar un porcentaje (el listado tendría que saber contarse).
