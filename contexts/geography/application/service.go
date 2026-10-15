@@ -12,6 +12,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/application/pipeline"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
+	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
 // Permissions of the context (the C# resources Parties/GeographicBoundary and the reference data).
@@ -26,6 +27,8 @@ type SearchBoundaries struct {
 	Type       string
 	Parent     string
 	Grouping   string
+	Country    string // ISO 3166-1 alpha-2
+	Level      string // country, 1, 2, 3 or local
 	Page, Size int
 }
 
@@ -59,8 +62,31 @@ type BoundaryDTO struct {
 	INE          string `json:"ineCode,omitempty"`
 	NUTS         string `json:"nutsCode,omitempty"`
 	LAU          string `json:"lauCode,omitempty"`
+	Country      string `json:"country,omitempty"`
+	Level        string `json:"level,omitempty"`
 	Parent       string `json:"parent,omitempty"`
 	Active       bool   `json:"active"`
+}
+
+// BoundaryLevelDTO names a level of the ladder in a country. Classification says which official
+// classification the level is in that country ("NUTS 2", "LAU"), when it has one.
+type BoundaryLevelDTO struct {
+	Country        string `json:"country"`
+	Level          string `json:"level"`
+	Name           string `json:"name"`
+	Administrative bool   `json:"administrative"`
+	Principal      bool   `json:"principal"`
+	Classification string `json:"classification,omitempty"`
+}
+
+func classification(l domain.CountryLevel) string {
+	switch l.Level {
+	case domain.Level1, domain.Level2, domain.Level3:
+		return "NUTS " + string(l.Level) + " (" + domain.NUTSVersion + ")"
+	case domain.LevelLocal:
+		return "LAU"
+	}
+	return ""
 }
 
 // BoundaryDetailDTO adds the ancestors (nearest first) and groupings.
@@ -116,7 +142,8 @@ func typeNames(ctx context.Context, c domain.Catalogs) (map[domain.BoundaryTypeI
 func boundaryDTO(b *domain.Boundary, names map[domain.BoundaryTypeID]string) BoundaryDTO {
 	c := b.Codes()
 	d := BoundaryDTO{ID: b.ID().String(), Name: b.Name(), Type: b.Type().String(), TypeName: names[b.Type()], GeoCode: c.Geo,
-		Abbreviation: c.Abbreviation, INE: c.INE, NUTS: c.NUTS, LAU: c.LAU, Active: b.IsActive()}
+		Abbreviation: c.Abbreviation, INE: c.INE, NUTS: c.NUTS, LAU: c.LAU, Country: b.Position().Country,
+		Level: string(b.Position().Level), Active: b.IsActive()}
 	if p, ok := b.Parent(); ok {
 		d.Parent = p.String()
 	}
@@ -147,6 +174,20 @@ func NewService(p Ports) *Service {
 					return fw.Page[BoundaryDTO]{}, invalid("type", "type must be a boundary type id")
 				}
 				parts = append(parts, domain.FieldBoundaryType.Eq(domain.BoundaryTypeID{UUID: id}))
+			}
+			if c := strings.TrimSpace(q.Country); c != "" {
+				country, err := vocab.NewCountryCode(c)
+				if err != nil {
+					return fw.Page[BoundaryDTO]{}, invalid("country", "country must be an ISO 3166-1 alpha-2 code")
+				}
+				parts = append(parts, domain.FieldCountry.Eq(country.String()))
+			}
+			if strings.TrimSpace(q.Level) != "" {
+				level, err := domain.ParseLevel(q.Level)
+				if err != nil {
+					return fw.Page[BoundaryDTO]{}, err
+				}
+				parts = append(parts, domain.FieldLevel.Eq(string(level)))
 			}
 			for field, s := range map[string]string{"parent": q.Parent, "grouping": q.Grouping} {
 				if s == "" {
@@ -278,6 +319,19 @@ func NewService(p Ports) *Service {
 			switch q.Name {
 			case "boundary-types":
 				return p.Catalogs.BoundaryTypes(ctx)
+			case "boundary-levels":
+				all, err := p.Catalogs.CountryLevels(ctx)
+				if err != nil {
+					return nil, err
+				}
+				out := []BoundaryLevelDTO{}
+				for _, l := range all {
+					if q.Country == "" || strings.EqualFold(l.Country.String(), q.Country) {
+						out = append(out, BoundaryLevelDTO{Country: l.Country.String(), Level: string(l.Level), Name: l.Name,
+							Administrative: l.Administrative, Principal: l.Principal, Classification: classification(l)})
+					}
+				}
+				return out, nil
 			case "currencies":
 				return p.Catalogs.Currencies(ctx)
 			case "languages":

@@ -17,6 +17,7 @@ type (
 // Catalogs are the small reference lists, read whole.
 type Catalogs interface {
 	BoundaryTypes(ctx context.Context) ([]BoundaryType, error)
+	CountryLevels(ctx context.Context) ([]CountryLevel, error)
 	Currencies(ctx context.Context) ([]Currency, error)
 	Languages(ctx context.Context) ([]Language, error)
 	TimeZones(ctx context.Context) ([]TimeZone, error)

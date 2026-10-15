@@ -11,9 +11,9 @@ comprimidos embebidos en el binario (`contexts/geography/infrastructure/seed`, 6
 
 | Datos | Filas | Nota |
 |---|---|---|
-| Tipos de delimitación | 27 | Continente, país, comunidad autónoma, provincia, municipio… y agrupaciones supranacionales |
-| Delimitaciones | 8.497 | 8.132 municipios, 248 países, 52 provincias, 26 regiones, 22 subcontinentes, 6 continentes y agrupaciones |
-| Vínculos | 8.870 | 8.480 de contención (un padre como máximo) y 390 de pertenencia (país → UE) |
+| Tipos de delimitación | 28 | Continente, país, comunidad autónoma, provincia, municipio… y agrupaciones supranacionales |
+| Delimitaciones | 8.507 | 8.132 municipios, 248 países, 52 provincias, 10 islas, 19 comunidades y ciudades autónomas, 7 agrupaciones de comunidades, 22 subcontinentes, 6 continentes y agrupaciones. Cada una con su país y su nivel: ver [GEOGRAFIA-NUTS.md](GEOGRAFIA-NUTS.md) |
+| Vínculos | 8.880 | 8.490 de contención (un padre como máximo; los municipios insulares, su isla) y 390 de pertenencia (país → UE) |
 | Códigos postales | 14.608 | 11.051 códigos distintos; un código puede cubrir hasta 10 municipios |
 | Perfiles de país | 248 | ISO 3166 (alfa-2, alfa-3 y numérico), prefijo telefónico, IBAN, formato postal, UE, EEE, eurozona, SEPA |
 | Monedas / idiomas / zonas horarias / tipos de vía | 182 / 183 / 5 / 40 | Con sus vínculos por país (71 / 4 / 2) |
@@ -74,7 +74,8 @@ contexts/geography/
     (con ancestros y agrupaciones);
   - `GET /api/geography/postal-codes?country&code` y `POST /api/geography/address-check`;
   - `GET /api/reference/countries[/{alpha2}]` y
-    `GET /api/reference/{currencies|languages|time-zones|street-types|boundary-types}`.
+    `GET /api/reference/{currencies|languages|time-zones|street-types|boundary-types|boundary-levels}`;
+  - `GET /api/geography/boundaries` admite además `country` y `level` (`country`, `1`, `2`, `3`, `local`).
 - **Integración con Parties:**
   - Parties define `application.AddressChecker`, y `infrastructure.GeographyAddresses` lo
     implementa sobre `contracts.AddressChecker`;

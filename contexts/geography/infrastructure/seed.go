@@ -68,6 +68,7 @@ func readSeed(name string) ([]record, error) {
 // Seed is the decoded seed data.
 type Seed struct {
 	BoundaryTypes []domain.BoundaryType
+	CountryLevels []domain.CountryLevel
 	Boundaries    []*domain.Boundary
 	PostalCodes   []*domain.PostalCode
 	Countries     []*domain.Country
@@ -92,7 +93,7 @@ func LoadSeed() (*Seed, error) {
 func loadSeed() (*Seed, error) {
 	files := map[string][]record{}
 	for _, name := range []string{"boundary_types", "boundaries", "associations", "postal_codes", "countries", "currencies",
-		"languages", "time_zones", "street_types", "country_currencies", "country_languages", "country_time_zones"} {
+		"languages", "time_zones", "street_types", "country_currencies", "country_languages", "country_time_zones", "country_levels"} {
 		rs, err := readSeed(name)
 		if err != nil {
 			return nil, err
@@ -104,6 +105,18 @@ func loadSeed() (*Seed, error) {
 		s.BoundaryTypes = append(s.BoundaryTypes, domain.BoundaryType{ID: domain.BoundaryTypeID{UUID: r.uuid("id")}, Name: r["name"],
 			Description: r["description"], Active: r.bool("active")})
 	}
+	for _, r := range files["country_levels"] {
+		c, err := vocab.NewCountryCode(r["country"])
+		if err != nil {
+			return nil, fmt.Errorf("seed country level %s: %w", r["country"], err)
+		}
+		level, err := domain.ParseLevel(r["level"])
+		if err != nil || level == domain.NoLevel {
+			return nil, fmt.Errorf("seed country level %s %q: not a level", r["country"], r["level"])
+		}
+		s.CountryLevels = append(s.CountryLevels, domain.CountryLevel{Country: c, Level: level, Name: r["name"],
+			Administrative: r.bool("administrative"), Principal: r.bool("principal")})
+	}
 	links := map[fw.UUID][]domain.Link{}
 	for _, r := range files["associations"] {
 		links[r.uuid("child")] = append(links[r.uuid("child")], domain.Link{ID: r.uuid("id"),
@@ -112,7 +125,7 @@ func loadSeed() (*Seed, error) {
 	for _, r := range files["boundaries"] {
 		b, err := domain.ReconstituteBoundary(domain.BoundaryID{UUID: r.uuid("id")}, r["name"], domain.BoundaryTypeID{UUID: r.uuid("type")},
 			domain.Codes{Geo: r["geo_code"], Abbreviation: r["abbreviation"], INE: r["ine_code"], NUTS: r["nuts_code"], LAU: r["lau_code"]},
-			r.bool("active"), links[r.uuid("id")])
+			domain.Position{Country: r["country"], Level: domain.Level(r["level"])}, r.bool("active"), links[r.uuid("id")])
 		if err != nil {
 			return nil, fmt.Errorf("seed boundary %s: %w", r["id"], err)
 		}

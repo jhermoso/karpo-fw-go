@@ -126,6 +126,40 @@ func (e *env) scenario() {
 		t.Fatalf("ancestors of Madrid: %v", names)
 	}
 
+	// The ladder of levels: what Spain calls each rung, and its boundaries by rung.
+	var levels []gapp.BoundaryLevelDTO
+	e.must(e.do("GET", "/api/reference/boundary-levels?country=ES", e.token, nil, &levels), 200, "levels of Spain")
+	principal := ""
+	for _, l := range levels {
+		if l.Principal {
+			principal += l.Level + " " + l.Name + " " + l.Classification
+		}
+	}
+	if len(levels) != 4 || principal != "2 Comunidad autónoma NUTS 2 (2024)" {
+		t.Fatalf("levels of Spain: %+v", levels)
+	}
+	var communities, islands fw.Page[gapp.BoundaryDTO]
+	e.must(e.do("GET", "/api/geography/boundaries?country=ES&level=2&size=50", e.token, nil, &communities), 200, "level 2 of Spain")
+	if communities.Total != 19 || communities.Items[0].TypeName != "Autonomous Community" || communities.Items[0].Country != "ES" {
+		t.Fatalf("the autonomous communities and cities: %d %+v", communities.Total, communities.Items)
+	}
+	e.must(e.do("GET", "/api/geography/boundaries?q=mallorca&level=3", e.token, nil, &islands), 200, "an island")
+	if islands.Total != 1 || islands.Items[0].NUTS != "ES532" || islands.Items[0].TypeName != "Island" {
+		t.Fatalf("Mallorca: %+v", islands.Items)
+	}
+	var province gapp.BoundaryDTO
+	e.must(e.do("GET", "/api/geography/boundaries/"+islands.Items[0].Parent, e.token, nil, &province), 200, "the province of an island")
+	if province.INE != "07" || province.NUTS != "" || province.Level != "" {
+		t.Fatalf("an insular province keeps its INE code and has no level 3 of its own: %+v", province)
+	}
+	e.must(e.do("GET", "/api/geography/boundaries?level=9", e.token, nil, nil), 400, "unknown level")
+	var unfiltered fw.Page[gapp.BoundaryDTO]
+	e.must(e.do("GET", "/api/geography/boundaries?level=%20&size=1", e.token, nil, &unfiltered), 200, "blank level")
+	if unfiltered.Total != 8507 {
+		t.Fatalf("a blank level is no filter: %d", unfiltered.Total)
+	}
+	e.must(e.do("GET", "/api/geography/boundaries?country=Spain", e.token, nil, nil), 400, "country by code")
+
 	var codes []gapp.PostalCodeDTO
 	e.must(e.do("GET", "/api/geography/postal-codes?country=ES&code=28013", e.token, nil, &codes), 200, "postal code")
 	if len(codes) != 1 || codes[0].Boundary.ID != madrid.ID {

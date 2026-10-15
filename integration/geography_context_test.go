@@ -57,8 +57,26 @@ func TestGeographyContext(t *testing.T) {
 					madrid = b
 				}
 			}
-			if madrid.INE != "28079" {
+			if madrid.INE != "28079" || madrid.Country != "ES" || madrid.Level != "local" {
 				t.Fatalf("Madrid: %+v", towns.Items)
+			}
+
+			// Levels (migrations 5 and 6): the autonomous communities, an island and its province.
+			communities, err := svc.SearchBoundaries.Handle(ctx, gapp.SearchBoundaries{Country: "ES", Level: "2", Size: 50})
+			if err != nil || communities.Total != 19 || communities.Items[0].TypeName != "Autonomous Community" {
+				t.Fatalf("level 2 of Spain: %d %v", communities.Total, err)
+			}
+			islands, err := svc.SearchBoundaries.Handle(ctx, gapp.SearchBoundaries{Text: "mallorca", Level: "3"})
+			if err != nil || islands.Total != 1 || islands.Items[0].NUTS != "ES532" {
+				t.Fatalf("Mallorca: %+v %v", islands.Items, err)
+			}
+			balears, err := svc.GetBoundary.Handle(ctx, gapp.GetBoundary{ID: islands.Items[0].Parent})
+			if err != nil || balears.INE != "07" || balears.NUTS != "" {
+				t.Fatalf("the province of Mallorca: %+v %v", balears.BoundaryDTO, err)
+			}
+			levels, err := svc.ListCatalog.Handle(ctx, gapp.ListCatalog{Name: "boundary-levels", Country: "ES"})
+			if ls, ok := levels.([]gapp.BoundaryLevelDTO); err != nil || !ok || len(ls) != 4 {
+				t.Fatalf("levels of Spain: %+v %v", levels, err)
 			}
 			detail, err := svc.GetBoundary.Handle(ctx, gapp.GetBoundary{ID: madrid.ID})
 			if err != nil || len(detail.Ancestors) < 3 || detail.Ancestors[0].Name != "Madrid" {

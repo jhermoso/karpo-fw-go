@@ -13,7 +13,7 @@ func TestSeed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(s.Boundaries) != 8497 || len(s.PostalCodes) != 14608 || len(s.Countries) != 248 || len(s.BoundaryTypes) != 27 ||
+	if len(s.Boundaries) != 8507 || len(s.PostalCodes) != 14608 || len(s.Countries) != 248 || len(s.BoundaryTypes) != 28 || len(s.CountryLevels) != 4 ||
 		len(s.Currencies) != 182 || len(s.Languages) != 183 || len(s.TimeZones) != 5 || len(s.StreetTypes) != 40 {
 		t.Fatalf("seed sizes: %d %d %d %d", len(s.Boundaries), len(s.PostalCodes), len(s.Countries), len(s.BoundaryTypes))
 	}
@@ -21,7 +21,7 @@ func TestSeed(t *testing.T) {
 	for _, b := range s.Boundaries {
 		links += len(b.Links())
 	}
-	if links != 8870 {
+	if links != 8880 {
 		t.Fatalf("links: %d", links)
 	}
 }
@@ -33,7 +33,7 @@ var mojibake = []string{"Ã", "Â", "â€", "\uFFFD"}
 // Every text of every seed file, whether or not the domain reads the column.
 func TestSeed_NoTextHasABrokenEncoding(t *testing.T) {
 	for _, name := range []string{"boundary_types", "boundaries", "associations", "postal_codes", "countries", "currencies",
-		"languages", "time_zones", "street_types", "country_currencies", "country_languages", "country_time_zones"} {
+		"languages", "time_zones", "street_types", "country_currencies", "country_languages", "country_time_zones", "country_levels"} {
 		rows, err := readSeed(name)
 		if err != nil {
 			t.Fatal(err)

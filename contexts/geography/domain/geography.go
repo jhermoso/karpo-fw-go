@@ -43,6 +43,8 @@ var (
 	TypeCountry       = MustBoundaryTypeID("10000000-0000-0000-0005-000000000003")
 	TypeProvince      = MustBoundaryTypeID("10000000-0000-0000-0005-000000000005")
 	TypeRegion        = MustBoundaryTypeID("10000000-0000-0000-0005-000000000006")
+	TypeAutonomous    = MustBoundaryTypeID("10000000-0000-0000-0005-000000000015") // Spanish autonomous communities and cities
+	TypeIsland        = MustBoundaryTypeID("10000000-0000-0000-0005-000000000019") // islands that are a NUTS 3 region
 	TypeMunicipality  = MustBoundaryTypeID("10000000-0000-0000-0005-000000000009")
 	TypeEconomicUnion = MustBoundaryTypeID("10000000-0000-0000-0005-000000000017")
 )
@@ -82,18 +84,68 @@ type Codes struct {
 	LAU          string // EU local administrative units
 }
 
+// Level is the rung of a boundary on the ladder every country shares: the country, its three
+// levels of regions and the local units. For a country of the European Union the regions are
+// its NUTS 1, 2 and 3 and the local units its LAU. What each rung is called, and which one is
+// the principal division of the country, is said by its CountryLevel: the Spanish comunidad
+// autónoma is level 2 and the German Land is level 1.
+type Level string
+
+// Levels. A boundary outside the ladder (a continent, a grouping, an insular province whose
+// level 3 are its islands) has NoLevel.
+const (
+	NoLevel      Level = ""
+	LevelCountry Level = "country"
+	Level1       Level = "1"
+	Level2       Level = "2"
+	Level3       Level = "3"
+	LevelLocal   Level = "local"
+)
+
+// ParseLevel parses a level; the empty text is NoLevel.
+func ParseLevel(s string) (Level, error) {
+	switch l := Level(strings.ToLower(strings.TrimSpace(s))); l {
+	case NoLevel, LevelCountry, Level1, Level2, Level3, LevelLocal:
+		return l, nil
+	}
+	var v fw.Validation
+	v.Add("level", "format", "level must be country, 1, 2, 3 or local")
+	return NoLevel, v.Err()
+}
+
+// NUTSVersion is the version of the NUTS classification the seed carries (the Spanish codes
+// are the same in NUTS 2021 and NUTS 2024).
+const NUTSVersion = "2024"
+
+// Position places a boundary: the country it belongs to (ISO 3166-1 alpha-2; empty above the
+// countries) and its level.
+type Position struct {
+	Country string
+	Level   Level
+}
+
+// CountryLevel names a level in a country.
+type CountryLevel struct {
+	Country        vocab.CountryCode
+	Level          Level
+	Name           string // what the country calls it (Comunidad autónoma, Land...)
+	Administrative bool   // false for a merely statistical level (the Spanish level 1)
+	Principal      bool   // the principal division of the country, the one a form asks for
+}
+
 // Boundary is a territorial unit. Its links are child entities: one containment parent at most.
 type Boundary struct {
 	fw.BaseAggregateRoot[BoundaryID]
-	name   string
-	typ    BoundaryTypeID
-	codes  Codes
-	active bool
-	links  []Link
+	name     string
+	typ      BoundaryTypeID
+	codes    Codes
+	position Position
+	active   bool
+	links    []Link
 }
 
 // ReconstituteBoundary rebuilds a boundary from stored data.
-func ReconstituteBoundary(id BoundaryID, name string, typ BoundaryTypeID, codes Codes, active bool, links []Link) (*Boundary, error) {
+func ReconstituteBoundary(id BoundaryID, name string, typ BoundaryTypeID, codes Codes, position Position, active bool, links []Link) (*Boundary, error) {
 	base, err := fw.NewBaseAggregateRoot(BoundaryKind, id)
 	if err != nil {
 		return nil, err
@@ -109,10 +161,14 @@ func ReconstituteBoundary(id BoundaryID, name string, typ BoundaryTypeID, codes 
 		v.Require(l.Parent != id, "links", "self", "a boundary cannot contain itself")
 	}
 	v.Require(containment <= 1, "links", "containment", "a boundary has one containing parent at most")
+	level, err := ParseLevel(string(position.Level))
+	v.Merge("", err)
+	position = Position{Country: strings.ToUpper(strings.TrimSpace(position.Country)), Level: level}
 	if err := v.Err(); err != nil {
 		return nil, err
 	}
-	return &Boundary{BaseAggregateRoot: base, name: name, typ: typ, codes: codes, active: active, links: slices.Clone(links)}, nil
+	return &Boundary{BaseAggregateRoot: base, name: name, typ: typ, codes: codes, position: position, active: active,
+		links: slices.Clone(links)}, nil
 }
 
 // Name returns the name.
@@ -123,6 +179,9 @@ func (b *Boundary) Type() BoundaryTypeID { return b.typ }
 
 // Codes returns the official codes.
 func (b *Boundary) Codes() Codes { return b.codes }
+
+// Position returns the country and the level of the boundary.
+func (b *Boundary) Position() Position { return b.position }
 
 // IsActive reports whether the boundary is in use.
 func (b *Boundary) IsActive() bool { return b.active }
@@ -158,6 +217,8 @@ var (
 	FieldBoundaryType = spec.Comparable("type", (*Boundary).Type)
 	FieldGeoCode      = spec.Comparable("geo_code", func(b *Boundary) string { return b.codes.Geo })
 	FieldAbbreviation = spec.Comparable("abbreviation", func(b *Boundary) string { return b.codes.Abbreviation })
+	FieldCountry      = spec.Comparable("country", func(b *Boundary) string { return b.position.Country })
+	FieldLevel        = spec.Comparable("level", func(b *Boundary) string { return string(b.position.Level) })
 	FieldLinks        = spec.Collection("links", (*Boundary).Links)
 	LinkFieldParent   = spec.Comparable("parent", func(l Link) BoundaryID { return l.Parent })
 	LinkFieldKind     = spec.Comparable("kind", func(l Link) LinkKind { return l.Kind })

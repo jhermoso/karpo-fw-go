@@ -132,23 +132,9 @@ func (h *Holidays) Locate(ctx context.Context, place string) (contracts.Boundary
 		}
 		return contracts.BoundaryRef{}, errors.Join(unknown, rerr)
 	case len(place) > 3 && place[2] == '-':
-		regions, ferr := h.ports.Boundaries.Find(ctx, spec.And(domain.FieldBoundaryType.Eq(domain.TypeRegion), domain.FieldAbbreviation.Eq(place[3:])))
-		if ferr != nil {
-			return contracts.BoundaryRef{}, ferr
-		}
-		ids := make([]string, 0, len(regions))
-		for _, r := range regions {
-			ids = append(ids, r.ID().String())
-		}
-		countries, cerr := h.ports.CountryOf(ctx, ids)
-		if cerr != nil {
-			return contracts.BoundaryRef{}, cerr
-		}
-		for _, r := range regions {
-			if countries[r.ID().String()] == place[:2] {
-				found = append(found, r)
-			}
-		}
+		// The regions of a country are its levels 1 and 2, whatever each country calls them.
+		found, err = h.ports.Boundaries.Find(ctx, spec.And(domain.FieldCountry.Eq(place[:2]),
+			domain.FieldLevel.In(string(domain.Level1), string(domain.Level2)), domain.FieldAbbreviation.Eq(place[3:])))
 	case digits && len(place) == 2:
 		found, err = h.ports.Boundaries.Find(ctx, spec.And(domain.FieldBoundaryType.Eq(domain.TypeProvince), domain.FieldGeoCode.Eq(place)))
 	case digits && len(place) == 5:

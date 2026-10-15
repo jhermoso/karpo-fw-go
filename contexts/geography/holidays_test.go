@@ -117,4 +117,26 @@ func (e *env) holidays() {
 	if is(madrid, "2026-11-09") {
 		t.Fatal("removed")
 	}
+
+	// An island has days of its own: its towns keep them, and those of another island do not.
+	var island, towns, others fw.Page[gapp.BoundaryDTO]
+	e.must(e.do("GET", "/api/geography/boundaries?q=la%20palma&level=3", e.token, nil, &island), 200, "an island")
+	if island.Total != 1 || island.Items[0].NUTS != "ES707" {
+		t.Fatalf("La Palma: %+v", island.Items)
+	}
+	e.must(e.do("GET", "/api/geography/boundaries?parent="+island.Items[0].ID+"&size=50", e.token, nil, &towns), 200, "the towns of an island")
+	e.must(e.do("GET", "/api/geography/boundaries?q=valverde&level=local", e.token, nil, &others), 200, "a town of El Hierro")
+	hierro := ""
+	for _, b := range others.Items {
+		if b.INE == "38048" {
+			hierro = b.ID
+		}
+	}
+	if towns.Total != 14 || towns.Items[0].Level != "local" || hierro == "" {
+		t.Fatalf("the 14 towns of La Palma and Valverde: %d %+v", towns.Total, others.Items)
+	}
+	e.must(e.do("POST", "/api/geography/holidays", e.keeper, declare(island.Items[0].ID, day("2026-08-05", "Nuestra Señora de las Nieves")), &made), 201, "the day of an island")
+	if !is(towns.Items[0].ID, "2026-08-05") || is(hierro, "2026-08-05") || is(madrid, "2026-08-05") {
+		t.Fatal("the day of La Palma is kept in La Palma and nowhere else")
+	}
 }

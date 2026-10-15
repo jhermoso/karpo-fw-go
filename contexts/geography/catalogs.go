@@ -21,6 +21,10 @@ func (c catalogs) BoundaryTypes(ctx context.Context) ([]domain.BoundaryType, err
 	return with(ctx, c.b, domain.Catalogs.BoundaryTypes)
 }
 
+func (c catalogs) CountryLevels(ctx context.Context) ([]domain.CountryLevel, error) {
+	return with(ctx, c.b, domain.Catalogs.CountryLevels)
+}
+
 func (c catalogs) Currencies(ctx context.Context) ([]domain.Currency, error) {
 	return with(ctx, c.b, domain.Catalogs.Currencies)
 }
