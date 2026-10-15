@@ -1,6 +1,10 @@
 package domain
 
-import "github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
+import (
+	"math"
+
+	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
+)
 
 // Paging defaults and limits.
 const (
@@ -34,9 +38,13 @@ func (p PageRequest[T]) Normalize() PageRequest[T] {
 	return p
 }
 
-// Offset returns the number of items to skip.
+// Offset returns the number of items to skip. A page number so large that the product would
+// overflow gives math.MaxInt: a page past the end of any result, never a negative offset.
 func (p PageRequest[T]) Offset() int {
 	n := p.Normalize()
+	if n.Number-1 > math.MaxInt/n.Size {
+		return math.MaxInt
+	}
 	return (n.Number - 1) * n.Size
 }
 

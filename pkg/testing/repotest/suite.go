@@ -3,6 +3,7 @@ package repotest
 import (
 	"context"
 	"errors"
+	"math"
 	"slices"
 	"strings"
 	"testing"
@@ -479,6 +480,12 @@ func testPaging(t *testing.T, h Harness) {
 	beyond, err := repo.FindPage(ctx, s, domain.NewPageRequest(99, 4, FieldPrice.Desc()))
 	if err != nil || len(beyond.Items) != 0 || beyond.Total != int64(len(sorted)) {
 		t.Fatalf("page beyond the end: %+v %v", beyond, err)
+	}
+
+	// The largest page number a caller can send is a page beyond the end too, not an overflow.
+	huge, err := repo.FindPage(ctx, s, domain.NewPageRequest(math.MaxInt, 4, FieldPrice.Desc()))
+	if err != nil || len(huge.Items) != 0 || huge.Total != int64(len(sorted)) {
+		t.Fatalf("largest page number: %+v %v", huge, err)
 	}
 }
 
