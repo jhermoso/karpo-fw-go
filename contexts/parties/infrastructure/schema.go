@@ -209,7 +209,23 @@ func Migrations() sqlrepo.MigrationSet {
 			`ALTER TABLE parties {add:doc_issue} {bool} DEFAULT {false} NOT NULL{addEnd}`,
 			`ALTER TABLE parties {add:doc_issue_number} {str:60}{addEnd}`,
 			`ALTER TABLE parties {add:doc_issue_reason} {str:200}{addEnd}`)},
+		// The role type that was "Other Organization Unit" is called "Team" in every project
+		// (docs/DECISIONES-COMUNES.md, D-54).
+		{Version: 19, Name: "role type Team", Run: renameTeamRole},
 	}}
+}
+
+// renameTeamRole gives the role type its common name and code where an earlier seed left the old ones.
+func renameTeamRole(ctx context.Context, db *sqlrepo.DB) error {
+	for _, t := range domain.WellKnownRoleTypes() {
+		if t.ID != domain.RoleTeam {
+			continue
+		}
+		_, err := db.Update(ctx, "role_types", sqlrepo.Values{"name": t.Name.String(), "description": t.Description, "code": t.Code},
+			sqlrepo.Values{"id": t.ID})
+		return err
+	}
+	return nil
 }
 
 // seedRoleCodes gives the well-known role types their code.
