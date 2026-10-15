@@ -36,14 +36,16 @@ type RoleDTO struct {
 
 // PartyDTO is the transport representation of a party.
 type PartyDTO struct {
-	ID              string              `json:"id"`
-	Kind            string              `json:"kind"`
-	Name            string              `json:"name"`
-	Person          *PersonDTO          `json:"person,omitempty"`
-	Organization    *OrganizationDTO    `json:"organization,omitempty"`
-	Active          bool                `json:"active"`
-	Test            bool                `json:"test,omitempty"`
-	Shared          bool                `json:"shared,omitempty"`
+	ID           string           `json:"id"`
+	Kind         string           `json:"kind"`
+	Name         string           `json:"name"`
+	Person       *PersonDTO       `json:"person,omitempty"`
+	Organization *OrganizationDTO `json:"organization,omitempty"`
+	Active       bool             `json:"active"`
+	Test         bool             `json:"test,omitempty"`
+	Shared       bool             `json:"shared,omitempty"`
+	// DocumentIssue is present when the identity document of the party was refused.
+	DocumentIssue   *DocumentIssueDTO   `json:"documentIssue,omitempty"`
 	Organizations   []string            `json:"organizations"` // internal organizations it is affiliated with now
 	Roles           []RoleDTO           `json:"roles"`
 	Identifications []IdentificationDTO `json:"identifications"`
@@ -53,6 +55,12 @@ type PartyDTO struct {
 	Version         int64               `json:"version"`
 	CreatedBy       string              `json:"createdBy,omitempty"`
 	ModifiedBy      string              `json:"modifiedBy,omitempty"`
+}
+
+// DocumentIssueDTO is the mark of a refused identity document.
+type DocumentIssueDTO struct {
+	Number string `json:"number,omitempty"`
+	Reason string `json:"reason"`
 }
 
 // IdentificationDTO is an identity document of a party.
@@ -117,6 +125,9 @@ func ToDTO(p *domain.Party, names Names) PartyDTO {
 	}
 	now := fw.Now()
 	d.Shared, d.Organizations = p.IsShared(), []string{}
+	if issue := p.DocumentIssue(); !issue.IsZero() {
+		d.DocumentIssue = &DocumentIssueDTO{Number: issue.Number, Reason: issue.Reason}
+	}
 	for _, o := range p.OrganizationsAt(now) {
 		d.Organizations = append(d.Organizations, o.String())
 	}

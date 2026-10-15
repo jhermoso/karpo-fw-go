@@ -33,25 +33,29 @@ func addRelationshipDetails(svc *Service, s service) {
 
 	svc.SetCustomerNumber = chain(PermRelationshipUpdate, func(ctx context.Context, c SetCustomerNumber) (RelationshipDTO, error) {
 		number := domain.NormalizeCustomerNumber(c.CustomerNumber)
+		// The number is of the numbering of the organization (the side that sells): who gives it
+		// must be able to write that organization, not just one of the two parties. Asked first,
+		// so that nobody learns which numbers are taken without being allowed to give one.
+		r, _, _, err := s.writableRelationship(ctx, c.ID)
+		if err != nil {
+			return RelationshipDTO{}, err
+		}
+		if sc := scopeOf(ctx); !sc.global && !sc.canWriteOrg(r.To()) {
+			return RelationshipDTO{}, fmt.Errorf("%w: the customer number is given by the organization that numbers its customers", fw.ErrForbidden)
+		}
 		if number != "" {
-			// A number tells one customer of the organization from the others, for good: it is
-			// not handed to another customer when the relationship ends, and the same customer
-			// keeps it if it comes back. Asked before the change, with its own read: who may not
-			// see the relationship is told so below.
-			if r, err := s.relationships.Repository().Get(ctx, c.ID); err == nil {
-				same, err := s.relationships.Repository().Find(ctx, spec.And(domain.RelFieldType.Eq(r.Type()), domain.RelFieldTo.Eq(r.To()),
-					domain.RelFieldCustomerNumber.Eq(number)))
-				if err != nil {
-					return RelationshipDTO{}, err
-				}
-				for _, o := range same {
-					if o.From() != r.From() {
-						if _, _, _, err := s.writableRelationship(ctx, c.ID); err != nil {
-							return RelationshipDTO{}, err
-						}
-						return RelationshipDTO{}, fw.Violation("parties.duplicate_customer_number",
-							"another customer of the organization has, or had, that customer number")
-					}
+			// A number tells one customer of the organization from the others: no other customer
+			// gets it while a relationship of the first, in force or ended, carries it, and the
+			// same customer keeps it if it comes back.
+			same, err := s.relationships.Repository().Find(ctx, spec.And(domain.RelFieldType.Eq(r.Type()), domain.RelFieldTo.Eq(r.To()),
+				domain.RelFieldCustomerNumber.Eq(number)))
+			if err != nil {
+				return RelationshipDTO{}, err
+			}
+			for _, o := range same {
+				if o.From() != r.From() {
+					return RelationshipDTO{}, fw.Violation("parties.duplicate_customer_number",
+						"another customer of the organization has, or had, that customer number")
 				}
 			}
 		}

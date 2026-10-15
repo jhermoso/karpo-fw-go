@@ -506,6 +506,52 @@ func (e *env) prospects(acme, ana papp.PartyDTO) {
 		e.t.Fatalf("a code taken away is nobody's: %+v", refers.Collaborator)
 	}
 
+	// The mark of a refused identity document: who has it is found by it, and a document that
+	// passes its checks answers it.
+	var marked papp.PartyDTO
+	issue := "/api/parties/" + agency.ID + "/document-issue"
+	e.must(e.do("PUT", issue, e.reader, map[string]any{"number": "B12345678", "reason": "wrong check digit"}, nil), 403, "a reader marks nothing")
+	e.must(e.do("PUT", issue, e.admin, map[string]any{"number": "B12345678"}, nil), 400, "a mark says why")
+	e.must(e.do("PUT", issue, e.admin, map[string]any{"number": " B12345678 ", "reason": "the CIF does not pass its check digits"}, &marked), 200, "mark")
+	if marked.DocumentIssue == nil || marked.DocumentIssue.Number != "B12345678" || marked.DocumentIssue.Reason == "" {
+		e.t.Fatalf("marked: %+v", marked.DocumentIssue)
+	}
+	var withIssue fw.Page[papp.PartyDTO]
+	e.must(e.do("GET", "/api/parties?documentIssue=true", e.admin, nil, &withIssue), 200, "the parties with a refused document")
+	if withIssue.Total != 1 || withIssue.Items[0].ID != agency.ID {
+		e.t.Fatalf("parties with a refused document: %+v", withIssue.Items)
+	}
+	e.must(e.do("PUT", issue, e.outsider, map[string]any{"reason": "x"}, nil), 404, "nobody marks what it does not see")
+	e.must(e.do("DELETE", issue, e.outsider, nil, nil), 404, "nor takes its mark away")
+	marked = papp.PartyDTO{} // decoding leaves what the answer does not bring
+	e.must(e.do("POST", "/api/parties/"+agency.ID+"/identifications", e.admin, map[string]any{"documentType": domain.DocOther.String(),
+		"country": "ES", "number": "B12345678"}, &marked), 200, "the wrong number, kept as other document")
+	if marked.DocumentIssue == nil {
+		e.t.Fatal("an other document, which nobody checks, answers no mark")
+	}
+	marked = papp.PartyDTO{}
+	e.must(e.do("POST", "/api/parties/"+agency.ID+"/identifications", e.admin, map[string]any{"documentType": domain.DocPassport.String(),
+		"country": "ES", "number": "PAB765432", "issuedOn": "2021-02-03", "expiresOn": "2031-02-02", "issuingAuthority": "Policía Nacional"}, &marked), 200, "a passport")
+	if marked.DocumentIssue == nil {
+		e.t.Fatal("a passport is not the document that was wrong: it answers no mark")
+	}
+	marked = papp.PartyDTO{} // decoding leaves what the answer does not bring
+	e.must(e.do("POST", "/api/parties/"+agency.ID+"/identifications", e.admin, map[string]any{"documentType": domain.DocTaxID.String(),
+		"country": "ES", "number": "A58818501"}, &marked), 200, "the right tax id")
+	if marked.DocumentIssue != nil {
+		e.t.Fatalf("a document that passes its checks answers the mark: %+v", marked.DocumentIssue)
+	}
+	e.must(e.do("PUT", issue, e.admin, map[string]any{"reason": "looked at by hand"}, &marked), 200, "mark again")
+	if marked.DocumentIssue == nil || marked.DocumentIssue.Number != "" {
+		e.t.Fatalf("marked again, without a number: %+v", marked.DocumentIssue)
+	}
+	marked = papp.PartyDTO{}
+	e.must(e.do("DELETE", issue, e.admin, nil, &marked), 200, "take the mark away")
+	e.must(e.do("GET", "/api/parties?documentIssue=true", e.admin, nil, &withIssue), 200, "nobody is marked now")
+	if marked.DocumentIssue != nil || withIssue.Total != 0 {
+		e.t.Fatalf("mark taken away: %+v, %d still marked", marked.DocumentIssue, withIssue.Total)
+	}
+
 	// Customer number: each organization numbers its own customers, so it is a detail of the
 	// customer relationship. It is of one customer for good.
 	customerOf := func(name string) (papp.PartyDTO, papp.RelationshipDTO) {
@@ -524,6 +570,7 @@ func (e *env) prospects(acme, ana papp.PartyDTO) {
 	}
 	number := "/api/party-relationships/" + buys.ID + "/customer-number"
 	e.must(e.do("PUT", number, e.viewer, map[string]any{"customerNumber": "4300001"}, nil), 403, "a read-only grant cannot number a customer")
+	e.must(e.do("PUT", number, e.outsider, map[string]any{"customerNumber": "4300001"}, nil), 404, "nobody numbers a customer it does not see")
 	e.must(e.do("PUT", number, e.clerk, map[string]any{"customerNumber": "43 00001"}, nil), 400, "no spaces")
 	e.must(e.do("PUT", number, e.clerk, map[string]any{"customerNumber": "430000000000000000001"}, nil), 400, "twenty characters at most")
 	e.must(e.do("PUT", "/api/party-relationships/"+refers.ID+"/customer-number", e.clerk, map[string]any{"customerNumber": "1"}, nil), 422,
@@ -538,6 +585,12 @@ func (e *env) prospects(acme, ana papp.PartyDTO) {
 		"the number of another customer of acme")
 	e.must(e.do("PUT", "/api/party-relationships/"+buysToo.ID+"/customer-number", e.clerk, map[string]any{"customerNumber": "C-4300002"}, nil), 200,
 		"its own number")
+
+	// A number given up is free again: only a number some relationship carries is taken.
+	e.must(e.do("PUT", "/api/party-relationships/"+buysToo.ID+"/customer-number", e.clerk, map[string]any{"customerNumber": "C-4300003"}, nil), 200,
+		"another number")
+	e.must(e.do("PUT", number, e.clerk, map[string]any{"customerNumber": "C-4300002"}, nil), 200, "the number the other gave up")
+	e.must(e.do("PUT", number, e.clerk, map[string]any{"customerNumber": "C-4300001"}, nil), 200, "and its own again")
 
 	// The number stays with the customer when the relationship ends: it is not handed to another
 	// one, and the customer gets it again if it comes back.
