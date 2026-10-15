@@ -185,17 +185,17 @@ el nombre del permiso que el global puede retirar; el diseño de la marca por ca
 | D-70 | **El bloqueo del duplicado alcanza a Facturación y Pedidos**: no se le factura ni se le hace un pedido | «el bloqueo sí alcanza a facturación y pedidos» |
 | D-71 | **La fusión bloquea la ficha, no la desactiva** (también en Trench, que hoy la desactiva) | «bloquear si» |
 | D-72 | **Karpo C# sigue con lo que tiene en marcha** antes de traer la fusión de Trench | «seguir con lo que tiene» |
-| D-73 | **La vista por pareja se puede filtrar y ordenar por los datos de la pareja** (número de cliente, bloqueo) desde la versión 1 | «si» a «¿es obligatorio en la primera versión ordenar la lista por número de cliente o por bloqueo?» |
+| D-73 | **La vista por pareja se puede filtrar y ordenar por los datos de la pareja** (número de cliente, bloqueo) desde la versión 1 | «si» a «¿es obligatorio en la primera versión ordenar la lista por número de cliente o por bloqueo?»; confirmada también en la sesión de Trench el 2026-10-16 |
 | D-74 | **Para saber qué empresa dio de alta una party basta la auditoría** (quién la creó y en la misma operación que su relación de negocio con esa empresa); **no hay tipo de relación nuevo ni dato nuevo en el modelo común**, y la relación del alta es la de negocio que elige quien da de alta. Aclarada en la sesión de Karpo C# | «no se si hace falta decir quien le dio de alta mas alla de la información histórica del registro. y la relacion se crea como en karpo c#»; y, a la aclaración en la sesión de Karpo C#: «sí, basta la auditoría y la relación de negocio» |
 | D-79 | **Al duplicado se le pueden emitir facturas rectificativas (abonos) de facturas ya emitidas**: corregir lo facturado es una obligación. Todo lo nuevo (factura ordinaria, presupuesto, pedido) sigue bloqueado. Precisa D-70 | «la de go» (esta sesión, 2026-10-15), a la pregunta de si un duplicado rechaza también los abonos, como hacía Trench, o permite la rectificativa de una factura ya emitida, como Karpo Go |
+| D-80 | **A una ficha fusionada se le permiten también los abonos sueltos**, sin factura de origen. Amplía D-79. Transmitida por la sesión de Trench (2026-10-16) | Contestada allí; Javier pide comprobar que ningún proyecto tenga regla, caso o dato que lo contradiga. Karpo Go no tiene abonos sueltos: no lo contradice |
+| D-81 | **Una factura emitida siempre tiene número y no se puede modificar.** El abono que D-79 permite a una ficha fusionada rectifica una factura emitida, es decir, numerada. Transmitida por la sesión de Trench | Contestada allí. En Trench, «emitida» es tener el documento finalizado con número; en Karpo Go ya es así |
 
 **D-70 y D-79 en Trench** (su sesión, 2026-10-16; en su `main`, PR 47): con una ficha fusionada se
 rechaza crear, modificar o confirmar pedidos, presupuestos y facturas, y también reservas de divisa
 y operaciones financieras. Se permite el abono que rectifica una factura dirigida a esa ficha; otro
 abono, 409. Se permite cerrar lo pendiente: consultar, cancelar o anular lo existente, y quitar o
-sustituir la ficha en un pedido. **Abierto con Javier:** los abonos sueltos (en Trench el abono no
-exige factura de origen; en Karpo Go no existen) y si «factura emitida» exige número (en Karpo Go
-la rectificativa sólo corrige una factura emitida, que siempre lo tiene).
+sustituir la ficha en un pedido. Javier lo cerró el mismo día: D-80 y D-81.
 
 **D-64 en cada proyecto (2026-10-14):** en Trench, fusionado en `main` (su PR 45): lo que
 decide «es duplicado» es su columna `MergedIntoPartyId`, y la relación «Duplicate Of» se crea
