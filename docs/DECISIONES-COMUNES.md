@@ -197,6 +197,13 @@ y operaciones financieras. Se permite el abono que rectifica una factura dirigid
 abono, 409. Se permite cerrar lo pendiente: consultar, cancelar o anular lo existente, y quitar o
 sustituir la ficha en un pedido. Javier lo cerró el mismo día: D-80 y D-81.
 
+**Lectura común de D-79 a D-81** (propuesta por Karpo C#, compartida por Trench; no es palabra de
+Javier): con una ficha fusionada, en facturación se admiten exactamente (a) el abono que rectifica
+una factura emitida, numerada, dirigida a esa ficha y al mismo receptor, y (b) el abono suelto, sin
+factura de origen. Nada más: ni facturas nuevas, ni pedidos, ni modificar lo existente. Theros: no
+le aplica. Karpo C#: nada lo contradice (aún no tiene fusión; su abono ya admite ir sin factura de
+origen).
+
 **D-64 en cada proyecto (2026-10-14):** en Trench, fusionado en `main` (su PR 45): lo que
 decide «es duplicado» es su columna `MergedIntoPartyId`, y la relación «Duplicate Of» se crea
 siempre con ella; filtro `includeMergedParties`. En Karpo Go, la relación «Duplicate Of» y su
@@ -399,6 +406,7 @@ Lo que Go no cumple todavía de lo decidido. Cada sesión lleva la suya en su re
 | D-53 | **Hecho** (rama `feat/parties-persona-proveedor-o-empresa`, migración 20): los dos tipos cuelgan de la raíz. Los demás contextos guardan a la empresa por identificador y no cambian. Una persona empresa no puede tener unidades organizativas debajo | El documento que identifica al autónomo; que la importación de proveedores cargue personas |
 | D-64 | **Hecho** (rama `feat/parties-duplicado-bloqueado`, migración 24): marcar con «Duplicate Of» bloquea la party; se lee, la búsqueda la deja fuera salvo `includeMergedParties=true` (nombre de Trench, su PR 45), no admite cambios ni relaciones nuevas; terminar la relación lo deshace. Lo marca quien puede modificar el duplicado; una empresa interna, sólo el global | Que los otros contextos se nieguen a operar con un duplicado |
 | D-70 | **Hecho** (PR 30, en borrador): Pedidos rechaza presupuestos, pedidos y confirmaciones para un duplicado; Facturación, preparar y emitir facturas ordinarias (las rectificativas, no: decidido en esta sesión). Lo saben por el contrato de identidades fiscales de Parties (`blocked`) | Compras, Cobros y Tesorería no lo miran |
+| D-70, D-79 | **Diferencia con la lectura común:** Go rechaza crear y emitir (o confirmar) para un duplicado, pero no **modificar** un borrador que ya existía: se le pueden añadir o quitar líneas a una factura o un pedido en borrador aunque su cliente pase a ser duplicado (no se podrá emitir ni confirmar) | Rechazar también las modificaciones de borradores, si se adopta la lectura común |
 | D-77, D-78 | **Hecho** (rama `feat/parties-empresa-interna-solo-global`): las altas anteriores al 2026-10-15 no cuentan como dadas de alta por su empresa; sólo el administrador global da «Internal Organization» | El circuito de D-78 (petición con pruebas, confirmación de datos, aprobación del global), diseño |
 | D-73 | Recogido en el contrato HTTP (`CONTRATO-PARTIES-V1.md` §7 quinquies) | La vista por pareja no está implementada en Go |
 | D-74 | **Hecho** (rama `feat/parties-alta-por-auditoria`): Go lo deduce de la auditoría, como pidió Javier el 2026-10-14 («prefiero que lo deduzca de los registros de auditoria tambien en go»): la party y la relación que la afilia nacieron juntas si su primer registro comparte el identificador de operación. Sin columna propia | — |
