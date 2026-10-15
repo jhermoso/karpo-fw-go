@@ -276,7 +276,15 @@ func (e *env) scenario(prefix string) (acme, ana papp.PartyDTO) {
 	// A relationship gives each side the role it lacks (D-49), but never makes an internal
 	// organization of anybody, nor gives a role to who cannot play it.
 	e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelEmployment.String(),
-		"fromParty": acme.ID, "toParty": ana.ID}, nil), 422, "an organization is not made an employee, nor Ana an internal organization")
+		"fromParty": acme.ID, "toParty": ana.ID}, nil), 422, "an organization is not made an employee")
+	var boss papp.PartyDTO
+	e.must(e.do("POST", "/api/persons", e.admin, map[string]any{"givenName": "Jefa", "firstSurname": prefix}, &boss), 201, "somebody who is no company")
+	e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelEmployment.String(),
+		"fromParty": ana.ID, "toParty": boss.ID}, nil), 422, "nobody is made an internal organization by a relationship")
+	e.must(e.do("GET", "/api/parties/"+boss.ID, e.admin, nil, &boss), 200, "the one who is no company")
+	if len(boss.Roles) != 0 {
+		e.t.Fatalf("a refused relationship left a role: %+v", boss.Roles)
+	}
 	e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelCustomer.String(),
 		"fromParty": ana.ID, "toParty": acme.ID}, nil), 201, "the customer relationship makes ana a customer")
 	e.must(e.do("GET", "/api/parties/"+ana.ID, e.reader, nil, &ana), 200, "ana after the relationship")
@@ -306,6 +314,16 @@ func (e *env) scenario(prefix string) (acme, ana papp.PartyDTO) {
 	e.must(e.do("GET", byRole+"&includeEndedRoles=true", e.reader, nil, &contractors), 200, "contractors ever")
 	if contractors.Total != 1 || contractors.Items[0].ID != ana.ID {
 		e.t.Fatalf("contractors ever: %+v", contractors)
+	}
+
+	// A party with relationships that have not ended is not deactivated (D-4); one without, is.
+	e.must(e.do("PUT", "/api/parties/"+ana.ID+"/active", e.admin, map[string]any{"active": false}, nil), 422, "ana works for acme and buys from it")
+	e.must(e.do("PUT", "/api/parties/"+acme.ID+"/active", e.admin, map[string]any{"active": false}, nil), 422, "acme has an employee and a customer")
+	var loner papp.PartyDTO
+	e.must(e.do("POST", "/api/persons", e.admin, map[string]any{"givenName": "Sola", "firstSurname": prefix}, &loner), 201, "somebody unrelated")
+	e.must(e.do("PUT", "/api/parties/"+loner.ID+"/active", e.admin, map[string]any{"active": false}, &loner), 200, "deactivate who nobody depends on")
+	if loner.Active {
+		e.t.Fatalf("still active: %+v", loner)
 	}
 
 	// The reader may read but not write.
@@ -680,6 +698,9 @@ func (e *env) phase3(acme, ana papp.PartyDTO) {
 	e.must(e.do("PUT", "/api/parties/"+loner.ID+"/shared", e.admin, map[string]any{"shared": true}, nil), 200, "share the bank")
 	e.must(e.do("GET", "/api/parties/"+loner.ID, e.outsider, nil, nil), 200, "a shared party is visible to everyone")
 	e.must(e.do("PUT", "/api/parties/"+loner.ID+"/name", e.clerk, map[string]any{"legalName": "Nope"}, nil), 403, "shared parties are read-only")
+	e.must(e.do("POST", "/api/party-relationships", e.clerk, map[string]any{"type": domain.RelSupplier.String(),
+		"fromParty": acme.ID, "toParty": loner.ID}, nil), 422, "a relationship gives no role to a party the caller cannot write")
+	e.must(e.do("PUT", "/api/parties/"+loner.ID+"/active", e.clerk, map[string]any{"active": false}, nil), 403, "nor is it deactivated by who only reads it")
 
 	// Hierarchy: Madrid office -> Sales division -> Acme.
 	var sales, madrid papp.PartyDTO
@@ -715,6 +736,14 @@ func (e *env) phase3(acme, ana papp.PartyDTO) {
 	if len(internal) != 1 || internal[0].ID != acme.ID {
 		e.t.Fatalf("the clerk's internal organizations: %+v", internal)
 	}
+
+	// A unit is registered under its company with the rollup: "an organization" is what Acme is,
+	// whatever roles it plays (D-53).
+	var north papp.PartyDTO
+	e.must(e.do("POST", "/api/organizations", e.clerk, map[string]any{"legalName": "Acme Norte " + acme.ID[:8],
+		"roles":       []string{domain.RoleDepartment.String()},
+		"affiliation": map[string]any{"organization": acme.ID, "relationshipType": domain.RelOrganizationRollup.String()}}, &north),
+		201, "a department registered under its company")
 
 	// Ending the relationship ends the visibility.
 	var rels []papp.RelationshipDTO
@@ -1025,7 +1054,7 @@ func endToEnd(t *testing.T, newDirectory func(*testing.T) directory) {
 	if _, err := e.mod.Relay(broker).RelayOnce(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if len(seen) != 15 || roles != 4 {
+	if len(seen) != 18 || roles != 4 {
 		t.Fatalf("published: %v, roles %d", seen, roles)
 	}
 	if len(shares) != 3 || shares[0] != "30.00" || shares[1] != "45.50" || shares[2] != "" {

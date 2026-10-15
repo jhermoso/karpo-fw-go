@@ -180,7 +180,7 @@ func Establish(id RelationshipID, t RelationshipType, from, to *Party, c RoleCat
 		if !s.p.IsActive() {
 			return nil, fw.Violation("parties.inactive", "the "+s.side+" party is inactive")
 		}
-		if !s.p.PlaysAt(c, s.role, since) && !isOfKind(s.p, s.role) {
+		if !s.p.Meets(c, s.role, since) {
 			name := s.role.String()
 			if rt, ok := c.RoleType(s.role); ok {
 				name = rt.Name.String()
@@ -204,11 +204,14 @@ func Establish(id RelationshipID, t RelationshipType, from, to *Party, c RoleCat
 	return r, nil
 }
 
-// isOfKind reports whether a role is the category of a whole kind and the party is of that kind:
-// a type that asks for "an organization" asks for what the party is, whatever roles it plays (an
-// internal organization or a supplier may be a person too: docs/DECISIONES-COMUNES.md, D-53).
-func isOfKind(p *Party, role RoleTypeID) bool {
-	return (role == RoleOrganizationCategory && p.kind == KindOrganization) || (role == RolePersonCategory && p.kind == KindPerson)
+// Meets reports whether the party is what a relationship type asks of one of its sides at t: it
+// plays the role (or one below it), or the role is the category of a whole kind and the party is
+// of that kind. A type that asks for "an organization" asks for what the party is, whatever roles
+// it plays (an internal organization or a supplier may be a person too:
+// docs/DECISIONES-COMUNES.md, D-53).
+func (p *Party) Meets(c RoleCatalog, role RoleTypeID, t time.Time) bool {
+	return p.PlaysAt(c, role, t) ||
+		(role == RoleOrganizationCategory && p.kind == KindOrganization) || (role == RolePersonCategory && p.kind == KindPerson)
 }
 
 // RelationshipState is the persisted state of a relationship.

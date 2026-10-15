@@ -87,9 +87,9 @@ func (s service) register(ctx context.Context, build func(domain.PartyID) (*doma
 		}
 		// The organization takes the side it plays; the new party the other one.
 		switch {
-		case org.PlaysAt(n.Roles, rt.ToRole, now):
+		case org.Meets(n.Roles, rt.ToRole, now):
 			partyIsFrom = true
-		case org.PlaysAt(n.Roles, rt.FromRole, now):
+		case org.Meets(n.Roles, rt.FromRole, now):
 			partyIsFrom = false
 		default:
 			return PartyDTO{}, fw.Violation("parties.relationship_role_missing", "the organization does not play a role of "+rt.Name.String())
@@ -98,7 +98,7 @@ func (s service) register(ctx context.Context, build func(domain.PartyID) (*doma
 		if !partyIsFrom {
 			role = rt.ToRole
 		}
-		if !p.PlaysAt(n.Roles, role, now) {
+		if !p.Meets(n.Roles, role, now) {
 			if _, err := p.AssignRole(n.Roles, role, now); err != nil {
 				return PartyDTO{}, err
 			}
@@ -179,14 +179,18 @@ func (s service) establish(ctx context.Context, rt domain.RelationshipType, from
 }
 
 // playing returns the party playing the role a relationship asks of it, giving it the role when
-// it lacks it (docs/DECISIONES-COMUNES.md, D-49). Two roles are never given this way, and the
-// relationship is refused as before: a category, which nobody is assigned, and Internal
-// Organization, which decides who sees and writes what and is only given on purpose.
+// it lacks it (docs/DECISIONES-COMUNES.md, D-49). The relationship is refused as before when the
+// role is not one to give this way: a category, which nobody is assigned; Internal Organization
+// or a role below it, which decides who sees and writes what and is only given on purpose; and
+// any role of a party the caller could not give it to by hand (a shared party, one it only reads).
 func (s service) playing(ctx context.Context, cat *domain.Catalog, p *domain.Party, role domain.RoleTypeID, since time.Time) (*domain.Party, error) {
-	if p.PlaysAt(cat, role, since) || role == domain.RoleInternalOrganization {
+	if p.Meets(cat, role, since) || cat.IsA(role, domain.RoleInternalOrganization) {
 		return p, nil
 	}
 	if t, ok := cat.RoleType(role); !ok || t.Category {
+		return p, nil
+	}
+	if !scopeOf(ctx).canWrite(p, fw.Now()) {
 		return p, nil
 	}
 	return s.parties.Update(ctx, p.ID(), func(_ context.Context, p *domain.Party) error {

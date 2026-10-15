@@ -431,7 +431,7 @@ rol, con la misma fecha de inicio que la relación.
 |---|---|
 | Dónde | `POST /api/party-relationships` y el alta de una party con afiliación. La regla del dominio no cambia (`Establish` sigue exigiendo los roles); el caso de uso los asigna antes |
 | Qué rol se asigna | El que pide el tipo de relación para ese lado, si la party no juega ya ése o uno por debajo |
-| Lo que se sigue rechazando (422) | Un rol que la party no puede jugar (una organización no pasa a ser empleada); una categoría, que no se asigna a nadie; y **«Internal Organization»** |
+| Lo que se sigue rechazando (422) | Un rol que la party no puede jugar (una organización no pasa a ser empleada); una categoría, que no se asigna a nadie; **«Internal Organization»** o un rol que cuelgue de él; y cualquier rol de una party que quien llama **no puede escribir** (una compartida, una que sólo ve) |
 | Auditoría y eventos | La asignación deja su entrada y publica `PartyRoleAssigned`, como una asignación a mano, en la misma transacción que la relación |
 | Permiso | El de crear relaciones (`Parties.Relationship.Create`); no pide además el de asignar roles |
 
@@ -441,10 +441,10 @@ rol, con la misma fecha de inicio que la relación.
   Excepción confirmada por Javier el 2026-10-14.
 - **Terminar la relación no quita el rol.** Quien fue cliente por una relación sigue teniendo el
   rol de cliente cuando la relación termina, hasta que alguien se lo cierre.
-- **Consecuencia que conviene saber:** el rol es de la party, no de la pareja. Quien puede escribir
-  en Acme y da de alta a un tercero compartido como cliente de Acme le deja el rol de cliente a la
-  vista de todas las empresas que lo ven. Antes hacía falta poder escribir en esa party para darle
-  el rol.
+- **El rol es de la party, no de la pareja**, y lo ven todas las empresas que la ven. Por eso la
+  relación sólo lo asigna a una party que quien llama podría modificar a mano. Para relacionarse
+  con un banco compartido que no tiene el rol, un administrador global se lo da antes (revisión
+  independiente del 2026-10-14).
 
 ## 12. Una persona puede ser proveedor, y organización interna
 
@@ -477,7 +477,7 @@ relación, con los mismos identificadores y códigos; y «Team» cuelga de «Inf
 | Tipos de rol nuevos | «Club» (`…0001-…0038`, `club`) y «Group» (`…0001-…0039`, `group`), bajo «Informal» | Semilla de Trench |
 | «Team» | Pasa de «Organization Unit» a «Informal» | D-62 |
 | Tipos de relación nuevos | «Subsidiary» (`…0002-…0010`, `subsidiary`: organización interna → filial); «Legal Representation» (`…0011`, `legal-representation`: representante autorizado → organización interna); «Department Assignment» (`…0012`, `department-assignment`: empleado → departamento); «Collaborator Contact» (`…0013`, `collaborator-contact`: contacto → colaborador) | Semilla de Trench |
-| Esquema | Migración 21, de datos: añade a una base ya sembrada los tipos que le faltan y mueve «Team». No toca los que ya están |
+| Esquema | Migración 21, de datos: añade a una base ya sembrada los tipos que le faltan y mueve «Team». No toca los que ya están. Si alguien añadió por su cuenta un tipo con uno de estos códigos (`club`, `subsidiary`…), la migración se detiene y dice cuál: hay que darle otro código y migrar de nuevo |
 
 Lo que **no** ha entrado, y por qué:
 
@@ -504,3 +504,23 @@ roles terminados y los que aún no han empezado. El nombre y la definición son 
 - *Ejemplo:* Luis fue empleado hasta diciembre y hoy sólo es cliente. `?role=Employee` no lo
   devuelve; `?role=Employee&includeEndedRoles=true`, sí.
 - El parámetro sólo afecta al filtro por rol; no cambia el de organización ni el de instalación.
+
+## 15. No se desactiva a quien tiene relaciones sin terminar
+
+Decisión de Javier (D-4): «borrar» es desactivar, y no se puede desactivar algo de lo que dependen
+otras cosas vigentes; lo comprueba el comando antes de ejecutarse.
+
+| Qué | Cómo |
+|---|---|
+| Dónde | `PUT /api/parties/{id}/active` con `active: false` |
+| Qué bloquea | Cualquier relación de la party, en cualquiera de los dos lados, que no haya terminado: las vigentes y las que aún no han empezado |
+| Respuesta | 422, `parties.has_relationships`, sólo a quien puede modificar la party (a quien sólo la ve, 403, sin decirle nada de sus relaciones). Primero se terminan las relaciones (`POST /api/party-relationships/{id}/terminate`) |
+| Reactivar | No comprueba nada |
+
+- *Ejemplo:* Talleres Pérez es cliente de Acme. Desactivarlo se rechaza; se termina la relación
+  de cliente y entonces sí se puede.
+- **Los roles no bloquean.** Son parte de la party (D-13: su ciclo de vida depende de ella) y se
+  quedan como están; una party desactivada ya no cuenta para nada aunque conserve roles vigentes.
+- **Lo de otros contextos no bloquea todavía:** una factura pendiente o un pedido abierto no lo
+  sabe Parties. Queda como estaba propuesto: cada contexto escucha `PartyDeactivated` y avisa.
+- **Sin hacer de D-8:** el comando «anular» para un alta equivocada.

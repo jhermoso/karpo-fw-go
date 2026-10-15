@@ -221,6 +221,24 @@ func NewService(d Deps) *Service {
 	}, pipeline.RetryOnConflict[UpdatePerson, PartyDTO](retry, backoff))
 
 	svc.SetActive = chain(PermPartyUpdate, func(ctx context.Context, c SetPartyActive) (PartyDTO, error) {
+		// A party something in force depends on is not deactivated: its relationships are ended
+		// first (docs/DECISIONES-COMUNES.md, D-4). The command asks before it does anything.
+		if !c.Active {
+			p, err := d.Parties.Get(ctx, c.ID)
+			if err != nil {
+				return PartyDTO{}, err
+			}
+			if err := scopeOf(ctx).writable(p); err != nil { // before telling anything about its relationships
+				return PartyDTO{}, err
+			}
+			related, err := d.Relationships.Exists(ctx, spec.And(domain.Involving(c.ID), domain.NotEndedAt(fw.Now())))
+			if err != nil {
+				return PartyDTO{}, err
+			}
+			if related {
+				return PartyDTO{}, fw.Violation("parties.has_relationships", "the party has relationships that have not ended; end them first")
+			}
+		}
 		return s.updateParty(ctx, c.ID, func(p *domain.Party, _ *domain.Catalog) error {
 			if c.Active {
 				p.Activate()

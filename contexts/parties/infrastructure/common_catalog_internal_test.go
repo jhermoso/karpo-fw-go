@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/parties/domain"
@@ -46,6 +47,16 @@ func TestSeedCommonCatalog_CompletesAnEarlierSeed(t *testing.T) {
 			t.Fatal(err)
 		}
 		return n
+	}
+	// A type somebody added with a code the program needs stops the step, with a message.
+	if _, err := raw.Exec(`INSERT INTO role_types (id, name, category, code) VALUES ('0f0f0f0f-0000-0000-0000-000000000001', 'Club', 0, 'club')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := seedCommonCatalog(ctx, db); err == nil || !strings.Contains(err.Error(), `"club"`) {
+		t.Fatalf("a code already taken: %v", err)
+	}
+	if _, err := raw.Exec(`DELETE FROM role_types WHERE name = 'Club'`); err != nil {
+		t.Fatal(err)
 	}
 	for range 2 {
 		if err := seedCommonCatalog(ctx, db); err != nil {
