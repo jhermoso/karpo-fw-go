@@ -133,6 +133,12 @@ func NameContains(text string) spec.Spec[*Party] { return FieldName.ContainsFold
 // OfKind matches people or organizations.
 func OfKind(k Kind) spec.Spec[*Party] { return FieldKind.Eq(k) }
 
+// HasPlayed matches parties with any of the role types, whenever: the ones in force, the ended
+// ones and the ones that have not started yet.
+func HasPlayed(roles ...RoleTypeID) spec.Spec[*Party] {
+	return FieldRoles.Any(RoleFieldType.In(roles...))
+}
+
 // Active matches active parties.
 func Active() spec.Spec[*Party] { return FieldActive.Eq(true) }
 

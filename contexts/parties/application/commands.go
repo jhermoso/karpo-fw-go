@@ -256,16 +256,19 @@ type GetParty struct{ ID domain.PartyID }
 // SearchParties searches parties; every criterion becomes part of one specification executed by
 // the store.
 type SearchParties struct {
-	Text           string
-	Kind           string
-	Role           string // role type id: parties playing it (or a role below it) now
-	Document       string // identification number
-	Organization   string // internal organization id: parties affiliated with it now
-	Facility       string // facility id: parties with a role at it now
-	Classification string // classification type id: parties classified so now
-	ActiveOnly     bool
-	DocumentIssue  bool // only the parties marked with a refused identity document
-	Page, Size     int
+	Text string
+	Kind string
+	Role string // role type id: parties playing it (or a role below it) now
+	// IncludeEndedRoles makes Role match the roles that are not in force too: the ended ones and
+	// the ones that have not started (docs/DECISIONES-COMUNES.md, D-48).
+	IncludeEndedRoles bool
+	Document          string // identification number
+	Organization      string // internal organization id: parties affiliated with it now
+	Facility          string // facility id: parties with a role at it now
+	Classification    string // classification type id: parties classified so now
+	ActiveOnly        bool
+	DocumentIssue     bool // only the parties marked with a refused identity document
+	Page, Size        int
 }
 
 // PartyRelationships lists the relationships of a party.
