@@ -49,6 +49,18 @@ type PartyRoleAssigned struct {
 // EventType implements domain.Event.
 func (PartyRoleAssigned) EventType() string { return "parties.party_role_assigned" }
 
+// PartyMarkedDuplicate is raised when a party is marked as the duplicate of another.
+type PartyMarkedDuplicate struct{ fw.EventMeta }
+
+// EventType implements domain.Event.
+func (PartyMarkedDuplicate) EventType() string { return "parties.party_marked_duplicate" }
+
+// PartyDuplicateCleared is raised when a party stops being a duplicate.
+type PartyDuplicateCleared struct{ fw.EventMeta }
+
+// EventType implements domain.Event.
+func (PartyDuplicateCleared) EventType() string { return "parties.party_duplicate_cleared" }
+
 // PartyRoleAnnulled is raised when a role given by mistake is taken back: removed, or ended and
 // marked when something depended on it.
 type PartyRoleAnnulled struct {

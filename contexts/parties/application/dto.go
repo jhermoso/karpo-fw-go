@@ -45,6 +45,7 @@ type PartyDTO struct {
 	Active       bool             `json:"active"`
 	Test         bool             `json:"test,omitempty"`
 	Shared       bool             `json:"shared,omitempty"`
+	Duplicate    bool             `json:"duplicate,omitempty"` // the duplicate of another party: it takes part in nothing but queries
 	// DocumentIssue is present when the identity document of the party was refused.
 	DocumentIssue   *DocumentIssueDTO   `json:"documentIssue,omitempty"`
 	Organizations   []string            `json:"organizations"` // internal organizations it is affiliated with now
@@ -125,7 +126,7 @@ func ToDTO(p *domain.Party, names Names) PartyDTO {
 		d.Organization = &OrganizationDTO{LegalName: n.Legal(), TradeName: n.Trade(), LegalForm: string(p.Organization().LegalForm)}
 	}
 	now := fw.Now()
-	d.Shared, d.Organizations = p.IsShared(), []string{}
+	d.Shared, d.Duplicate, d.Organizations = p.IsShared(), p.IsDuplicate(), []string{}
 	if issue := p.DocumentIssue(); !issue.IsZero() {
 		d.DocumentIssue = &DocumentIssueDTO{Number: issue.Number, Reason: issue.Reason}
 	}

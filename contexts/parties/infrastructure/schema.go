@@ -225,6 +225,9 @@ func Migrations() sqlrepo.MigrationSet {
 		// (docs/DECISIONES-COMUNES.md, D-62). Migration 21 does the same on a database it meets
 		// first; here it reaches the ones that had already passed it.
 		{Version: 23, Name: "prospect relationship moves to …0017; duplicate of", Run: seedCommonCatalog},
+		// The mark of a party that is the duplicate of another (docs/DECISIONES-COMUNES.md, D-64).
+		{Version: 24, Name: "mark of a duplicate party", Up: sqlrepo.RenderDDLAll(
+			`ALTER TABLE parties {add:duplicate} {bool} DEFAULT {false} NOT NULL{addEnd}`)},
 	}}
 }
 

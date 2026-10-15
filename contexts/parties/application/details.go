@@ -36,7 +36,7 @@ func addRelationshipDetails(svc *Service, s service) {
 		// The number is of the numbering of the organization (the side that sells): who gives it
 		// must be able to write that organization, not just one of the two parties. Asked first,
 		// so that nobody learns which numbers are taken without being allowed to give one.
-		r, _, _, err := s.writableRelationship(ctx, c.ID)
+		r, _, _, err := s.operableRelationship(ctx, c.ID)
 		if err != nil {
 			return RelationshipDTO{}, err
 		}
@@ -77,7 +77,7 @@ func addRelationshipDetails(svc *Service, s service) {
 				}
 				for _, o := range same {
 					if o.ID() != r.ID() {
-						if _, _, _, err := s.writableRelationship(ctx, c.ID); err != nil {
+						if _, _, _, err := s.operableRelationship(ctx, c.ID); err != nil {
 							return RelationshipDTO{}, err
 						}
 						return RelationshipDTO{}, fw.Violation("parties.duplicate_promotion_code",
@@ -138,7 +138,7 @@ func (s service) changeDetails(ctx context.Context, id domain.RelationshipID, fn
 	if err != nil {
 		return RelationshipDTO{}, err
 	}
-	if _, _, _, err := s.writableRelationship(ctx, id); err != nil {
+	if _, _, _, err := s.operableRelationship(ctx, id); err != nil {
 		return RelationshipDTO{}, err
 	}
 	r, err := s.relationships.Update(ctx, id, func(_ context.Context, r *domain.Relationship) error {

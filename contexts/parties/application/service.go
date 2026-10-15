@@ -141,6 +141,9 @@ func (s service) updateParty(ctx context.Context, id domain.PartyID, fn func(*do
 		if err := sc.writable(p); err != nil {
 			return err
 		}
+		if err := operable(p); err != nil {
+			return err
+		}
 		return fn(p, n.Roles)
 	})
 	if err != nil {
@@ -399,6 +402,9 @@ func NewService(d Deps) *Service {
 		}
 		if q.DocumentIssue {
 			parts = append(parts, domain.FieldDocumentIssue.Eq(true))
+		}
+		if !q.IncludeDuplicates {
+			parts = append(parts, domain.FieldDuplicate.Eq(false))
 		}
 		if q.Role != "" {
 			role, err := parseRoleType(q.Role)

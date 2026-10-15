@@ -347,6 +347,32 @@ func (e *env) scenario(prefix string) (acme, ana papp.PartyDTO) {
 	e.must(e.do("POST", "/api/parties/"+ana.ID+"/roles", e.admin, map[string]any{"roleType": domain.RoleEmployee.String(),
 		"from": employee.From}, &ana), 200, "the role again, from when the annulled one started")
 
+	// A duplicate is found and read, and takes part in nothing else (D-64); ending the Duplicate
+	// Of relationship undoes it.
+	var dup, survivor papp.PartyDTO
+	e.must(e.do("POST", "/api/persons", e.admin, map[string]any{"givenName": "Duplicada", "firstSurname": prefix}, &dup), 201, "a duplicate")
+	e.must(e.do("POST", "/api/persons", e.admin, map[string]any{"givenName": "Buena", "firstSurname": prefix}, &survivor), 201, "the survivor")
+	var dupRel papp.RelationshipDTO
+	e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelDuplicateOf.String(),
+		"fromParty": dup.ID, "toParty": survivor.ID}, &dupRel), 201, "mark the duplicate")
+	var found fw.Page[papp.PartyDTO]
+	e.must(e.do("GET", "/api/parties?q=Duplicada", e.admin, nil, &found), 200, "search by default")
+	if slices.ContainsFunc(found.Items, func(p papp.PartyDTO) bool { return p.ID == dup.ID }) {
+		e.t.Fatalf("a duplicate in a search by default: %+v", found)
+	}
+	e.must(e.do("GET", "/api/parties?q=Duplicada&includeDuplicates=true", e.admin, nil, &found), 200, "search with the duplicates")
+	if !slices.ContainsFunc(found.Items, func(p papp.PartyDTO) bool { return p.ID == dup.ID && p.Duplicate }) {
+		e.t.Fatalf("the duplicate was not found on request: %+v", found)
+	}
+	e.must(e.do("GET", "/api/parties/"+dup.ID, e.admin, nil, nil), 200, "a duplicate is read")
+	e.must(e.do("PUT", "/api/parties/"+dup.ID+"/name", e.admin, map[string]any{"givenName": "Otra", "firstSurname": prefix}, nil), 422, "nor renamed")
+	e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelCustomer.String(),
+		"fromParty": dup.ID, "toParty": acme.ID}, nil), 422, "nor related")
+	e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelDuplicateOf.String(),
+		"fromParty": survivor.ID, "toParty": dup.ID}, nil), 422, "nor the survivor of anybody")
+	e.must(e.do("POST", "/api/party-relationships/"+dupRel.ID+"/terminate", e.admin, nil, nil), 200, "undo the duplicate")
+	e.must(e.do("PUT", "/api/parties/"+dup.ID+"/name", e.admin, map[string]any{"givenName": "Otra", "firstSurname": prefix}, nil), 200, "operable again")
+
 	// A party with relationships that have not ended is not deactivated (D-4); one without, is.
 	e.must(e.do("PUT", "/api/parties/"+ana.ID+"/active", e.admin, map[string]any{"active": false}, nil), 422, "ana works for acme and buys from it")
 	e.must(e.do("PUT", "/api/parties/"+acme.ID+"/active", e.admin, map[string]any{"active": false}, nil), 422, "acme has an employee and a customer")
@@ -1085,7 +1111,7 @@ func endToEnd(t *testing.T, newDirectory func(*testing.T) directory) {
 	if _, err := e.mod.Relay(broker).RelayOnce(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if len(seen) != 18 || roles != 6 {
+	if len(seen) != 20 || roles != 6 {
 		t.Fatalf("published: %v, roles %d", seen, roles)
 	}
 	if len(shares) != 3 || shares[0] != "30.00" || shares[1] != "45.50" || shares[2] != "" {

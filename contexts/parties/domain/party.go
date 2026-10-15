@@ -79,6 +79,7 @@ type Party struct {
 	facilityRoles   []FacilityRole
 	shared          bool
 	documentIssue   DocumentIssue
+	duplicate       bool
 }
 
 // DocumentIssue marks a party whose identity document was refused: the number as it came and why
@@ -150,6 +151,7 @@ type PartyState struct {
 	Facilities   []FacilityRole
 	Shared       bool
 	Issue        DocumentIssue
+	Duplicate    bool
 	Active       bool
 	Test         bool
 	Audit        traits.AuditStamp
@@ -179,10 +181,35 @@ func Reconstitute(id PartyID, s PartyState) (*Party, error) {
 	p.facilityRoles = slices.Clone(s.Facilities)
 	p.shared = s.Shared
 	p.documentIssue = s.Issue
+	p.duplicate = s.Duplicate
 	p.Activation = traits.RestoredActivation(s.Active)
 	p.Audited = traits.RestoredAudit(s.Audit)
 	p.TestFlag = traits.RestoredTestFlag(s.Test)
 	return p, nil
+}
+
+// IsDuplicate reports whether the party is a duplicate of another: it is still found and read,
+// but takes part in nothing else (docs/DECISIONES-COMUNES.md, D-64). The Duplicate Of
+// relationship says of which party; this mark is its projection, so that searches can leave it
+// out.
+func (p *Party) IsDuplicate() bool { return p.duplicate }
+
+// MarkDuplicate marks the party as a duplicate. A party is the duplicate of one party only.
+func (p *Party) MarkDuplicate() error {
+	if p.duplicate {
+		return fw.Violation("parties.already_duplicate", "the party is already the duplicate of another")
+	}
+	p.duplicate = true
+	p.Raise(PartyMarkedDuplicate{EventMeta: p.NewEventMeta()})
+	return nil
+}
+
+// ClearDuplicate takes the mark away: the Duplicate Of relationship ended.
+func (p *Party) ClearDuplicate() {
+	if p.duplicate {
+		p.duplicate = false
+		p.Raise(PartyDuplicateCleared{EventMeta: p.NewEventMeta()})
+	}
 }
 
 // DocumentIssue returns the mark of a refused identity document (zero when there is none).

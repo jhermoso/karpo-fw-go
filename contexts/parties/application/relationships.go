@@ -137,6 +137,11 @@ func (s service) establish(ctx context.Context, rt domain.RelationshipType, from
 			return nil, err
 		}
 	}
+	for _, p := range []*domain.Party{from, to} {
+		if err := operable(p); err != nil {
+			return nil, err
+		}
+	}
 	if dup, err := s.Relationships.Exists(ctx, domain.SameRelationship(rt, from.ID(), to.ID(), since)); err != nil {
 		return nil, err
 	} else if dup {
@@ -163,6 +168,12 @@ func (s service) establish(ctx context.Context, rt domain.RelationshipType, from
 	}
 	if err := s.relationships.Create(ctx, r); err != nil {
 		return nil, err
+	}
+	if rt.ID == domain.RelDuplicateOf { // the duplicate is marked, and affiliated with nobody
+		if _, err := s.parties.Update(ctx, from.ID(), func(_ context.Context, p *domain.Party) error { return p.MarkDuplicate() }); err != nil {
+			return nil, err
+		}
+		return r, nil
 	}
 	for _, side := range [][2]*domain.Party{{from, to}, {to, from}} {
 		member, org := side[0], side[1]
@@ -254,6 +265,31 @@ func (s service) writableRelationship(ctx context.Context, id domain.Relationshi
 	return r, from, to, nil
 }
 
+// operable refuses any change to a party marked as the duplicate of another: it is found and
+// read, and nothing else (docs/DECISIONES-COMUNES.md, D-64). Ending its relationships is still
+// allowed, the Duplicate Of one included, which is how the mark is undone.
+func operable(p *domain.Party) error {
+	if p.IsDuplicate() {
+		return fw.Violation("parties.duplicate", "the party is the duplicate of another: it takes part in nothing but queries")
+	}
+	return nil
+}
+
+// operableRelationship is writableRelationship for a change to the relationship itself (its
+// details): neither of its parties may be a duplicate.
+func (s service) operableRelationship(ctx context.Context, id domain.RelationshipID) (*domain.Relationship, *domain.Party, *domain.Party, error) {
+	r, from, to, err := s.writableRelationship(ctx, id)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	for _, p := range []*domain.Party{from, to} {
+		if err := operable(p); err != nil {
+			return nil, nil, nil, err
+		}
+	}
+	return r, from, to, nil
+}
+
 // terminate ends a relationship and the affiliations it produced. The caller needs to see the
 // relationship and be allowed to relate its parties.
 func (s service) terminate(ctx context.Context, id domain.RelationshipID, at time.Time) (*domain.Relationship, error) {
@@ -264,6 +300,11 @@ func (s service) terminate(ctx context.Context, id domain.RelationshipID, at tim
 	r, err := s.relationships.Update(ctx, id, func(_ context.Context, r *domain.Relationship) error { return r.Terminate(at) })
 	if err != nil {
 		return nil, err
+	}
+	if r.Type() == domain.RelDuplicateOf { // undoing the mark is ending the relationship
+		if _, err := s.parties.Update(ctx, r.From(), func(_ context.Context, p *domain.Party) error { p.ClearDuplicate(); return nil }); err != nil {
+			return nil, err
+		}
 	}
 	for _, p := range []*domain.Party{from, to} {
 		if !slices.ContainsFunc(p.Affiliations(), func(a domain.Affiliation) bool { return a.Relationship == id }) {
