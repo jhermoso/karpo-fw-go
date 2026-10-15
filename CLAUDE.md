@@ -7,7 +7,7 @@ Karpo en Go: el framework (`pkg/`), los contextos de negocio (`contexts/`) y el 
 
 | Proyecto | Carpeta | Qué es |
 |---|---|---|
-| Trench | `(repositorio de Trench)` | ERP original en C#; sigue evolucionando. Referencia del esquema de datos |
+| Trench | `C:\Git\Trench` | ERP original en C#; sigue evolucionando. Referencia del esquema de datos |
 | Karpo C# | `C:\Git\Paranoia\Karpo` | Karpo en C# |
 | Karpo Go | este repositorio | Karpo en Go |
 | Theros | `C:\Git\Paranoia\Theros` | Generador de código; compila lo que genera contra este framework |
