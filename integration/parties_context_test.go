@@ -61,6 +61,34 @@ func TestPartiesContext(t *testing.T) {
 			if err != nil || len(types) != len(domain.WellKnownRoleTypes()) {
 				t.Fatalf("seeded role types: %d %v", len(types), err)
 			}
+			// Migration 16: every role type of the program has its code, and one can be added.
+			for _, rt := range types {
+				if rt.Code != domain.CodeOf(rt.Name) || !rt.WellKnown {
+					t.Fatalf("role type %s: code %q", rt.Name, rt.Code)
+				}
+			}
+			guarantor, err := svc.DefineRoleType.Handle(ctx, papp.DefineRoleType{Name: "Guarantor", Code: "guarantor", Parent: domain.RolePersonCategory.String()})
+			if err != nil || guarantor.Applicability != "person" || guarantor.WellKnown {
+				t.Fatalf("adding a role type: %+v %v", guarantor, err)
+			}
+			if _, err := svc.DefineRoleType.Handle(ctx, papp.DefineRoleType{Name: "Avalista", Code: "guarantor", Parent: domain.RolePersonCategory.String()}); !errors.Is(err, fw.ErrRuleViolation) {
+				t.Fatalf("a code already taken: %v", err)
+			}
+			if types, err = svc.ListRoleTypes.Handle(ctx, papp.ListRoleTypes{}); err != nil || len(types) != len(domain.WellKnownRoleTypes())+1 {
+				t.Fatalf("role types after adding one: %d %v", len(types), err)
+			}
+			guarantee, err := svc.DefineRelationshipType.Handle(ctx, papp.DefineRelationshipType{Name: "Guarantee", Code: "guarantee",
+				FromRole: guarantor.ID, ToRole: domain.RoleCustomer.String()})
+			if err != nil || guarantee.WellKnown || guarantee.Hierarchical || guarantee.FromRole != guarantor.ID {
+				t.Fatalf("adding a relationship type: %+v %v", guarantee, err)
+			}
+			if _, err := svc.DefineRelationshipType.Handle(ctx, papp.DefineRelationshipType{Name: "Aval", Code: "guarantee",
+				FromRole: guarantor.ID, ToRole: domain.RoleCustomer.String()}); !errors.Is(err, fw.ErrRuleViolation) {
+				t.Fatalf("a relationship type code already taken: %v", err)
+			}
+			if all, err := svc.ListRelationshipTypes.Handle(ctx, papp.ListRelationshipTypes{}); err != nil || len(all) != len(domain.WellKnownRelationshipTypes())+1 {
+				t.Fatalf("relationship types after adding one: %d %v", len(all), err)
+			}
 			acme, err := svc.RegisterOrganization.Handle(ctx, papp.RegisterOrganization{LegalName: "Acme Sociedad Anónima", TradeName: "Acme",
 				Roles: []string{domain.RoleInternalOrganization.String()}})
 			if err != nil {
@@ -237,7 +265,7 @@ func TestPartiesContext(t *testing.T) {
 			// Details by relationship type (docs/PARTIES-UDM.md): the codes read from SQL, the
 			// prospect relationship added by migration 11 and its trial in a nullable column.
 			relTypes, err := svc.ListRelationshipTypes.Handle(ctx, papp.ListRelationshipTypes{})
-			if err != nil || len(relTypes) != len(domain.WellKnownRelationshipTypes()) {
+			if err != nil || len(relTypes) != len(domain.WellKnownRelationshipTypes())+1 { // the seed and the one added above
 				t.Fatalf("seeded relationship types: %d %v", len(relTypes), err)
 			}
 			for _, rt := range relTypes {

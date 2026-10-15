@@ -106,6 +106,74 @@ func TestRoleCatalog(t *testing.T) {
 
 func ptr(id domain.RoleTypeID) *domain.RoleTypeID { return &id }
 
+func TestRoleTypes_CodesAndAdding(t *testing.T) {
+	for name, want := range map[string]string{"Customer": "customer", "Bill-To Customer": "bill-to-customer",
+		"  Internal   Organization ": "internal-organization", "Año 2026!": "a-o-2026", "---": ""} {
+		if got := domain.CodeOf(name); got != want {
+			t.Errorf("code of %q: %q, want %q", name, got, want)
+		}
+	}
+	cat := domain.WellKnownRoleCatalog() // panics if two role types of the program shared a code
+	for _, rt := range cat.All() {
+		if got, ok := cat.ByCode(rt.Code); rt.Code == "" || !ok || got.ID != rt.ID || !domain.IsWellKnownRoleType(rt.ID) {
+			t.Errorf("%s: code %q does not lead back to it", rt.Name, rt.Code)
+		}
+	}
+	if _, ok := cat.ByCode(""); ok {
+		t.Error("the empty code is nobody's")
+	}
+
+	id := domain.RoleTypeID{UUID: fw.NewUUID()}
+	guarantor, err := domain.NewRoleType(id, " Guarantor ", "Answers for  a debt", "guarantor", domain.RolePersonCategory)
+	if err != nil || guarantor.Name.String() != "Guarantor" || guarantor.Description != "Answers for a debt" || guarantor.Category ||
+		domain.IsWellKnownRoleType(id) {
+		t.Fatalf("new role type: %+v %v", guarantor, err)
+	}
+	if err := cat.Admits(guarantor); err != nil {
+		t.Fatalf("a new role type under Person fits: %v", err)
+	}
+	for what, bad := range map[string]func() (domain.RoleType, error){
+		"no name":   func() (domain.RoleType, error) { return domain.NewRoleType(id, " ", "", "", domain.RolePersonCategory) },
+		"no parent": func() (domain.RoleType, error) { return domain.NewRoleType(id, "X", "", "", domain.RoleTypeID{}) },
+		"code in capitals": func() (domain.RoleType, error) {
+			return domain.NewRoleType(id, "X", "", "Guarantor", domain.RolePersonCategory)
+		},
+		"code ending in a hyphen": func() (domain.RoleType, error) {
+			return domain.NewRoleType(id, "X", "", "guarantor-", domain.RolePersonCategory)
+		},
+	} {
+		if _, err := bad(); !errors.Is(err, fw.ErrValidation) {
+			t.Errorf("%s: %v", what, err)
+		}
+	}
+	taken := func(name, code string, parent domain.RoleTypeID) error {
+		rt, err := domain.NewRoleType(id, name, "", code, parent)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return cat.Admits(rt)
+	}
+	if err := taken("CUSTOMER", "", domain.RolePartyRoot); !errors.Is(err, fw.ErrRuleViolation) {
+		t.Errorf("a name already in the catalog: %v", err)
+	}
+	if err := taken("Buyer", "customer", domain.RolePartyRoot); !errors.Is(err, fw.ErrRuleViolation) {
+		t.Errorf("a code already in the catalog: %v", err)
+	}
+	if err := taken("Buyer", "", domain.RoleTypeID{UUID: fw.NewUUID()}); !errors.Is(err, fw.ErrValidation) {
+		t.Errorf("a parent nobody has: %v", err)
+	}
+
+	// With it in the catalog, it is a role of persons like the ones of the program.
+	withIt, err := domain.NewRoleCatalog(append(domain.WellKnownRoleTypes(), guarantor), domain.RolePersonCategory, domain.RoleOrganizationCategory)
+	if err != nil || withIt.Applicability(id) != domain.AppliesToPerson || !withIt.IsA(id, domain.RolePersonCategory) {
+		t.Fatalf("catalog with the new role type: %v", err)
+	}
+	if _, err := domain.NewRoleCatalog(append(domain.WellKnownRoleTypes(), guarantor, domain.RoleType{ID: domain.RoleTypeID{UUID: fw.NewUUID()},
+		Name: guarantor.Name, Code: "guarantor"}), domain.RolePersonCategory, domain.RoleOrganizationCategory); !errors.Is(err, fw.ErrValidation) {
+		t.Fatalf("two role types with the same code: %v", err)
+	}
+}
+
 func TestParty_RegisterAndRename(t *testing.T) {
 	ana := person(t, "Ana", "García", "López")
 	if ana.Kind() != domain.KindPerson || ana.Name() != "Ana García López" || !ana.IsActive() {
