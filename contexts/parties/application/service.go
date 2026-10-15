@@ -164,19 +164,39 @@ func (s service) scope(ctx context.Context) scope {
 // the affiliation: the first audit record of each, in one operation (the same correlation). It
 // is how "the organization registered it" is known without keeping it anywhere else
 // (docs/DECISIONES-COMUNES.md, D-74). Without an audit log, or when in doubt, it says no.
+//
+// A party registered before the rule existed does not count, even when the audit log could tell
+// (D-77): it stays read-only to the standard users of the organization.
 func (s service) registeredWith(ctx context.Context, p *domain.Party, a domain.Affiliation) bool {
 	if s.Audit == nil {
 		return false
 	}
-	first := func(kind, id string) string {
+	first := func(kind, id string) (app.AuditRecord, bool) {
 		trail, err := s.Audit.Trail(ctx, kind, id)
 		if err != nil || len(trail) == 0 {
-			return ""
+			return app.AuditRecord{}, false
 		}
-		return trail[0].CorrelationID
+		return trail[0], true
 	}
-	c := first(domain.PartyKind, p.ID().String())
-	return c != "" && c == first(domain.RelationshipKind, a.Relationship.String())
+	party, ok := first(domain.PartyKind, p.ID().String())
+	if !ok || party.CorrelationID == "" || party.At.Before(RegistrationRuleSince) {
+		return false
+	}
+	rel, ok := first(domain.RelationshipKind, a.Relationship.String())
+	return ok && rel.CorrelationID == party.CorrelationID
+}
+
+// RegistrationRuleSince is when "the organization that registered a party changes it" came into
+// force (docs/DECISIONES-COMUNES.md, D-65 and D-77): parties registered earlier are only related.
+var RegistrationRuleSince = time.Date(2026, 10, 15, 0, 0, 0, 0, time.UTC)
+
+// mayGive refuses to give a role only the global administrator gives: Internal Organization, or a
+// role below it, makes a party a company of the group (docs/DECISIONES-COMUNES.md, D-78).
+func mayGive(sc scope, cat *domain.Catalog, role domain.RoleTypeID) error {
+	if !sc.global && cat.IsA(role, domain.RoleInternalOrganization) {
+		return fmt.Errorf("%w: only the global administrator makes a party an internal organization", fw.ErrForbidden)
+	}
+	return nil
 }
 
 // NewService wires the use cases.
@@ -314,6 +334,9 @@ func NewService(d Deps) *Service {
 			return PartyDTO{}, err
 		}
 		return s.updateParty(ctx, c.PartyID, func(p *domain.Party, cat *domain.Catalog) error {
+			if err := mayGive(s.scope(ctx), cat, role); err != nil {
+				return err
+			}
 			_, err := p.AssignRole(cat, role, nowOr(c.From))
 			return err
 		})
