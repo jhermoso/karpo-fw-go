@@ -635,6 +635,27 @@ func (e *env) phase2(acme, ana papp.PartyDTO) {
 	if len(got.Contacts) != 2 || got.Contacts[0].Value != "ana@example.com" || got.Contacts[1].Address == nil || got.Contacts[1].Address.Locality != "Madrid" {
 		e.t.Fatalf("contacts: %+v", got.Contacts)
 	}
+	// Where in the street, piece by piece: stored and read back as given, each piece optional.
+	var withPieces papp.PartyDTO
+	e.must(e.do("POST", "/api/parties/"+acme.ID+"/contacts", e.admin, map[string]any{"kind": "postal", "purposes": []string{"shipping"},
+		"address": map[string]any{"streetType": "CL", "line1": "Mayor", "number": " 5 ", "numberQualifier": "bis", "block": "2", "portal": "A",
+			"staircase": "B", "floor": "3", "door": "izquierda", "postalCode": "28013", "locality": "Madrid", "country": "ES"}}, &withPieces), 200, "address with its pieces")
+	var pieces *papp.AddressDTO
+	for _, c := range withPieces.Contacts {
+		if c.Address != nil && c.Address.Line1 == "Mayor" {
+			pieces = c.Address
+		}
+	}
+	if pieces == nil || pieces.Number != "5" || pieces.NumberQualifier != "bis" || pieces.Block != "2" || pieces.Portal != "A" ||
+		pieces.Staircase != "B" || pieces.Floor != "3" || pieces.Door != "izquierda" {
+		e.t.Fatalf("address with its pieces: %+v", pieces)
+	}
+	e.must(e.do("POST", "/api/parties/"+acme.ID+"/contacts", e.admin, map[string]any{"kind": "postal",
+		"address": map[string]any{"line1": "Mayor", "floor": "the third one", "country": "ES"}}, nil), 400, "a piece too long")
+	if got.Contacts[1].Address.Number != "" || got.Contacts[1].Address.Door != "" {
+		e.t.Fatalf("an address without pieces has none: %+v", got.Contacts[1].Address)
+	}
+
 	e.must(e.do("POST", "/api/parties/"+ana.ID+"/contacts/"+got.Contacts[0].ID+"/end", e.admin, nil, &got), 200, "end e-mail")
 	if got.Contacts[0].Active || len(got.Contacts[0].Purposes) != 0 {
 		e.t.Fatalf("ended contact: %+v", got.Contacts[0])
@@ -712,7 +733,8 @@ func endToEnd(t *testing.T, newDirectory func(*testing.T) directory) {
 
 	// Audit trail and Published Language, both committed with the changes.
 	trail, err := e.mod.Audit.Trail(ctx, domain.PartyKind, acme.ID)
-	if err != nil || len(trail) != 4 || trail[1].Actor.Name != "ana.admin" || len(trail[3].Changes) != 1 || trail[3].Changes[0].Field != "classifications" {
+	if err != nil || len(trail) != 5 || trail[1].Actor.Name != "ana.admin" || len(trail[3].Changes) != 1 || trail[3].Changes[0].Field != "contacts" ||
+		len(trail[4].Changes) != 1 || trail[4].Changes[0].Field != "classifications" {
 		t.Fatalf("audit: %+v %v", trail, err)
 	}
 	broker := inprocess.NewBroker()

@@ -206,3 +206,18 @@ func TestParty_Classifications(t *testing.T) {
 		t.Fatalf("catalog: %d", len(cc.All()))
 	}
 }
+
+func TestPostalAddress_Premises(t *testing.T) {
+	a := domain.PostalAddress{StreetType: "CL", Line1: "Mayor", Country: es, PostalCode: "28013", Locality: "Madrid",
+		Premises: domain.Premises{Number: "5", Qualifier: "bis", Block: "2", Portal: "A", Staircase: "B", Floor: "3", Door: "izquierda"}}
+	if got, want := a.String(), "CL Mayor 5 bis, bloque 2, portal A, escalera B, planta 3, puerta izquierda, 28013 Madrid, ES"; got != want {
+		t.Fatalf("rendering: got %q, want %q", got, want)
+	}
+	plain := domain.PostalAddress{Line1: "Mayor 1", Country: es}
+	if !plain.Premises.IsZero() || plain.String() != "Mayor 1, ES" {
+		t.Fatalf("an address without pieces: %q", plain.String())
+	}
+	if got := (domain.Premises{Floor: "3", Door: "B"}).String(); got != "planta 3, puerta B" {
+		t.Fatalf("pieces without a number: %q", got)
+	}
+}

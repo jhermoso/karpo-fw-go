@@ -188,6 +188,15 @@ func Migrations() sqlrepo.MigrationSet {
 		{Version: 14, Name: "collaborator relationship details: promotion code", Up: sqlrepo.RenderDDLAll(
 			`ALTER TABLE party_relationships {add:promotion_code} {str:15}{addEnd}`,
 			`CREATE INDEX ix_party_rel_promotion ON party_relationships (promotion_code)`)},
+		// Where in the street an address is, piece by piece (docs/GEOGRAFIA-NUTS.md, N-5).
+		{Version: 15, Name: "postal address: number, block, portal, staircase, floor and door", Up: sqlrepo.RenderDDLAll(
+			`ALTER TABLE party_contacts {add:addr_number} {str:10}{addEnd}`,
+			`ALTER TABLE party_contacts {add:addr_qualifier} {str:10}{addEnd}`,
+			`ALTER TABLE party_contacts {add:addr_block} {str:10}{addEnd}`,
+			`ALTER TABLE party_contacts {add:addr_portal} {str:10}{addEnd}`,
+			`ALTER TABLE party_contacts {add:addr_staircase} {str:10}{addEnd}`,
+			`ALTER TABLE party_contacts {add:addr_floor} {str:10}{addEnd}`,
+			`ALTER TABLE party_contacts {add:addr_door} {str:10}{addEnd}`)},
 	}}
 }
 

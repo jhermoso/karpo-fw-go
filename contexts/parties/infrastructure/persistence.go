@@ -206,7 +206,8 @@ func PartyMapping() sqlrepo.Mapping[domain.PartyID, *domain.Party] {
 			Table:      "party_contacts",
 			ForeignKey: "party_id",
 			Columns: []string{"id", "kind", "contact_value", "street_type", "line1", "line2", "directions", "postal_code",
-				"locality", "region", "country", "geo_postal_code", "geo_boundary", "purposes", "non_solicitation", "valid_from", "valid_to"},
+				"locality", "region", "country", "geo_postal_code", "geo_boundary", "purposes", "non_solicitation", "valid_from", "valid_to",
+				"addr_number", "addr_qualifier", "addr_block", "addr_portal", "addr_staircase", "addr_floor", "addr_door"},
 			Fields:  map[string]string{"value": "contact_value"},
 			OrderBy: []string{"valid_from", "id"},
 			Dehydrate: func(p *domain.Party) ([]sqlrepo.Values, error) {
@@ -218,7 +219,10 @@ func PartyMapping() sqlrepo.Mapping[domain.PartyID, *domain.Party] {
 						"postal_code": nullable(a.PostalCode), "locality": nullable(a.Locality), "region": nullable(a.Region),
 						"country": nullable(a.Country.String()), "geo_postal_code": optUUID(a.Geo.PostalCode),
 						"geo_boundary": optUUID(a.Geo.Boundary), "purposes": nullable(joinPurposes(c.Purposes)),
-						"non_solicitation": c.NonSolicitation, "valid_from": c.Period.From(), "valid_to": nil}
+						"non_solicitation": c.NonSolicitation, "valid_from": c.Period.From(), "valid_to": nil,
+						"addr_number": nullable(a.Premises.Number), "addr_qualifier": nullable(a.Premises.Qualifier),
+						"addr_block": nullable(a.Premises.Block), "addr_portal": nullable(a.Premises.Portal),
+						"addr_staircase": nullable(a.Premises.Staircase), "addr_floor": nullable(a.Premises.Floor), "addr_door": nullable(a.Premises.Door)}
 					if t, ok := c.Period.To(); ok {
 						v["valid_to"] = t
 					}
@@ -319,7 +323,9 @@ func hydrateContact(c *sqlrepo.Row) (domain.Contact, error) {
 		}
 		out.Address = domain.PostalAddress{StreetType: c.String("street_type"), Line1: c.String("line1"), Line2: c.String("line2"),
 			Directions: c.String("directions"), PostalCode: c.String("postal_code"), Locality: c.String("locality"),
-			Region: c.String("region"), Country: country}
+			Region: c.String("region"), Country: country,
+			Premises: domain.Premises{Number: c.String("addr_number"), Qualifier: c.String("addr_qualifier"), Block: c.String("addr_block"),
+				Portal: c.String("addr_portal"), Staircase: c.String("addr_staircase"), Floor: c.String("addr_floor"), Door: c.String("addr_door")}}
 		if !c.IsNull("geo_postal_code") {
 			out.Address.Geo.PostalCode = c.UUID("geo_postal_code")
 		}

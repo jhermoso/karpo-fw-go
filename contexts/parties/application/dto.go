@@ -160,6 +160,8 @@ func ToDTO(p *domain.Party, names Names) PartyDTO {
 		if c.Kind == domain.ContactPostal {
 			a := c.Address
 			cd.Address = &AddressDTO{StreetType: a.StreetType, Line1: a.Line1, Line2: a.Line2, Directions: a.Directions,
+				Number: a.Premises.Number, NumberQualifier: a.Premises.Qualifier, Block: a.Premises.Block, Portal: a.Premises.Portal,
+				Staircase: a.Premises.Staircase, Floor: a.Premises.Floor, Door: a.Premises.Door,
 				PostalCode: a.PostalCode, Locality: a.Locality, Region: a.Region, Country: a.Country.String()}
 			if !a.Geo.PostalCode.IsZero() {
 				cd.Address.GeoPostalCode = a.Geo.PostalCode.String()
