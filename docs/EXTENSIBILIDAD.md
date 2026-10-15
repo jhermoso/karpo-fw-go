@@ -62,7 +62,7 @@ cambiar para admitirlo.
 > plan de Trench como si fuera su código. La sesión de Trench la corrigió punto por punto
 > (catorce correcciones) al escribir el contrato común. **La fuente es ese contrato**, no esta
 > sección: `doc/Contrato_Extensibilidad_Campos_Personalizados_2026-10-13.md`, PR
-> [Trench#27](https://github.com/Trench/pull/27). Lo de aquí es un
+> [Trench (PR 27)](https://github.com/Trench/pull/27). Lo de aquí es un
 > resumen de lo que dice, leído el 13 de octubre; ni el contrato ni este resumen están aprobados
 > por Javier.
 
