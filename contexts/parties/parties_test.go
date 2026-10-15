@@ -273,14 +273,20 @@ func (e *env) scenario(prefix string) (acme, ana papp.PartyDTO) {
 		e.t.Fatalf("relationship: %+v", rel)
 	}
 	e.must(e.do("POST", "/api/party-relationships", e.admin, body, nil), 422, "duplicate relationship")
+	// A relationship gives each side the role it lacks (D-49), but never makes an internal
+	// organization of anybody, nor gives a role to who cannot play it.
+	e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelEmployment.String(),
+		"fromParty": acme.ID, "toParty": ana.ID}, nil), 422, "an organization is not made an employee, nor Ana an internal organization")
 	e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelCustomer.String(),
-		"fromParty": ana.ID, "toParty": acme.ID}, nil), 422, "ana is not a customer yet")
+		"fromParty": ana.ID, "toParty": acme.ID}, nil), 201, "the customer relationship makes ana a customer")
+	e.must(e.do("GET", "/api/parties/"+ana.ID, e.reader, nil, &ana), 200, "ana after the relationship")
+	if !slices.ContainsFunc(ana.Roles, func(r papp.RoleDTO) bool { return r.RoleType == domain.RoleCustomer.String() }) {
+		e.t.Fatalf("ana was not made a customer: %+v", ana.Roles)
+	}
 
-	// Ana becomes a bill-to customer: a Customer by inheritance, so the relationship is allowed
-	// and a search for customers finds her.
+	// Ana becomes a bill-to customer too: a Customer by inheritance; a search for customers finds
+	// her once.
 	e.must(e.do("POST", "/api/parties/"+ana.ID+"/roles", e.admin, map[string]any{"roleType": domain.RoleBillToCustomer.String()}, &ana), 200, "assign role")
-	e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelCustomer.String(),
-		"fromParty": ana.ID, "toParty": acme.ID}, nil), 201, "customer relationship")
 	var customers fw.Page[papp.PartyDTO]
 	e.must(e.do("GET", "/api/parties?role="+domain.RoleCustomer.String()+"&q="+prefix, e.reader, nil, &customers), 200, "search customers")
 	if customers.Total != 1 || customers.Items[0].ID != ana.ID {
@@ -902,7 +908,7 @@ func (e *env) roleTypes(tag string) {
 		t.Fatalf("audit of the new relationship type: %+v %v", trail, err)
 	}
 
-	// And relates parties like any other: each side has to play its role.
+	// And relates parties like any other: a side that lacks its role is given it.
 	var debtor papp.PartyDTO
 	e.must(e.do("POST", "/api/persons", e.admin, map[string]any{"givenName": "Dora", "firstSurname": "Deudora " + tag,
 		"roles": []string{domain.RoleCustomer.String()}}, &debtor), 201, "a customer")
@@ -912,8 +918,12 @@ func (e *env) roleTypes(tag string) {
 	if rel.TypeName != "Guarantee" || !rel.Active || rel.FromRole != added.ID {
 		t.Fatalf("relationship of the new type: %+v", rel)
 	}
-	e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": relType.ID, "fromParty": debtor.ID, "toParty": person.ID}, nil),
-		422, "the sides the other way round do not play the roles")
+	e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": relType.ID, "fromParty": debtor.ID, "toParty": person.ID}, &rel),
+		201, "the other way round, each side is given the role it lacks")
+	e.must(e.do("GET", "/api/parties/"+debtor.ID, e.admin, nil, &debtor), 200, "the customer, now a guarantor too")
+	if !slices.ContainsFunc(debtor.Roles, func(r papp.RoleDTO) bool { return r.RoleType == added.ID }) {
+		t.Fatalf("the relationship did not give the role of the new type: %+v", debtor.Roles)
+	}
 }
 
 func endToEnd(t *testing.T, newDirectory func(*testing.T) directory) {
@@ -961,7 +971,7 @@ func endToEnd(t *testing.T, newDirectory func(*testing.T) directory) {
 		t.Fatalf("seeded role types without a code: %d", n)
 	}
 	_ = raw.QueryRow("SELECT COUNT(*) FROM party_roles WHERE party_id = (SELECT id FROM parties WHERE name LIKE 'Ana sql%')").Scan(&n)
-	if n != 2 {
+	if n != 3 { // employee, customer by the relationship, bill-to customer
 		t.Fatalf("ana's roles in SQL: %d", n)
 	}
 
@@ -1000,7 +1010,7 @@ func endToEnd(t *testing.T, newDirectory func(*testing.T) directory) {
 	if _, err := e.mod.Relay(broker).RelayOnce(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if len(seen) != 15 || roles != 2 {
+	if len(seen) != 15 || roles != 3 {
 		t.Fatalf("published: %v, roles %d", seen, roles)
 	}
 	if len(shares) != 3 || shares[0] != "30.00" || shares[1] != "45.50" || shares[2] != "" {

@@ -142,7 +142,7 @@ contexts/parties/
 | Roles | `PartyRoleApplicationService` creaba un `Party("Temp")` falso y guardaba el rol directamente: **nunca se comprobaba el solapamiento** | Los roles son hijos del agregado. `AssignRole` exige tipo existente, no categoría, compatible con persona u organización, party activa y sin solapamiento del mismo rol |
 | Jerarquía de roles | Codificada en `WellKnownCatalog` **y** en la tabla `role_type_hierarchy` (dos fuentes de verdad) | La tabla `role_types.parent_id` es la única fuente; se siembra desde el mismo catálogo con **los mismos GUID**. `Catalog` valida que no haya ciclos y deriva a qué tipo de party aplica cada rol |
 | Herencia de roles | Virtual al leer (`LoadRolesSectionAsync`) | Igual: `PlaysAt` y `Catalog.Descendants`. En la búsqueda se traduce a `EXISTS` con la vigencia en SQL |
-| Relaciones | Partes «PartyFrom»/«PartyTo» falsas; `RelationshipTypeAllowedSpec` devolvía siempre `true`; sin control de origen distinto del destino | `Establish` exige partes distintas y activas que **jueguen los roles del tipo** (o uno por debajo) en la fecha de inicio. Además rechaza duplicados solapados, en ambos sentidos si el tipo es simétrico |
+| Relaciones | Partes «PartyFrom»/«PartyTo» falsas; `RelationshipTypeAllowedSpec` devolvía siempre `true`; sin control de origen distinto del destino | `Establish` exige partes distintas y activas que **jueguen los roles del tipo** (o uno por debajo) en la fecha de inicio; desde el 2026-10-14 el caso de uso **asigna antes el rol a quien le falte** (§11). Además rechaza duplicados solapados, en ambos sentidos si el tipo es simétrico |
 | Vigencia | `ExpirationDate` sin setter en PartyRelationship; `ThruDate` duplicado en OrganizationRollup | `vocab.ValidPeriod` semiabierto con `Terminate`/`EndRole` |
 | Catálogo | Roles de pedido (C0–C8) dentro del catálogo de roles de party; `Salesperson`/`Collaborator` usados en tipos de relación pero fuera de la jerarquía; `DepartmentAssignment` declarado sin fila | Los roles de pedido son de Orders; `Salesperson` cuelga de Persona y `Collaborator` de la raíz; `DepartmentAssignment` queda pendiente |
 | Autorización | Política en el endpoint | `pipeline.RequirePermission` en cada caso de uso (`Parties.Party.Create`, `Parties.PartyRole.Assign`, `Parties.Relationship.Create`…) |
@@ -419,3 +419,25 @@ con la marca «the CIF does not pass its check digits» y el número tal como vi
   marca quitada a mano vuelve en la siguiente importación mientras el documento no se corrija.
 - **Lo que no hay:** la marca no bloquea nada (se puede facturar a una party marcada); eso sería
   una regla de Facturación.
+
+## 11. La relación asigna los roles que falten
+
+Decisión de Javier (D-49 de [DECISIONES-COMUNES.md](DECISIONES-COMUNES.md), confirmada el
+2026-10-14). Antes, dar de alta «Talleres Pérez es cliente de Acme» se rechazaba con un 422 si
+Talleres Pérez no tenía ya el rol de cliente. Ahora la relación se crea y Talleres Pérez recibe el
+rol, con la misma fecha de inicio que la relación.
+
+| Qué | Cómo |
+|---|---|
+| Dónde | `POST /api/party-relationships` y el alta de una party con afiliación. La regla del dominio no cambia (`Establish` sigue exigiendo los roles); el caso de uso los asigna antes |
+| Qué rol se asigna | El que pide el tipo de relación para ese lado, si la party no juega ya ése o uno por debajo |
+| Lo que se sigue rechazando (422) | Un rol que la party no puede jugar (una organización no pasa a ser empleada); una categoría, que no se asigna a nadie; y **«Internal Organization»** |
+| Auditoría y eventos | La asignación deja su entrada y publica `PartyRoleAssigned`, como una asignación a mano, en la misma transacción que la relación |
+| Permiso | El de crear relaciones (`Parties.Relationship.Create`); no pide además el de asignar roles |
+
+- **Por qué «Internal Organization» no se asigna así:** ese rol decide quién ve y quién escribe
+  qué (las afiliaciones cuelgan de él). Si una relación lo diera, cualquiera con permiso para crear
+  relaciones podría convertir a un tercero en empresa del grupo. Se sigue dando a propósito.
+  Es una excepción decidida aquí, no por Javier; está trasladada a las otras sesiones.
+- **Terminar la relación no quita el rol.** Quien fue cliente por una relación sigue teniendo el
+  rol de cliente cuando la relación termina, hasta que alguien se lo cierre.
