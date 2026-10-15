@@ -105,7 +105,7 @@ comporta como cualquier empresa del grupo (emite facturas, tiene plan contable y
 | D-52 | **En el filtro de roles no hay paréntesis por ahora**: se usa la precedencia de los operadores («y» liga más que «o»). El árbol de la expresión se mantiene; los paréntesis, más adelante, sobre la línea donde se ve la expresión | «de momento no podemos meter paréntesis vamos a utilizar la precedencia de los operadores…» | — |
 | D-53 | **Una persona puede ser proveedor** (un autónomo), **e incluso organización interna** | «si, si puede, incluso puede ser organización interna» | — |
 
-**El filtro de D-48, según Trench** (2026-10-13; hecho allí en Trench PR 34, sin
+**El filtro de D-48, según Trench** (2026-10-13; hecho allí en Trench (PR 34), sin
 fusionar, sin probar en Oracle ni SQL Server):
 
 - Campo `includeEndedRoles`, booleano opcional, en el filtro de búsqueda de parties, hermano de
@@ -228,7 +228,7 @@ Tomadas en la sesión de Trench (2026-10-13 tarde y 2026-10-14). **Confirmadas a
 | D-57 (2) | **Un campo que pasa a obligatorio se exige en la siguiente modificación de cada registro**; el plan enseña cuántos quedan sin valor | «2 a y el aviso recomendado» |
 | D-58 (5) | **Las referencias a catálogo (país, divisa) entran en la primera versión**, como un tipo de campo más | «5 dentro, confirmo» |
 | D-59 (6) | **El acrónimo de empresa es obligatorio e inmutable**, y hay una función para que un administrador los cree en lote para una selección de registros. Sólo afecta a las organizaciones internas | «6 a, aunque el uso del acrónimo solo afecta en este caso a las organizaciones internas deberíamos facilitar una función para crearlos para una selección de registros por parte de un administrador» |
-| D-60 (7) | **Trench da código estable a sus tipos de rol y de relación con la regla y los valores de Karpo Go** (nombre en minúsculas con guiones). Hecho en Trench PR 36, sin fusionar | «7 sí» · «arranca ya los códigos estables y coordínalo con Karpo C#» |
+| D-60 (7) | **Trench da código estable a sus tipos de rol y de relación con la regla y los valores de Karpo Go** (nombre en minúsculas con guiones). Hecho en Trench (PR 36), sin fusionar | «7 sí» · «arranca ya los códigos estables y coordínalo con Karpo C#» |
 | D-61 (4) | **Los campos de un producto financiero tienen una sola puerta**: se declaran en «Campos personalizados» y el producto los cita. Sólo afecta a quien tenga configuradores de producto | «4 b» |
 
 ### 1.3 Contrato HTTP y datos
