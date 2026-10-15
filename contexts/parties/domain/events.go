@@ -49,6 +49,19 @@ type PartyRoleAssigned struct {
 // EventType implements domain.Event.
 func (PartyRoleAssigned) EventType() string { return "parties.party_role_assigned" }
 
+// PartyRoleAnnulled is raised when a role given by mistake is taken back: removed, or ended and
+// marked when something depended on it.
+type PartyRoleAnnulled struct {
+	fw.EventMeta
+	RoleID   string    `json:"roleId"`
+	RoleType string    `json:"roleType"`
+	At       time.Time `json:"at"`
+	Removed  bool      `json:"removed"`
+}
+
+// EventType implements domain.Event.
+func (PartyRoleAnnulled) EventType() string { return "parties.party_role_annulled" }
+
 // PartyRoleEnded is raised when a party stops playing a role.
 type PartyRoleEnded struct {
 	fw.EventMeta

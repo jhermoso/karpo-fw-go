@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -54,6 +55,7 @@ type Service struct {
 	SetShared             app.CommandHandler[SetShared, PartyDTO]
 	AssignRole            app.CommandHandler[AssignRole, PartyDTO]
 	EndRole               app.CommandHandler[EndRole, PartyDTO]
+	AnnulRole             app.CommandHandler[AnnulRole, PartyDTO]
 	EstablishRelationship app.CommandHandler[EstablishRelationship, RelationshipDTO]
 	TerminateRelationship app.CommandHandler[TerminateRelationship, RelationshipDTO]
 	SetProspectTrial      app.CommandHandler[SetProspectTrial, RelationshipDTO]
@@ -292,6 +294,29 @@ func NewService(d Deps) *Service {
 			return p.EndRole(c.RoleID, nowOr(c.At))
 		})
 	}, pipeline.RetryOnConflict[EndRole, PartyDTO](retry, backoff))
+
+	svc.AnnulRole = chain(PermRoleAnnul, func(ctx context.Context, c AnnulRole) (PartyDTO, error) {
+		// What depends on a role are the relationships the party has, or had, in it. The command
+		// looks before it does anything (D-8): with none, the role is removed; with any, annulled.
+		rels, err := d.Relationships.Find(ctx, domain.Involving(c.PartyID))
+		if err != nil {
+			return PartyDTO{}, err
+		}
+		return s.updateParty(ctx, c.PartyID, func(p *domain.Party, cat *domain.Catalog) error {
+			i := slices.IndexFunc(p.Roles(), func(r domain.PartyRole) bool { return r.ID == c.RoleID })
+			if i < 0 {
+				return fw.NotFound("parties.party_role", c.RoleID)
+			}
+			role := p.Roles()[i].RoleType
+			// Internal Organization is never removed: grants and affiliations may point at the
+			// company, and that it once was one is worth keeping.
+			depended := cat.IsA(role, domain.RoleInternalOrganization) || slices.ContainsFunc(rels, func(r *domain.Relationship) bool {
+				return (r.From() == p.ID() && cat.IsA(role, r.FromRole())) || (r.To() == p.ID() && cat.IsA(role, r.ToRole()))
+			})
+			_, err := p.AnnulRole(c.RoleID, fw.Now(), depended)
+			return err
+		})
+	}, pipeline.RetryOnConflict[AnnulRole, PartyDTO](retry, backoff))
 
 	svc.EstablishRelationship = chain(PermRelationshipCreate, func(ctx context.Context, c EstablishRelationship) (RelationshipDTO, error) {
 		var v fw.Validation

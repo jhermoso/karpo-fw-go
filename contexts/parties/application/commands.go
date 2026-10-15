@@ -14,10 +14,13 @@ import (
 
 // Permissions of the context ({Subdomain}.{Resource}.{Action}, as in the C# PermissionCodes).
 var (
-	PermPartyRead          = authz.MustPermission("Parties.Party.Read")
-	PermPartyCreate        = authz.MustPermission("Parties.Party.Create")
-	PermPartyUpdate        = authz.MustPermission("Parties.Party.Update")
-	PermRoleAssign         = authz.MustPermission("Parties.PartyRole.Assign")
+	PermPartyRead   = authz.MustPermission("Parties.Party.Read")
+	PermPartyCreate = authz.MustPermission("Parties.Party.Create")
+	PermPartyUpdate = authz.MustPermission("Parties.Party.Update")
+	PermRoleAssign  = authz.MustPermission("Parties.PartyRole.Assign")
+	// PermRoleAnnul takes back a role given by mistake, removing it when nothing depends on it:
+	// an action of its own, which the standard rule of Security does not hand out.
+	PermRoleAnnul          = authz.MustPermission("Parties.PartyRole.Annul")
 	PermRelationshipRead   = authz.MustPermission("Parties.Relationship.Read")
 	PermRelationshipCreate = authz.MustPermission("Parties.Relationship.Create")
 	PermRelationshipEnd    = authz.MustPermission("Parties.Relationship.Terminate")
@@ -39,7 +42,7 @@ var (
 func Permissions() []authz.Permission {
 	return []authz.Permission{PermPartyRead, PermPartyCreate, PermPartyUpdate, PermRoleAssign, PermRelationshipRead,
 		PermRelationshipCreate, PermRelationshipEnd, PermRelationshipUpdate, PermRelationshipSetTrial, PermRoleTypeDefine,
-		PermRelationshipTypeDefine}
+		PermRelationshipTypeDefine, PermRoleAnnul}
 }
 
 // RegisterPerson registers a person, optionally with initial roles (the C# CreatePartyWithRole).
@@ -155,6 +158,12 @@ type EndRole struct {
 	PartyID domain.PartyID     `json:"-"`
 	RoleID  domain.PartyRoleID `json:"-"`
 	At      *time.Time         `json:"at,omitempty"`
+}
+
+// AnnulRole takes back a role given to a party by mistake.
+type AnnulRole struct {
+	PartyID domain.PartyID     `json:"-"`
+	RoleID  domain.PartyRoleID `json:"-"`
 }
 
 // EstablishRelationship relates two parties (the roles come from the relationship type). The

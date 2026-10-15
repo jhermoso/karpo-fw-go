@@ -51,6 +51,9 @@ type PartyRole struct {
 	ID       PartyRoleID
 	RoleType RoleTypeID
 	Period   vocab.ValidPeriod
+	// Annulled marks a role given by mistake that could not be taken away because something
+	// was already said about the party in that role. It ended when it was annulled.
+	Annulled bool
 }
 
 // IsActiveAt reports whether the role is played at t.
@@ -330,7 +333,7 @@ func (p *Party) AssignRole(c RoleCatalog, roleType RoleTypeID, from time.Time) (
 		return PartyRoleID{}, err
 	}
 	for _, r := range p.roles {
-		if r.RoleType == roleType && r.Period.Overlaps(period) {
+		if !r.Annulled && r.RoleType == roleType && r.Period.Overlaps(period) {
 			return PartyRoleID{}, fw.Violation("parties.role_overlap", "the party already plays this role in that period")
 		}
 	}
@@ -338,6 +341,40 @@ func (p *Party) AssignRole(c RoleCatalog, roleType RoleTypeID, from time.Time) (
 	p.roles = append(slices.Clone(p.roles), role) // never share the backing array with a stored copy
 	p.Raise(PartyRoleAssigned{EventMeta: p.NewEventMeta(), RoleID: role.ID.String(), RoleType: roleType.String(), From: period.From()})
 	return role.ID, nil
+}
+
+// AnnulRole takes back a role given by mistake (docs/DECISIONES-COMUNES.md, D-8). When nothing
+// depends on it, the role is removed as if it had never been given; when something does (the
+// caller says so: it is the one who can look at the relationships), it ends at that moment and
+// stays, marked as annulled. It reports whether the role was removed.
+func (p *Party) AnnulRole(id PartyRoleID, at time.Time, depended bool) (removed bool, err error) {
+	i := slices.IndexFunc(p.roles, func(r PartyRole) bool { return r.ID == id })
+	if i < 0 {
+		return false, fw.NotFound("parties.party_role", id)
+	}
+	r := p.roles[i]
+	if r.Annulled {
+		return false, nil
+	}
+	p.roles = slices.Clone(p.roles)
+	if at.Before(r.Period.From()) {
+		at = r.Period.From()
+	}
+	if end, closed := r.Period.To(); closed && !at.Before(end) {
+		at = end // it had ended already: that is when it stopped being played
+	}
+	if !depended {
+		p.roles = slices.Delete(p.roles, i, i+1)
+	} else {
+		period, err := vocab.NewValidPeriod(r.Period.From(), &at)
+		if err != nil {
+			return false, err
+		}
+		p.roles[i].Period = period
+		p.roles[i].Annulled = true
+	}
+	p.Raise(PartyRoleAnnulled{EventMeta: p.NewEventMeta(), RoleID: id.String(), RoleType: r.RoleType.String(), At: at.UTC(), Removed: !depended})
+	return !depended, nil
 }
 
 // EndRole stops playing a role at a moment (not before it started).
@@ -363,7 +400,7 @@ func (p *Party) EndRole(id PartyRoleID, at time.Time) error {
 // PlaysAt reports whether the party plays roleType, or a role below it in the hierarchy, at t.
 func (p *Party) PlaysAt(c RoleCatalog, roleType RoleTypeID, t time.Time) bool {
 	for _, r := range p.roles {
-		if r.IsActiveAt(t) && c.IsA(r.RoleType, roleType) {
+		if !r.Annulled && r.IsActiveAt(t) && c.IsA(r.RoleType, roleType) { // an annulled role counts for nothing, whenever
 			return true
 		}
 	}

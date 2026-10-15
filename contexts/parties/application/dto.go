@@ -32,6 +32,7 @@ type RoleDTO struct {
 	From     time.Time  `json:"from"`
 	Until    *time.Time `json:"until,omitempty"`
 	Active   bool       `json:"active"`
+	Annulled bool       `json:"annulled,omitempty"`
 }
 
 // PartyDTO is the transport representation of a party.
@@ -132,7 +133,7 @@ func ToDTO(p *domain.Party, names Names) PartyDTO {
 		d.Organizations = append(d.Organizations, o.String())
 	}
 	for _, r := range p.Roles() {
-		rd := RoleDTO{ID: r.ID.String(), RoleType: r.RoleType.String(), From: r.Period.From(), Active: r.IsActiveAt(now)}
+		rd := RoleDTO{ID: r.ID.String(), RoleType: r.RoleType.String(), From: r.Period.From(), Active: r.IsActiveAt(now), Annulled: r.Annulled}
 		if t, ok := r.Period.To(); ok {
 			rd.Until = &t
 		}
