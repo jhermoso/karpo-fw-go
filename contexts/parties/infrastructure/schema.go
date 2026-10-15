@@ -215,7 +215,61 @@ func Migrations() sqlrepo.MigrationSet {
 		// A person may be a supplier, and an internal organization too: the two role types leave
 		// the branch of the organizations (docs/DECISIONES-COMUNES.md, D-53).
 		{Version: 20, Name: "supplier and internal organization are roles of any party", Run: moveRolesOfAnyParty},
+		// Every project seeds the same types: the ones this catalog lacked, and Team among the
+		// informal organizations (docs/DECISIONES-COMUNES.md, D-62).
+		{Version: 21, Name: "the common catalog of role and relationship types", Run: seedCommonCatalog},
 	}}
+}
+
+// seedCommonCatalog adds the well-known types a database seeded earlier does not have, and hangs
+// Team from where the seed says now. A database seeded with this version already has them all.
+func seedCommonCatalog(ctx context.Context, db *sqlrepo.DB) error {
+	has := func(table string) (map[string]bool, error) {
+		rows, err := db.Select(ctx, table, []string{"id"})
+		if err != nil {
+			return nil, err
+		}
+		ids := make(map[string]bool, len(rows))
+		for _, r := range rows {
+			ids[r.UUID("id").String()] = true
+		}
+		return ids, nil
+	}
+	roles, err := has("role_types")
+	if err != nil {
+		return err
+	}
+	for _, t := range domain.WellKnownRoleTypes() { // parents go first
+		switch {
+		case t.ID == domain.RoleTeam:
+			if _, err := db.Update(ctx, "role_types", sqlrepo.Values{"parent_id": *t.Parent}, sqlrepo.Values{"id": t.ID}); err != nil {
+				return fmt.Errorf("moving role type %s: %w", t.Name, err)
+			}
+		case !roles[t.ID.String()]:
+			var parent any
+			if t.Parent != nil {
+				parent = *t.Parent
+			}
+			if err := db.Insert(ctx, "role_types", sqlrepo.Values{"id": t.ID, "name": t.Name.String(), "description": t.Description,
+				"parent_id": parent, "category": t.Category, "code": t.Code}); err != nil {
+				return fmt.Errorf("seeding role type %s: %w", t.Name, err)
+			}
+		}
+	}
+	rels, err := has("relationship_types")
+	if err != nil {
+		return err
+	}
+	for _, t := range domain.WellKnownRelationshipTypes() {
+		if rels[t.ID.String()] {
+			continue
+		}
+		if err := db.Insert(ctx, "relationship_types", sqlrepo.Values{"id": t.ID, "name": t.Name.String(), "description": t.Description,
+			"from_role": t.FromRole, "to_role": t.ToRole, "hierarchical": t.Hierarchical, "code": t.Code}); err != nil {
+			return fmt.Errorf("seeding relationship type %s: %w", t.Name, err)
+		}
+	}
+	return nil
 }
 
 // moveRolesOfAnyParty hangs Supplier and Internal Organization from where the seed says now.
