@@ -607,5 +607,12 @@ modificarlo**. Ahora:
   afiliarían a nadie y quien la crea no la vería.
 - **Una salvedad:** «empresa interna» se mira por el tipo de rol exacto; un tipo de rol añadido
   colgando de «Internal Organization» no cuenta como tal.
+- **Las altas anteriores a la regla no cuentan** (D-77, decidido por Javier el 2026-10-15): una
+  party dada de alta antes del 2026-10-15 (`RegistrationRuleSince`) queda como relacionada aunque la
+  auditoría sepa quién la dio de alta; sólo la modifica quien tenga el permiso.
+- **Sólo el administrador global hace a una party empresa del grupo** (primer paso de D-78): dar
+  el rol «Internal Organization», o uno que cuelgue de él, a mano o en el alta, responde 403 a
+  cualquier otro. Falta el circuito que Javier describe: que el usuario que dice representar al
+  tercero lo pida, aporte pruebas y confirme los datos que ya hay, y el global lo apruebe.
 - Esquema: nada nuevo.
 

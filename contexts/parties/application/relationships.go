@@ -61,6 +61,9 @@ func (s service) register(ctx context.Context, build func(domain.PartyID) (*doma
 		if err != nil {
 			return PartyDTO{}, err
 		}
+		if err := mayGive(sc, n.Roles, id); err != nil {
+			return PartyDTO{}, err
+		}
 		if _, err := p.AssignRole(n.Roles, id, now); err != nil {
 			return PartyDTO{}, err
 		}

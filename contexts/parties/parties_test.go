@@ -718,6 +718,16 @@ func (e *env) prospects(acme, ana papp.PartyDTO) {
 	e.must(e.do("POST", "/api/persons", e.seller, map[string]any{"givenName": "Mía", "firstSurname": acme.ID[:8],
 		"affiliation": map[string]any{"organization": acme.ID, "relationshipType": domain.RelCustomer.String()}}, &mine), 201, "registered from acme")
 	e.must(rename(e.seller, mine.ID), 200, "what acme registered, acme changes")
+	// Unless it was registered before the rule existed (D-77).
+	since := papp.RegistrationRuleSince
+	papp.RegistrationRuleSince = time.Now().Add(time.Hour)
+	e.must(rename(e.seller, mine.ID), 403, "a party registered before the rule is only related")
+	papp.RegistrationRuleSince = since
+	// Only the global administrator makes a party an internal organization (D-78).
+	e.must(e.do("POST", "/api/parties/"+mine.ID+"/roles", e.clerk, map[string]any{"roleType": domain.RoleInternalOrganization.String()}, nil), 403,
+		"a clerk does not make a company of the group")
+	e.must(e.do("POST", "/api/organizations", e.clerk, map[string]any{"legalName": "Filial " + acme.ID[:8], "roles": []string{domain.RoleInternalOrganization.String()},
+		"affiliation": map[string]any{"organization": acme.ID, "relationshipType": domain.RelCustomer.String()}}, nil), 403, "nor registers one")
 	var relative papp.PartyDTO
 	e.must(e.do("POST", "/api/persons", e.admin, map[string]any{"givenName": "Pariente", "firstSurname": acme.ID[:8],
 		"roles": []string{domain.RoleFamilyMember.String()}}, &relative), 201, "a relative")
