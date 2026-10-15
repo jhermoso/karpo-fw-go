@@ -501,7 +501,7 @@ Lo que **no** ha entrado, y por qué:
 Decisión de Javier (D-48). `GET /api/parties?role=<tipo>` devuelve a quien juega ese rol (o uno
 por debajo) **ahora**: empezó ya y no ha terminado. Con `includeEndedRoles=true` entran también los
 roles terminados y los que aún no han empezado. El nombre y la definición son los de Trench
-(Trench PR 34), para que el mismo front sirva a los dos.
+(Trench (PR 34)), para que el mismo front sirva a los dos.
 
 - *Ejemplo:* Luis fue empleado hasta diciembre y hoy sólo es cliente. `?role=Employee` no lo
   devuelve; `?role=Employee&includeEndedRoles=true`, sí.
