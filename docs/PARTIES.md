@@ -501,7 +501,7 @@ Lo que **no** ha entrado, y por qué:
 Decisión de Javier (D-48). `GET /api/parties?role=<tipo>` devuelve a quien juega ese rol (o uno
 por debajo) **ahora**: empezó ya y no ha terminado. Con `includeEndedRoles=true` entran también los
 roles terminados y los que aún no han empezado. El nombre y la definición son los de Trench
-(Trench PR 34), para que el mismo front sirva a los dos.
+(Trench (PR 34)), para que el mismo front sirva a los dos.
 
 - *Ejemplo:* Luis fue empleado hasta diciembre y hoy sólo es cliente. `?role=Employee` no lo
   devuelve; `?role=Employee&includeEndedRoles=true`, sí.
@@ -589,20 +589,23 @@ modificarlo**. Ahora:
 
 | Caso | Quién lo modifica |
 |---|---|
-| Se dio de alta desde tu empresa (la afiliación nació con la party) | Los usuarios de tu empresa con acceso completo |
+| Se dio de alta desde tu empresa (la party y su relación con tu empresa se crearon en la misma operación, según la auditoría) | Los usuarios de tu empresa con acceso completo |
 | Ya existía y tu empresa sólo se relaciona con él | Sólo quien tenga además `Parties.Party.UpdateRelated`: de entrada el administrador de organización, no el usuario estándar; el administrador global se lo puede retirar |
 | Es empresa interna de otros | Nadie de tu empresa, tenga el permiso que tenga. Sí sus propios usuarios, o quien reciba acceso a esa empresa |
 | Compartida (catálogo común) | Sólo el administrador global, como antes |
 
 - **Verlo no cambia:** cualquier relación con tu empresa te deja verlo, salvo las de familia: una
   relación de familia no hace visible a nadie (D-67, pensado para la persona que es empresa).
-- **Lo que ya había:** las afiliaciones anteriores a la migración 25 no se sabe si nacieron con la
-  party y quedan como relacionadas. En una instalación con datos habría que marcarlas.
+- **Cómo se sabe que la dio de alta tu empresa** (D-74): sin dato propio. La auditoría guarda,
+  para cada cambio, el identificador de la operación en que se hizo. Si el primer registro de la
+  party y el de la relación que la afilia a tu empresa comparten ese identificador, nacieron
+  juntas. Un alta que llega sin identificador de operación recibe uno. Sin auditoría configurada,
+  ninguna party cuenta como dada de alta por nadie: sólo modifica quien tenga el permiso.
 - **Sin hacer de D-67:** la marca por campo con la que una persona autoriza qué datos suyos se ven
   como party pública. Necesita diseño.
 - Dar de alta una party con una afiliación de familia o de duplicado se rechaza (400): no
   afiliarían a nadie y quien la crea no la vería.
 - **Una salvedad:** «empresa interna» se mira por el tipo de rol exacto; un tipo de rol añadido
   colgando de «Internal Organization» no cuenta como tal.
-- Esquema: migración 25, `party_affiliations.registered`.
+- Esquema: nada nuevo.
 

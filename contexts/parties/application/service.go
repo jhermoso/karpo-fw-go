@@ -136,9 +136,9 @@ func (s service) updateParty(ctx context.Context, id domain.PartyID, fn func(*do
 	if err != nil {
 		return PartyDTO{}, err
 	}
-	sc := scopeOf(ctx)
-	p, err := s.parties.Update(ctx, id, func(_ context.Context, p *domain.Party) error {
-		if err := sc.writable(p); err != nil {
+	p, err := s.parties.Update(ctx, id, func(ctx context.Context, p *domain.Party) error {
+		// The scope reads the audit log inside the unit of work it is in (D-74).
+		if err := s.scope(ctx).writable(p); err != nil {
 			return err
 		}
 		if err := operable(p); err != nil {
@@ -150,6 +150,33 @@ func (s service) updateParty(ctx context.Context, id domain.PartyID, fn func(*do
 		return PartyDTO{}, err
 	}
 	return n.dto(p), nil
+}
+
+// scope is the scope of the caller, able to tell from the audit log which parties an
+// organization registered.
+func (s service) scope(ctx context.Context) scope {
+	sc := scopeOf(ctx)
+	sc.registered = func(p *domain.Party, a domain.Affiliation) bool { return s.registeredWith(ctx, p, a) }
+	return sc
+}
+
+// registeredWith reports whether the party was registered together with the relationship behind
+// the affiliation: the first audit record of each, in one operation (the same correlation). It
+// is how "the organization registered it" is known without keeping it anywhere else
+// (docs/DECISIONES-COMUNES.md, D-74). Without an audit log, or when in doubt, it says no.
+func (s service) registeredWith(ctx context.Context, p *domain.Party, a domain.Affiliation) bool {
+	if s.Audit == nil {
+		return false
+	}
+	first := func(kind, id string) string {
+		trail, err := s.Audit.Trail(ctx, kind, id)
+		if err != nil || len(trail) == 0 {
+			return ""
+		}
+		return trail[0].CorrelationID
+	}
+	c := first(domain.PartyKind, p.ID().String())
+	return c != "" && c == first(domain.RelationshipKind, a.Relationship.String())
 }
 
 // NewService wires the use cases.
@@ -233,7 +260,7 @@ func NewService(d Deps) *Service {
 			if err != nil {
 				return PartyDTO{}, err
 			}
-			if err := scopeOf(ctx).writable(p); err != nil { // before telling anything about its relationships
+			if err := s.scope(ctx).writable(p); err != nil { // before telling anything about its relationships
 				return PartyDTO{}, err
 			}
 			related, err := d.Relationships.Exists(ctx, spec.And(domain.Involving(c.ID), domain.NotEndedAt(fw.Now())))
@@ -272,7 +299,7 @@ func NewService(d Deps) *Service {
 
 	// Only global administrators decide which parties every organization sees.
 	svc.SetShared = chain(PermPartyUpdate, func(ctx context.Context, c SetShared) (PartyDTO, error) {
-		if sc := scopeOf(ctx); !sc.global {
+		if sc := s.scope(ctx); !sc.global {
 			if _, err := sc.visible(d.Parties.Get(ctx, c.ID)); err != nil {
 				return PartyDTO{}, err // out of scope: uniform 404
 			}
@@ -341,7 +368,7 @@ func NewService(d Deps) *Service {
 			v.Add("type", "unknown", "unknown relationship type")
 			return RelationshipDTO{}, v.Err()
 		}
-		sc := scopeOf(ctx)
+		sc := s.scope(ctx)
 		from, err := sc.visible(d.Parties.Get(ctx, fromID))
 		if err != nil {
 			return RelationshipDTO{}, err
@@ -379,7 +406,7 @@ func NewService(d Deps) *Service {
 		if err != nil {
 			return PartyDTO{}, err
 		}
-		p, err := scopeOf(ctx).visible(d.Parties.Get(ctx, q.ID))
+		p, err := s.scope(ctx).visible(d.Parties.Get(ctx, q.ID))
 		if err != nil {
 			return PartyDTO{}, err
 		}
@@ -392,7 +419,7 @@ func NewService(d Deps) *Service {
 			return fw.Page[PartyDTO]{}, err
 		}
 		now := fw.Now()
-		parts := []spec.Specification[*domain.Party]{scopeOf(ctx).parties(now)}
+		parts := []spec.Specification[*domain.Party]{s.scope(ctx).parties(now)}
 		if t := strings.TrimSpace(q.Text); t != "" {
 			parts = append(parts, domain.NameContains(t))
 		}
@@ -460,7 +487,7 @@ func NewService(d Deps) *Service {
 		if err != nil {
 			return nil, err
 		}
-		sc := scopeOf(ctx)
+		sc := s.scope(ctx)
 		if _, err := sc.visible(d.Parties.Get(ctx, q.PartyID)); err != nil {
 			return nil, err
 		}
@@ -485,7 +512,7 @@ func NewService(d Deps) *Service {
 			return nil, err
 		}
 		now := fw.Now()
-		sc := scopeOf(ctx)
+		sc := s.scope(ctx)
 		where := domain.PlaysAt(now, domain.RoleInternalOrganization)
 		if !sc.global {
 			where = where.And(domain.WithIDs(sc.orgs...))
@@ -514,7 +541,7 @@ func NewService(d Deps) *Service {
 	})
 
 	svc.DefineRoleType = chain(PermRoleTypeDefine, func(ctx context.Context, c DefineRoleType) (RoleTypeDTO, error) {
-		if !scopeOf(ctx).global {
+		if !s.scope(ctx).global {
 			return RoleTypeDTO{}, fmt.Errorf("%w: the role catalog belongs to the whole installation", fw.ErrForbidden)
 		}
 		catalogMu.Lock()
@@ -553,7 +580,7 @@ func NewService(d Deps) *Service {
 	})
 
 	svc.DefineRelationshipType = chain(PermRelationshipTypeDefine, func(ctx context.Context, c DefineRelationshipType) (RelationshipTypeDTO, error) {
-		if !scopeOf(ctx).global {
+		if !s.scope(ctx).global {
 			return RelationshipTypeDTO{}, fmt.Errorf("%w: the relationship catalog belongs to the whole installation", fw.ErrForbidden)
 		}
 		catalogMu.Lock()
