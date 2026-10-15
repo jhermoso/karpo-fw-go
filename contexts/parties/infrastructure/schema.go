@@ -212,7 +212,24 @@ func Migrations() sqlrepo.MigrationSet {
 		// The role type that was "Other Organization Unit" is called "Team" in every project
 		// (docs/DECISIONES-COMUNES.md, D-54).
 		{Version: 19, Name: "role type Team", Run: renameTeamRole},
+		// A person may be a supplier, and an internal organization too: the two role types leave
+		// the branch of the organizations (docs/DECISIONES-COMUNES.md, D-53).
+		{Version: 20, Name: "supplier and internal organization are roles of any party", Run: moveRolesOfAnyParty},
 	}}
+}
+
+// moveRolesOfAnyParty hangs Supplier and Internal Organization from where the seed says now.
+func moveRolesOfAnyParty(ctx context.Context, db *sqlrepo.DB) error {
+	for _, t := range domain.WellKnownRoleTypes() {
+		if t.ID != domain.RoleSupplier && t.ID != domain.RoleInternalOrganization {
+			continue
+		}
+		if _, err := db.Update(ctx, "role_types", sqlrepo.Values{"parent_id": *t.Parent, "description": t.Description},
+			sqlrepo.Values{"id": t.ID}); err != nil {
+			return fmt.Errorf("moving role type %s: %w", t.Name, err)
+		}
+	}
+	return nil
 }
 
 // renameTeamRole gives the role type its common name and code where an earlier seed left the old ones.

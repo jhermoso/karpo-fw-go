@@ -204,8 +204,8 @@ func TestParty_Roles(t *testing.T) {
 	ana := person(t, "Ana", "García", "")
 	acme := org(t, "Acme", "")
 
-	if _, err := ana.AssignRole(cat, domain.RoleSupplier, t0); !isViolation(err, "parties.role_incompatible") {
-		t.Fatalf("a person cannot be a supplier: %v", err)
+	if _, err := ana.AssignRole(cat, domain.RoleCorporation, t0); !isViolation(err, "parties.role_incompatible") {
+		t.Fatalf("a person cannot be a corporation: %v", err)
 	}
 	if _, err := acme.AssignRole(cat, domain.RoleEmployee, t0); !isViolation(err, "parties.role_incompatible") {
 		t.Fatalf("an organization cannot be an employee: %v", err)
@@ -253,6 +253,40 @@ func TestParty_Roles(t *testing.T) {
 	bank.Deactivate()
 	if _, err := bank.AssignRole(cat, domain.RoleSupplier, t0); !isViolation(err, "parties.inactive") {
 		t.Fatal("inactive parties get no roles")
+	}
+}
+
+// A self-employed person may be a supplier, and an internal organization like any company of the
+// group: one that has employees and units (docs/DECISIONES-COMUNES.md, D-53).
+func TestParty_APersonMayBeSupplierAndInternalOrganization(t *testing.T) {
+	types := map[domain.RelationshipTypeID]domain.RelationshipType{}
+	for _, rt := range domain.WellKnownRelationshipTypes() {
+		types[rt.ID] = rt
+	}
+	luis := person(t, "Luis", "Pérez", "")
+	for _, role := range []domain.RoleTypeID{domain.RoleSupplier, domain.RoleInternalOrganization} {
+		if _, err := luis.AssignRole(cat, role, t0); err != nil {
+			t.Fatalf("a person as %s: %v", role, err)
+		}
+	}
+	ana := person(t, "Ana", "García", "")
+	if _, err := ana.AssignRole(cat, domain.RoleEmployee, t0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := domain.Establish(domain.NewRelationshipID(), types[domain.RelEmployment], ana, luis, cat, t0, ""); err != nil {
+		t.Fatalf("an employee of a person who is an internal organization: %v", err)
+	}
+	// "An organization" as the parent of a unit is what the party is, not a role it plays.
+	acme, shop := org(t, "Acme", ""), org(t, "Tienda", "")
+	if _, err := shop.AssignRole(cat, domain.RoleDepartment, t0); err != nil {
+		t.Fatal(err)
+	}
+	rollup := types[domain.RelOrganizationRollup]
+	if _, err := domain.Establish(domain.NewRelationshipID(), rollup, shop, acme, cat, t0, ""); err != nil {
+		t.Fatalf("a unit under an organization without roles: %v", err)
+	}
+	if _, err := domain.Establish(domain.NewRelationshipID(), rollup, shop, luis, cat, t0, ""); !isViolation(err, "parties.relationship_role_missing") {
+		t.Fatalf("a unit under a person: %v", err)
 	}
 }
 
