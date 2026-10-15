@@ -78,6 +78,15 @@ func Migrations() sqlrepo.MigrationSet {
 			}
 			return db.InsertMany(ctx, "fac_facility_types", []string{"id", "name", "description", "requires_contact", "active"}, rows)
 		}},
+		// Where in the street the address is, piece by piece (vocab.Premises), as in Parties.
+		{Version: 4, Name: "address: number, block, portal, staircase, floor and door", Up: sqlrepo.RenderDDLAll(
+			`ALTER TABLE fac_facilities {add:addr_number} {str:10}{addEnd}`,
+			`ALTER TABLE fac_facilities {add:addr_qualifier} {str:10}{addEnd}`,
+			`ALTER TABLE fac_facilities {add:addr_block} {str:10}{addEnd}`,
+			`ALTER TABLE fac_facilities {add:addr_portal} {str:10}{addEnd}`,
+			`ALTER TABLE fac_facilities {add:addr_staircase} {str:10}{addEnd}`,
+			`ALTER TABLE fac_facilities {add:addr_floor} {str:10}{addEnd}`,
+			`ALTER TABLE fac_facilities {add:addr_door} {str:10}{addEnd}`)},
 	}}
 }
 
@@ -113,7 +122,8 @@ func FacilityMapping() sqlrepo.Mapping[domain.FacilityID, *domain.Facility] {
 	return sqlrepo.Mapping[domain.FacilityID, *domain.Facility]{
 		Table: "fac_facilities",
 		Columns: sqlrepo.WithAuditColumns("organization", "facility_type", "name", "description", "part_of", "area_m2", "street_type",
-			"line1", "line2", "postal_code", "locality", "region", "country", "geo_postal_code", "geo_boundary", "phone", "email", "active"),
+			"line1", "line2", "postal_code", "locality", "region", "country", "geo_postal_code", "geo_boundary", "phone", "email", "active",
+			"addr_number", "addr_qualifier", "addr_block", "addr_portal", "addr_staircase", "addr_floor", "addr_door"),
 		Fields: map[string]string{"type": "facility_type"},
 		Dehydrate: func(f *domain.Facility) (sqlrepo.Values, error) {
 			l := f.Location()
@@ -130,7 +140,9 @@ func FacilityMapping() sqlrepo.Mapping[domain.FacilityID, *domain.Facility] {
 				"line1": opt(a.Line1), "line2": opt(a.Line2), "postal_code": opt(a.PostalCode), "locality": opt(a.Locality),
 				"region": opt(a.Region), "country": opt(a.Country.String()), "geo_postal_code": optUUID(a.Geo.PostalCode),
 				"geo_boundary": optUUID(a.Geo.Boundary), "phone": opt(l.Phone.String()), "email": opt(l.Email.String()),
-				"active": f.IsActive()}, f.AuditStamp()), nil
+				"active": f.IsActive(), "addr_number": opt(a.Premises.Number), "addr_qualifier": opt(a.Premises.Qualifier),
+				"addr_block": opt(a.Premises.Block), "addr_portal": opt(a.Premises.Portal), "addr_staircase": opt(a.Premises.Staircase),
+				"addr_floor": opt(a.Premises.Floor), "addr_door": opt(a.Premises.Door)}, f.AuditStamp()), nil
 		},
 		Hydrate: func(r *sqlrepo.Row, _ sqlrepo.ChildRows) (*domain.Facility, error) {
 			var v fw.Validation
@@ -147,7 +159,9 @@ func FacilityMapping() sqlrepo.Mapping[domain.FacilityID, *domain.Facility] {
 				s.Area = d
 			}
 			addr := domain.Address{StreetType: r.String("street_type"), Line1: r.String("line1"), Line2: r.String("line2"),
-				PostalCode: r.String("postal_code"), Locality: r.String("locality"), Region: r.String("region")}
+				PostalCode: r.String("postal_code"), Locality: r.String("locality"), Region: r.String("region"),
+				Premises: vocab.Premises{Number: r.String("addr_number"), Qualifier: r.String("addr_qualifier"), Block: r.String("addr_block"),
+					Portal: r.String("addr_portal"), Staircase: r.String("addr_staircase"), Floor: r.String("addr_floor"), Door: r.String("addr_door")}}
 			if c := r.String("country"); c != "" {
 				cc, err := vocab.NewCountryCode(c)
 				v.Merge("country", err)

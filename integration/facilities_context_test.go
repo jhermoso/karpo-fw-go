@@ -73,13 +73,16 @@ func TestFacilitiesContext(t *testing.T) {
 				}
 			}
 			office, err := fac.Service.Register.Handle(cctx, fapp.RegisterFacility{Organization: acme.ID, Type: fdomain.TypeOffice.String(),
-				Name: "Oficina Sol", AreaM2: "250.75", Location: &fapp.LocationDTO{Line1: "Puerta del Sol 1", PostalCode: "28013",
+				Name: "Oficina Sol", AreaM2: "250.75", Location: &fapp.LocationDTO{Line1: "Puerta del Sol", Number: "1", NumberQualifier: "bis", Block: "2", Portal: "A", Staircase: "B",
+					Floor: "3", Door: "izquierda", PostalCode: "28013",
 					Locality: "Madrid", Country: "ES", GeoBoundary: madrid, Phone: "+34 910 000 000", Email: "sol@acme.test"}})
 			if err != nil {
 				t.Fatal(err)
 			}
 			got, err := fac.Service.Get.Handle(cctx, fapp.GetFacility{ID: fdomain.FacilityID{UUID: fw.MustParseUUID(office.ID)}})
-			if err != nil || got.AreaM2 != "250.75" || got.Location.GeoPostalCode == "" || got.Location.Email != "sol@acme.test" {
+			if err != nil || got.AreaM2 != "250.75" || got.Location.GeoPostalCode == "" || got.Location.Email != "sol@acme.test" ||
+				got.Location.Number != "1" || got.Location.NumberQualifier != "bis" || got.Location.Block != "2" || got.Location.Portal != "A" ||
+				got.Location.Staircase != "B" || got.Location.Floor != "3" || got.Location.Door != "izquierda" {
 				t.Fatalf("round trip: %+v %v", got, err)
 			}
 			room, err := fac.Service.Register.Handle(cctx, fapp.RegisterFacility{Organization: acme.ID, Type: fdomain.TypeRoom.String(),

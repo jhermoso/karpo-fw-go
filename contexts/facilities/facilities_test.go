@@ -161,7 +161,10 @@ func (h *host) scenario(tag string) {
 		}
 	}
 	office := map[string]any{"organization": acme.ID, "type": fdomain.TypeOffice.String(), "name": "Oficina Sol " + tag,
-		"location": map[string]any{"line1": "Puerta del Sol 1", "postalCode": "28013", "locality": "Madrid", "country": "ES", "geoBoundary": madrid}}
+		"location": map[string]any{"line1": "Puerta del Sol", "number": " 1 ", "floor": "the third one", "door": "B", "postalCode": "28013",
+			"locality": "Madrid", "country": "ES", "geoBoundary": madrid}}
+	h.must(h.do("POST", "/api/facilities", "clerk", office, nil), 400, "a piece of the address too long")
+	office["location"].(map[string]any)["floor"] = "3"
 	h.must(h.do("POST", "/api/facilities", "clerk", office, nil), 422, "an office needs a phone")
 	office["location"].(map[string]any)["phone"] = "+34 910 000 000"
 	office["location"].(map[string]any)["postalCode"] = "08001"
@@ -169,7 +172,8 @@ func (h *host) scenario(tag string) {
 	office["location"].(map[string]any)["postalCode"] = "28013"
 	var sol fapp.FacilityDTO
 	h.must(h.do("POST", "/api/facilities", "clerk", office, &sol), 201, "register the office")
-	if sol.Location.GeoPostalCode == "" || sol.Location.GeoBoundary != madrid || sol.TypeName != "Office" || sol.Location.Phone != "+34910000000" {
+	if sol.Location.GeoPostalCode == "" || sol.Location.GeoBoundary != madrid || sol.TypeName != "Office" || sol.Location.Phone != "+34910000000" ||
+		sol.Location.Line1 != "Puerta del Sol" || sol.Location.Number != "1" || sol.Location.Floor != "3" || sol.Location.Door != "B" || sol.Location.Portal != "" {
 		t.Fatalf("office: %+v", sol)
 	}
 	h.must(h.do("POST", "/api/facilities", "clerk", map[string]any{"organization": globex.ID, "type": fdomain.TypeWarehouse.String(), "name": "X"}, nil),

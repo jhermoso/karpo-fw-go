@@ -64,37 +64,8 @@ type GeoRef struct {
 	Boundary   fw.UUID // municipality or smallest boundary, optional
 }
 
-// Premises says where in the street the address is, in the pieces Spanish forms ask for one by
-// one: "Mayor 5 bis, bloque 2, portal A, escalera B, 3.º izquierda". All optional. An address
-// that has them keeps the name of the street alone in Line1.
-type Premises struct {
-	Number    string // street number: "5", "5-7", "s/n", "km 12,5"
-	Qualifier string // what follows the number: "bis", "duplicado"
-	Block     string
-	Portal    string
-	Staircase string
-	Floor     string
-	Door      string // door or letter: "izquierda", "B"
-}
-
-// IsZero reports whether no piece is given.
-func (p Premises) IsZero() bool { return p == Premises{} }
-
-// String renders the pieces the Spanish way, after the name of the street.
-func (p Premises) String() string {
-	out := strings.TrimSpace(p.Number + " " + p.Qualifier)
-	for _, part := range []struct{ label, v string }{{"bloque", p.Block}, {"portal", p.Portal}, {"escalera", p.Staircase},
-		{"planta", p.Floor}, {"puerta", p.Door}} {
-		if part.v == "" {
-			continue
-		}
-		if out != "" {
-			out += ", "
-		}
-		out += part.label + " " + part.v
-	}
-	return out
-}
+// Premises says where in the street the address is, piece by piece (shared vocabulary).
+type Premises = vocab.Premises
 
 // PostalAddress is a postal address (value object).
 type PostalAddress struct {
@@ -113,14 +84,10 @@ type PostalAddress struct {
 func (a PostalAddress) normalized() (PostalAddress, error) {
 	a.StreetType, a.Line1, a.Line2 = strings.ToUpper(clean(a.StreetType)), clean(a.Line1), clean(a.Line2)
 	a.Directions, a.PostalCode, a.Locality, a.Region = clean(a.Directions), strings.ToUpper(clean(a.PostalCode)), clean(a.Locality), clean(a.Region)
-	p := &a.Premises
-	p.Number, p.Qualifier, p.Block, p.Portal = clean(p.Number), clean(p.Qualifier), clean(p.Block), clean(p.Portal)
-	p.Staircase, p.Floor, p.Door = clean(p.Staircase), clean(p.Floor), clean(p.Door)
 	var v fw.Validation
-	for field, s := range map[string]string{"address.number": p.Number, "address.numberQualifier": p.Qualifier, "address.block": p.Block,
-		"address.portal": p.Portal, "address.staircase": p.Staircase, "address.floor": p.Floor, "address.door": p.Door} {
-		v.Require(utf8.RuneCountInString(s) <= 10, field, "length", "too long")
-	}
+	premises, err := a.Premises.Normalized("address")
+	v.Merge("", err)
+	a.Premises = premises
 	v.Require(a.Line1 != "", "address.line1", "required", "the first address line is required")
 	v.Require(!a.Country.IsZero(), "address.country", "required", "country is required")
 	for field, s := range map[string]struct {

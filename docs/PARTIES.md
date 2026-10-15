@@ -299,6 +299,8 @@ puede sacar la planta para una casilla.
   `Staircase`, `Floor`, `Door`, `Letter`). La correspondencia: escalera, planta y puerta, igual;
   `Letter` va en `door`; `StreetNumber2` no sé qué guarda (ningún código de Trench la lee) y
   la he tomado por el calificador. Trench no tiene bloque ni portal.
-- **Pendiente:** la dirección de una instalación (`facilities`) tiene su propio objeto y no
-  lleva todavía estas piezas; y la región de la dirección sigue siendo texto libre aunque la
-  dirección lleve los identificadores de Geografía (ver [GEOGRAFIA-NUTS.md](GEOGRAFIA-NUTS.md)).
+- **Las mismas piezas en las instalaciones.** Son vocabulario común (`vocab.Premises`, en
+  `pkg/domain/vocab`): la dirección de una instalación las lleva con los mismos nombres
+  ([INSTALACIONES.md](INSTALACIONES.md)).
+- **Pendiente:** la región de la dirección sigue siendo texto libre aunque la dirección lleve
+  los identificadores de Geografía (ver [GEOGRAFIA-NUTS.md](GEOGRAFIA-NUTS.md)).
