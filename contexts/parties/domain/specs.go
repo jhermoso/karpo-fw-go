@@ -163,6 +163,7 @@ func PlaysAt(t time.Time, roles ...RoleTypeID) spec.Spec[*Party] {
 
 // Relationship fields.
 var (
+	RelFieldID    = spec.Comparable("id", (*Relationship).ID)
 	RelFieldType  = spec.Comparable("type", (*Relationship).Type)
 	RelFieldFrom  = spec.Comparable("from_party", (*Relationship).From)
 	RelFieldTo    = spec.Comparable("to_party", (*Relationship).To)

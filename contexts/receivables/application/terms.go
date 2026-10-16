@@ -95,6 +95,11 @@ type GetExposure struct {
 	Seller, Customer, On string
 }
 
+// SearchCredit lista los perfiles de crédito de las empresas que ve quien llama; con Seller, sólo
+// los de esa empresa. Es lo que la vista por pareja necesita para enseñar el límite y el bloqueo de
+// cada cliente (docs/DECISIONES-COMUNES.md, D-73).
+type SearchCredit struct{ Seller string }
+
 // CreditDTO is the transport form of a credit profile.
 type CreditDTO struct {
 	ID       string `json:"id"`
@@ -208,6 +213,26 @@ func (s service) termsUseCases(svc *Service) {
 		out := []DueDTO{}
 		for _, d := range ds {
 			out = append(out, DueDTO{Date: d.Date.String(), Amount: money(d.Amount)})
+		}
+		return out, nil
+	})
+
+	svc.SearchCredit = guard(PermCreditRead, func(ctx context.Context, q SearchCredit) ([]CreditDTO, error) {
+		var v fw.Validation
+		parts := []spec.Specification[*domain.CreditProfile]{within(scopeOf(ctx), domain.CredFieldSeller)}
+		if q.Seller != "" {
+			parts = append(parts, domain.CredFieldSeller.Eq(domain.OrganizationID{UUID: parseID(&v, "seller", q.Seller)}))
+		}
+		if err := v.Err(); err != nil {
+			return nil, err
+		}
+		ps, err := s.Credit.Find(ctx, spec.And(parts...))
+		if err != nil {
+			return nil, err
+		}
+		out := make([]CreditDTO, 0, len(ps))
+		for _, p := range ps {
+			out = append(out, creditDTO(p))
 		}
 		return out, nil
 	})
