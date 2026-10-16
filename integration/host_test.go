@@ -20,7 +20,6 @@ import (
 	fininfra "github.com/jhermoso/karpo-fw-go/contexts/financial/infrastructure"
 	fisinfra "github.com/jhermoso/karpo-fw-go/contexts/fiscal/infrastructure"
 	geoinfra "github.com/jhermoso/karpo-fw-go/contexts/geography/infrastructure"
-	hrapp "github.com/jhermoso/karpo-fw-go/contexts/hr/application"
 	hrinfra "github.com/jhermoso/karpo-fw-go/contexts/hr/infrastructure"
 	invinfra "github.com/jhermoso/karpo-fw-go/contexts/inventory/infrastructure"
 	modinfra "github.com/jhermoso/karpo-fw-go/contexts/modules/infrastructure"
