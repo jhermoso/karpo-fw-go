@@ -18,13 +18,14 @@ import (
 	expapp "github.com/jhermoso/karpo-fw-go/contexts/exports/application"
 	finapp "github.com/jhermoso/karpo-fw-go/contexts/financial/application"
 	geoinfra "github.com/jhermoso/karpo-fw-go/contexts/geography/infrastructure"
-	impapp "github.com/jhermoso/karpo-fw-go/contexts/imports/application"
+	parapp "github.com/jhermoso/karpo-fw-go/contexts/parties/application"
 	pardomain "github.com/jhermoso/karpo-fw-go/contexts/parties/domain"
 	"github.com/jhermoso/karpo-fw-go/contexts/security"
 	secapp "github.com/jhermoso/karpo-fw-go/contexts/security/application"
 	"github.com/jhermoso/karpo-fw-go/host"
 	"github.com/jhermoso/karpo-fw-go/pkg/application"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
+	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/memory"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
@@ -140,48 +141,28 @@ func scenario(t *testing.T, sw *hotswap.Switch) {
 		}
 	}
 
-	// An import registers its companies and their departments in Parties through the loaders of
-	// the host.
-	files := impapp.RunImport{Source: "personio", Files: []impapp.FileDTO{{Role: "org-units", Name: "org.csv",
-		Content: "unitType,name,parentOrg,notes\nInternalOrganization,Añil Cambios,,\nInternalOrganization,Karpo Servicios,,\nDepartment,Operaciones,Karpo Servicios,\n"}}}
-	var run impapp.RunDTO
-	c.must(c.do("POST", "/api/imports/runs", root, files, &run), 201, "import")
-	count := func(kind string) impapp.CountDTO {
-		for _, k := range run.Counts {
-			if k.Kind == kind {
-				return k
-			}
+	// Two companies in Parties, registered as an import of the organization used to register them.
+	admin, _ := authz.NewContext(authz.Context{Subject: fw.NewUUID(), SubjectName: "admin", Kind: authz.Service, Permissions: []authz.Permission{authz.Wildcard}})
+	admin.GlobalAdmin = true
+	actx := authz.WithContext(ctx, admin)
+	for _, name := range []string{"Añil Cambios", "Karpo Servicios"} {
+		if _, err := h.Parties.Service.RegisterOrganization.Handle(actx, parapp.RegisterOrganization{LegalName: name, Roles: []string{pardomain.RoleInternalOrganization.String()}}); err != nil {
+			t.Fatal(err)
 		}
-		return impapp.CountDTO{}
-	}
-	if run.Status != "succeeded" || count("legal-entity").Created != 2 || count("department").Created != 1 || run.Warnings != 0 {
-		t.Fatalf("import: %+v", run)
 	}
 	companies, err := h.Parties.Organizations.All(ctx)
 	if err != nil || len(companies) != 2 {
 		t.Fatalf("companies in Parties: %+v %v", companies, err)
 	}
-	// Again, and with the name written otherwise: nothing new.
-	files.Files[0].Content = "unitType,name\nInternalOrganization,AÑIL  cambios\nInternalOrganization,Karpo Servicios\n"
-	c.must(c.do("POST", "/api/imports/runs", root, files, &run), 201, "import again")
-	if count("legal-entity").Created != 0 || count("legal-entity").Unchanged != 2 {
-		t.Fatalf("import again: %+v", run.Counts)
-	}
-	if companies, _ = h.Parties.Organizations.All(ctx); len(companies) != 2 {
-		t.Fatalf("no company twice: %+v", companies)
-	}
-	financialdetail := companies[0].ID
-	if companies[0].Name != "Añil Cambios" {
-		financialdetail = companies[1].ID
-	}
+	company := companies[0].ID
 
 	// The finance sector exists only for a company that is a financial institution: Parties says so.
-	account := map[string]any{"company": financialdetail, "number": "ES91 2100 0418 4502 0005 1332", "holder": companies[0].ID, "name": "Cuenta de pago",
+	account := map[string]any{"company": company, "number": "ES91 2100 0418 4502 0005 1332", "holder": companies[0].ID, "name": "Cuenta de pago",
 		"uses": []string{"customer-payment"}}
 	c.must(c.do("POST", "/api/financial/accounts", root, account, nil), 422, "not a financial institution yet")
 	financial := func() bool {
 		t.Helper()
-		ok, err := h.Modules.Features.Has(ctx, financialdetail, "capability", "financial")
+		ok, err := h.Modules.Features.Has(ctx, company, "capability", "financial")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -190,8 +171,8 @@ func scenario(t *testing.T, sw *hotswap.Switch) {
 	if financial() {
 		t.Fatal("no financial capability before it is a financial institution")
 	}
-	c.must(c.do("POST", "/api/modules/activate", root, map[string]any{"organization": financialdetail, "kind": "capability", "code": "financial"}, nil), 422, "it is not switched by hand")
-	c.must(c.do("POST", "/api/parties/"+financialdetail+"/roles", root, map[string]any{"roleType": pardomain.RoleFinancialInstitution.String()}, nil), 200, "it becomes one")
+	c.must(c.do("POST", "/api/modules/activate", root, map[string]any{"organization": company, "kind": "capability", "code": "financial"}, nil), 422, "it is not switched by hand")
+	c.must(c.do("POST", "/api/parties/"+company+"/roles", root, map[string]any{"roleType": pardomain.RoleFinancialInstitution.String()}, nil), 200, "it becomes one")
 	if !financial() {
 		t.Fatal("the capability comes with the role: the menu and the sector say the same")
 	}
@@ -201,9 +182,9 @@ func scenario(t *testing.T, sw *hotswap.Switch) {
 	var acc finapp.AccountDTO
 	c.must(c.do("POST", "/api/financial/accounts", root, account, &acc), 201, "open an account")
 	var job expapp.JobDTO
-	c.must(c.do("POST", "/api/exports", root, map[string]any{"dataset": "customer-accounts", "filter": map[string]string{"company": financialdetail}}, &job), 202, "ask for the export")
+	c.must(c.do("POST", "/api/exports", root, map[string]any{"dataset": "customer-accounts", "filter": map[string]string{"company": company}}, &job), 202, "ask for the export")
 	chores, err := h.RunChores(ctx)
-	if err != nil || chores.ExportsWritten != 1 || chores.ImportsClosed != 0 || chores.Quotes != 0 || chores.Reservations != 0 {
+	if err != nil || chores.ExportsWritten != 1 || chores.Quotes != 0 || chores.Reservations != 0 {
 		t.Fatalf("chores: %+v %v", chores, err)
 	}
 	var file []byte
@@ -218,7 +199,7 @@ func scenario(t *testing.T, sw *hotswap.Switch) {
 
 	// A fact for the books of a company that has none yet does not hold anybody back: Accounting
 	// keeps it, and the chores will post it the day it can.
-	charge, _ := json.Marshal(map[string]any{"assetId": acc.ID, "company": financialdetail, "code": "EQ-1", "period": "2026-03", "date": "2026-03-31", "amount": "50.00"})
+	charge, _ := json.Marshal(map[string]any{"assetId": acc.ID, "company": company, "code": "EQ-1", "period": "2026-03", "date": "2026-03-31", "amount": "50.00"})
 	if err := h.Broker.Send(ctx, application.Envelope{ID: acc.ID, Type: "assets.depreciation-charged.v1", Source: "assets", Subject: acc.ID, Data: charge}); err != nil {
 		t.Fatalf("a company without books holds the others back: %v", err)
 	}
@@ -228,7 +209,7 @@ func scenario(t *testing.T, sw *hotswap.Switch) {
 			Code string `json:"code"`
 		} `json:"items"`
 	}
-	c.must(c.do("GET", "/api/accounting/parked?company="+financialdetail, root, nil, &kept), 200, "what waits to be posted")
+	c.must(c.do("GET", "/api/accounting/parked?company="+company, root, nil, &kept), 200, "what waits to be posted")
 	if kept.Total != 1 || kept.Items[0].Code != "accounting.no_ledger" {
 		t.Fatalf("kept: %+v", kept)
 	}
@@ -254,7 +235,7 @@ func scenario(t *testing.T, sw *hotswap.Switch) {
 	for _, k := range types {
 		kinds = append(kinds, k.Type)
 	}
-	for _, k := range []string{"financial.account", "parties.party", "exports.job", "imports.run", "orders.quote", "security.user"} {
+	for _, k := range []string{"financial.account", "parties.party", "exports.job", "orders.quote", "security.user"} {
 		if !slices.Contains(kinds, k) {
 			t.Fatalf("no history of %s: %v", k, kinds)
 		}

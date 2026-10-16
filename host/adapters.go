@@ -18,7 +18,6 @@ import (
 	findomain "github.com/jhermoso/karpo-fw-go/contexts/financial/domain"
 	fisdomain "github.com/jhermoso/karpo-fw-go/contexts/fiscal/domain"
 	hrdomain "github.com/jhermoso/karpo-fw-go/contexts/hr/domain"
-	impdomain "github.com/jhermoso/karpo-fw-go/contexts/imports/domain"
 	invdomain "github.com/jhermoso/karpo-fw-go/contexts/inventory/domain"
 	modapp "github.com/jhermoso/karpo-fw-go/contexts/modules/application"
 	moddomain "github.com/jhermoso/karpo-fw-go/contexts/modules/domain"
@@ -68,56 +67,12 @@ func (h *Host) histories() {
 		h.Financial.Audit:  {findomain.AccountKind, findomain.ProductKind, findomain.AgreementKind},
 		h.Exchange.Audit:   {exgdomain.CurrencyKind, exgdomain.SettingsKind, exgdomain.ReservationKind},
 		h.Modules.Audit:    {moddomain.FeatureKind, moddomain.ActivationKind},
-		h.Imports.Audit:    {impdomain.RunKind, impdomain.ReferenceKind},
 		h.Exports.Audit:    {expdomain.JobKind},
 	} {
 		for _, kind := range kinds {
 			h.Audit.Register(kind, log, nil)
 		}
 	}
-}
-
-// LegalEntities loads the companies an import brings (records of kind legal-entity) into Parties,
-// with its own use cases: who imports needs the permission to register an organization.
-type LegalEntities struct{ Parties *parties.Module }
-
-// Kind implements imports' Loader.
-func (LegalEntities) Kind() string { return impdomain.KindLegalEntity }
-
-// EntityType implements imports' Loader.
-func (LegalEntities) EntityType() string { return pardomain.PartyKind }
-
-// Find looks for an internal organization of that name, without minding case or accents.
-func (l LegalEntities) Find(ctx context.Context, r impdomain.Record, _ impdomain.Refs) (string, error) {
-	all, err := l.Parties.Organizations.All(ctx)
-	if err != nil {
-		return "", err
-	}
-	name := impdomain.Fold(r.Fields["name"])
-	for _, o := range all {
-		if impdomain.Fold(o.Name) == name {
-			return o.ID, nil
-		}
-	}
-	return "", nil
-}
-
-// Apply registers the company when it does not exist, as a financial institution too when the
-// source says it is one. One that exists is left as it is: an import does not rename a company,
-// nor does it change what it is.
-func (l LegalEntities) Apply(ctx context.Context, r impdomain.Record, existing string, _ impdomain.Refs) (string, impdomain.Outcome, error) {
-	if existing != "" {
-		return existing, impdomain.Unchanged, nil
-	}
-	roles := []string{pardomain.RoleInternalOrganization.String()}
-	if r.Fields["financialInstitution"] == "true" {
-		roles = append(roles, pardomain.RoleFinancialInstitution.String())
-	}
-	p, err := l.Parties.Service.RegisterOrganization.Handle(ctx, parapp.RegisterOrganization{LegalName: r.Fields["name"], Roles: roles})
-	if err != nil {
-		return "", "", err
-	}
-	return p.ID, impdomain.Created, nil
 }
 
 // FinancialInstitutions tells Financial which companies are financial institutions: in Parties, an
@@ -250,6 +205,5 @@ func (c CustomerAccounts) Page(ctx context.Context, filters map[string]string, c
 var (
 	_ findomain.Institutions = FinancialInstitutions{}
 	_ modapp.Derivation      = SectorCapabilities{}
-	_ impdomain.Loader       = LegalEntities{}
 	_ expapp.Dataset         = CustomerAccounts{}
 )

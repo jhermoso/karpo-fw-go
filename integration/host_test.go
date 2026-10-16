@@ -20,10 +20,7 @@ import (
 	fininfra "github.com/jhermoso/karpo-fw-go/contexts/financial/infrastructure"
 	fisinfra "github.com/jhermoso/karpo-fw-go/contexts/fiscal/infrastructure"
 	geoinfra "github.com/jhermoso/karpo-fw-go/contexts/geography/infrastructure"
-	hrapp "github.com/jhermoso/karpo-fw-go/contexts/hr/application"
 	hrinfra "github.com/jhermoso/karpo-fw-go/contexts/hr/infrastructure"
-	impapp "github.com/jhermoso/karpo-fw-go/contexts/imports/application"
-	impinfra "github.com/jhermoso/karpo-fw-go/contexts/imports/infrastructure"
 	invinfra "github.com/jhermoso/karpo-fw-go/contexts/inventory/infrastructure"
 	modinfra "github.com/jhermoso/karpo-fw-go/contexts/modules/infrastructure"
 	ordinfra "github.com/jhermoso/karpo-fw-go/contexts/orders/infrastructure"
@@ -61,7 +58,7 @@ func TestHost(t *testing.T) {
 		t.Run(e.name, func(t *testing.T) {
 			db := open(t, e)
 			ctx := context.Background()
-			for _, drop := range []func(context.Context, *sqlrepo.DB){mailbox.DropAll, expinfra.DropAll, impinfra.DropAll, modinfra.DropAll, exginfra.DropAll, fininfra.DropAll,
+			for _, drop := range []func(context.Context, *sqlrepo.DB){mailbox.DropAll, expinfra.DropAll, modinfra.DropAll, exginfra.DropAll, fininfra.DropAll,
 				wrkinfra.DropAll, shpinfra.DropAll, docinfra.DropAll, astinfra.DropAll, accinfra.DropAll, treinfra.DropAll, payinfra.DropAll, purinfra.DropAll,
 				bilinfra.DropAll, ordinfra.DropAll, invinfra.DropAll, recinfra.DropAll, prlinfra.DropAll, hrinfra.DropAll, fisinfra.DropAll, proinfra.DropAll,
 				secinfra.DropAll, parinfra.DropAll, dropPartiesTables, facinfra.DropAll, geoinfra.DropAll} {
@@ -84,7 +81,7 @@ func TestHost(t *testing.T) {
 
 			t.Setenv(security.EnvBootstrapUser, "root")
 			t.Setenv(security.EnvBootstrapPassword, "boot-password-0001")
-			h, err := host.Compose(hotswap.New(db), host.Options{JWTSecret: []byte("host-integration"), ApiscoreEntity: apiscoreEntity})
+			h, err := host.Compose(hotswap.New(db), host.Options{JWTSecret: []byte("host-integration")})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -99,112 +96,15 @@ func TestHost(t *testing.T) {
 			admin, _ := authz.NewContext(authz.Context{Subject: fw.NewUUID(), SubjectName: "admin", Kind: authz.Service, Permissions: []authz.Permission{authz.Wildcard}})
 			admin.GlobalAdmin = true
 			actx := authz.WithContext(ctx, admin)
-			run, err := h.Imports.Service.Execute.Handle(actx, impapp.RunImport{Source: "personio", Files: []impapp.FileDTO{{Role: "org-units", Name: "org.csv",
-				Content: "unitType,name\nInternalOrganization,Añil Cambios\nInternalOrganization,Karpo Servicios\n"}}})
-			if err != nil || run.Status != "succeeded" || run.Counts[0].Created != 2 {
-				t.Fatalf("import: %+v %v", run, err)
-			}
-			again, err := h.Imports.Service.Execute.Handle(actx, impapp.RunImport{Source: "personio", Files: []impapp.FileDTO{{Role: "org-units", Name: "org.csv",
-				Content: "unitType,name\nInternalOrganization,añil  cambios\n"}}})
-			if err != nil || again.Counts[0].Unchanged != 1 {
-				t.Fatalf("import again: %+v %v", again, err)
+			// Two companies in Parties, which the import of the organization used to register.
+			for _, name := range []string{"Añil Cambios", "Karpo Servicios"} {
+				if _, err := h.Parties.Service.RegisterOrganization.Handle(actx, parapp.RegisterOrganization{LegalName: name, Roles: []string{pardomain.RoleInternalOrganization.String()}}); err != nil {
+					t.Fatal(err)
+				}
 			}
 			companies, err := h.Parties.Organizations.All(ctx)
 			if err != nil || len(companies) != 2 {
 				t.Fatalf("companies: %+v %v", companies, err)
-			}
-
-			// The rest of the organization, through the loaders of the host: departments and people in
-			// Parties, a work center in Facilities, employments in HR (one person in two companies), and
-			// for one of them the position they hold in their department and where they work.
-			types, err := h.HR.Service.PositionTypes.Handle(actx, hrapp.ListPositionTypes{})
-			if err != nil || len(types) == 0 {
-				t.Fatalf("position types: %v", err)
-			}
-			title, jobType := "", ""
-			for _, pt := range types {
-				if pt.Active {
-					title, jobType = pt.Title, pt.ID.String()
-					break
-				}
-			}
-			org := "unitType,name,parentOrg\nInternalOrganization,Añil Cambios,\nInternalOrganization,Karpo Servicios,\n" +
-				"Department,Operaciones,Añil Cambios\nDepartment,Operaciones,Karpo Servicios\nOffice,Oficina Sol,Añil Cambios\n"
-			people := "employeeNumber,firstName,lastName,email,gender,legalEntity,hireDate,terminationDate,department,workCenter,jobTitle\n" +
-				"P-1,Íñigo,Núñez,inigo@anil.test,M,Añil Cambios,2020-03-01,,operaciones,OFICINA SOL,\"" + title + "\"\n" +
-				"P-2,Lucía,Pérez,lucia@anil.test,F,Añil / Karpo (PLURIEMPLEO),2021-05-10,2024-12-31,,,\n"
-			whole := impapp.RunImport{Source: "personio", Files: []impapp.FileDTO{{Role: "org-units", Name: "org.csv", Content: org},
-				{Role: "people", Name: "people.csv", Content: people}}}
-			loaded, err := h.Imports.Service.Execute.Handle(actx, whole)
-			if err != nil || loaded.Status != "succeeded" {
-				t.Fatalf("the whole organization: %+v %v", loaded, err)
-			}
-			want := map[string]impapp.CountDTO{"legal-entity": {Read: 2, Unchanged: 2}, "department": {Read: 2, Created: 2}, "work-center": {Read: 1, Created: 1},
-				"person": {Read: 2, Created: 2}, "employment": {Read: 3, Created: 3}, "position": {Read: 1, Created: 1}, "work-place": {Read: 1, Created: 1}}
-			for _, c := range loaded.Counts {
-				kind := c.Kind
-				c.Kind = ""
-				if c != want[kind] {
-					t.Fatalf("the whole organization, %s: %+v", kind, c)
-				}
-			}
-			twice, err := h.Imports.Service.Execute.Handle(actx, whole)
-			if err != nil || twice.Status != "succeeded" {
-				t.Fatalf("again: %+v %v", twice, err)
-			}
-			for _, c := range twice.Counts {
-				if c.Created != 0 || c.Updated != 0 || c.Failed != 0 || c.Unchanged != c.Read {
-					t.Fatalf("again, %s: %+v", c.Kind, c)
-				}
-			}
-			jobs, err := h.HR.Service.SearchEmployments.Handle(actx, hrapp.SearchEmployments{Number: "P-2", Size: 10})
-			if err != nil || jobs.Total != 2 || jobs.Items[0].Terminated != "2024-12-31" || jobs.Items[0].Hired != "2021-05-10" || jobs.Items[0].Person != jobs.Items[1].Person {
-				t.Fatalf("one person in two companies: %+v %v", jobs.Items, err)
-			}
-
-			held, err := h.HR.Service.SearchPositions.Handle(actx, hrapp.SearchPositions{Type: jobType, Size: 10})
-			if err != nil {
-				t.Fatal(err)
-			}
-			placed := 0
-			for _, pos := range held.Items {
-				if pos.TypeTitle == title && !pos.Vacant && pos.Unit != pos.Organization {
-					placed++
-				}
-			}
-			if placed != 1 {
-				t.Fatalf("a position in the department, held: %+v", held.Items)
-			}
-
-			// The lists of Parties and HR as files, through the datasets of the host.
-			listed := func(dataset string) string {
-				t.Helper()
-				j, err := h.Exports.Service.Start.Handle(actx, expapp.StartExport{Dataset: dataset})
-				if err != nil {
-					t.Fatal(err)
-				}
-				if done, err := h.RunChores(ctx); err != nil || done.ExportsWritten != 1 {
-					t.Fatalf("%s: %+v %v", dataset, done, err)
-				}
-				id, _ := expdomain.ParseJobID(j.ID)
-				f, err := h.Exports.Service.Download.Handle(actx, expapp.DownloadJob{ID: id})
-				if err != nil {
-					t.Fatal(err)
-				}
-				defer f.Content.Close()
-				b, _ := io.ReadAll(f.Content)
-				return string(b)
-			}
-			if persons := listed("persons"); !strings.Contains(persons, "Íñigo Núñez,Persona,Activo\r\n") || !strings.Contains(persons, "Lucía Pérez,Persona,Activo\r\n") ||
-				strings.Count(persons, "\r\n") != 3 {
-				t.Fatalf("persons: %q", persons)
-			}
-			if staff := listed("employees"); !strings.Contains(staff, "Íñigo Núñez,P-1,2020-03-01,,Sí\r\n") ||
-				strings.Count(staff, "Lucía Pérez,P-2,2021-05-10,2024-12-31,No\r\n") != 2 {
-				t.Fatalf("employees: %q", staff)
-			}
-			if rels := listed("party-relationships"); strings.Count(rels, "Employment,") != 3 || strings.Count(rels, "Organization Rollup,Operaciones,") != 2 {
-				t.Fatalf("relationships: %q", rels)
 			}
 
 			// The finance sector exists only for a financial institution: the role is given in Parties.
@@ -249,9 +149,6 @@ func TestHost(t *testing.T) {
 			if moved, err = h.Deliver(ctx); err != nil || moved != 0 {
 				t.Fatalf("delivered twice: %d %v", moved, err)
 			}
-
-			// What Sage and Apiscore bring, through the loaders of the host.
-			tradeImports(t, h, actx)
 		})
 	}
 }

@@ -79,7 +79,7 @@ Excepciones:
   - La dirección y el teléfono se toman prestados del `ContactMechanism` de Party. Facility no
     tiene ningún campo geográfico: llega a la geografía a través de la dirección.
 - **Es la entidad más referenciada desde fuera** (≈45 ficheros, todos por Id): Product
-  (`InventoryItem`, `StockBalance`), Shipments, WorkEffort, Orders, FinancialDetail e Import.
+  (`InventoryItem`, `StockBalance`), Shipments, WorkEffort, Orders, FinancialDetail.
 - **FinancialDetail consulta `ctx.Set<Facility>()` directamente** sobre el `DbContext` compartido: hay que
   sustituirlo por un puerto.
 - **RRHH `WorkCenter` duplica la instalación**, con la dirección guardada como texto.

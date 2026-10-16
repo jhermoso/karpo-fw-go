@@ -120,7 +120,7 @@ func Run(ctx context.Context, command string, db *sqlrepo.DB, ping func(context.
 	if err != nil {
 		return err
 	}
-	h, err := host.Compose(hotswap.New(db), host.Options{JWTSecret: []byte(cfg.Secret), Files: files, ApiscoreEntity: os.Getenv("KARPO_APISCORE_ENTITY"),
+	h, err := host.Compose(hotswap.New(db), host.Options{JWTSecret: []byte(cfg.Secret), Files: files,
 		OnDeliveryGivenUp: Alerts{Webhook: cfg.AlertWebhook, Logger: logger}.DeliveryGivenUp})
 	if err != nil {
 		return err
