@@ -196,7 +196,11 @@ el nombre del permiso que el global puede retirar; el diseño de la marca por ca
 rechaza crear, modificar o confirmar pedidos, presupuestos y facturas, y también reservas de divisa
 y operaciones financieras. Se permite el abono que rectifica una factura dirigida a esa ficha; otro
 abono, 409. Se permite cerrar lo pendiente: consultar, cancelar o anular lo existente, y quitar o
-sustituir la ficha en un pedido. Javier lo cerró el mismo día: D-80 y D-81.
+sustituir la ficha en un pedido. Javier lo cerró el mismo día: D-80 y D-81. **En Trench, D-80 a D-82 están en su `main`** (PR 48, 2026-10-16): una
+factura emitida no admite líneas, borrado ni volver a borrador, sólo pasar a pagada, cancelada o
+anulada; sólo la emisión la deja emitida y con número; el borrador de una ficha fusionada se
+modifica, pero no se emite; los datos antiguos en estado emitida o pagada sin documento cuentan como
+emitidos.
 
 **Lectura común de D-79 a D-81** (propuesta por Karpo C#, compartida por Trench; no es palabra de
 Javier): con una ficha fusionada, en facturación se admiten exactamente (a) el abono que rectifica
