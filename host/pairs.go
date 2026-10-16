@@ -51,7 +51,7 @@ type PairRow struct {
 	Until                    *time.Time `json:"until,omitempty"`
 	// De cliente.
 	CustomerNumber string  `json:"customerNumber,omitempty"`
-	CreditLimit    *string `json:"creditLimit,omitempty"` // nulo: sin límite
+	CreditLimit    *string `json:"creditLimit,omitempty"` // nulo: sin límite, o sin permiso para leer Cobros
 	BlockOrders    *bool   `json:"blockOrders,omitempty"`
 	BlockDelivery  *bool   `json:"blockDelivery,omitempty"`
 	// De proveedor.
@@ -131,7 +131,10 @@ func (p Pairs) search(w http.ResponseWriter, r *http.Request, code string) {
 		return
 	}
 	number := max(q.Page.Number, 1)
-	from := min((number-1)*size, len(rows))
+	from := len(rows) // una página fuera de rango es una lista vacía
+	if number-1 <= len(rows)/size {
+		from = min((number-1)*size, len(rows))
+	}
 	page := struct {
 		Items []PairRow `json:"items"`
 		Total int       `json:"total"`
@@ -158,22 +161,28 @@ func (p Pairs) rows(ctx context.Context, code string, f pairFilter, id string) (
 	q := parapp.SearchPairs{Code: code, Organizations: f.InternalOrganizationIDs, IncludeEnded: f.IncludeEnded, ID: id,
 		Party: parapp.SearchParties{Text: f.Text, Document: f.Document, Role: f.Role, IncludeEndedRoles: f.IncludeEndedRoles,
 			IncludeMergedParties: f.IncludeMergedParties}}
-	switch len(f.Kinds) {
-	case 0:
-	case 1:
+	for _, k := range f.Kinds {
+		if k != "person" && k != "organization" {
+			var v fw.Validation
+			v.Add("filter.kinds", "enum", "kinds are person and organization")
+			return nil, v.Err()
+		}
+	}
+	if len(f.Kinds) == 1 { // las dos clases son todas
 		q.Party.Kind = f.Kinds[0]
-	default:
-		// Las dos clases son todas.
 	}
 	pairs, err := p.h.Parties.Service.Pairs.Handle(ctx, q)
 	if err != nil {
 		return nil, err
 	}
-	ids := make([]string, 0, len(pairs))
-	orgs := []string{}
+	ids, orgs := []string{}, []string{}
+	seen := map[string]bool{}
 	for _, pr := range pairs {
-		ids = append(ids, pr.Party.ID)
-		if !slices.Contains(orgs, pr.Organization) {
+		if !seen[pr.Party.ID] {
+			seen[pr.Party.ID] = true
+			ids = append(ids, pr.Party.ID)
+		}
+		if !slices.Contains(orgs, pr.Organization) { // pocas: las empresas del grupo
 			orgs = append(orgs, pr.Organization)
 		}
 	}
@@ -183,17 +192,19 @@ func (p Pairs) rows(ctx context.Context, code string, f pairFilter, id string) (
 	}
 	key := func(org, party string) string { return org + "/" + party }
 	credit, terms, suppliers := map[string]receivables.CreditDTO{}, map[string]orders.TermsDTO{}, map[string]purchases.SupplierDTO{}
+	// Qué empresas deja leer cada contexto a quien llama: de las otras, el dato no se enseña.
+	readCredit, readTerms, readSuppliers := map[string]bool{}, map[string]bool{}, map[string]bool{}
 	for _, org := range orgs {
 		if code == "customer" {
 			cs, err := p.h.Receivables.Service.SearchCredit.Handle(ctx, receivables.SearchCredit{Seller: org})
-			if err := allowed(err); err != nil {
+			if readCredit[org], err = readable(err); err != nil {
 				return nil, err
 			}
 			for _, c := range cs {
 				credit[key(c.Seller, c.Customer)] = c
 			}
 			ts, err := p.h.Orders.Service.SearchTerms.Handle(ctx, orders.SearchTerms{Company: org})
-			if err := allowed(err); err != nil {
+			if readTerms[org], err = readable(err); err != nil {
 				return nil, err
 			}
 			for _, t := range ts {
@@ -201,7 +212,7 @@ func (p Pairs) rows(ctx context.Context, code string, f pairFilter, id string) (
 			}
 		} else {
 			ss, err := p.h.Purchases.Service.SearchSuppliers.Handle(ctx, purchases.SearchSuppliers{Company: org})
-			if err := allowed(err); err != nil {
+			if readSuppliers[org], err = readable(err); err != nil {
 				return nil, err
 			}
 			for _, s := range ss {
@@ -223,21 +234,22 @@ func (p Pairs) rows(ctx context.Context, code string, f pairFilter, id string) (
 			row.TaxID, row.Country = t.Number, t.Country
 		}
 		k := key(pr.Organization, pr.Party.ID)
+		org := pr.Organization
 		if code == "customer" {
-			blockOrders, blockDelivery := false, false
-			if c, ok := credit[k]; ok {
-				if c.Limited {
-					limit := c.Limit
-					row.CreditLimit = &limit
-				}
-				blockOrders = c.Blocked
+			c, t := credit[k], terms[k] // sin perfil: sin límite y sin bloqueo
+			if readCredit[org] && c.Limited {
+				limit := c.Limit
+				row.CreditLimit = &limit
 			}
-			if t, ok := terms[k]; ok {
-				blockOrders = blockOrders || t.BlockOrders
-				blockDelivery = t.BlockDelivery
+			if readCredit[org] && readTerms[org] { // el bloqueo de pedidos sale de los dos
+				blockOrders := c.Blocked || t.BlockOrders
+				row.BlockOrders = &blockOrders
 			}
-			row.BlockOrders, row.BlockDelivery = &blockOrders, &blockDelivery
-		} else {
+			if readTerms[org] {
+				blockDelivery := t.BlockDelivery
+				row.BlockDelivery = &blockDelivery
+			}
+		} else if readSuppliers[org] {
 			blocked := suppliers[k].Blocked
 			row.BlockInvoices = &blocked
 		}
@@ -270,12 +282,16 @@ func (r PairRow) blocked() bool {
 	return false
 }
 
-// allowed deja pasar la falta de permiso sobre un contexto: esos datos no se enseñan.
-func allowed(err error) error {
-	if err == nil || errors.Is(err, fw.ErrForbidden) {
-		return nil
+// readable dice si quien llama pudo leer un contexto. Sin permiso, esos datos no se enseñan y no es
+// un error; cualquier otro fallo, sí.
+func readable(err error) (bool, error) {
+	switch {
+	case err == nil:
+		return true, nil
+	case errors.Is(err, fw.ErrForbidden):
+		return false, nil
 	}
-	return err
+	return false, err
 }
 
 // taxIdentities lee el documento fiscal y el país de los terceros, por lotes.

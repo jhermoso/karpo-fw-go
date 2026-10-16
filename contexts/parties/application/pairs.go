@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/parties/domain"
+	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
 )
@@ -61,12 +62,28 @@ func (s service) pairs(ctx context.Context, q SearchPairs) ([]PairDTO, error) {
 	if err != nil {
 		return nil, err
 	}
+	// La fila enseña al tercero entero: hace falta también poder leer parties.
+	if err := authz.Require(ctx, PermPartyRead); err != nil {
+		return nil, err
+	}
 	n, err := s.names(ctx)
 	if err != nil {
 		return nil, err
 	}
 	now := fw.Now()
-	where := domain.RelFieldType.Eq(typ).And(s.scope(ctx).relationships())
+	// Una pareja es de quien llama cuando lo es la empresa del grupo, no el tercero: si Acme compra
+	// a Acme Levante, esa relación de cliente es una pareja de Acme Levante, no de Acme.
+	companyField := domain.RelFieldTo
+	if orgFirst {
+		companyField = domain.RelFieldFrom
+	}
+	where := domain.RelFieldType.Eq(typ)
+	if sc := s.scope(ctx); !sc.global {
+		if len(sc.orgs) == 0 {
+			return []PairDTO{}, nil
+		}
+		where = where.And(companyField.In(sc.orgs...))
+	}
 	if q.ID != "" {
 		id, err := domain.ParseRelationshipID(q.ID)
 		if err != nil {
@@ -89,11 +106,7 @@ func (s service) pairs(ctx context.Context, q SearchPairs) ([]PairDTO, error) {
 			}
 			orgs = append(orgs, id)
 		}
-		if orgFirst {
-			where = where.And(domain.RelFieldFrom.In(orgs...))
-		} else {
-			where = where.And(domain.RelFieldTo.In(orgs...))
-		}
+		where = where.And(companyField.In(orgs...))
 	}
 	rels, err := s.Relationships.Find(ctx, where, domain.RelFieldSince.Asc())
 	if err != nil {
@@ -107,12 +120,14 @@ func (s service) pairs(ctx context.Context, q SearchPairs) ([]PairDTO, error) {
 		return r.To(), r.From()
 	}
 	var partyIDs, orgIDs []domain.PartyID
+	seen := map[domain.PartyID]bool{}
 	for _, r := range rels {
 		org, party := sides(r)
-		if !slices.Contains(partyIDs, party) {
+		if !seen[party] {
+			seen[party] = true
 			partyIDs = append(partyIDs, party)
 		}
-		if !slices.Contains(orgIDs, org) {
+		if !slices.Contains(orgIDs, org) { // pocas: las empresas del grupo
 			orgIDs = append(orgIDs, org)
 		}
 	}
