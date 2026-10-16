@@ -191,6 +191,8 @@ el nombre del permiso que el global puede retirar; el diseño de la marca por ca
 | D-80 | **A una ficha fusionada se le permiten también los abonos sueltos**, sin factura de origen. Amplía D-79. Transmitida por la sesión de Trench (2026-10-16) | Contestada allí; Javier pide comprobar que ningún proyecto tenga regla, caso o dato que lo contradiga. Karpo Go no tiene abonos sueltos: no lo contradice |
 | D-81 | **Una factura emitida siempre tiene número y no se puede modificar.** El abono que D-79 permite a una ficha fusionada rectifica una factura emitida, es decir, numerada. Transmitida por la sesión de Trench | Contestada allí. En Trench, «emitida» es tener el documento finalizado con número; en Karpo Go ya es así |
 | D-82 | **Un borrador de factura se puede modificar aunque su cliente sea una ficha fusionada; lo que no se modifica es la factura emitida.** Precisa la lectura común de D-79 a D-81: «ni modificar lo existente» se refiere a lo emitido | «los borradores de factura si se pueden modificar lo que no se puede modificar son las facturas emitidas» (esta sesión, 2026-10-16) |
+| D-83 | **Una regla de negocio rota responde 422** en el contrato HTTP común (Karpo C# usaba 409). Cierra la decisión 12 del contrato | «422» (esta sesión, 2026-10-17), a «una regla de negocio rota, ¿409 o 422?» |
+| D-84 | **Los comentarios del código de Karpo Go van en español**, como dice su `CLAUDE.md`; los identificadores, en inglés. Lo existente, en inglés, se traduce aparte | «español» (esta sesión, 2026-10-17) |
 
 **D-70 y D-79 en Trench** (su sesión, 2026-10-16; en su `main`, PR 47): con una ficha fusionada se
 rechaza crear, modificar o confirmar pedidos, presupuestos y facturas, y también reservas de divisa
