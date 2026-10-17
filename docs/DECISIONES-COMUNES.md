@@ -242,6 +242,23 @@ búsquedas ni de los listados por rol. **Choque con D-4:** si la fusión deja in
 relaciones vigentes, contradice que no se puede desactivar algo de lo que dependen relaciones
 vigentes.
 
+### 1.1 sexies El autónomo y los identificadores (sesión de Trench)
+
+Tomadas en la sesión de Trench el 2026-10-17 y **transmitidas por ella**; no se han confirmado aquí.
+La lectura es de esa sesión.
+
+| # | Decisión (lectura) | Lo que dijo Javier |
+|---|---|---|
+| D-85 | **El autónomo es una persona con el rol «Self-Employed»**, no una organización legal: una ficha es persona u organización, nunca las dos. El rol es sólo de personas y tiene vigencia; sus datos de actividad (nombre comercial, epígrafe, alta) van en un perfil del rol; su NIF es su documento de identidad. La importación crea personas cuando el NIF es un DNI o un NIE. Precisa D-53 y contesta su pregunta abierta | «sí» a esa propuesta. Había pensado en «persona y organización legal», pero rompía la invariante persona u organización. En Trench, 55 de 3.610 organizaciones legales tienen NIF de persona y 13 duplican a una persona con el mismo documento: se corrigen antes de converger |
+| D-86 | **Una persona empresa del grupo (D-53) se identifica con su documento de identidad.** Sus datos registrales se ocultan por ahora y se decide más adelante; se empieza sólo por el catálogo y los listados, hasta que haya un caso real | Transmitida |
+| D-87 | **Qué campo es identificador se marca explícitamente en el código**; la herramienta sólo lo propone | Transmitida (su D1) |
+| D-88 | **El valor normalizado de un identificador se guarda en una tabla genérica de valores**, que sirve también para correo, teléfono, IBAN y campos personalizados | Transmitida (su D2) |
+| D-89 | **El nombre solo nunca basta para decir que dos fichas son la misma**: sólo propone candidatas junto con otro dato | Transmitida (su D3) |
+| D-90 | **Un campo personalizado no puede ser identificador en la primera versión del contrato común**; ese nombre de propiedad queda reservado | Transmitida (su D5) |
+| D-91 | **Los 38 CIF repetidos de Trench se fusionan** antes de converger. Precisa D-50 | Transmitida |
+| D-92 | **Un dato con formato erróneo avisa y se guarda como incidencia, sin impedir guardar, en el correo, el teléfono, el IBAN y los campos personalizados; el documento de identidad inválido se sigue rechazando** (D-5). En las importaciones sigue D-9: la party con el documento rechazado entra marcada con el error, con un filtro para encontrarla. Resuelve el choque entre el D4 de Trench y D-5 | «b» (en la sesión de Trench, 2026-10-18), a las lecturas que se le plantearon desde aquí |
+| D-93 | **Al fusionar, cada relación de negocio vigente de la ficha fusionada (cliente o proveedor con una empresa) pasa a la superviviente, con su perfil comercial, si la superviviente no tiene ya esa relación con esa misma empresa**; si ya la tiene, se revisa caso por caso. Precisa D-64 («las relaciones se quedan donde están») para ese caso | «sí» (en la sesión de Trench, 2026-10-18). Motivo de esa sesión: en Trench, 41 de las 44 relaciones de las fichas a fusionar no las tiene la superviviente, y con el bloqueo de facturación y pedidos quedarían inservibles |
+
 ### 1.2 Extensibilidad
 
 Detalle en [EXTENSIBILIDAD.md](EXTENSIBILIDAD.md) §1.
@@ -327,7 +344,6 @@ empresa es un envío o un trabajo; y cómo se añade un valor de catálogo en SQ
 | D-62 | **Dos tipos de relación con los lados distintos.** «Agent Relationship» (`…0008`): Agent → Internal Organization en Trench, Agent → Customer en Go. «Organization Rollup» (`…0005`): Department → Internal Organization en Trench; en Go, cualquier unidad organizativa → cualquier organización |
 | D-62 | «Organization Unit» (`…0105`) cuelga de «Legal» en las semillas SQL de Trench y de «Organization» en su catálogo de código y en Karpo Go. «Entidad financiera» (`…00F1`) está en las semillas de Trench y otro script la borra |
 | D-62 | «Salesperson» (`…0001-…00C3`) es en Trench un rol de pedido, no de party; en Go es un rol de party. La relación `prospect` sólo existe en Go |
-| D-53 | ¿Un autónomo proveedor u organización interna se identifica con su NIF de persona? |
 | D-53, D-67 | La primera mitad la contesta D-67 (sólo cuentan las relaciones de negocio). Falta qué tipos de relación son «de negocio» y el diseño de la marca por campo |
 | D-49 | Diferencias de Karpo C# (su PR 31, sin fusionar), de su sesión: responde 409 donde Go da 422; exige además el permiso de asignar roles; una party recién creada en C# no es escribible por su empresa hasta tener una relación (en Go el alta ya la afilia); C# da por escribible una party del catálogo público y Go nunca; el alta de relación en C# no lleva fecha de inicio |
 | D-56 | Que un tipo hijo no pueda declarar un código de campo que ya declara un ancestro, y qué pasa con los valores si un tipo cambia de padre. Por fijar entre Trench y Go |
@@ -419,8 +435,9 @@ Lo que Go no cumple todavía de lo decidido. Cada sesión lleva la suya en su re
 | D-59 | La empresa no tiene acrónimo | Dato nuevo, requisito previo de la extensibilidad |
 | D-50 | Cumple: índice único sobre tipo, país y número | — |
 | D-54, D-62 | **Hecho** (PR 20 y rama `feat/parties-catalogo-comun`, migraciones 19 y 21): «Team» bajo «Informal»; sembrados Club, Group y los cuatro tipos de relación | «Duplicate Of», cuando se resuelva el choque de identificador (§2) |
-| D-53 | **Hecho** (rama `feat/parties-persona-proveedor-o-empresa`, migración 20): los dos tipos cuelgan de la raíz. Los demás contextos guardan a la empresa por identificador y no cambian. Una persona empresa no puede tener unidades organizativas debajo | El documento que identifica al autónomo; que la importación de proveedores cargue personas |
-| D-64 | **Hecho** (rama `feat/parties-duplicado-bloqueado`, migración 24): marcar con «Duplicate Of» bloquea la party; se lee, la búsqueda la deja fuera salvo `includeMergedParties=true` (nombre de Trench, su PR 45), no admite cambios ni relaciones nuevas; terminar la relación lo deshace. Lo marca quien puede modificar el duplicado; una empresa interna, sólo el global | Que los otros contextos se nieguen a operar con un duplicado |
+| D-53 | **Hecho** (rama `feat/parties-persona-proveedor-o-empresa`, migración 20): los dos tipos cuelgan de la raíz. Los demás contextos guardan a la empresa por identificador y no cambian. Una persona empresa no puede tener unidades organizativas debajo | El rol «Self-Employed» con su perfil de actividad (D-85); que una persona empresa use su documento de identidad como principal (D-86). Go no tiene importación |
+| D-64 | **Hecho** (rama `feat/parties-duplicado-bloqueado`, migración 24): marcar con «Duplicate Of» bloquea la party; se lee, la búsqueda la deja fuera salvo `includeMergedParties=true` (nombre de Trench, su PR 45), no admite cambios ni relaciones nuevas; terminar la relación lo deshace. Lo marca quien puede modificar el duplicado; una empresa interna, sólo el global | Pasar las relaciones de negocio vigentes a la superviviente al fusionar (D-93). Lo de los otros contextos ya está (D-70) |
+| D-92 | El documento de identidad inválido se rechaza (cumple D-5). Go valida hoy el IBAN (`vocab`) y lo rechaza si está mal formado | Comprobar qué rechaza hoy Go de correo, teléfono e IBAN y pasarlo a aviso con incidencia |
 | D-70 | **Hecho** (PR 30, en borrador): Pedidos rechaza presupuestos, pedidos y confirmaciones para un duplicado; Facturación, preparar y emitir facturas ordinarias (las rectificativas, no: decidido en esta sesión). Lo saben por el contrato de identidades fiscales de Parties (`blocked`) | Compras, Cobros y Tesorería no lo miran |
 | D-70, D-79, D-82 | Cumple: rechaza crear y emitir (o confirmar) para un duplicado y deja modificar los borradores | — |
 | D-77, D-78 | **Hecho** (rama `feat/parties-empresa-interna-solo-global`): las altas anteriores al 2026-10-15 no cuentan como dadas de alta por su empresa; sólo el administrador global da «Internal Organization» | El circuito de D-78 (petición con pruebas, confirmación de datos, aprobación del global), diseño |
