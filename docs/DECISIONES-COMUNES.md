@@ -259,6 +259,14 @@ La lectura es de esa sesión.
 | D-92 | **Un dato con formato erróneo avisa y se guarda como incidencia, sin impedir guardar, en el correo, el teléfono, el IBAN y los campos personalizados; el documento de identidad inválido se sigue rechazando** (D-5). En las importaciones sigue D-9: la party con el documento rechazado entra marcada con el error, con un filtro para encontrarla. Resuelve el choque entre el D4 de Trench y D-5 | «b» (en la sesión de Trench, 2026-10-18), a las lecturas que se le plantearon desde aquí |
 | D-93 | **Al fusionar, cada relación de negocio vigente de la ficha fusionada (cliente o proveedor con una empresa) pasa a la superviviente, con su perfil comercial, si la superviviente no tiene ya esa relación con esa misma empresa**; si ya la tiene, se revisa caso por caso. Precisa D-64 («las relaciones se quedan donde están») para ese caso | «sí» (en la sesión de Trench, 2026-10-18). Motivo de esa sesión: en Trench, 41 de las 44 relaciones de las fichas a fusionar no las tiene la superviviente, y con el bloqueo de facturación y pedidos quedarían inservibles |
 
+**D-85 y D-93 en Trench** (su sesión, 2026-10-18; en su `main`, commit c6b3c233). D-85, hecho en
+parte (PR 53): las importaciones crean una persona con el rol «Self Employed» cuando el NIF es un
+DNI o un NIE, y la reutilizan si ya existe con ese documento; faltan el perfil del rol y corregir
+las 55 organizaciones con NIF de persona ya importadas. D-93, hecho (PR 54): al fusionar, las
+relaciones vigentes de cliente o de proveedor pasan a la superviviente con su perfil comercial si
+no las tiene ya con esa empresa, y deshacer la fusión las devuelve; faltan que la pantalla de
+fusión las enseñe y decidir las direcciones por defecto del perfil trasladado.
+
 ### 1.2 Extensibilidad
 
 Detalle en [EXTENSIBILIDAD.md](EXTENSIBILIDAD.md) §1.
