@@ -211,6 +211,18 @@ factura de origen. Nada más: ni facturas nuevas, ni pedidos, ni modificar lo ex
 le aplica. Karpo C#: nada lo contradice (aún no tiene fusión; su abono ya admite ir sin factura de
 origen).
 
+**D-73 en Trench** (su sesión, 2026-10-17; en su `main`, commit 84a553fd, PR 51): «Relaciones de
+clientes / proveedores» se filtran y ordenan en el servidor por los datos de la pareja, con
+`POST /api/{customer,supplier}-relationships/search/enriched` y un `PartyFilterDto` ampliado. Sólo
+lectura, como en Karpo Go. Clientes: `customerNumber` (exacto), `customerNumberContains` e
+`isBlocked` (pedidos o albaranes bloqueados; sin perfil, no bloqueada). Proveedores:
+`supplierCodeInTenant` (exacto), `supplierCodeInTenantContains` (no hay número de proveedor) e
+`isBlocked` (pedidos o recepciones). Los dos: `maxRiskFrom` y `maxRiskTo`, y los órdenes `isBlocked`
+y `maxRisk`. **Los nombres no son los de Karpo Go** (`taxId`, `creditLimit`, `blocked`…): Trench
+mantiene los suyos hasta adoptar el contrato común. En el mismo `main` (PR 50), un arreglo: el alta
+de factura guarda ya el emisor y el receptor, y un abono con una factura de origen que no existe
+responde 404. **D-83 en Trench:** aún no lo ha confirmado Javier en su sesión; allí sigue el 409.
+
 **D-64 en cada proyecto (2026-10-14):** en Trench, fusionado en `main` (su PR 45): lo que
 decide «es duplicado» es su columna `MergedIntoPartyId`, y la relación «Duplicate Of» se crea
 siempre con ella; filtro `includeMergedParties`. En Karpo Go, la relación «Duplicate Of» y su
@@ -412,7 +424,7 @@ Lo que Go no cumple todavía de lo decidido. Cada sesión lleva la suya en su re
 | D-70 | **Hecho** (PR 30, en borrador): Pedidos rechaza presupuestos, pedidos y confirmaciones para un duplicado; Facturación, preparar y emitir facturas ordinarias (las rectificativas, no: decidido en esta sesión). Lo saben por el contrato de identidades fiscales de Parties (`blocked`) | Compras, Cobros y Tesorería no lo miran |
 | D-70, D-79, D-82 | Cumple: rechaza crear y emitir (o confirmar) para un duplicado y deja modificar los borradores | — |
 | D-77, D-78 | **Hecho** (rama `feat/parties-empresa-interna-solo-global`): las altas anteriores al 2026-10-15 no cuentan como dadas de alta por su empresa; sólo el administrador global da «Internal Organization» | El circuito de D-78 (petición con pruebas, confirmación de datos, aprobación del global), diseño |
-| D-51, D-73 | **Hecha la lectura** (PR 2 de karpo-fw-go, en borrador): `POST /api/customer-relationships/search` y `GET …/{id}`, y lo mismo para proveedores; una fila por pareja con número de cliente, límite y bloqueos de Cobros, Pedidos y Compras, filtrada y ordenada por ellos. Talleres Pérez sale una vez por empresa | El alta de la pareja; los campos que Go no tiene (código externo, delegación, motivo del bloqueo) |
+| D-51, D-73 | **Hecha la lectura** (PR 2 de karpo-fw-go, fusionado el 2026-10-17): `POST /api/customer-relationships/search` y `GET …/{id}`, y lo mismo para proveedores; una fila por pareja con número de cliente, límite y bloqueos de Cobros, Pedidos y Compras, filtrada y ordenada por ellos. Talleres Pérez sale una vez por empresa | El alta de la pareja; los campos que Go no tiene (código externo, delegación, motivo del bloqueo) |
 | D-74 | **Hecho** (rama `feat/parties-alta-por-auditoria`): Go lo deduce de la auditoría, como pidió Javier el 2026-10-14 («prefiero que lo deduzca de los registros de auditoria tambien en go»): la party y la relación que la afilia nacieron juntas si su primer registro comparte el identificador de operación. Sin columna propia | — |
 | D-75, D-76 | Cumple: un usuario que no es administrador global sólo da de alta con afiliación, y `Parties.Party.UpdateRelated` es un permiso del rol | — |
 | D-65, D-66 | **Hecho** (rama `feat/parties-quien-modifica`; desde D-74, sin la migración 25): se sabe si la party nació con el alta por la auditoría; si no, modifica quien tenga `Parties.Party.UpdateRelated` (de entrada, el administrador de organización); una empresa interna de otros sólo la modifican sus usuarios. Las afiliaciones anteriores a la migración quedan como relacionadas | El permiso vale para todas las empresas del usuario, no por empresa |
