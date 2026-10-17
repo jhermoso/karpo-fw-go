@@ -185,9 +185,31 @@ el nombre del permiso que el global puede retirar; el diseño de la marca por ca
 | D-70 | **El bloqueo del duplicado alcanza a Facturación y Pedidos**: no se le factura ni se le hace un pedido | «el bloqueo sí alcanza a facturación y pedidos» |
 | D-71 | **La fusión bloquea la ficha, no la desactiva** (también en Trench, que hoy la desactiva) | «bloquear si» |
 | D-72 | **Karpo C# sigue con lo que tiene en marcha** antes de traer la fusión de Trench | «seguir con lo que tiene» |
-| D-73 | **La vista por pareja se puede filtrar y ordenar por los datos de la pareja** (número de cliente, bloqueo) desde la versión 1 | «si» a «¿es obligatorio en la primera versión ordenar la lista por número de cliente o por bloqueo?» |
+| D-73 | **La vista por pareja se puede filtrar y ordenar por los datos de la pareja** (número de cliente, bloqueo) desde la versión 1 | «si» a «¿es obligatorio en la primera versión ordenar la lista por número de cliente o por bloqueo?»; confirmada también en la sesión de Trench el 2026-10-16 |
 | D-74 | **Para saber qué empresa dio de alta una party basta la auditoría** (quién la creó y en la misma operación que su relación de negocio con esa empresa); **no hay tipo de relación nuevo ni dato nuevo en el modelo común**, y la relación del alta es la de negocio que elige quien da de alta. Aclarada en la sesión de Karpo C# | «no se si hace falta decir quien le dio de alta mas alla de la información histórica del registro. y la relacion se crea como en karpo c#»; y, a la aclaración en la sesión de Karpo C#: «sí, basta la auditoría y la relación de negocio» |
 | D-79 | **Al duplicado se le pueden emitir facturas rectificativas (abonos) de facturas ya emitidas**: corregir lo facturado es una obligación. Todo lo nuevo (factura ordinaria, presupuesto, pedido) sigue bloqueado. Precisa D-70 | «la de go» (esta sesión, 2026-10-15), a la pregunta de si un duplicado rechaza también los abonos, como hacía Trench, o permite la rectificativa de una factura ya emitida, como Karpo Go |
+| D-80 | **A una ficha fusionada se le permiten también los abonos sueltos**, sin factura de origen. Amplía D-79. Transmitida por la sesión de Trench (2026-10-16) | Contestada allí; Javier pide comprobar que ningún proyecto tenga regla, caso o dato que lo contradiga. Karpo Go no tiene abonos sueltos: no lo contradice |
+| D-81 | **Una factura emitida siempre tiene número y no se puede modificar.** El abono que D-79 permite a una ficha fusionada rectifica una factura emitida, es decir, numerada. Transmitida por la sesión de Trench | Contestada allí. En Trench, «emitida» es tener el documento finalizado con número; en Karpo Go ya es así |
+| D-82 | **Un borrador de factura se puede modificar aunque su cliente sea una ficha fusionada; lo que no se modifica es la factura emitida.** Precisa la lectura común de D-79 a D-81: «ni modificar lo existente» se refiere a lo emitido | «los borradores de factura si se pueden modificar lo que no se puede modificar son las facturas emitidas» (esta sesión, 2026-10-16) |
+| D-83 | **Una regla de negocio rota responde 422** en el contrato HTTP común (Karpo C# usaba 409). Cierra la decisión 12 del contrato | «422» (esta sesión, 2026-10-17), a «una regla de negocio rota, ¿409 o 422?» |
+| D-84 | **Los comentarios del código de Karpo Go van en español**, como dice su `CLAUDE.md`; los identificadores, en inglés. Lo existente, en inglés, se traduce aparte | «español» (esta sesión, 2026-10-17) |
+
+**D-70 y D-79 en Trench** (su sesión, 2026-10-16; en su `main`, PR 47): con una ficha fusionada se
+rechaza crear, modificar o confirmar pedidos, presupuestos y facturas, y también reservas de divisa
+y operaciones financieras. Se permite el abono que rectifica una factura dirigida a esa ficha; otro
+abono, 409. Se permite cerrar lo pendiente: consultar, cancelar o anular lo existente, y quitar o
+sustituir la ficha en un pedido. Javier lo cerró el mismo día: D-80 y D-81. **En Trench, D-80 a D-82 están en su `main`** (PR 48, 2026-10-16): una
+factura emitida no admite líneas, borrado ni volver a borrador, sólo pasar a pagada, cancelada o
+anulada; sólo la emisión la deja emitida y con número; el borrador de una ficha fusionada se
+modifica, pero no se emite; los datos antiguos en estado emitida o pagada sin documento cuentan como
+emitidos.
+
+**Lectura común de D-79 a D-81** (propuesta por Karpo C#, compartida por Trench; no es palabra de
+Javier): con una ficha fusionada, en facturación se admiten exactamente (a) el abono que rectifica
+una factura emitida, numerada, dirigida a esa ficha y al mismo receptor, y (b) el abono suelto, sin
+factura de origen. Nada más: ni facturas nuevas, ni pedidos, ni modificar lo existente. Theros: no
+le aplica. Karpo C#: nada lo contradice (aún no tiene fusión; su abono ya admite ir sin factura de
+origen).
 
 **D-64 en cada proyecto (2026-10-14):** en Trench, fusionado en `main` (su PR 45): lo que
 decide «es duplicado» es su columna `MergedIntoPartyId`, y la relación «Duplicate Of» se crea
@@ -283,10 +305,8 @@ empresa es un envío o un trabajo; y cómo se añade un valor de catálogo en SQ
 | D-13 | Cómo se declara en el dominio que una relación es de dependencia (el diseño no está hecho) |
 | D-15 | (1) Una party desactivada, ¿deja de verla también quien tendría que reactivarla? (2) Un antiguo cliente, ¿se puede editar desde la empresa o sólo ver? (3) ¿Cambia también lo que responde «a qué empresas pertenece hoy», que usan RRHH y Security? |
 | D-17 | (1) ¿El rol «cliente» sigue existiendo, como consecuencia de tener la relación, o desaparece? (2) Si sigue, ¿lo asigna la relación al establecerse o tiene que existir antes? **Javier dijo en Trench, sin cerrarlo:** «creo que podemos decir que es la relación la que asigna los roles si estos no están previamente». Trench lo hace así; Go rechaza la relación si el rol falta. (3) ¿Vale lo mismo para proveedor, empleado y cliente potencial? (4) ¿La búsqueda de parties deja de poder filtrar «los que son cliente»? |
-| D-17, D-30 | **En la pantalla «Clientes», Talleres Pérez, que compra a Acme y a Acme Levante, ¿sale una vez o dos**, una por empresa, cada una con su número de cliente? El contrato HTTP propuesto trata «cliente» como rol y daría una; D-17 y D-30 implican dos. (Pregunta de la sesión de Theros) |
 | D-7, D-10, D-28 | **Talleres Pérez deja de ser cliente de Acme en marzo y vuelve en septiembre. ¿Vuelve con su número y su bloqueo por impago, o empieza de cero?** En Trench el perfil comercial cuelga de cada relación: empezaría de cero. En Go el límite y el bloqueo viven en `receivables` por pareja y se conservan; el número queda guardado en la relación terminada, nadie más puede usarlo, y hay que volver a dárselo a mano a la relación nueva. (Pregunta de la sesión de Theros) |
 | D-31 | Si hay relaciones de cliente de quien no tiene el rol de cliente, ¿qué significa entonces el rol? (va con D-17) |
-| D-35 | ¿«Tiene el rol X» mira sólo los roles vigentes hoy (Go) o cualquiera que haya tenido (Trench)? *Ejemplo:* Luis fue empleado hasta diciembre y hoy sólo es cliente; al filtrar por «Empleado», ¿sale? En Trench hoy sale; en Go, no. Si los dos comparten la expresión, tienen que contestar lo mismo. Trench recomendará «sólo vigentes» |
 | D-39 | ¿Qué variantes cuentan en Karpo Go? Hoy es un solo proceso (D-2) |
 | D-40 | Go prueba además en MySQL y SQLite. ¿Siguen como motores de prueba, o sobran? Dato de Theros: prueba lo generado en SQLite, PostgreSQL, SQL Server y Oracle; su plantilla de Go dice admitir MySQL sin ninguna prueba. Si sobran, en Theros SQLite quedaría sólo como motor embebido de las pruebas sin contenedores |
 | D-44 | ¿Se termina entonces el broker NATS de Go, que está aparcado en una rama? |
@@ -383,20 +403,18 @@ Lo que Go no cumple todavía de lo decidido. Cada sesión lleva la suya en su re
 | D-39, D-44 | Un solo proceso; el broker NATS está aparcado en una rama sin fusionar | Decidir qué variantes cuentan en Go |
 | D-48 | **Hecho** (rama `feat/parties-roles-terminados`): `GET /api/parties?role=…&includeEndedRoles=true` | — |
 | D-49 | **Hecho** (PR 21, más los arreglos de la revisión en `feat/parties-desactivar-con-relaciones`): el caso de uso asigna el rol que falte antes de establecer la relación. No se asigna «Internal Organization» ni un rol que cuelgue de él (D-62), ni ningún rol a una party que quien llama no puede escribir (decidido en esta sesión tras la revisión independiente) | Que Javier confirme la segunda restricción |
-| D-55, D-56 | `EXTENSIBILIDAD.md` dice lo contrario en los dos puntos (retirar sin DDL; sólo el tipo exacto). El mecanismo no está implementado | Corregir el diseño |
+| D-55, D-56 | `EXTENSIBILIDAD.md` corregido; el mecanismo no está implementado | El mecanismo |
 | D-59 | La empresa no tiene acrónimo | Dato nuevo, requisito previo de la extensibilidad |
 | D-50 | Cumple: índice único sobre tipo, país y número | — |
-| D-51 | No hay búsqueda de relaciones ni vista por pareja | Entra con el contrato HTTP |
 | D-54, D-62 | **Hecho** (PR 20 y rama `feat/parties-catalogo-comun`, migraciones 19 y 21): «Team» bajo «Informal»; sembrados Club, Group y los cuatro tipos de relación | «Duplicate Of», cuando se resuelva el choque de identificador (§2) |
 | D-53 | **Hecho** (rama `feat/parties-persona-proveedor-o-empresa`, migración 20): los dos tipos cuelgan de la raíz. Los demás contextos guardan a la empresa por identificador y no cambian. Una persona empresa no puede tener unidades organizativas debajo | El documento que identifica al autónomo; que la importación de proveedores cargue personas |
 | D-64 | **Hecho** (rama `feat/parties-duplicado-bloqueado`, migración 24): marcar con «Duplicate Of» bloquea la party; se lee, la búsqueda la deja fuera salvo `includeMergedParties=true` (nombre de Trench, su PR 45), no admite cambios ni relaciones nuevas; terminar la relación lo deshace. Lo marca quien puede modificar el duplicado; una empresa interna, sólo el global | Que los otros contextos se nieguen a operar con un duplicado |
 | D-70 | **Hecho** (PR 30, en borrador): Pedidos rechaza presupuestos, pedidos y confirmaciones para un duplicado; Facturación, preparar y emitir facturas ordinarias (las rectificativas, no: decidido en esta sesión). Lo saben por el contrato de identidades fiscales de Parties (`blocked`) | Compras, Cobros y Tesorería no lo miran |
+| D-70, D-79, D-82 | Cumple: rechaza crear y emitir (o confirmar) para un duplicado y deja modificar los borradores | — |
 | D-77, D-78 | **Hecho** (rama `feat/parties-empresa-interna-solo-global`): las altas anteriores al 2026-10-15 no cuentan como dadas de alta por su empresa; sólo el administrador global da «Internal Organization» | El circuito de D-78 (petición con pruebas, confirmación de datos, aprobación del global), diseño |
-| D-73 | Recogido en el contrato HTTP (`CONTRATO-PARTIES-V1.md` §7 quinquies) | La vista por pareja no está implementada en Go |
+| D-51, D-73 | **Hecha la lectura** (PR 2 de karpo-fw-go, en borrador): `POST /api/customer-relationships/search` y `GET …/{id}`, y lo mismo para proveedores; una fila por pareja con número de cliente, límite y bloqueos de Cobros, Pedidos y Compras, filtrada y ordenada por ellos. Talleres Pérez sale una vez por empresa | El alta de la pareja; los campos que Go no tiene (código externo, delegación, motivo del bloqueo) |
 | D-74 | **Hecho** (rama `feat/parties-alta-por-auditoria`): Go lo deduce de la auditoría, como pidió Javier el 2026-10-14 («prefiero que lo deduzca de los registros de auditoria tambien en go»): la party y la relación que la afilia nacieron juntas si su primer registro comparte el identificador de operación. Sin columna propia | — |
 | D-75, D-76 | Cumple: un usuario que no es administrador global sólo da de alta con afiliación, y `Parties.Party.UpdateRelated` es un permiso del rol | — |
-| D-77 | **Diferencia:** Go deduce de la auditoría (D-74) también las altas anteriores, así que un tercero que se dio de alta desde tu empresa antes de la regla sigue siendo modificable por sus usuarios. Sólo quedan de lectura los que se dieron de alta sin la relación o antes de que hubiera auditoría | Que Javier diga si las altas anteriores cuentan, ahora que la auditoría lo sabe |
-| D-78 | **Hoy cualquiera que pueda escribir una party y tenga el permiso de asignar roles le puede dar «Internal Organization»** (o crear una relación que lo pida y se rechaza, D-49). No hay aprobación del global ni pruebas | Reservar la asignación de «Internal Organization» al administrador global, como primer paso; el circuito de aprobación, diseño |
 | D-65, D-66 | **Hecho** (rama `feat/parties-quien-modifica`; desde D-74, sin la migración 25): se sabe si la party nació con el alta por la auditoría; si no, modifica quien tenga `Parties.Party.UpdateRelated` (de entrada, el administrador de organización); una empresa interna de otros sólo la modifican sus usuarios. Las afiliaciones anteriores a la migración quedan como relacionadas | El permiso vale para todas las empresas del usuario, no por empresa |
 | D-67 | **Hecho en parte:** una relación de familia no afilia a nadie | La marca por campo de los datos públicos de una persona, diseño |
 | D-40 | Cumple los tres, y prueba además en MySQL y SQLite | — |
