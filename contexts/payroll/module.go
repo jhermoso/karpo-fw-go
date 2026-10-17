@@ -1,4 +1,5 @@
-// Package payroll composes the Payroll bounded context on a hot-swap backend.
+// Package payroll compone el contexto delimitado Payroll sobre un backend intercambiable en
+// caliente.
 package payroll
 
 import (
@@ -20,7 +21,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 )
 
-// Module is the composed context.
+// Module es el contexto compuesto.
 type Module struct {
 	Service           *papp.Service
 	Remittance        contracts.Remittance
@@ -28,7 +29,8 @@ type Module struct {
 	Audit             application.AuditLog
 }
 
-// Compose builds the context on sw. Payroll needs HR: employments are the port it owns.
+// Compose construye el contexto sobre sw. Payroll necesita HR: las relaciones laborales son su
+// puerto propio.
 func Compose(sw *hotswap.Switch, employments papp.Employments) *Module {
 	payslips := hotswap.Repository(sw, infrastructure.PayslipRepositoryFactory)
 	profiles := hotswap.Repository(sw, infrastructure.ProfileRepositoryFactory)
@@ -44,7 +46,7 @@ func Compose(sw *hotswap.Switch, employments papp.Employments) *Module {
 	return &Module{Service: svc, Remittance: papp.Remittance{Payslips: payslips, Profiles: profiles}, IntegrationOutbox: integration, Audit: audit}
 }
 
-// Relay forwards the Published Language to a transport.
+// Relay reenvía el Published Language a un transporte.
 func (m *Module) Relay(sender application.MessageSender, opts ...outbox.RelayOption) *outbox.Relay {
 	return messaging.NewRelay(contracts.Source, m.IntegrationOutbox, sender, opts...)
 }
@@ -73,7 +75,8 @@ func badID(w http.ResponseWriter, r *http.Request) {
 	distribution.WriteError(w, r, fmt.Errorf("%w: invalid id", fw.ErrValidation))
 }
 
-// command handles POST/PUT /{id}/...: it parses the id, decodes the body and lets set place the id.
+// command atiende POST/PUT /{id}/...: interpreta el id, decodifica el cuerpo y deja que set
+// coloque el id.
 func command[ID, In, Out any](parse func(string) (ID, error), set func(*In, ID), run func(context.Context, In) (Out, error)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := parse(r.PathValue("id"))
@@ -118,7 +121,7 @@ func get[ID, Out any](parse func(string) (ID, error), run func(context.Context, 
 	}
 }
 
-// RegisterRoutes implements distribution.EndpointModule.
+// RegisterRoutes implementa distribution.EndpointModule.
 func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	svc := m.Service
 	pay, prof, acc := domain.ParsePayslipID, domain.ParseProfileID, domain.ParseEmployerAccountID
@@ -127,7 +130,7 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 		return q.Get, func(k string) int { n, _ := strconv.Atoi(q.Get(k)); return n }
 	}
 
-	// Payslips.
+	// Nóminas.
 	mux.HandleFunc("POST /api/payroll/payslips", create(svc.DraftPayslip.Handle))
 	mux.HandleFunc("GET /api/payroll/payslips", func(w http.ResponseWriter, r *http.Request) {
 		s, n := query(r)
@@ -156,7 +159,7 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/payroll/payslips/{id}/approve", command(pay, func(c *papp.ApprovePayslip, id domain.PayslipID) { c.ID = id }, svc.Approve.Handle))
 	mux.HandleFunc("POST /api/payroll/payslips/{id}/cancel", command(pay, func(c *papp.CancelPayslip, id domain.PayslipID) { c.ID = id }, svc.Cancel.Handle))
 
-	// Profiles.
+	// Perfiles.
 	mux.HandleFunc("POST /api/payroll/profiles", create(svc.OpenProfile.Handle))
 	mux.HandleFunc("GET /api/payroll/profiles", func(w http.ResponseWriter, r *http.Request) {
 		s, n := query(r)
@@ -170,7 +173,7 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/payroll/profiles/{id}/splits", command(prof, func(c *papp.AddSplit, id domain.ProfileID) { c.ID = id }, svc.AddSplit.Handle))
 	mux.HandleFunc("POST /api/payroll/profiles/{id}/splits/end", command(prof, func(c *papp.EndSplit, id domain.ProfileID) { c.ID = id }, svc.EndSplit.Handle))
 
-	// Employer accounts (CCC).
+	// Cuentas de cotización (CCC).
 	mux.HandleFunc("POST /api/payroll/employer-accounts", create(svc.RegisterAccount.Handle))
 	mux.HandleFunc("GET /api/payroll/employer-accounts", func(w http.ResponseWriter, r *http.Request) {
 		s, n := query(r)
@@ -184,7 +187,7 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/payroll/employer-accounts/{id}/payment", command(acc, func(c *papp.SetAccountPayment, id domain.EmployerAccountID) { c.ID = id }, svc.SetAccountPayment.Handle))
 	mux.HandleFunc("POST /api/payroll/employer-accounts/{id}/deactivate", command(acc, func(c *papp.DeactivateAccount, id domain.EmployerAccountID) { c.ID = id }, svc.DeactivateAccount.Handle))
 
-	// Catalog and the Remittance port (for Treasury).
+	// Catálogo y el puerto Remittance (para Treasury).
 	mux.HandleFunc("GET /api/payroll/catalogs/concepts", func(w http.ResponseWriter, r *http.Request) {
 		out, err := svc.Concepts.Handle(r.Context(), papp.ListConcepts{Kind: r.URL.Query().Get("kind")})
 		distribution.Respond(w, r, out, err, http.StatusOK)

@@ -20,7 +20,7 @@ func opt(s string) any {
 	return s
 }
 
-// UserMapping maps User to sec_users and its three child tables.
+// UserMapping asocia User con sec_users y sus tres tablas hijas.
 func UserMapping() sqlrepo.Mapping[domain.UserID, *domain.User] {
 	return sqlrepo.Mapping[domain.UserID, *domain.User]{
 		Table: "sec_users",
@@ -94,7 +94,7 @@ func UserMapping() sqlrepo.Mapping[domain.UserID, *domain.User] {
 	}
 }
 
-// RoleMapping maps Role to sec_roles and sec_role_permissions.
+// RoleMapping asocia Role con sec_roles y sec_role_permissions.
 func RoleMapping() sqlrepo.Mapping[domain.RoleID, *domain.Role] {
 	return sqlrepo.Mapping[domain.RoleID, *domain.Role]{
 		Table:   "sec_roles",
@@ -130,7 +130,7 @@ func RoleMapping() sqlrepo.Mapping[domain.RoleID, *domain.Role] {
 	}
 }
 
-// PermissionMapping maps the catalog entries to sec_permissions.
+// PermissionMapping asocia las entradas del catálogo con sec_permissions.
 func PermissionMapping() sqlrepo.Mapping[domain.PermissionID, *domain.PermissionEntry] {
 	return sqlrepo.Mapping[domain.PermissionID, *domain.PermissionEntry]{
 		Table:   "sec_permissions",
@@ -148,7 +148,7 @@ func PermissionMapping() sqlrepo.Mapping[domain.PermissionID, *domain.Permission
 	}
 }
 
-// SessionMapping maps Session to sec_sessions.
+// SessionMapping asocia Session con sec_sessions.
 func SessionMapping() sqlrepo.Mapping[domain.SessionID, *domain.Session] {
 	return sqlrepo.Mapping[domain.SessionID, *domain.Session]{
 		Table:   "sec_sessions",
@@ -171,7 +171,7 @@ func SessionMapping() sqlrepo.Mapping[domain.SessionID, *domain.Session] {
 
 func unsupported(b hotswap.Backend) error { return fmt.Errorf("security: unsupported backend %T", b) }
 
-// UserRepositoryFactory builds the user repository.
+// UserRepositoryFactory construye el repositorio de usuarios.
 func UserRepositoryFactory(b hotswap.Backend) (domain.UserRepository, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -182,7 +182,7 @@ func UserRepositoryFactory(b hotswap.Backend) (domain.UserRepository, error) {
 	return nil, unsupported(b)
 }
 
-// RoleRepositoryFactory builds the role repository.
+// RoleRepositoryFactory construye el repositorio de roles.
 func RoleRepositoryFactory(b hotswap.Backend) (domain.RoleRepository, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -193,7 +193,7 @@ func RoleRepositoryFactory(b hotswap.Backend) (domain.RoleRepository, error) {
 	return nil, unsupported(b)
 }
 
-// PermissionRepositoryFactory builds the permission catalog repository.
+// PermissionRepositoryFactory construye el repositorio del catálogo de permisos.
 func PermissionRepositoryFactory(b hotswap.Backend) (domain.PermissionRepository, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -204,7 +204,7 @@ func PermissionRepositoryFactory(b hotswap.Backend) (domain.PermissionRepository
 	return nil, unsupported(b)
 }
 
-// SessionRepositoryFactory builds the session repository.
+// SessionRepositoryFactory construye el repositorio de sesiones.
 func SessionRepositoryFactory(b hotswap.Backend) (domain.SessionRepository, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -215,10 +215,10 @@ func SessionRepositoryFactory(b hotswap.Backend) (domain.SessionRepository, erro
 	return nil, unsupported(b)
 }
 
-// OutboxFactory builds the domain event outbox.
+// OutboxFactory construye el outbox de eventos de dominio.
 func OutboxFactory(b hotswap.Backend) (application.OutboxStore, error) { return outbox(b, TableOutbox) }
 
-// IntegrationOutboxFactory builds the Published Language outbox.
+// IntegrationOutboxFactory construye el outbox del Published Language.
 func IntegrationOutboxFactory(b hotswap.Backend) (application.OutboxStore, error) {
 	return outbox(b, TableIntegrationOutbox)
 }
@@ -233,7 +233,7 @@ func outbox(b hotswap.Backend, table string) (application.OutboxStore, error) {
 	return nil, unsupported(b)
 }
 
-// AuditLogFactory builds the audit log.
+// AuditLogFactory construye el registro de auditoría.
 func AuditLogFactory(b hotswap.Backend) (application.AuditLog, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -244,16 +244,16 @@ func AuditLogFactory(b hotswap.Backend) (application.AuditLog, error) {
 	return nil, unsupported(b)
 }
 
-// PartiesDirectory adapts the Parties directory to the ports of Security (ACL): the party of a
-// user must exist, and accesses are granted to internal organizations only.
+// PartiesDirectory adapta el directorio de Parties a los puertos de Security (ACL): la party de un
+// usuario tiene que existir, y los accesos sólo se conceden a organizaciones internas.
 type PartiesDirectory struct {
 	Directory     parties.Directory
 	Organizations parties.InternalOrganizationCatalog
 }
 
-// PartyExists implements application.PartyDirectory.
+// PartyExists implementa application.PartyDirectory.
 func (p PartiesDirectory) PartyExists(ctx context.Context, party fw.UUID) (bool, error) {
-	if party == domain.BootstrapAdminParty.UUID { // the reserved technical party is never in Parties
+	if party == domain.BootstrapAdminParty.UUID { // la party técnica reservada nunca está en Parties
 		return true, nil
 	}
 	found, err := p.Directory.Resolve(ctx, []string{party.String()})
@@ -264,7 +264,7 @@ func (p PartiesDirectory) PartyExists(ctx context.Context, party fw.UUID) (bool,
 	return ok, nil
 }
 
-// IsInternalOrganization implements application.InternalOrganizations.
+// IsInternalOrganization implementa application.InternalOrganizations.
 func (p PartiesDirectory) IsInternalOrganization(ctx context.Context, organization fw.UUID) (bool, error) {
 	all, err := p.Organizations.All(ctx)
 	if err != nil {

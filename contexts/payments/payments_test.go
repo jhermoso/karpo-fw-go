@@ -54,7 +54,7 @@ func mustIBAN(s string) vocab.IBAN {
 	return i
 }
 
-// netPay plays the Payroll Remittance port: the splits of the net pay of each payslip.
+// netPay hace del puerto Remittance de Payroll: los repartos del líquido de cada nómina.
 type netPay map[string][]ydomain.PayTo
 
 func (n netPay) NetPayments(_ context.Context, ids []string) (map[string][]ydomain.PayTo, error) {
@@ -67,9 +67,9 @@ func (n netPay) NetPayments(_ context.Context, ids []string) (map[string][]ydoma
 	return out, nil
 }
 
-// host composes Parties, Payments, Treasury and Accounting on one hot-swappable backend, with one
-// in-process broker carrying the Published Language. Payroll and Fiscal are played by hand-made
-// envelopes.
+// host compone Parties, Payments, Treasury y Accounting sobre un único backend intercambiable en
+// caliente, con un broker en proceso que lleva el Published Language. Payroll y Fiscal se simulan
+// con sobres hechos a mano.
 type host struct {
 	t        *testing.T
 	srv      *httptest.Server
@@ -87,9 +87,9 @@ type host struct {
 }
 
 func compose(t *testing.T) *host {
-	// Treasury stamps a transfer order with the moment its file is generated and settles it on that
-	// day or later: the scenario runs on a fixed clock, so that its dates hold whatever the day the
-	// test runs. The tokens are issued and checked on the same clock.
+	// Treasury sella una orden de transferencia con el momento en que se genera su fichero y la
+	// liquida ese día o después: el escenario corre con un reloj fijo, para que sus fechas valgan sea
+	// cual sea el día en que corre la prueba. Los tokens se emiten y se comprueban con el mismo reloj.
 	t.Cleanup(fw.SetClock(fake.New(time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC))))
 	ctx := context.Background()
 	sw := hotswap.New(memory.NewStore("memory"))
@@ -100,7 +100,7 @@ func compose(t *testing.T) *host {
 	am := accounting.Compose(sw)
 	broker := inprocess.NewBroker()
 	broker.Subscribe("payments", ym.Consumer)
-	broker.Subscribe("accounting", am.Consumer, "payments.payment-allocated.v1", "payments.allocation-reversed.v1") // this ledger has no payroll accounts
+	broker.Subscribe("accounting", am.Consumer, "payments.payment-allocated.v1", "payments.allocation-reversed.v1") // este libro no tiene cuentas de nómina
 
 	jwt, _ := jwtauth.New(jwtauth.Config{Secret: []byte("payments-test")})
 	dir := authorization.NewMemoryDirectory()
@@ -177,7 +177,7 @@ func (h *host) ok(err error) {
 	}
 }
 
-// deliver relays the Published Language of Treasury and Payments until quiet.
+// deliver retransmite el Published Language de Treasury y Payments hasta que no queda nada.
 func (h *host) deliver() {
 	for moved := true; moved; {
 		moved = false
@@ -191,7 +191,7 @@ func (h *host) deliver() {
 	}
 }
 
-// send plays Payroll or Fiscal: one of their facts on the broker.
+// send hace de Payroll o Fiscal: uno de sus hechos en el broker.
 func (h *host) send(id, typ string, data any) {
 	h.t.Helper()
 	raw, _ := json.Marshal(data)
@@ -245,7 +245,7 @@ func (h *host) scenario(tag string) {
 	h.grant("outsider", globex.ID)
 	var list0 fw.Page[yapp.PayableDTO]
 
-	// The chart and ledger of Acme.
+	// El plan de cuentas y el libro de Acme.
 	for code, name := range map[string]string{"4000": "Proveedores", "5700": "Caja", "5720": "Bancos", "4650": "Remuneraciones pendientes",
 		"4751": "HP acreedora por retenciones"} {
 		_, err := h.acc.Service.CreateAccount.Handle(ctx, aapp.CreateAccount{Company: acme.ID, Code: code, Name: name, Postable: true})
@@ -255,8 +255,8 @@ func (h *host) scenario(tag string) {
 		"cash": "5700", "bank": "5720", "net-pay-payable": "4650", "withholding-payable": "4751"}})
 	h.ok(err)
 
-	// Purchases: a received invoice owes what is paid to the supplier, once however many times it
-	// arrives; a credit of the supplier owes nothing here.
+	// Purchases: una factura recibida debe lo que se paga al proveedor, una sola vez por muchas veces
+	// que llegue; un abono del proveedor no debe nada aquí.
 	f1 := fw.NewUUID().String()
 	invoice := func(id, number, issued, due, payable string, payTo []map[string]any) map[string]any {
 		return map[string]any{"invoiceId": id, "company": acme.ID, "supplier": supplier.ID, "supplierNumber": number, "issued": issued, "due": due,
@@ -282,8 +282,8 @@ func (h *host) scenario(tag string) {
 	h.must(h.do("PUT", "/api/payments/payables/"+inv2.ID+"/pay-to", "registrar", map[string]any{"payTo": []map[string]any{{"iban": "ES9121000418450200051333",
 		"amount": "121.00"}}}, nil), 400, "IBAN check digits")
 
-	// Payroll: an approved payslip owes its net pay on its payment date to the split accounts,
-	// once however many times it arrives.
+	// Payroll: una nómina aprobada debe su líquido en su fecha de pago a las cuentas del reparto,
+	// una sola vez por muchas veces que llegue.
 	slip := fw.NewUUID().String()
 	h.splits[slip] = []ydomain.PayTo{{IBAN: mustIBAN("ES7921000813610123456789"), Amount: vocab.MustDecimal("1000.00")},
 		{IBAN: mustIBAN("ES6621000418401234567891"), Amount: vocab.MustDecimal("469.70")}}
@@ -293,13 +293,13 @@ func (h *host) scenario(tag string) {
 	h.send(msg, "payroll.payslip-approved.v1", approved)
 	h.send(msg, "payroll.payslip-approved.v1", approved)
 	h.send(fw.NewUUID().String(), "payroll.payslip-approved.v1", approved)
-	// A second payslip, cancelled before being paid.
+	// Una segunda nómina, anulada antes de pagarse.
 	slip2 := fw.NewUUID().String()
 	h.send(fw.NewUUID().String(), "payroll.payslip-approved.v1", map[string]any{"payslipId": slip2, "person": ana.ID, "employer": acme.ID,
 		"periodEnd": "2026-09-30", "net": "50.00"})
 	h.send(fw.NewUUID().String(), "payroll.payslip-cancelled.v1", map[string]any{"payslipId": slip2, "reason": "duplicada"})
 
-	// Fiscal: the Modelo 111 of the third quarter is due on 20 October; the 190 is informative.
+	// Fiscal: el Modelo 111 del tercer trimestre vence el 20 de octubre; el 190 es informativo.
 	h.send(fw.NewUUID().String(), "fiscal.filing-submitted.v1", map[string]any{"filingId": fw.NewUUID().String(), "declarant": acme.ID, "form": "111",
 		"year": 2026, "period": "3T", "withheld": "216.00"})
 	h.send(fw.NewUUID().String(), "fiscal.filing-submitted.v1", map[string]any{"filingId": fw.NewUUID().String(), "declarant": acme.ID, "form": "190",
@@ -325,7 +325,7 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("one payslip cancelled: %+v", cancelled.Items)
 	}
 
-	// Treasury proposes the transfers of what carries accounts: the supplier and the payslip.
+	// Treasury propone las transferencias de lo que lleva cuentas: el proveedor y la nómina.
 	bank, err := h.treasury.Service.OpenAccount.Handle(ctx, tapp.OpenAccount{Owner: acme.ID, IBAN: "ES1000492352082414205416", Alias: "Pagos " + tag,
 		Payments: true, Opened: vocab.MustDate(2020, 1, 1)})
 	h.ok(err)
@@ -351,8 +351,8 @@ func (h *host) scenario(tag string) {
 	}
 	h.must(h.do("GET", "/api/treasury/transfers/"+order.ID, "outsider", nil, nil), 404, "outsider")
 
-	// The bank executes on the day the file was generated (that of the fixed clock), never before:
-	// Payments registers a payment per transfer and Accounting posts them.
+	// El banco ejecuta el día en que se generó el fichero (el del reloj fijo), nunca antes:
+	// Payments registra un pago por transferencia y Accounting los contabiliza.
 	_, err = h.treasury.Service.SettleTransfers.Handle(ctx, tapp.SettleTransfers{ID: oid, On: vocab.MustDate(2026, 10, 5)})
 	h.ok(err)
 	h.deliver()
@@ -364,8 +364,8 @@ func (h *host) scenario(tag string) {
 	}
 	h.expect(acme.ID, map[string]string{"4000": "605.00", "4650": "1469.70", "5720": "-2074.70"})
 
-	// The second account of the payslip rejects the transfer: the payment is cancelled and
-	// reversed, and 469.70 are owed again.
+	// La segunda cuenta de la nómina rechaza la transferencia: el pago se anula y se revierte, y se
+	// vuelven a deber 469.70.
 	var second string
 	for _, tr := range order.Transfers {
 		if tr.Payable == nomina.ID && tr.Amount == "469.70" {
@@ -380,7 +380,7 @@ func (h *host) scenario(tag string) {
 	}
 	h.expect(acme.ID, map[string]string{"4650": "1000.00", "5720": "-1605.00"})
 
-	// Paying by hand: the tax at the bank, part of the second invoice in cash.
+	// Pagar a mano: el impuesto en el banco, parte de la segunda factura en efectivo.
 	var taxPay, cash yapp.PaymentDTO
 	h.must(h.do("POST", "/api/payments/payments", "payer", map[string]any{"company": acme.ID, "authority": "AEAT", "date": "2026-10-20", "amount": "216.00",
 		"method": "transfer", "reference": "NRC 1234", "allocations": []map[string]any{{"payable": tax.ID, "amount": "216.00"}}}, &taxPay), 201, "tax paid")
@@ -396,7 +396,7 @@ func (h *host) scenario(tag string) {
 	h.deliver()
 	h.expect(acme.ID, map[string]string{"4000": "705.00", "4751": "216.00", "5700": "-100.00", "5720": "-1821.00"})
 
-	// A payment is cancelled, not deleted: the payable is open again and the entry reversed.
+	// Un pago se anula, no se borra: la obligación vuelve a estar abierta y el asiento se revierte.
 	h.must(h.do("POST", "/api/payments/payments/"+cash.ID+"/cancel", "payer", nil, &cash), 200, "cancel payment")
 	h.must(h.do("POST", "/api/payments/payments/"+cash.ID+"/cancel", "payer", nil, nil), 422, "cancelled once")
 	h.deliver()

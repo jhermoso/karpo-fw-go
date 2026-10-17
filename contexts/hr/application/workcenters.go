@@ -10,7 +10,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// OpenWorkCenter registers a facility of the employer as work center.
+// OpenWorkCenter da de alta una instalación del empleador como centro de trabajo.
 type OpenWorkCenter struct {
 	Employer     string     `json:"employer"`
 	Facility     string     `json:"facility"`
@@ -19,28 +19,28 @@ type OpenWorkCenter struct {
 	Opened       vocab.Date `json:"opened"`
 }
 
-// SetHeadquarters makes a work center the employer's headquarters.
+// SetHeadquarters hace de un centro de trabajo la sede del empleador.
 type SetHeadquarters struct {
 	ID domain.WorkCenterID `json:"-"`
 }
 
-// CloseWorkCenter closes a work center without contracts in force after the date.
+// CloseWorkCenter cierra un centro de trabajo sin contratos en vigor después de la fecha.
 type CloseWorkCenter struct {
 	ID domain.WorkCenterID `json:"-"`
 	On vocab.Date          `json:"on"`
 }
 
-// GetWorkCenter loads a work center.
+// GetWorkCenter carga un centro de trabajo.
 type GetWorkCenter struct{ ID domain.WorkCenterID }
 
-// SearchWorkCenters searches work centers of the caller's scope.
+// SearchWorkCenters busca centros de trabajo del ámbito del que llama.
 type SearchWorkCenters struct {
 	Employer   string
 	OpenOnly   bool
 	Page, Size int
 }
 
-// WorkCenterDTO is the transport form of a work center.
+// WorkCenterDTO es la forma de transporte de un centro de trabajo.
 type WorkCenterDTO struct {
 	ID           string `json:"id"`
 	Employer     string `json:"employer"`
@@ -57,7 +57,7 @@ func workCenterDTO(w *domain.WorkCenter) WorkCenterDTO {
 		Headquarters: w.IsHeadquarters(), Opened: w.Opened().String(), Closed: dateText(w.Closed()), Version: w.Version()}
 }
 
-// unsetHeadquarters clears the flag of the other open headquarters of the employer.
+// unsetHeadquarters quita la marca a las demás sedes abiertas del empleador.
 func (s service) unsetHeadquarters(ctx context.Context, employer domain.OrganizationID, keep domain.WorkCenterID) error {
 	hqs, err := s.WorkCenters.Find(ctx, domain.WCFieldEmployer.Eq(employer).And(domain.WCFieldHQ.Eq(true)))
 	if err != nil {
@@ -91,7 +91,7 @@ func (s service) workCenterUseCases(svc *Service) {
 				return WorkCenterDTO{}, err
 			}
 			if !ok || f.Owner != employer {
-				// Another organization's facility does not exist for this employer.
+				// La instalación de otra organización no existe para este empleador.
 				return WorkCenterDTO{}, fw.NotFound("facilities.facility", facility)
 			}
 			if !f.Active {

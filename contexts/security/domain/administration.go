@@ -8,22 +8,22 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
 )
 
-// Administrator is who performs an act of delegated administration, as resolved for the request:
-// its permissions, the organizations in its scope and the ones it can write (Full access).
+// Administrator es quien realiza un acto de administración delegada, tal como se resuelve para la
+// petición: sus permisos, las organizaciones de su ámbito y las que puede escribir (acceso Full).
 //
-// The three rules of delegated administration (decision 5) are its methods:
+// Las tres reglas de la administración delegada (decisión 5) son sus métodos:
 //
-//  1. nobody grants what they do not have (CanAssign, CanGrant);
-//  2. you administer the users you fully encompass (CanAdminister, AdministrableBy);
-//  3. nobody administers themselves (every rule rejects the administrator's own user). The other
-//     half of rule 3, that an active global administrator always remains, needs the other users
-//     and is checked by the application with GlobalAdministrators.
+//  1. nadie concede lo que no tiene (CanAssign, CanGrant);
+//  2. cada administrador administra a los usuarios que abarca por completo (CanAdminister, AdministrableBy);
+//  3. nadie se administra a sí mismo (cada regla rechaza el propio usuario del administrador). La
+//     otra mitad de la regla 3, que siempre quede un administrador global activo, necesita a los
+//     otros usuarios y la comprueba la aplicación con GlobalAdministrators.
 type Administrator struct {
 	User          UserID
 	Global        bool
 	Permissions   []Permission
-	Organizations []OrganizationID // effective scope: what the administrator sees
-	Full          []OrganizationID // organizations with Full access inside the scope
+	Organizations []OrganizationID // ámbito efectivo: lo que ve el administrador
+	Full          []OrganizationID // organizaciones con acceso Full dentro del ámbito
 }
 
 func forbidden(msg string) error { return fmt.Errorf("%w: %s", fw.ErrForbidden, msg) }
@@ -39,9 +39,10 @@ func (a Administrator) notSelf(u UserID) error {
 	return nil
 }
 
-// CanAssign checks rule 1 for roles: to assign or revoke a role the administrator must hold
-// every permission the role carries. It replaces the C# check by role name and the unused
-// hierarchy level: a custom role with more permissions than the administrator's is out of reach.
+// CanAssign comprueba la regla 1 para los roles: para asignar o retirar un rol el administrador
+// tiene que tener cada permiso que lleva el rol. Sustituye la comprobación de C# por nombre de rol
+// y el nivel de jerarquía sin usar: un rol propio con más permisos que los del administrador queda
+// fuera de su alcance.
 func (a Administrator) CanAssign(r *Role) error {
 	for _, p := range r.Permissions() {
 		if !a.holds(p) {
@@ -51,8 +52,8 @@ func (a Administrator) CanAssign(r *Role) error {
 	return nil
 }
 
-// CanGrant checks rule 1 for organizations: to grant, change or revoke an access to an
-// organization the administrator needs Full access to it.
+// CanGrant comprueba la regla 1 para las organizaciones: para conceder, cambiar o retirar un acceso
+// a una organización el administrador necesita acceso Full a ella.
 func (a Administrator) CanGrant(org OrganizationID) error {
 	if a.Global || slices.Contains(a.Full, org) {
 		return nil
@@ -60,21 +61,22 @@ func (a Administrator) CanGrant(org OrganizationID) error {
 	return forbidden("organization outside the writable scope")
 }
 
-// Sees reports whether the user is visible to the administrator: it has an access to an
-// organization of the administrator's scope.
+// Sees dice si el usuario es visible para el administrador: tiene un acceso a una organización del
+// ámbito del administrador.
 func (a Administrator) Sees(u *User) bool {
 	return a.Global || VisibleTo(a.Organizations...).IsSatisfiedBy(u)
 }
 
-// Encompasses reports whether the administrator fully encompasses the user (rule 2).
+// Encompasses dice si el administrador abarca por completo al usuario (regla 2).
 func (a Administrator) Encompasses(u *User) bool {
 	return a.Global || AdministrableBy(a.Full...).IsSatisfiedBy(u)
 }
 
-// CanAdminister checks rules 2 and 3 for one user: the administrator may rename, deactivate,
-// unlock, reset the password, link identities or change the roles of a user only when it has
-// Full access to every organization the user works in. A user without accesses belongs to the
-// global administrator. In C# a single shared organization was enough, even read-only.
+// CanAdminister comprueba las reglas 2 y 3 para un usuario: el administrador puede renombrar,
+// desactivar, desbloquear, restablecer la contraseña, vincular identidades o cambiar los roles de
+// un usuario sólo cuando tiene acceso Full a cada organización en la que trabaja el usuario. Un
+// usuario sin accesos es del administrador global. En C# bastaba una sola organización compartida,
+// aunque fuera de sólo lectura.
 func (a Administrator) CanAdminister(u *User) error {
 	if err := a.notSelf(u.ID()); err != nil {
 		return err
@@ -85,7 +87,7 @@ func (a Administrator) CanAdminister(u *User) error {
 	return nil
 }
 
-// CanChangeAccess checks rules 1 and 3 for the access of a user to an organization.
+// CanChangeAccess comprueba las reglas 1 y 3 para el acceso de un usuario a una organización.
 func (a Administrator) CanChangeAccess(u *User, org OrganizationID) error {
 	if err := a.notSelf(u.ID()); err != nil {
 		return err
@@ -93,7 +95,7 @@ func (a Administrator) CanChangeAccess(u *User, org OrganizationID) error {
 	return a.CanGrant(org)
 }
 
-// User fields and specifications.
+// Campos y especificaciones de User.
 var (
 	UserFieldID          = spec.Comparable("id", func(u *User) UserID { return u.ID() })
 	UserFieldUsername    = spec.Text("username", (*User).Username)
@@ -110,23 +112,23 @@ var (
 	IdentityFieldSubj   = spec.Comparable("subject", func(i ExternalIdentity) string { return i.Subject })
 )
 
-// UsersWithIDs matches the given users.
+// UsersWithIDs selecciona los usuarios dados.
 func UsersWithIDs(ids ...UserID) spec.Spec[*User] { return UserFieldID.In(ids...) }
 
-// UserNamed matches the user with that user name, ignoring case.
+// UserNamed selecciona el usuario con ese nombre de usuario, sin distinguir mayúsculas.
 func UserNamed(username string) spec.Spec[*User] {
 	return UserFieldUsernameKey.Eq(UsernameKey(username))
 }
 
-// UsersOfParties matches the users of the parties.
+// UsersOfParties selecciona los usuarios de las parties.
 func UsersOfParties(parties ...PartyID) spec.Spec[*User] { return UserFieldParty.In(parties...) }
 
-// WithIdentity matches the user linked with an external identity.
+// WithIdentity selecciona el usuario vinculado con una identidad externa.
 func WithIdentity(id ExternalIdentity) spec.Spec[*User] {
 	return UserFieldIdentities.Any(IdentityFieldIssuer.Eq(id.Issuer).And(IdentityFieldSubj.Eq(id.Subject)))
 }
 
-// HoldingRole matches the users with any of the roles.
+// HoldingRole selecciona los usuarios con cualquiera de los roles.
 func HoldingRole(roles ...RoleID) spec.Spec[*User] {
 	if len(roles) == 0 {
 		return spec.None[*User]()
@@ -134,8 +136,8 @@ func HoldingRole(roles ...RoleID) spec.Spec[*User] {
 	return UserFieldRoles.Any(UserRoleFieldRole.In(roles...))
 }
 
-// VisibleTo is the scope rule of Security for reading: a user does not belong to an organization,
-// it has accesses; it is visible to whoever has one of those organizations in scope.
+// VisibleTo es la regla de ámbito de Security para leer: un usuario no pertenece a una
+// organización, tiene accesos; es visible para quien tiene una de esas organizaciones en su ámbito.
 func VisibleTo(orgs ...OrganizationID) spec.Spec[*User] {
 	if len(orgs) == 0 {
 		return spec.None[*User]()
@@ -143,8 +145,8 @@ func VisibleTo(orgs ...OrganizationID) spec.Spec[*User] {
 	return UserFieldAccesses.Any(AccessFieldOrg.In(orgs...))
 }
 
-// AdministrableBy is the scope rule of Security for administering (rule 2): the users with at
-// least one access, all of them to organizations where the administrator has Full access.
+// AdministrableBy es la regla de ámbito de Security para administrar (regla 2): los usuarios con
+// al menos un acceso, todos ellos a organizaciones donde el administrador tiene acceso Full.
 func AdministrableBy(full ...OrganizationID) spec.Spec[*User] {
 	if len(full) == 0 {
 		return spec.None[*User]()
@@ -152,12 +154,12 @@ func AdministrableBy(full ...OrganizationID) spec.Spec[*User] {
 	return UserFieldAccesses.Any(AccessFieldOrg.In(full...)).And(UserFieldAccesses.None(AccessFieldOrg.NotIn(full...)))
 }
 
-// GlobalAdministrators matches the active users holding the GlobalSuperAdmin role, other than
-// except: rule 3 requires that one always remains.
+// GlobalAdministrators selecciona los usuarios activos con el rol GlobalSuperAdmin, salvo except:
+// la regla 3 exige que siempre quede uno.
 func GlobalAdministrators(except UserID) spec.Spec[*User] {
 	return UserFieldActive.Eq(true).And(HoldingRole(RoleGlobalSuperAdmin), UserFieldID.Ne(except))
 }
 
-// ErrLastGlobalAdmin is returned when an act would leave the installation without an active
-// global administrator.
+// ErrLastGlobalAdmin se devuelve cuando un acto dejaría la instalación sin un administrador global
+// activo.
 var ErrLastGlobalAdmin = fw.Violation("security.last_global_admin", "an active global administrator must always remain")

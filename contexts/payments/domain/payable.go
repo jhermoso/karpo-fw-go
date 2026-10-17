@@ -1,7 +1,7 @@
-// Package domain is the Payments model: what a company owes (payables from supplier invoices,
-// approved payslips and submitted tax forms) and the money it pays out, applied to them. The C#
-// had a Payment with a numeric status nothing enforced, applications to invoices that could
-// over-pay them, and no payable at all.
+// Package domain es el modelo de Payments: lo que debe una empresa (obligaciones de pago de
+// facturas de proveedor, nóminas aprobadas y modelos fiscales presentados) y el dinero que paga,
+// aplicado a ellas. El C# tenía un Payment con un estado numérico que nada hacía cumplir,
+// aplicaciones a facturas que podían pagarlas de más, y ninguna obligación de pago.
 package domain
 
 import (
@@ -17,25 +17,25 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// PayableKind is the stable aggregate type name.
+// PayableKind es el nombre estable del tipo de agregado.
 const PayableKind = "payments.payable"
 
-// Kind is where an obligation comes from.
+// Kind es de dónde viene una obligación.
 type Kind int
 
-// Kinds.
+// Clases.
 const (
-	SupplierInvoice Kind = iota + 1 // what is paid to the supplier of a received invoice (Purchases)
-	Payroll                         // the net pay of an approved payslip
-	Tax                             // the amount of a submitted tax form (Modelo 111)
+	SupplierInvoice Kind = iota + 1 // lo que se paga al proveedor de una factura recibida (Purchases)
+	Payroll                         // el líquido de una nómina aprobada
+	Tax                             // el importe de un modelo fiscal presentado (Modelo 111)
 )
 
 var kinds = map[Kind]string{SupplierInvoice: "supplier-invoice", Payroll: "payroll", Tax: "tax"}
 
-// String returns the stable name.
+// String devuelve el nombre estable.
 func (k Kind) String() string { return kinds[k] }
 
-// ParseKind parses a kind name.
+// ParseKind interpreta el nombre de una clase.
 func ParseKind(s string) (Kind, bool) {
 	for k, n := range kinds {
 		if n == s {
@@ -45,26 +45,26 @@ func ParseKind(s string) (Kind, bool) {
 	return 0, false
 }
 
-// Source is the fact an obligation comes from (unique per company).
+// Source es el hecho del que viene una obligación (único por empresa).
 type Source struct {
-	Type string // e.g. "purchases.invoice-registered.v1", "payroll.payslip-approved.v1", "fiscal.filing-submitted.v1"
+	Type string // p. ej. "purchases.invoice-registered.v1", "payroll.payslip-approved.v1", "fiscal.filing-submitted.v1"
 	ID   string
 }
 
-// PayTo is a bank account an obligation is paid to by transfer, and how much of it.
+// PayTo es una cuenta bancaria a la que se paga una obligación por transferencia, y cuánto de ella.
 type PayTo struct {
 	IBAN   vocab.IBAN
 	Amount vocab.Decimal
 }
 
-// PayableState is the persisted state of a payable.
+// PayableState es el estado persistido de una obligación.
 type PayableState struct {
 	Company     OrganizationID
-	Payee       PartyID // zero for a tax authority
-	Authority   string  // the tax authority (AEAT) when there is no payee party
+	Payee       PartyID // cero para una administración tributaria
+	Authority   string  // la administración tributaria (AEAT) cuando no hay party beneficiaria
 	Kind        Kind
 	Source      Source
-	Document    string // supplier invoice number, payslip or tax form reference
+	Document    string // número de factura de proveedor, referencia de nómina o de modelo fiscal
 	Description string
 	Issued      vocab.Date
 	Due         vocab.Date
@@ -76,7 +76,7 @@ type PayableState struct {
 	Audit       traits.AuditStamp
 }
 
-// Payable is what a company owes and when.
+// Payable es lo que debe una empresa y cuándo.
 type Payable struct {
 	fw.BaseAggregateRoot[PayableID]
 	traits.Audited
@@ -99,7 +99,7 @@ func checkPayTo(v *fw.Validation, amount vocab.Decimal, to []PayTo) {
 	v.Require(sum.Equal(amount), "payTo", "sum", "the accounts add up to the amount")
 }
 
-// ReconstitutePayable rebuilds a payable.
+// ReconstitutePayable reconstruye una obligación.
 func ReconstitutePayable(id PayableID, s PayableState) (*Payable, error) {
 	base, err := fw.NewBaseAggregateRoot(PayableKind, id)
 	if err != nil {
@@ -132,7 +132,7 @@ func ReconstitutePayable(id PayableID, s PayableState) (*Payable, error) {
 	return &Payable{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// RegisterPayable records a new obligation.
+// RegisterPayable registra una obligación nueva.
 func RegisterPayable(id PayableID, s PayableState) (*Payable, error) {
 	s.Paid, s.Cancelled = vocab.DecimalFromInt(0), false
 	p, err := ReconstitutePayable(id, s)
@@ -144,14 +144,14 @@ func RegisterPayable(id PayableID, s PayableState) (*Payable, error) {
 	return p, nil
 }
 
-// State returns the state (the accounts are a copy).
+// State devuelve el estado (las cuentas son una copia).
 func (p *Payable) State() PayableState {
 	s := p.s
 	s.PayTo = slices.Clone(s.PayTo)
 	return s
 }
 
-// Open returns what is still to pay (zero when cancelled).
+// Open devuelve lo que queda por pagar (cero cuando está anulada).
 func (p *Payable) Open() vocab.Decimal {
 	if p.s.Cancelled {
 		return vocab.DecimalFromInt(0)
@@ -159,10 +159,10 @@ func (p *Payable) Open() vocab.Decimal {
 	return p.s.Amount.Sub(p.s.Paid)
 }
 
-// Settled reports whether everything is paid.
+// Settled dice si está todo pagado.
 func (p *Payable) Settled() bool { return p.s.Paid.Equal(p.s.Amount) }
 
-// Payee names who is paid: the party, or the tax authority.
+// Payee nombra a quién se paga: la party, o la administración tributaria.
 func (p *Payable) Payee() string {
 	if p.s.Kind == Tax {
 		return p.s.Authority
@@ -170,8 +170,8 @@ func (p *Payable) Payee() string {
 	return p.s.Payee.String()
 }
 
-// Apply records an amount paid. Invariants: an active payable, positive cents, never more than
-// what is open (the C# let an invoice be over-paid).
+// Apply registra un importe pagado. Invariantes: una obligación activa, céntimos positivos, nunca
+// más de lo abierto (el C# dejaba pagar una factura de más).
 func (p *Payable) Apply(amount vocab.Decimal) error {
 	if p.s.Cancelled {
 		return fw.Violation("payments.payable_cancelled", "the payable is cancelled")
@@ -189,7 +189,7 @@ func (p *Payable) Apply(amount vocab.Decimal) error {
 	return nil
 }
 
-// Unapply reverses an amount paid (a payment cancelled or a transfer rejected).
+// Unapply revierte un importe pagado (un pago anulado o una transferencia rechazada).
 func (p *Payable) Unapply(amount vocab.Decimal) error {
 	if !amount.IsPositive() || amount.GreaterThan(p.s.Paid) {
 		return fw.Violation("payments.unapply", "cannot reverse more than was paid")
@@ -198,8 +198,9 @@ func (p *Payable) Unapply(amount vocab.Decimal) error {
 	return nil
 }
 
-// Cancel withdraws an obligation that nothing has paid yet (a cancelled payslip, a reverted tax
-// form, a supplier invoice registered by mistake). One partly paid is settled or refunded first.
+// Cancel retira una obligación de la que aún no se ha pagado nada (una nómina anulada, un modelo
+// fiscal revertido, una factura de proveedor registrada por error). Una pagada en parte se liquida
+// o se reembolsa antes.
 func (p *Payable) Cancel(reason string) error {
 	if p.s.Cancelled {
 		return fw.Violation("payments.payable_cancelled", "the payable is already cancelled")
@@ -212,7 +213,7 @@ func (p *Payable) Cancel(reason string) error {
 	return nil
 }
 
-// SetPayTo replaces the accounts the payable is paid to (empty: no transfer data).
+// SetPayTo sustituye las cuentas a las que se paga la obligación (vacío: sin datos de transferencia).
 func (p *Payable) SetPayTo(to []PayTo) error {
 	if p.s.Cancelled || p.Settled() {
 		return fw.Violation("payments.payable_closed", "the payable is cancelled or settled")
@@ -226,13 +227,13 @@ func (p *Payable) SetPayTo(to []PayTo) error {
 	return nil
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (p *Payable) AuditSnapshot() map[string]any {
 	return map[string]any{"document": p.s.Document, "amount": p.s.Amount.String(), "paid": p.s.Paid.String(), "cancelled": p.s.Cancelled}
 }
 
-// TaxDue returns the last day to pay a self-assessed tax form of a period (AEAT code: 01–12 or
-// 1T–4T): the 20th of the month after the period, and the 30th of January for the last one.
+// TaxDue devuelve el último día para pagar un modelo fiscal autoliquidado de un periodo (código
+// AEAT: 01–12 o 1T–4T): el día 20 del mes siguiente al periodo, y el 30 de enero para el último.
 func TaxDue(year int, period string) (vocab.Date, error) {
 	var month int
 	switch {
@@ -249,7 +250,7 @@ func TaxDue(year int, period string) (vocab.Date, error) {
 	return vocab.NewDate(year, time.Month(month+1), 20)
 }
 
-// Payable fields.
+// Campos de la obligación.
 var (
 	PayFieldID        = spec.Comparable("id", func(p *Payable) PayableID { return p.ID() })
 	PayFieldCompany   = spec.Comparable("company", func(p *Payable) OrganizationID { return p.s.Company })

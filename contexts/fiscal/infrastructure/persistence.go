@@ -1,6 +1,6 @@
-// Package infrastructure stores the Fiscal context: SQL mappings, versioned schema of the five
-// engines, hot-swap factories and the Parties adapter. Nothing is seeded: the C# seeded no tax
-// rates, and legal data is not invented here.
+// Package infrastructure persiste el contexto Fiscal: mapeos SQL, esquema versionado de los cinco
+// motores, factorías intercambiables en caliente y el adaptador de Parties. No se siembra nada: el C# no sembraba
+// tipos impositivos, y aquí no se inventan datos legales.
 package infrastructure
 
 import (
@@ -24,10 +24,10 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlserver"
 )
 
-// Context is the name of the bounded context.
+// Context es el nombre del contexto delimitado.
 const Context = "fiscal"
 
-// Technical tables of the context.
+// Tablas técnicas del contexto.
 const (
 	TableOutbox            = "fiscal_outbox"
 	TableIntegrationOutbox = "fiscal_integration_outbox"
@@ -82,7 +82,7 @@ func technicalDDL(d string) []string {
 	return nil
 }
 
-// Migrations is the versioned schema of the context.
+// Migrations es el esquema versionado del contexto.
 func Migrations() sqlrepo.MigrationSet {
 	technical := map[string][]string{}
 	for _, d := range sqlrepo.Dialects {
@@ -94,16 +94,16 @@ func Migrations() sqlrepo.MigrationSet {
 	}}
 }
 
-// Migrator returns the schema migrator of the context.
+// Migrator devuelve el migrador del esquema del contexto.
 func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 	return sqlrepo.NewMigrator(db, []sqlrepo.MigrationSet{Migrations()})
 }
 
-// Tables lists the tables of the context, children first (drop order).
+// Tables enumera las tablas del contexto, las hijas primero (orden de borrado).
 var Tables = []string{"fis_filing_lines", "fis_filings", "fis_counters", "fis_withholdings", "fis_activities", "fis_obligations", "fis_taxpayers",
 	"fis_treatments", "fis_tax_rates", TableOutbox, TableIntegrationOutbox, TableAuditLog, TableInbox}
 
-// DropAll removes the tables of the context and its migration history (tests only).
+// DropAll quita las tablas del contexto y su historial de migraciones (sólo pruebas).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
 	for _, t := range Tables {
 		_, _ = db.ExecContext(ctx, "DROP TABLE "+t)
@@ -139,7 +139,7 @@ func optInt(n int) any {
 	return int64(n)
 }
 
-// TaxRateMapping maps TaxRate to fis_tax_rates.
+// TaxRateMapping mapea TaxRate a fis_tax_rates.
 func TaxRateMapping() sqlrepo.Mapping[domain.TaxRateID, *domain.TaxRate] {
 	return sqlrepo.Mapping[domain.TaxRateID, *domain.TaxRate]{
 		Table:   "fis_tax_rates",
@@ -162,7 +162,7 @@ func TaxRateMapping() sqlrepo.Mapping[domain.TaxRateID, *domain.TaxRate] {
 	}
 }
 
-// TreatmentMapping maps Treatment to fis_treatments.
+// TreatmentMapping mapea Treatment a fis_treatments.
 func TreatmentMapping() sqlrepo.Mapping[domain.TreatmentID, *domain.Treatment] {
 	return sqlrepo.Mapping[domain.TreatmentID, *domain.Treatment]{
 		Table:   "fis_treatments",
@@ -183,7 +183,7 @@ func TreatmentMapping() sqlrepo.Mapping[domain.TreatmentID, *domain.Treatment] {
 	}
 }
 
-// TaxpayerMapping maps Taxpayer to fis_taxpayers, its activities and obligations.
+// TaxpayerMapping mapea Taxpayer a fis_taxpayers, sus actividades y sus obligaciones.
 func TaxpayerMapping() sqlrepo.Mapping[domain.TaxpayerID, *domain.Taxpayer] {
 	return sqlrepo.Mapping[domain.TaxpayerID, *domain.Taxpayer]{
 		Table:   "fis_taxpayers",
@@ -214,7 +214,7 @@ func TaxpayerMapping() sqlrepo.Mapping[domain.TaxpayerID, *domain.Taxpayer] {
 					return nil, err
 				}
 			}
-			// UUID v7: byte order is creation order on every engine.
+			// UUID v7: el orden de los bytes es el orden de creación en todos los motores.
 			slices.SortFunc(s.Activities, func(a, b domain.Activity) int { return bytes.Compare(a.ID.Bytes(), b.ID.Bytes()) })
 			slices.SortFunc(s.Obligations, func(a, b domain.Obligation) int { return bytes.Compare(a.ID.Bytes(), b.ID.Bytes()) })
 			if err := r.Err(); err != nil {
@@ -249,7 +249,7 @@ func TaxpayerMapping() sqlrepo.Mapping[domain.TaxpayerID, *domain.Taxpayer] {
 	}
 }
 
-// FilingMapping maps Filing to fis_filings and its lines.
+// FilingMapping mapea Filing a fis_filings y sus líneas.
 func FilingMapping() sqlrepo.Mapping[domain.FilingID, *domain.Filing] {
 	return sqlrepo.Mapping[domain.FilingID, *domain.Filing]{
 		Table: "fis_filings",
@@ -316,7 +316,7 @@ func FilingMapping() sqlrepo.Mapping[domain.FilingID, *domain.Filing] {
 	}
 }
 
-// CounterMapping maps Counter to fis_counters.
+// CounterMapping mapea Counter a fis_counters.
 func CounterMapping() sqlrepo.Mapping[domain.CounterID, *domain.Counter] {
 	return sqlrepo.Mapping[domain.CounterID, *domain.Counter]{
 		Table:   "fis_counters",
@@ -336,7 +336,7 @@ func CounterMapping() sqlrepo.Mapping[domain.CounterID, *domain.Counter] {
 	}
 }
 
-// WithholdingMapping maps Withholding to fis_withholdings.
+// WithholdingMapping mapea Withholding a fis_withholdings.
 func WithholdingMapping() sqlrepo.Mapping[domain.WithholdingID, *domain.Withholding] {
 	return sqlrepo.Mapping[domain.WithholdingID, *domain.Withholding]{
 		Table:   "fis_withholdings",
@@ -370,7 +370,7 @@ func repository[ID fw.Identifier, T fw.AggregateRoot[ID]](b hotswap.Backend, m s
 	return nil, unsupported(b)
 }
 
-// Repository factories.
+// Factorías de repositorios.
 func TaxRateRepositoryFactory(b hotswap.Backend) (domain.TaxRateRepository, error) {
 	return repository(b, TaxRateMapping())
 }
@@ -395,10 +395,11 @@ func WithholdingRepositoryFactory(b hotswap.Backend) (domain.WithholdingReposito
 	return repository(b, WithholdingMapping())
 }
 
-// OutboxFactory builds the domain event outbox; IntegrationOutboxFactory, the Published Language one.
+// OutboxFactory construye el outbox de eventos de dominio; IntegrationOutboxFactory, el del
+// Published Language.
 func OutboxFactory(b hotswap.Backend) (application.OutboxStore, error) { return outbox(b, TableOutbox) }
 
-// IntegrationOutboxFactory builds the integration outbox.
+// IntegrationOutboxFactory construye el outbox de integración.
 func IntegrationOutboxFactory(b hotswap.Backend) (application.OutboxStore, error) {
 	return outbox(b, TableIntegrationOutbox)
 }
@@ -413,7 +414,7 @@ func outbox(b hotswap.Backend, table string) (application.OutboxStore, error) {
 	return nil, unsupported(b)
 }
 
-// AuditLogFactory builds the audit log.
+// AuditLogFactory construye el registro de auditoría.
 func AuditLogFactory(b hotswap.Backend) (application.AuditLog, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -424,7 +425,7 @@ func AuditLogFactory(b hotswap.Backend) (application.AuditLog, error) {
 	return nil, unsupported(b)
 }
 
-// InboxFactory builds the inbox of the integration events Fiscal consumes.
+// InboxFactory construye el inbox de los eventos de integración que consume Fiscal.
 func InboxFactory(b hotswap.Backend) (application.InboxStore, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -435,12 +436,13 @@ func InboxFactory(b hotswap.Backend) (application.InboxStore, error) {
 	return nil, unsupported(b)
 }
 
-// PartiesIdentities adapts the Parties TaxIdentities contract to the Fiscal Identities port (ACL).
+// PartiesIdentities adapta el contrato TaxIdentities de Parties al puerto Identities de Fiscal
+// (ACL).
 type PartiesIdentities struct{ TaxIdentities parties.TaxIdentities }
 
 var _ domain.Identities = PartiesIdentities{}
 
-// Identities implements domain.Identities (in batches of the Parties maximum).
+// Identities implementa domain.Identities (en lotes del máximo de Parties).
 func (p PartiesIdentities) Identities(ctx context.Context, ids []domain.PartyID) (map[domain.PartyID]domain.Identity, error) {
 	out := map[domain.PartyID]domain.Identity{}
 	var batch []string

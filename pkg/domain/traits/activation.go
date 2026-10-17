@@ -1,16 +1,16 @@
 package traits
 
-// Activatable is implemented by aggregates that can be switched on and off
-// (C# IActivable / IToggleable).
+// Activatable lo implementan los agregados que se pueden activar y desactivar
+// (IActivable / IToggleable de C#).
 type Activatable interface {
 	IsActive() bool
 }
 
-// Activation is the embeddable on/off state. The zero value is active, matching the C#
-// default (IsActive = true), so embedding it needs no initialization.
+// Activation es el estado activo/inactivo incrustable. El valor cero es activo, como el valor por
+// defecto de C# (IsActive = true), así que incrustarlo no necesita inicialización.
 //
-// Activate and Deactivate report whether the state changed, so the aggregate can raise its own
-// meaningful event only on real transitions:
+// Activate y Deactivate dicen si el estado ha cambiado, para que el agregado lance su propio
+// evento con significado sólo en las transiciones reales:
 //
 //	func (p *Party) Deactivate(reason string) {
 //		if p.Activation.Deactivate() {
@@ -21,20 +21,20 @@ type Activation struct {
 	inactive bool
 }
 
-// RestoredActivation rebuilds the state from persistence.
+// RestoredActivation reconstruye el estado desde la persistencia.
 func RestoredActivation(active bool) Activation { return Activation{inactive: !active} }
 
-// IsActive reports whether the aggregate is active.
+// IsActive dice si el agregado está activo.
 func (a Activation) IsActive() bool { return !a.inactive }
 
-// Activate switches the state on and reports whether it changed.
+// Activate activa el estado y dice si ha cambiado.
 func (a *Activation) Activate() bool {
 	changed := a.inactive
 	a.inactive = false
 	return changed
 }
 
-// Deactivate switches the state off and reports whether it changed.
+// Deactivate desactiva el estado y dice si ha cambiado.
 func (a *Activation) Deactivate() bool {
 	changed := !a.inactive
 	a.inactive = true

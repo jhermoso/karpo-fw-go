@@ -11,17 +11,18 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// DraftPayslip drafts the payslip of an employee for a period.
+// DraftPayslip prepara en borrador la nómina de un empleado para un periodo.
 type DraftPayslip struct {
 	Person      string     `json:"person"`
 	Employer    string     `json:"employer"`
-	Kind        string     `json:"kind,omitempty"` // ordinary (default), extra-pay, settlement
+	Kind        string     `json:"kind,omitempty"` // ordinary (por defecto), extra-pay, settlement
 	Start       vocab.Date `json:"start"`
 	End         vocab.Date `json:"end"`
-	PaymentDate vocab.Date `json:"paymentDate,omitzero"` // default: the end of the period
+	PaymentDate vocab.Date `json:"paymentDate,omitzero"` // por defecto: el final del periodo
 }
 
-// AddLine adds a line of a concept (by id or code): an amount, quantity × unit or base × percent.
+// AddLine añade una línea de un concepto (por id o código): un importe, cantidad × unidad o base ×
+// porcentaje.
 type AddLine struct {
 	ID          domain.PayslipID `json:"-"`
 	Concept     string           `json:"concept"`
@@ -33,43 +34,43 @@ type AddLine struct {
 	Percent     string           `json:"percent,omitempty"`
 }
 
-// RemoveLine removes a line of a draft.
+// RemoveLine quita una línea de un borrador.
 type RemoveLine struct {
 	ID   domain.PayslipID `json:"-"`
 	Line string           `json:"line"`
 }
 
-// Reschedule changes the payment date of a draft.
+// Reschedule cambia la fecha de pago de un borrador.
 type Reschedule struct {
 	ID          domain.PayslipID `json:"-"`
 	PaymentDate vocab.Date       `json:"paymentDate"`
 }
 
-// ApprovePayslip approves a draft.
+// ApprovePayslip aprueba un borrador.
 type ApprovePayslip struct {
 	ID domain.PayslipID `json:"-"`
 }
 
-// CancelPayslip cancels an approved payslip.
+// CancelPayslip anula una nómina aprobada.
 type CancelPayslip struct {
 	ID     domain.PayslipID `json:"-"`
 	Reason string           `json:"reason"`
 }
 
-// DiscardPayslip deletes a draft.
+// DiscardPayslip borra un borrador.
 type DiscardPayslip struct{ ID domain.PayslipID }
 
-// GetPayslip loads a payslip.
+// GetPayslip carga una nómina.
 type GetPayslip struct{ ID domain.PayslipID }
 
-// SearchPayslips searches payslips of the caller's scope.
+// SearchPayslips busca nóminas del ámbito de quien llama.
 type SearchPayslips struct {
 	Employer, Person, Status string
-	From, To                 string // period start range (civil dates)
+	From, To                 string // intervalo del inicio del periodo (fechas civiles)
 	Page, Size               int
 }
 
-// LineDTO is the transport form of a line.
+// LineDTO es la forma de transporte de una línea.
 type LineDTO struct {
 	ID          string `json:"id"`
 	Concept     string `json:"concept"`
@@ -83,7 +84,7 @@ type LineDTO struct {
 	Amount      string `json:"amount"`
 }
 
-// TotalsDTO is the transport form of the totals.
+// TotalsDTO es la forma de transporte de los totales.
 type TotalsDTO struct {
 	Gross            string `json:"gross"`
 	ContributionBase string `json:"contributionBase"`
@@ -96,7 +97,7 @@ type TotalsDTO struct {
 	CompanyCost      string `json:"companyCost"`
 }
 
-// PayslipDTO is the transport form of a payslip.
+// PayslipDTO es la forma de transporte de una nómina.
 type PayslipDTO struct {
 	ID                string    `json:"id"`
 	Employment        string    `json:"employment"`

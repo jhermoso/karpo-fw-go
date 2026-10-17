@@ -1,7 +1,8 @@
-// Package domain is the Work model: the work a company does (projects, tasks, maintenance and
-// production jobs) with its plan, the people assigned to it, a status that moves by rules, and
-// the time recorded against it. The C# WorkEffort was a header whose status, history and actual
-// hours were typed by hand and independent of each other, and its time entries had no date.
+// Package domain es el modelo de Work: el trabajo que hace una empresa (proyectos, tareas,
+// mantenimiento y órdenes de producción) con su plan, las personas asignadas, un estado que se mueve
+// por reglas y el tiempo anotado en él. El WorkEffort del C# era una cabecera cuyo estado, historial
+// y horas reales se tecleaban a mano y eran independientes entre sí, y sus anotaciones de tiempo no
+// tenían fecha.
 package domain
 
 import (
@@ -15,25 +16,25 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// WorkKind is the stable aggregate type name.
+// WorkKind es el nombre estable del tipo de agregado.
 const WorkKind = "work.work"
 
-// Identities of the context.
+// Identidades del contexto.
 type (
-	// WorkID identifies a piece of work.
+	// WorkID identifica un trabajo.
 	WorkID struct{ fw.UUID }
-	// TimeEntryID identifies a time entry.
+	// TimeEntryID identifica una anotación de tiempo.
 	TimeEntryID struct{ fw.UUID }
-	// OrganizationID is the company doing the work, an internal organization of Parties.
+	// OrganizationID es la empresa que hace el trabajo, una organización interna de Parties.
 	OrganizationID struct{ fw.UUID }
-	// PartyID is a customer or a person of the Parties context.
+	// PartyID es un cliente o una persona del contexto Parties.
 	PartyID struct{ fw.UUID }
 )
 
-// Kind is what a piece of work is (the seeded C# work effort types).
+// Kind es qué es un trabajo (los tipos de work effort sembrados del C#).
 type Kind string
 
-// Kinds.
+// Tipos.
 const (
 	Project     Kind = "project"
 	Task        Kind = "task"
@@ -41,16 +42,17 @@ const (
 	Production  Kind = "production"
 )
 
-// Kinds lists the valid kinds.
+// Kinds lista los tipos válidos.
 var Kinds = []Kind{Project, Task, Maintenance, Production}
 
-// Purposes lists the valid purposes (the seeded C# purpose types); a piece of work may have none.
+// Purposes lista los propósitos válidos (los tipos de propósito sembrados del C#); un trabajo
+// puede no tener ninguno.
 var Purposes = []string{"improvement", "repair", "preventive-check", "audit", "training"}
 
-// Status is where a piece of work is.
+// Status es dónde está un trabajo.
 type Status string
 
-// Statuses (the seeded C# status types).
+// Estados (los tipos de estado sembrados del C#).
 const (
 	Created    Status = "created"
 	Scheduled  Status = "scheduled"
@@ -60,10 +62,10 @@ const (
 	Cancelled  Status = "cancelled"
 )
 
-// Statuses lists the valid statuses.
+// Statuses lista los estados válidos.
 var Statuses = []Status{Created, Scheduled, InProgress, OnHold, Completed, Cancelled}
 
-// next is the rule of the status: where each one may go.
+// next es la regla del estado: adónde puede ir cada uno.
 var next = map[Status][]Status{
 	Created:    {Scheduled, InProgress, Cancelled},
 	Scheduled:  {InProgress, Cancelled},
@@ -71,59 +73,59 @@ var next = map[Status][]Status{
 	OnHold:     {InProgress, Cancelled},
 }
 
-// Step is a change of status.
+// Step es un cambio de estado.
 type Step struct {
 	Status Status
 	On     vocab.Date
 }
 
-// Assignment is a person working on a piece of work, with the hourly rate of their time.
+// Assignment es una persona que trabaja en un trabajo, con la tarifa por hora de su tiempo.
 type Assignment struct {
 	Person PartyID
 	Role   string
-	Rate   vocab.Decimal // cost of an hour
+	Rate   vocab.Decimal // coste de una hora
 	From   vocab.Date
-	Until  vocab.Date // zero while assigned
+	Until  vocab.Date // cero mientras está asignada
 }
 
-// Covers reports whether the assignment is in force on a day.
+// Covers dice si la asignación está vigente en un día.
 func (a Assignment) Covers(d vocab.Date) bool {
 	return !d.Before(a.From) && (a.Until.IsZero() || !d.After(a.Until))
 }
 
-// Plan is what may be edited while the work is open.
+// Plan es lo que se puede editar mientras el trabajo está abierto.
 type Plan struct {
 	Name           string
 	Description    string
 	Purpose        string
-	Customer       PartyID // who the work is for, if anyone
-	Facility       fw.UUID // where (Facilities)
-	Asset          fw.UUID // on what (Assets)
+	Customer       PartyID // para quién es el trabajo, si es para alguien
+	Facility       fw.UUID // dónde (Facilities)
+	Asset          fw.UUID // sobre qué (Assets)
 	PlannedStart   vocab.Date
 	PlannedEnd     vocab.Date
 	EstimatedHours vocab.Decimal
 	Budget         vocab.Decimal
 }
 
-// WorkState is the persisted state of a piece of work.
+// WorkState es el estado persistido de un trabajo.
 type WorkState struct {
 	Company OrganizationID
 	Code    string
 	Kind    Kind
-	Parent  WorkID // the project a task belongs to
+	Parent  WorkID // el proyecto al que pertenece una tarea
 	Plan
 	Status       Status
 	Started      vocab.Date
 	Finished     vocab.Date
 	CancelReason string
-	Hours        vocab.Decimal // approved hours when completed
-	Cost         vocab.Decimal // their cost when completed
+	Hours        vocab.Decimal // horas aprobadas al terminarse
+	Cost         vocab.Decimal // su coste al terminarse
 	Assignments  []Assignment
 	History      []Step
 	Audit        traits.AuditStamp
 }
 
-// Work is a piece of work of a company.
+// Work es un trabajo de una empresa.
 type Work struct {
 	fw.BaseAggregateRoot[WorkID]
 	traits.Audited
@@ -155,7 +157,7 @@ func checkPlan(v *fw.Validation, p *Plan) {
 	v.Require(!p.Budget.IsNegative() && p.Budget.Equal(p.Budget.Round(2)), "budget", "range", "a budget in cents")
 }
 
-// ReconstituteWork rebuilds a piece of work.
+// ReconstituteWork reconstruye un trabajo.
 func ReconstituteWork(id WorkID, s WorkState) (*Work, error) {
 	base, err := fw.NewBaseAggregateRoot(WorkKind, id)
 	if err != nil {
@@ -176,7 +178,7 @@ func ReconstituteWork(id WorkID, s WorkState) (*Work, error) {
 	return &Work{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// OpenWork creates a piece of work on a day.
+// OpenWork crea un trabajo en un día.
 func OpenWork(id WorkID, company OrganizationID, code string, kind Kind, parent WorkID, plan Plan, on vocab.Date) (*Work, error) {
 	if on.IsZero() {
 		return nil, fw.Violation("work.date", "the day is required")
@@ -190,14 +192,14 @@ func OpenWork(id WorkID, company OrganizationID, code string, kind Kind, parent 
 	return w, nil
 }
 
-// State returns the state (slices are copies).
+// State devuelve el estado (los slices son copias).
 func (w *Work) State() WorkState {
 	s := w.s
 	s.Assignments, s.History = slices.Clone(s.Assignments), slices.Clone(s.History)
 	return s
 }
 
-// Open reports whether the work is neither completed nor cancelled.
+// Open dice si el trabajo no está ni terminado ni anulado.
 func (w *Work) Open() bool { return w.s.Status != Completed && w.s.Status != Cancelled }
 
 func (w *Work) closed() error {
@@ -207,7 +209,7 @@ func (w *Work) closed() error {
 	return nil
 }
 
-// Change replaces the plan of an open piece of work.
+// Change sustituye el plan de un trabajo abierto.
 func (w *Work) Change(p Plan) error {
 	if err := w.closed(); err != nil {
 		return err
@@ -224,7 +226,7 @@ func (w *Work) Change(p Plan) error {
 	return nil
 }
 
-// move changes the status by the rule, on a day not before the last change.
+// move cambia el estado según la regla, en un día no anterior al último cambio.
 func (w *Work) move(to Status, on vocab.Date) error {
 	if on.IsZero() {
 		return fw.Violation("work.date", "the day is required")
@@ -242,7 +244,7 @@ func (w *Work) move(to Status, on vocab.Date) error {
 	return nil
 }
 
-// Schedule commits the planned dates.
+// Schedule fija las fechas planificadas.
 func (w *Work) Schedule(on vocab.Date) error {
 	if w.s.PlannedStart.IsZero() || w.s.PlannedEnd.IsZero() {
 		return fw.Violation("work.plan_required", "scheduling needs the planned start and end")
@@ -250,7 +252,7 @@ func (w *Work) Schedule(on vocab.Date) error {
 	return w.move(Scheduled, on)
 }
 
-// Start begins the work, or resumes it when on hold.
+// Start empieza el trabajo, o lo reanuda cuando está en pausa.
 func (w *Work) Start(on vocab.Date) error {
 	if err := w.move(InProgress, on); err != nil {
 		return err
@@ -261,10 +263,10 @@ func (w *Work) Start(on vocab.Date) error {
 	return nil
 }
 
-// Hold pauses the work.
+// Hold pone en pausa el trabajo.
 func (w *Work) Hold(on vocab.Date) error { return w.move(OnHold, on) }
 
-// Complete finishes the work with the approved hours recorded against it and their cost.
+// Complete termina el trabajo con las horas aprobadas anotadas en él y su coste.
 func (w *Work) Complete(on vocab.Date, hours, cost vocab.Decimal) error {
 	if err := w.move(Completed, on); err != nil {
 		return err
@@ -275,7 +277,7 @@ func (w *Work) Complete(on vocab.Date, hours, cost vocab.Decimal) error {
 	return nil
 }
 
-// Cancel abandons the work, with a reason.
+// Cancel abandona el trabajo, con un motivo.
 func (w *Work) Cancel(on vocab.Date, reason string) error {
 	reason = strings.TrimSpace(reason)
 	if reason == "" || utf8.RuneCountInString(reason) > 200 {
@@ -288,8 +290,8 @@ func (w *Work) Cancel(on vocab.Date, reason string) error {
 	return nil
 }
 
-// Assign puts a person on the work from a day at an hourly rate, or changes the role and rate of
-// a person already on it.
+// Assign pone a una persona en el trabajo desde un día con una tarifa por hora, o cambia el papel y
+// la tarifa de una persona que ya está en él.
 func (w *Work) Assign(person PartyID, role string, rate vocab.Decimal, from vocab.Date) error {
 	if err := w.closed(); err != nil {
 		return err
@@ -313,7 +315,7 @@ func (w *Work) Assign(person PartyID, role string, rate vocab.Decimal, from voca
 	return nil
 }
 
-// Release takes a person off the work after a day.
+// Release saca a una persona del trabajo después de un día.
 func (w *Work) Release(person PartyID, until vocab.Date) error {
 	if err := w.closed(); err != nil {
 		return err
@@ -331,8 +333,8 @@ func (w *Work) Release(person PartyID, until vocab.Date) error {
 	return nil
 }
 
-// RateFor returns the hourly rate of a person on a day: time is recorded only by who is assigned
-// that day, on work in progress that had started by then.
+// RateFor devuelve la tarifa por hora de una persona en un día: sólo anota tiempo quien está
+// asignado ese día, en un trabajo en curso que ya había empezado para entonces.
 func (w *Work) RateFor(person PartyID, on vocab.Date) (vocab.Decimal, error) {
 	if w.s.Status != InProgress {
 		return zero(), fw.Violation("work.not_in_progress", "time is recorded on work in progress")
@@ -355,12 +357,12 @@ func optional(u fw.UUID) string {
 	return u.String()
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (w *Work) AuditSnapshot() map[string]any {
 	return map[string]any{"code": w.s.Code, "name": w.s.Name, "status": string(w.s.Status), "assignments": len(w.s.Assignments)}
 }
 
-// Work fields.
+// Campos del trabajo.
 var (
 	WrkFieldCompany  = spec.Comparable("company", func(w *Work) OrganizationID { return w.s.Company })
 	WrkFieldCode     = spec.Ordered("code", func(w *Work) string { return w.s.Code })
@@ -370,16 +372,16 @@ var (
 	WrkFieldCustomer = spec.Comparable("customer", func(w *Work) PartyID { return w.s.Customer })
 )
 
-// Events of the work.
+// Eventos del trabajo.
 type (
-	// WorkOpened is raised when a piece of work is created.
+	// WorkOpened se lanza cuando se crea un trabajo.
 	WorkOpened struct {
 		fw.EventMeta
 		Company string `json:"company"`
 		Code    string `json:"code"`
 		Kind    string `json:"kind"`
 	}
-	// WorkStatusChanged is raised on each change of status.
+	// WorkStatusChanged se lanza en cada cambio de estado.
 	WorkStatusChanged struct {
 		fw.EventMeta
 		Company string `json:"company"`
@@ -388,7 +390,7 @@ type (
 		To      string `json:"to"`
 		On      string `json:"on"`
 	}
-	// WorkCompleted is raised when a piece of work is finished.
+	// WorkCompleted se lanza cuando se termina un trabajo.
 	WorkCompleted struct {
 		fw.EventMeta
 		Company  string `json:"company"`
@@ -402,16 +404,16 @@ type (
 	}
 )
 
-// EventType implementations.
+// Implementaciones de EventType.
 func (WorkOpened) EventType() string        { return "work.work_opened" }
 func (WorkStatusChanged) EventType() string { return "work.status_changed" }
 func (WorkCompleted) EventType() string     { return "work.work_completed" }
 
-// NewWorkID returns a new identity.
+// NewWorkID devuelve una identidad nueva.
 func NewWorkID() WorkID { return WorkID{fw.NewUUID()} }
 
-// ParseWorkID parses a textual identity.
+// ParseWorkID analiza una identidad textual.
 func ParseWorkID(s string) (WorkID, error) { u, err := fw.ParseUUID(s); return WorkID{u}, err }
 
-// WorkRepository stores work.
+// WorkRepository guarda trabajos.
 type WorkRepository = fw.Repository[WorkID, *Work]

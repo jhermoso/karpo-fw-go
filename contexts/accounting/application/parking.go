@@ -17,15 +17,15 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
 )
 
-// Permissions of the facts that wait to be posted.
+// Permisos de los hechos que esperan a contabilizarse.
 var (
 	PermParkedRead    = authz.MustPermission("Accounting.Parked.Read")
 	PermParkedResolve = authz.MustPermission("Accounting.Parked.Resolve")
 )
 
-// companyField is where each fact Accounting posts names the company whose books it goes to. A
-// fact that is not here (payroll.payslip-cancelled.v1 names only the payslip) follows the fact of
-// its subject.
+// companyField es donde cada hecho que contabiliza Accounting nombra la empresa a cuyos libros va. Un
+// hecho que no está aquí (payroll.payslip-cancelled.v1 sólo nombra la nómina) sigue al hecho de su
+// sujeto.
 var companyField = map[string]string{
 	"billing.invoice-issued.v1":           "seller",
 	"receivables.collection-allocated.v1": "seller",
@@ -58,25 +58,25 @@ func companyOf(env app.Envelope) domain.OrganizationID {
 	return domain.OrganizationID{UUID: u}
 }
 
-// Parking stands before the consumer of Accounting. A fact a rule keeps from being posted (the
-// company has no ledger, the profile lacks an account, the period is closed) is kept instead of
-// refused: refusing it would make its publisher send it again and again, and hold it back for
-// every other listener. The facts of a company are posted in the order they happened, so while
-// one waits those that come after it wait behind.
+// Parking está delante del consumidor de Accounting. Un hecho que una regla impide contabilizar (la
+// empresa no tiene contabilidad, al perfil le falta una cuenta, el periodo está cerrado) se guarda
+// en vez de rechazarse: rechazarlo haría que su publicador lo enviase una y otra vez, y retendría
+// a su publicador para todos los demás oyentes. Los hechos de una empresa se contabilizan en el orden en que
+// ocurrieron, así que mientras uno espera, los que vienen después esperan detrás.
 type Parking struct {
 	inner  Inner
 	parked domain.ParkedRepository
 	orch   *orchestration.Orchestrator[domain.ParkedID, *domain.ParkedFact]
 }
 
-// Inner is the consumer that posts: it takes a message once, in its own unit of work.
+// Inner es el consumidor que contabiliza: toma un mensaje una vez, en su propia unidad de trabajo.
 type Inner interface {
 	app.MessageHandler
 	Name() string
 	Types() []string
 }
 
-// NewParking puts the parking before a consumer.
+// NewParking pone el aparcamiento delante de un consumidor.
 func NewParking(inner Inner, d Deps) *Parking {
 	var opts []orchestration.Option
 	if d.Audit != nil {
@@ -85,7 +85,7 @@ func NewParking(inner Inner, d Deps) *Parking {
 	return &Parking{inner: inner, parked: d.Parked, orch: orchestration.New[domain.ParkedID, *domain.ParkedFact](d.Parked, d.UoW, opts...)}
 }
 
-// Name is the name the transport knows the consumer by.
+// Name es el nombre por el que el transporte conoce al consumidor.
 func (p *Parking) Name() string { return p.inner.Name() }
 
 func (p *Parking) waiting(ctx context.Context, more spec.Specification[*domain.ParkedFact]) ([]*domain.ParkedFact, error) {
@@ -102,19 +102,19 @@ func (p *Parking) park(ctx context.Context, env app.Envelope, company domain.Org
 	return p.orch.Create(ctx, f)
 }
 
-// HandleMessage implements application.MessageHandler: it posts the fact, or keeps it. It must be
-// called outside any unit of work: what the consumer wrote before a rule refused the fact is
-// undone with its own, and only then is the fact kept.
+// HandleMessage implementa application.MessageHandler: contabiliza el hecho, o lo guarda. Debe
+// llamarse fuera de toda unidad de trabajo: lo que el consumidor escribió antes de que una regla
+// rechazase el hecho se deshace con la suya, y sólo entonces se guarda el hecho.
 func (p *Parking) HandleMessage(ctx context.Context, env app.Envelope) error {
 	if !slices.Contains(p.inner.Types(), env.Type) {
-		return nil // not a fact Accounting posts
+		return nil // no es un hecho que contabilice Accounting
 	}
-	// Sent again after it was kept: it is already here.
+	// Enviado otra vez después de guardarse: ya está aquí.
 	if known, err := p.parked.Exists(ctx, domain.ParFieldEnvelope.Eq(env.ID)); err != nil || known {
 		return err
 	}
 	company := companyOf(env)
-	// Behind what waits: of its company, or about the same thing.
+	// Detrás de lo que espera: de su empresa, o sobre lo mismo.
 	var ahead []*domain.ParkedFact
 	var err error
 	if !company.IsZero() {
@@ -146,7 +146,7 @@ func envelopeOf(s domain.ParkedState) app.Envelope {
 		CausationID: s.CausationID, Data: json.RawMessage(s.Data)}
 }
 
-// inOrder sorts facts as they happened.
+// inOrder ordena los hechos tal como ocurrieron.
 func inOrder(fs []*domain.ParkedFact) {
 	slices.SortFunc(fs, func(a, b *domain.ParkedFact) int {
 		x, y := a.State(), b.State()
@@ -160,12 +160,13 @@ func inOrder(fs []*domain.ParkedFact) {
 	})
 }
 
-// retry tries again the facts that wait, in the order they happened. The first one of a company
-// that still cannot be posted stops that company: the rest stay behind it. What stops a fact
-// without being a rule (a validation, a failure) stops its company too, and no other: it is
-// noted on the fact and given at the end, once every company had its turn. A fact refused again
-// for the same code and reason is not written again: the scheduler retries every round, and a
-// company that takes days to open its books would otherwise fill the audit trail with nothing.
+// retry vuelve a intentar los hechos que esperan, en el orden en que ocurrieron. El primero de una
+// empresa que todavía no puede contabilizarse detiene esa empresa: el resto se queda detrás. Lo que
+// detiene un hecho sin ser una regla (una validación, un fallo) detiene también su empresa, y
+// ninguna otra: se anota en el hecho y se devuelve al final, cuando todas las empresas han tenido su
+// turno. Un hecho rechazado otra vez por el mismo código y motivo no se vuelve a escribir: el
+// planificador reintenta cada vuelta, y una empresa que tarda días en abrir sus libros llenaría, si
+// no, la pista de auditoría de nada.
 func (p *Parking) retry(ctx context.Context, only spec.Specification[*domain.ParkedFact]) (posted, waiting int, err error) {
 	all, err := p.waiting(ctx, only)
 	if err != nil {
@@ -206,19 +207,19 @@ func (p *Parking) retry(ctx context.Context, only spec.Specification[*domain.Par
 	return posted, waiting, failed
 }
 
-// Commands and queries of what waits.
+// Órdenes y consultas de lo que espera.
 type (
-	// RetryParked tries again the facts that wait: those of a company, or of every company in the
-	// caller's scope when none is given.
+	// RetryParked vuelve a intentar los hechos que esperan: los de una empresa, o los de todas las
+	// empresas del ámbito de quien llama cuando no se da ninguna.
 	RetryParked struct {
 		Company string `json:"company,omitempty"`
 	}
-	// DiscardParked gives up a fact that waits, saying why.
+	// DiscardParked renuncia a un hecho que espera, diciendo por qué.
 	DiscardParked struct {
 		ID   domain.ParkedID `json:"-"`
 		Note string          `json:"note"`
 	}
-	// SearchParked lists the facts kept, the oldest first.
+	// SearchParked lista los hechos guardados, los más antiguos primero.
 	SearchParked struct {
 		Company, Status string
 		Page, Size      int
@@ -268,8 +269,8 @@ func parkedDTO(f *domain.ParkedFact) ParkedDTO {
 		Note: s.Note, Data: json.RawMessage(s.Data), Version: f.Version()}
 }
 
-// companies restricts facts to the caller's scope. A fact that names no company is for a global
-// administrator only.
+// companies restringe los hechos al ámbito de quien llama. Un hecho que no nombra empresa es sólo
+// para un administrador global.
 func companies(sc scope) spec.Specification[*domain.ParkedFact] {
 	switch {
 	case sc.global:

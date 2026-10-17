@@ -13,7 +13,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Staff implements contracts.Staff (one query per batch; it serves contexts, not users).
+// Staff implementa contracts.Staff (una consulta por lote; sirve a contextos, no a usuarios).
 type Staff struct{ Employments domain.EmploymentRepository }
 
 var _ contracts.Staff = Staff{}
@@ -25,8 +25,8 @@ func tooMany(n int) error {
 	return nil
 }
 
-// EmploymentsOn implements contracts.Staff: the employments active on the date, with their
-// primary contract on that date.
+// EmploymentsOn implementa contracts.Staff: las relaciones laborales activas en la fecha, con su
+// contrato principal en esa fecha.
 func (s Staff) EmploymentsOn(ctx context.Context, personIDs []string, date string) (map[string][]contracts.EmploymentRef, error) {
 	if err := tooMany(len(personIDs)); err != nil {
 		return nil, err
@@ -65,7 +65,7 @@ func (s Staff) EmploymentsOn(ctx context.Context, personIDs []string, date strin
 	return out, nil
 }
 
-// PositionDirectory implements contracts.Positions.
+// PositionDirectory implementa contracts.Positions.
 type PositionDirectory struct{ Positions domain.PositionRepository }
 
 var _ contracts.Positions = PositionDirectory{}
@@ -82,7 +82,7 @@ func positionRef(p *domain.Position, now time.Time) contracts.PositionRef {
 	return r
 }
 
-// Resolve implements contracts.Positions.
+// Resolve implementa contracts.Positions.
 func (d PositionDirectory) Resolve(ctx context.Context, ids []string) (map[string]contracts.PositionRef, error) {
 	if err := tooMany(len(ids)); err != nil {
 		return nil, err
@@ -108,7 +108,7 @@ func (d PositionDirectory) Resolve(ctx context.Context, ids []string) (map[strin
 	return out, nil
 }
 
-// HeldBy implements contracts.Positions.
+// HeldBy implementa contracts.Positions.
 func (d PositionDirectory) HeldBy(ctx context.Context, personID string) ([]contracts.PositionRef, error) {
 	u, err := fw.ParseUUID(personID)
 	if err != nil {
@@ -126,7 +126,7 @@ func (d PositionDirectory) HeldBy(ctx context.Context, personID string) ([]contr
 	return out, nil
 }
 
-// Publications translates the domain events into the Published Language.
+// Publications traduce los eventos de dominio al Published Language.
 func Publications(r *messaging.Recorder) *messaging.Recorder {
 	one := func(e app.IntegrationEvent) ([]app.IntegrationEvent, error) { return []app.IntegrationEvent{e}, nil }
 	messaging.On(r, func(_ context.Context, e domain.EmployeeHired) ([]app.IntegrationEvent, error) {

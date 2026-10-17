@@ -1,6 +1,6 @@
-// Package authorization implements the authz contracts: the generic resolver of the
-// "contrato de autorización v1" (Go port of ErpKernel SecurityAuthorizationContextResolver)
-// over an authz.Directory, and an in-memory directory for tests and local development.
+// Package authorization implementa los contratos de authz: el resolutor genérico del
+// «contrato de autorización v1» (port a Go de SecurityAuthorizationContextResolver de ErpKernel)
+// sobre un authz.Directory, y un directorio en memoria para pruebas y desarrollo local.
 package authorization
 
 import (
@@ -12,18 +12,18 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// DefaultGlobalAdminRole is the role that makes a subject global administrator.
+// DefaultGlobalAdminRole es el rol que hace de un sujeto administrador global.
 const DefaultGlobalAdminRole = "GlobalSuperAdmin"
 
-// Options configure a Resolver.
+// Options configuran un Resolver.
 type Options struct {
-	TenantID          string                   // default "erp-security" (the JWT issuer)
-	GlobalAdminRole   string                   // default DefaultGlobalAdminRole
-	ServicePrincipals []authz.ServicePrincipal // technical callers (never global admin, no wildcard)
+	TenantID          string                   // por defecto "erp-security" (el emisor del JWT)
+	GlobalAdminRole   string                   // por defecto DefaultGlobalAdminRole
+	ServicePrincipals []authz.ServicePrincipal // llamantes técnicos (nunca administrador global, sin comodín)
 }
 
-// Resolver resolves authorization contexts from a Directory. It resolves once per request and
-// keeps no cache between requests (contract v1, D7).
+// Resolver resuelve contextos de autorización a partir de un Directory. Resuelve una vez por
+// petición y no guarda caché entre peticiones (contrato v1, D7).
 type Resolver struct {
 	dir  authz.Directory
 	opts Options
@@ -31,7 +31,7 @@ type Resolver struct {
 
 var _ authz.Resolver = (*Resolver)(nil)
 
-// NewResolver builds a Resolver.
+// NewResolver construye un Resolver.
 func NewResolver(dir authz.Directory, opts Options) *Resolver {
 	if opts.TenantID == "" {
 		opts.TenantID = "erp-security"
@@ -42,9 +42,9 @@ func NewResolver(dir authz.Directory, opts Options) *Resolver {
 	return &Resolver{dir: dir, opts: opts}
 }
 
-// Resolve implements authz.Resolver: incomplete principal -> Deny "incomplete-principal";
-// service principals from configuration; unknown/inactive/locked users -> Deny; directory
-// failure -> Indeterminate (fail closed).
+// Resolve implementa authz.Resolver: principal incompleto -> Deny "incomplete-principal";
+// principales de servicio desde la configuración; usuarios desconocidos/inactivos/bloqueados -> Deny;
+// fallo del directorio -> Indeterminate (falla cerrado).
 func (r *Resolver) Resolve(ctx context.Context, p authz.Principal, req authz.Request) authz.Resolution {
 	if !p.Complete() {
 		return authz.Denied(authz.ReasonIncompletePrincipal)
@@ -95,7 +95,7 @@ func (r *Resolver) service(p authz.Principal, req authz.Request) authz.Resolutio
 	return authz.Denied(authz.ReasonUnknownService)
 }
 
-// MemoryDirectory is an in-memory authz.Directory for tests and local development.
+// MemoryDirectory es un authz.Directory en memoria para pruebas y desarrollo local.
 type MemoryDirectory struct {
 	mu       sync.RWMutex
 	subjects map[domain.UUID]authz.Subject
@@ -104,26 +104,26 @@ type MemoryDirectory struct {
 
 var _ authz.Directory = (*MemoryDirectory)(nil)
 
-// NewMemoryDirectory builds an empty directory.
+// NewMemoryDirectory construye un directorio vacío.
 func NewMemoryDirectory() *MemoryDirectory {
 	return &MemoryDirectory{subjects: map[domain.UUID]authz.Subject{}}
 }
 
-// Put registers or replaces a subject.
+// Put registra o sustituye un sujeto.
 func (d *MemoryDirectory) Put(id domain.UUID, s authz.Subject) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.subjects[id] = s
 }
 
-// FailWith makes every lookup fail (nil restores it), to exercise Indeterminate.
+// FailWith hace fallar todas las búsquedas (nil lo restablece), para ejercitar Indeterminate.
 func (d *MemoryDirectory) FailWith(err error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.fail = err
 }
 
-// Subject implements authz.Directory.
+// Subject implementa authz.Directory.
 func (d *MemoryDirectory) Subject(_ context.Context, id domain.UUID) (authz.Subject, bool, error) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()

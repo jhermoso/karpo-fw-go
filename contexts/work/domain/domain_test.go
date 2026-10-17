@@ -175,7 +175,7 @@ func TestWork_AssignmentsAndTime(t *testing.T) {
 	if err != nil || !e.Cost().Equal(dec("187.50")) || e.State().Comment != "Demolición" || !e.State().Rate.Equal(dec("25")) {
 		t.Fatalf("recorded: %+v %v", e, err)
 	}
-	// A new rate does not change what is already recorded.
+	// Una tarifa nueva no cambia lo ya anotado.
 	_ = w.Assign(ana, "Encargada", dec("30"), date("2026-03-09"))
 	if err := e.Correct(dec("8"), false, "Demolición y desescombro"); err != nil || !e.Cost().Equal(dec("200.00")) || e.State().Billable {
 		t.Fatalf("corrected: %v %s", err, e.Cost())

@@ -58,7 +58,7 @@ func TestInvoice(t *testing.T) {
 	if _, err := inv.AddLine(domain.LineInput{Description: "X", Quantity: dec("1"), UnitPrice: dec("1")}); err == nil {
 		t.Fatal("a tax code or a treatment is required")
 	}
-	// 3 × 33.335 = 100.005, less 10 % = 90.0045 → 90.00
+	// 3 × 33.335 = 100.005, menos el 10 % = 90.0045 → 90.00
 	if _, err := inv.AddLine(domain.LineInput{Description: "Consultoría", Quantity: dec("3"), UnitPrice: dec("33.335"), Discount: dec("10"), TaxCode: "g21"}); err != nil {
 		t.Fatal(err)
 	}

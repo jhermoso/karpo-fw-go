@@ -10,19 +10,19 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// PositionKind is the stable aggregate type name.
+// PositionKind es el nombre estable de tipo de agregado.
 const PositionKind = "hr.position"
 
-// Fulfillment is a person holding the position during a period (child entity; the C#
-// PositionFulfillment had no start date).
+// Fulfillment es una persona que ocupa el puesto durante un periodo (entidad hija; el
+// PositionFulfillment del C# no tenía fecha de inicio).
 type Fulfillment struct {
 	ID     fw.UUID
 	Holder PersonID
 	Period vocab.ValidPeriod
 }
 
-// ReportingLine is a supervisor position of this one during a period (child entity; the C#
-// PositionReportingStructure could not set its primary flag or end).
+// ReportingLine es un puesto supervisor de éste durante un periodo (entidad hija; el
+// PositionReportingStructure del C# no podía fijar su marca de principal ni terminar).
 type ReportingLine struct {
 	ID         fw.UUID
 	Supervisor PositionID
@@ -30,27 +30,28 @@ type ReportingLine struct {
 	Period     vocab.ValidPeriod
 }
 
-// Flags are the working conditions of a position.
+// Flags son las condiciones de trabajo de un puesto.
 type Flags struct {
 	Salaried, Exempt, FullTime, Temporary bool
 }
 
-// Position is a job slot of an organization unit (a Parties organization: department, division
-// or the internal organization itself), of a type, with its holders and reporting lines.
+// Position es una plaza de trabajo de una unidad organizativa (una organización de Parties:
+// departamento, división o la propia organización interna), de un tipo, con sus titulares y sus
+// líneas de dependencia.
 type Position struct {
 	fw.BaseAggregateRoot[PositionID]
 	traits.Audited
-	unit         OrganizationID // department, division...
-	organization OrganizationID // the internal organization the unit belongs to (scope)
+	unit         OrganizationID // departamento, división...
+	organization OrganizationID // la organización interna a la que pertenece la unidad (ámbito)
 	typ          PositionTypeID
 	status       PositionStatusID
-	planned      vocab.ValidPeriod // estimated from / thru
+	planned      vocab.ValidPeriod // desde / hasta estimados
 	flags        Flags
 	holders      []Fulfillment
 	reportsTo    []ReportingLine
 }
 
-// PositionState is the persisted state of a position.
+// PositionState es el estado persistido de un puesto.
 type PositionState struct {
 	Unit, Organization OrganizationID
 	Type               PositionTypeID
@@ -62,7 +63,7 @@ type PositionState struct {
 	Audit              traits.AuditStamp
 }
 
-// ReconstitutePosition rebuilds a position.
+// ReconstitutePosition reconstruye un puesto.
 func ReconstitutePosition(id PositionID, s PositionState) (*Position, error) {
 	base, err := fw.NewBaseAggregateRoot(PositionKind, id)
 	if err != nil {
@@ -81,7 +82,7 @@ func ReconstitutePosition(id PositionID, s PositionState) (*Position, error) {
 		reportsTo: slices.Clone(s.ReportsTo)}, nil
 }
 
-// OpenPosition creates a position (status Budgeted, Pending Approval or Active).
+// OpenPosition crea un puesto (en estado Budgeted, Pending Approval o Active).
 func OpenPosition(id PositionID, t PositionType, s PositionState) (*Position, error) {
 	if !t.Active {
 		var v fw.Validation
@@ -103,31 +104,31 @@ func OpenPosition(id PositionID, t PositionType, s PositionState) (*Position, er
 	return p, nil
 }
 
-// Unit returns the organization unit.
+// Unit devuelve la unidad organizativa.
 func (p *Position) Unit() OrganizationID { return p.unit }
 
-// Organization returns the internal organization (scope).
+// Organization devuelve la organización interna (ámbito).
 func (p *Position) Organization() OrganizationID { return p.organization }
 
-// Type returns the position type.
+// Type devuelve el tipo de puesto.
 func (p *Position) Type() PositionTypeID { return p.typ }
 
-// Status returns the status (Vacant is never stored: see IsVacantAt).
+// Status devuelve el estado (Vacant nunca se guarda: véase IsVacantAt).
 func (p *Position) Status() PositionStatusID { return p.status }
 
-// Planned returns the planned period.
+// Planned devuelve el periodo previsto.
 func (p *Position) Planned() vocab.ValidPeriod { return p.planned }
 
-// Flags returns the working conditions.
+// Flags devuelve las condiciones de trabajo.
 func (p *Position) Flags() Flags { return p.flags }
 
-// Holders returns a copy of the fulfillments.
+// Holders devuelve una copia de las ocupaciones.
 func (p *Position) Holders() []Fulfillment { return slices.Clone(p.holders) }
 
-// ReportsTo returns a copy of the reporting lines.
+// ReportsTo devuelve una copia de las líneas de dependencia.
 func (p *Position) ReportsTo() []ReportingLine { return slices.Clone(p.reportsTo) }
 
-// HolderAt returns the person holding the position at t.
+// HolderAt devuelve la persona que ocupa el puesto en t.
 func (p *Position) HolderAt(t time.Time) (PersonID, bool) {
 	for _, h := range p.holders {
 		if h.Period.IsActiveAt(t) {
@@ -137,14 +138,14 @@ func (p *Position) HolderAt(t time.Time) (PersonID, bool) {
 	return PersonID{}, false
 }
 
-// IsVacantAt reports whether an active position has no holder at t (the C# stored Vacant as a
-// status that nobody kept up to date).
+// IsVacantAt dice si un puesto activo no tiene titular en t (el C# guardaba Vacant como un estado
+// que nadie mantenía al día).
 func (p *Position) IsVacantAt(t time.Time) bool {
 	_, held := p.HolderAt(t)
 	return p.status == StatusActive && !held
 }
 
-// PrimarySupervisorAt returns the primary supervisor position at t.
+// PrimarySupervisorAt devuelve el puesto supervisor principal en t.
 func (p *Position) PrimarySupervisorAt(t time.Time) (PositionID, bool) {
 	for _, l := range p.reportsTo {
 		if l.Primary && l.Period.IsActiveAt(t) {
@@ -154,8 +155,8 @@ func (p *Position) PrimarySupervisorAt(t time.Time) (PositionID, bool) {
 	return PositionID{}, false
 }
 
-// SetStatus changes the status. Vacant is derived and cannot be set; an inactive position is
-// closed (see Close).
+// SetStatus cambia el estado. Vacant se deduce y no se puede fijar; un puesto inactivo está
+// cerrado (véase Close).
 func (p *Position) SetStatus(s PositionStatusID) error {
 	switch s {
 	case StatusVacant:
@@ -173,9 +174,9 @@ func (p *Position) SetStatus(s PositionStatusID) error {
 	return nil
 }
 
-// Fill gives the position to a person from a moment on. Invariants: the position is active, and
-// it has one holder at a time (the C# did not check it). The application checks the person is
-// an employee of the organization.
+// Fill da el puesto a una persona a partir de un momento. Invariantes: el puesto está activo, y
+// tiene un solo titular a la vez (el C# no lo comprobaba). La aplicación comprueba que la persona
+// es empleada de la organización.
 func (p *Position) Fill(holder PersonID, from time.Time) error {
 	if p.status != StatusActive {
 		return fw.Violation("hr.position_not_active", "only an active position can be filled")
@@ -194,7 +195,7 @@ func (p *Position) Fill(holder PersonID, from time.Time) error {
 	return nil
 }
 
-// Vacate ends the current holding at a moment (the C# Terminate was a no-op).
+// Vacate termina la ocupación actual en un momento (el Terminate del C# no hacía nada).
 func (p *Position) Vacate(at time.Time) error {
 	for i, h := range p.holders {
 		if !h.Period.IsOpenEnded() || at.Before(h.Period.From()) {
@@ -212,9 +213,9 @@ func (p *Position) Vacate(at time.Time) error {
 	return fw.Violation("hr.position_not_filled", "the position has no current holder")
 }
 
-// ReportTo adds a supervisor position. Invariants: not itself, not twice at a time, and one primary
-// supervisor at a time (a new primary replaces the previous one, which becomes secondary).
-// The application checks there is no cycle through primary lines.
+// ReportTo añade un puesto supervisor. Invariantes: no él mismo, no dos veces a la vez, y un solo
+// supervisor principal a la vez (uno principal nuevo sustituye al anterior, que pasa a secundario).
+// La aplicación comprueba que no hay un ciclo por las líneas principales.
 func (p *Position) ReportTo(supervisor PositionID, primary bool, from time.Time) error {
 	if supervisor == p.ID() {
 		return fw.Violation("hr.reporting_self", "a position cannot report to itself")
@@ -240,7 +241,7 @@ func (p *Position) ReportTo(supervisor PositionID, primary bool, from time.Time)
 	return nil
 }
 
-// EndReporting ends the line to a supervisor at a moment.
+// EndReporting termina en un momento la línea hacia un supervisor.
 func (p *Position) EndReporting(supervisor PositionID, at time.Time) error {
 	for i, l := range p.reportsTo {
 		if l.Supervisor != supervisor || !l.Period.IsOpenEnded() {
@@ -258,7 +259,7 @@ func (p *Position) EndReporting(supervisor PositionID, at time.Time) error {
 	return fw.NotFound("hr.reporting_line", supervisor)
 }
 
-// Close closes the position at a moment: it becomes inactive and its holder leaves it.
+// Close cierra el puesto en un momento: pasa a inactivo y su titular lo deja.
 func (p *Position) Close(at time.Time) error {
 	if p.status == StatusInactive {
 		return nil
@@ -280,7 +281,7 @@ func (p *Position) Close(at time.Time) error {
 	return nil
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (p *Position) AuditSnapshot() map[string]any {
 	now := fw.Now()
 	holder, _ := p.HolderAt(now)
@@ -296,7 +297,7 @@ func until(p vocab.ValidPeriod) *time.Time {
 	return nil
 }
 
-// Position fields and specifications.
+// Campos y especificaciones de los puestos.
 var (
 	PosFieldID           = spec.Comparable("id", func(p *Position) PositionID { return p.ID() })
 	PosFieldUnit         = spec.Comparable("unit", (*Position).Unit)
@@ -314,18 +315,18 @@ var (
 	ReportFieldUntil     = spec.OptionalTime("valid_to", func(l ReportingLine) *time.Time { return until(l.Period) })
 )
 
-// HeldBy matches positions the person holds at t.
+// HeldBy selecciona los puestos que la persona ocupa en t.
 func HeldBy(person PersonID, t time.Time) spec.Spec[*Position] {
 	return PosFieldHolders.Any(spec.And(HolderFieldPerson.Eq(person), HolderFieldFrom.AtOrBefore(t),
 		HolderFieldUntil.IsNull().Or(HolderFieldUntil.After(t))))
 }
 
-// DirectReportsOf matches positions whose current primary supervisor is one of the positions.
+// DirectReportsOf selecciona los puestos cuyo supervisor principal actual es uno de los puestos.
 func DirectReportsOf(supervisors ...PositionID) spec.Spec[*Position] {
 	return PosFieldReports.Any(spec.And(ReportFieldSup.In(supervisors...), ReportFieldPrimary.Eq(true), ReportFieldUntil.IsNull()))
 }
 
-// VacantAt matches active positions without a holder at t.
+// VacantAt selecciona los puestos activos sin titular en t.
 func VacantAt(t time.Time) spec.Spec[*Position] {
 	current := spec.And(HolderFieldFrom.AtOrBefore(t), HolderFieldUntil.IsNull().Or(HolderFieldUntil.After(t)))
 	return PosFieldStatus.Eq(StatusActive).And(PosFieldHolders.Any(current).Not())

@@ -1,4 +1,5 @@
-// Package purchases composes the Purchases (Compras) bounded context on a hot-swap backend.
+// Package purchases compone el contexto delimitado Purchases (Compras) sobre un backend
+// intercambiable en caliente.
 package purchases
 
 import (
@@ -20,14 +21,15 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 )
 
-// Module is the composed context.
+// Module es el contexto compuesto.
 type Module struct {
 	Service           *uapp.Service
 	IntegrationOutbox application.OutboxStore
 	Audit             application.AuditLog
 }
 
-// Compose builds the context on sw. Purchases needs the tax engine of Fiscal, a port it owns.
+// Compose construye el contexto sobre sw. Purchases necesita el motor de impuestos de Fiscal, un
+// puerto propio.
 func Compose(sw *hotswap.Switch, taxes domain.Taxes) *Module {
 	integration := hotswap.Outbox(sw, infrastructure.IntegrationOutboxFactory)
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
@@ -40,7 +42,7 @@ func Compose(sw *hotswap.Switch, taxes domain.Taxes) *Module {
 	return &Module{Service: svc, IntegrationOutbox: integration, Audit: audit}
 }
 
-// Relay forwards the Published Language to a transport.
+// Relay reenvía el Published Language a un transporte.
 func (m *Module) Relay(sender application.MessageSender, opts ...outbox.RelayOption) *outbox.Relay {
 	return messaging.NewRelay(contracts.Source, m.IntegrationOutbox, sender, opts...)
 }
@@ -92,7 +94,7 @@ func create[In, Out any](status int, run func(context.Context, In) (Out, error))
 	}
 }
 
-// RegisterRoutes implements distribution.EndpointModule.
+// RegisterRoutes implementa distribution.EndpointModule.
 func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	svc := m.Service
 	inv := domain.ParseInvoiceID

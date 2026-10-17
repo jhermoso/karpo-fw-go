@@ -9,7 +9,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
 )
 
-// RegisterAccount registers a CCC of an employer.
+// RegisterAccount da de alta un CCC de un empleador.
 type RegisterAccount struct {
 	Employer string `json:"employer"`
 	Code     string `json:"code"`
@@ -19,29 +19,29 @@ type RegisterAccount struct {
 	IBAN     string `json:"iban,omitempty"`
 }
 
-// SetAccountPayment changes how contributions are paid.
+// SetAccountPayment cambia cómo se pagan las cotizaciones.
 type SetAccountPayment struct {
 	ID     domain.EmployerAccountID `json:"-"`
 	Method string                   `json:"method"`
 	IBAN   string                   `json:"iban,omitempty"`
 }
 
-// DeactivateAccount records the Social Security "baja" of a CCC.
+// DeactivateAccount registra la baja en la Seguridad Social de un CCC.
 type DeactivateAccount struct {
 	ID domain.EmployerAccountID `json:"-"`
 }
 
-// GetAccount loads an employer account.
+// GetAccount carga una cuenta de cotización.
 type GetAccount struct{ ID domain.EmployerAccountID }
 
-// SearchAccounts searches employer accounts of the caller's scope.
+// SearchAccounts busca cuentas de cotización del ámbito de quien llama.
 type SearchAccounts struct {
 	Employer   string
 	ActiveOnly bool
 	Page, Size int
 }
 
-// AccountDTO is the transport form of an employer account.
+// AccountDTO es la forma de transporte de una cuenta de cotización.
 type AccountDTO struct {
 	ID       string `json:"id"`
 	Employer string `json:"employer"`
@@ -91,7 +91,7 @@ func (s service) accountUseCases(svc *Service) {
 		if err != nil {
 			return AccountDTO{}, err
 		}
-		// A CCC identifies one employer registration: it is unique while active, whoever owns it.
+		// Un CCC identifica una inscripción de empleador: es único mientras está activo, sea de quien sea.
 		same, err := s.Accounts.Find(ctx, domain.AccFieldCode.Eq(a.Code()).And(domain.AccFieldActive.Eq(true)))
 		if err != nil {
 			return AccountDTO{}, err

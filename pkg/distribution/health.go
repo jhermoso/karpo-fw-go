@@ -8,36 +8,36 @@ import (
 	"time"
 )
 
-// CheckFunc evaluates the health of a specific subsystem.
+// CheckFunc evalúa la salud de un subsistema concreto.
 type CheckFunc func(ctx context.Context) error
 
-// HealthRegistry manages liveness and readiness health checks.
+// HealthRegistry gestiona las comprobaciones de salud de liveness y readiness.
 type HealthRegistry struct {
 	mu              sync.RWMutex
 	readinessProbes map[string]CheckFunc
 }
 
-// NewHealthRegistry creates a new HealthRegistry.
+// NewHealthRegistry crea un HealthRegistry nuevo.
 func NewHealthRegistry() *HealthRegistry {
 	return &HealthRegistry{
 		readinessProbes: make(map[string]CheckFunc),
 	}
 }
 
-// RegisterReadinessProbe registers a check required for the service to accept traffic.
+// RegisterReadinessProbe registra una comprobación necesaria para que el servicio acepte tráfico.
 func (h *HealthRegistry) RegisterReadinessProbe(name string, probe CheckFunc) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.readinessProbes[name] = probe
 }
 
-// HealthStatus represents the payload returned by health endpoints.
+// HealthStatus representa el cuerpo que devuelven los endpoints de salud.
 type HealthStatus struct {
 	Status string            `json:"status"`
 	Checks map[string]string `json:"checks,omitempty"`
 }
 
-// LivenessHandler returns HTTP 200 OK as long as the process is running.
+// LivenessHandler devuelve HTTP 200 OK mientras el proceso esté en marcha.
 func (h *HealthRegistry) LivenessHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -46,7 +46,7 @@ func (h *HealthRegistry) LivenessHandler() http.HandlerFunc {
 	}
 }
 
-// ReadinessHandler evaluates all registered readiness probes. If any probe fails, it returns 503.
+// ReadinessHandler evalúa todas las sondas de readiness registradas. Si falla alguna, devuelve 503.
 func (h *HealthRegistry) ReadinessHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		h.mu.RLock()
@@ -89,7 +89,7 @@ func (h *HealthRegistry) ReadinessHandler() http.HandlerFunc {
 	}
 }
 
-// Mount mounts /healthz and /readyz onto the provided ServeMux.
+// Mount monta /healthz y /readyz en el ServeMux dado.
 func (h *HealthRegistry) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("/healthz", h.LivenessHandler())
 	mux.HandleFunc("/readyz", h.ReadinessHandler())

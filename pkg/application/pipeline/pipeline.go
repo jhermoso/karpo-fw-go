@@ -1,7 +1,7 @@
-// Package pipeline implements the standard use-case middleware (the Go counterpart of MediatR
-// pipeline behaviors / C# handler decorators): validation, transactions, optimistic-concurrency
-// retries, idempotency and logging. Compose them with application.Chain; the first middleware is
-// the outermost one.
+// Package pipeline implementa el middleware estándar de los casos de uso (la contrapartida en Go de
+// los pipeline behaviors de MediatR / los decoradores de manejadores de C#): validación, transacciones,
+// reintentos por concurrencia optimista, idempotencia y log. Se componen con application.Chain; el
+// primer middleware es el más exterior.
 //
 //	h := application.Chain[RegisterParty, PartyDTO](handler,
 //		pipeline.Idempotent[RegisterParty, PartyDTO](store, 24*time.Hour),
@@ -22,8 +22,8 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/log"
 )
 
-// Validating rejects requests whose Validate method (application.Validatable) fails, before
-// reaching the handler.
+// Validating rechaza, antes de llegar al manejador, las peticiones cuyo método Validate
+// (application.Validatable) falla.
 func Validating[In, Out any]() application.Middleware[In, Out] {
 	return func(next application.Handler[In, Out]) application.Handler[In, Out] {
 		return application.HandlerFunc[In, Out](func(ctx context.Context, in In) (Out, error) {
@@ -41,8 +41,8 @@ func Validating[In, Out any]() application.Middleware[In, Out] {
 	}
 }
 
-// Transactional runs the handler inside uow: everything it does through repositories and the
-// outbox commits or rolls back together.
+// Transactional ejecuta el manejador dentro de uow: todo lo que hace mediante los repositorios y el
+// outbox se confirma o se deshace junto.
 func Transactional[In, Out any](uow domain.UnitOfWork) application.Middleware[In, Out] {
 	return func(next application.Handler[In, Out]) application.Handler[In, Out] {
 		return application.HandlerFunc[In, Out](func(ctx context.Context, in In) (Out, error) {
@@ -57,9 +57,9 @@ func Transactional[In, Out any](uow domain.UnitOfWork) application.Middleware[In
 	}
 }
 
-// RetryOnConflict re-executes the handler when it fails with domain.ErrConflict (optimistic
-// concurrency), up to attempts times in total, waiting backoff*attempt between tries.
-// Place it outside Transactional so every attempt runs in a fresh transaction.
+// RetryOnConflict vuelve a ejecutar el manejador cuando falla con domain.ErrConflict (concurrencia
+// optimista), hasta attempts veces en total, esperando backoff*intento entre uno y otro.
+// Se coloca fuera de Transactional para que cada intento se ejecute en una transacción nueva.
 func RetryOnConflict[In, Out any](attempts int, backoff time.Duration) application.Middleware[In, Out] {
 	if attempts < 1 {
 		attempts = 1
@@ -86,11 +86,11 @@ func RetryOnConflict[In, Out any](attempts int, backoff time.Duration) applicati
 	}
 }
 
-// Logging logs every execution with its request type, duration, outcome and correlation id. The
-// correlation id is written explicitly so every log.Logger carries it, not only those that read
-// the context (log/vanilla does, and does not repeat a key the line already has).
+// Logging registra cada ejecución con su tipo de petición, duración, desenlace e id de correlación.
+// El id de correlación se escribe explícitamente para que todo log.Logger lo lleve, no sólo los que
+// leen el contexto (log/vanilla lo hace, y no repite una clave que la línea ya tiene).
 //
-// Prefer Observed, which also traces and measures the use case and only logs failures.
+// Es preferible Observed, que además traza y mide el caso de uso y sólo registra los fallos.
 func Logging[In, Out any](logger log.Logger) application.Middleware[In, Out] {
 	return func(next application.Handler[In, Out]) application.Handler[In, Out] {
 		return application.HandlerFunc[In, Out](func(ctx context.Context, in In) (Out, error) {

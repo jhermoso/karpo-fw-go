@@ -22,8 +22,8 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// listener is a consumer that takes what it is given once (as the inbox of a real one makes
-// sure), unless it is told to refuse.
+// listener es un consumidor que recoge una vez lo que se le da (como asegura el inbox
+// de uno real), salvo que se le diga que rechace.
 type listener struct {
 	name   string
 	refuse error
@@ -78,7 +78,7 @@ func scenario(t *testing.T, sw *hotswap.Switch) {
 		}
 	}
 
-	// A listener refuses a message: the other gets it, the publisher is not told, the message is kept.
+	// Un oyente rechaza un mensaje: el otro lo recibe, al publicador no se le dice, el mensaje se guarda.
 	send(message("m1", "inv-1", 1))
 	if !slices.Equal(dues.got, []string{"m1"}) || books.tried != 1 {
 		t.Fatalf("the other listener: %v, tried %d", dues.got, books.tried)
@@ -88,9 +88,9 @@ func scenario(t *testing.T, sw *hotswap.Switch) {
 		w[0].Subject != "inv-1" || w[0].NextAttempt == "" || string(w[0].Data) != `{"n":"m1"}` {
 		t.Fatalf("kept: %+v", w)
 	}
-	// Sent again: nothing new, and the listener is not asked again.
+	// Enviado otra vez: nada nuevo, y al oyente no se le vuelve a preguntar.
 	send(message("m1", "inv-1", 1))
-	// About the same thing: it waits behind, untried. About another: it is tried on its own.
+	// Sobre lo mismo: espera detrás, sin intentar. Sobre otra cosa: se intenta por su cuenta.
 	send(message("m2", "inv-1", 2))
 	if books.tried != 1 || len(kept("")) != 2 {
 		t.Fatalf("behind: tried %d, kept %+v", books.tried, kept(""))
@@ -100,7 +100,7 @@ func scenario(t *testing.T, sw *hotswap.Switch) {
 	if !slices.Equal(books.got, []string{"m3"}) || !slices.Equal(dues.got, []string{"m1", "m2", "m3"}) {
 		t.Fatalf("another thing goes through: %v %v", books.got, dues.got)
 	}
-	// Not due yet: a round does nothing. When it is asked for, both go in the order they happened.
+	// Aún no toca: una ronda no hace nada. Cuando se pide, van los dos en el orden en que pasaron.
 	if r, err := office.Redeliver(ctx, false); err != nil || r != (mailbox.Redelivered{Waiting: 2}) || len(books.got) != 1 {
 		t.Fatalf("not due: %+v %v", r, err)
 	}
@@ -111,8 +111,8 @@ func scenario(t *testing.T, sw *hotswap.Switch) {
 		t.Fatalf("what was delivered is not kept: %+v", kept(""))
 	}
 
-	// A listener that keeps refusing: after ten tries the message is given up, and what comes
-	// after it about the same thing waits.
+	// Un oyente que sigue rechazando: tras diez intentos el mensaje se abandona, y lo que viene
+	// después sobre lo mismo espera.
 	books.refuse = errors.New("the database is down")
 	send(message("m4", "inv-3", 4))
 	send(message("m5", "inv-3", 5))
@@ -124,7 +124,7 @@ func scenario(t *testing.T, sw *hotswap.Switch) {
 	if r, err := office.Redeliver(ctx, true); err != nil || r != (mailbox.Redelivered{Waiting: 1, GivenUp: 1}) {
 		t.Fatalf("given up: %+v %v", r, err)
 	}
-	// Somebody is told, once, the moment it is given up.
+	// Se avisa a alguien, una vez, en el momento en que se abandona.
 	if len(told) != 1 || told[0].Consumer != "accounting" || told[0].Status != "given-up" || told[0].Attempts != mailbox.MaxAttempts ||
 		told[0].Reason != "the database is down" {
 		t.Fatalf("told: %+v", told)
@@ -143,7 +143,7 @@ func scenario(t *testing.T, sw *hotswap.Switch) {
 		t.Fatalf("what was given up is not tried on its own: %+v %v", r, err)
 	}
 
-	// Only a global administrator looks at the mailboxes and decides.
+	// Sólo un administrador global mira los buzones y decide.
 	clerk, _ := authz.NewContext(authz.Context{Subject: fw.NewUUID(), SubjectName: "clerk", Kind: authz.Service, Permissions: []authz.Permission{authz.Wildcard}})
 	cctx := authz.WithContext(ctx, clerk)
 	gid, _ := mailbox.ParseID(given[0].ID)
@@ -165,7 +165,7 @@ func scenario(t *testing.T, sw *hotswap.Switch) {
 	if _, err := office.Search(admin, mailbox.Search{Status: "lost"}); !errors.Is(err, fw.ErrValidation) {
 		t.Fatalf("an unknown status: %v", err)
 	}
-	// Discarding says why; then what waited behind goes through.
+	// Descartar dice por qué; después pasa lo que esperaba detrás.
 	var rule *fw.RuleViolationError
 	if _, err := office.Discard(admin, mailbox.Discard{ID: gid}); !errors.As(err, &rule) || rule.Code != "mailbox.discard_note" {
 		t.Fatalf("discard without a note: %v", err)
@@ -180,14 +180,14 @@ func scenario(t *testing.T, sw *hotswap.Switch) {
 	if r, err := office.Redeliver(ctx, false); err != nil || r != (mailbox.Redelivered{Delivered: 1}) || books.got[len(books.got)-1] != "m5" {
 		t.Fatalf("what waited behind: %+v %v %v", r, err, books.got)
 	}
-	send(message("m4", "inv-3", 4)) // the discarded message sent again: it stays discarded
+	send(message("m4", "inv-3", 4)) // el mensaje descartado, enviado otra vez: sigue descartado
 	if slices.Contains(books.got, "m4") || len(kept("")) != 1 {
 		t.Fatalf("discarded for good: %v %+v", books.got, kept(""))
 	}
 
-	// Asking to retry puts back what was given up and tries it at once.
+	// Pedir reintentar devuelve lo abandonado y lo intenta en el acto.
 	books.refuse = errors.New("still down")
-	send(message("m6", "", 6)) // about nothing in particular: it holds nobody back
+	send(message("m6", "", 6)) // sobre nada en particular: no retiene a nadie
 	send(message("m7", "", 7))
 	for range mailbox.MaxAttempts - 1 {
 		if _, err := office.Redeliver(ctx, true); err != nil {

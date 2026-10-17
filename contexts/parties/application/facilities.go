@@ -12,21 +12,21 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
 )
 
-// FacilityInfo is what Parties needs of a facility of the Facilities context.
+// FacilityInfo es lo que Parties necesita de una instalación del contexto Facilities.
 type FacilityInfo struct {
 	Organization fw.UUID
 	Name         string
 	Active       bool
 }
 
-// FacilityDirectory resolves facilities (the port Parties owns; an adapter implements it over the
-// Facilities contracts).
+// FacilityDirectory resuelve instalaciones (el puerto es de Parties; un adaptador lo implementa
+// sobre los contratos de Facilities).
 type FacilityDirectory interface {
 	Facilities(ctx context.Context, ids []fw.UUID) (map[fw.UUID]FacilityInfo, error)
 }
 
-// AssignFacilityRole makes a party play a role at a facility (an employee at the work center, the
-// headquarters of an organization...).
+// AssignFacilityRole hace que una party desempeñe un rol en una instalación (un empleado en el
+// centro de trabajo, la sede de una organización...).
 type AssignFacilityRole struct {
 	PartyID  domain.PartyID `json:"-"`
 	Facility string         `json:"facility"`
@@ -34,17 +34,17 @@ type AssignFacilityRole struct {
 	From     *time.Time     `json:"from,omitempty"`
 }
 
-// EndFacilityRole ends a facility role (now when At is nil).
+// EndFacilityRole termina un rol en una instalación (ahora si At es nil).
 type EndFacilityRole struct {
 	PartyID domain.PartyID        `json:"-"`
 	RoleID  domain.FacilityRoleID `json:"-"`
 	At      *time.Time            `json:"at,omitempty"`
 }
 
-// ListFacilityRoleTypes lists the facility role catalog.
+// ListFacilityRoleTypes lista el catálogo de roles en instalaciones.
 type ListFacilityRoleTypes struct{}
 
-// FacilityRoleDTO is a facility role of a party.
+// FacilityRoleDTO es un rol de una party en una instalación.
 type FacilityRoleDTO struct {
 	ID           string     `json:"id"`
 	Facility     string     `json:"facility"`
@@ -69,7 +69,7 @@ func facilityRoleDTOs(p *domain.Party) []FacilityRoleDTO {
 	return out
 }
 
-// addFacilityRoles wires the facility role use cases.
+// addFacilityRoles conecta los casos de uso de los roles en instalaciones.
 func addFacilityRoles(svc *Service, s service) {
 	retry, backoff := 3, 10*time.Millisecond
 	svc.AssignFacilityRole = chain(PermPartyUpdate, func(ctx context.Context, c AssignFacilityRole) (PartyDTO, error) {
@@ -89,7 +89,7 @@ func addFacilityRoles(svc *Service, s service) {
 			return PartyDTO{}, err
 		}
 		info, ok := found[facility]
-		// A facility of another organization does not exist for the caller (uniform 404).
+		// Una instalación de otra organización no existe para el llamante (404 uniforme).
 		if sc := s.scope(ctx); !ok || (!sc.global && !slices.Contains(sc.orgs, domain.PartyID{UUID: info.Organization})) {
 			return PartyDTO{}, fw.NotFound("facilities.facility", facility)
 		}
@@ -115,7 +115,7 @@ func addFacilityRoles(svc *Service, s service) {
 	})
 }
 
-// facilitySpec filters parties with a role at a facility now.
+// facilitySpec filtra las parties con un rol en una instalación ahora.
 func facilitySpec(id string) (spec.Spec[*domain.Party], error) {
 	u, err := fw.ParseUUID(id)
 	if err != nil {

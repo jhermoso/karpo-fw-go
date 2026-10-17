@@ -1,4 +1,5 @@
-// Package testkit provides common testing harnesses, fakes and fixtures for Karpo applications.
+// Package testkit ofrece arneses de prueba, dobles y datos de prueba comunes para las
+// aplicaciones de Karpo.
 package testkit
 
 import (
@@ -12,8 +13,9 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/time/fake"
 )
 
-// Harness bundles common test fixtures: a fake clock (also installed as the domain clock),
-// an in-process bus, an in-memory store (unit of work) with its outbox, and an event registry.
+// Harness agrupa datos de prueba comunes: un reloj falso (instalado también como reloj del
+// dominio), un bus en proceso, un almacén en memoria (unidad de trabajo) con su outbox y un
+// registro de eventos.
 type Harness struct {
 	Clock    *fake.FakeClock
 	Bus      *inprocess.Bus
@@ -22,8 +24,8 @@ type Harness struct {
 	Registry *events.Registry
 }
 
-// NewHarness creates a Harness frozen at initialTime. When t is not nil the domain clock is
-// restored at the end of the test.
+// NewHarness crea un Harness congelado en initialTime. Cuando t no es nil, el reloj del dominio
+// se restaura al final de la prueba.
 func NewHarness(t testing.TB, initialTime time.Time) *Harness {
 	clock := fake.New(initialTime)
 	restore := domain.SetClock(clock)

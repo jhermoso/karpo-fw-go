@@ -16,7 +16,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/trace"
 )
 
-// Fields of the request line written by Observe. C# (Paranoia.Karpo.Fw) writes the same names.
+// Campos de la línea de petición que escribe Observe. C# (Paranoia.Karpo.Fw) escribe los mismos nombres.
 const (
 	RequestLogMessage = "http request"
 	FieldMethod       = "method"
@@ -28,21 +28,21 @@ const (
 	FieldError        = "error"
 	FieldErrorType    = "error_type"
 
-	// RouteUnmatched is the route of requests that matched no pattern (404 of the mux, or a
-	// handler that never told its pattern): the raw path is never used, it would create one
-	// metric series per identifier.
+	// RouteUnmatched es la ruta de las peticiones que no casan con ningún patrón (404 del mux, o
+	// un manejador que nunca dijo su patrón): nunca se usa la ruta en bruto, crearía una serie de
+	// métricas por identificador.
 	RouteUnmatched = "unmatched"
-	// MethodOther replaces methods outside the standard set, which a client can invent.
+	// MethodOther sustituye a los métodos fuera del conjunto estándar, que un cliente puede inventar.
 	MethodOther = "_OTHER"
 
-	// StatusAborted is the status recorded for a handler that aborted (http.ErrAbortHandler)
-	// before writing a response: the client got none. 499 is the conventional "closed without
-	// response" code of nginx; ErrorTypeAborted is its error_type.
+	// StatusAborted es el estado que se registra para un manejador que abortó (http.ErrAbortHandler)
+	// antes de escribir una respuesta: el cliente no recibió ninguna. 499 es el código convencional
+	// de nginx para «cerrada sin respuesta»; ErrorTypeAborted es su error_type.
 	StatusAborted    = 499
 	ErrorTypeAborted = "aborted"
 )
 
-// Router resolves the pattern a request matches. *http.ServeMux implements it.
+// Router resuelve el patrón con el que casa una petición. *http.ServeMux lo implementa.
 type Router interface {
 	Handler(r *http.Request) (h http.Handler, pattern string)
 }
@@ -52,19 +52,21 @@ type observeConfig struct {
 	quiet  map[string]bool
 }
 
-// ObserveOption configures Observe.
+// ObserveOption configura Observe.
 type ObserveOption func(*observeConfig)
 
-// ObserveRoutes resolves the route pattern by asking router (the mux the routes are registered
-// on) before the request is served. Without it the route is the pattern told by the response
-// helpers (WriteError, Respond) or the one the mux set when Observe wraps it directly; handlers
-// that answer with WriteJSON behind other middleware need this option to get a route.
+// ObserveRoutes resuelve el patrón de la ruta preguntando a router (el mux en el que están
+// registradas las rutas) antes de servir la petición. Sin ella, la ruta es el patrón que dicen las
+// funciones auxiliares de respuesta (WriteError, Respond) o el que puso el mux cuando Observe lo
+// envuelve directamente; los manejadores que responden con WriteJSON detrás de otro middleware
+// necesitan esta opción para tener ruta.
 func ObserveRoutes(router Router) ObserveOption {
 	return func(c *observeConfig) { c.router = router }
 }
 
-// ObserveQuietly skips the log line of successful requests to these exact paths (e.g. /healthz
-// and /readyz, polled every few seconds). They are still measured, and failures are still logged.
+// ObserveQuietly omite la línea de log de las peticiones con éxito a estas rutas exactas (p. ej.
+// /healthz y /readyz, consultadas cada pocos segundos). Se siguen midiendo, y los fallos se siguen
+// registrando.
 func ObserveQuietly(paths ...string) ObserveOption {
 	return func(c *observeConfig) {
 		for _, p := range paths {
@@ -73,9 +75,9 @@ func ObserveQuietly(paths ...string) ObserveOption {
 	}
 }
 
-// requestRecord is what the inner layers tell Observe about the request. The ServeMux sets the
-// pattern on the request it receives and every middleware in between works on a copy
-// (r.WithContext), so the outer middleware cannot read it from its own request.
+// requestRecord es lo que las capas internas le cuentan a Observe de la petición. El ServeMux pone
+// el patrón en la petición que recibe y cada middleware intermedio trabaja sobre una copia
+// (r.WithContext), así que el middleware externo no puede leerlo de su propia petición.
 type requestRecord struct {
 	mu    sync.Mutex
 	route string
@@ -90,7 +92,7 @@ func recordOf(ctx context.Context) *requestRecord {
 	return rec
 }
 
-// noteRoute tells Observe the pattern the mux matched for r.
+// noteRoute le dice a Observe el patrón con el que el mux ha casado r.
 func noteRoute(r *http.Request) {
 	if r == nil || r.Pattern == "" {
 		return
@@ -102,9 +104,9 @@ func noteRoute(r *http.Request) {
 	}
 }
 
-// RecordError tells Observe the error behind the response of r, so a 5xx leaves its cause in
-// the log and in the span. WriteError, Respond and Recovery call it; handlers that write a 5xx
-// by other means should call it too. Without Observe in the chain it does nothing.
+// RecordError le dice a Observe el error que hay detrás de la respuesta de r, para que un 5xx deje
+// su causa en el log y en el span. La llaman WriteError, Respond y Recovery; los manejadores que
+// escriben un 5xx por otros medios también deberían llamarla. Sin Observe en la cadena no hace nada.
 func RecordError(r *http.Request, err error) {
 	if r == nil || err == nil {
 		return
@@ -117,7 +119,7 @@ func RecordError(r *http.Request, err error) {
 	}
 }
 
-// noteActor tells Observe who the caller is (identifier only).
+// noteActor le dice a Observe quién llama (sólo el identificador).
 func noteActor(ctx context.Context) {
 	rec := recordOf(ctx)
 	if rec == nil {
@@ -130,21 +132,21 @@ func noteActor(ctx context.Context) {
 	}
 }
 
-// Observe is the telemetry of the HTTP entry point. For every request it leaves:
+// Observe es la telemetría de la entrada HTTP. Por cada petición deja:
 //
-//   - a server span, child of the incoming W3C traceparent when there is a valid one;
-//   - one observation of http.server.request.duration (seconds) by method, route and status;
-//   - one log line with method, route, status, duration_ms, correlation_id, trace_id, span_id
-//     and the actor id: Info, or Error with the cause when the status is 5xx.
+//   - un span de servidor, hijo del traceparent W3C entrante cuando hay uno válido;
+//   - una observación de http.server.request.duration (segundos) por método, ruta y estado;
+//   - una línea de log con method, route, status, duration_ms, correlation_id, trace_id, span_id
+//     y el id del actor: Info, o Error con la causa cuando el estado es 5xx.
 //
-// The route is always the pattern ("/parties/{id}"), never the path, and nothing personal is
-// written: no query string, no headers, no bodies, no actor name.
+// La ruta es siempre el patrón ("/parties/{id}"), nunca la ruta real, y no se escribe nada
+// personal: ni query string, ni cabeceras, ni cuerpos, ni nombre del actor.
 //
-// Mount it right after Correlation, outside everything else:
+// Se monta justo después de Correlation, fuera de todo lo demás:
 //
 //	distribution.Chain(mux, distribution.Correlation(), distribution.Observe(logger, tracer, meter), ...)
 //
-// Any of logger, tracer and meter may be nil: that part is skipped.
+// Cualquiera de logger, tracer y meter puede ser nil: esa parte se omite.
 func Observe(logger log.Logger, tracer trace.Tracer, meter metrics.Meter, opts ...ObserveOption) Middleware {
 	cfg := observeConfig{quiet: map[string]bool{}}
 	for _, opt := range opts {
@@ -184,8 +186,8 @@ func Observe(logger log.Logger, tracer trace.Tracer, meter metrics.Meter, opts .
 				rec.mu.Unlock()
 				aborted := panicked == http.ErrAbortHandler //nolint:errorlint // the sentinel is compared by identity, as net/http does
 				if panicked != nil {
-					// Recovery (outside) will answer 500 unless the response already started. An
-					// aborted handler gets no answer at all: StatusAborted marks it.
+					// Recovery (fuera) responderá 500 salvo que la respuesta ya haya empezado. Un
+					// manejador abortado no recibe respuesta alguna: StatusAborted lo marca.
 					if status == 0 {
 						status = http.StatusInternalServerError
 						if aborted {
@@ -259,8 +261,8 @@ func Observe(logger log.Logger, tracer trace.Tracer, meter metrics.Meter, opts .
 
 			defer func() {
 				if p := recover(); p != nil {
-					// Aborted handlers (http.ErrAbortHandler, e.g. httputil.ReverseProxy when the
-					// upstream fails) are measured and logged too: in bulk they are an incident.
+					// Los manejadores abortados (http.ErrAbortHandler, p. ej. httputil.ReverseProxy cuando
+					// falla el upstream) también se miden y se registran: en masa son una incidencia.
 					finish(p)
 					panic(p)
 				}
@@ -271,7 +273,7 @@ func Observe(logger log.Logger, tracer trace.Tracer, meter metrics.Meter, opts .
 	}
 }
 
-// errorType names the innermost error type of the chain, without its message.
+// errorType nombra el tipo de error más interno de la cadena, sin su mensaje.
 func errorType(err error) string {
 	for {
 		next := errors.Unwrap(err)
@@ -291,8 +293,8 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
-// routeTemplate turns a ServeMux pattern ("[METHOD ][HOST]/path") into the route label: the path
-// part only.
+// routeTemplate convierte un patrón de ServeMux ("[METHOD ][HOST]/path") en la etiqueta de ruta:
+// sólo la parte de la ruta.
 func routeTemplate(pattern string) string {
 	if i := strings.IndexByte(pattern, '/'); i >= 0 {
 		return pattern[i:]
@@ -309,17 +311,17 @@ func knownMethod(m string) string {
 	return MethodOther
 }
 
-// responseWriter records the status without hiding the capabilities of the wrapped writer:
-// Flush works for streamed responses (server-sent events) and Unwrap lets
-// http.ResponseController reach the real writer (deadlines, hijacking).
+// responseWriter registra el estado sin ocultar las capacidades del writer envuelto: Flush
+// funciona con respuestas en streaming (server-sent events) y Unwrap deja que
+// http.ResponseController llegue al writer real (plazos, hijacking).
 type responseWriter struct {
 	http.ResponseWriter
 	status int
 }
 
 func (w *responseWriter) WriteHeader(code int) {
-	// 1xx are informational (100 Continue, 103 Early Hints): the final status comes after them.
-	// 101 Switching Protocols is final (the connection is upgraded).
+	// Los 1xx son informativos (100 Continue, 103 Early Hints): el estado final llega después.
+	// 101 Switching Protocols es final (la conexión cambia de protocolo).
 	if w.status == 0 && (code >= 200 || code == http.StatusSwitchingProtocols) {
 		w.status = code
 	}
@@ -333,7 +335,7 @@ func (w *responseWriter) Write(b []byte) (int, error) {
 	return w.ResponseWriter.Write(b)
 }
 
-// Flush implements http.Flusher.
+// Flush implementa http.Flusher.
 func (w *responseWriter) Flush() {
 	if w.status == 0 {
 		w.status = http.StatusOK
@@ -341,16 +343,16 @@ func (w *responseWriter) Flush() {
 	_ = http.NewResponseController(w.ResponseWriter).Flush()
 }
 
-// Unwrap returns the wrapped writer (http.ResponseController).
+// Unwrap devuelve el writer envuelto (http.ResponseController).
 func (w *responseWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 
-// MaxCorrelationIDLength is the longest correlation id accepted from a client: the outbox and
-// audit tables store it in 64 characters.
+// MaxCorrelationIDLength es la longitud máxima del id de correlación que se acepta de un cliente:
+// las tablas del outbox y de auditoría lo guardan en 64 caracteres.
 const MaxCorrelationIDLength = 64
 
-// ValidCorrelationID reports whether a client-supplied correlation id can be used as is: 1 to
-// 64 characters among letters, digits, '-', '_', '.' and ':'. That covers UUIDs, ULIDs and trace
-// ids, and keeps out line breaks, quotes and anything that could not be stored.
+// ValidCorrelationID dice si un id de correlación aportado por el cliente se puede usar tal cual:
+// de 1 a 64 caracteres entre letras, dígitos, '-', '_', '.' y ':'. Eso cubre UUID, ULID e ids de
+// traza, y deja fuera saltos de línea, comillas y todo lo que no se podría guardar.
 func ValidCorrelationID(id string) bool {
 	if id == "" || len(id) > MaxCorrelationIDLength {
 		return false

@@ -13,8 +13,8 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// ReserveLine is an amount of a currency a customer wants. The rate is not sent: it is quoted
-// when the reservation is registered.
+// ReserveLine es un importe de una moneda que quiere un cliente. El cambio no se envía: se cotiza
+// cuando se registra la reserva.
 type ReserveLine struct {
 	Currency      string `json:"currency"`
 	Amount        string `json:"amount"`
@@ -22,12 +22,12 @@ type ReserveLine struct {
 	CollectorNote string `json:"collectorNote,omitempty"`
 }
 
-// Reserve registers a reservation of foreign cash to collect at an office.
+// Reserve registra una reserva de efectivo en divisa para recoger en una oficina.
 type Reserve struct {
 	Company       string        `json:"company"`
 	Customer      string        `json:"customer"`
 	Channel       string        `json:"channel"`
-	Segment       string        `json:"segment,omitempty"` // WEB by default
+	Segment       string        `json:"segment,omitempty"` // WEB, por omisión
 	Pickup        time.Time     `json:"pickup"`
 	TimeSlot      string        `json:"timeSlot,omitempty"`
 	Facility      string        `json:"facility,omitempty"`
@@ -35,40 +35,40 @@ type Reserve struct {
 	Lines         []ReserveLine `json:"lines"`
 }
 
-// AdvanceReservation moves a reservation one step: email-verified, notified or completed.
+// AdvanceReservation hace avanzar una reserva un paso: email-verified, notified o completed.
 type AdvanceReservation struct {
 	ID domain.ReservationID `json:"-"`
 	To string               `json:"to"`
 }
 
-// CancelReservation abandons a reservation.
+// CancelReservation abandona una reserva.
 type CancelReservation struct {
 	ID     domain.ReservationID `json:"-"`
 	Reason string               `json:"reason,omitempty"`
 }
 
-// ExpireDue closes the reservations of a company nobody collected in time.
+// ExpireDue cierra las reservas de una empresa que nadie recogió a tiempo.
 type ExpireDue struct {
 	Company string `json:"company"`
 }
 
-// GetReservation loads a reservation by its identity or by the reference the customer quotes.
+// GetReservation carga una reserva por su identidad o por la referencia que da el cliente.
 type GetReservation struct {
 	ID        domain.ReservationID
 	Reference string
 }
 
-// SearchReservations searches the reservations of the caller's scope, newest first.
+// SearchReservations busca las reservas del ámbito de quien llama, las más recientes primero.
 type SearchReservations struct {
 	Company, Status, Customer, Facility, Currency string
 	CreatedFrom, CreatedTo, PickupFrom, PickupTo  string
 	Page, Size                                    int
 }
 
-// GetDashboard summarises the reservations of a company registered between two days.
+// GetDashboard resume las reservas de una empresa registradas entre dos días.
 type GetDashboard struct{ Company, From, To string }
 
-// ReservationLineDTO is the transport form of a line.
+// ReservationLineDTO es la forma de transporte de una línea.
 type ReservationLineDTO struct {
 	Line          int    `json:"line"`
 	Currency      string `json:"currency"`
@@ -83,13 +83,13 @@ type ReservationLineDTO struct {
 	CollectorNote string `json:"collectorNote,omitempty"`
 }
 
-// StepDTO is the transport form of a change of status.
+// StepDTO es la forma de transporte de un cambio de estado.
 type StepDTO struct {
 	Status string `json:"status"`
 	At     string `json:"at"`
 }
 
-// ReservationDTO is the transport form of a reservation.
+// ReservationDTO es la forma de transporte de una reserva.
 type ReservationDTO struct {
 	ID            string               `json:"id"`
 	Company       string               `json:"company"`
@@ -134,13 +134,13 @@ func reservationDTO(r *domain.Reservation, detail bool) ReservationDTO {
 	return d
 }
 
-// ExpiredDTO is the result of closing what nobody collected.
+// ExpiredDTO es el resultado de cerrar lo que nadie recogió.
 type ExpiredDTO struct {
 	Expired    int      `json:"expired"`
 	References []string `json:"references"`
 }
 
-// DayDTO, CurrencyTotalDTO and FacilityTotalDTO are the breakdowns of the dashboard.
+// DayDTO, CurrencyTotalDTO y FacilityTotalDTO son los desgloses del cuadro de mando.
 type (
 	DayDTO struct {
 		Date         string `json:"date"`
@@ -160,8 +160,8 @@ type (
 	}
 )
 
-// DashboardDTO summarises a period. Totals and breakdowns count what is alive or collected:
-// cancelled and expired reservations only appear in ByStatus (the C# dashboard added them up).
+// DashboardDTO resume un periodo. Los totales y los desgloses cuentan lo que está vivo o recogido:
+// las reservas canceladas y caducadas sólo aparecen en ByStatus (el cuadro de mando del C# las sumaba).
 type DashboardDTO struct {
 	Reservations int                `json:"reservations"`
 	Eur          string             `json:"eur"`
@@ -190,7 +190,7 @@ func (s service) wireReservations(svc *Service) {
 		if err != nil {
 			return ReservationDTO{}, err
 		}
-		// The promotion code attributes the reservation to a collaborator; it does not change the price.
+		// El código de promoción atribuye la reserva a un colaborador; no cambia el precio.
 		code, collaborator := strings.TrimSpace(c.PromotionCode), domain.PartyID{}
 		switch {
 		case set.PromotionMode == domain.PromotionDisabled:
@@ -213,7 +213,7 @@ func (s service) wireReservations(svc *Service) {
 		if strings.TrimSpace(req.Segment) == "" {
 			req.Segment = domain.DefaultSegment
 		}
-		// The rates are quoted here, now: what the client saw on screen is not trusted.
+		// Los cambios se cotizan aquí, ahora: no se confía en lo que el cliente vio en pantalla.
 		for i, l := range c.Lines {
 			q, err := s.quote(ctx, org, set, l.Currency, req.Segment, amounts[i])
 			if err != nil {
@@ -239,7 +239,7 @@ func (s service) wireReservations(svc *Service) {
 		if err := scopeOf(ctx).check(domain.ReservationKind, res.ID(), res.State().Company, true); err != nil {
 			return ReservationDTO{}, err
 		}
-		// Asking for what already is changes nothing, and saves nothing.
+		// Pedir lo que ya es no cambia nada, y no guarda nada.
 		probe, err := domain.ReconstituteReservation(res.ID(), res.State())
 		if err != nil {
 			return ReservationDTO{}, err
@@ -271,7 +271,7 @@ func (s service) wireReservations(svc *Service) {
 		now := fw.Now()
 		return update(ctx, c.ID, func(r *domain.Reservation) (bool, error) { return r.Cancel(now, c.Reason) })
 	})
-	// Nothing expired a reservation in C#: this is what a scheduled job calls.
+	// En C# nada hacía caducar una reserva: esto es lo que llama una tarea programada.
 	svc.ExpireDue = changing(d.UoW, PermReservationProgress, func(ctx context.Context, c ExpireDue) (ExpiredDTO, error) {
 		var v fw.Validation
 		org, err := company(ctx, &v, c.Company, true)

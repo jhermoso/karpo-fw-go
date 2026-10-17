@@ -11,7 +11,7 @@ import (
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// PartiesOrganizations adapts the Parties contracts to the HR Organizations port (ACL).
+// PartiesOrganizations adapta los contratos de Parties al puerto Organizations de RRHH (ACL).
 type PartiesOrganizations struct {
 	Hierarchy  parties.OrganizationHierarchy
 	Membership parties.Membership
@@ -19,7 +19,7 @@ type PartiesOrganizations struct {
 
 var _ happ.Organizations = PartiesOrganizations{}
 
-// InternalOrganizationOf implements happ.Organizations.
+// InternalOrganizationOf implementa happ.Organizations.
 func (p PartiesOrganizations) InternalOrganizationOf(ctx context.Context, units []domain.OrganizationID) (map[domain.OrganizationID]domain.OrganizationID, error) {
 	ids := make([]string, len(units))
 	for i, u := range units {
@@ -40,7 +40,7 @@ func (p PartiesOrganizations) InternalOrganizationOf(ctx context.Context, units 
 	return out, nil
 }
 
-// Affiliated implements happ.Organizations.
+// Affiliated implementa happ.Organizations.
 func (p PartiesOrganizations) Affiliated(ctx context.Context, person domain.PersonID, org domain.OrganizationID) (bool, error) {
 	m, err := p.Membership.InternalOrganizations(ctx, []string{person.String()})
 	if err != nil {
@@ -49,12 +49,12 @@ func (p PartiesOrganizations) Affiliated(ctx context.Context, person domain.Pers
 	return slices.Contains(m[person.String()], org.String()), nil
 }
 
-// FacilitiesDirectory adapts the Facilities directory to the HR Facilities port (ACL).
+// FacilitiesDirectory adapta el directorio de Facilities al puerto Facilities de RRHH (ACL).
 type FacilitiesDirectory struct{ Directory fac.Directory }
 
 var _ happ.Facilities = FacilitiesDirectory{}
 
-// Facility implements happ.Facilities.
+// Facility implementa happ.Facilities.
 func (f FacilitiesDirectory) Facility(ctx context.Context, id domain.FacilityID) (happ.FacilityInfo, bool, error) {
 	refs, err := f.Directory.Resolve(ctx, []string{id.String()})
 	if err != nil {

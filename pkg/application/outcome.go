@@ -7,8 +7,8 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// Outcomes of an operation, for metric labels and span attributes. They follow the domain error
-// taxonomy, the same one the HTTP layer maps to status codes.
+// Desenlaces de una operación, para las etiquetas de las métricas y los atributos de los spans.
+// Siguen la taxonomía de errores del dominio, la misma que la capa HTTP traduce a códigos de estado.
 const (
 	OutcomeOK           = "ok"
 	OutcomeValidation   = "validation"
@@ -20,8 +20,8 @@ const (
 	OutcomeError        = "error"
 )
 
-// Outcome classifies err with errors.Is, never by its text. Everything outside the taxonomy
-// (infrastructure failures, bugs, an indeterminate authorization) is OutcomeError.
+// Outcome clasifica err con errors.Is, nunca por su texto. Todo lo que queda fuera de la taxonomía
+// (fallos de infraestructura, errores de programación, una autorización indeterminada) es OutcomeError.
 func Outcome(err error) string {
 	switch {
 	case err == nil:

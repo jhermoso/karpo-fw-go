@@ -4,28 +4,28 @@ import (
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// Identities of the context.
+// Identidades del contexto.
 type (
-	// InvoiceID identifies a received invoice.
+	// InvoiceID identifica una factura recibida.
 	InvoiceID struct{ fw.UUID }
-	// SupplierID identifies a supplier profile.
+	// SupplierID identifica un perfil de proveedor.
 	SupplierID struct{ fw.UUID }
-	// CounterID identifies a register counter.
+	// CounterID identifica un contador del registro.
 	CounterID struct{ fw.UUID }
-	// OrganizationID is the buying company, an internal organization of the Parties context.
+	// OrganizationID es la empresa compradora, una organización interna del contexto Parties.
 	OrganizationID struct{ fw.UUID }
-	// PartyID is the supplier, a party of the Parties context.
+	// PartyID es el proveedor, una party del contexto Parties.
 	PartyID struct{ fw.UUID }
 )
 
-// Events of the context.
+// Eventos del contexto.
 type (
-	// InvoiceRegistered is raised when a received invoice is booked, with its state.
+	// InvoiceRegistered se lanza cuando se registra una factura recibida, con su estado.
 	InvoiceRegistered struct {
 		fw.EventMeta
 		Snapshot InvoiceState `json:"snapshot"`
 	}
-	// InvoiceCancelled is raised when a received invoice is annulled.
+	// InvoiceCancelled se lanza cuando se anula una factura recibida.
 	InvoiceCancelled struct {
 		fw.EventMeta
 		Company  string `json:"company"`
@@ -34,25 +34,25 @@ type (
 	}
 )
 
-// EventType implementations.
+// Implementaciones de EventType.
 func (InvoiceRegistered) EventType() string { return "purchases.invoice_registered" }
 func (InvoiceCancelled) EventType() string  { return "purchases.invoice_cancelled" }
 
-// New identities and parsing.
+// Identidades nuevas y análisis.
 func NewInvoiceID() InvoiceID   { return InvoiceID{fw.NewUUID()} }
 func NewSupplierID() SupplierID { return SupplierID{fw.NewUUID()} }
 func NewCounterID() CounterID   { return CounterID{fw.NewUUID()} }
 
-// ParseInvoiceID parses a textual identity.
+// ParseInvoiceID analiza una identidad textual.
 func ParseInvoiceID(s string) (InvoiceID, error) { u, err := fw.ParseUUID(s); return InvoiceID{u}, err }
 
-// ParseSupplierID parses a textual identity.
+// ParseSupplierID analiza una identidad textual.
 func ParseSupplierID(s string) (SupplierID, error) {
 	u, err := fw.ParseUUID(s)
 	return SupplierID{u}, err
 }
 
-// Repositories of the context.
+// Repositorios del contexto.
 type (
 	InvoiceRepository  = fw.Repository[InvoiceID, *Invoice]
 	SupplierRepository = fw.Repository[SupplierID, *SupplierProfile]

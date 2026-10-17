@@ -33,7 +33,7 @@ func TestOutboxRelay_DeliversDecodedEventsAtLeastOnce(t *testing.T) {
 	}
 
 	n, err := f.Relay.RelayOnce(context.Background())
-	if err != nil || n != 1 { // created delivered, renamed failed
+	if err != nil || n != 1 { // created entregado, renamed fallido
 		t.Fatalf("first pass: delivered %d, err %v", n, err)
 	}
 	if msgs := f.Pending(t); len(msgs) != 1 || msgs[0].Attempts != 1 || msgs[0].LastError != "transient" {

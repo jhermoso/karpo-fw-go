@@ -1,4 +1,4 @@
-// Package facilities composes the Facilities bounded context on a hot-swap backend.
+// Package facilities compone el contexto delimitado Facilities sobre un backend intercambiable en caliente.
 package facilities
 
 import (
@@ -20,7 +20,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 )
 
-// Module is the composed context.
+// Module es el contexto compuesto.
 type Module struct {
 	Service           *fapp.Service
 	Directory         contracts.Directory
@@ -28,13 +28,13 @@ type Module struct {
 	Audit             application.AuditLog
 }
 
-// Option configures the composition.
+// Option configura la composición.
 type Option func(*fapp.Deps)
 
-// WithAddressChecker validates locations with the Geography context.
+// WithAddressChecker valida las ubicaciones con el contexto Geography.
 func WithAddressChecker(c fapp.AddressChecker) Option { return func(d *fapp.Deps) { d.Addresses = c } }
 
-// Compose builds the context on sw.
+// Compose monta el contexto sobre sw.
 func Compose(sw *hotswap.Switch, opts ...Option) *Module {
 	repo := hotswap.Repository(sw, infrastructure.RepositoryFactory)
 	integration := hotswap.Outbox(sw, infrastructure.IntegrationOutboxFactory)
@@ -50,7 +50,7 @@ func Compose(sw *hotswap.Switch, opts ...Option) *Module {
 	return &Module{Service: fapp.NewService(deps), Directory: fapp.Directory{Facilities: repo}, IntegrationOutbox: integration, Audit: audit}
 }
 
-// Relay forwards the Published Language to a transport.
+// Relay reenvía el Published Language a un transporte.
 func (m *Module) Relay(sender application.MessageSender, opts ...outbox.RelayOption) *outbox.Relay {
 	return messaging.NewRelay(contracts.Source, m.IntegrationOutbox, sender, opts...)
 }
@@ -64,7 +64,7 @@ func (c catalogs) FacilityTypes(ctx context.Context) (out []domain.FacilityType,
 	return out, err
 }
 
-// RegisterRoutes implements distribution.EndpointModule.
+// RegisterRoutes implementa distribution.EndpointModule.
 func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	svc := m.Service
 	id := func(r *http.Request) (domain.FacilityID, error) {

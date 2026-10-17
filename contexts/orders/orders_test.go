@@ -45,9 +45,9 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/time/fake"
 )
 
-// host composes Parties, Products, Inventory, Receivables and Orders on one hot-swappable
-// backend, with one in-process broker carrying the Published Language between Orders and
-// Inventory.
+// host compone Parties, Products, Inventory, Receivables y Orders sobre un único backend
+// intercambiable en caliente, con un broker en proceso que lleva el Published Language entre
+// Orders e Inventory.
 type host struct {
 	t        *testing.T
 	srv      *httptest.Server
@@ -146,7 +146,7 @@ func (h *host) ok(err error) {
 	}
 }
 
-// deliver relays the Published Language of Orders and Inventory until quiet.
+// deliver retransmite el Published Language de Orders e Inventory hasta que no queda nada.
 func (h *host) deliver() {
 	for moved := true; moved; {
 		moved = false
@@ -184,7 +184,7 @@ func (h *host) scenario(tag string) {
 	}
 	h.grant("outsider", globex.ID)
 
-	// Products with their prices, a warehouse with 600 screws.
+	// Productos con sus precios, un almacén con 600 tornillos.
 	product := func(company, sku string, d dapp.DetailsInput) dapp.ProductDTO {
 		d.Name = sku + " " + tag
 		p, err := h.prod.Service.RegisterProduct.Handle(ctx, dapp.RegisterProduct{Company: company, SKU: sku, DetailsInput: d})
@@ -215,7 +215,7 @@ func (h *host) scenario(tag string) {
 		return s.OnHand, s.Reserved
 	}
 
-	// The terms of the customer: the wholesale list and 10% on every line.
+	// Las condiciones del cliente: la tarifa de mayoristas y un 10 % en cada línea.
 	var terms oapp.TermsDTO
 	h.must(h.do("PUT", "/api/orders/terms", "seller", map[string]any{"company": acme.ID, "customer": ana.ID, "priceList": list.ID, "discount": "10"}, nil), 403,
 		"selling is not setting terms")
@@ -224,7 +224,7 @@ func (h *host) scenario(tag string) {
 	h.must(h.do("PUT", "/api/orders/terms", "manager", map[string]any{"company": acme.ID, "customer": ana.ID, "priceList": list.ID, "discount": "10"}, &terms), 200,
 		"terms")
 
-	// A draft priced by Products: each discount once.
+	// Un borrador con los precios de Products: cada descuento una vez.
 	var o oapp.OrderDTO
 	draft := map[string]any{"company": acme.ID, "customer": ana.ID, "date": "2026-10-04", "warehouse": wh.ID, "reference": "Su pedido 77"}
 	h.must(h.do("POST", "/api/orders/orders", "outsider", draft, nil), 404, "outsider")
@@ -247,7 +247,7 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("priced: %+v", o)
 	}
 
-	// Confirmation: its own permission, the credit of Receivables, a number.
+	// Confirmación: su propio permiso, el crédito de Receivables, un número.
 	confirm := "/api/orders/orders/" + o.ID + "/confirm"
 	h.must(h.do("POST", confirm, "seller", nil, nil), 403, "selling is not confirming")
 	limit := "100"
@@ -264,7 +264,7 @@ func (h *host) scenario(tag string) {
 	}
 	h.must(h.do("POST", lines, "seller", map[string]any{"product": montaje.ID, "quantity": "1"}, nil), 422, "a confirmed order does not change")
 
-	// Nothing is delivered of a stocked line until Inventory holds it; it holds the 600 there are.
+	// No se entrega nada de una línea con existencias hasta que Inventory la retiene; retiene las 600 que hay.
 	deliveries := "/api/orders/orders/" + o.ID + "/deliveries"
 	h.must(h.do("POST", deliveries, "dispatcher", map[string]any{"lines": []map[string]any{{"line": 1, "quantity": "100"}}}, nil), 422, "not held yet")
 	h.deliver()
@@ -275,12 +275,12 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("stock held: %s %s", on, res)
 	}
 
-	// The delivery note of everything that can go: 600 screws and the 3 hours.
+	// El albarán de todo lo que puede salir: 600 tornillos y las 3 horas.
 	var note oapp.DeliveryDTO
 	h.must(h.do("POST", deliveries, "seller", nil, nil), 403, "selling is not delivering")
 	h.must(h.do("POST", deliveries, "dispatcher", map[string]any{"date": "2026-10-03"}, nil), 422, "before the order")
 	h.must(h.do("POST", deliveries, "dispatcher", map[string]any{"date": "2026-10-05"}, &note), 201, "delivery note")
-	// 600 × 0.0684 = 41.04, plus 94.50.
+	// 600 × 0.0684 = 41.04, más 94.50.
 	if note.Number != "ALB-2026-000001" || note.OrderNumber != "PED-2026-000001" || len(note.Lines) != 2 || note.Lines[0].Quantity != "600" ||
 		note.Lines[0].Amount != "41.04" || note.Total != "135.54" || note.OrderStatus != "confirmed" {
 		t.Fatalf("delivery note: %+v", note)
@@ -295,7 +295,7 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("stock card: %+v", card.Items)
 	}
 
-	// The rest waits for stock: asked again when 250 arrive, delivered, and the order closed.
+	// El resto espera existencias: se vuelve a pedir cuando llegan 250, se entrega y el pedido se cierra.
 	request := "/api/orders/orders/" + o.ID + "/request-stock"
 	h.must(h.do("POST", request, "manager", nil, nil), 200, "ask again")
 	h.deliver()
@@ -309,9 +309,9 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("held later: %+v", o.Lines[0])
 	}
 	h.must(h.do("POST", deliveries, "dispatcher", map[string]any{"lines": []map[string]any{{"line": 1, "quantity": "300"}}}, nil), 422, "more than held")
-	// A note without a date is of today and takes its number from the series of that year: those
-	// requests run on a fixed clock, so that the scenario stays in 2026 whatever the day the test runs.
-	// The moment is a past one: the tokens are issued with the real clock and must not have expired.
+	// Un albarán sin fecha es de hoy y toma su número de la serie de ese año: esas peticiones van con
+	// un reloj fijo, para que el escenario se quede en 2026 sea cual sea el día en que corre la prueba.
+	// El momento es uno pasado: los tokens se emiten con el reloj real y no deben haber caducado.
 	today := func(f func()) {
 		defer fw.SetClock(fake.New(time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC)))()
 		f()
@@ -333,12 +333,12 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("stock after the second delivery: %s %s", on, res)
 	}
 
-	// A second order holds stock and is cancelled: what it held is released.
+	// Un segundo pedido retiene existencias y se anula: lo que retenía se libera.
 	receive("500")
 	var o2 oapp.OrderDTO
 	h.must(h.do("POST", "/api/orders/orders", "seller", draft, &o2), 201, "second draft")
 	h.must(h.do("POST", "/api/orders/orders/"+o2.ID+"/lines", "seller", map[string]any{"product": tornillo.ID, "quantity": "100"}, &o2), 200, "its line")
-	// Under 1000 units the list has no line: the base price, 0.125 × 0.90.
+	// Por debajo de 1000 unidades la tarifa no tiene línea: el precio base,0.125 × 0.90.
 	if o2.Lines[0].NetPrice != "0.1125" || o2.Lines[0].Amount != "11.25" {
 		t.Fatalf("base price: %+v", o2.Lines[0])
 	}
@@ -354,7 +354,7 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("released: %s %s %s", on, res, o2.Status)
 	}
 
-	// A customer blocked for orders or deliveries.
+	// Un cliente bloqueado para pedidos o entregas.
 	var o3 oapp.OrderDTO
 	h.must(h.do("POST", "/api/orders/orders", "seller", draft, &o3), 201, "third draft")
 	h.must(h.do("POST", "/api/orders/orders/"+o3.ID+"/lines", "seller", map[string]any{"product": montaje.ID, "quantity": "1"}, nil), 200, "its line")
@@ -367,7 +367,7 @@ func (h *host) scenario(tag string) {
 	today(func() {
 		h.must(h.do("POST", "/api/orders/orders/"+o3.ID+"/deliveries", "dispatcher", nil, &note), 201, "deliver the service")
 	})
-	// The discount of the customer is the one of the day the draft was opened (10%).
+	// El descuento del cliente es el del día en que se abrió el borrador (10 %).
 	if note.OrderStatus != "delivered" || note.Number != "ALB-2026-000003" || note.Lines[0].NetPrice != "31.5000" {
 		t.Fatalf("third delivery: %+v", note)
 	}

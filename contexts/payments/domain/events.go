@@ -6,23 +6,23 @@ import (
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// Identities of the context.
+// Identidades del contexto.
 type (
-	// PayableID identifies a payable.
+	// PayableID identifica una obligación de pago.
 	PayableID struct{ fw.UUID }
-	// PaymentID identifies a payment.
+	// PaymentID identifica un pago.
 	PaymentID struct{ fw.UUID }
-	// AllocationID identifies an allocation.
+	// AllocationID identifica una aplicación.
 	AllocationID struct{ fw.UUID }
-	// OrganizationID is the paying company, an internal organization of the Parties context.
+	// OrganizationID es la empresa que paga, una organización interna del contexto Parties.
 	OrganizationID struct{ fw.UUID }
-	// PartyID is the payee, a party of the Parties context.
+	// PartyID es el beneficiario, una party del contexto Parties.
 	PartyID struct{ fw.UUID }
 )
 
-// Events of the context (the C# raised a generic FactIssued for payments that nobody consumed).
+// Eventos del contexto (el C# lanzaba para los pagos un FactIssued genérico que nadie consumía).
 type (
-	// PayableRegistered is raised when an obligation is recorded.
+	// PayableRegistered se lanza al registrar una obligación.
 	PayableRegistered struct {
 		fw.EventMeta
 		Kind     string `json:"kind"`
@@ -30,28 +30,28 @@ type (
 		Amount   string `json:"amount"`
 		Due      string `json:"due"`
 	}
-	// PayableSettled is raised when nothing remains to pay.
+	// PayableSettled se lanza cuando no queda nada por pagar.
 	PayableSettled struct {
 		fw.EventMeta
 		Company  string `json:"company"`
 		Kind     string `json:"kind"`
 		Document string `json:"document"`
 	}
-	// PayableCancelled is raised when an unpaid obligation is withdrawn.
+	// PayableCancelled se lanza al retirar una obligación sin pagar.
 	PayableCancelled struct {
 		fw.EventMeta
 		Kind     string `json:"kind"`
 		Document string `json:"document"`
 		Reason   string `json:"reason"`
 	}
-	// PaymentRegistered is raised when money is paid out.
+	// PaymentRegistered se lanza cuando sale dinero en un pago.
 	PaymentRegistered struct {
 		fw.EventMeta
 		Payee  string `json:"payee"`
 		Amount string `json:"amount"`
 		Method string `json:"method"`
 	}
-	// PaymentAllocated is raised when part of a payment is applied to a payable.
+	// PaymentAllocated se lanza cuando parte de un pago se aplica a una obligación.
 	PaymentAllocated struct {
 		fw.EventMeta
 		Company string `json:"company"`
@@ -62,7 +62,7 @@ type (
 		Amount  string `json:"amount"`
 		On      string `json:"on"`
 	}
-	// AllocationReversed is raised when an allocation is reversed (or its payment cancelled).
+	// AllocationReversed se lanza cuando una aplicación se revierte (o se anula su pago).
 	AllocationReversed struct {
 		fw.EventMeta
 		Company string `json:"company"`
@@ -73,7 +73,7 @@ type (
 	}
 )
 
-// EventType implementations.
+// Implementaciones de EventType.
 func (PayableRegistered) EventType() string  { return "payments.payable_registered" }
 func (PayableSettled) EventType() string     { return "payments.payable_settled" }
 func (PayableCancelled) EventType() string   { return "payments.payable_cancelled" }
@@ -81,30 +81,31 @@ func (PaymentRegistered) EventType() string  { return "payments.payment_register
 func (PaymentAllocated) EventType() string   { return "payments.payment_allocated" }
 func (AllocationReversed) EventType() string { return "payments.allocation_reversed" }
 
-// New identities and parsing.
+// Identidades nuevas e interpretación.
 func NewPayableID() PayableID { return PayableID{fw.NewUUID()} }
 func NewPaymentID() PaymentID { return PaymentID{fw.NewUUID()} }
 
-// ParsePayableID parses a textual identity.
+// ParsePayableID interpreta una identidad en texto.
 func ParsePayableID(s string) (PayableID, error) { u, err := fw.ParseUUID(s); return PayableID{u}, err }
 
-// ParsePaymentID parses a textual identity.
+// ParsePaymentID interpreta una identidad en texto.
 func ParsePaymentID(s string) (PaymentID, error) { u, err := fw.ParseUUID(s); return PaymentID{u}, err }
 
-// ParseAllocationID parses a textual identity.
+// ParseAllocationID interpreta una identidad en texto.
 func ParseAllocationID(s string) (AllocationID, error) {
 	u, err := fw.ParseUUID(s)
 	return AllocationID{u}, err
 }
 
-// Repositories of the context.
+// Repositorios del contexto.
 type (
 	PayableRepository = fw.Repository[PayableID, *Payable]
 	PaymentRepository = fw.Repository[PaymentID, *Payment]
 )
 
-// NetPaySplits answers how the net pay of approved payslips is split across bank accounts (the
-// Payroll Remittance port, through an adapter). Payslips without splits are absent.
+// NetPaySplits responde cómo se reparte el líquido de las nóminas aprobadas entre cuentas
+// bancarias (el puerto Remittance de Payroll, a través de un adaptador). Las nóminas sin reparto no
+// aparecen.
 type NetPaySplits interface {
 	NetPayments(ctx context.Context, payslipIDs []string) (map[string][]PayTo, error)
 }

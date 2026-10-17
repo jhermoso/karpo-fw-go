@@ -1,6 +1,7 @@
-// Package infrastructure stores the Geography and reference data context: SQL mappings, the
-// versioned schema of the five engines, the embedded seed (the Karpo catalogs, same GUIDs,
-// extracted from 040-Data/schema/sqlserver/02-semillas.sql) and the hot-swap factories.
+// Package infrastructure guarda el contexto de Geografía y datos de referencia: los mapeos SQL,
+// el esquema versionado de los cinco motores, la semilla embebida (los catálogos de Karpo, con los
+// mismos GUID, extraídos de 040-Data/schema/sqlserver/02-semillas.sql) y las factorías para el
+// intercambio en caliente.
 package infrastructure
 
 import (
@@ -20,7 +21,7 @@ import (
 //go:embed seed/*.csv.gz
 var seedFS embed.FS
 
-// record is one CSV row addressed by column name.
+// record es una fila CSV a la que se accede por nombre de columna.
 type record map[string]string
 
 func (r record) uuid(col string) fw.UUID {
@@ -32,7 +33,7 @@ func (r record) uuid(col string) fw.UUID {
 func (r record) bool(col string) bool { return r[col] == "1" }
 func (r record) int(col string) int   { n, _ := strconv.Atoi(r[col]); return n }
 
-// readSeed reads a seed file.
+// readSeed lee un fichero de la semilla.
 func readSeed(name string) ([]record, error) {
 	f, err := seedFS.Open("seed/" + name + ".csv.gz")
 	if err != nil {
@@ -65,7 +66,7 @@ func readSeed(name string) ([]record, error) {
 	}
 }
 
-// Seed is the decoded seed data.
+// Seed son los datos de la semilla decodificados.
 type Seed struct {
 	BoundaryTypes []domain.BoundaryType
 	CountryLevels []domain.CountryLevel
@@ -84,7 +85,7 @@ var (
 	seedErr  error
 )
 
-// LoadSeed decodes the embedded seed once.
+// LoadSeed decodifica la semilla embebida una sola vez.
 func LoadSeed() (*Seed, error) {
 	seedOnce.Do(func() { seedData, seedErr = loadSeed() })
 	return seedData, seedErr

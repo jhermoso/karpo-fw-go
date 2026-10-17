@@ -4,9 +4,10 @@ import (
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// Domain events (the C# raised a generic FactIssued only when Documents numbered a TaxFiling).
+// Eventos de dominio (el C# sólo lanzaba un FactIssued genérico cuando Documents numeraba un
+// TaxFiling).
 type (
-	// FilingDrafted is raised when a filing is generated.
+	// FilingDrafted se lanza cuando se genera una declaración.
 	FilingDrafted struct {
 		fw.EventMeta
 		Declarant string `json:"declarant"`
@@ -14,7 +15,7 @@ type (
 		Year      int    `json:"year"`
 		Period    string `json:"period"`
 	}
-	// FilingSubmitted is raised when a filing is submitted, with its number and totals.
+	// FilingSubmitted se lanza cuando se presenta una declaración, con su número y sus totales.
 	FilingSubmitted struct {
 		fw.EventMeta
 		Declarant   string `json:"declarant"`
@@ -26,14 +27,14 @@ type (
 		Perceptions string `json:"perceptions"`
 		Withheld    string `json:"withheld"`
 	}
-	// FilingReverted is raised when a submitted filing is reverted.
+	// FilingReverted se lanza cuando se revierte una declaración presentada.
 	FilingReverted struct {
 		fw.EventMeta
 		Reason string `json:"reason"`
 	}
 )
 
-// EventType implementations.
+// Implementaciones de EventType.
 func (FilingDrafted) EventType() string   { return "fiscal.filing_drafted" }
 func (FilingSubmitted) EventType() string { return "fiscal.filing_submitted" }
 func (FilingReverted) EventType() string  { return "fiscal.filing_reverted" }

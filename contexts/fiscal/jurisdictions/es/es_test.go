@@ -67,7 +67,7 @@ func TestSpain_GeneralRegime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// 30.09 × 21 % = 6.3189 → 6.32 on the aggregated base (line by line it would be 3 × 2.11 = 6.33).
+	// 30.09 × 21 % = 6.3189 → 6.32 sobre la base agregada (línea a línea serían 3 × 2.11 = 6.33).
 	if len(got.Lines) != 3 || !got.Lines[0].Base.Equal(dec("30.09")) || !got.Lines[0].Amount.Equal(dec("6.32")) ||
 		!got.Lines[1].Amount.Equal(dec("10")) || got.Lines[2].TreatmentKind != domain.Exempt || !got.Lines[2].Amount.IsZero() ||
 		!got.Net.Equal(dec("180.09")) || !got.Tax.Equal(dec("16.32")) || !got.Surcharge.IsZero() {
@@ -107,7 +107,7 @@ func TestSpain_GeneralRegime(t *testing.T) {
 	if _, err := (es.Spain{}).Calculate(ctx, past, b); !isViolation(err, "fiscal.unknown_rate") {
 		t.Fatal("the rate was not in force yet")
 	}
-	// Credit notes (by differences) have negative bases.
+	// Las facturas rectificativas (por diferencias) tienen bases negativas.
 	neg := domain.Assessment{Taxpayer: a.Taxpayer, Date: on, Lines: []domain.TaxableLine{{Base: dec("-10.03"), TaxCode: "G21"}}}
 	if got, err := (es.Spain{}).Calculate(ctx, neg, b); err != nil || !got.Tax.Equal(dec("-2.11")) {
 		t.Fatalf("negative base: %+v %v", got, err)

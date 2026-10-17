@@ -1,14 +1,14 @@
-// Package contracts is what other bounded contexts may depend on: the Published Language of
-// Products and its ports (Inventory checks what it stocks, Orders and Billing price and tax what
-// they sell, Purchases what it buys).
+// Package contracts es aquello de lo que pueden depender otros contextos delimitados: el Published
+// Language de Products y sus puertos (Inventory comprueba lo que almacena, Orders y Billing ponen
+// precio e impuestos a lo que venden, Purchases a lo que compra).
 package contracts
 
 import "context"
 
-// Source is the name of the publishing bounded context.
+// Source es el nombre del contexto delimitado que publica.
 const Source = "products"
 
-// ProductRef is what other contexts need of a product.
+// ProductRef es lo que otros contextos necesitan de un producto.
 type ProductRef struct {
 	ID              string `json:"id"`
 	Company         string `json:"company"`
@@ -24,20 +24,20 @@ type ProductRef struct {
 	Tracking        string `json:"tracking"` // none | lot | serial
 	BlockedSales    bool   `json:"blockedSales"`
 	BlockedPurchase bool   `json:"blockedPurchase"`
-	Discontinued    string `json:"discontinued,omitempty"` // civil date from which it is retired
+	Discontinued    string `json:"discontinued,omitempty"` // fecha civil desde la que está retirado
 	StandardCost    string `json:"standardCost"`
 }
 
-// MaxBatch is the maximum number of ids per call.
+// MaxBatch es el número máximo de ids por llamada.
 const MaxBatch = 900
 
-// Catalog resolves products by id (unknown ids are absent).
+// Catalog resuelve productos por id (los ids desconocidos no aparecen).
 type Catalog interface {
 	Products(ctx context.Context, ids []string) (map[string]ProductRef, error)
 }
 
-// Quote is the price of a product for a quantity on a date. Amounts are decimal strings with up to
-// four decimals; Net is the unit price after the discount.
+// Quote es el precio de un producto para una cantidad en una fecha. Los importes son cadenas
+// decimales de hasta cuatro decimales; Net es el precio unitario tras el descuento.
 type Quote struct {
 	UnitPrice string `json:"unitPrice"`
 	Discount  string `json:"discount"`
@@ -45,13 +45,13 @@ type Quote struct {
 	Source    string `json:"source"` // list | base
 }
 
-// Pricing prices a product of a company for a quantity on a civil date, with a price list of the
-// company (empty: the base price of the product).
+// Pricing pone precio a un producto de una empresa para una cantidad en una fecha civil, con una
+// lista de precios de la empresa (vacía: el precio base del producto).
 type Pricing interface {
 	Quote(ctx context.Context, company, product, priceList, quantity, on string) (Quote, error)
 }
 
-// ProductRegisteredV1 is published when a product enters the catalog of a company.
+// ProductRegisteredV1 se publica cuando un producto entra en el catálogo de una empresa.
 type ProductRegisteredV1 struct {
 	ProductID string `json:"productId"`
 	Company   string `json:"company"`
@@ -60,10 +60,10 @@ type ProductRegisteredV1 struct {
 	Kind      string `json:"kind"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (ProductRegisteredV1) IntegrationEventType() string { return "products.product-registered.v1" }
 
-// ProductDiscontinuedV1 is published when a product is retired from a civil date.
+// ProductDiscontinuedV1 se publica cuando un producto se retira desde una fecha civil.
 type ProductDiscontinuedV1 struct {
 	ProductID string `json:"productId"`
 	Company   string `json:"company"`
@@ -71,7 +71,7 @@ type ProductDiscontinuedV1 struct {
 	On        string `json:"on"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (ProductDiscontinuedV1) IntegrationEventType() string {
 	return "products.product-discontinued.v1"
 }

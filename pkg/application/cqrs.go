@@ -1,46 +1,47 @@
-// Package application holds the CONTRACTS of the application layer (the Go counterpart of
-// Paranoia.Karpo.Fw.Application.Contracts): use-case handlers (CQRS) and their middleware type,
-// the ports the layer depends on (event publishing and recording, outbox store, idempotency
-// store, event decoding), bounded-context modules and the request context keys.
+// Package application reúne los CONTRATOS de la capa de aplicación (la contrapartida en Go de
+// Paranoia.Karpo.Fw.Application.Contracts): manejadores de casos de uso (CQRS) y su tipo de middleware,
+// los puertos de los que depende la capa (publicación y registro de eventos, almacén del outbox,
+// almacén de idempotencia, decodificación de eventos), los módulos de contexto delimitado y las
+// claves del contexto de la petición.
 //
-// It contains no implementation with behaviour of its own; the architecture tests enforce that
-// it imports only the standard library and other contract packages. Implementations live in:
+// No contiene ninguna implementación con comportamiento propio; las pruebas de arquitectura hacen
+// cumplir que sólo importa la biblioteca estándar y otros paquetes de contratos. Las implementaciones están en:
 //
 //	application/pipeline       Validating, Transactional, RetryOnConflict, Idempotent, Logging
 //	application/orchestration  Orchestrator, Execute
-//	application/outbox         Recorder (EventRecorder over an OutboxStore), Relay
-//	application/hosting        Host (module lifecycle)
+//	application/outbox         Recorder (EventRecorder sobre un OutboxStore), Relay
+//	application/hosting        Host (ciclo de vida de los módulos)
 //
-// Design choice versus the C# framework: there is no reflection-based mediator. Handlers are
-// plain typed values injected where they are used and decorated with generic middleware
-// (the same approach as the C# IdempotencyCommandHandlerDecorator), so every
-// command -> result pairing is checked by the compiler.
+// Decisión de diseño frente al framework de C#: no hay mediador basado en reflexión. Los
+// manejadores son valores tipados simples que se inyectan donde se usan y se decoran con middleware
+// genérico (el mismo enfoque que el IdempotencyCommandHandlerDecorator de C#), de modo que el
+// compilador comprueba cada emparejamiento orden -> resultado.
 package application
 
 import "context"
 
-// Handler executes a use case: In is the command or query, Out its result.
+// Handler ejecuta un caso de uso: In es la orden o la consulta, Out su resultado.
 type Handler[In, Out any] interface {
 	Handle(ctx context.Context, in In) (Out, error)
 }
 
-// HandlerFunc adapts a function into a Handler.
+// HandlerFunc adapta una función a Handler.
 type HandlerFunc[In, Out any] func(ctx context.Context, in In) (Out, error)
 
-// Handle calls fn.
+// Handle llama a fn.
 func (fn HandlerFunc[In, Out]) Handle(ctx context.Context, in In) (Out, error) { return fn(ctx, in) }
 
-// CommandHandler handles a command (state change). Use Transactional middleware on it.
+// CommandHandler maneja una orden (cambio de estado). Debe envolverse con el middleware Transactional.
 type CommandHandler[C, R any] = Handler[C, R]
 
-// QueryHandler handles a query (no side effects).
+// QueryHandler maneja una consulta (sin efectos laterales).
 type QueryHandler[Q, R any] = Handler[Q, R]
 
-// Middleware decorates a handler with a cross-cutting concern (the Go equivalent of a
-// MediatR pipeline behavior or a C# handler decorator), preserving static types.
+// Middleware decora un manejador con un aspecto transversal (el equivalente en Go de un
+// pipeline behavior de MediatR o de un decorador de manejador de C#), conservando los tipos estáticos.
 type Middleware[In, Out any] func(next Handler[In, Out]) Handler[In, Out]
 
-// Chain wraps h with middlewares; the first middleware is the outermost one.
+// Chain envuelve h con los middlewares; el primero es el más exterior.
 func Chain[In, Out any](h Handler[In, Out], middlewares ...Middleware[In, Out]) Handler[In, Out] {
 	for i := len(middlewares) - 1; i >= 0; i-- {
 		h = middlewares[i](h)

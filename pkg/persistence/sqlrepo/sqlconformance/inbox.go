@@ -14,7 +14,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlserver"
 )
 
-// InboxDDL returns the inbox DDL of a dialect name.
+// InboxDDL devuelve el DDL del inbox para un nombre de dialecto.
 func InboxDDL(dialect string) []string {
 	switch dialect {
 	case "sqlite":
@@ -31,8 +31,8 @@ func InboxDDL(dialect string) []string {
 	return nil
 }
 
-// RunInbox checks the SQL inbox on db: first claim, duplicate, per-consumer partitioning,
-// and rollback together with the unit of work.
+// RunInbox comprueba el inbox SQL sobre db: primera reclamación, duplicado, separación por
+// consumidor, y rollback junto con la unidad de trabajo.
 func RunInbox(t *testing.T, db *sqlrepo.DB) {
 	ctx := context.Background()
 	_, _ = db.ExecContext(ctx, "DROP TABLE "+sqlrepo.DefaultInboxTable)

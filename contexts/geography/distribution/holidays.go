@@ -12,15 +12,15 @@ import (
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// HolidaysModule serves the calendar of holidays.
+// HolidaysModule sirve el calendario de festivos.
 type HolidaysModule struct{ holidays *gapp.Holidays }
 
-// NewHolidaysModule builds the routes of the calendar.
+// NewHolidaysModule construye las rutas del calendario.
 func NewHolidaysModule(h *gapp.Holidays) *HolidaysModule { return &HolidaysModule{holidays: h} }
 
 var _ distribution.EndpointModule = (*HolidaysModule)(nil)
 
-// RegisterRoutes implements distribution.EndpointModule.
+// RegisterRoutes implementa distribution.EndpointModule.
 func (m *HolidaysModule) RegisterRoutes(mux *http.ServeMux) {
 	h := m.holidays
 	mux.HandleFunc("GET /api/geography/holidays", func(w http.ResponseWriter, r *http.Request) {

@@ -6,45 +6,45 @@ import (
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// Domain events (the C# RRHH raised none).
+// Eventos de dominio (el RRHH del C# no lanzaba ninguno).
 type (
-	// PositionOpened is raised when a position is created.
+	// PositionOpened se lanza cuando se crea un puesto.
 	PositionOpened struct {
 		fw.EventMeta
 		Unit         string `json:"unit"`
 		Organization string `json:"organization"`
 		Type         string `json:"type"`
 	}
-	// PositionStatusChanged is raised when the status changes.
+	// PositionStatusChanged se lanza cuando cambia el estado.
 	PositionStatusChanged struct {
 		fw.EventMeta
 		Status string `json:"status"`
 	}
-	// PositionFilled is raised when a person takes the position.
+	// PositionFilled se lanza cuando una persona ocupa el puesto.
 	PositionFilled struct {
 		fw.EventMeta
 		Holder string    `json:"holder"`
 		From   time.Time `json:"from"`
 	}
-	// PositionVacated is raised when the holder leaves the position.
+	// PositionVacated se lanza cuando el titular deja el puesto.
 	PositionVacated struct {
 		fw.EventMeta
 		Holder string    `json:"holder"`
 		At     time.Time `json:"at"`
 	}
-	// ReportingChanged is raised when a reporting line starts or ends.
+	// ReportingChanged se lanza cuando empieza o termina una línea de dependencia.
 	ReportingChanged struct {
 		fw.EventMeta
 		Supervisor string `json:"supervisor"`
 		Primary    bool   `json:"primary,omitempty"`
 		Ended      bool   `json:"ended,omitempty"`
 	}
-	// PositionClosed is raised when a position is closed.
+	// PositionClosed se lanza cuando se cierra un puesto.
 	PositionClosed struct {
 		fw.EventMeta
 		At time.Time `json:"at"`
 	}
-	// EmployeeHired is raised when a person is hired.
+	// EmployeeHired se lanza cuando se contrata a una persona.
 	EmployeeHired struct {
 		fw.EventMeta
 		Person   string `json:"person"`
@@ -52,7 +52,7 @@ type (
 		Number   string `json:"number,omitempty"`
 		Hired    string `json:"hired"`
 	}
-	// EmployeeTerminated is raised when an employment ends.
+	// EmployeeTerminated se lanza cuando termina una relación laboral.
 	EmployeeTerminated struct {
 		fw.EventMeta
 		Person     string `json:"person"`
@@ -60,7 +60,7 @@ type (
 		Terminated string `json:"terminated"`
 		Reason     string `json:"reason,omitempty"`
 	}
-	// ContractStarted is raised when a labor contract is added.
+	// ContractStarted se lanza cuando se añade un contrato de trabajo.
 	ContractStarted struct {
 		fw.EventMeta
 		Contract   string `json:"contract"`
@@ -70,28 +70,28 @@ type (
 		WorkCenter string `json:"workCenter"`
 		Primary    bool   `json:"primary"`
 	}
-	// ContractEnded is raised when a labor contract ends.
+	// ContractEnded se lanza cuando termina un contrato de trabajo.
 	ContractEnded struct {
 		fw.EventMeta
 		Contract string `json:"contract"`
 		End      string `json:"end"`
 		Reason   string `json:"reason,omitempty"`
 	}
-	// WorkCenterOpened is raised when a work center is registered.
+	// WorkCenterOpened se lanza cuando se da de alta un centro de trabajo.
 	WorkCenterOpened struct {
 		fw.EventMeta
 		Employer string `json:"employer"`
 		Facility string `json:"facility"`
 		Code     string `json:"code"`
 	}
-	// WorkCenterClosed is raised when a work center closes.
+	// WorkCenterClosed se lanza cuando cierra un centro de trabajo.
 	WorkCenterClosed struct {
 		fw.EventMeta
 		Closed string `json:"closed"`
 	}
 )
 
-// EventType implementations.
+// Implementaciones de EventType.
 func (PositionOpened) EventType() string        { return "hr.position_opened" }
 func (PositionStatusChanged) EventType() string { return "hr.position_status_changed" }
 func (PositionFilled) EventType() string        { return "hr.position_filled" }

@@ -1,4 +1,5 @@
-// Package products composes the Products (Productos) bounded context on a hot-swap backend.
+// Package products compone el contexto delimitado Products (Productos) sobre un backend
+// intercambiable en caliente.
 package products
 
 import (
@@ -20,7 +21,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 )
 
-// Module is the composed context.
+// Module es el contexto compuesto.
 type Module struct {
 	Service           *papp.Service
 	Catalog           contracts.Catalog
@@ -29,7 +30,7 @@ type Module struct {
 	Audit             application.AuditLog
 }
 
-// Compose builds the context on sw.
+// Compose construye el contexto sobre sw.
 func Compose(sw *hotswap.Switch) *Module {
 	integration := hotswap.Outbox(sw, infrastructure.IntegrationOutboxFactory)
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
@@ -43,7 +44,7 @@ func Compose(sw *hotswap.Switch) *Module {
 		Pricing: papp.PricingPort{Products: d.Products, PriceLists: d.PriceLists}, IntegrationOutbox: integration, Audit: audit}
 }
 
-// Relay forwards the Published Language to a transport.
+// Relay reenvía el Published Language a un transporte.
 func (m *Module) Relay(sender application.MessageSender, opts ...outbox.RelayOption) *outbox.Relay {
 	return messaging.NewRelay(contracts.Source, m.IntegrationOutbox, sender, opts...)
 }
@@ -107,14 +108,14 @@ func get[ID, Out any](parse func(string) (ID, error), run func(context.Context, 
 	}
 }
 
-// UnitDTO is the transport form of a unit of measure.
+// UnitDTO es la forma de transporte de una unidad de medida.
 type UnitDTO struct {
 	Code      string `json:"code"`
 	Name      string `json:"name"`
 	Dimension string `json:"dimension"`
 }
 
-// RegisterRoutes implements distribution.EndpointModule.
+// RegisterRoutes implementa distribution.EndpointModule.
 func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	svc := m.Service
 	prod, cat, pl := domain.ParseProductID, domain.ParseCategoryID, domain.ParsePriceListID

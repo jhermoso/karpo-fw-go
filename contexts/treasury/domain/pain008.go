@@ -8,8 +8,9 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// The ISO 20022 customer direct debit initiation (pain.008.001.02), the file SEPA banks accept for
-// CORE and B2B collections. One payment information block per sequence type.
+// La iniciación de adeudos directos del cliente de ISO 20022 (pain.008.001.02), el fichero que
+// aceptan los bancos SEPA para los cobros CORE y B2B. Un bloque de información de pago por tipo de
+// secuencia.
 
 type painDocument struct {
 	XMLName xml.Name       `xml:"Document"`
@@ -83,7 +84,7 @@ type painAmount struct {
 	Value    string `xml:",chardata"`
 }
 
-// sepaName keeps a name within the SEPA character set and 70 characters.
+// sepaName mantiene un nombre dentro del juego de caracteres SEPA y en 70 caracteres como mucho.
 func sepaName(s string) string {
 	out := strings.Map(func(r rune) rune {
 		switch {
@@ -133,7 +134,7 @@ func agent(bic string) painAgent {
 	return painAgent{Other: &painOther{ID: "NOTPROVIDED"}}
 }
 
-// Pain008 renders the file of a generated remittance.
+// Pain008 compone el fichero de una remesa generada.
 func (r *Remittance) Pain008() ([]byte, error) {
 	if r.s.Status == RemDraft || r.s.Status == RemCancelled {
 		return nil, fw.Violation("treasury.remittance_not_generated", "the file exists once the remittance is generated")

@@ -1,57 +1,58 @@
-// Package domain is the model of the Security bounded context: users and how they authenticate
-// (password, external identities), roles and the permissions they carry, access to organizations,
-// refresh sessions, the permission catalog and the rules of delegated administration. It is the
-// Go port of the C# ErpKernel Security subdomain (see docs/SEGURIDAD.md): authentication says who
-// the caller is; this context says what the caller may do and on which organizations.
+// Package domain es el modelo del contexto delimitado Security: los usuarios y cómo se autentican
+// (contraseña, identidades externas), los roles y los permisos que llevan, el acceso a
+// organizaciones, las sesiones de refresco, el catálogo de permisos y las reglas de la
+// administración delegada. Es la traducción a Go del subdominio Security de ErpKernel en C# (ver
+// docs/SEGURIDAD.md): la autenticación dice quién llama; este contexto dice qué puede hacer quien
+// llama y sobre qué organizaciones.
 package domain
 
 import (
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// UserID identifies a security user (same GUIDs as the C# IdSecurityUser).
+// UserID identifica un usuario de seguridad (los mismos GUID que IdSecurityUser en C#).
 type UserID struct{ fw.UUID }
 
-// NewUserID returns a new identity.
+// NewUserID devuelve una identidad nueva.
 func NewUserID() UserID { return UserID{fw.NewUUID()} }
 
-// ParseUserID parses a textual identity.
+// ParseUserID interpreta una identidad en texto.
 func ParseUserID(s string) (UserID, error) {
 	u, err := fw.ParseUUID(s)
 	return UserID{u}, err
 }
 
-// MustUserID parses a well-known identity.
+// MustUserID interpreta una identidad conocida.
 func MustUserID(s string) UserID { return UserID{fw.MustParseUUID(s)} }
 
-// RoleID identifies a role (same GUIDs as the C# IdSecurityRole for the seeded ones).
+// RoleID identifica un rol (los mismos GUID que IdSecurityRole en C# para los sembrados).
 type RoleID struct{ fw.UUID }
 
-// NewRoleID returns a new identity.
+// NewRoleID devuelve una identidad nueva.
 func NewRoleID() RoleID { return RoleID{fw.NewUUID()} }
 
-// ParseRoleID parses a textual identity.
+// ParseRoleID interpreta una identidad en texto.
 func ParseRoleID(s string) (RoleID, error) {
 	u, err := fw.ParseUUID(s)
 	return RoleID{u}, err
 }
 
-// MustRoleID parses a well-known identity.
+// MustRoleID interpreta una identidad conocida.
 func MustRoleID(s string) RoleID { return RoleID{fw.MustParseUUID(s)} }
 
-// SessionID identifies a refresh session.
+// SessionID identifica una sesión de refresco.
 type SessionID struct{ fw.UUID }
 
-// NewSessionID returns a new identity.
+// NewSessionID devuelve una identidad nueva.
 func NewSessionID() SessionID { return SessionID{fw.NewUUID()} }
 
-// PartyID references the Parties party behind a user, by identity.
+// PartyID referencia, por identidad, la party de Parties que hay detrás de un usuario.
 type PartyID struct{ fw.UUID }
 
-// OrganizationID references an internal organization (a Parties party), by identity.
+// OrganizationID referencia, por identidad, una organización interna (una party de Parties).
 type OrganizationID struct{ fw.UUID }
 
-// ParseOrganizationID parses a textual identity.
+// ParseOrganizationID interpreta una identidad en texto.
 func ParseOrganizationID(s string) (OrganizationID, error) {
 	u, err := fw.ParseUUID(s)
 	return OrganizationID{u}, err

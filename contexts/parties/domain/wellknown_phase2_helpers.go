@@ -1,6 +1,6 @@
 package domain
 
-// WellKnownDocumentPolicy builds the document policy of the seed.
+// WellKnownDocumentPolicy construye la política de documentos de la semilla.
 func WellKnownDocumentPolicy() *DocumentPolicy {
 	p, err := NewDocumentPolicy(WellKnownDocumentTypes(), WellKnownCountryDocumentRules())
 	if err != nil {
@@ -9,7 +9,7 @@ func WellKnownDocumentPolicy() *DocumentPolicy {
 	return p
 }
 
-// WellKnownClassificationCatalog builds the classification catalog of the seed.
+// WellKnownClassificationCatalog construye el catálogo de clasificaciones de la semilla.
 func WellKnownClassificationCatalog() *ClassificationCatalog {
 	c, err := NewClassificationCatalog(WellKnownClassificationTypes())
 	if err != nil {
@@ -18,7 +18,7 @@ func WellKnownClassificationCatalog() *ClassificationCatalog {
 	return c
 }
 
-// Well-known document types and classifications used by code and tests.
+// Tipos de documento y clasificaciones conocidos que usan el código y las pruebas.
 var (
 	DocPassport         = MustDocumentTypeID("c0000000-0004-0000-0000-000000000001")
 	DocNationalID       = MustDocumentTypeID("c0000000-0004-0000-0000-000000000002")

@@ -1,10 +1,12 @@
-// Package repotest is the conformance suite of the domain.Repository contract. Every repository
-// implementation (memory, each SQL dialect, future document stores...) runs Run against its own
-// backend to prove it honours the same semantics: optimistic concurrency, unit-of-work rollback,
-// child collections and, above all, that every specification returns exactly the aggregates
-// that satisfy it in memory, while being executed by the store.
+// Package repotest es la batería de conformidad del contrato domain.Repository. Cada
+// implementación de repositorio (memoria, cada dialecto SQL, futuros almacenes de
+// documentos...) ejecuta Run contra su propio almacén para demostrar que respeta la misma
+// semántica: concurrencia optimista, rollback de la unidad de trabajo, colecciones hijas y,
+// sobre todo, que cada especificación devuelve exactamente los agregados que la cumplen en
+// memoria, aunque la ejecute el almacén.
 //
-// The suite uses its own small aggregate, Widget, exercising every kind of typed field.
+// La batería usa su propio agregado pequeño, Widget, que ejercita todos los tipos de campo
+// tipado.
 package repotest
 
 import (
@@ -16,22 +18,22 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Kind is the aggregate type name of Widget.
+// Kind es el nombre del tipo de agregado de Widget.
 const Kind = "repotest.widget"
 
-// WidgetID identifies a Widget.
+// WidgetID identifica un Widget.
 type WidgetID struct{ domain.UUID }
 
-// NewWidgetID returns a new identity.
+// NewWidgetID devuelve una identidad nueva.
 func NewWidgetID() WidgetID { return WidgetID{domain.NewUUID()} }
 
-// Part is a child value object of Widget.
+// Part es un objeto de valor hijo de Widget.
 type Part struct {
 	Name string
 	Qty  int64
 }
 
-// Widget is the aggregate used by the conformance suite.
+// Widget es el agregado que usa la batería de conformidad.
 type Widget struct {
 	domain.BaseAggregateRoot[WidgetID]
 	name      string
@@ -44,28 +46,29 @@ type Widget struct {
 	parts     []Part
 }
 
-// WidgetCreated is raised when a Widget is created.
+// WidgetCreated se lanza cuando se crea un Widget.
 type WidgetCreated struct {
 	domain.EventMeta
 	Name string `json:"name"`
 }
 
-// EventType implements domain.Event.
+// EventType implementa domain.Event.
 func (WidgetCreated) EventType() string { return "repotest.widget_created" }
 
-// WidgetRenamed is raised when a Widget is renamed.
+// WidgetRenamed se lanza cuando se renombra un Widget.
 type WidgetRenamed struct {
 	domain.EventMeta
 	From string `json:"from"`
 	To   string `json:"to"`
 }
 
-// EventType implements domain.Event.
+// EventType implementa domain.Event.
 func (WidgetRenamed) EventType() string { return "repotest.widget_renamed" }
 
-// NewWidget creates a new Widget and raises WidgetCreated. Weight (a decimal) and launch date (a
-// civil date) are derived deterministically: price/8 and the calendar day of createdAt, so the
-// conformance suite also exercises exact decimals and dates on every store.
+// NewWidget crea un Widget nuevo y lanza WidgetCreated. El peso (un decimal) y la fecha de
+// lanzamiento (una fecha civil) se derivan de forma determinista: price/8 y el día natural de
+// createdAt, así que la batería de conformidad también ejercita decimales exactos y fechas en
+// todos los almacenes.
 func NewWidget(id WidgetID, name string, price int64, active bool, color *string, createdAt time.Time, parts ...Part) (*Widget, error) {
 	weight := vocab.DecimalFromInt(price).Div(vocab.DecimalFromInt(8))
 	w, err := Reconstitute(id, name, price, active, color, createdAt, weight, vocab.DateOf(createdAt.UTC()), parts)
@@ -76,7 +79,7 @@ func NewWidget(id WidgetID, name string, price int64, active bool, color *string
 	return w, nil
 }
 
-// Reconstitute rebuilds a Widget from persisted state without raising events.
+// Reconstitute reconstruye un Widget a partir del estado persistido sin lanzar eventos.
 func Reconstitute(id WidgetID, name string, price int64, active bool, color *string, createdAt time.Time,
 	weight vocab.Decimal, launch vocab.Date, parts []Part) (*Widget, error) {
 	base, err := domain.NewBaseAggregateRoot(Kind, id)
@@ -106,31 +109,31 @@ func Reconstitute(id WidgetID, name string, price int64, active bool, color *str
 	}, nil
 }
 
-// Name returns the name.
+// Name devuelve el nombre.
 func (w *Widget) Name() string { return w.name }
 
-// Price returns the price in cents.
+// Price devuelve el precio en céntimos.
 func (w *Widget) Price() int64 { return w.price }
 
-// Active reports whether the widget is active.
+// Active dice si el widget está activo.
 func (w *Widget) Active() bool { return w.active }
 
-// Color returns the optional color.
+// Color devuelve el color opcional.
 func (w *Widget) Color() *string { return w.color }
 
-// CreatedAt returns the creation instant.
+// CreatedAt devuelve el instante de creación.
 func (w *Widget) CreatedAt() time.Time { return w.createdAt }
 
-// Weight returns the weight (exact decimal).
+// Weight devuelve el peso (decimal exacto).
 func (w *Widget) Weight() vocab.Decimal { return w.weight }
 
-// Launch returns the launch date (civil date).
+// Launch devuelve la fecha de lanzamiento (fecha civil).
 func (w *Widget) Launch() vocab.Date { return w.launch }
 
-// Parts returns the parts.
+// Parts devuelve las piezas.
 func (w *Widget) Parts() []Part { return slices.Clone(w.parts) }
 
-// Rename changes the name and raises WidgetRenamed.
+// Rename cambia el nombre y lanza WidgetRenamed.
 func (w *Widget) Rename(name string) error {
 	if name == "" {
 		return domain.Violation("widget.name_required", "name is required")
@@ -141,13 +144,13 @@ func (w *Widget) Rename(name string) error {
 	return nil
 }
 
-// SetPrice changes the price.
+// SetPrice cambia el precio.
 func (w *Widget) SetPrice(p int64) { w.price = p }
 
-// ReplaceParts replaces the parts collection.
+// ReplaceParts sustituye la colección de piezas.
 func (w *Widget) ReplaceParts(parts ...Part) { w.parts = slices.Clone(parts) }
 
-// Clone returns a deep copy (for the memory repository's isolation option).
+// Clone devuelve una copia profunda (para la opción de aislamiento del repositorio en memoria).
 func (w *Widget) Clone() *Widget {
 	c := *w
 	c.parts = slices.Clone(w.parts)
@@ -158,7 +161,8 @@ func (w *Widget) Clone() *Widget {
 	return &c
 }
 
-// Typed fields of Widget used by specifications. Adapters map the logical names to storage.
+// Campos tipados de Widget que usan las especificaciones. Los adaptadores traducen los nombres
+// lógicos al almacenamiento.
 var (
 	FieldID        = spec.Comparable[*Widget, WidgetID]("id", (*Widget).ID)
 	FieldName      = spec.Text[*Widget]("name", (*Widget).Name)
@@ -174,17 +178,17 @@ var (
 	PartQty  = spec.Ordered[Part, int64]("qty", func(p Part) int64 { return p.Qty })
 )
 
-// PremiumName is the name of the custom specification Premium.
+// PremiumName es el nombre de la especificación propia Premium.
 const PremiumName = "repotest.premium"
 
-// Premium is a custom specification: active widgets priced at least minPrice.
-// Every adapter must provide its own translation of PremiumName.
+// Premium es una especificación propia: widgets activos con precio de al menos minPrice.
+// Cada adaptador debe dar su propia traducción de PremiumName.
 func Premium(minPrice int64) spec.Spec[*Widget] {
 	return spec.Custom(PremiumName, func(w *Widget) bool { return w.active && w.price >= minPrice }, minPrice)
 }
 
-// Unknown is a custom specification no adapter translates; stores that cannot evaluate it
-// natively must fail with domain.ErrUnsupported.
+// Unknown es una especificación propia que ningún adaptador traduce; los almacenes que no
+// pueden evaluarla de forma nativa deben fallar con domain.ErrUnsupported.
 func Unknown() spec.Spec[*Widget] {
 	return spec.Custom("repotest.unknown", func(*Widget) bool { return true })
 }

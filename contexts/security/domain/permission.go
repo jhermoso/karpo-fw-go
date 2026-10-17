@@ -10,15 +10,15 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/traits"
 )
 
-// Permission is a permission code "{Namespace}.{Resource}.{Action}" (contract v1), for example
-// "Parties.Party.Create". The code is the identity of the permission: every bounded context
-// declares its own and Security keeps the catalog (decision 4).
+// Permission es un código de permiso "{Namespace}.{Resource}.{Action}" (contrato v1), por ejemplo
+// "Parties.Party.Create". El código es la identidad del permiso: cada contexto delimitado declara
+// los suyos y Security guarda el catálogo (decisión 4).
 type Permission string
 
-// Wildcard grants every permission. Only the GlobalSuperAdmin system role carries it.
+// Wildcard concede todos los permisos. Sólo lo lleva el rol del sistema GlobalSuperAdmin.
 const Wildcard Permission = "*.*.*"
 
-// Actions the standard role rule knows (decision 4, the C# P5 rule).
+// Acciones que conoce la regla estándar de roles (decisión 4, la regla P5 de C#).
 const (
 	ActionRead   = "Read"
 	ActionCreate = "Create"
@@ -38,19 +38,19 @@ func (p Permission) parts() ([]string, bool) {
 	return parts, true
 }
 
-// WellFormed reports whether the code has three non-empty segments.
+// WellFormed dice si el código tiene tres segmentos no vacíos.
 func (p Permission) WellFormed() bool {
 	_, ok := p.parts()
 	return ok
 }
 
-// Namespace returns the first segment (the bounded context).
+// Namespace devuelve el primer segmento (el contexto delimitado).
 func (p Permission) Namespace() string { return p.segment(0) }
 
-// Resource returns the second segment.
+// Resource devuelve el segundo segmento.
 func (p Permission) Resource() string { return p.segment(1) }
 
-// Action returns the third segment.
+// Action devuelve el tercer segmento.
 func (p Permission) Action() string { return p.segment(2) }
 
 func (p Permission) segment(i int) string {
@@ -60,7 +60,7 @@ func (p Permission) segment(i int) string {
 	return ""
 }
 
-// normalizePermissions validates, deduplicates and sorts permission codes.
+// normalizePermissions valida, quita duplicados y ordena códigos de permiso.
 func normalizePermissions(perms []Permission) ([]Permission, error) {
 	var v fw.Validation
 	out := make([]Permission, 0, len(perms))
@@ -76,25 +76,25 @@ func normalizePermissions(perms []Permission) ([]Permission, error) {
 	return out, v.Err()
 }
 
-// PermissionKind is the stable aggregate type name of a catalog entry.
+// PermissionKind es el nombre estable del tipo de agregado de una entrada del catálogo.
 const PermissionKind = "security.permission"
 
-// PermissionID is the storage identity of a catalog entry. It is derived from the code, so every
-// installation gives the same permission the same id; other contexts never see it.
+// PermissionID es la identidad de almacenamiento de una entrada del catálogo. Se deriva del código,
+// así que cada instalación da al mismo permiso el mismo id; los otros contextos nunca la ven.
 type PermissionID struct{ fw.UUID }
 
-// PermissionIDOf derives the identity of a permission from its code.
+// PermissionIDOf deriva la identidad de un permiso a partir de su código.
 func PermissionIDOf(code Permission) PermissionID {
 	sum := sha256.Sum256([]byte("karpo.security.permission:" + string(code)))
 	var u fw.UUID
 	copy(u[:], sum[:16])
-	u[6] = (u[6] & 0x0f) | 0x80 // RFC 9562 version 8 (name-based, custom)
+	u[6] = (u[6] & 0x0f) | 0x80 // RFC 9562 versión 8 (basada en nombre, propia)
 	u[8] = (u[8] & 0x3f) | 0x80
 	return PermissionID{u}
 }
 
-// PermissionEntry is one entry of the permission catalog. Entries are never deleted: a permission
-// nobody declares anymore is deactivated and stops granting (fail closed).
+// PermissionEntry es una entrada del catálogo de permisos. Las entradas nunca se borran: un permiso
+// que ya nadie declara se desactiva y deja de conceder (falla cerrado).
 type PermissionEntry struct {
 	fw.BaseAggregateRoot[PermissionID]
 	traits.Activation
@@ -102,12 +102,12 @@ type PermissionEntry struct {
 	description string
 }
 
-// DeclarePermission creates the catalog entry of a permission.
+// DeclarePermission crea la entrada del catálogo de un permiso.
 func DeclarePermission(code Permission, description string) (*PermissionEntry, error) {
 	return ReconstitutePermission(code, description, true)
 }
 
-// ReconstitutePermission rebuilds a catalog entry from persisted state.
+// ReconstitutePermission reconstruye una entrada del catálogo a partir del estado persistido.
 func ReconstitutePermission(code Permission, description string, active bool) (*PermissionEntry, error) {
 	var v fw.Validation
 	v.Require(code.WellFormed() && len(code) <= 200, "code", "format", "a permission is {Namespace}.{Resource}.{Action}")
@@ -123,13 +123,13 @@ func ReconstitutePermission(code Permission, description string, active bool) (*
 	return &PermissionEntry{BaseAggregateRoot: base, Activation: traits.RestoredActivation(active), code: code, description: description}, nil
 }
 
-// Code returns the permission code.
+// Code devuelve el código del permiso.
 func (p *PermissionEntry) Code() Permission { return p.code }
 
-// Description returns the description.
+// Description devuelve la descripción.
 func (p *PermissionEntry) Description() string { return p.description }
 
-// DefaultDescription describes a permission from its segments (as the C# catalog did).
+// DefaultDescription describe un permiso a partir de sus segmentos (como hacía el catálogo de C#).
 func DefaultDescription(code Permission) string {
 	if code == Wildcard {
 		return "Full access to all resources and actions"
@@ -137,16 +137,16 @@ func DefaultDescription(code Permission) string {
 	return code.Action() + " access to " + code.Namespace() + "." + code.Resource()
 }
 
-// Catalog entry fields.
+// Campos de las entradas del catálogo.
 var (
 	PermFieldCode   = spec.Comparable("code", func(p *PermissionEntry) string { return string(p.code) })
 	PermFieldActive = spec.Comparable("active", (*PermissionEntry).IsActive)
 )
 
-// Catalog is the set of permissions in force: the active entries of the catalog.
+// Catalog es el conjunto de permisos en vigor: las entradas activas del catálogo.
 type Catalog struct{ codes map[Permission]struct{} }
 
-// NewCatalog builds a catalog from codes.
+// NewCatalog construye un catálogo a partir de códigos.
 func NewCatalog(codes ...Permission) Catalog {
 	c := Catalog{codes: make(map[Permission]struct{}, len(codes))}
 	for _, p := range codes {
@@ -155,13 +155,13 @@ func NewCatalog(codes ...Permission) Catalog {
 	return c
 }
 
-// Has reports whether the permission is in force.
+// Has dice si el permiso está en vigor.
 func (c Catalog) Has(p Permission) bool {
 	_, ok := c.codes[p]
 	return ok
 }
 
-// Codes returns the permissions in force, sorted.
+// Codes devuelve los permisos en vigor, ordenados.
 func (c Catalog) Codes() []Permission {
 	out := make([]Permission, 0, len(c.codes))
 	for p := range c.codes {
@@ -171,7 +171,7 @@ func (c Catalog) Codes() []Permission {
 	return out
 }
 
-// Check reports the permissions the catalog does not know.
+// Check informa de los permisos que el catálogo no conoce.
 func (c Catalog) Check(perms []Permission) error {
 	var v fw.Validation
 	for _, p := range perms {
@@ -180,11 +180,11 @@ func (c Catalog) Check(perms []Permission) error {
 	return v.Err()
 }
 
-// StandardPermissions is the rule that gives each system role its permissions (decision 4, the
-// rule Javier approved as P5): GlobalSuperAdmin the wildcard; OrganizationAdmin everything but
-// what is reserved to the global administrator; StandardUser Read, Create and Update outside
-// Security; ReadOnlyUser every Read; Customer nothing. Any other action (Approve, Issue,
-// Submit...) reaches OrganizationAdmin or a custom role only.
+// StandardPermissions es la regla que da a cada rol del sistema sus permisos (decisión 4, la regla
+// que Javier aprobó como P5): GlobalSuperAdmin, el comodín; OrganizationAdmin, todo menos lo
+// reservado al administrador global; StandardUser, Read, Create y Update fuera de Security;
+// ReadOnlyUser, todos los Read; Customer, nada. Cualquier otra acción (Approve, Issue, Submit...)
+// sólo llega a OrganizationAdmin o a un rol propio.
 func StandardPermissions(role RoleID, c Catalog) []Permission {
 	var out []Permission
 	for _, p := range c.Codes() {

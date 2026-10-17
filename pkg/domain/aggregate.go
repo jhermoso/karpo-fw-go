@@ -2,29 +2,29 @@ package domain
 
 import "fmt"
 
-// AggregateRoot is the consistency boundary of a cluster of entities and value objects.
-// Only aggregate roots have repositories.
+// AggregateRoot es la frontera de consistencia de un grupo de entidades y objetos de valor.
+// Sólo las raíces de agregado tienen repositorio.
 //
-// The interface is sealed: its unexported methods can only be satisfied by embedding
-// BaseAggregateRoot, which guarantees every aggregate carries a version (optimistic
-// concurrency) and an event buffer.
+// La interfaz está sellada: sus métodos no exportados sólo se satisfacen incrustando
+// BaseAggregateRoot, que garantiza que todo agregado lleva una versión (concurrencia
+// optimista) y un buffer de eventos.
 type AggregateRoot[ID Identifier] interface {
 	Entity[ID]
-	// AggregateType is the stable, persisted name of the aggregate kind (e.g. "parties.party").
+	// AggregateType es el nombre estable y persistido del tipo de agregado (p. ej. "parties.party").
 	AggregateType() string
-	// Version is the persisted version: 0 means "never persisted".
+	// Version es la versión persistida: 0 significa «nunca persistido».
 	Version() int64
-	// PendingEvents returns the domain events raised since the aggregate was loaded or last saved.
+	// PendingEvents devuelve los eventos de dominio lanzados desde que se cargó o se guardó por última vez el agregado.
 	PendingEvents() []Event
-	// ClearEvents discards the pending events once they are safely recorded/dispatched.
+	// ClearEvents descarta los eventos pendientes una vez registrados o despachados con seguridad.
 	ClearEvents()
 
 	aggregateRoot()
 	setVersion(v int64)
 }
 
-// BaseAggregateRoot is the embeddable implementation of AggregateRoot. Embed it by value and
-// use a pointer receiver for the aggregate type (e.g. *Party implements AggregateRoot[PartyID]).
+// BaseAggregateRoot es la implementación incrustable de AggregateRoot. Se incrusta por valor y
+// el tipo del agregado usa receptor puntero (p. ej. *Party implementa AggregateRoot[PartyID]).
 type BaseAggregateRoot[ID Identifier] struct {
 	BaseEntity[ID]
 	kind    string
@@ -32,7 +32,7 @@ type BaseAggregateRoot[ID Identifier] struct {
 	events  []Event
 }
 
-// NewBaseAggregateRoot validates the identity and kind of a new or reconstituted aggregate.
+// NewBaseAggregateRoot valida la identidad y el tipo de un agregado nuevo o reconstituido.
 func NewBaseAggregateRoot[ID Identifier](kind string, id ID) (BaseAggregateRoot[ID], error) {
 	if kind == "" {
 		return BaseAggregateRoot[ID]{}, fmt.Errorf("%w: aggregate kind must not be empty", ErrInvalidIdentity)
@@ -44,24 +44,24 @@ func NewBaseAggregateRoot[ID Identifier](kind string, id ID) (BaseAggregateRoot[
 	return BaseAggregateRoot[ID]{BaseEntity: base, kind: kind}, nil
 }
 
-// AggregateType returns the aggregate kind.
+// AggregateType devuelve el tipo del agregado.
 func (a *BaseAggregateRoot[ID]) AggregateType() string { return a.kind }
 
-// Version returns the persisted version (0 when new).
+// Version devuelve la versión persistida (0 si es nuevo).
 func (a *BaseAggregateRoot[ID]) Version() int64 { return a.version }
 
-// IsNew reports whether the aggregate has never been persisted.
+// IsNew dice si el agregado no se ha persistido nunca.
 func (a *BaseAggregateRoot[ID]) IsNew() bool { return a.version == 0 }
 
-// Raise records a domain event. Call it from aggregate behaviour methods after the state change.
+// Raise registra un evento de dominio. Se llama desde los métodos de comportamiento del agregado, después del cambio de estado.
 func (a *BaseAggregateRoot[ID]) Raise(evt Event) {
 	if evt != nil {
 		a.events = append(a.events, evt)
 	}
 }
 
-// NewEventMeta returns event metadata pre-filled with this aggregate's identity, kind and the
-// version the aggregate will have once the pending changes are saved.
+// NewEventMeta devuelve metadatos de evento ya rellenos con la identidad y el tipo de este
+// agregado y la versión que tendrá una vez guardados los cambios pendientes.
 func (a *BaseAggregateRoot[ID]) NewEventMeta() EventMeta {
 	m := NewEventMeta()
 	m.AggregateType = a.kind
@@ -70,19 +70,19 @@ func (a *BaseAggregateRoot[ID]) NewEventMeta() EventMeta {
 	return m
 }
 
-// PendingEvents returns a copy of the events raised and not yet cleared.
+// PendingEvents devuelve una copia de los eventos lanzados y aún no descartados.
 func (a *BaseAggregateRoot[ID]) PendingEvents() []Event {
 	return append([]Event(nil), a.events...)
 }
 
-// ClearEvents empties the pending events.
+// ClearEvents vacía los eventos pendientes.
 func (a *BaseAggregateRoot[ID]) ClearEvents() { a.events = nil }
 
 func (a *BaseAggregateRoot[ID]) aggregateRoot()     {}
 func (a *BaseAggregateRoot[ID]) setVersion(v int64) { a.version = v }
 
-// MarkPersisted sets the persisted version of an aggregate. It is reserved for repository
-// implementations (after an insert/update, or when reconstituting from storage).
+// MarkPersisted fija la versión persistida de un agregado. Está reservada a las
+// implementaciones de repositorio (tras un insert/update, o al reconstituir desde el almacenamiento).
 func MarkPersisted[ID Identifier](agg AggregateRoot[ID], version int64) {
 	agg.setVersion(version)
 }

@@ -12,47 +12,47 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Aggregate type names.
+// Nombres de los tipos de agregado.
 const (
 	ProductKind   = "financial.product"
 	AgreementKind = "financial.agreement"
 )
 
-// Identities.
+// Identidades.
 type (
-	// ProductID identifies a financial product.
+	// ProductID identifica un producto financiero.
 	ProductID struct{ fw.UUID }
-	// AgreementID identifies an agreement.
+	// AgreementID identifica un acuerdo.
 	AgreementID struct{ fw.UUID }
 )
 
-// New identities and parsing.
+// Identidades nuevas e interpretación.
 func NewProductID() ProductID     { return ProductID{fw.NewUUID()} }
 func NewAgreementID() AgreementID { return AgreementID{fw.NewUUID()} }
 
-// ParseProductID parses a textual identity.
+// ParseProductID interpreta una identidad en texto.
 func ParseProductID(s string) (ProductID, error) { u, err := fw.ParseUUID(s); return ProductID{u}, err }
 
-// ParseAgreementID parses a textual identity.
+// ParseAgreementID interpreta una identidad en texto.
 func ParseAgreementID(s string) (AgreementID, error) {
 	u, err := fw.ParseUUID(s)
 	return AgreementID{u}, err
 }
 
-// Institutions tells whether a company is a financial institution. This context is the finance
-// sector of Karpo: it exists only for the companies that are one (in Parties, an internal
-// organization that also has the role of financial institution).
+// Institutions dice si una empresa es una entidad financiera. Este contexto es el sector financiero
+// de Karpo: sólo existe para las empresas que lo son (en Parties, una organización interna que
+// además tiene el papel de entidad financiera).
 type Institutions interface {
 	IsFinancialInstitution(ctx context.Context, company OrganizationID) (bool, error)
 }
 
-// Families of financial product and of the agreements and accounts they give rise to (the C# kept
-// free text: savings_account, checking_account, mortgage_loan_account, loan_agreement,
+// Families son las familias de producto financiero y de los acuerdos y cuentas a los que dan lugar (el C# guardaba
+// texto libre: savings_account, checking_account, mortgage_loan_account, loan_agreement,
 // investment_agreement, leasing_agreement, generic).
 var Families = []string{"payment", "deposit", "loan", "investment", "leasing", "other"}
 
-// ValidCode reports whether s is a code: 1 to max upper case letters, digits, dashes, dots or
-// underscores.
+// ValidCode dice si s es un código: de 1 a max mayúsculas, dígitos, guiones, puntos o guiones
+// bajos.
 func ValidCode(s string, max int) bool {
 	if s == "" || len(s) > max {
 		return false
@@ -65,30 +65,30 @@ func ValidCode(s string, max int) bool {
 	return true
 }
 
-// NormalizeCode trims and raises a code.
+// NormalizeCode recorta un código y lo pasa a mayúsculas.
 func NormalizeCode(s string) string { return strings.ToUpper(strings.TrimSpace(s)) }
 
-// ProductState is the persisted state of a financial product.
+// ProductState es el estado persistido de un producto financiero.
 type ProductState struct {
 	Company        OrganizationID
-	Code           string // the institution's own, unique in it
+	Code           string // el propio de la entidad, único en ella
 	Name           string
 	Description    string
 	Family         string
-	RegulatoryCode string     // the one the supervisor knows it by (CNMV, MiFID II)
-	Discontinued   vocab.Date // from this day it is no longer contracted
+	RegulatoryCode string     // aquél por el que lo conoce el supervisor (CNMV, MiFID II)
+	Discontinued   vocab.Date // desde este día ya no se contrata
 	Audit          traits.AuditStamp
 }
 
-// Product is something a financial institution offers its customers: a kind of account, of loan,
-// of deposit. In C# it hung from three levels of the product hierarchy and had one field.
+// Product es algo que una entidad financiera ofrece a sus clientes: un tipo de cuenta, de préstamo,
+// de depósito. En el C# colgaba de tres niveles de la jerarquía de productos y tenía un campo.
 type Product struct {
 	fw.BaseAggregateRoot[ProductID]
 	traits.Audited
 	s ProductState
 }
 
-// ReconstituteProduct rebuilds a product.
+// ReconstituteProduct reconstruye un producto.
 func ReconstituteProduct(id ProductID, s ProductState) (*Product, error) {
 	base, err := fw.NewBaseAggregateRoot(ProductKind, id)
 	if err != nil {
@@ -109,15 +109,15 @@ func ReconstituteProduct(id ProductID, s ProductState) (*Product, error) {
 	return &Product{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// State returns the state.
+// State devuelve el estado.
 func (p *Product) State() ProductState { return p.s }
 
-// Offered reports whether the product can be contracted on a day.
+// Offered dice si el producto se puede contratar en un día.
 func (p *Product) Offered(on vocab.Date) bool {
 	return p.s.Discontinued.IsZero() || on.Before(p.s.Discontinued)
 }
 
-// Change replaces what describes the product; its company and its code stay.
+// Change sustituye lo que describe el producto; su empresa y su código se quedan.
 func (p *Product) Change(name, description, family, regulatoryCode string) error {
 	s := p.s
 	s.Name, s.Description, s.Family, s.RegulatoryCode = name, description, family, regulatoryCode
@@ -129,7 +129,7 @@ func (p *Product) Change(name, description, family, regulatoryCode string) error
 	return nil
 }
 
-// Discontinue stops offering the product from a day: what was contracted goes on.
+// Discontinue deja de ofrecer el producto desde un día: lo contratado sigue.
 func (p *Product) Discontinue(on vocab.Date) error {
 	if on.IsZero() {
 		return fw.Violation("financial.date", "say from which day")
@@ -138,50 +138,50 @@ func (p *Product) Discontinue(on vocab.Date) error {
 	return nil
 }
 
-// Reinstate offers the product again.
+// Reinstate vuelve a ofrecer el producto.
 func (p *Product) Reinstate() { p.s.Discontinued = vocab.Date{} }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (p *Product) AuditSnapshot() map[string]any {
 	return map[string]any{"code": p.s.Code, "name": p.s.Name, "family": p.s.Family, "regulatoryCode": p.s.RegulatoryCode,
 		"discontinued": p.s.Discontinued.String()}
 }
 
-// AgreementStatus is whether an agreement is in force.
+// AgreementStatus es si un acuerdo está vigente.
 type AgreementStatus string
 
-// Statuses of an agreement (the C# had none).
+// Estados de un acuerdo (el C# no tenía ninguno).
 const (
 	StatusInForce    AgreementStatus = "in-force"
 	StatusTerminated AgreementStatus = "terminated"
 )
 
-// AgreementState is the persisted state of an agreement.
+// AgreementState es el estado persistido de un acuerdo.
 type AgreementState struct {
 	Company     OrganizationID
-	Customer    PartyID // who it is signed with (the C# agreement had no counterparty)
-	Number      string  // the institution's own, unique in it
+	Customer    PartyID // con quién está firmado (el acuerdo del C# no tenía contraparte)
+	Number      string  // el propio de la entidad, único en ella
 	Name        string
 	Description string
 	Family      string
-	Product     ProductID // what was contracted
+	Product     ProductID // lo que se contrató
 	Signed      vocab.Date
 	From        vocab.Date
-	Thru        vocab.Date // the last day; zero while it has no end
+	Thru        vocab.Date // el último día; cero mientras no tenga fin
 	Status      AgreementStatus
-	Reason      string // of its termination
+	Reason      string // de su terminación
 	Audit       traits.AuditStamp
 }
 
-// Agreement is a contract between a financial institution and a customer: what governs the
-// accounts opened under it.
+// Agreement es un contrato entre una entidad financiera y un cliente: lo que rige las cuentas
+// abiertas bajo él.
 type Agreement struct {
 	fw.BaseAggregateRoot[AgreementID]
 	traits.Audited
 	s AgreementState
 }
 
-// ReconstituteAgreement rebuilds an agreement.
+// ReconstituteAgreement reconstruye un acuerdo.
 func ReconstituteAgreement(id AgreementID, s AgreementState) (*Agreement, error) {
 	base, err := fw.NewBaseAggregateRoot(AgreementKind, id)
 	if err != nil {
@@ -207,8 +207,7 @@ func ReconstituteAgreement(id AgreementID, s AgreementState) (*Agreement, error)
 	return &Agreement{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// Sign records an agreement signed with a customer; without a day of effect, the one it was
-// signed.
+// Sign registra un acuerdo firmado con un cliente; sin día de efecto, el de la firma.
 func Sign(id AgreementID, s AgreementState) (*Agreement, error) {
 	s.Status, s.Reason = StatusInForce, ""
 	if s.From.IsZero() {
@@ -230,16 +229,16 @@ func optString(u fw.UUID) string {
 	return u.String()
 }
 
-// State returns the state.
+// State devuelve el estado.
 func (a *Agreement) State() AgreementState { return a.s }
 
-// InForce reports whether the agreement governs on a day.
+// InForce dice si el acuerdo rige en un día.
 func (a *Agreement) InForce(on vocab.Date) bool {
 	return !on.Before(a.s.From) && (a.s.Thru.IsZero() || !on.After(a.s.Thru)) &&
 		(a.s.Status == StatusInForce || !on.After(a.s.Thru))
 }
 
-// Change replaces the name, the description and the last day of an agreement in force.
+// Change sustituye el nombre, la descripción y el último día de un acuerdo vigente.
 func (a *Agreement) Change(name, description string, thru vocab.Date) error {
 	if a.s.Status != StatusInForce {
 		return fw.Violation("financial.terminated", "a terminated agreement does not change")
@@ -254,7 +253,7 @@ func (a *Agreement) Change(name, description string, thru vocab.Date) error {
 	return nil
 }
 
-// Terminate ends an agreement in force on a day, saying why.
+// Terminate termina un acuerdo vigente en un día, diciendo por qué.
 func (a *Agreement) Terminate(on vocab.Date, reason string) error {
 	if a.s.Status != StatusInForce {
 		return fw.Violation("financial.terminated", "the agreement is already terminated")
@@ -274,12 +273,12 @@ func (a *Agreement) Terminate(on vocab.Date, reason string) error {
 	return nil
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (a *Agreement) AuditSnapshot() map[string]any {
 	return map[string]any{"number": a.s.Number, "name": a.s.Name, "status": string(a.s.Status), "thru": a.s.Thru.String(), "reason": a.s.Reason}
 }
 
-// Fields.
+// Campos.
 var (
 	ProFieldCompany = spec.Comparable("company", func(p *Product) OrganizationID { return p.s.Company })
 	ProFieldCode    = spec.Ordered("product_code", func(p *Product) string { return p.s.Code })
@@ -292,15 +291,15 @@ var (
 	AgrFieldProduct  = spec.Comparable("product", func(a *Agreement) ProductID { return a.s.Product })
 )
 
-// Repositories.
+// Repositorios.
 type (
 	ProductRepository   = fw.Repository[ProductID, *Product]
 	AgreementRepository = fw.Repository[AgreementID, *Agreement]
 )
 
-// Events of an agreement.
+// Eventos de un acuerdo.
 type (
-	// AgreementSigned is raised when an agreement is signed.
+	// AgreementSigned se lanza cuando se firma un acuerdo.
 	AgreementSigned struct {
 		fw.EventMeta
 		Company  string     `json:"company"`
@@ -312,7 +311,7 @@ type (
 		From     vocab.Date `json:"from"`
 		Thru     vocab.Date `json:"thru"`
 	}
-	// AgreementTerminated is raised when an agreement is terminated.
+	// AgreementTerminated se lanza cuando se termina un acuerdo.
 	AgreementTerminated struct {
 		fw.EventMeta
 		Company  string     `json:"company"`
@@ -323,6 +322,6 @@ type (
 	}
 )
 
-// EventType implementations.
+// Implementaciones de EventType.
 func (AgreementSigned) EventType() string     { return "financial.agreement_signed" }
 func (AgreementTerminated) EventType() string { return "financial.agreement_terminated" }

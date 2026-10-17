@@ -11,11 +11,11 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// OpenPosition creates a position in an organization unit.
+// OpenPosition crea un puesto en una unidad organizativa.
 type OpenPosition struct {
 	Unit        string     `json:"unit"`
 	Type        string     `json:"type"`
-	Status      string     `json:"status,omitempty"` // Active (default), Budgeted or Pending Approval
+	Status      string     `json:"status,omitempty"` // Active (por omisión), Budgeted o Pending Approval
 	PlannedFrom *time.Time `json:"plannedFrom,omitempty"`
 	PlannedThru *time.Time `json:"plannedThru,omitempty"`
 	Salaried    bool       `json:"salaried"`
@@ -24,26 +24,26 @@ type OpenPosition struct {
 	Temporary   bool       `json:"temporary"`
 }
 
-// SetPositionStatus changes the status of a position.
+// SetPositionStatus cambia el estado de un puesto.
 type SetPositionStatus struct {
 	ID     domain.PositionID `json:"-"`
 	Status string            `json:"status"`
 }
 
-// FillPosition gives a position to an employee of its organization.
+// FillPosition da un puesto a un empleado de su organización.
 type FillPosition struct {
 	ID     domain.PositionID `json:"-"`
 	Person string            `json:"person"`
 	From   *time.Time        `json:"from,omitempty"`
 }
 
-// VacatePosition ends the current holding.
+// VacatePosition termina la ocupación actual.
 type VacatePosition struct {
 	ID domain.PositionID `json:"-"`
 	At *time.Time        `json:"at,omitempty"`
 }
 
-// ReportTo adds a supervisor position.
+// ReportTo añade un puesto supervisor.
 type ReportTo struct {
 	ID         domain.PositionID `json:"-"`
 	Supervisor string            `json:"supervisor"`
@@ -51,43 +51,43 @@ type ReportTo struct {
 	From       *time.Time        `json:"from,omitempty"`
 }
 
-// EndReporting ends the line to a supervisor position.
+// EndReporting termina la línea hacia un puesto supervisor.
 type EndReporting struct {
 	ID         domain.PositionID `json:"-"`
 	Supervisor string            `json:"supervisor"`
 	At         *time.Time        `json:"at,omitempty"`
 }
 
-// ClosePosition closes a position (its holder leaves it).
+// ClosePosition cierra un puesto (su titular lo deja).
 type ClosePosition struct {
 	ID domain.PositionID `json:"-"`
 	At *time.Time        `json:"at,omitempty"`
 }
 
-// GetPosition loads a position.
+// GetPosition carga un puesto.
 type GetPosition struct{ ID domain.PositionID }
 
-// SearchPositions searches positions of the caller's scope.
+// SearchPositions busca puestos del ámbito del que llama.
 type SearchPositions struct {
 	Unit, Organization, Type, Status, Holder string
 	VacantOnly                               bool
 	Page, Size                               int
 }
 
-// GetOrgChart returns the positions reporting (primary line, now) to a root position.
+// GetOrgChart devuelve los puestos que dependen (por la línea principal, ahora) de un puesto raíz.
 type GetOrgChart struct {
 	Root  domain.PositionID
-	Depth int // 1..MaxDepth, default 3
+	Depth int // 1..MaxDepth, 3 por omisión
 }
 
-// FulfillmentDTO is a holding of a position.
+// FulfillmentDTO es una ocupación de un puesto.
 type FulfillmentDTO struct {
 	Person string     `json:"person"`
 	From   time.Time  `json:"from"`
 	Thru   *time.Time `json:"thru,omitempty"`
 }
 
-// ReportingDTO is a reporting line.
+// ReportingDTO es una línea de dependencia.
 type ReportingDTO struct {
 	Supervisor string     `json:"supervisor"`
 	Primary    bool       `json:"primary"`
@@ -95,7 +95,7 @@ type ReportingDTO struct {
 	Thru       *time.Time `json:"thru,omitempty"`
 }
 
-// PositionDTO is the transport form of a position.
+// PositionDTO es la forma de transporte de un puesto.
 type PositionDTO struct {
 	ID           string           `json:"id"`
 	Unit         string           `json:"unit"`
@@ -116,7 +116,7 @@ type PositionDTO struct {
 	ModifiedBy   string           `json:"modifiedBy,omitempty"`
 }
 
-// ChartNode is a position of an org chart with its direct reports.
+// ChartNode es un puesto de un organigrama con sus subordinados directos.
 type ChartNode struct {
 	Position PositionDTO `json:"position"`
 	Reports  []ChartNode `json:"reports"`
@@ -164,7 +164,7 @@ func (n positionNames) dto(p *domain.Position) PositionDTO {
 	return d
 }
 
-// organizationOf returns the internal organization of a unit.
+// organizationOf devuelve la organización interna de una unidad.
 func (s service) organizationOf(ctx context.Context, unit domain.OrganizationID) (domain.OrganizationID, error) {
 	if s.Organizations == nil {
 		return unit, nil
@@ -180,7 +180,7 @@ func (s service) organizationOf(ctx context.Context, unit domain.OrganizationID)
 	return org, nil
 }
 
-// employedBy reports whether the person has an employment with the organization on a date.
+// employedBy dice si la persona tiene una relación laboral con la organización en una fecha.
 func (s service) employedBy(ctx context.Context, person domain.PersonID, org domain.OrganizationID, on vocab.Date) (bool, error) {
 	es, err := s.Employments.Find(ctx, domain.CurrentEmploymentsOf(person).And(domain.EmpFieldEmployer.Eq(org)))
 	if err != nil {
@@ -194,7 +194,7 @@ func (s service) employedBy(ctx context.Context, person domain.PersonID, org dom
 	return false, nil
 }
 
-// checkNoCycle walks up the primary supervisors of sup: the position must not be among them.
+// checkNoCycle sube por los supervisores principales de sup: el puesto no debe estar entre ellos.
 func (s service) checkNoCycle(ctx context.Context, position, sup domain.PositionID, now time.Time) error {
 	node := sup
 	for level := 0; ; level++ {
@@ -432,7 +432,7 @@ func (s service) positionUseCases(svc *Service) {
 		if err := sc.check(domain.PositionKind, root.ID(), root.Organization(), false); err != nil {
 			return ChartNode{}, err
 		}
-		// One query per level (IN lists in chunks); a position is placed once.
+		// Una consulta por nivel (listas IN por tramos); cada puesto se coloca una sola vez.
 		now := fw.Now()
 		nodes := map[domain.PositionID]*ChartNode{root.ID(): {Position: names.dto(root)}}
 		children := map[domain.PositionID][]domain.PositionID{}

@@ -11,25 +11,25 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// PartyKind is the stable aggregate type name of Party.
+// PartyKind es el nombre estable del tipo de agregado de Party.
 const PartyKind = "parties.party"
 
-// Kind distinguishes people from organizations. In C# they were subclasses of Party mapped TPT
-// (Person, Organization, LegalOrganization, Corporation); here the kind is data and the details
-// of each kind are value objects, so a party never changes class to change its data.
+// Kind distingue a las personas de las organizaciones. En C# eran subclases de Party mapeadas TPT
+// (Person, Organization, LegalOrganization, Corporation); aquí la clase es un dato y los detalles
+// de cada clase son objetos de valor, así que una party nunca cambia de clase para cambiar sus datos.
 type Kind string
 
-// Party kinds.
+// Clases de party.
 const (
 	KindPerson       Kind = "person"
 	KindOrganization Kind = "organization"
 )
 
-// PersonDetails are the data of a person.
+// PersonDetails son los datos de una persona.
 type PersonDetails struct {
 	Name          PersonalName
 	Gender        Gender
-	BirthDate     vocab.Date // zero when unknown
+	BirthDate     vocab.Date // cero si no se conoce
 	MaritalStatus MaritalStatus
 }
 
@@ -40,28 +40,29 @@ func (d PersonDetails) validate() error {
 	return v.Err()
 }
 
-// OrganizationDetails are the data of an organization.
+// OrganizationDetails son los datos de una organización.
 type OrganizationDetails struct {
 	Name      OrganizationName
 	LegalForm LegalForm
 }
 
-// PartyRole is a role played by a party during a period (child entity of Party).
+// PartyRole es un rol que desempeña una party durante un periodo (entidad hija de Party).
 type PartyRole struct {
 	ID       PartyRoleID
 	RoleType RoleTypeID
 	Period   vocab.ValidPeriod
-	// Annulled marks a role given by mistake that could not be taken away because something
-	// was already said about the party in that role. It ended when it was annulled.
+	// Annulled marca un rol dado por error que no se pudo quitar porque ya se había dicho algo
+	// de la party en ese rol. Terminó cuando se anuló.
 	Annulled bool
 }
 
-// IsActiveAt reports whether the role is played at t.
+// IsActiveAt dice si el rol se desempeña en t.
 func (r PartyRole) IsActiveAt(t time.Time) bool { return r.Period.IsActiveAt(t) }
 
-// Party is someone taking part in the business: a person or an organization, with the roles it
-// plays. Roles are child entities: their invariants (compatible kind, no overlapping periods of
-// the same role) are guarded here, which the C# bypassed by persisting PartyRole directly.
+// Party es alguien que toma parte en el negocio: una persona o una organización, con los roles que
+// desempeña. Los roles son entidades hijas: sus invariantes (clase compatible, sin periodos
+// solapados del mismo rol) se hacen cumplir aquí, cosa que C# se saltaba al persistir PartyRole
+// directamente.
 type Party struct {
 	fw.BaseAggregateRoot[PartyID]
 	traits.Activation
@@ -82,25 +83,25 @@ type Party struct {
 	duplicate       bool
 }
 
-// DocumentIssue marks a party whose identity document was refused: the number as it came and why
-// it was not taken. It is how a party loaded by an import with a wrong document stays in sight
-// until somebody corrects it (docs/PARTIES-MODELO-COMUN.md, D-5 and D-9). The zero value is no
-// issue.
+// DocumentIssue marca una party cuyo documento de identidad se rechazó: el número tal como llegó y
+// por qué no se aceptó. Así una party cargada por una importación con un documento erróneo sigue a
+// la vista hasta que alguien la corrija (docs/PARTIES-MODELO-COMUN.md, D-5 y D-9). El valor cero
+// es que no hay incidencia.
 type DocumentIssue struct {
-	Number string // as it came, for who corrects it; it identifies nobody
+	Number string // tal como llegó, para quien lo corrija; no identifica a nadie
 	Reason string
 }
 
-// IsZero reports whether there is no issue.
+// IsZero dice si no hay incidencia.
 func (d DocumentIssue) IsZero() bool { return d == DocumentIssue{} }
 
-// Limits of a document issue.
+// Límites de una incidencia de documento.
 const (
 	MaxDocumentIssueNumber = 60
 	MaxDocumentIssueReason = 200
 )
 
-// RegisterPerson creates a person.
+// RegisterPerson crea una persona.
 func RegisterPerson(id PartyID, d PersonDetails) (*Party, error) {
 	if err := d.validate(); err != nil {
 		return nil, err
@@ -114,7 +115,7 @@ func RegisterPerson(id PartyID, d PersonDetails) (*Party, error) {
 	return p, nil
 }
 
-// RegisterOrganization creates an organization.
+// RegisterOrganization crea una organización.
 func RegisterOrganization(id PartyID, d OrganizationDetails) (*Party, error) {
 	if d.Name.Legal() == "" {
 		var v fw.Validation
@@ -138,7 +139,7 @@ func newParty(id PartyID, k Kind) (*Party, error) {
 	return &Party{BaseAggregateRoot: base, kind: k}, nil
 }
 
-// PartyState is the persisted state of a party (used by Reconstitute).
+// PartyState es el estado persistido de una party (lo usa Reconstitute).
 type PartyState struct {
 	Kind         Kind
 	Person       PersonDetails
@@ -157,7 +158,7 @@ type PartyState struct {
 	Audit        traits.AuditStamp
 }
 
-// Reconstitute rebuilds a party from persisted state, without events.
+// Reconstitute reconstruye una party a partir del estado persistido, sin eventos.
 func Reconstitute(id PartyID, s PartyState) (*Party, error) {
 	p, err := newParty(id, s.Kind)
 	if err != nil {
@@ -188,13 +189,12 @@ func Reconstitute(id PartyID, s PartyState) (*Party, error) {
 	return p, nil
 }
 
-// IsDuplicate reports whether the party is a duplicate of another: it is still found and read,
-// but takes part in nothing else (docs/DECISIONES-COMUNES.md, D-64). The Duplicate Of
-// relationship says of which party; this mark is its projection, so that searches can leave it
-// out.
+// IsDuplicate dice si la party es un duplicado de otra: se sigue encontrando y leyendo, pero no
+// toma parte en nada más (docs/DECISIONES-COMUNES.md, D-64). La relación Duplicate Of dice de qué
+// party; esta marca es su proyección, para que las búsquedas puedan dejarla fuera.
 func (p *Party) IsDuplicate() bool { return p.duplicate }
 
-// MarkDuplicate marks the party as a duplicate. A party is the duplicate of one party only.
+// MarkDuplicate marca la party como duplicado. Una party es duplicado de una sola party.
 func (p *Party) MarkDuplicate() error {
 	if p.duplicate {
 		return fw.Violation("parties.already_duplicate", "the party is already the duplicate of another")
@@ -204,7 +204,7 @@ func (p *Party) MarkDuplicate() error {
 	return nil
 }
 
-// ClearDuplicate takes the mark away: the Duplicate Of relationship ended.
+// ClearDuplicate quita la marca: la relación Duplicate Of ha terminado.
 func (p *Party) ClearDuplicate() {
 	if p.duplicate {
 		p.duplicate = false
@@ -212,14 +212,14 @@ func (p *Party) ClearDuplicate() {
 	}
 }
 
-// DocumentIssue returns the mark of a refused identity document (zero when there is none).
+// DocumentIssue devuelve la marca de un documento de identidad rechazado (cero si no la hay).
 func (p *Party) DocumentIssue() DocumentIssue { return p.documentIssue }
 
-// HasDocumentIssue reports whether the party is marked with a refused identity document.
+// HasDocumentIssue dice si la party está marcada con un documento de identidad rechazado.
 func (p *Party) HasDocumentIssue() bool { return !p.documentIssue.IsZero() }
 
-// FlagDocumentIssue marks the party: its identity document was refused, for that reason. A new
-// mark replaces the one there was.
+// FlagDocumentIssue marca la party: su documento de identidad se rechazó, por ese motivo. Una
+// marca nueva sustituye a la que hubiera.
 func (p *Party) FlagDocumentIssue(number, reason string) error {
 	number, reason = strings.Join(strings.Fields(number), " "), strings.Join(strings.Fields(reason), " ")
 	var v fw.Validation
@@ -233,19 +233,19 @@ func (p *Party) FlagDocumentIssue(number, reason string) error {
 	return nil
 }
 
-// ClearDocumentIssue takes the mark away: somebody looked at it.
+// ClearDocumentIssue quita la marca: alguien la ha mirado.
 func (p *Party) ClearDocumentIssue() { p.documentIssue = DocumentIssue{} }
 
-// Kind returns the party kind.
+// Kind devuelve la clase de party.
 func (p *Party) Kind() Kind { return p.kind }
 
-// Person returns the person details (zero for an organization).
+// Person devuelve los datos de persona (cero en una organización).
 func (p *Party) Person() PersonDetails { return p.person }
 
-// Organization returns the organization details (zero for a person).
+// Organization devuelve los datos de organización (cero en una persona).
 func (p *Party) Organization() OrganizationDetails { return p.organization }
 
-// Name returns the display name.
+// Name devuelve el nombre visible.
 func (p *Party) Name() string {
 	if p.kind == KindPerson {
 		return p.person.Name.String()
@@ -253,10 +253,10 @@ func (p *Party) Name() string {
 	return p.organization.Name.String()
 }
 
-// Roles returns a copy of every role, current or past.
+// Roles devuelve una copia de todos los roles, actuales o pasados.
 func (p *Party) Roles() []PartyRole { return slices.Clone(p.roles) }
 
-// RoleTypes returns the role types of the roles (for specifications over the role collection).
+// RoleTypes devuelve los tipos de los roles (para especificaciones sobre la colección de roles).
 func (p *Party) RoleTypes() []RoleTypeID {
 	out := make([]RoleTypeID, len(p.roles))
 	for i, r := range p.roles {
@@ -272,7 +272,7 @@ func (p *Party) requireActive(action string) error {
 	return nil
 }
 
-// RenamePerson changes the name of a person.
+// RenamePerson cambia el nombre de una persona.
 func (p *Party) RenamePerson(n PersonalName) error {
 	if p.kind != KindPerson {
 		return fw.Violation("parties.kind_mismatch", "only a person has a personal name")
@@ -285,7 +285,7 @@ func (p *Party) RenamePerson(n PersonalName) error {
 	return p.rename(func() { p.person.Name = n }, n == p.person.Name)
 }
 
-// RenameOrganization changes the name of an organization.
+// RenameOrganization cambia el nombre de una organización.
 func (p *Party) RenameOrganization(n OrganizationName) error {
 	if p.kind != KindOrganization {
 		return fw.Violation("parties.kind_mismatch", "only an organization has an organization name")
@@ -313,7 +313,7 @@ func (p *Party) rename(apply func(), same bool) error {
 	return nil
 }
 
-// UpdatePersonDetails changes gender, birth date and marital status of a person.
+// UpdatePersonDetails cambia el género, la fecha de nacimiento y el estado civil de una persona.
 func (p *Party) UpdatePersonDetails(g Gender, birth vocab.Date, m MaritalStatus) error {
 	if p.kind != KindPerson {
 		return fw.Violation("parties.kind_mismatch", "only a person has personal details")
@@ -330,24 +330,24 @@ func (p *Party) UpdatePersonDetails(g Gender, birth vocab.Date, m MaritalStatus)
 	return nil
 }
 
-// Activate reactivates the party.
+// Activate reactiva la party.
 func (p *Party) Activate() {
 	if p.Activation.Activate() {
 		p.Raise(PartyActivated{EventMeta: p.NewEventMeta()})
 	}
 }
 
-// Deactivate deactivates the party. Its roles keep their periods: deactivation hides the party,
-// it does not rewrite its history.
+// Deactivate desactiva la party. Sus roles conservan sus periodos: desactivar oculta la party, no
+// reescribe su historia.
 func (p *Party) Deactivate() {
 	if p.Activation.Deactivate() {
 		p.Raise(PartyDeactivated{EventMeta: p.NewEventMeta()})
 	}
 }
 
-// AssignRole makes the party play a role from a moment on. Invariants: the role type exists, is
-// not a category and suits the party kind; the party is active; and it does not already play
-// the same role in an overlapping period.
+// AssignRole hace que la party desempeñe un rol a partir de un instante. Invariantes: el tipo de
+// rol existe, no es una categoría y encaja con la clase de party; la party está activa; y no
+// desempeña ya el mismo rol en un periodo solapado.
 func (p *Party) AssignRole(c RoleCatalog, roleType RoleTypeID, from time.Time) (PartyRoleID, error) {
 	if err := p.requireActive("be given roles"); err != nil {
 		return PartyRoleID{}, err
@@ -365,15 +365,15 @@ func (p *Party) AssignRole(c RoleCatalog, roleType RoleTypeID, from time.Time) (
 		}
 	}
 	role := PartyRole{ID: NewPartyRoleID(), RoleType: roleType, Period: period}
-	p.roles = append(slices.Clone(p.roles), role) // never share the backing array with a stored copy
+	p.roles = append(slices.Clone(p.roles), role) // nunca se comparte el array subyacente con una copia guardada
 	p.Raise(PartyRoleAssigned{EventMeta: p.NewEventMeta(), RoleID: role.ID.String(), RoleType: roleType.String(), From: period.From()})
 	return role.ID, nil
 }
 
-// AnnulRole takes back a role given by mistake (docs/DECISIONES-COMUNES.md, D-8). When nothing
-// depends on it, the role is removed as if it had never been given; when something does (the
-// caller says so: it is the one who can look at the relationships), it ends at that moment and
-// stays, marked as annulled. It reports whether the role was removed.
+// AnnulRole retira un rol dado por error (docs/DECISIONES-COMUNES.md, D-8). Si nada depende de
+// él, el rol se quita como si nunca se hubiera dado; si algo depende (lo dice quien llama: es
+// quien puede mirar las relaciones), termina en ese instante y se queda, marcado como anulado.
+// Dice si el rol se quitó.
 func (p *Party) AnnulRole(id PartyRoleID, at time.Time, depended bool) (removed bool, err error) {
 	i := slices.IndexFunc(p.roles, func(r PartyRole) bool { return r.ID == id })
 	if i < 0 {
@@ -388,7 +388,7 @@ func (p *Party) AnnulRole(id PartyRoleID, at time.Time, depended bool) (removed 
 		at = r.Period.From()
 	}
 	if end, closed := r.Period.To(); closed && !at.Before(end) {
-		at = end // it had ended already: that is when it stopped being played
+		at = end // ya había terminado: es cuando dejó de desempeñarse
 	}
 	if !depended {
 		p.roles = slices.Delete(p.roles, i, i+1)
@@ -404,7 +404,7 @@ func (p *Party) AnnulRole(id PartyRoleID, at time.Time, depended bool) (removed 
 	return !depended, nil
 }
 
-// EndRole stops playing a role at a moment (not before it started).
+// EndRole deja de desempeñar un rol en un instante (no antes de que empezara).
 func (p *Party) EndRole(id PartyRoleID, at time.Time) error {
 	i := slices.IndexFunc(p.roles, func(r PartyRole) bool { return r.ID == id })
 	if i < 0 {
@@ -412,7 +412,7 @@ func (p *Party) EndRole(id PartyRoleID, at time.Time) error {
 	}
 	r := p.roles[i]
 	if end, closed := r.Period.To(); closed && !at.Before(end) {
-		return nil // already ended at or before at
+		return nil // ya terminó en at o antes
 	}
 	period, err := vocab.NewValidPeriod(r.Period.From(), &at)
 	if err != nil {
@@ -424,17 +424,17 @@ func (p *Party) EndRole(id PartyRoleID, at time.Time) error {
 	return nil
 }
 
-// PlaysAt reports whether the party plays roleType, or a role below it in the hierarchy, at t.
+// PlaysAt dice si la party desempeña roleType, o un rol por debajo de él en la jerarquía, en t.
 func (p *Party) PlaysAt(c RoleCatalog, roleType RoleTypeID, t time.Time) bool {
 	for _, r := range p.roles {
-		if !r.Annulled && r.IsActiveAt(t) && c.IsA(r.RoleType, roleType) { // an annulled role counts for nothing, whenever
+		if !r.Annulled && r.IsActiveAt(t) && c.IsA(r.RoleType, roleType) { // un rol anulado no cuenta para nada, en ningún momento
 			return true
 		}
 	}
 	return false
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (p *Party) AuditSnapshot() map[string]any {
 	s := map[string]any{"kind": string(p.kind), "name": p.Name(), "active": p.IsActive(), "test": p.IsTest()}
 	if !p.documentIssue.IsZero() {

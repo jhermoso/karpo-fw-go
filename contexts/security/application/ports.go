@@ -1,7 +1,7 @@
-// Package application holds the Security use cases: signing in with a password and keeping the
-// session, administering users, roles and organization accesses under the rules of delegated
-// administration, the permission catalog, and the ports Security offers to the rest of the
-// system (authz.Directory, the external identity authenticator, the user directory).
+// Package application contiene los casos de uso de Security: iniciar sesión con contraseña y
+// mantener la sesión, administrar usuarios, roles y accesos a organizaciones bajo las reglas de la
+// administración delegada, el catálogo de permisos, y los puertos que Security ofrece al resto del
+// sistema (authz.Directory, el autenticador de identidades externas, el directorio de usuarios).
 package application
 
 import (
@@ -16,7 +16,7 @@ import (
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// Permissions of the Security use cases.
+// Permisos de los casos de uso de Security.
 var (
 	PermUserRead     = authz.MustPermission(string(domain.PermUserRead))
 	PermUserCreate   = authz.MustPermission(string(domain.PermUserCreate))
@@ -28,40 +28,40 @@ var (
 	PermRoleUpdate   = authz.MustPermission(string(domain.PermRoleUpdate))
 )
 
-// Permissions returns the permissions this context declares to the catalog.
+// Permissions devuelve los permisos que este contexto declara al catálogo.
 func Permissions() []authz.Permission {
 	return []authz.Permission{PermUserRead, PermUserCreate, PermUserUpdate, PermUserRole, PermAccessRead, PermAccessUpdate,
 		PermRoleRead, PermRoleUpdate}
 }
 
-// PasswordHasher hashes and verifies passwords. The hash is self-describing (algorithm and cost
-// inside), so the cost can be raised without a migration.
+// PasswordHasher calcula el hash de las contraseñas y las verifica. El hash es autodescriptivo
+// (lleva dentro el algoritmo y el coste), así que el coste se puede subir sin una migración.
 type PasswordHasher interface {
 	Hash(password string) (string, error)
-	// Verify reports whether the password matches the hash, and whether the hash is weaker than
-	// the current settings and should be recomputed.
+	// Verify dice si la contraseña coincide con el hash, y si el hash es más débil que la
+	// configuración actual y debería recalcularse.
 	Verify(password, hash string) (ok, stale bool)
 }
 
-// TokenIssuer issues the access token of the own login. Security does not know its format: the
-// composition root adapts the issuer of the host (today, the shared-secret JWT).
+// TokenIssuer emite el token de acceso del login propio. Security no conoce su formato: la raíz de
+// composición adapta el emisor del anfitrión (hoy, el JWT de secreto compartido).
 type TokenIssuer interface {
 	IssueAccessToken(ctx context.Context, subject fw.UUID, username string, party fw.UUID, expiresAt time.Time) (string, error)
 }
 
-// PartyDirectory tells whether a party exists (adapter over the Parties directory).
+// PartyDirectory dice si existe una party (adaptador sobre el directorio de Parties).
 type PartyDirectory interface {
 	PartyExists(ctx context.Context, party fw.UUID) (bool, error)
 }
 
-// InternalOrganizations tells whether a party is an internal organization, the only kind of
-// organization an access can be granted to (adapter over the Parties catalog).
+// InternalOrganizations dice si una party es una organización interna, la única clase de
+// organización a la que se puede conceder un acceso (adaptador sobre el catálogo de Parties).
 type InternalOrganizations interface {
 	IsInternalOrganization(ctx context.Context, organization fw.UUID) (bool, error)
 }
 
-// Deps are the ports the use cases need. Recorder, Audit, Parties and Organizations are optional;
-// zero durations and lockout take the defaults.
+// Deps son los puertos que necesitan los casos de uso. Recorder, Audit, Parties y Organizations son
+// opcionales; las duraciones y el bloqueo a cero toman los valores por defecto.
 type Deps struct {
 	Users         domain.UserRepository
 	Roles         domain.RoleRepository
@@ -75,11 +75,11 @@ type Deps struct {
 	Parties       PartyDirectory
 	Organizations InternalOrganizations
 	Lockout       domain.LockoutPolicy
-	AccessTTL     time.Duration // life of an access token (default 15 minutes)
-	SessionTTL    time.Duration // life of a refresh token (default 7 days)
+	AccessTTL     time.Duration // vida de un token de acceso (por defecto 15 minutos)
+	SessionTTL    time.Duration // vida de un token de refresco (por defecto 7 días)
 }
 
-// Defaults of the own login.
+// Valores por defecto del login propio.
 const (
 	DefaultAccessTTL  = 15 * time.Minute
 	DefaultSessionTTL = 7 * 24 * time.Hour
@@ -98,7 +98,7 @@ func (d Deps) withDefaults() Deps {
 	return d
 }
 
-// administratorOf builds the domain Administrator of the request from its authorization context.
+// administratorOf construye el Administrator de dominio de la petición a partir de su contexto de autorización.
 func administratorOf(ctx context.Context) (domain.Administrator, error) {
 	ac, ok := authz.FromContext(ctx)
 	if !ok {

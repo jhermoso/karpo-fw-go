@@ -1,11 +1,11 @@
-// Package trace is the tracing contract of the framework: a Tracer starts spans, a Span is one
-// leg of a request (HTTP -> use case -> SQL) and a SpanContext identifies it across processes
-// with the W3C traceparent header.
+// Package trace es el contrato de trazas del framework: un Tracer abre spans, un Span es un tramo
+// de una petición (HTTP -> caso de uso -> SQL) y un SpanContext lo identifica de un proceso a
+// otro con la cabecera traceparent de W3C.
 //
-// The contract depends on the standard library only. Implementations live in subpackages
-// (trace/vanilla has no dependencies; an OpenTelemetry adapter belongs to a separate module).
-// Every instrumented piece of the framework takes a Tracer as an option and falls back to Noop,
-// so a service that configures nothing behaves exactly as before.
+// El contrato sólo depende de la biblioteca estándar. Las implementaciones están en subpaquetes
+// (trace/vanilla no tiene dependencias; un adaptador de OpenTelemetry va en un módulo aparte).
+// Cada pieza instrumentada del framework recibe un Tracer como opción y, si no lo tiene, usa
+// Noop, así que un servicio que no configura nada se comporta exactamente como antes.
 package trace
 
 import (
@@ -14,34 +14,34 @@ import (
 	"strings"
 )
 
-// TraceParentHeader is the W3C Trace Context header.
+// TraceParentHeader es la cabecera W3C Trace Context.
 const TraceParentHeader = "traceparent"
 
-// Log attribute keys of the current span (see LogAttrs).
+// Claves de los atributos de log del span actual (véase LogAttrs).
 const (
 	TraceIDKey = "trace_id"
 	SpanIDKey  = "span_id"
 )
 
-// SpanContext identifies a span: the trace it belongs to, its own id and whether it is recorded.
+// SpanContext identifica un span: la traza a la que pertenece, su propio id y si se registra.
 type SpanContext struct {
 	TraceID [16]byte
 	SpanID  [8]byte
 	Sampled bool
 }
 
-// IsValid reports whether both ids are set (W3C: all zeros is invalid).
+// IsValid dice si están puestos los dos ids (W3C: todo ceros no es válido).
 func (sc SpanContext) IsValid() bool {
 	return sc.TraceID != [16]byte{} && sc.SpanID != [8]byte{}
 }
 
-// TraceIDString returns the trace id as 32 lowercase hex characters.
+// TraceIDString devuelve el id de traza como 32 caracteres hexadecimales en minúscula.
 func (sc SpanContext) TraceIDString() string { return hex.EncodeToString(sc.TraceID[:]) }
 
-// SpanIDString returns the span id as 16 lowercase hex characters.
+// SpanIDString devuelve el id del span como 16 caracteres hexadecimales en minúscula.
 func (sc SpanContext) SpanIDString() string { return hex.EncodeToString(sc.SpanID[:]) }
 
-// TraceParent renders the W3C traceparent header value, or "" for an invalid context.
+// TraceParent compone el valor de la cabecera traceparent de W3C, o "" para un contexto no válido.
 func (sc SpanContext) TraceParent() string {
 	if !sc.IsValid() {
 		return ""
@@ -53,10 +53,10 @@ func (sc SpanContext) TraceParent() string {
 	return "00-" + sc.TraceIDString() + "-" + sc.SpanIDString() + "-" + flags
 }
 
-// ParseTraceParent parses a W3C traceparent header: version-traceid-parentid-flags, lowercase
-// hex. Unknown versions are accepted as long as the four known fields are well formed (the
-// specification asks for forward compatibility); version ff, uppercase hex and all-zero ids are
-// rejected.
+// ParseTraceParent analiza una cabecera traceparent de W3C: version-traceid-parentid-flags, en
+// hexadecimal en minúscula. Las versiones desconocidas se aceptan siempre que los cuatro campos
+// conocidos estén bien formados (la especificación pide compatibilidad hacia delante); se rechazan
+// la versión ff, el hexadecimal en mayúscula y los ids todo ceros.
 func ParseTraceParent(header string) (SpanContext, bool) {
 	var sc SpanContext
 	h := strings.TrimSpace(header)
@@ -67,7 +67,7 @@ func ParseTraceParent(header string) (SpanContext, bool) {
 	if !ok || h[0:2] == "ff" {
 		return sc, false
 	}
-	// Version 00 has exactly four fields; later versions may append more after a dash.
+	// La versión 00 tiene exactamente cuatro campos; las posteriores pueden añadir más tras un guion.
 	if len(h) > 55 && (version[0] == 0 || h[55] != '-') {
 		return sc, false
 	}
@@ -97,7 +97,7 @@ func lowerHex(s string) ([]byte, bool) {
 	return b, err == nil
 }
 
-// Kind is the role of a span in the trace.
+// Kind es el papel de un span en la traza.
 type Kind int
 
 const (
@@ -123,29 +123,29 @@ func (k Kind) String() string {
 	}
 }
 
-// StartConfig is what the start options resolve to. Implementations read it with NewStartConfig.
+// StartConfig es el resultado de aplicar las opciones de inicio. Las implementaciones lo leen con NewStartConfig.
 type StartConfig struct {
 	Kind         Kind
 	RemoteParent SpanContext
 	NewRoot      bool
 }
 
-// StartOption configures Tracer.Start.
+// StartOption configura Tracer.Start.
 type StartOption func(*StartConfig)
 
-// WithKind sets the span kind (default KindInternal).
+// WithKind fija el tipo del span (por defecto KindInternal).
 func WithKind(k Kind) StartOption { return func(c *StartConfig) { c.Kind = k } }
 
-// WithRemoteParent continues the trace that arrived from another process (e.g. a traceparent
-// header). An invalid context is ignored.
+// WithRemoteParent continúa la traza que llegó de otro proceso (p. ej. una cabecera
+// traceparent). Un contexto no válido se ignora.
 func WithRemoteParent(sc SpanContext) StartOption {
 	return func(c *StartConfig) { c.RemoteParent = sc }
 }
 
-// WithNewRoot starts a new trace even if ctx carries a span.
+// WithNewRoot abre una traza nueva aunque ctx lleve un span.
 func WithNewRoot() StartOption { return func(c *StartConfig) { c.NewRoot = true } }
 
-// NewStartConfig applies opts.
+// NewStartConfig aplica opts.
 func NewStartConfig(opts ...StartOption) StartConfig {
 	var c StartConfig
 	for _, opt := range opts {
@@ -154,36 +154,36 @@ func NewStartConfig(opts ...StartOption) StartConfig {
 	return c
 }
 
-// Tracer starts spans.
+// Tracer abre spans.
 type Tracer interface {
-	// Start begins a span as a child of the span in ctx (or of the remote parent, or as a new
-	// trace) and returns a context carrying it. The caller must End the span.
+	// Start abre un span hijo del span de ctx (o del padre remoto, o como traza nueva) y
+	// devuelve un contexto que lo lleva. Quien llama debe cerrar el span con End.
 	Start(ctx context.Context, name string, opts ...StartOption) (context.Context, Span)
 }
 
-// Span is one leg of a trace.
+// Span es un tramo de una traza.
 type Span interface {
-	// Context returns the identifiers of the span (the zero value for a no-op span).
+	// Context devuelve los identificadores del span (el valor cero para un span no-op).
 	Context() SpanContext
-	// SetName replaces the span name (e.g. once the HTTP route is known).
+	// SetName sustituye el nombre del span (p. ej. cuando ya se conoce la ruta HTTP).
 	SetName(name string)
-	// SetAttributes adds key/value pairs, like log.Logger. Never pass personal data, secrets,
-	// command bodies or SQL arguments.
+	// SetAttributes añade pares clave/valor, como log.Logger. Nunca se pasan datos personales,
+	// secretos, cuerpos de comandos ni argumentos SQL.
 	SetAttributes(kv ...any)
-	// RecordError marks the span as failed with err; nil is ignored.
+	// RecordError marca el span como fallido con err; nil se ignora.
 	RecordError(err error)
-	// End finishes the span. Further calls have no effect.
+	// End termina el span. Las llamadas siguientes no tienen efecto.
 	End()
 }
 
 type spanKey struct{}
 
-// ContextWithSpan returns ctx carrying span. Tracer implementations call it from Start.
+// ContextWithSpan devuelve ctx con span. Las implementaciones de Tracer la llaman desde Start.
 func ContextWithSpan(ctx context.Context, span Span) context.Context {
 	return context.WithValue(ctx, spanKey{}, span)
 }
 
-// FromContext returns the span in ctx. It never returns nil: without a span it returns a no-op.
+// FromContext devuelve el span de ctx. Nunca devuelve nil: sin span devuelve uno no-op.
 func FromContext(ctx context.Context) Span {
 	if s, ok := ctx.Value(spanKey{}).(Span); ok && s != nil {
 		return s
@@ -191,8 +191,8 @@ func FromContext(ctx context.Context) Span {
 	return noopSpan{}
 }
 
-// LogAttrs returns "trace_id" and "span_id" of the span in ctx as log arguments, or nil when
-// there is no valid span.
+// LogAttrs devuelve "trace_id" y "span_id" del span de ctx como argumentos de log, o nil cuando
+// no hay un span válido.
 func LogAttrs(ctx context.Context) []any {
 	sc := FromContext(ctx).Context()
 	if !sc.IsValid() {
@@ -201,10 +201,10 @@ func LogAttrs(ctx context.Context) []any {
 	return []any{TraceIDKey, sc.TraceIDString(), SpanIDKey, sc.SpanIDString()}
 }
 
-// Noop returns a Tracer that records nothing and leaves the context untouched.
+// Noop devuelve un Tracer que no registra nada y deja el contexto intacto.
 func Noop() Tracer { return noopTracer{} }
 
-// OrNoop returns t, or Noop when t is nil.
+// OrNoop devuelve t, o Noop cuando t es nil.
 func OrNoop(t Tracer) Tracer {
 	if t == nil {
 		return noopTracer{}

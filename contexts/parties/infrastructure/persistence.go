@@ -18,7 +18,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 )
 
-// PartyMapping maps Party to parties + party_roles.
+// PartyMapping mapea Party a parties + party_roles.
 func PartyMapping() sqlrepo.Mapping[domain.PartyID, *domain.Party] {
 	return sqlrepo.Mapping[domain.PartyID, *domain.Party]{
 		Table: "parties",
@@ -85,8 +85,8 @@ func PartyMapping() sqlrepo.Mapping[domain.PartyID, *domain.Party] {
 					IssuingAuthority: c.String("issuing_authority"), IssuedOn: c.Date("issued_on"), ExpiresOn: c.Date("expires_on"),
 					Primary: c.Bool("is_primary")})
 			}
-			// UUID v7 ids are chronological, but SQL Server sorts UNIQUEIDENTIFIER by byte groups:
-			// order in Go so every engine returns the same order.
+			// Los ids UUID v7 son cronológicos, pero SQL Server ordena UNIQUEIDENTIFIER por grupos
+			// de bytes: se ordena en Go para que todos los motores devuelvan el mismo orden.
 			slices.SortFunc(s.Identities, func(a, b domain.Identification) int { return bytes.Compare(a.ID.Bytes(), b.ID.Bytes()) })
 			for _, c := range children.Of("contacts") {
 				contact, err := hydrateContact(c)
@@ -273,7 +273,7 @@ func PartyMapping() sqlrepo.Mapping[domain.PartyID, *domain.Party] {
 	}
 }
 
-// RelationshipMapping maps Relationship to party_relationships.
+// RelationshipMapping mapea Relationship a party_relationships.
 func RelationshipMapping() sqlrepo.Mapping[domain.RelationshipID, *domain.Relationship] {
 	return sqlrepo.Mapping[domain.RelationshipID, *domain.Relationship]{
 		Table: "party_relationships",
@@ -286,7 +286,7 @@ func RelationshipMapping() sqlrepo.Mapping[domain.RelationshipID, *domain.Relati
 				"remark": nullable(r.Remark()), "trial_until": r.TrialUntil(), "share_percent": nil, "promotion_code": nullable(r.PromotionCode()),
 				"customer_number": nullable(r.CustomerNumber())}
 			if s := r.OwnershipShare(); s != nil {
-				v["share_percent"] = s.Points().StringFixed(2) // exact text, as every decimal of the contexts
+				v["share_percent"] = s.Points().StringFixed(2) // texto exacto, como todos los decimales de los contextos
 			}
 			return sqlrepo.AuditStampValues(v, r.AuditStamp()), nil
 		},
@@ -378,15 +378,15 @@ func nullable(s string) any {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Catalogs
+// Catálogos
 // ---------------------------------------------------------------------------------------------
 
-// SQLCatalogs reads the role and relationship type catalogs from the database.
+// SQLCatalogs lee de la base de datos los catálogos de tipos de rol y de relación.
 type SQLCatalogs struct{ db *sqlrepo.DB }
 
 var _ domain.Catalogs = SQLCatalogs{}
 
-// RoleTypes implements domain.Catalogs.
+// RoleTypes implementa domain.Catalogs.
 func (c SQLCatalogs) RoleTypes(ctx context.Context) ([]domain.RoleType, error) {
 	rows, err := c.db.Select(ctx, "role_types", []string{"id", "name", "description", "parent_id", "category", "code"}, "name")
 	if err != nil {
@@ -412,7 +412,7 @@ func (c SQLCatalogs) RoleTypes(ctx context.Context) ([]domain.RoleType, error) {
 	return out, nil
 }
 
-// AddRoleType implements domain.Catalogs.
+// AddRoleType implementa domain.Catalogs.
 func (c SQLCatalogs) AddRoleType(ctx context.Context, t domain.RoleType) error {
 	var parent any
 	if t.Parent != nil {
@@ -422,7 +422,7 @@ func (c SQLCatalogs) AddRoleType(ctx context.Context, t domain.RoleType) error {
 		"parent_id": parent, "category": t.Category, "code": nullable(t.Code)})
 }
 
-// RelationshipTypes implements domain.Catalogs.
+// RelationshipTypes implementa domain.Catalogs.
 func (c SQLCatalogs) RelationshipTypes(ctx context.Context) ([]domain.RelationshipType, error) {
 	rows, err := c.db.Select(ctx, "relationship_types", []string{"id", "name", "description", "from_role", "to_role", "hierarchical", "code"}, "name")
 	if err != nil {
@@ -445,13 +445,13 @@ func (c SQLCatalogs) RelationshipTypes(ctx context.Context) ([]domain.Relationsh
 	return out, nil
 }
 
-// AddRelationshipType implements domain.Catalogs.
+// AddRelationshipType implementa domain.Catalogs.
 func (c SQLCatalogs) AddRelationshipType(ctx context.Context, t domain.RelationshipType) error {
 	return c.db.Insert(ctx, "relationship_types", sqlrepo.Values{"id": t.ID, "name": t.Name.String(), "description": nullable(t.Description),
 		"from_role": t.FromRole, "to_role": t.ToRole, "hierarchical": t.Hierarchical, "code": nullable(t.Code)})
 }
 
-// DocumentTypes implements domain.Catalogs.
+// DocumentTypes implementa domain.Catalogs.
 func (c SQLCatalogs) DocumentTypes(ctx context.Context) ([]domain.DocumentType, error) {
 	rows, err := c.db.Select(ctx, "document_types", []string{"id", "code", "name", "default_pattern", "requires_expiry",
 		"requires_authority", "active"}, "code")
@@ -474,7 +474,7 @@ func (c SQLCatalogs) DocumentTypes(ctx context.Context) ([]domain.DocumentType, 
 	return out, nil
 }
 
-// CountryDocumentRules implements domain.Catalogs.
+// CountryDocumentRules implementa domain.Catalogs.
 func (c SQLCatalogs) CountryDocumentRules(ctx context.Context) ([]domain.CountryDocumentRule, error) {
 	rows, err := c.db.Select(ctx, "country_document_rules", []string{"id", "country", "doc_type", "available", "is_default",
 		"display_order", "pattern", "min_length", "max_length", "check_digit", "requires_expiry", "requires_authority", "active"}, "id")
@@ -506,7 +506,7 @@ func (c SQLCatalogs) CountryDocumentRules(ctx context.Context) ([]domain.Country
 	return out, nil
 }
 
-// ClassificationTypes implements domain.Catalogs. Families are returned before their leaves.
+// ClassificationTypes implementa domain.Catalogs. Las familias se devuelven antes que sus hojas.
 func (c SQLCatalogs) ClassificationTypes(ctx context.Context) ([]domain.ClassificationType, error) {
 	rows, err := c.db.Select(ctx, "classification_types", []string{"id", "name", "description", "family_id", "active",
 		"applies_to", "exclusive_family"}, "id")
@@ -536,7 +536,7 @@ func (c SQLCatalogs) ClassificationTypes(ctx context.Context) ([]domain.Classifi
 	return append(families, leaves...), nil
 }
 
-// FacilityRoleTypes implements domain.Catalogs.
+// FacilityRoleTypes implementa domain.Catalogs.
 func (c SQLCatalogs) FacilityRoleTypes(ctx context.Context) ([]domain.FacilityRoleType, error) {
 	rows, err := c.db.Select(ctx, "facility_role_types", []string{"id", "name", "description", "active"}, "name")
 	if err != nil {
@@ -553,9 +553,9 @@ func (c SQLCatalogs) FacilityRoleTypes(ctx context.Context) ([]domain.FacilityRo
 	return out, nil
 }
 
-// WellKnownCatalogs serves the seed catalogs from memory (in-memory backend and tests), plus the
-// role types added to it. The zero value is ready to use; the catalogs of a memory store are
-// shared by everybody who asks for them (CatalogsFor).
+// WellKnownCatalogs sirve desde memoria los catálogos de la siembra (backend en memoria y
+// pruebas), más los tipos de rol que se le añaden. El valor cero está listo para usarse; los
+// catálogos de un almacén en memoria los comparten todos los que los piden (CatalogsFor).
 type WellKnownCatalogs struct{ added *addedRoleTypes }
 
 type addedRoleTypes struct {
@@ -564,10 +564,10 @@ type addedRoleTypes struct {
 	relationships []domain.RelationshipType
 }
 
-// memoryCatalogs holds the role types added to each memory store.
+// memoryCatalogs guarda los tipos de rol añadidos a cada almacén en memoria.
 var memoryCatalogs sync.Map // *memory.Store -> *addedRoleTypes
 
-// RoleTypes implements domain.Catalogs.
+// RoleTypes implementa domain.Catalogs.
 func (c WellKnownCatalogs) RoleTypes(context.Context) ([]domain.RoleType, error) {
 	out := domain.WellKnownRoleTypes()
 	if c.added != nil {
@@ -578,7 +578,7 @@ func (c WellKnownCatalogs) RoleTypes(context.Context) ([]domain.RoleType, error)
 	return out, nil
 }
 
-// AddRoleType implements domain.Catalogs.
+// AddRoleType implementa domain.Catalogs.
 func (c WellKnownCatalogs) AddRoleType(_ context.Context, t domain.RoleType) error {
 	if c.added == nil {
 		return fmt.Errorf("%w: these catalogs are the seed alone and take no role types", fw.ErrUnsupported)
@@ -589,7 +589,7 @@ func (c WellKnownCatalogs) AddRoleType(_ context.Context, t domain.RoleType) err
 	return nil
 }
 
-// RelationshipTypes implements domain.Catalogs.
+// RelationshipTypes implementa domain.Catalogs.
 func (c WellKnownCatalogs) RelationshipTypes(context.Context) ([]domain.RelationshipType, error) {
 	out := domain.WellKnownRelationshipTypes()
 	if c.added != nil {
@@ -600,7 +600,7 @@ func (c WellKnownCatalogs) RelationshipTypes(context.Context) ([]domain.Relation
 	return out, nil
 }
 
-// AddRelationshipType implements domain.Catalogs.
+// AddRelationshipType implementa domain.Catalogs.
 func (c WellKnownCatalogs) AddRelationshipType(_ context.Context, t domain.RelationshipType) error {
 	if c.added == nil {
 		return fmt.Errorf("%w: these catalogs are the seed alone and take no relationship types", fw.ErrUnsupported)
@@ -611,33 +611,33 @@ func (c WellKnownCatalogs) AddRelationshipType(_ context.Context, t domain.Relat
 	return nil
 }
 
-// DocumentTypes implements domain.Catalogs.
+// DocumentTypes implementa domain.Catalogs.
 func (WellKnownCatalogs) DocumentTypes(context.Context) ([]domain.DocumentType, error) {
 	return domain.WellKnownDocumentTypes(), nil
 }
 
-// CountryDocumentRules implements domain.Catalogs.
+// CountryDocumentRules implementa domain.Catalogs.
 func (WellKnownCatalogs) CountryDocumentRules(context.Context) ([]domain.CountryDocumentRule, error) {
 	return domain.WellKnownCountryDocumentRules(), nil
 }
 
-// ClassificationTypes implements domain.Catalogs.
+// ClassificationTypes implementa domain.Catalogs.
 func (WellKnownCatalogs) ClassificationTypes(context.Context) ([]domain.ClassificationType, error) {
 	return domain.WellKnownClassificationTypes(), nil
 }
 
-// FacilityRoleTypes implements domain.Catalogs.
+// FacilityRoleTypes implementa domain.Catalogs.
 func (WellKnownCatalogs) FacilityRoleTypes(context.Context) ([]domain.FacilityRoleType, error) {
 	return domain.WellKnownFacilityRoleTypes(), nil
 }
 
 // ---------------------------------------------------------------------------------------------
-// Hot-swap factories: every port of the context for any backend
+// Factorías intercambiables en caliente: todos los puertos del contexto para cualquier backend
 // ---------------------------------------------------------------------------------------------
 
 func unsupported(b hotswap.Backend) error { return fmt.Errorf("parties: unsupported backend %T", b) }
 
-// PartyRepositoryFactory builds the Party repository.
+// PartyRepositoryFactory construye el repositorio de Party.
 func PartyRepositoryFactory(b hotswap.Backend) (domain.PartyRepository, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -648,7 +648,7 @@ func PartyRepositoryFactory(b hotswap.Backend) (domain.PartyRepository, error) {
 	return nil, unsupported(b)
 }
 
-// RelationshipRepositoryFactory builds the Relationship repository.
+// RelationshipRepositoryFactory construye el repositorio de Relationship.
 func RelationshipRepositoryFactory(b hotswap.Backend) (domain.RelationshipRepository, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -659,7 +659,7 @@ func RelationshipRepositoryFactory(b hotswap.Backend) (domain.RelationshipReposi
 	return nil, unsupported(b)
 }
 
-// CatalogsFor returns the catalog reader of a backend.
+// CatalogsFor devuelve el lector de catálogos de un backend.
 func CatalogsFor(b hotswap.Backend) (domain.Catalogs, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -671,7 +671,7 @@ func CatalogsFor(b hotswap.Backend) (domain.Catalogs, error) {
 	return nil, unsupported(b)
 }
 
-// SwappableCatalogs returns catalogs that follow the backend of the Switch.
+// SwappableCatalogs devuelve catálogos que siguen al backend del Switch.
 func SwappableCatalogs(sw *hotswap.Switch) domain.Catalogs {
 	return swappableCatalogs{b: hotswap.Bind(sw, CatalogsFor)}
 }
@@ -718,12 +718,12 @@ func (c swappableCatalogs) FacilityRoleTypes(ctx context.Context) (out []domain.
 	return out, err
 }
 
-// OutboxFactory builds the domain event outbox.
+// OutboxFactory construye el outbox de eventos de dominio.
 func OutboxFactory(b hotswap.Backend) (application.OutboxStore, error) {
 	return outboxFor(b, TablePartiesOutbox)
 }
 
-// IntegrationOutboxFactory builds the integration outbox (Published Language).
+// IntegrationOutboxFactory construye el outbox de integración (Published Language).
 func IntegrationOutboxFactory(b hotswap.Backend) (application.OutboxStore, error) {
 	return outboxFor(b, TableIntegrationOutbox)
 }
@@ -738,7 +738,7 @@ func outboxFor(b hotswap.Backend, table string) (application.OutboxStore, error)
 	return nil, unsupported(b)
 }
 
-// InboxFactory builds the inbox of the integration events Parties consumes.
+// InboxFactory construye el inbox de los eventos de integración que consume Parties.
 func InboxFactory(b hotswap.Backend) (application.InboxStore, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -749,7 +749,7 @@ func InboxFactory(b hotswap.Backend) (application.InboxStore, error) {
 	return nil, unsupported(b)
 }
 
-// AuditLogFactory builds the audit log.
+// AuditLogFactory construye el registro de auditoría.
 func AuditLogFactory(b hotswap.Backend) (application.AuditLog, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:

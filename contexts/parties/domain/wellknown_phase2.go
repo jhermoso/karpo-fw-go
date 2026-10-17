@@ -1,6 +1,7 @@
-// Code generated from the C# seed (040-Data/schema/sqlserver/02-semillas.sql): identity document
-// types, country document rules and party classification types, with the same GUIDs. Countries
-// are ISO 3166-1 alpha-2 codes (the C# referenced the geography row of the country).
+// Código generado a partir de la semilla de C# (040-Data/schema/sqlserver/02-semillas.sql): tipos
+// de documento de identidad, reglas de documento por país y tipos de clasificación de party, con
+// los mismos GUID. Los países son códigos ISO 3166-1 alfa-2 (C# referenciaba la fila de geografía
+// del país).
 
 package domain
 
@@ -10,7 +11,7 @@ var yes, no = ptrBool(true), ptrBool(false)
 
 func ptrBool(b bool) *bool { return &b }
 
-// WellKnownDocumentTypes returns the seed of the identity document type catalog.
+// WellKnownDocumentTypes devuelve la semilla del catálogo de tipos de documento de identidad.
 func WellKnownDocumentTypes() []DocumentType {
 	return []DocumentType{
 		{ID: MustDocumentTypeID("c0000000-0004-0000-0000-000000000001"), Code: "CCPT", Name: vocab.MustName("Passport"), DefaultPattern: "", RequiresExpiry: true, RequiresIssuingAuthority: true, Active: true},
@@ -23,7 +24,7 @@ func WellKnownDocumentTypes() []DocumentType {
 	}
 }
 
-// WellKnownCountryDocumentRules returns the seed of the country document rules.
+// WellKnownCountryDocumentRules devuelve la semilla de las reglas de documento por país.
 func WellKnownCountryDocumentRules() []CountryDocumentRule {
 	return []CountryDocumentRule{
 		{ID: "c0000000-0009-0000-0000-000000000001", Country: vocab.MustCountryCode("ES"), DocumentType: MustDocumentTypeID("c0000000-0004-0000-0000-000000000002"), Available: true, Default: true, DisplayOrder: 0, Pattern: "^\\d{8}[A-Z]$", MinLength: 9, MaxLength: 9, CheckDigit: "ES_DNI_MOD23", RequiresExpiry: nil, RequiresIssuingAuthority: nil, Active: true},
@@ -60,8 +61,8 @@ func WellKnownCountryDocumentRules() []CountryDocumentRule {
 	}
 }
 
-// WellKnownClassificationTypes returns the seed of the classification catalog: the families and
-// leaves of the C# party_type (the legacy types 1..9 are not classifications; see docs/PARTIES.md).
+// WellKnownClassificationTypes devuelve la semilla del catálogo de clasificaciones: las familias y
+// hojas del party_type de C# (los tipos heredados 1..9 no son clasificaciones; ver docs/PARTIES.md).
 func WellKnownClassificationTypes() []ClassificationType {
 	return []ClassificationType{
 		{ID: MustClassificationTypeID("20000000-0000-0000-0005-000000000100"), Name: vocab.MustName("Segmento de cliente"), Description: "Familia de clasificación (no asignable): segmento comercial del cliente. Aplica a Person y Organization.", Family: nil, Active: true, AppliesTo: AppliesToAny, Exclusive: true},

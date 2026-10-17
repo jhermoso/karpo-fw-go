@@ -2,8 +2,8 @@ package application
 
 import "github.com/jhermoso/karpo-fw-go/pkg/application/authz"
 
-// Permissions (the C# reservation endpoints required authentication only). Setting rates and
-// margins, taking reservations and moving them are separate.
+// Permisos (los endpoints de reservas del C# sólo exigían autenticación). Fijar cambios y márgenes,
+// tomar reservas y hacerlas avanzar van por separado.
 var (
 	PermPricingRead         = authz.MustPermission("Exchange.Pricing.Read")
 	PermPricingUpdate       = authz.MustPermission("Exchange.Pricing.Update")
@@ -12,7 +12,7 @@ var (
 	PermReservationProgress = authz.MustPermission("Exchange.Reservation.Progress")
 )
 
-// Permissions returns the permissions this context declares to the Security catalog.
+// Permissions devuelve los permisos que este contexto declara al catálogo de Security.
 func Permissions() []authz.Permission {
 	return []authz.Permission{PermPricingRead, PermPricingUpdate, PermReservationRead, PermReservationCreate, PermReservationProgress}
 }

@@ -11,7 +11,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// AddIdentification adds an identity document to a party.
+// AddIdentification añade un documento de identidad a una party.
 type AddIdentification struct {
 	PartyID          domain.PartyID `json:"-"`
 	DocumentType     string         `json:"documentType"`
@@ -23,17 +23,18 @@ type AddIdentification struct {
 	Primary          bool           `json:"primary,omitempty"`
 }
 
-// RemoveIdentification removes an identity document.
+// RemoveIdentification quita un documento de identidad.
 type RemoveIdentification struct {
 	PartyID domain.PartyID
 	ID      domain.IdentificationID
 }
 
-// AddressDTO is the transport representation of a postal address.
+// AddressDTO es la representación de transporte de una dirección postal.
 type AddressDTO struct {
 	StreetType string `json:"streetType,omitempty"`
 	Line1      string `json:"line1"`
-	// Where in the street, piece by piece (Spanish forms ask for them one by one). All optional.
+	// Dónde en la calle, pieza a pieza (los formularios españoles las piden una a una). Todas
+	// opcionales.
 	Number          string `json:"number,omitempty"`
 	NumberQualifier string `json:"numberQualifier,omitempty"` // bis, duplicado
 	Block           string `json:"block,omitempty"`
@@ -47,11 +48,11 @@ type AddressDTO struct {
 	Locality        string `json:"locality,omitempty"`
 	Region          string `json:"region,omitempty"`
 	Country         string `json:"country"`
-	GeoPostalCode   string `json:"geoPostalCode,omitempty"` // Geography context ids
+	GeoPostalCode   string `json:"geoPostalCode,omitempty"` // ids del contexto Geography
 	GeoBoundary     string `json:"geoBoundary,omitempty"`
 }
 
-// AddContact adds a contact to a party.
+// AddContact añade un contacto a una party.
 type AddContact struct {
 	PartyID         domain.PartyID `json:"-"`
 	Kind            string         `json:"kind"`
@@ -62,41 +63,41 @@ type AddContact struct {
 	From            *time.Time     `json:"from,omitempty"`
 }
 
-// SetContactPurposes replaces the purposes of a contact.
+// SetContactPurposes sustituye los usos de un contacto.
 type SetContactPurposes struct {
 	PartyID   domain.PartyID   `json:"-"`
 	ContactID domain.ContactID `json:"-"`
 	Purposes  []string         `json:"purposes"`
 }
 
-// EndContact stops using a contact (now when At is nil).
+// EndContact deja de usar un contacto (ahora si At es nil).
 type EndContact struct {
 	PartyID   domain.PartyID   `json:"-"`
 	ContactID domain.ContactID `json:"-"`
 	At        *time.Time       `json:"at,omitempty"`
 }
 
-// Classify classifies a party from a moment on (now when From is nil).
+// Classify clasifica una party desde un momento (ahora si From es nil).
 type Classify struct {
 	PartyID        domain.PartyID `json:"-"`
 	Classification string         `json:"classification"`
 	From           *time.Time     `json:"from,omitempty"`
 }
 
-// EndClassification ends a classification (now when At is nil).
+// EndClassification termina una clasificación (ahora si At es nil).
 type EndClassification struct {
 	PartyID domain.PartyID          `json:"-"`
 	ID      domain.ClassificationID `json:"-"`
 	At      *time.Time              `json:"at,omitempty"`
 }
 
-// DocumentOptions lists the document types available in a country.
+// DocumentOptions lista los tipos de documento disponibles en un país.
 type DocumentOptions struct{ Country string }
 
-// ListClassificationTypes lists the classification catalog.
+// ListClassificationTypes lista el catálogo de clasificaciones.
 type ListClassificationTypes struct{}
 
-// DocumentOptionDTO is a document type available in a country.
+// DocumentOptionDTO es un tipo de documento disponible en un país.
 type DocumentOptionDTO struct {
 	DocumentType             string `json:"documentType"`
 	Code                     string `json:"code"`
@@ -107,7 +108,7 @@ type DocumentOptionDTO struct {
 	RequiresIssuingAuthority bool   `json:"requiresIssuingAuthority"`
 }
 
-// ClassificationTypeDTO is an entry of the classification catalog.
+// ClassificationTypeDTO es una entrada del catálogo de clasificaciones.
 type ClassificationTypeDTO struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
@@ -201,7 +202,7 @@ func parsePurposes(ps []string) ([]domain.Purpose, error) {
 	return out, v.Err()
 }
 
-// addPhase2 wires identifications, contacts and classifications.
+// addPhase2 conecta identificaciones, contactos y clasificaciones.
 func addPhase2(svc *Service, s service) {
 	updateParty := s.updateParty
 	retry, backoff := 3, 10*time.Millisecond
@@ -219,9 +220,9 @@ func addPhase2(svc *Service, s service) {
 		if err != nil {
 			return PartyDTO{}, err
 		}
-		// A document identifies one party: the C# only offered a lookup by value.
-		// Every party counts, visible or not: a document identifies one party in the whole
-		// installation (decision P1: the base identity is shared).
+		// Un documento identifica a una sola party: el C# sólo ofrecía una búsqueda por valor.
+		// Cuenta toda party, visible o no: un documento identifica a una sola party en toda la
+		// instalación (decisión P1: la identidad base es compartida).
 		taken, err := s.Parties.Exists(ctx, spec.And(domain.HoldsDocument(d.Type, d.Country.String(), number), spec.Not(domain.WithIDs(c.PartyID))))
 		if err != nil {
 			return PartyDTO{}, err

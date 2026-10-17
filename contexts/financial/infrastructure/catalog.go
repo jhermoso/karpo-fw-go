@@ -7,7 +7,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 )
 
-// The catalog of products, the agreements, and what ties an account to an agreement.
+// El catálogo de productos, los acuerdos y lo que ata una cuenta a un acuerdo.
 var catalogDDL = []string{
 	`CREATE TABLE fin_products (id {uuid} NOT NULL PRIMARY KEY, version {bigint} NOT NULL, company {uuid} NOT NULL, product_code {str:30} NOT NULL,
 	product_name {str:120} NOT NULL, description {str:500}, family {str:20} NOT NULL, regulatory_code {str:50}, discontinued_on {date}, ` + audit + `)`,
@@ -20,7 +20,7 @@ var catalogDDL = []string{
 	`ALTER TABLE fin_accounts {add:agreement} {uuid}{addEnd}`,
 }
 
-// ProductMapping maps Product to fin_products.
+// ProductMapping mapea Product a fin_products.
 func ProductMapping() sqlrepo.Mapping[domain.ProductID, *domain.Product] {
 	return sqlrepo.Mapping[domain.ProductID, *domain.Product]{
 		Table:   "fin_products",
@@ -42,7 +42,7 @@ func ProductMapping() sqlrepo.Mapping[domain.ProductID, *domain.Product] {
 	}
 }
 
-// AgreementMapping maps Agreement to fin_agreements.
+// AgreementMapping mapea Agreement a fin_agreements.
 func AgreementMapping() sqlrepo.Mapping[domain.AgreementID, *domain.Agreement] {
 	return sqlrepo.Mapping[domain.AgreementID, *domain.Agreement]{
 		Table: "fin_agreements",
@@ -67,7 +67,7 @@ func AgreementMapping() sqlrepo.Mapping[domain.AgreementID, *domain.Agreement] {
 	}
 }
 
-// ProductRepositoryFactory builds the product repository.
+// ProductRepositoryFactory construye el repositorio de productos.
 func ProductRepositoryFactory(b hotswap.Backend) (domain.ProductRepository, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -78,7 +78,7 @@ func ProductRepositoryFactory(b hotswap.Backend) (domain.ProductRepository, erro
 	return nil, unsupported(b)
 }
 
-// AgreementRepositoryFactory builds the agreement repository.
+// AgreementRepositoryFactory construye el repositorio de acuerdos.
 func AgreementRepositoryFactory(b hotswap.Backend) (domain.AgreementRepository, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:

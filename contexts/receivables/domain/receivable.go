@@ -9,21 +9,21 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// ReceivableKind is the stable aggregate type name.
+// ReceivableKind es el nombre estable del tipo de agregado.
 const ReceivableKind = "receivables.receivable"
 
-// Installment is a due item of a receivable.
+// Installment es un vencimiento de un cobro pendiente.
 type Installment struct {
 	No        int
 	Due       vocab.Date
-	Amount    vocab.Decimal // negative for credits (corrective invoices)
-	Collected vocab.Decimal // same sign as Amount
+	Amount    vocab.Decimal // negativo en los abonos (facturas rectificativas)
+	Collected vocab.Decimal // mismo signo que Amount
 }
 
-// Open returns what is still to collect (same sign as Amount).
+// Open devuelve lo que queda por cobrar (mismo signo que Amount).
 func (i Installment) Open() vocab.Decimal { return i.Amount.Sub(i.Collected) }
 
-// ReceivableState is the persisted state of a receivable.
+// ReceivableState es el estado persistido de un cobro pendiente.
 type ReceivableState struct {
 	Seller       OrganizationID
 	Customer     PartyID
@@ -35,16 +35,16 @@ type ReceivableState struct {
 	Audit        traits.AuditStamp
 }
 
-// Receivable is what a customer owes for an issued invoice (or what the seller owes back for a
-// corrective invoice), split into installments. The C# had no receivable: nothing computed due
-// dates and nothing ever marked an invoice as paid.
+// Receivable es lo que un cliente debe por una factura emitida (o lo que el vendedor debe devolver por
+// una factura rectificativa), repartido en vencimientos. El C# no tenía cobros pendientes: nada
+// calculaba vencimientos y nada marcaba nunca una factura como pagada.
 type Receivable struct {
 	fw.BaseAggregateRoot[ReceivableID]
 	traits.Audited
 	s ReceivableState
 }
 
-// ReconstituteReceivable rebuilds a receivable.
+// ReconstituteReceivable reconstruye un cobro pendiente.
 func ReconstituteReceivable(id ReceivableID, s ReceivableState) (*Receivable, error) {
 	base, err := fw.NewBaseAggregateRoot(ReceivableKind, id)
 	if err != nil {
@@ -70,7 +70,7 @@ func ReconstituteReceivable(id ReceivableID, s ReceivableState) (*Receivable, er
 	return &Receivable{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// OpenReceivable creates the receivable of an invoice with its schedule.
+// OpenReceivable crea el cobro pendiente de una factura con sus vencimientos.
 func OpenReceivable(invoice ReceivableID, s ReceivableState, schedule []Due) (*Receivable, error) {
 	s.Installments = nil
 	for k, d := range schedule {
@@ -84,14 +84,14 @@ func OpenReceivable(invoice ReceivableID, s ReceivableState, schedule []Due) (*R
 	return r, nil
 }
 
-// State returns the state (installments are a copy).
+// State devuelve el estado (los vencimientos son una copia).
 func (r *Receivable) State() ReceivableState {
 	s := r.s
 	s.Installments = slices.Clone(s.Installments)
 	return s
 }
 
-// Open returns what is still to collect.
+// Open devuelve lo que queda por cobrar.
 func (r *Receivable) Open() vocab.Decimal {
 	o := vocab.DecimalFromInt(0)
 	for _, i := range r.s.Installments {
@@ -100,7 +100,7 @@ func (r *Receivable) Open() vocab.Decimal {
 	return o
 }
 
-// Overdue returns what is still to collect of the installments due before a date.
+// Overdue devuelve lo que queda por cobrar de los vencimientos anteriores a una fecha.
 func (r *Receivable) Overdue(on vocab.Date) vocab.Decimal {
 	o := vocab.DecimalFromInt(0)
 	for _, i := range r.s.Installments {
@@ -111,11 +111,11 @@ func (r *Receivable) Overdue(on vocab.Date) vocab.Decimal {
 	return o
 }
 
-// Settled reports whether nothing remains to collect.
+// Settled dice si no queda nada por cobrar.
 func (r *Receivable) Settled() bool { return r.Open().IsZero() }
 
-// Apply records an amount against an installment. Invariants (the C# capped only the payment
-// side): the amount has the sign of the installment and does not exceed what is open.
+// Apply anota un importe contra un vencimiento. Invariantes (el C# sólo ponía tope por el lado del
+// pago): el importe tiene el signo del vencimiento y no supera lo que queda abierto.
 func (r *Receivable) Apply(no int, amount vocab.Decimal) error {
 	k := slices.IndexFunc(r.s.Installments, func(i Installment) bool { return i.No == no })
 	if k < 0 {
@@ -136,7 +136,7 @@ func (r *Receivable) Apply(no int, amount vocab.Decimal) error {
 	return nil
 }
 
-// Unapply reverses an amount recorded against an installment.
+// Unapply deshace un importe anotado contra un vencimiento.
 func (r *Receivable) Unapply(no int, amount vocab.Decimal) error {
 	k := slices.IndexFunc(r.s.Installments, func(i Installment) bool { return i.No == no })
 	if k < 0 {
@@ -151,7 +151,7 @@ func (r *Receivable) Unapply(no int, amount vocab.Decimal) error {
 	return nil
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (r *Receivable) AuditSnapshot() map[string]any {
 	return map[string]any{"number": r.s.Number, "open": r.Open().String()}
 }
@@ -160,7 +160,7 @@ type fwInt int
 
 func (i fwInt) String() string { return vocab.DecimalFromInt(int64(i)).String() }
 
-// Receivable fields.
+// Campos del cobro pendiente.
 var (
 	RecFieldID       = spec.Comparable("id", func(r *Receivable) ReceivableID { return r.ID() })
 	RecFieldSeller   = spec.Comparable("seller", func(r *Receivable) OrganizationID { return r.s.Seller })
@@ -169,7 +169,7 @@ var (
 	RecFieldIssued   = spec.OrderedBy("issued", func(r *Receivable) vocab.Date { return r.s.Issued }, vocab.CompareDates)
 )
 
-// Repositories and ports of the context.
+// Repositorios y puertos del contexto.
 type (
 	TermsRepository         = fw.Repository[TermsID, *Terms]
 	ReceivableRepository    = fw.Repository[ReceivableID, *Receivable]

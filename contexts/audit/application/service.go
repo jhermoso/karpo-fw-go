@@ -1,7 +1,7 @@
-// Package application holds the Audit queries: the history of an aggregate of any bounded
-// context, read from the audit log that context already keeps with each change. Audit stores
-// nothing of its own and knows no other context: the host registers, for each kind of aggregate,
-// where its log is and how to tell whether the caller may see the aggregate.
+// Package application contiene las consultas de Audit: el historial de un agregado de cualquier
+// contexto delimitado, leído del registro de auditoría que ese contexto ya lleva con cada cambio.
+// Audit no guarda nada propio y no conoce ningún otro contexto: el anfitrión registra, para cada
+// tipo de agregado, dónde está su registro y cómo saber si quien llama puede ver el agregado.
 package application
 
 import (
@@ -19,19 +19,19 @@ import (
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// PermTrailRead reads the history of an aggregate (the C# audit endpoints required
-// authentication only). It is needed besides being able to see the aggregate itself.
+// PermTrailRead lee el historial de un agregado (los endpoints de auditoría del C# sólo exigían
+// autenticación). Se necesita además de poder ver el propio agregado.
 var PermTrailRead = authz.MustPermission("Audit.Trail.Read")
 
-// Permissions returns the permissions this context declares to the Security catalog.
+// Permissions devuelve los permisos que este contexto declara al catálogo de Security.
 func Permissions() []authz.Permission { return []authz.Permission{PermTrailRead} }
 
-// Guard tells whether the caller may see an aggregate: it returns the error the owning context
-// gives when they may not (404 outside their companies, 403 without its permission).
+// Guard dice si quien llama puede ver un agregado: devuelve el error que da el contexto dueño
+// cuando no puede (404 fuera de sus empresas, 403 sin su permiso).
 type Guard func(ctx context.Context, id string) error
 
-// Seeing builds a guard from the query a context already has to load an aggregate: who can load
-// it can read its history.
+// Seeing construye una guarda a partir de la consulta que un contexto ya tiene para cargar un
+// agregado: quien puede cargarlo puede leer su historial.
 func Seeing[ID, Q, Out any](parse func(string) (ID, error), query func(ID) Q, get app.QueryHandler[Q, Out]) Guard {
 	return func(ctx context.Context, id string) error {
 		parsed, err := parse(id)
@@ -48,18 +48,18 @@ type subject struct {
 	guard Guard
 }
 
-// Registry is what the host tells Audit: the log and the guard of each kind of aggregate.
+// Registry es lo que el anfitrión le dice a Audit: el registro y la guarda de cada tipo de agregado.
 type Registry struct {
 	mu       sync.RWMutex
 	subjects map[string]subject
 }
 
-// NewRegistry returns an empty registry.
+// NewRegistry devuelve un registro vacío.
 func NewRegistry() *Registry { return &Registry{subjects: map[string]subject{}} }
 
-// Register declares a kind of aggregate (its stable type name, such as "billing.invoice"), the
-// audit log of its context and its guard. Without a guard only a global administrator reads its
-// history.
+// Register declara un tipo de agregado (su nombre de tipo estable, como "billing.invoice"), el
+// registro de auditoría de su contexto y su guarda. Sin guarda, sólo un administrador global lee
+// su historial.
 func (r *Registry) Register(aggregateType string, log app.AuditLog, guard Guard) *Registry {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -85,34 +85,34 @@ func (r *Registry) types() []string {
 	return out
 }
 
-// Service exposes the queries.
+// Service expone las consultas.
 type Service struct {
 	Trail app.QueryHandler[GetTrail, []EntryDTO]
 	Types app.QueryHandler[ListTypes, []TypeDTO]
 }
 
-// GetTrail asks for the history of an aggregate, oldest first.
+// GetTrail pide el historial de un agregado, lo más antiguo primero.
 type GetTrail struct{ Type, ID string }
 
-// ListTypes lists the kinds of aggregate with a history.
+// ListTypes lista los tipos de agregado con historial.
 type ListTypes struct{}
 
-// TypeDTO is a kind of aggregate with a history. Restricted ones are read by a global
-// administrator only.
+// TypeDTO es un tipo de agregado con historial. Los restringidos sólo los lee un administrador
+// global.
 type TypeDTO struct {
 	Type       string `json:"type"`
 	Context    string `json:"context"`
 	Restricted bool   `json:"restricted"`
 }
 
-// ChangeDTO is a field that changed.
+// ChangeDTO es un campo que cambió.
 type ChangeDTO struct {
 	Field string `json:"field"`
 	Old   any    `json:"old,omitempty"`
 	New   any    `json:"new,omitempty"`
 }
 
-// EntryDTO is a change of an aggregate: who, when, how, which fields and which events.
+// EntryDTO es un cambio de un agregado: quién, cuándo, cómo, qué campos y qué eventos.
 type EntryDTO struct {
 	Version       int64       `json:"version"`
 	Operation     string      `json:"operation"` // created | updated | deleted
@@ -133,7 +133,7 @@ func entryDTO(r app.AuditRecord) EntryDTO {
 		e.ActorParty = r.Actor.PartyID.String()
 	}
 	if r.Import != nil {
-		e.Import = r.Import.SourceKey // the source of the import run that made the change
+		e.Import = r.Import.SourceKey // el origen de la importación que hizo el cambio
 	}
 	for _, c := range r.Changes {
 		e.Changes = append(e.Changes, ChangeDTO{Field: c.Field, Old: c.Old, New: c.New})
@@ -141,7 +141,7 @@ func entryDTO(r app.AuditRecord) EntryDTO {
 	return e
 }
 
-// NewService wires the queries on a registry.
+// NewService conecta las consultas sobre un registro.
 func NewService(reg *Registry) *Service {
 	guard := func(ctx context.Context, s subject, id string) error {
 		if s.guard != nil {

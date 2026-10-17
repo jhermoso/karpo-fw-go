@@ -10,17 +10,17 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// AccessLevel is the access a user has to an organization.
+// AccessLevel es el acceso que tiene un usuario a una organización.
 type AccessLevel string
 
-// Access levels (contract v1, P2: Full writes; ReadOnly reads; Restricted behaves as ReadOnly).
+// Niveles de acceso (contrato v1, P2: Full escribe; ReadOnly lee; Restricted se comporta como ReadOnly).
 const (
 	Full       AccessLevel = "Full"
 	ReadOnly   AccessLevel = "ReadOnly"
 	Restricted AccessLevel = "Restricted"
 )
 
-// ParseAccessLevel parses a stored level; unknown or empty values are Restricted (never fails).
+// ParseAccessLevel analiza un nivel almacenado; los valores desconocidos o vacíos son Restricted (nunca falla).
 func ParseAccessLevel(s string) AccessLevel {
 	switch AccessLevel(s) {
 	case Full, ReadOnly:
@@ -29,19 +29,19 @@ func ParseAccessLevel(s string) AccessLevel {
 	return Restricted
 }
 
-// CanWrite reports whether the level allows writing.
+// CanWrite dice si el nivel permite escribir.
 func (l AccessLevel) CanWrite() bool { return l == Full }
 
-// Grant is one organization access of the subject, as stored by Security. IncludeSubsidiaries
-// is transported but does not expand anything in v1 (business decision P2).
+// Grant es un acceso del sujeto a una organización, tal como lo guarda Security. IncludeSubsidiaries
+// se transporta pero no expande nada en v1 (decisión de negocio P2).
 type Grant struct {
 	OrganizationID      domain.UUID `json:"organizationId"`
 	Level               AccessLevel `json:"level"`
 	IncludeSubsidiaries bool        `json:"includeSubsidiaries"`
 }
 
-// Context is the resolved authorization of one request (contract v1 AuthorizationContext).
-// Build it with NewContext, which enforces the contract invariants.
+// Context es la autorización resuelta de una petición (AuthorizationContext del contrato v1).
+// Se construye con NewContext, que hace cumplir los invariantes del contrato.
 type Context struct {
 	TenantID               string        `json:"tenantId"`
 	Subject                domain.UUID   `json:"subjectId"`
@@ -57,9 +57,9 @@ type Context struct {
 	CorrelationID          string        `json:"correlationId,omitempty"`
 }
 
-// NewContext validates the contract invariants: a human needs a party id; effective
-// organizations must be a subset of the grants. When effective is nil it is computed as
-// grants ∩ requested (all grants when nothing was requested).
+// NewContext valida los invariantes del contrato: un humano necesita un id de party; las
+// organizaciones efectivas deben ser un subconjunto de las concesiones. Cuando las efectivas son nil
+// se calculan como concesiones ∩ pedidas (todas las concesiones si no se pidió nada).
 func NewContext(c Context) (*Context, error) {
 	if c.Subject.IsZero() || strings.TrimSpace(c.SubjectName) == "" {
 		return nil, fmt.Errorf("%w: subject and name are required", domain.ErrValidation)
@@ -86,8 +86,8 @@ func NewContext(c Context) (*Context, error) {
 	return &c, nil
 }
 
-// EffectiveOrganizations computes grants ∩ requested (all granted organizations when nothing
-// was requested), without expanding subsidiaries.
+// EffectiveOrganizations calcula concesiones ∩ pedidas (todas las organizaciones concedidas si no
+// se pidió nada), sin expandir filiales.
 func EffectiveOrganizations(grants []Grant, requested []domain.UUID) []domain.UUID {
 	out := []domain.UUID{}
 	for _, g := range grants {
@@ -101,8 +101,8 @@ func EffectiveOrganizations(grants []Grant, requested []domain.UUID) []domain.UU
 	return out
 }
 
-// HasPermission reports whether the context grants a permission: global admins and the
-// wildcard grant everything; malformed codes are never granted.
+// HasPermission dice si el contexto concede un permiso: los administradores globales y el
+// comodín lo conceden todo; los códigos mal formados nunca se conceden.
 func (c *Context) HasPermission(p Permission) bool {
 	if !p.WellFormed() {
 		return false
@@ -110,13 +110,13 @@ func (c *Context) HasPermission(p Permission) bool {
 	return c.GlobalAdmin || slices.Contains(c.Permissions, Wildcard) || slices.Contains(c.Permissions, p)
 }
 
-// CanRead reports whether the organization is inside the effective scope.
+// CanRead dice si la organización está dentro del ámbito efectivo.
 func (c *Context) CanRead(org domain.UUID) bool {
 	return c.GlobalAdmin || containsUUID(c.EffectiveOrganizations, org)
 }
 
-// CanWrite reports whether the subject may write data owned by org: global admins always; others
-// need a Full grant on org and org inside the effective scope (P2).
+// CanWrite dice si el sujeto puede escribir datos propiedad de org: los administradores globales
+// siempre; los demás necesitan una concesión Full sobre org y que org esté dentro del ámbito efectivo (P2).
 func (c *Context) CanWrite(org domain.UUID) bool {
 	if c.GlobalAdmin {
 		return true
@@ -132,9 +132,9 @@ func (c *Context) CanWrite(org domain.UUID) bool {
 	return false
 }
 
-// PolicyVersion computes the deterministic version of a subject's policy (SHA-256, hex) from
-// its active flag, roles, permissions and grants, all sorted. Resolvers include it in the
-// context so clients can detect revocations; it changes with any relevant change.
+// PolicyVersion calcula la versión determinista de la política de un sujeto (SHA-256, hex) a partir
+// de su marca de activo, roles, permisos y concesiones, todo ordenado. Los resolutores la incluyen en
+// el contexto para que los clientes puedan detectar revocaciones; cambia con cualquier cambio relevante.
 func PolicyVersion(active bool, roles []string, permissions []Permission, grants []Grant) string {
 	r := slices.Clone(roles)
 	slices.Sort(r)

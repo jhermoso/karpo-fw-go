@@ -12,8 +12,9 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/memory"
 )
 
-// Two relays with the default name on the same meter (two bounded contexts, each with its domain
-// relay): the oldest pending message of either one shows in the gauge, whichever was built last.
+// Dos relays con el nombre por defecto en el mismo meter (dos contextos delimitados, cada uno con su
+// relay de dominio): el mensaje pendiente más antiguo de cualquiera de ellos se ve en el indicador, sea
+// cual sea el último construido.
 func TestRelay_PendingAgeOfRelaysSharingAName(t *testing.T) {
 	reg := metricsvanilla.NewRegistry()
 	deliver := func(context.Context, application.OutboxMessage) error { return nil }
@@ -34,7 +35,7 @@ func TestRelay_PendingAgeOfRelaysSharingAName(t *testing.T) {
 		t.Fatalf("one series per outbox name: %v", reg.SeriesLabels(metrics.OutboxOldestPendingAge))
 	}
 
-	// A named relay keeps its own series.
+	// Un relay con nombre conserva su propia serie.
 	outbox.NewForwarder(memory.NewOutbox(memory.NewStore("billing")), deliver, outbox.WithRelayName("billing"), outbox.WithRelayTelemetry(nil, reg))
 	if age, ok := reg.GaugeValue(metrics.OutboxOldestPendingAge, "outbox", "billing"); !ok || age != 0 {
 		t.Fatalf("an empty named outbox reports 0: %v %v", age, ok)

@@ -1,5 +1,5 @@
-// Package application holds the Documents queries (with permissions and company scope) and the
-// subscriptions that keep the register.
+// Package application contiene las consultas de Documents (con permisos y ámbito de empresa) y las
+// suscripciones que llevan el registro.
 package application
 
 import (
@@ -18,17 +18,17 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// MaxTrail bounds the documents of a trail.
+// MaxTrail limita los documentos de una traza.
 const MaxTrail = 200
 
-// Deps are the ports the use cases need; Audit is optional.
+// Deps son los puertos que necesitan los casos de uso; Audit es opcional.
 type Deps struct {
 	Documents domain.DocumentRepository
 	UoW       fw.UnitOfWork
 	Audit     app.AuditLog
 }
 
-// Service exposes the queries.
+// Service expone las consultas.
 type Service struct {
 	Get    app.QueryHandler[GetDocument, DocumentDTO]
 	Search app.QueryHandler[SearchDocuments, fw.Page[DocumentDTO]]
@@ -65,7 +65,7 @@ func scopeOf(ctx context.Context) scope {
 	return s
 }
 
-// check returns a uniform 404 outside the company's scope.
+// check devuelve un 404 uniforme fuera del ámbito de la empresa.
 func (s scope) check(id fmt.Stringer, org domain.OrganizationID) error {
 	if !s.global && !slices.Contains(s.orgs, org) {
 		return fw.NotFound(domain.DocumentKind, id)
@@ -89,24 +89,24 @@ func parseID(v *fw.Validation, field, s string) fw.UUID {
 	return u
 }
 
-// GetDocument loads an entry by its identity, or by the fact it stands for.
+// GetDocument carga una anotación por su identidad, o por el hecho que representa.
 type GetDocument struct {
 	ID           domain.DocumentID
 	Type, FactID string
 }
 
-// SearchDocuments searches the register of the caller's scope.
+// SearchDocuments busca en el registro del ámbito de quien llama.
 type SearchDocuments struct {
 	Company, Type, Party, Number, From, To string
-	Live                                   bool // not cancelled
+	Live                                   bool // no anulados
 	Page, Size                             int
 }
 
-// GetTrail returns the whole trail a document belongs to: from the first document it comes from
-// down to everything that came from it, oldest first.
+// GetTrail devuelve toda la traza a la que pertenece un documento: desde el primer documento del
+// que viene hasta todo lo que vino de él, lo más antiguo primero.
 type GetTrail struct{ ID domain.DocumentID }
 
-// DocumentDTO is the transport form of an entry.
+// DocumentDTO es la forma de transporte de una anotación.
 type DocumentDTO struct {
 	ID           string `json:"id"`
 	Company      string `json:"company"`
@@ -147,7 +147,7 @@ func (s service) byFact(ctx context.Context, r domain.Ref) (*domain.Document, er
 	return found[0], nil
 }
 
-// trail walks up to the first document and then down through everything derived from it.
+// trail sube hasta el primer documento y después baja por todo lo que deriva de él.
 func (s service) trail(ctx context.Context, d *domain.Document) ([]*domain.Document, error) {
 	root, seen := d, map[domain.Ref]bool{d.State().Fact: true}
 	for !root.State().Origin.IsZero() && len(seen) < MaxTrail {
@@ -156,7 +156,7 @@ func (s service) trail(ctx context.Context, d *domain.Document) ([]*domain.Docum
 			return nil, err
 		}
 		if up == nil || seen[up.State().Fact] {
-			break // the origin is not in the register (yet), or the data loops
+			break // el origen no está (aún) en el registro, o los datos forman un ciclo
 		}
 		root, seen[up.State().Fact] = up, true
 	}
@@ -183,7 +183,7 @@ func guard[In, Out any](fn func(context.Context, In) (Out, error)) app.Handler[I
 	return app.Chain[In, Out](app.HandlerFunc[In, Out](fn), pipeline.RequirePermission[In, Out](PermDocumentRead))
 }
 
-// NewService wires the queries.
+// NewService conecta las consultas.
 func NewService(d Deps) *Service {
 	s := newService(d)
 	svc := &Service{}
@@ -276,12 +276,12 @@ func NewService(d Deps) *Service {
 	return svc
 }
 
-// Register implements contracts.Register on the repository: the port other contexts use.
+// Register implementa contracts.Register sobre el repositorio: el puerto que usan otros contextos.
 type Register struct{ Documents domain.DocumentRepository }
 
 var _ contracts.Register = Register{}
 
-// ByFact implements contracts.Register.
+// ByFact implementa contracts.Register.
 func (r Register) ByFact(ctx context.Context, docType, factID string) (contracts.Document, bool, error) {
 	found, err := r.Documents.Find(ctx, domain.ByFact(domain.Ref{Type: domain.Type(docType), ID: factID}))
 	if err != nil || len(found) == 0 {

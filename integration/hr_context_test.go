@@ -26,9 +26,10 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 )
 
-// TestHRContext runs HR with Parties and Facilities on every engine (one database, four migration
-// histories): seeded catalogs, work centers, employments with contracts, positions with holders
-// and reporting lines (EXISTS / NOT EXISTS), termination cascade and the Staff port.
+// TestHRContext ejecuta HR con Parties y Facilities en cada motor (una base de datos, cuatro
+// historias de migraciones): catálogos sembrados, centros de trabajo, empleos con contratos,
+// puestos con titulares y líneas jerárquicas (EXISTS / NOT EXISTS), baja en cascada y el puerto
+// Staff.
 func TestHRContext(t *testing.T) {
 	for _, e := range engines {
 		if e.name == "oracle-dotnet-guids" {
@@ -60,7 +61,7 @@ func TestHRContext(t *testing.T) {
 			admin.GlobalAdmin = true
 			actx := authz.WithContext(ctx, admin)
 
-			// Seeded catalogs, with the C# GUIDs.
+			// Catálogos sembrados, con los GUID de C#.
 			types, err := svc.PositionTypes.Handle(actx, happ.ListPositionTypes{})
 			links := 0
 			for _, pt := range types {
@@ -183,7 +184,7 @@ func TestHRContext(t *testing.T) {
 				len(staff[bea.ID]) != 1 || staff[bea.ID][0].Contract != nil {
 				t.Fatalf("staff: %+v %v", staff, err)
 			}
-			// Parties reacts to hr.employee-terminated.v1 through its inbox (decision 4 of docs/RRHH.md).
+			// Parties reacciona a hr.employee-terminated.v1 a través de su inbox (decisión 4 de docs/RRHH.md).
 			broker := inprocess.NewBroker()
 			broker.Subscribe("parties", pm.Consumer)
 			for {

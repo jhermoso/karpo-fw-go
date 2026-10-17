@@ -45,7 +45,7 @@ func line(qty, price, discount string, stocked bool) domain.Line {
 		Quantity: dec(qty), UnitPrice: dec(price), Discount: dec(discount)}
 }
 
-// events returns the pending events of a type and clears them all.
+// events devuelve los eventos pendientes de un tipo y los borra todos.
 func events[E fw.Event](o *domain.Order) []E {
 	var out []E
 	for _, e := range o.PendingEvents() {
@@ -59,7 +59,7 @@ func events[E fw.Event](o *domain.Order) []E {
 
 func TestOrder_PricesEachDiscountOnce(t *testing.T) {
 	o := draft(t, "10")
-	// 0.08 with 5% of the list and 10% of the customer: 0.08 × 0.95 × 0.90 = 0.0684.
+	// 0.08 con un 5 % de la tarifa y un 10 % del cliente: 0.08 × 0.95 × 0.90 = 0.0684.
 	no, err := o.AddLine(line("1000", "0.08", "5", true))
 	if err != nil || no != 1 {
 		t.Fatalf("line: %d %v", no, err)
@@ -110,7 +110,7 @@ func TestOrder_ConfirmHoldDeliver(t *testing.T) {
 		t.Fatalf("nothing held yet: %v", err)
 	}
 	o.Hold(1, dec("6"))
-	o.Hold(9, dec("6")) // unknown line: ignored
+	o.Hold(9, dec("6")) // línea desconocida: se ignora
 	if err := o.RequestStock(); err != nil {
 		t.Fatal(err)
 	}
@@ -137,7 +137,7 @@ func TestOrder_ConfirmHoldDeliver(t *testing.T) {
 	if err := o.Cancel("no"); !isViolation(err, "orders.delivered") {
 		t.Fatalf("cancel a served order: %v", err)
 	}
-	o.Hold(1, dec("9")) // never beyond what is pending
+	o.Hold(1, dec("9")) // nunca más allá de lo pendiente
 	if !o.State().Lines[0].Reserved.Equal(dec("4")) {
 		t.Fatalf("hold capped: %s", o.State().Lines[0].Reserved)
 	}
@@ -174,7 +174,7 @@ func TestOrder_CancelAndClose(t *testing.T) {
 	if err := o.Cancel("otra vez"); !isViolation(err, "orders.closed") {
 		t.Fatalf("cancel twice: %v", err)
 	}
-	o.Hold(1, dec("1")) // a late reservation of a cancelled order is ignored
+	o.Hold(1, dec("1")) // una reserva tardía de un pedido anulado se ignora
 	if !o.State().Lines[0].Reserved.IsZero() {
 		t.Fatal("late hold")
 	}

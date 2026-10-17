@@ -1,4 +1,4 @@
-// Package distribution exposes the Geography and reference data context over HTTP.
+// Package distribution expone por HTTP el contexto de Geografía y datos de referencia.
 package distribution
 
 import (
@@ -11,15 +11,15 @@ import (
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// Module is the HTTP endpoint module of the context.
+// Module es el módulo de endpoints HTTP del contexto.
 type Module struct{ svc *gapp.Service }
 
-// NewModule creates the endpoint module.
+// NewModule crea el módulo de endpoints.
 func NewModule(svc *gapp.Service) *Module { return &Module{svc: svc} }
 
 var _ distribution.EndpointModule = (*Module)(nil)
 
-// RegisterRoutes implements distribution.EndpointModule.
+// RegisterRoutes implementa distribution.EndpointModule.
 func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/geography/boundaries", m.searchBoundaries)
 	mux.HandleFunc("GET /api/geography/boundaries/{id}", m.getBoundary)

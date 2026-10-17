@@ -7,11 +7,11 @@ import (
 	"unicode/utf8"
 )
 
-// Tag is a free classification label, normalized to lower case with single spaces.
+// Tag es una etiqueta libre de clasificación, normalizada a minúsculas y con espacios simples.
 type Tag struct{ value string }
 
-// NewTag validates a tag: 1..50 characters, starting with a letter or digit, then letters,
-// digits, spaces, '-', '_' or '.'.
+// NewTag valida una etiqueta: 1..50 caracteres, que empieza por una letra o un dígito, seguida de
+// letras, dígitos, espacios, '-', '_' o '.'.
 func NewTag(s string) (Tag, error) {
 	t := strings.ToLower(strings.Join(strings.Fields(s), " "))
 	if t == "" {
@@ -32,16 +32,16 @@ func NewTag(s string) (Tag, error) {
 	return Tag{t}, nil
 }
 
-// String returns the tag.
+// String devuelve la etiqueta.
 func (t Tag) String() string { return t.value }
 
-// IsZero reports whether the tag is absent.
+// IsZero dice si falta la etiqueta.
 func (t Tag) IsZero() bool { return t.value == "" }
 
-// MarshalText implements encoding.TextMarshaler.
+// MarshalText implementa encoding.TextMarshaler.
 func (t Tag) MarshalText() ([]byte, error) { return []byte(t.value), nil }
 
-// UnmarshalText implements encoding.TextUnmarshaler.
+// UnmarshalText implementa encoding.TextUnmarshaler.
 func (t *Tag) UnmarshalText(b []byte) error {
 	v, err := NewTag(string(b))
 	if err == nil {
@@ -50,10 +50,10 @@ func (t *Tag) UnmarshalText(b []byte) error {
 	return err
 }
 
-// TagSet is an immutable, sorted set of distinct tags. Unlike the C# TagSet it may be empty.
+// TagSet es un conjunto inmutable y ordenado de etiquetas distintas. A diferencia del TagSet de C#, puede estar vacío.
 type TagSet struct{ tags []Tag }
 
-// NewTagSet builds a set from raw labels, reporting every invalid one.
+// NewTagSet construye un conjunto a partir de etiquetas en bruto e informa de todas las no válidas.
 func NewTagSet(labels ...string) (TagSet, error) {
 	tags := make([]Tag, 0, len(labels))
 	var errs []error
@@ -71,37 +71,37 @@ func NewTagSet(labels ...string) (TagSet, error) {
 	return TagSetOf(tags...), nil
 }
 
-// TagSetOf builds a set from valid tags.
+// TagSetOf construye un conjunto a partir de etiquetas válidas.
 func TagSetOf(tags ...Tag) TagSet {
 	out := slices.Clone(tags)
 	slices.SortFunc(out, func(a, b Tag) int { return strings.Compare(a.value, b.value) })
 	return TagSet{tags: slices.Compact(out)}
 }
 
-// Tags returns the tags in order.
+// Tags devuelve las etiquetas en orden.
 func (s TagSet) Tags() []Tag { return slices.Clone(s.tags) }
 
-// Len returns the number of tags.
+// Len devuelve el número de etiquetas.
 func (s TagSet) Len() int { return len(s.tags) }
 
-// Contains reports whether t is in the set.
+// Contains dice si t está en el conjunto.
 func (s TagSet) Contains(t Tag) bool {
 	_, ok := slices.BinarySearchFunc(s.tags, t, func(a, b Tag) int { return strings.Compare(a.value, b.value) })
 	return ok
 }
 
-// With returns a new set including t.
+// With devuelve un conjunto nuevo que incluye t.
 func (s TagSet) With(t Tag) TagSet { return TagSetOf(append(s.Tags(), t)...) }
 
-// Without returns a new set excluding t.
+// Without devuelve un conjunto nuevo que excluye t.
 func (s TagSet) Without(t Tag) TagSet {
 	return TagSet{tags: slices.DeleteFunc(s.Tags(), func(x Tag) bool { return x == t })}
 }
 
-// Equal reports whether both sets contain the same tags.
+// Equal dice si ambos conjuntos contienen las mismas etiquetas.
 func (s TagSet) Equal(o TagSet) bool { return slices.Equal(s.tags, o.tags) }
 
-// String returns "a, b, c".
+// String devuelve "a, b, c".
 func (s TagSet) String() string {
 	parts := make([]string, len(s.tags))
 	for i, t := range s.tags {

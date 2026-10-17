@@ -9,8 +9,8 @@ import (
 
 type inboxKey struct{ consumer, id string }
 
-// Inbox is an in-memory application.InboxStore bound to a Store's unit of work: a claim made
-// inside a unit of work that rolls back is forgotten.
+// Inbox es un application.InboxStore en memoria ligado a la unidad de trabajo de un Store: una
+// reclamación hecha dentro de una unidad de trabajo que hace rollback se olvida.
 type Inbox struct {
 	store *Store
 	mu    sync.Mutex
@@ -19,12 +19,12 @@ type Inbox struct {
 
 var _ application.InboxStore = (*Inbox)(nil)
 
-// NewInbox creates an inbox on store.
+// NewInbox crea un inbox sobre store.
 func NewInbox(store *Store) *Inbox {
 	return &Inbox{store: store, seen: map[inboxKey]struct{}{}}
 }
 
-// Claim implements application.InboxStore.
+// Claim implementa application.InboxStore.
 func (i *Inbox) Claim(ctx context.Context, consumer, messageID string) (bool, error) {
 	if i.store.closed.Load() {
 		return false, ErrClosed

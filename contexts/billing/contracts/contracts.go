@@ -1,12 +1,12 @@
-// Package contracts is what other bounded contexts may depend on: the Published Language of
-// Billing (Fiscal keeps the VAT books and the Modelo 303 from it, Accounting posts the sale,
-// Receivables opens the collection).
+// Package contracts es aquello de lo que pueden depender otros contextos delimitados: el Published
+// Language de Billing (Fiscal lleva con él los libros de IVA y el Modelo 303, Accounting contabiliza
+// la venta, Receivables abre el cobro).
 package contracts
 
-// Source is the name of the publishing bounded context.
+// Source es el nombre del contexto delimitado que publica.
 const Source = "billing"
 
-// TaxLineV1 is a line of the tax breakdown of an issued invoice.
+// TaxLineV1 es una línea del desglose de impuestos de una factura emitida.
 type TaxLineV1 struct {
 	TaxType         string `json:"taxType,omitempty"`
 	TaxCode         string `json:"taxCode,omitempty"`
@@ -19,14 +19,14 @@ type TaxLineV1 struct {
 	SurchargeAmount string `json:"surchargeAmount,omitempty"`
 }
 
-// InvoiceIssuedV1 is published when an invoice is issued. Amounts are decimal strings in the
-// invoice currency with two decimals; dates are civil dates.
+// InvoiceIssuedV1 se publica cuando se emite una factura. Los importes son cadenas decimales en la
+// moneda de la factura con dos decimales; las fechas son fechas civiles.
 type InvoiceIssuedV1 struct {
 	InvoiceID     string      `json:"invoiceId"`
 	Number        string      `json:"number"`
 	Kind          string      `json:"kind"` // ordinary | corrective
 	Corrects      string      `json:"corrects,omitempty"`
-	SourceType    string      `json:"sourceType,omitempty"` // the document it was drafted from (orders.delivery)
+	SourceType    string      `json:"sourceType,omitempty"` // el documento del que se preparó (orders.delivery)
 	SourceID      string      `json:"sourceId,omitempty"`
 	Reason        string      `json:"reason,omitempty"` // R1–R5
 	Seller        string      `json:"seller"`
@@ -38,7 +38,7 @@ type InvoiceIssuedV1 struct {
 	OperationDate string      `json:"operationDate,omitempty"`
 	DueDate       string      `json:"dueDate,omitempty"`
 	Currency      string      `json:"currency"`
-	Country       string      `json:"country"` // tax jurisdiction
+	Country       string      `json:"country"` // jurisdicción fiscal
 	Net           string      `json:"net"`
 	Tax           string      `json:"tax"`
 	Surcharge     string      `json:"surcharge"`
@@ -46,5 +46,5 @@ type InvoiceIssuedV1 struct {
 	Taxes         []TaxLineV1 `json:"taxes"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (InvoiceIssuedV1) IntegrationEventType() string { return "billing.invoice-issued.v1" }

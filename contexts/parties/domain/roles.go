@@ -10,30 +10,31 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Applicability tells which kind of party may play a role.
+// Applicability dice qué clase de party puede desempeñar un rol.
 type Applicability string
 
-// Applicabilities, derived from the position of the role in the hierarchy (under the Person or
-// Organization category, or elsewhere).
+// Aplicabilidades, deducidas de la posición del rol en la jerarquía (bajo la categoría Person u
+// Organization, o en otro sitio).
 const (
 	AppliesToAny          Applicability = "any"
 	AppliesToPerson       Applicability = "person"
 	AppliesToOrganization Applicability = "organization"
 )
 
-// RoleTypeKind and RelationshipTypeKind name the catalog entries in the audit log.
+// RoleTypeKind y RelationshipTypeKind nombran las entradas del catálogo en el registro de auditoría.
 const (
 	RoleTypeKind         = "parties.role_type"
 	RelationshipTypeKind = "parties.relationship_type"
 )
 
-// RoleType is an entry of the role type catalog. Categories group roles and cannot be assigned
-// (the C# IsTag). A role type may have one parent; a party playing a role also plays every
-// ancestor role (virtual inheritance: ancestors are derived, never stored).
+// RoleType es una entrada del catálogo de tipos de rol. Las categorías agrupan roles y no se
+// pueden asignar (el IsTag de C#). Un tipo de rol puede tener un padre; una party que desempeña un
+// rol desempeña también todos sus roles antepasados (herencia virtual: los antepasados se deducen,
+// nunca se guardan).
 type RoleType struct {
 	ID RoleTypeID
-	// Code is the stable, readable key of the type ("customer"); optional and unique. It is what
-	// a model, a seed or an extension names the type by, instead of its identifier.
+	// Code es la clave estable y legible del tipo ("customer"); opcional y única. Es el nombre con
+	// el que un modelo, una semilla o una extensión se refieren al tipo, en lugar de su identificador.
 	Code        string
 	Name        vocab.Name
 	Description string
@@ -41,12 +42,12 @@ type RoleType struct {
 	Category    bool
 }
 
-// MaxTypeCode is the length of the longest code of a catalog type.
+// MaxTypeCode es la longitud del código más largo de un tipo del catálogo.
 const MaxTypeCode = 40
 
 var typeCode = regexp.MustCompile(`^[a-z][a-z0-9]*(-[a-z0-9]+)*$`)
 
-// CodeOf derives a code from a name: "Bill-To Customer" is "bill-to-customer".
+// CodeOf deduce un código a partir de un nombre: "Bill-To Customer" es "bill-to-customer".
 func CodeOf(name string) string {
 	var b strings.Builder
 	dash := false
@@ -64,10 +65,10 @@ func CodeOf(name string) string {
 	return b.String()
 }
 
-// NewRoleType builds a role type somebody adds to the catalog: a role that can be assigned,
-// placed in the hierarchy under its parent. It carries no data of its own (a type that needs
-// some is an extension, docs/EXTENSIBILIDAD.md). Whether the parent exists, and whether the name
-// and the code are free, is checked against the catalog (Catalog.Admits).
+// NewRoleType construye un tipo de rol que alguien añade al catálogo: un rol que se puede asignar,
+// colocado en la jerarquía bajo su padre. No lleva datos propios (un tipo que los necesite es una
+// extensión, docs/EXTENSIBILIDAD.md). Que el padre exista, y que el nombre y el código estén
+// libres, se comprueba contra el catálogo (Catalog.Admits).
 func NewRoleType(id RoleTypeID, name, description, code string, parent RoleTypeID) (RoleType, error) {
 	var v fw.Validation
 	n, err := vocab.NewName(name)
@@ -85,18 +86,19 @@ func NewRoleType(id RoleTypeID, name, description, code string, parent RoleTypeI
 	return RoleType{ID: id, Code: code, Name: n, Description: description, Parent: &parent}, nil
 }
 
-// RoleCatalog answers questions about role types. It is a domain service built from the
-// catalog data (see NewRoleCatalog); the aggregates receive it instead of reading ambient state.
+// RoleCatalog responde a preguntas sobre los tipos de rol. Es un servicio de dominio construido a
+// partir de los datos del catálogo (ver NewRoleCatalog); los agregados lo reciben en lugar de leer
+// estado ambiental.
 type RoleCatalog interface {
 	RoleType(id RoleTypeID) (RoleType, bool)
-	// IsA reports whether role is ancestor or equal to the ancestor role.
+	// IsA dice si role es ancestor o desciende de él.
 	IsA(role, ancestor RoleTypeID) bool
-	// Applicability returns which kind of party may play role.
+	// Applicability devuelve qué clase de party puede desempeñar role.
 	Applicability(role RoleTypeID) Applicability
 }
 
-// Catalog is the in-memory RoleCatalog. It validates the hierarchy when built: known parents,
-// no cycles.
+// Catalog es el RoleCatalog en memoria. Valida la jerarquía al construirse: padres conocidos, sin
+// ciclos.
 type Catalog struct {
 	types      map[RoleTypeID]RoleType
 	codes      map[string]RoleTypeID
@@ -109,8 +111,8 @@ type Catalog struct {
 
 var _ RoleCatalog = (*Catalog)(nil)
 
-// NewRoleCatalog builds a catalog. personCategory and organizationCategory are the categories
-// whose descendants may only be played by people or by organizations.
+// NewRoleCatalog construye un catálogo. personCategory y organizationCategory son las categorías
+// cuyos descendientes sólo pueden desempeñar personas u organizaciones, respectivamente.
 func NewRoleCatalog(types []RoleType, personCategory, organizationCategory RoleTypeID) (*Catalog, error) {
 	c := &Catalog{types: map[RoleTypeID]RoleType{}, codes: map[string]RoleTypeID{}, ancestors: map[RoleTypeID][]RoleTypeID{},
 		appliesTo: map[RoleTypeID]Applicability{}, personCat: personCategory, orgCat: organizationCategory}
@@ -157,17 +159,17 @@ func NewRoleCatalog(types []RoleType, personCategory, organizationCategory RoleT
 	return c, nil
 }
 
-// RoleType implements RoleCatalog.
+// RoleType implementa RoleCatalog.
 func (c *Catalog) RoleType(id RoleTypeID) (RoleType, bool) { t, ok := c.types[id]; return t, ok }
 
-// ByCode returns the role type with a code.
+// ByCode devuelve el tipo de rol que tiene un código.
 func (c *Catalog) ByCode(code string) (RoleType, bool) {
 	id, ok := c.codes[code]
 	return c.types[id], ok && code != ""
 }
 
-// Admits checks that a new role type fits the catalog: its parent exists, and nobody has its
-// name (whatever the case) or its code.
+// Admits comprueba que un tipo de rol nuevo encaja en el catálogo: su padre existe y nadie tiene
+// su nombre (sin distinguir mayúsculas) ni su código.
 func (c *Catalog) Admits(t RoleType) error {
 	if t.Parent == nil {
 		return fw.Violation("parties.role_type_without_parent", "a role type hangs from a parent in the hierarchy")
@@ -191,18 +193,19 @@ func (c *Catalog) Admits(t RoleType) error {
 	return nil
 }
 
-// IsA implements RoleCatalog.
+// IsA implementa RoleCatalog.
 func (c *Catalog) IsA(role, ancestor RoleTypeID) bool {
 	return role == ancestor || slices.Contains(c.ancestors[role], ancestor)
 }
 
-// Applicability implements RoleCatalog.
+// Applicability implementa RoleCatalog.
 func (c *Catalog) Applicability(role RoleTypeID) Applicability { return c.appliesTo[role] }
 
-// Ancestors returns the ancestors of role, nearest first.
+// Ancestors devuelve los antepasados de role, primero el más cercano.
 func (c *Catalog) Ancestors(role RoleTypeID) []RoleTypeID { return slices.Clone(c.ancestors[role]) }
 
-// Descendants returns role and every role below it (to search parties "playing role X").
+// Descendants devuelve role y todos los roles por debajo de él (para buscar parties «que
+// desempeñan el rol X»).
 func (c *Catalog) Descendants(role RoleTypeID) []RoleTypeID {
 	out := []RoleTypeID{}
 	for _, id := range c.typesOrder {
@@ -213,7 +216,7 @@ func (c *Catalog) Descendants(role RoleTypeID) []RoleTypeID {
 	return out
 }
 
-// All returns every role type in declaration order.
+// All devuelve todos los tipos de rol en el orden en que se declararon.
 func (c *Catalog) All() []RoleType {
 	out := make([]RoleType, len(c.typesOrder))
 	for i, id := range c.typesOrder {
@@ -222,7 +225,8 @@ func (c *Catalog) All() []RoleType {
 	return out
 }
 
-// CanPlay checks that a party of kind may be given role: known, not a category, compatible.
+// CanPlay comprueba que a una party de clase kind se le puede dar role: conocido, no es una
+// categoría, compatible.
 func CanPlay(c RoleCatalog, kind Kind, role RoleTypeID) error {
 	t, ok := c.RoleType(role)
 	if !ok {

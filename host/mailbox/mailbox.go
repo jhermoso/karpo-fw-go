@@ -20,13 +20,13 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 )
 
-// Listener is a consumer of the host: it takes a message once, in its own unit of work.
+// Listener es un consumidor del anfitrión: recoge un mensaje una vez, en su propia unidad de trabajo.
 type Listener interface {
 	app.MessageHandler
 	Name() string
 }
 
-// Office keeps the mailboxes of the listeners of a host.
+// Office guarda los buzones de los oyentes de un anfitrión.
 type Office struct {
 	deliveries Repository
 	orch       *orchestration.Orchestrator[ID, *Delivery]
@@ -34,29 +34,30 @@ type Office struct {
 	givenUp    func(context.Context, DTO)
 }
 
-// OnGivenUp sets what is told when a delivery is given up: the one moment somebody has to know,
-// because from then on nothing happens on its own. fn must not fail the round: it is told, no more.
+// OnGivenUp fija a quién se avisa cuando se abandona una entrega: el único momento en que alguien
+// tiene que saberlo, porque desde entonces nada pasa por sí solo. fn no debe hacer fallar la ronda:
+// se le avisa, nada más.
 func (o *Office) OnGivenUp(fn func(context.Context, DTO)) { o.givenUp = fn }
 
-// New builds the office on sw.
+// New construye la oficina sobre sw.
 func New(sw *hotswap.Switch) *Office {
 	repo := hotswap.Repository(sw, RepositoryFactory)
 	return &Office{deliveries: repo, orch: orchestration.New[ID, *Delivery](repo, sw), listeners: map[string]Listener{}}
 }
 
-// Box is the mailbox of a listener: what the transport delivers to instead of the listener.
+// Box es el buzón de un oyente: a lo que entrega el transporte en vez de al oyente.
 type Box struct {
 	office   *Office
 	listener Listener
 }
 
-// For returns the mailbox of a listener.
+// For devuelve el buzón de un oyente.
 func (o *Office) For(l Listener) *Box {
 	o.listeners[l.Name()] = l
 	return &Box{office: o, listener: l}
 }
 
-// Name is the name the transport knows the listener by.
+// Name es el nombre por el que el transporte conoce al oyente.
 func (b *Box) Name() string { return b.listener.Name() }
 
 func codeOf(err error) string {
@@ -83,16 +84,16 @@ func stateOf(consumer string, env app.Envelope) State {
 		CorrelationID: env.CorrelationID, CausationID: env.CausationID, Data: string(env.Data)}
 }
 
-// HandleMessage implements application.MessageHandler: the listener takes the message, or it is
-// kept for it. Only failing to keep it is an error: then the publisher sends it again, which is
-// safe. It must be called outside any unit of work, as the listener itself.
+// HandleMessage implementa application.MessageHandler: el oyente recoge el mensaje, o se le guarda.
+// Sólo es error no poder guardarlo: entonces el publicador lo envía otra vez, lo que no tiene
+// peligro. Se ha de llamar fuera de toda unidad de trabajo, como el propio oyente.
 func (b *Box) HandleMessage(ctx context.Context, env app.Envelope) error {
 	o, name := b.office, b.listener.Name()
-	// Sent again after it was kept: it is already here.
+	// Enviado otra vez después de guardarlo: ya está aquí.
 	if known, err := o.deliveries.Exists(ctx, spec.And(FieldConsumer.Eq(name), FieldEnvelope.Eq(env.ID))); err != nil || known {
 		return err
 	}
-	// Behind what waits about the same thing: a listener gets the messages of a thing in order.
+	// Detrás de lo que espera sobre lo mismo: un oyente recibe en orden los mensajes de una cosa.
 	if env.Subject != "" {
 		ahead, err := o.open(ctx, FieldConsumer.Eq(name), FieldSubject.Eq(env.Subject))
 		if err != nil {
@@ -108,7 +109,7 @@ func (b *Box) HandleMessage(ctx context.Context, env app.Envelope) error {
 	}
 	herr := b.listener.HandleMessage(ctx, env)
 	if herr == nil || ctx.Err() != nil {
-		return ctx.Err() // a process that is stopping keeps nothing: the publisher still has the message
+		return ctx.Err() // un proceso que se está parando no guarda nada: el publicador aún tiene el mensaje
 	}
 	d, err := Keep(NewID(), stateOf(name, env), codeOf(herr), herr.Error(), fw.Now())
 	if err != nil {
@@ -135,16 +136,16 @@ func inOrder(ds []*Delivery) {
 	})
 }
 
-// Redelivered is what a round of redelivery did.
+// Redelivered es lo que hizo una ronda de reentrega.
 type Redelivered struct {
 	Delivered int `json:"delivered"`
 	Waiting   int `json:"waiting"`
 	GivenUp   int `json:"givenUp"`
 }
 
-// Redeliver tries again what waits and is due, in the order it happened. For each listener, a
-// message that still cannot be delivered (or that was given up) holds back those that came after
-// it about the same thing. With force, what is not due yet is tried too.
+// Redeliver vuelve a intentar lo que espera y ya toca, en el orden en que pasó. Para cada oyente,
+// un mensaje que aún no se puede entregar (o que se abandonó) retiene a los que vinieron después
+// sobre lo mismo. Con force, también se intenta lo que aún no toca.
 func (o *Office) Redeliver(ctx context.Context, force bool) (Redelivered, error) {
 	var out Redelivered
 	all, err := o.open(ctx)
@@ -200,26 +201,26 @@ func (o *Office) Redeliver(ctx context.Context, force bool) (Redelivered, error)
 	return out, nil
 }
 
-// Commands and queries: for a global administrator, as the histories are.
+// Comandos y consultas: para un administrador global, como las historias.
 type (
-	// Search lists what is kept, the oldest first.
+	// Search lista lo que está guardado, lo más antiguo primero.
 	Search struct {
 		Consumer, Status string
 		Page, Size       int
 	}
-	// Retry puts back among those that are tried the deliveries that were given up (one, or all)
-	// and tries now everything that waits.
+	// Retry devuelve a las que se intentan las entregas abandonadas (una, o todas) e intenta ahora
+	// todo lo que espera.
 	Retry struct {
 		ID string `json:"id,omitempty"`
 	}
-	// Discard gives up a delivery for good, saying why.
+	// Discard abandona una entrega para siempre, diciendo por qué.
 	Discard struct {
 		ID   ID     `json:"-"`
 		Note string `json:"note"`
 	}
 )
 
-// DTO is the transport form of a delivery.
+// DTO es la forma de transporte de una entrega.
 type DTO struct {
 	ID          string          `json:"id"`
 	Consumer    string          `json:"consumer"`
@@ -260,7 +261,7 @@ func admin(ctx context.Context) error {
 	return nil
 }
 
-// Search lists the deliveries kept.
+// Search lista las entregas guardadas.
 func (o *Office) Search(ctx context.Context, q Search) (fw.Page[DTO], error) {
 	if err := admin(ctx); err != nil {
 		return fw.Page[DTO]{}, err
@@ -284,15 +285,15 @@ func (o *Office) Search(ctx context.Context, q Search) (fw.Page[DTO], error) {
 	return fw.MapPage(page, dto), nil
 }
 
-// Count is how many deliveries a listener has waiting and given up.
+// Count es cuántas entregas tiene un oyente en espera y abandonadas.
 type Count struct {
 	Consumer string `json:"consumer"`
 	Waiting  int    `json:"waiting"`
 	GivenUp  int    `json:"givenUp"`
 }
 
-// Summary counts what each listener has pending, those with something given up first: what a
-// screen shows to tell at a glance whether somebody has to look.
+// Summary cuenta lo que tiene pendiente cada oyente, primero los que tienen algo abandonado: lo que
+// muestra una pantalla para saber de un vistazo si alguien tiene que mirar.
 func (o *Office) Summary(ctx context.Context) ([]Count, error) {
 	if err := admin(ctx); err != nil {
 		return nil, err
@@ -328,7 +329,7 @@ func (o *Office) Summary(ctx context.Context) ([]Count, error) {
 	return out, nil
 }
 
-// Retry tries again what somebody asks for.
+// Retry vuelve a intentar lo que alguien pide.
 func (o *Office) Retry(ctx context.Context, c Retry) (Redelivered, error) {
 	if err := admin(ctx); err != nil {
 		return Redelivered{}, err
@@ -358,7 +359,7 @@ func (o *Office) Retry(ctx context.Context, c Retry) (Redelivered, error) {
 	return o.Redeliver(ctx, true)
 }
 
-// Discard gives up a delivery for good.
+// Discard abandona una entrega para siempre.
 func (o *Office) Discard(ctx context.Context, c Discard) (DTO, error) {
 	if err := admin(ctx); err != nil {
 		return DTO{}, err
@@ -384,7 +385,7 @@ func decode(r *http.Request, v any) error {
 	return nil
 }
 
-// RegisterRoutes implements distribution.EndpointModule.
+// RegisterRoutes implementa distribution.EndpointModule.
 func (o *Office) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/deliveries", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()

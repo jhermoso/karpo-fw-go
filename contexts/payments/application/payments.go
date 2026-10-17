@@ -10,14 +10,14 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// AllocationInput applies part of a payment to a payable.
+// AllocationInput aplica parte de un pago a una obligación.
 type AllocationInput struct {
 	Payable string `json:"payable"`
 	Amount  string `json:"amount"`
 }
 
-// RegisterPayment records money paid out, optionally allocated at once. Payee is a party id, or
-// Authority the tax authority (AEAT).
+// RegisterPayment registra dinero pagado, aplicado en el acto si se quiere. Payee es un id de
+// party, o Authority la administración tributaria (AEAT).
 type RegisterPayment struct {
 	Company     string            `json:"company"`
 	Payee       string            `json:"payee,omitempty"`
@@ -29,33 +29,33 @@ type RegisterPayment struct {
 	Allocations []AllocationInput `json:"allocations,omitempty"`
 }
 
-// Allocate applies part of a payment to a payable.
+// Allocate aplica parte de un pago a una obligación.
 type Allocate struct {
 	ID domain.PaymentID `json:"-"`
 	AllocationInput
 }
 
-// Deallocate reverses an allocation.
+// Deallocate revierte una aplicación.
 type Deallocate struct {
 	ID         domain.PaymentID `json:"-"`
 	Allocation string           `json:"allocation"`
 }
 
-// CancelPayment cancels a payment and reverses its allocations.
+// CancelPayment anula un pago y revierte sus aplicaciones.
 type CancelPayment struct {
 	ID domain.PaymentID `json:"-"`
 }
 
-// GetPayment loads a payment.
+// GetPayment carga un pago.
 type GetPayment struct{ ID domain.PaymentID }
 
-// SearchPayments searches payments of the caller's scope.
+// SearchPayments busca pagos del ámbito de quien llama.
 type SearchPayments struct {
 	Company, Payee string
 	Page, Size     int
 }
 
-// AllocationDTO is the transport form of an allocation.
+// AllocationDTO es la forma de transporte de una aplicación.
 type AllocationDTO struct {
 	ID      string `json:"id"`
 	Payable string `json:"payable"`
@@ -64,7 +64,7 @@ type AllocationDTO struct {
 	On      string `json:"on"`
 }
 
-// PaymentDTO is the transport form of a payment.
+// PaymentDTO es la forma de transporte de un pago.
 type PaymentDTO struct {
 	ID          string          `json:"id"`
 	Company     string          `json:"company"`
@@ -96,9 +96,9 @@ func paymentDTO(p *domain.Payment) PaymentDTO {
 	return d
 }
 
-// apply records an allocation on both sides: the payable (what is open) first, so a refused
-// amount leaves no allocation on the payment, then the payment. Both change in the caller's unit
-// of work.
+// apply registra una aplicación en los dos lados: primero la obligación (lo abierto), para que un
+// importe rechazado no deje ninguna aplicación en el pago, y luego el pago. Los dos cambian en la
+// unidad de trabajo de quien llama.
 func (s service) apply(ctx context.Context, p *domain.Payment, in AllocationInput, on vocab.Date) error {
 	var v fw.Validation
 	id := domain.PayableID{UUID: parseID(&v, "payable", in.Payable)}

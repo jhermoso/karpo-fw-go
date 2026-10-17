@@ -46,7 +46,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/testing/archtest"
 )
 
-// host composes Parties, Facilities, HR and Payroll on one hot-swappable backend.
+// host compone Parties, Facilities, HR y Payroll sobre un único backend intercambiable en caliente.
 type host struct {
 	t        *testing.T
 	srv      *httptest.Server
@@ -177,7 +177,7 @@ func (h *host) scenario(tag string) {
 		t.Fatal(err)
 	}
 
-	// Employer account (CCC): control digits, unique while active.
+	// Cuenta de cotización (CCC): dígitos de control, única mientras está activa.
 	var ccc yapp.AccountDTO
 	h.must(h.do("POST", "/api/payroll/employer-accounts", "clerk", map[string]any{"employer": acme.ID, "code": "28/1234567/43",
 		"regime": "0111", "method": "manual"}, nil), 400, "wrong control digits")
@@ -188,7 +188,7 @@ func (h *host) scenario(tag string) {
 	h.must(h.do("POST", "/api/payroll/employer-accounts", "outsider", map[string]any{"employer": acme.ID, "code": "08123456700",
 		"regime": "0111", "method": "manual"}, nil), 404, "acme is out of the outsider's scope")
 
-	// Profile of the employment, with the net split: garnishment, 30 % and the residual.
+	// Perfil de la relación laboral, con el líquido repartido: embargo, 30 % y la residual.
 	var prof yapp.ProfileDTO
 	terms := map[string]any{"person": ana.ID, "employer": acme.ID, "contributionGroup": 5, "incomeTaxRate": "15",
 		"salary": map[string]any{"amount": "2000", "periodicity": "monthly", "paymentsPerYear": 14}, "employerAccount": ccc.ID}
@@ -210,7 +210,7 @@ func (h *host) scenario(tag string) {
 	h.must(h.do("POST", "/api/payroll/profiles/"+prof.ID+"/splits", "clerk", map[string]any{"iban": "ES9121000418450200051332",
 		"residual": true, "from": from}, nil), 422, "one residual")
 
-	// Payslip of last month: lines, derived totals, approval by another role.
+	// Nómina del mes pasado: líneas, totales derivados, aprobación por otro rol.
 	end := vocab.MustDate(today.Year(), today.Month(), 1).AddDays(-1)
 	start := vocab.MustDate(end.Year(), end.Month(), 1)
 	var slip yapp.PayslipDTO
@@ -245,14 +245,14 @@ func (h *host) scenario(tag string) {
 	h.must(h.do("DELETE", "/api/payroll/payslips/"+slip.ID, "clerk", nil, nil), 422, "an approved payslip is not deleted")
 	h.must(h.do("GET", "/api/payroll/payslips/"+slip.ID, "outsider", nil, nil), 404, "outsider")
 
-	// Treasury: the net split across the accounts.
+	// Treasury: el líquido repartido entre las cuentas.
 	pays, err := h.payroll.Remittance.NetPayments(context.Background(), []string{slip.ID})
 	if err != nil || len(pays[slip.ID]) != 3 || pays[slip.ID][0].Amount != "200.00" || !pays[slip.ID][0].Garnishment ||
 		pays[slip.ID][1].Amount != "497.36" || pays[slip.ID][2].Amount != "960.52" {
 		t.Fatalf("net payments: %+v %v", pays, err)
 	}
 
-	// Correction: cancel, draft again, discard the draft.
+	// Corrección: anular, volver a preparar, descartar el borrador.
 	h.must(h.do("POST", "/api/payroll/payslips/"+slip.ID+"/cancel", "approver", map[string]any{"reason": "plus mal calculado"}, &slip), 200, "cancel")
 	var again yapp.PayslipDTO
 	h.must(h.do("POST", "/api/payroll/payslips", "clerk", draft, &again), 201, "a cancelled payslip frees the period")
@@ -263,7 +263,7 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("search: %+v", list)
 	}
 
-	// Published Language: Fiscal and Accounting would consume this, not payroll tables.
+	// Published Language: Fiscal y Accounting consumirían esto, no las tablas de nóminas.
 	broker := inprocess.NewBroker()
 	store := memory.NewStore("fiscal")
 	fiscal := messaging.NewConsumer("fiscal", memory.NewInbox(store), store)

@@ -11,9 +11,9 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Engine implements contracts.TaxEngine: it resolves the fiscal profile of the seller, picks the
-// jurisdiction of its country and lets it calculate with the catalog in force. It serves
-// contexts, not users.
+// Engine implementa contracts.TaxEngine: resuelve el perfil fiscal del vendedor, elige la
+// jurisdicción de su país y deja que calcule con el catálogo vigente. Sirve a contextos, no a
+// usuarios.
 type Engine struct {
 	Taxpayers     domain.TaxpayerRepository
 	Rates         domain.TaxRateRepository
@@ -23,7 +23,7 @@ type Engine struct {
 
 var _ contracts.TaxEngine = Engine{}
 
-// NewEngine registers the jurisdictions by country.
+// NewEngine registra las jurisdicciones por país.
 func NewEngine(taxpayers domain.TaxpayerRepository, rates domain.TaxRateRepository, treatments domain.TreatmentRepository,
 	jurisdictions ...domain.Jurisdiction) Engine {
 	e := Engine{Taxpayers: taxpayers, Rates: rates, Treatments: treatments, Jurisdictions: map[string]domain.Jurisdiction{}}
@@ -33,7 +33,7 @@ func NewEngine(taxpayers domain.TaxpayerRepository, rates domain.TaxRateReposito
 	return e
 }
 
-// RateOn implements domain.RateBook.
+// RateOn implementa domain.RateBook.
 func (e Engine) RateOn(ctx context.Context, t domain.TaxType, in domain.Territory, code string, on vocab.Date) (*domain.TaxRate, bool, error) {
 	rs, err := e.Rates.Find(ctx, spec.And(domain.RateFieldType.Eq(int(t)), domain.RateFieldTerritory.Eq(int(in)), domain.RateFieldCode.Eq(code)))
 	if err != nil {
@@ -47,7 +47,7 @@ func (e Engine) RateOn(ctx context.Context, t domain.TaxType, in domain.Territor
 	return nil, false, nil
 }
 
-// Treatment implements domain.RateBook.
+// Treatment implementa domain.RateBook.
 func (e Engine) Treatment(ctx context.Context, in domain.Territory, code string) (*domain.Treatment, bool, error) {
 	ts, err := e.Treatments.Find(ctx, spec.And(domain.TreatFieldTerr.Eq(int(in)), domain.TreatFieldCode.Eq(code), domain.TreatFieldActive.Eq(true)))
 	if err != nil || len(ts) == 0 {
@@ -56,7 +56,7 @@ func (e Engine) Treatment(ctx context.Context, in domain.Territory, code string)
 	return ts[0], true, nil
 }
 
-// Calculate implements contracts.TaxEngine.
+// Calculate implementa contracts.TaxEngine.
 func (e Engine) Calculate(ctx context.Context, doc contracts.TaxableDocument) (contracts.TaxBreakdown, error) {
 	var v fw.Validation
 	seller := domain.OrganizationID{UUID: parseID(&v, "seller", doc.Seller)}

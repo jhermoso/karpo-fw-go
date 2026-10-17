@@ -19,9 +19,10 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/memory"
 )
 
-// TestParties_AddressesCheckedByGeography composes two contexts on one backend: Parties
-// validates postal addresses through its own port, implemented by an adapter over the
-// Geography contracts (decision of the context map: Parties keeps only Geography ids).
+// TestParties_AddressesCheckedByGeography compone dos contextos sobre un mismo backend: Parties
+// valida las direcciones postales a través de su propio puerto, implementado por un adaptador
+// sobre los contratos de Geography (decisión del mapa de contextos: Parties sólo guarda ids de
+// Geography).
 func TestParties_AddressesCheckedByGeography(t *testing.T) {
 	ctx := context.Background()
 	store := memory.NewStore("host")

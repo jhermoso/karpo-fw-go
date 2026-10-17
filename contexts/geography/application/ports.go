@@ -1,5 +1,6 @@
-// Package application holds the use cases of the Geography and reference data context (queries,
-// protected by permissions) and the implementation of its Open Host Service for other contexts.
+// Package application contiene los casos de uso del contexto de Geografía y datos de referencia
+// (consultas, protegidas por permisos) y la implementación de su Open Host Service para otros
+// contextos.
 package application
 
 import (
@@ -13,15 +14,15 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// MaxDepth bounds every walk of the boundary hierarchy (continent to municipality is 6).
+// MaxDepth acota cada recorrido de la jerarquía de límites (de continente a municipio hay 6).
 const MaxDepth = 10
 
-// chunk keeps IN lists small (SQL Server accepts 2100 parameters per statement): a whole
-// country has thousands of municipalities.
+// chunk mantiene pequeñas las listas IN (SQL Server admite 2100 parámetros por sentencia): un país
+// entero tiene miles de municipios.
 const chunk = 500
 
-// Ports implements the contracts of the context (Gazetteer, AddressChecker, Reference). It serves
-// other contexts, not users: the caller's own use case is what is authorized.
+// Ports implementa los contratos del contexto (Gazetteer, AddressChecker, Reference). Sirve a
+// otros contextos, no a usuarios: lo que se autoriza es el caso de uso del que llama.
 type Ports struct {
 	Boundaries  domain.BoundaryRepository
 	PostalCodes domain.PostalCodeRepository
@@ -45,7 +46,7 @@ func parseBoundaryIDs(ids []string) []domain.BoundaryID {
 	return out
 }
 
-// find runs a specification built from ids in chunks.
+// find ejecuta por tramos una especificación construida a partir de ids.
 func find[T any](ctx context.Context, ids []domain.BoundaryID, run func(context.Context, []domain.BoundaryID) ([]T, error)) ([]T, error) {
 	var out []T
 	for start := 0; start < len(ids); start += chunk {
@@ -68,7 +69,7 @@ func ref(b *domain.Boundary) contracts.BoundaryRef {
 	return contracts.BoundaryRef{ID: b.ID().String(), Name: b.Name(), Type: b.Type().String(), Active: b.IsActive()}
 }
 
-// Resolve implements contracts.Gazetteer.
+// Resolve implementa contracts.Gazetteer.
 func (p Ports) Resolve(ctx context.Context, ids []string) (map[string]contracts.BoundaryRef, error) {
 	if len(ids) > contracts.MaxBatch {
 		return nil, fmt.Errorf("%w: at most %d ids per call", fw.ErrValidation, contracts.MaxBatch)
@@ -84,7 +85,7 @@ func (p Ports) Resolve(ctx context.Context, ids []string) (map[string]contracts.
 	return out, nil
 }
 
-// Ancestors implements contracts.Gazetteer.
+// Ancestors implementa contracts.Gazetteer.
 func (p Ports) Ancestors(ctx context.Context, id string) ([]contracts.BoundaryRef, error) {
 	bid, err := domain.ParseBoundaryID(id)
 	if err != nil {
@@ -108,7 +109,7 @@ func (p Ports) Ancestors(ctx context.Context, id string) ([]contracts.BoundaryRe
 	return out, nil
 }
 
-// Descendants implements contracts.Gazetteer: one query per level (in chunks).
+// Descendants implementa contracts.Gazetteer: una consulta por nivel (por tramos).
 func (p Ports) Descendants(ctx context.Context, ids []string) ([]string, error) {
 	seen := parseBoundaryIDs(ids)
 	level := slices.Clone(seen)
@@ -139,7 +140,7 @@ func (p Ports) Descendants(ctx context.Context, ids []string) ([]string, error) 
 	return out, nil
 }
 
-// CountryOf implements contracts.Gazetteer: it walks up, one level per query, until a country.
+// CountryOf implementa contracts.Gazetteer: sube, un nivel por consulta, hasta un país.
 func (p Ports) CountryOf(ctx context.Context, ids []string) (map[string]string, error) {
 	out := map[string]string{}
 	current := map[domain.BoundaryID]domain.BoundaryID{}
@@ -217,9 +218,9 @@ func (p Ports) country(ctx context.Context, alpha2 string) (*domain.Country, err
 	return cs[0], nil
 }
 
-// CheckPostalAddress implements contracts.AddressChecker: the code must have the country format
-// and, when a boundary is given, belong to it. Without a boundary, a code with a single entry
-// is resolved to it.
+// CheckPostalAddress implementa contracts.AddressChecker: el código debe tener el formato del país
+// y, si se da un límite, pertenecer a él. Sin límite, un código con una sola entrada se resuelve a
+// esa entrada.
 func (p Ports) CheckPostalAddress(ctx context.Context, q contracts.PostalAddressQuery) (contracts.PostalAddressResult, error) {
 	c, err := p.country(ctx, q.Country)
 	if err != nil {
@@ -253,7 +254,7 @@ func (p Ports) CheckPostalAddress(ctx context.Context, q contracts.PostalAddress
 	return res, nil
 }
 
-// Country implements contracts.Reference.
+// Country implementa contracts.Reference.
 func (p Ports) Country(ctx context.Context, alpha2 string) (contracts.CountryInfo, error) {
 	c, err := p.country(ctx, alpha2)
 	if err != nil {
@@ -309,7 +310,7 @@ func boolFirst(a, b bool, then int) int {
 	return then
 }
 
-// CheckIBAN implements contracts.Reference.
+// CheckIBAN implementa contracts.Reference.
 func (p Ports) CheckIBAN(ctx context.Context, iban string) error {
 	i, err := vocab.NewIBAN(iban)
 	if err != nil {

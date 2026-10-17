@@ -1,5 +1,5 @@
-// Package application holds the Payroll use cases (with permissions and employer scope), the
-// port Payroll consumes from HR, its Remittance port and the translation to its Published
+// Package application contiene los casos de uso de Payroll (con permisos y ámbito de empleador),
+// el puerto que Payroll consume de HR, su puerto Remittance y la traducción a su Published
 // Language.
 package application
 
@@ -19,8 +19,8 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Permissions (the C# RRHH.Payslip.* and RRHH.PayslipLine.*; the Parties-side payroll endpoints
-// had none). Approving is a permission of its own, apart from preparing.
+// Permisos (los RRHH.Payslip.* y RRHH.PayslipLine.* de C#; los endpoints de nómina del lado de
+// Parties no tenían ninguno). Aprobar es un permiso propio, aparte de preparar.
 var (
 	PermPayslipRead    = authz.MustPermission("Payroll.Payslip.Read")
 	PermPayslipCreate  = authz.MustPermission("Payroll.Payslip.Create")
@@ -35,7 +35,7 @@ var (
 	PermRemittanceRead = authz.MustPermission("Payroll.Remittance.Read")
 )
 
-// EmploymentInfo is what Payroll needs of an HR employment.
+// EmploymentInfo es lo que Payroll necesita de una relación laboral de HR.
 type EmploymentInfo struct {
 	ID         domain.EmploymentID
 	Number     string
@@ -43,15 +43,15 @@ type EmploymentInfo struct {
 	WorkCenter domain.WorkCenterID
 }
 
-// Employments is what Payroll needs of HR (the port Payroll owns; an adapter implements it over
-// the HR Staff contract).
+// Employments es lo que Payroll necesita de HR (el puerto propio de Payroll; un adaptador lo
+// implementa sobre el contrato Staff de HR).
 type Employments interface {
-	// EmploymentOn returns the employment of the person with the employer active on the date,
-	// with its primary contract on that date.
+	// EmploymentOn devuelve la relación laboral de la persona con el empleador activa en la fecha,
+	// con su contrato principal en esa fecha.
 	EmploymentOn(ctx context.Context, person domain.PersonID, employer domain.OrganizationID, on vocab.Date) (EmploymentInfo, bool, error)
 }
 
-// Deps are the ports the use cases need; Recorder and Audit are optional.
+// Deps son los puertos que necesitan los casos de uso; Recorder y Audit son opcionales.
 type Deps struct {
 	Payslips    domain.PayslipRepository
 	Profiles    domain.ProfileRepository
@@ -63,7 +63,7 @@ type Deps struct {
 	Audit       app.AuditLog
 }
 
-// Service exposes the use cases.
+// Service expone los casos de uso.
 type Service struct {
 	DraftPayslip   app.CommandHandler[DraftPayslip, PayslipDTO]
 	AddLine        app.CommandHandler[AddLine, PayslipDTO]
@@ -91,8 +91,8 @@ type Service struct {
 	Concepts app.QueryHandler[ListConcepts, []ConceptDTO]
 }
 
-// scope: everything belongs to its employer; visible inside the employer's scope (uniform 404
-// elsewhere) and writable with a Full grant on it.
+// scope: todo pertenece a su empleador; visible dentro del ámbito del empleador (404 uniforme en
+// otro caso) y modificable con un permiso Full sobre él.
 type scope struct {
 	global bool
 	ac     *authz.Context
@@ -178,7 +178,7 @@ func dateText(d vocab.Date) string {
 	return d.String()
 }
 
-// NewService wires the use cases.
+// NewService conecta los casos de uso.
 func NewService(d Deps) *Service {
 	var opts []orchestration.Option
 	if d.Recorder != nil {
@@ -221,10 +221,10 @@ func retry[In, Out any]() app.Middleware[In, Out] {
 	return pipeline.RetryOnConflict[In, Out](3, 10*time.Millisecond)
 }
 
-// ListConcepts lists the pay concept catalog, optionally of one kind.
+// ListConcepts enumera el catálogo de conceptos retributivos, de una sola clase si se pide.
 type ListConcepts struct{ Kind string }
 
-// ConceptDTO is the transport form of a concept.
+// ConceptDTO es la forma de transporte de un concepto.
 type ConceptDTO struct {
 	ID            string `json:"id"`
 	Code          string `json:"code"`

@@ -1,5 +1,5 @@
-// Package audit composes the Audit (Historial: quién cambió qué y cuándo) bounded context. It has
-// no storage: it reads the audit logs the other contexts keep.
+// Package audit compone el contexto delimitado Audit (Historial: quién cambió qué y cuándo). No
+// tiene almacenamiento: lee los registros de auditoría que llevan los otros contextos.
 package audit
 
 import (
@@ -10,26 +10,26 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/distribution"
 )
 
-// Module is the composed context.
+// Module es el contexto compuesto.
 type Module struct {
 	Service  *aapp.Service
 	Registry *aapp.Registry
 }
 
-// Compose builds the context. The host then registers each kind of aggregate.
+// Compose construye el contexto. Después el anfitrión registra cada tipo de agregado.
 func Compose() *Module {
 	reg := aapp.NewRegistry()
 	return &Module{Service: aapp.NewService(reg), Registry: reg}
 }
 
-// Register declares a kind of aggregate, the audit log of its context and how to tell whether the
-// caller may see it (nil: only a global administrator reads its history).
+// Register declara un tipo de agregado, el registro de auditoría de su contexto y cómo saber si
+// quien llama puede verlo (nil: sólo un administrador global lee su historial).
 func (m *Module) Register(aggregateType string, log application.AuditLog, guard aapp.Guard) *Module {
 	m.Registry.Register(aggregateType, log, guard)
 	return m
 }
 
-// RegisterRoutes implements distribution.EndpointModule.
+// RegisterRoutes implementa distribution.EndpointModule.
 func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/audit/types", func(w http.ResponseWriter, r *http.Request) {
 		out, err := m.Service.Types.Handle(r.Context(), aapp.ListTypes{})

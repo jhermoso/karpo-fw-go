@@ -29,8 +29,9 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/time/fake"
 )
 
-// n43 builds a Cuaderno 43 file of one account (bank 2100, office 0813, number 0123456789) for
-// May 2026 from an opening balance in cents and movements (day, cents, concept).
+// n43 construye un fichero del Cuaderno 43 de una cuenta (entidad 2100, oficina 0813, número
+// 0123456789) para mayo de 2026 a partir de un saldo inicial en céntimos y de movimientos (día,
+// céntimos, concepto).
 type n43Movement struct {
 	day     int
 	cents   int64
@@ -89,7 +90,7 @@ func TestNorma43_Parses(t *testing.T) {
 	if !a.Matches(iban) || a.Matches(other) {
 		t.Fatal("the account of the file is matched by bank, office and number")
 	}
-	// ISO 8859-1, as banks still send it.
+	// ISO 8859-1, como aún lo envían los bancos.
 	latin := strings.ReplaceAll(n43("0123456789", 1000000, may, 0), "Ó", "\xd3")
 	if accounts, err := domain.ParseNorma43(latin); err != nil || accounts[0].Lines[2].Concept != "COMISIÓN DE MANTENIMIENTO" {
 		t.Fatalf("latin-1: %v", err)
@@ -162,8 +163,8 @@ func TestStatement_Rules(t *testing.T) {
 	}
 }
 
-// others plays the contexts Treasury asks: what Receivables has to collect, what Payments has to
-// pay, and who the parties are.
+// others hace de los contextos a los que pregunta Treasury: lo que Receivables tiene que cobrar,
+// lo que Payments tiene que pagar y quiénes son las parties.
 type others struct {
 	due []domain.DueItem
 	pay []domain.PayableDue
@@ -185,7 +186,7 @@ func (o *others) Identities(_ context.Context, parties []domain.PartyID) (map[do
 	return out, nil
 }
 
-// bank composes Treasury alone, with the other contexts played by the test.
+// bank compone Treasury solo, con los demás contextos simulados por la prueba.
 func bank(t *testing.T) (*host, *others) {
 	ctx := context.Background()
 	sw := hotswap.New(memory.NewStore("memory"))
@@ -236,8 +237,9 @@ func (h *host) statements(tag string, world *others) {
 		Reference: "M-" + tag, Scheme: "CORE", Signed: day(1, 1)})
 	h.ok(err)
 
-	// What was sent to the bank at the beginning of May: remittances of direct debits and an order
-	// of transfers, through the use cases (on a fixed clock: files are generated before they are due).
+	// Lo que se envió al banco a principios de mayo: remesas de adeudos y una orden de
+	// transferencias, a través de los casos de uso (con un reloj fijo: los ficheros se generan antes
+	// de su vencimiento).
 	debtorIBAN, _ := vocab.NewIBAN("ES6621000418401234567891")
 	restore := fw.SetClock(fake.New(time.Date(2026, 5, 1, 9, 0, 0, 0, time.UTC)))
 	remittance := func(account string, on vocab.Date, amount string) string {
@@ -264,7 +266,7 @@ func (h *host) statements(tag string, world *others) {
 	trf := order.ID
 	restore()
 
-	// The bank's file for May.
+	// El fichero del banco de mayo.
 	file := func(content string) map[string]any { return map[string]any{"owner": acme, "content": content} }
 	good := n43("0123456789", 1000000, may, 0)
 	var imported []tapp.StatementDTO
@@ -281,7 +283,7 @@ func (h *host) statements(tag string, world *others) {
 	}
 	mayID := imported[0].ID
 
-	// June by hand: it must continue May.
+	// Junio a mano: tiene que continuar mayo.
 	june := func(opening, closing string) map[string]any {
 		return map[string]any{"account": main.ID, "from": "2026-06-01", "to": "2026-06-30", "opening": opening, "closing": closing,
 			"lines": []map[string]any{{"date": "2026-06-03", "amount": "500.00", "concept": "Adeudos SEPA"}, {"date": "2026-06-10", "amount": "-20.00", "concept": "Seguro"}}}
@@ -294,7 +296,7 @@ func (h *host) statements(tag string, world *others) {
 	h.must(h.do("POST", "/api/treasury/statements", "importer", map[string]any{"account": main.ID, "from": "2026-07-01", "to": "2026-07-31",
 		"opening": "9780.50", "closing": "10143.50", "lines": []map[string]any{{"date": "2026-07-02", "amount": "363.00"}}}, &jul), 201, "July")
 
-	// Automatic: the remittance and the order of the account, by amount and date; the fee is left.
+	// Automático: la remesa y la orden de la cuenta, por importe y fecha; la comisión se queda.
 	var stm tapp.StatementDTO
 	h.must(h.do("POST", "/api/treasury/statements/"+mayID+"/auto-reconcile", "importer", nil, nil), 403, "importing is not reconciling")
 	h.must(h.do("POST", "/api/treasury/statements/"+mayID+"/auto-reconcile", "outsider", nil, nil), 404, "outsider")
@@ -320,7 +322,7 @@ func (h *host) statements(tag string, world *others) {
 	if stm.Pending != 0 || stm.Lines[2].MatchNote != "Comisión de mantenimiento" {
 		t.Fatalf("May reconciled: %+v", stm)
 	}
-	// By hand: released, and reconciled again only against what fits.
+	// A mano: liberado, y vuelto a conciliar sólo contra lo que encaja.
 	h.must(h.do("POST", path(mayID, "release"), "importer", map[string]any{"line": 1}, nil), 403, "importing is not reconciling")
 	h.must(h.do("POST", path(mayID, "release"), "reconciler", map[string]any{"line": 1}, &stm), 200, "release")
 	h.must(h.do("POST", path(mayID, "release"), "reconciler", map[string]any{"line": 1}, nil), 422, "released once")
@@ -330,8 +332,8 @@ func (h *host) statements(tag string, world *others) {
 	h.must(h.do("POST", path(mayID, "reconcile"), "reconciler", reconcile(mayID, 1, "remittance", rem, ""), &stm), 200, "the remittance")
 	h.must(h.do("POST", path(jul.ID, "reconcile"), "reconciler", reconcile(jul.ID, 1, "remittance", rem, ""), nil), 422, "already explains a movement of May")
 
-	// June: the remittance of the 20th is too far from the movement of the 3rd for the automatic
-	// run, but a person may decide it is that one.
+	// Junio: la remesa del día 20 está demasiado lejos del movimiento del día 3 para la pasada
+	// automática, pero una persona puede decidir que es esa.
 	stm = tapp.StatementDTO{}
 	h.must(h.do("POST", path(jun.ID, "auto-reconcile"), "reconciler", nil, &stm), 200, "June automatic")
 	if stm.Matched != 0 || stm.Pending != 2 {

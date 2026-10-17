@@ -1,8 +1,8 @@
-// Package domain is the Products model: the catalog of what a company sells, buys and stocks
-// (goods and services with their unit, tax code, barcodes, kit components and suppliers), its
-// categories and its price lists. The C# had a wide UDM catalog where every Validate() returned
-// success and price, cost, barcodes, supplier and stock thresholds were each modelled two or
-// three times without a link.
+// Package domain es el modelo de Products: el catálogo de lo que una empresa vende, compra y
+// almacena (bienes y servicios con su unidad, código fiscal, códigos de barras, componentes de kit y
+// proveedores), sus categorías y sus listas de precios. El C# tenía un catálogo UDM amplio en el que
+// todo Validate() devolvía éxito, y precio, coste, códigos de barras, proveedor y umbrales de stock
+// estaban modelados dos o tres veces cada uno sin relación.
 package domain
 
 import (
@@ -17,13 +17,13 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// ProductKind is the stable aggregate type name.
+// ProductKind es el nombre estable del tipo de agregado.
 const ProductKind = "products.product"
 
-// Kind tells goods from services (the C# kept it as a free string and a TPT subtype at once).
+// Kind distingue bienes de servicios (el C# lo guardaba a la vez como cadena libre y como subtipo TPT).
 type Kind int
 
-// Kinds.
+// Tipos.
 const (
 	Good Kind = iota + 1
 	Service
@@ -31,10 +31,10 @@ const (
 
 var kinds = map[Kind]string{Good: "good", Service: "service"}
 
-// String returns the stable name.
+// String devuelve el nombre estable.
 func (k Kind) String() string { return kinds[k] }
 
-// ParseKind parses a kind name.
+// ParseKind analiza el nombre de un tipo.
 func ParseKind(s string) (Kind, bool) {
 	for k, n := range kinds {
 		if n == s {
@@ -44,10 +44,10 @@ func ParseKind(s string) (Kind, bool) {
 	return 0, false
 }
 
-// Tracking is how the stock of a good is identified (the C# TrackingMode was a free string).
+// Tracking es cómo se identifica el stock de un bien (el TrackingMode del C# era una cadena libre).
 type Tracking int
 
-// Tracking modes.
+// Modos de trazabilidad.
 const (
 	TrackNone Tracking = iota + 1
 	TrackLot
@@ -56,10 +56,10 @@ const (
 
 var trackings = map[Tracking]string{TrackNone: "none", TrackLot: "lot", TrackSerial: "serial"}
 
-// String returns the stable name.
+// String devuelve el nombre estable.
 func (t Tracking) String() string { return trackings[t] }
 
-// ParseTracking parses a tracking mode name.
+// ParseTracking analiza el nombre de un modo de trazabilidad.
 func ParseTracking(s string) (Tracking, bool) {
 	for k, n := range trackings {
 		if n == s {
@@ -69,17 +69,17 @@ func ParseTracking(s string) (Tracking, bool) {
 	return 0, false
 }
 
-// Barcode is an identification code of a product.
+// Barcode es un código de identificación de un producto.
 type Barcode struct {
 	Type  string // ean-13 | ean-8 | upc-a | internal
 	Value string
 }
 
-// barcodeDigits are the lengths of the GTIN types, whose last digit is a check digit.
+// barcodeDigits son las longitudes de los tipos GTIN, cuyo último dígito es de control.
 var barcodeDigits = map[string]int{"ean-13": 13, "ean-8": 8, "upc-a": 12}
 
-// ValidGTIN reports whether digits is a GTIN with a correct check digit (weights 3 and 1 from the
-// right, modulo 10).
+// ValidGTIN dice si digits es un GTIN con el dígito de control correcto (pesos 3 y 1 desde la
+// derecha, módulo 10).
 func ValidGTIN(digits string) bool {
 	if len(digits) < 8 {
 		return false
@@ -106,30 +106,30 @@ func validBarcode(b Barcode) bool {
 	return b.Type == "internal" && b.Value != "" && len(b.Value) <= 30 && !strings.ContainsAny(b.Value, " \t\n")
 }
 
-// Component is a product a kit is made of.
+// Component es un producto del que está hecho un kit.
 type Component struct {
 	Product  ProductID
 	Quantity vocab.Decimal
 }
 
-// SupplierItem is how a supplier names and delivers the product.
+// SupplierItem es cómo nombra y entrega el producto un proveedor.
 type SupplierItem struct {
 	Supplier  PartyID
-	Code      string // the supplier's reference
+	Code      string // la referencia del proveedor
 	LeadDays  int
 	Preferred bool
 }
 
-// Details are the editable data of a product.
+// Details son los datos editables de un producto.
 type Details struct {
 	Name            string
 	Description     string
 	Kind            Kind
 	UoM             string
 	Category        CategoryID
-	TaxCode         string        // tax code of the Fiscal catalog (G21, R10…)
-	ExpenseCategory string        // expense category of Purchases when bought (goods, supplies…)
-	BasePrice       vocab.Decimal // sales price without a price list, up to 4 decimals
+	TaxCode         string        // código fiscal del catálogo de Fiscal (G21, R10…)
+	ExpenseCategory string        // categoría de gasto de Purchases cuando se compra (mercaderías, suministros…)
+	BasePrice       vocab.Decimal // precio de venta sin lista de precios, hasta 4 decimales
 	StandardCost    vocab.Decimal
 	ForSale         bool
 	ForPurchase     bool
@@ -142,7 +142,7 @@ type Details struct {
 	Suppliers       []SupplierItem
 }
 
-// ProductState is the persisted state of a product.
+// ProductState es el estado persistido de un producto.
 type ProductState struct {
 	Company OrganizationID
 	SKU     string
@@ -151,17 +151,17 @@ type ProductState struct {
 	Audit        traits.AuditStamp
 }
 
-// Product is something a company sells, buys or stocks.
+// Product es algo que una empresa vende, compra o almacena.
 type Product struct {
 	fw.BaseAggregateRoot[ProductID]
 	traits.Audited
 	s ProductState
 }
 
-// MaxComponents bounds the components of a kit.
+// MaxComponents limita los componentes de un kit.
 const MaxComponents = 200
 
-// NormalizeSKU returns the canonical form of a SKU: trimmed, upper case.
+// NormalizeSKU devuelve la forma canónica de un SKU: sin espacios en los extremos y en mayúsculas.
 func NormalizeSKU(s string) string { return strings.ToUpper(strings.TrimSpace(s)) }
 
 func validSKU(s string) bool {
@@ -224,7 +224,7 @@ func checkDetails(v *fw.Validation, self ProductID, d *Details) {
 	v.Require(preferred <= 1 && len(d.Suppliers) <= 50, "suppliers", "preferred", "at most one preferred supplier and 50 suppliers")
 }
 
-// ReconstituteProduct rebuilds a product.
+// ReconstituteProduct reconstruye un producto.
 func ReconstituteProduct(id ProductID, s ProductState) (*Product, error) {
 	base, err := fw.NewBaseAggregateRoot(ProductKind, id)
 	if err != nil {
@@ -242,7 +242,7 @@ func ReconstituteProduct(id ProductID, s ProductState) (*Product, error) {
 	return &Product{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// RegisterProduct adds a product to the catalog of a company.
+// RegisterProduct añade un producto al catálogo de una empresa.
 func RegisterProduct(id ProductID, company OrganizationID, sku string, d Details) (*Product, error) {
 	p, err := ReconstituteProduct(id, ProductState{Company: company, SKU: sku, Details: d})
 	if err != nil {
@@ -252,20 +252,20 @@ func RegisterProduct(id ProductID, company OrganizationID, sku string, d Details
 	return p, nil
 }
 
-// State returns the state (slices are copies).
+// State devuelve el estado (los slices son copias).
 func (p *Product) State() ProductState {
 	s := p.s
 	s.Barcodes, s.Components, s.Suppliers = slices.Clone(s.Barcodes), slices.Clone(s.Components), slices.Clone(s.Suppliers)
 	return s
 }
 
-// Active reports whether the product is not discontinued on a date.
+// Active dice si el producto no está retirado en una fecha.
 func (p *Product) Active(on vocab.Date) bool {
 	return p.s.Discontinued.IsZero() || on.Before(p.s.Discontinued)
 }
 
-// Change replaces the details. A discontinued product does not change; the kind of a product does
-// not change either (a good in stock cannot become a service).
+// Change sustituye los datos. Un producto retirado no cambia; el tipo de un producto tampoco (un
+// bien en stock no puede pasar a ser un servicio).
 func (p *Product) Change(d Details) error {
 	if !p.s.Discontinued.IsZero() {
 		return fw.Violation("products.discontinued", "a discontinued product does not change")
@@ -283,7 +283,7 @@ func (p *Product) Change(d Details) error {
 	return nil
 }
 
-// Discontinue retires the product from a date (it is never deleted: documents keep pointing to it).
+// Discontinue retira el producto desde una fecha (nunca se borra: los documentos siguen apuntando a él).
 func (p *Product) Discontinue(on vocab.Date) error {
 	if !p.s.Discontinued.IsZero() {
 		return fw.Violation("products.discontinued", "the product is already discontinued")
@@ -296,12 +296,12 @@ func (p *Product) Discontinue(on vocab.Date) error {
 	return nil
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (p *Product) AuditSnapshot() map[string]any {
 	return map[string]any{"sku": p.s.SKU, "name": p.s.Name, "basePrice": p.s.BasePrice.String(), "discontinued": p.s.Discontinued.String()}
 }
 
-// Product fields.
+// Campos del producto.
 var (
 	ProdFieldID       = spec.Comparable("id", func(p *Product) ProductID { return p.ID() })
 	ProdFieldCompany  = spec.Comparable("company", func(p *Product) OrganizationID { return p.s.Company })

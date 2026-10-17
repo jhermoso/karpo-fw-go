@@ -12,28 +12,28 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// QuoteKind is the aggregate type name of a quote.
+// QuoteKind es el nombre de tipo del agregado de un presupuesto.
 const QuoteKind = "orders.quote"
 
-// DefaultValidityDays is how long a quote holds its prices when nobody says otherwise.
+// DefaultValidityDays es cuánto mantiene un presupuesto sus precios cuando nadie dice otra cosa.
 const DefaultValidityDays = 30
 
-// QuoteID identifies a quote.
+// QuoteID identifica un presupuesto.
 type QuoteID struct{ fw.UUID }
 
-// NewQuoteID returns a fresh identity.
+// NewQuoteID devuelve una identidad nueva.
 func NewQuoteID() QuoteID { return QuoteID{fw.NewUUID()} }
 
-// ParseQuoteID parses a textual identity.
+// ParseQuoteID interpreta una identidad en texto.
 func ParseQuoteID(s string) (QuoteID, error) { u, err := fw.ParseUUID(s); return QuoteID{u}, err }
 
-// QuoteStatus is where a quote is. The C# kept a bare number (0, 1, 2) anyone could set, and an
-// issued quote could still be edited, deleted or sent back.
+// QuoteStatus es dónde está un presupuesto. El C# guardaba un número sin más (0, 1, 2) que
+// cualquiera podía poner, y un presupuesto emitido aún se podía editar, borrar o devolver.
 type QuoteStatus string
 
-// Statuses of a quote. A draft is worked on; once sent it has its number and no longer changes:
-// the customer accepts it (it becomes an order), rejects it, or lets it expire; the company may
-// withdraw it before any of that.
+// Estados de un presupuesto. Un borrador se trabaja; una vez enviado tiene su número y ya no cambia:
+// el cliente lo acepta (se convierte en pedido), lo rechaza o lo deja caducar; la empresa puede
+// retirarlo antes de nada de eso.
 const (
 	QuoteDraft     QuoteStatus = "draft"
 	QuoteSent      QuoteStatus = "sent"
@@ -43,11 +43,11 @@ const (
 	QuoteWithdrawn QuoteStatus = "withdrawn"
 )
 
-// QuoteStatuses lists the valid statuses.
+// QuoteStatuses enumera los estados válidos.
 var QuoteStatuses = []QuoteStatus{QuoteDraft, QuoteSent, QuoteAccepted, QuoteRejected, QuoteExpired, QuoteWithdrawn}
 
-// QuoteLine is a product offered at a price: the same prices an order line has, without what an
-// order adds when it is served.
+// QuoteLine es un producto ofrecido a un precio: los mismos precios que tiene una línea de pedido,
+// sin lo que un pedido añade al servirse.
 type QuoteLine struct {
 	No          int
 	Product     ProductID
@@ -58,37 +58,37 @@ type QuoteLine struct {
 	Stocked     bool
 	Quantity    vocab.Decimal
 	UnitPrice   vocab.Decimal
-	Discount    vocab.Decimal // percentage, of the price list
+	Discount    vocab.Decimal // porcentaje, de la tarifa
 	NetPrice    vocab.Decimal
 	Amount      vocab.Decimal
 }
 
-// QuoteState is the persisted state of a quote.
+// QuoteState es el estado persistido de un presupuesto.
 type QuoteState struct {
 	Company          OrganizationID
 	Customer         PartyID
-	Number           string // assigned when it is sent
+	Number           string // se asigna al enviarlo
 	Date             vocab.Date
-	ValidUntil       vocab.Date // the last day its prices hold
+	ValidUntil       vocab.Date // el último día en que valen sus precios
 	PriceList        PriceListID
 	CustomerDiscount vocab.Decimal
 	Reference        string
 	Notes            string
 	Status           QuoteStatus
 	Lines            []QuoteLine
-	Reason           string  // of the rejection or the withdrawal
-	Order            OrderID // the order it became
+	Reason           string  // del rechazo o la retirada
+	Order            OrderID // el pedido en que se convirtió
 	Audit            traits.AuditStamp
 }
 
-// Quote is an offer to a customer: products, quantities and prices that hold until a day.
+// Quote es una oferta a un cliente: productos, cantidades y precios que valen hasta un día.
 type Quote struct {
 	fw.BaseAggregateRoot[QuoteID]
 	traits.Audited
 	s QuoteState
 }
 
-// ReconstituteQuote rebuilds a quote.
+// ReconstituteQuote reconstruye un presupuesto.
 func ReconstituteQuote(id QuoteID, s QuoteState) (*Quote, error) {
 	base, err := fw.NewBaseAggregateRoot(QuoteKind, id)
 	if err != nil {
@@ -102,7 +102,7 @@ func ReconstituteQuote(id QuoteID, s QuoteState) (*Quote, error) {
 	s.Reference, s.Notes, s.Reason = strings.TrimSpace(s.Reference), strings.TrimSpace(s.Notes), strings.TrimSpace(s.Reason)
 	v.Require(utf8.RuneCountInString(s.Reference) <= 40 && utf8.RuneCountInString(s.Notes) <= 500 && utf8.RuneCountInString(s.Reason) <= 200, "notes", "length",
 		"a reference of up to 40, notes of up to 500 and a reason of up to 200 characters")
-	// A draft has no number yet; one withdrawn before it was sent never had it.
+	// Un borrador aún no tiene número; uno retirado antes de enviarse nunca lo tuvo.
 	v.Require((s.Number == "") == (s.Status == QuoteDraft) || s.Status == QuoteWithdrawn, "number", "state", "a quote has a number from the moment it is sent")
 	v.Require(s.Order.IsZero() || s.Status == QuoteAccepted, "order", "state", "only an accepted quote became an order")
 	v.Require(len(s.Lines) <= MaxLines, "lines", "count", "too many lines")
@@ -120,7 +120,7 @@ func ReconstituteQuote(id QuoteID, s QuoteState) (*Quote, error) {
 	return &Quote{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// DraftQuote opens a draft. Without a validity it holds DefaultValidityDays from its date.
+// DraftQuote abre un borrador. Sin validez, vale DefaultValidityDays desde su fecha.
 func DraftQuote(id QuoteID, s QuoteState) (*Quote, error) {
 	s.Status, s.Number, s.Lines, s.Reason, s.Order = QuoteDraft, "", nil, "", OrderID{}
 	if s.ValidUntil.IsZero() && !s.Date.IsZero() {
@@ -129,14 +129,14 @@ func DraftQuote(id QuoteID, s QuoteState) (*Quote, error) {
 	return ReconstituteQuote(id, s)
 }
 
-// State returns the state (lines are a copy).
+// State devuelve el estado (las líneas son una copia).
 func (q *Quote) State() QuoteState {
 	s := q.s
 	s.Lines = slices.Clone(s.Lines)
 	return s
 }
 
-// Total returns the sum of the lines, before taxes.
+// Total devuelve la suma de las líneas, antes de impuestos.
 func (q *Quote) Total() vocab.Decimal {
 	t := zero()
 	for _, l := range q.s.Lines {
@@ -152,8 +152,8 @@ func (q *Quote) mustBe(st QuoteStatus, code, msg string) error {
 	return nil
 }
 
-// Change replaces what a draft says of itself: its dates, the customer's reference and the notes.
-// The prices of its lines stay as they were taken.
+// Change sustituye lo que un borrador dice de sí mismo: sus fechas, la referencia del cliente y las
+// notas. Los precios de sus líneas se quedan como se tomaron.
 func (q *Quote) Change(date, validUntil vocab.Date, reference, notes string) error {
 	if err := q.mustBe(QuoteDraft, "orders.quote_not_draft", "only a draft quote changes"); err != nil {
 		return err
@@ -168,8 +168,8 @@ func (q *Quote) Change(date, validUntil vocab.Date, reference, notes string) err
 	return nil
 }
 
-// AddLine adds a priced line to a draft and returns its number. It is priced as an order line is:
-// the discount of the list, then the one of the customer.
+// AddLine añade una línea con precio a un borrador y devuelve su número. Se le pone precio como a
+// una línea de pedido: el descuento de la tarifa y luego el del cliente.
 func (q *Quote) AddLine(l QuoteLine) (int, error) {
 	if err := q.mustBe(QuoteDraft, "orders.quote_not_draft", "only a draft quote changes"); err != nil {
 		return 0, err
@@ -192,7 +192,7 @@ func (q *Quote) AddLine(l QuoteLine) (int, error) {
 	return l.No, nil
 }
 
-// RemoveLine removes a line from a draft.
+// RemoveLine quita una línea de un borrador.
 func (q *Quote) RemoveLine(no int) error {
 	if err := q.mustBe(QuoteDraft, "orders.quote_not_draft", "only a draft quote changes"); err != nil {
 		return err
@@ -210,7 +210,7 @@ func (q *Quote) closed(order string) {
 		Status: string(q.s.Status), Reason: q.s.Reason, Order: order, Total: q.Total().StringFixed(2)})
 }
 
-// Send commits the offer with its number: from here on it does not change.
+// Send cierra la oferta con su número: desde aquí ya no cambia.
 func (q *Quote) Send(number string, today vocab.Date) error {
 	if err := q.mustBe(QuoteDraft, "orders.quote_not_draft", "only a draft quote is sent"); err != nil {
 		return err
@@ -230,8 +230,8 @@ func (q *Quote) Send(number string, today vocab.Date) error {
 	return nil
 }
 
-// Accept records that the customer took the offer on a day within its validity, and the order it
-// became.
+// Accept registra que el cliente tomó la oferta un día dentro de su validez, y el pedido en que se
+// convirtió.
 func (q *Quote) Accept(order OrderID, on vocab.Date) error {
 	if err := q.mustBe(QuoteSent, "orders.quote_not_sent", "only a quote that was sent is accepted"); err != nil {
 		return err
@@ -253,13 +253,13 @@ func (q *Quote) end(to QuoteStatus, reason string) error {
 		return fw.Violation("orders.reason", "a reason of at most 200 characters")
 	}
 	q.s.Status, q.s.Reason = to, reason
-	if q.s.Number != "" { // a draft nobody saw ends without telling anyone
+	if q.s.Number != "" { // un borrador que nadie vio termina sin avisar a nadie
 		q.closed("")
 	}
 	return nil
 }
 
-// Reject records that the customer said no.
+// Reject registra que el cliente dijo que no.
 func (q *Quote) Reject(reason string) error {
 	if err := q.mustBe(QuoteSent, "orders.quote_not_sent", "only a quote that was sent is rejected"); err != nil {
 		return err
@@ -267,7 +267,7 @@ func (q *Quote) Reject(reason string) error {
 	return q.end(QuoteRejected, reason)
 }
 
-// Withdraw takes back a draft or an offer nobody answered yet.
+// Withdraw retira un borrador o una oferta que nadie ha contestado aún.
 func (q *Quote) Withdraw(reason string) error {
 	if q.s.Status != QuoteDraft && q.s.Status != QuoteSent {
 		return fw.Violation("orders.quote_closed", "a quote "+string(q.s.Status)+" is not withdrawn")
@@ -275,12 +275,12 @@ func (q *Quote) Withdraw(reason string) error {
 	return q.end(QuoteWithdrawn, reason)
 }
 
-// Due reports whether a sent quote is past its validity on a day.
+// Due dice si un presupuesto enviado ha pasado su validez en un día.
 func (q *Quote) Due(today vocab.Date) bool {
 	return q.s.Status == QuoteSent && today.After(q.s.ValidUntil)
 }
 
-// Expire closes a sent quote nobody answered in time. It reports whether it did.
+// Expire cierra un presupuesto enviado que nadie contestó a tiempo. Dice si lo hizo.
 func (q *Quote) Expire(today vocab.Date) bool {
 	if !q.Due(today) {
 		return false
@@ -289,13 +289,13 @@ func (q *Quote) Expire(today vocab.Date) bool {
 	return true
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (q *Quote) AuditSnapshot() map[string]any {
 	return map[string]any{"number": q.s.Number, "status": string(q.s.Status), "validUntil": q.s.ValidUntil.String(), "total": q.Total().String(),
 		"lines": len(q.s.Lines), "order": q.s.Order.String()}
 }
 
-// Quote fields.
+// Campos del presupuesto.
 var (
 	QuoFieldCompany  = spec.Comparable("company", func(q *Quote) OrganizationID { return q.s.Company })
 	QuoFieldCustomer = spec.Comparable("customer", func(q *Quote) PartyID { return q.s.Customer })
@@ -304,12 +304,12 @@ var (
 	QuoFieldNumber   = spec.Ordered("quote_number", func(q *Quote) string { return q.s.Number })
 )
 
-// QuoteRepository stores quotes.
+// QuoteRepository guarda presupuestos.
 type QuoteRepository = fw.Repository[QuoteID, *Quote]
 
-// Events of a quote.
+// Eventos de un presupuesto.
 type (
-	// QuoteSentOut is raised when a quote is sent to the customer.
+	// QuoteSentOut se lanza al enviar un presupuesto al cliente.
 	QuoteSentOut struct {
 		fw.EventMeta
 		Company    string     `json:"company"`
@@ -319,7 +319,7 @@ type (
 		ValidUntil vocab.Date `json:"validUntil"`
 		Total      string     `json:"total"`
 	}
-	// QuoteClosed is raised when a sent quote is accepted, rejected, withdrawn or expires.
+	// QuoteClosed se lanza cuando un presupuesto enviado se acepta, se rechaza, se retira o caduca.
 	QuoteClosed struct {
 		fw.EventMeta
 		Company  string `json:"company"`
@@ -332,6 +332,6 @@ type (
 	}
 )
 
-// EventType implementations.
+// Implementaciones de EventType.
 func (QuoteSentOut) EventType() string { return "orders.quote_sent" }
 func (QuoteClosed) EventType() string  { return "orders.quote_closed" }

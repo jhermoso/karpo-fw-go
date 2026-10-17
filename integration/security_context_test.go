@@ -27,9 +27,9 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 )
 
-// TestSecurityConformance runs the Security mapping battery on every engine: the seed with the C#
-// GUIDs, every specification in SQL against its evaluation in memory, round trips, children
-// replaced with the aggregate and the unique indexes the domain relies on.
+// TestSecurityConformance ejecuta la batería de mapeo de Security en cada motor: la semilla con los
+// GUID de C#, cada especificación en SQL frente a su evaluación en memoria, idas y vueltas, hijos
+// reemplazados con el agregado y los índices únicos en los que se apoya el dominio.
 func TestSecurityConformance(t *testing.T) {
 	for _, e := range engines {
 		t.Run(e.name, func(t *testing.T) {
@@ -51,10 +51,10 @@ func TestSecurityConformance(t *testing.T) {
 	}
 }
 
-// TestSecurityContext runs Security with Parties on every engine (one database, two migration
-// histories): the catalog synchronization, the bootstrap administrator, login, sessions with
-// reuse detection, delegated administration, and Parties authorized through the real
-// authz.Directory read from the database on every resolution.
+// TestSecurityContext ejecuta Security con Parties en cada motor (una base de datos, dos historias
+// de migraciones): la sincronización del catálogo, el administrador de arranque, el login, las
+// sesiones con detección de reutilización, la administración delegada, y Parties autorizado a
+// través del authz.Directory real leído de la base de datos en cada resolución.
 func TestSecurityContext(t *testing.T) {
 	for _, e := range engines {
 		if e.name == "oracle-dotnet-guids" {
@@ -86,8 +86,8 @@ func TestSecurityContext(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			// as resolves the caller exactly as distribution.Authorize does: token -> principal ->
-			// context read from the database, and the resolved subject as the actor of the audit.
+			// as resuelve a quien llama exactamente como lo hace distribution.Authorize: token -> principal ->
+			// contexto leído de la base de datos, y el sujeto resuelto como actor de la auditoría.
 			as := func(tok sapp.Tokens) context.Context {
 				t.Helper()
 				p, err := jwt.Authenticate(ctx, tok.AccessToken)
@@ -111,7 +111,7 @@ func TestSecurityContext(t *testing.T) {
 				t.Fatalf("bootstrap: %q %v", out, err)
 			}
 
-			// The bootstrap administrator changes its password before anything else.
+			// El administrador de arranque cambia su contraseña antes que nada.
 			boot, err := sec.Service.Login.Handle(ctx, sapp.Login{Username: "Root", Password: "bootstrap-password-1"})
 			must(err)
 			if _, err := sec.Service.SearchUsers.Handle(as(boot), sapp.SearchUsers{}); !errors.Is(err, fw.ErrForbidden) {
@@ -121,7 +121,7 @@ func TestSecurityContext(t *testing.T) {
 			must(err)
 			root := as(rootTok)
 
-			// Parties through the real directory.
+			// Parties a través del directorio real.
 			acme, err := pm.Service.RegisterOrganization.Handle(root, papp.RegisterOrganization{LegalName: "Acme", Roles: []string{pdomain.RoleInternalOrganization.String()}})
 			must(err)
 			beta, err := pm.Service.RegisterOrganization.Handle(root, papp.RegisterOrganization{LegalName: "Beta", Roles: []string{pdomain.RoleInternalOrganization.String()}})
@@ -173,7 +173,7 @@ func TestSecurityContext(t *testing.T) {
 				t.Fatalf("beta is out of marta's scope: %v", err)
 			}
 
-			// Delegated administration, with the specifications translated to SQL.
+			// Administración delegada, con las especificaciones traducidas a SQL.
 			carlosUser := register(marta, "carlos", acme.ID, "ReadOnly")
 			_, err = sec.Service.AssignRole.Handle(marta, sapp.AssignRole{ID: uid(carlosUser), Role: sdomain.RoleStandardUser})
 			must(err)
@@ -205,7 +205,7 @@ func TestSecurityContext(t *testing.T) {
 				t.Fatalf("nobody administers themselves: %v", err)
 			}
 
-			// Revocation on the next resolution with the same token; sessions with reuse detection.
+			// Revocación en la siguiente resolución con el mismo token; sesiones con detección de reutilización.
 			carlosTok := signIn("carlos")
 			if _, err := pm.Service.Search.Handle(as(carlosTok), papp.SearchParties{}); err != nil {
 				t.Fatalf("a standard user reads parties: %v", err)
@@ -224,7 +224,7 @@ func TestSecurityContext(t *testing.T) {
 				t.Fatalf("the family ended: %v", err)
 			}
 
-			// Lockout with timestamps stored by the engine, and deactivation.
+			// Bloqueo con marcas de tiempo guardadas por el motor, y desactivación.
 			for range 2 {
 				if _, err := sec.Service.Login.Handle(ctx, sapp.Login{Username: "carlos", Password: "wrong-password-000"}); !errors.Is(err, fw.ErrUnauthorized) {
 					t.Fatalf("wrong password: %v", err)
@@ -250,7 +250,7 @@ func TestSecurityContext(t *testing.T) {
 				t.Fatalf("a deactivated user is denied: %+v", res)
 			}
 
-			// External identity, roles and audit.
+			// Identidad externa, roles y auditoría.
 			_, err = sec.Service.LinkIdentity.Handle(root, sapp.LinkIdentity{ID: uid(pedroUser), Issuer: "https://id.example", Subject: "sub-pedro"})
 			must(err)
 			if _, err := sec.Service.LinkIdentity.Handle(root, sapp.LinkIdentity{ID: uid(martaUser), Issuer: "https://id.example", Subject: "sub-pedro"}); !errors.Is(err, fw.ErrRuleViolation) {

@@ -34,7 +34,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/time/fake"
 )
 
-// collaborators plays Parties: the promotion codes of the collaborators.
+// collaborators hace de Parties: los códigos de promoción de los colaboradores.
 type collaborators map[string]domain.PartyID
 
 func (c collaborators) ByPromotionCode(_ context.Context, _ domain.OrganizationID, code string) (domain.PartyID, bool, error) {
@@ -92,7 +92,7 @@ func (h *host) grant(user, org string) {
 	h.dir.Put(h.ids[user], s)
 }
 
-// do sends a request and decodes the answer into a fresh value of out.
+// do envía una petición y decodifica la respuesta en un valor nuevo de out.
 func (h *host) do(method, path, user string, body, out any) int {
 	h.t.Helper()
 	var buf bytes.Buffer
@@ -107,7 +107,7 @@ func (h *host) do(method, path, user string, body, out any) int {
 	}
 	defer res.Body.Close()
 	if out != nil && res.StatusCode < 300 {
-		switch o := out.(type) { // omitted fields must not keep what a previous answer left
+		switch o := out.(type) { // los campos omitidos no deben conservar lo que dejó una respuesta anterior
 		case *xapp.ReservationDTO:
 			*o = xapp.ReservationDTO{}
 		case *xapp.QuoteDTO:
@@ -138,7 +138,7 @@ func (h *host) scenario() {
 	pickup := now.Add(48 * time.Hour).Truncate(time.Second)
 	today := vocab.DateOf(now)
 
-	// Currencies, rates and margins: the numbers of the C# quote tests.
+	// Monedas, cambios y márgenes: los números de las pruebas de cotización del C#.
 	usd := map[string]any{"company": acme, "code": "usd", "name": "Dólar", "facial": "5"}
 	h.must(h.do("PUT", "/api/exchange/currencies", "viewer", usd, nil), 403, "viewer")
 	h.must(h.do("PUT", "/api/exchange/currencies", "outsider", usd, nil), 404, "outsider")
@@ -169,7 +169,7 @@ func (h *host) scenario() {
 		t.Fatalf("default settings: %+v", set)
 	}
 
-	// Quotes.
+	// Cotizaciones.
 	quote := func(currency, amount string) string {
 		return "/api/exchange/quote?company=" + acme + "&currency=" + currency + "&amount=" + amount
 	}
@@ -204,7 +204,7 @@ func (h *host) scenario() {
 	}
 	h.must(h.do("PUT", "/api/exchange/settings", "pricer", settings(2, "required"), nil), 200, "second level, code required")
 
-	// A reservation: the rates are quoted by the server and kept.
+	// Una reserva: los cambios los cotiza el servidor y se conservan.
 	order := func(code string, lines ...map[string]any) map[string]any {
 		return map[string]any{"company": acme, "customer": customer, "channel": "web", "pickup": pickup.Format(time.RFC3339), "facility": office,
 			"promotionCode": code, "lines": lines}
@@ -231,7 +231,7 @@ func (h *host) scenario() {
 		res.Lines[1].Eur != "351.00" || res.Lines[1].MarginValue != "0" {
 		t.Fatalf("reservation: %+v", res)
 	}
-	// A new rate does not touch what is reserved.
+	// Un cambio nuevo no toca lo reservado.
 	h.must(h.do("POST", "/api/exchange/rates", "pricer", map[string]any{"company": acme, "code": "USD", "rate": "0.96", "on": today.AddDays(1).String()}, nil), 422, "a rate for tomorrow")
 	h.must(h.do("POST", "/api/exchange/rates", "pricer", map[string]any{"company": acme, "code": "USD", "rate": "0.90", "on": today.AddDays(-1).String()}, nil), 422, "an older rate")
 	h.must(h.do("POST", "/api/exchange/rates", "pricer", rate("USD", "0.95"), nil), 200, "new rate")
@@ -257,7 +257,7 @@ func (h *host) scenario() {
 	}
 	h.must(h.do("POST", path(res, "cancel"), "desk", nil, nil), 422, "cancel what was collected")
 
-	// Codes optional again: one reservation cancelled, one nobody collects.
+	// Códigos opcionales otra vez: una reserva cancelada, otra que nadie recoge.
 	h.must(h.do("PUT", "/api/exchange/settings", "pricer", settings(2, "optional"), nil), 200, "codes optional")
 	h.must(h.do("POST", "/api/exchange/reservations", "clerk", order("", line("USD", "100")), &cancelled), 201, "second")
 	h.must(h.do("POST", "/api/exchange/reservations", "clerk", order("", line("USD", "200")), &late), 201, "third")
@@ -272,7 +272,7 @@ func (h *host) scenario() {
 		t.Fatalf("cancelled: %+v", cancelled)
 	}
 	h.must(h.do("POST", path(cancelled, "advance"), "desk", to("email-verified"), nil), 422, "cancelled does not move")
-	// Five hours after the pickup nobody came: the job closes it (on a clock moved forward).
+	// Cinco horas después de la recogida no vino nadie: la tarea la cierra (con un reloj adelantado).
 	func() {
 		defer fw.SetClock(fake.New(pickup.Add(5 * time.Hour)))()
 		expired, err := h.exg.Service.ExpireDue.Handle(h.adminCtx, xapp.ExpireDue{Company: acme})
@@ -319,7 +319,7 @@ func (h *host) scenario() {
 		t.Fatalf("outsider: %+v", page.Items)
 	}
 
-	// The dashboard counts what is alive or collected.
+	// El cuadro de mando cuenta lo que está vivo o recogido.
 	var dash xapp.DashboardDTO
 	period := "&from=" + today.AddDays(-1).String() + "&to=" + today.AddDays(1).String()
 	h.must(h.do("GET", "/api/exchange/dashboard?company="+acme, "viewer", nil, nil), 400, "period")
@@ -331,7 +331,7 @@ func (h *host) scenario() {
 		t.Fatalf("dashboard: %+v", dash)
 	}
 
-	// 100 × 0.95 × 1.02 = 96.90 above. Three registrations, three steps of the first, a cancellation and an expiry.
+	// 100 × 0.95 × 1.02 = 96.90, más arriba. Tres registros, tres pasos del primero, una cancelación y una caducidad.
 	if n, err := h.exg.Relay(inprocess.NewBroker()).RelayOnce(context.Background()); err != nil || n != 8 {
 		t.Fatalf("published: %d %v", n, err)
 	}

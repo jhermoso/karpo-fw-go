@@ -16,15 +16,15 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// placeFor is how long the place of a company is remembered: a schedule asks about many days in
-// a row, and a company does not move every minute.
+// placeFor es cuánto tiempo se recuerda el lugar de una empresa: un calendario
+// pregunta por muchos días seguidos, y una empresa no se muda cada minuto.
 const placeFor = 5 * time.Minute
 
-// SellerCalendar tells Receivables the days a seller does not collect on: Saturdays, Sundays and
-// the holidays Geography keeps for where the seller is. Where it is, Parties says: the
-// municipality of its postal address in force, or its country when the address names no
-// municipality. A seller without an address has weekends only. It asks Parties as the host: it
-// answers a fact about a company, it shows nothing of it.
+// SellerCalendar dice a Receivables los días en que un vendedor no cobra: sábados, domingos y los
+// festivos que Geography guarda para donde está el vendedor. Dónde está lo dice Parties: el
+// municipio de su dirección postal en vigor, o su país cuando la dirección no nombra municipio. Un
+// vendedor sin dirección sólo tiene fines de semana. Pregunta a Parties como el anfitrión: responde
+// un hecho sobre una empresa, no muestra nada de ella.
 type SellerCalendar struct {
 	Parties   *parties.Module
 	Geography *geography.Module
@@ -41,7 +41,7 @@ type place struct {
 
 var _ recdomain.Calendar = (*SellerCalendar)(nil)
 
-// where returns the boundary a seller is in ("" when nobody knows).
+// where devuelve el ámbito en que está un vendedor ("" cuando nadie lo sabe).
 func (c *SellerCalendar) where(ctx context.Context, seller recdomain.OrganizationID) (string, error) {
 	now := time.Now()
 	c.mu.Lock()
@@ -78,7 +78,7 @@ func (c *SellerCalendar) where(ctx context.Context, seller recdomain.Organizatio
 	return boundary, nil
 }
 
-// IsHoliday implements Receivables' Calendar.
+// IsHoliday implementa Calendar de Receivables.
 func (c *SellerCalendar) IsHoliday(ctx context.Context, seller recdomain.OrganizationID, d vocab.Date) (bool, error) {
 	if wd := d.BaseTime().Weekday(); wd == time.Saturday || wd == time.Sunday {
 		return true, nil

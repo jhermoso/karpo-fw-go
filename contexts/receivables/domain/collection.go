@@ -11,29 +11,29 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// CollectionKind is the stable aggregate type name.
+// CollectionKind es el nombre estable del tipo de agregado.
 const CollectionKind = "receivables.collection"
 
-// Method is how a collection was received (the C# payment_method_type seed plus direct debit and
-// offset).
+// Method es cómo se recibió un cobro (la siembra payment_method_type del C# más el adeudo directo y
+// la compensación).
 type Method int
 
-// Methods.
+// Medios.
 const (
 	Cash Method = iota + 1
 	Transfer
 	Card
 	Check
 	DirectDebit
-	Offset // a credit (corrective invoice) netted against open installments
+	Offset // un abono (factura rectificativa) compensado con vencimientos abiertos
 )
 
 var methods = map[Method]string{Cash: "cash", Transfer: "transfer", Card: "card", Check: "check", DirectDebit: "direct-debit", Offset: "offset"}
 
-// String returns the stable name.
+// String devuelve el nombre estable.
 func (m Method) String() string { return methods[m] }
 
-// ParseMethod parses a method name.
+// ParseMethod analiza el nombre de un medio.
 func ParseMethod(s string) (Method, bool) {
 	for k, n := range methods {
 		if n == s {
@@ -43,10 +43,10 @@ func ParseMethod(s string) (Method, bool) {
 	return 0, false
 }
 
-// AllocationID identifies an allocation.
+// AllocationID identifica una aplicación.
 type AllocationID struct{ fw.UUID }
 
-// Allocation applies part of a collection to an installment of a receivable.
+// Allocation aplica parte de un cobro a un vencimiento de un cobro pendiente.
 type Allocation struct {
 	ID          AllocationID
 	Receivable  ReceivableID
@@ -55,7 +55,7 @@ type Allocation struct {
 	On          vocab.Date
 }
 
-// CollectionState is the persisted state of a collection.
+// CollectionState es el estado persistido de un cobro.
 type CollectionState struct {
 	Seller      OrganizationID
 	Payer       PartyID
@@ -69,16 +69,16 @@ type CollectionState struct {
 	Audit       traits.AuditStamp
 }
 
-// Collection is money received from a customer (the C# Payment + PaymentApplication, which let an
-// invoice be over-collected, a payment reduced below what was applied, and a payment change after
-// being issued).
+// Collection es dinero recibido de un cliente (el Payment + PaymentApplication del C#, que dejaban
+// cobrar una factura de más, reducir un pago por debajo de lo aplicado y cambiar un pago después de
+// emitido).
 type Collection struct {
 	fw.BaseAggregateRoot[CollectionID]
 	traits.Audited
 	s CollectionState
 }
 
-// ReconstituteCollection rebuilds a collection.
+// ReconstituteCollection reconstruye un cobro.
 func ReconstituteCollection(id CollectionID, s CollectionState) (*Collection, error) {
 	base, err := fw.NewBaseAggregateRoot(CollectionKind, id)
 	if err != nil {
@@ -104,7 +104,7 @@ func ReconstituteCollection(id CollectionID, s CollectionState) (*Collection, er
 	return &Collection{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// RegisterCollection records money received.
+// RegisterCollection anota dinero recibido.
 func RegisterCollection(id CollectionID, s CollectionState) (*Collection, error) {
 	s.Cancelled, s.Allocations = false, nil
 	c, err := ReconstituteCollection(id, s)
@@ -117,14 +117,14 @@ func RegisterCollection(id CollectionID, s CollectionState) (*Collection, error)
 	return c, nil
 }
 
-// State returns the state (allocations are a copy).
+// State devuelve el estado (las aplicaciones son una copia).
 func (c *Collection) State() CollectionState {
 	s := c.s
 	s.Allocations = slices.Clone(s.Allocations)
 	return s
 }
 
-// Allocated returns the sum of the allocations.
+// Allocated devuelve la suma de las aplicaciones.
 func (c *Collection) Allocated() vocab.Decimal {
 	a := vocab.DecimalFromInt(0)
 	for _, x := range c.s.Allocations {
@@ -133,12 +133,12 @@ func (c *Collection) Allocated() vocab.Decimal {
 	return a
 }
 
-// Unallocated returns what remains to allocate.
+// Unallocated devuelve lo que queda por aplicar.
 func (c *Collection) Unallocated() vocab.Decimal { return c.s.Amount.Sub(c.Allocated()) }
 
-// Allocate applies part of the collection to an installment. Invariants: an active collection,
-// and the allocations never exceed the amount (an offset allocates positive and negative amounts
-// that must balance, checked with Balanced). The receivable checks its own side.
+// Allocate aplica parte del cobro a un vencimiento. Invariantes: un cobro activo, y las
+// aplicaciones nunca superan el importe (una compensación aplica importes positivos y negativos que
+// deben cuadrar, lo que se comprueba con Balanced). El cobro pendiente comprueba su propio lado.
 func (c *Collection) Allocate(r ReceivableID, installment int, amount vocab.Decimal, on vocab.Date) (AllocationID, error) {
 	if c.s.Cancelled {
 		return AllocationID{}, fw.Violation("receivables.collection_cancelled", "the collection is cancelled")
@@ -153,10 +153,10 @@ func (c *Collection) Allocate(r ReceivableID, installment int, amount vocab.Deci
 	return a.ID, nil
 }
 
-// Balanced reports whether an offset nets to zero.
+// Balanced dice si una compensación suma cero.
 func (c *Collection) Balanced() bool { return c.s.Method != Offset || c.Allocated().IsZero() }
 
-// Deallocate reverses an allocation and returns it (the receivable is reverted by the caller).
+// Deallocate deshace una aplicación y la devuelve (el cobro pendiente lo revierte quien llama).
 func (c *Collection) Deallocate(id AllocationID) (Allocation, error) {
 	if c.s.Method == Offset {
 		return Allocation{}, fw.Violation("receivables.offset_reversal", "an offset is reversed as a whole: cancel it")
@@ -171,8 +171,8 @@ func (c *Collection) Deallocate(id AllocationID) (Allocation, error) {
 	return a, nil
 }
 
-// Cancel cancels the collection and returns its allocations for the caller to revert (a
-// collection is never deleted).
+// Cancel anula el cobro y devuelve sus aplicaciones para que las revierta quien llama (un cobro
+// nunca se borra).
 func (c *Collection) Cancel() ([]Allocation, error) {
 	if c.s.Cancelled {
 		return nil, fw.Violation("receivables.collection_cancelled", "the collection is already cancelled")
@@ -185,12 +185,12 @@ func (c *Collection) Cancel() ([]Allocation, error) {
 	return out, nil
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (c *Collection) AuditSnapshot() map[string]any {
 	return map[string]any{"amount": c.s.Amount.String(), "allocated": c.Allocated().String(), "cancelled": c.s.Cancelled}
 }
 
-// Collection fields.
+// Campos del cobro.
 var (
 	ColFieldSeller    = spec.Comparable("seller", func(c *Collection) OrganizationID { return c.s.Seller })
 	ColFieldPayer     = spec.Comparable("payer", func(c *Collection) PartyID { return c.s.Payer })

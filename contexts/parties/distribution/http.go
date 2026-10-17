@@ -1,6 +1,6 @@
-// Package distribution exposes the Parties use cases over HTTP (REST + RFC 9457 problems). The
-// routes follow the C# publisher where the concept survived (/api/parties, /api/party-relationships,
-// /api/catalogs/..., /api/parties/directory/...).
+// Package distribution expone los casos de uso de Parties por HTTP (REST + problemas RFC 9457).
+// Las rutas siguen al publicador de C# donde el concepto ha sobrevivido (/api/parties,
+// /api/party-relationships, /api/catalogs/..., /api/parties/directory/...).
 package distribution
 
 import (
@@ -16,20 +16,20 @@ import (
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// Module is the Parties HTTP endpoint module.
+// Module es el módulo de endpoints HTTP de Parties.
 type Module struct {
 	svc       *papp.Service
 	directory contracts.Directory
 }
 
-// NewModule creates the endpoint module.
+// NewModule crea el módulo de endpoints.
 func NewModule(svc *papp.Service, directory contracts.Directory) *Module {
 	return &Module{svc: svc, directory: directory}
 }
 
 var _ distribution.EndpointModule = (*Module)(nil)
 
-// RegisterRoutes implements distribution.EndpointModule.
+// RegisterRoutes implementa distribution.EndpointModule.
 func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/persons", m.registerPerson)
 	mux.HandleFunc("POST /api/organizations", m.registerOrganization)
@@ -74,7 +74,7 @@ func pathParty(r *http.Request) (domain.PartyID, error) {
 	return id, nil
 }
 
-// handle decodes an optional body into cmd, runs fn and writes the response.
+// handle decodifica un cuerpo opcional en cmd, ejecuta fn y escribe la respuesta.
 func handle[C, R any](w http.ResponseWriter, r *http.Request, cmd *C, body bool, status int, fn func(C) (R, error)) {
 	if body {
 		if err := decode(r, cmd); err != nil {

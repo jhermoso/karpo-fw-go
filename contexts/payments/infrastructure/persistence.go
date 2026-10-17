@@ -1,6 +1,6 @@
-// Package infrastructure stores the Payments context: SQL mappings, versioned schema of the five
-// engines (with the inbox of the Payroll, Fiscal and Treasury events), hot-swap factories and the
-// adapter to the Payroll Remittance port.
+// Package infrastructure guarda el contexto Payments: mapeos SQL, esquema versionado de los cinco
+// motores (con el inbox de los eventos de Payroll, Fiscal y Treasury), factorías intercambiables en
+// caliente y el adaptador al puerto Remittance de Payroll.
 package infrastructure
 
 import (
@@ -24,10 +24,10 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlserver"
 )
 
-// Context is the name of the bounded context.
+// Context es el nombre del contexto delimitado.
 const Context = "payments"
 
-// Technical tables of the context.
+// Tablas técnicas del contexto.
 const (
 	TableOutbox            = "payments_outbox"
 	TableIntegrationOutbox = "payments_integration_outbox"
@@ -75,7 +75,7 @@ func technicalDDL(d string) []string {
 	return nil
 }
 
-// Migrations is the versioned schema of the context.
+// Migrations es el esquema versionado del contexto.
 func Migrations() sqlrepo.MigrationSet {
 	technical := map[string][]string{}
 	for _, d := range sqlrepo.Dialects {
@@ -87,15 +87,15 @@ func Migrations() sqlrepo.MigrationSet {
 	}}
 }
 
-// Migrator returns the schema migrator of the context.
+// Migrator devuelve el migrador del esquema del contexto.
 func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 	return sqlrepo.NewMigrator(db, []sqlrepo.MigrationSet{Migrations()})
 }
 
-// Tables lists the tables of the context, children first (drop order).
+// Tables enumera las tablas del contexto, las hijas primero (orden de borrado).
 var Tables = []string{"pay_allocations", "pay_payments", "pay_payable_accounts", "pay_payables", TableOutbox, TableIntegrationOutbox, TableAuditLog, TableInbox}
 
-// DropAll removes the tables of the context and its migration history (tests only).
+// DropAll borra las tablas del contexto y su historial de migraciones (sólo para pruebas).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
 	for _, t := range Tables {
 		_, _ = db.ExecContext(ctx, "DROP TABLE "+t)
@@ -117,7 +117,7 @@ func optUUID(u fw.UUID) any {
 	return u
 }
 
-// PayableMapping maps Payable to pay_payables and its accounts.
+// PayableMapping mapea Payable a pay_payables y sus cuentas.
 func PayableMapping() sqlrepo.Mapping[domain.PayableID, *domain.Payable] {
 	return sqlrepo.Mapping[domain.PayableID, *domain.Payable]{
 		Table: "pay_payables",
@@ -181,7 +181,7 @@ func PayableMapping() sqlrepo.Mapping[domain.PayableID, *domain.Payable] {
 	}
 }
 
-// PaymentMapping maps Payment to pay_payments and its allocations.
+// PaymentMapping mapea Payment a pay_payments y sus aplicaciones.
 func PaymentMapping() sqlrepo.Mapping[domain.PaymentID, *domain.Payment] {
 	return sqlrepo.Mapping[domain.PaymentID, *domain.Payment]{
 		Table:   "pay_payments",
@@ -241,20 +241,20 @@ func repository[ID fw.Identifier, T fw.AggregateRoot[ID]](b hotswap.Backend, m s
 	return nil, unsupported(b)
 }
 
-// PayableRepositoryFactory builds the payable repository.
+// PayableRepositoryFactory construye el repositorio de obligaciones de pago.
 func PayableRepositoryFactory(b hotswap.Backend) (domain.PayableRepository, error) {
 	return repository(b, PayableMapping())
 }
 
-// PaymentRepositoryFactory builds the payment repository.
+// PaymentRepositoryFactory construye el repositorio de pagos.
 func PaymentRepositoryFactory(b hotswap.Backend) (domain.PaymentRepository, error) {
 	return repository(b, PaymentMapping())
 }
 
-// OutboxFactory builds the domain event outbox.
+// OutboxFactory construye el outbox de eventos de dominio.
 func OutboxFactory(b hotswap.Backend) (application.OutboxStore, error) { return outbox(b, TableOutbox) }
 
-// IntegrationOutboxFactory builds the integration outbox.
+// IntegrationOutboxFactory construye el outbox de integración.
 func IntegrationOutboxFactory(b hotswap.Backend) (application.OutboxStore, error) {
 	return outbox(b, TableIntegrationOutbox)
 }
@@ -269,7 +269,7 @@ func outbox(b hotswap.Backend, table string) (application.OutboxStore, error) {
 	return nil, unsupported(b)
 }
 
-// AuditLogFactory builds the audit log.
+// AuditLogFactory construye el registro de auditoría.
 func AuditLogFactory(b hotswap.Backend) (application.AuditLog, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -280,7 +280,7 @@ func AuditLogFactory(b hotswap.Backend) (application.AuditLog, error) {
 	return nil, unsupported(b)
 }
 
-// InboxFactory builds the inbox of the events Payments consumes.
+// InboxFactory construye el inbox de los eventos que consume Payments.
 func InboxFactory(b hotswap.Backend) (application.InboxStore, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -291,12 +291,12 @@ func InboxFactory(b hotswap.Backend) (application.InboxStore, error) {
 	return nil, unsupported(b)
 }
 
-// PayrollNetPay adapts the Payroll Remittance contract to the Payments port (ACL).
+// PayrollNetPay adapta el contrato Remittance de Payroll al puerto de Payments (ACL).
 type PayrollNetPay struct{ Remittance payroll.Remittance }
 
 var _ domain.NetPaySplits = PayrollNetPay{}
 
-// NetPayments implements domain.NetPaySplits.
+// NetPayments implementa domain.NetPaySplits.
 func (p PayrollNetPay) NetPayments(ctx context.Context, payslipIDs []string) (map[string][]domain.PayTo, error) {
 	in, err := p.Remittance.NetPayments(ctx, payslipIDs)
 	if err != nil {

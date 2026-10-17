@@ -6,11 +6,11 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// AuditColumns are the conventional columns of a traits.AuditStamp. Append them to
-// Mapping.Columns and use AuditStampValues / Row.AuditStamp in Dehydrate / Hydrate.
+// AuditColumns son las columnas convencionales de un traits.AuditStamp. Se añaden a
+// Mapping.Columns y se usan AuditStampValues / Row.AuditStamp en Dehydrate / Hydrate.
 var AuditColumns = []string{"created_at", "created_by_id", "created_by_name", "modified_at", "modified_by_id", "modified_by_name"}
 
-// WithAuditColumns returns columns followed by AuditColumns.
+// WithAuditColumns devuelve columns seguidas de AuditColumns.
 func WithAuditColumns(columns ...string) []string {
 	return append(append([]string{}, columns...), AuditColumns...)
 }
@@ -29,12 +29,12 @@ func actorName(a vocab.Actor) any {
 	return a.Name
 }
 
-// AuditStampValues writes a stamp into vals (creating the map when nil) and returns it.
+// AuditStampValues escribe un sello en vals (creando el mapa si es nil) y lo devuelve.
 func AuditStampValues(vals Values, s traits.AuditStamp) Values {
 	if vals == nil {
 		vals = Values{}
 	}
-	vals["created_at"] = nil // an unstamped aggregate stores NULL, never Go's zero time
+	vals["created_at"] = nil // un agregado sin sello guarda NULL, nunca el tiempo cero de Go
 	if !s.CreatedAt.IsZero() {
 		vals["created_at"] = s.CreatedAt
 	}
@@ -65,7 +65,7 @@ func (r *Row) actor(idCol, nameCol string) vocab.Actor {
 	return vocab.Actor{PartyID: u, Name: name}
 }
 
-// AuditStamp reads the AuditColumns of the row.
+// AuditStamp lee las AuditColumns de la fila.
 func (r *Row) AuditStamp() traits.AuditStamp {
 	s := traits.AuditStamp{
 		CreatedAt:  r.Time("created_at"),

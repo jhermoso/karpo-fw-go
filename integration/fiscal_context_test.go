@@ -35,9 +35,9 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 )
 
-// TestFiscalContext runs Fiscal fed by Payroll on every engine: rates with validity, taxpayer with
-// children, withholdings through the SQL inbox, Modelo 111 and 190 generation (dates and decimals
-// in SQL), numbering counter, revert and regeneration.
+// TestFiscalContext ejecuta Fiscal alimentado por Payroll en cada motor: tipos con vigencia,
+// contribuyente con hijos, retenciones a través del inbox SQL, generación de los modelos 111 y 190
+// (fechas y decimales en SQL), contador de numeración, reversión y regeneración.
 func TestFiscalContext(t *testing.T) {
 	for _, e := range engines {
 		if e.name == "oracle-dotnet-guids" {
@@ -78,7 +78,7 @@ func TestFiscalContext(t *testing.T) {
 				}
 			}
 
-			// Rates.
+			// Tipos.
 			g, err := svc.CreateRate.Handle(actx, fapp.CreateRate{Type: "vat", Territory: "common", Code: "R10", Description: "Reducido", Rate: "10",
 				Surcharge: "1.4", From: vocab.MustDate(2012, 9, 1)})
 			must(err)
@@ -148,7 +148,7 @@ func TestFiscalContext(t *testing.T) {
 				}
 			}
 
-			// Taxpayer and forms.
+			// Contribuyente y modelos.
 			tp, err := svc.RegisterTaxpayer.Handle(actx, fapp.RegisterTaxpayer{Organization: acme.ID, TermsInput: fapp.TermsInput{Territory: "common",
 				FiscalYearStartMonth: 1, GeneralProrata: "87.5"}})
 			must(err)
@@ -164,7 +164,7 @@ func TestFiscalContext(t *testing.T) {
 			if err != nil || got.GeneralProrata != "87.50" || len(got.Obligations) != 2 || len(got.Activities) != 1 || !got.Activities[0].Primary {
 				t.Fatalf("taxpayer round trip: %+v %v", got, err)
 			}
-			// 2105.25 × 15.5 % = 326.31 per payslip; the March payslip was cancelled.
+			// 2105.25 × 15.5 % = 326.31 por nómina; la nómina de marzo se canceló.
 			q1, err := svc.GenerateFiling.Handle(actx, fapp.GenerateFiling{Organization: acme.ID, Form: "111", Year: 2026, Period: "1T"})
 			if err != nil || q1.Recipients != 1 || q1.Perceptions != "4210.50" || q1.Withheld != "652.62" || len(q1.Problems) != 0 {
 				t.Fatalf("111: %+v %v", q1, err)

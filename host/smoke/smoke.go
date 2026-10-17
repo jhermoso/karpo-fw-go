@@ -1,31 +1,31 @@
 //go:build smoke
 
-// Package smoke is the smoke publisher of Karpo: the same host cmd/karpo serves, with a door that
-// lets a person in WITHOUT CREDENTIALS, to try the whole from a browser or from curl without
-// anybody reading and typing a password.
+// Package smoke es la publicadora de humo de Karpo: el mismo anfitrión que sirve cmd/karpo, con una
+// puerta que deja entrar a una persona SIN CREDENCIALES, para probar el conjunto desde un navegador
+// o desde curl sin que nadie lea y teclee una contraseña.
 //
-//	GET  /api/smoke/enter?as=<profile>  a page that stores in the browser what the front engine
-//	                                    stores after a login, and goes to /
-//	GET  /api/smoke/token?as=<profile>  the same session as JSON, for curl
-//	POST /api/auth/login                any password, for the fixed profiles
+//	GET  /api/smoke/enter?as=<profile>  una página que guarda en el navegador lo que guarda el
+//	                                    motor del front tras un login, y va a /
+//	GET  /api/smoke/token?as=<profile>  la misma sesión como JSON, para curl
+//	POST /api/auth/login                cualquier contraseña, para los perfiles fijos
 //
-// Everything else is the host as it is: its routes, its permissions, its refresh of sessions.
+// Todo lo demás es el anfitrión tal cual: sus rutas, sus permisos, su refresco de sesiones.
 //
-// Who gets in is one of a few identities fixed in this file (Profiles). Nothing here
-// authenticates anybody, so it must never leave a development machine, and three things keep it
-// there:
+// Quien entra es una de unas pocas identidades fijadas en este fichero (Profiles). Aquí nada
+// autentica a nadie, así que nunca debe salir de una máquina de desarrollo, y tres cosas lo
+// mantienen ahí:
 //
-//   - Every file of it carries the build tag smoke: without -tags smoke it is not in any binary,
-//     and cmd/karpo-smoke does not compile. Neither cmd/karpo nor cmd/karpo-postgres import it.
-//   - New refuses to start unless KARPO_ENV is exactly "development", Listen refuses any
-//     address that is not a loopback one, and every request has to name this machine in its Host.
-//   - A test that always runs (pkg/testing/archtest, without the tag) fails if a Go file without
-//     the tag imports this package or names its routes.
+//   - Cada fichero suyo lleva la etiqueta de build smoke: sin -tags smoke no está en ningún binario,
+//     y cmd/karpo-smoke no compila. Ni cmd/karpo ni cmd/karpo-postgres lo importan.
+//   - New se niega a arrancar salvo que KARPO_ENV sea exactamente "development", Listen rechaza
+//     toda dirección que no sea de loopback, y cada petición tiene que nombrar esta máquina en su Host.
+//   - Una prueba que siempre se ejecuta (pkg/testing/archtest, sin la etiqueta) falla si un fichero
+//     Go sin la etiqueta importa este paquete o nombra sus rutas.
 //
-// There is no secret to keep: the key that signs the sessions and the password of each profile
-// are made when the publisher starts, live in its memory and are gone when it stops. That is why
-// it only starts on a database nobody administers yet: on the next start nobody knows the
-// password of the administrator the previous one made.
+// No hay secreto que guardar: la clave que firma las sesiones y la contraseña de cada perfil se
+// crean al arrancar el publicador, viven en su memoria y desaparecen cuando se para. Por eso sólo
+// arranca sobre una base de datos que nadie administra aún: en el siguiente arranque nadie sabe la
+// contraseña del administrador que creó el anterior.
 package smoke
 
 import (
@@ -52,33 +52,33 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 )
 
-// EnvVar is the variable that has to say Development, exactly, for the publisher to start.
+// EnvVar es la variable que tiene que decir Development, exactamente, para que arranque el publicador.
 const EnvVar = "KARPO_ENV"
 
-// Development is what EnvVar has to say.
+// Development es lo que tiene que decir EnvVar.
 const Development = "development"
 
-// Profile is one of the identities the publisher lets in. They are fixed here, in code: there
-// is nothing to configure and nothing to keep secret.
+// Profile es una de las identidades que deja entrar el publicador. Están fijadas aquí, en código:
+// no hay nada que configurar ni nada que mantener en secreto.
 type Profile struct {
-	// Name is what ?as= says.
+	// Name es lo que dice ?as=.
 	Name string
-	// Username is the user of the host it is. It says smoke, so that who looks at a trace, or at
-	// who created a record, sees it is not a person.
+	// Username es el usuario del anfitrión que es. Dice smoke, para que quien mire una traza, o
+	// mire quién creó un registro, vea que no es una persona.
 	Username string
-	// Role, DisplayName and Position are what the front engine keeps of the user of a session.
+	// Role, DisplayName y Position son lo que guarda el motor del front del usuario de una sesión.
 	Role, DisplayName, Position string
 }
 
-// Profiles are the identities of the publisher. The first is the one ?as= means when it says
-// nothing. There is one: the administrator of the installation, who may do everything.
+// Profiles son las identidades del publicador. La primera es la que quiere decir ?as= cuando no
+// dice nada. Hay una: el administrador de la instalación, que puede hacerlo todo.
 func Profiles() []Profile {
 	return []Profile{
 		{Name: "admin", Username: "smoke-admin", Role: "super", DisplayName: "Smoke Admin", Position: "Rol Técnico"},
 	}
 }
 
-// profile finds a profile by its name or by its username. No name is the first one.
+// profile busca un perfil por su nombre o por su username. Sin nombre es el primero.
 func profile(name string) (Profile, bool) {
 	all := Profiles()
 	if name == "" {
@@ -92,7 +92,7 @@ func profile(name string) (Profile, bool) {
 	return Profile{}, false
 }
 
-// names are the names of the profiles, for a message.
+// names son los nombres de los perfiles, para un mensaje.
 func names() string {
 	var out []string
 	for _, p := range Profiles() {
@@ -101,27 +101,27 @@ func names() string {
 	return strings.Join(out, ", ")
 }
 
-// Options is what who starts the publisher decides. None of it is a credential.
+// Options es lo que decide quien arranca el publicador. Nada de ello es una credencial.
 type Options struct {
-	// Files keeps the files of the exports (nil: in memory).
+	// Files guarda los ficheros de las exportaciones (nil: en memoria).
 	Files expapp.Files
-	// Ping tells whether the database answers, for the readiness probe (nil: no probe).
+	// Ping dice si la base de datos responde, para la sonda de disponibilidad (nil: sin sonda).
 	Ping func(context.Context) error
 }
 
-// Publisher is the host with the door of smoke.
+// Publisher es el anfitrión con la puerta de humo.
 type Publisher struct {
-	// Host is Karpo composed: who starts the publisher runs its deliveries and its chores.
+	// Host es Karpo compuesto: quien arranca el publicador ejecuta sus entregas y sus tareas.
 	Host *host.Host
 
 	handler http.Handler
 	inner   http.Handler
-	// passwords are those of the profiles, by username. Made here, kept here, never shown.
+	// passwords son las de los perfiles, por username. Creadas aquí, guardadas aquí, nunca mostradas.
 	passwords map[string]string
 }
 
-// CheckEnv says whether the environment lets the publisher start: KARPO_ENV exactly
-// "development". A variable that is missing is a refusal, as any other value.
+// CheckEnv dice si el entorno deja arrancar al publicador: KARPO_ENV exactamente "development".
+// Una variable que falta es un rechazo, como cualquier otro valor.
 func CheckEnv(env string) error {
 	if env != Development {
 		return fmt.Errorf("smoke: %s is %q and must be exactly %q: the smoke publisher lets anybody in without credentials and only starts in development", EnvVar, env, Development)
@@ -129,7 +129,7 @@ func CheckEnv(env string) error {
 	return nil
 }
 
-// random gives n bytes of the system, as hexadecimal.
+// random da n bytes del sistema, en hexadecimal.
 func random(n int) (string, error) {
 	b := make([]byte, n)
 	if _, err := rand.Read(b); err != nil {
@@ -138,14 +138,15 @@ func random(n int) (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-// New composes Karpo on a migrated backend nobody administers yet, makes the profiles and adds
-// the door. env is what KARPO_ENV says: anything but "development" and there is no publisher.
+// New compone Karpo sobre un backend migrado que nadie administra aún, crea los perfiles y añade
+// la puerta. env es lo que dice KARPO_ENV: cualquier cosa que no sea "development" y no hay
+// publicador.
 func New(ctx context.Context, env string, sw *hotswap.Switch, o Options) (*Publisher, error) {
 	if err := CheckEnv(env); err != nil {
 		return nil, err
 	}
-	// It takes no credentials from anywhere: with these set the host would make an administrator
-	// of its own, with a password somebody knows.
+	// No toma credenciales de ningún sitio: con éstas puestas el anfitrión crearía un administrador
+	// propio, con una contraseña que alguien conoce.
 	for _, name := range []string{security.EnvBootstrapUser, security.EnvBootstrapPassword} {
 		if os.Getenv(name) != "" {
 			return nil, fmt.Errorf("smoke: %s is set: the smoke publisher takes no credentials, unset it", name)
@@ -187,9 +188,9 @@ func New(ctx context.Context, env string, sw *hotswap.Switch, o Options) (*Publi
 	return p, nil
 }
 
-// create makes the user of a profile: the first administrator of the installation, with a
-// password nobody sees, and already changed once, so that the host does not ask to change it
-// before anything else.
+// create crea el usuario de un perfil: el primer administrador de la instalación, con una
+// contraseña que nadie ve, y ya cambiada una vez, para que el anfitrión no pida cambiarla antes
+// de nada.
 func (p *Publisher) create(ctx context.Context, who Profile) error {
 	first, err := random(24)
 	if err != nil {
@@ -218,15 +219,15 @@ func (p *Publisher) create(ctx context.Context, who Profile) error {
 	return nil
 }
 
-// call sends a request to a handler of this process and decodes a 2xx answer into out. It gives
-// the status and, when it is not 2xx, the body.
+// call envía una petición a un handler de este proceso y decodifica una respuesta 2xx en out. Da
+// el estado y, cuando no es 2xx, el cuerpo.
 func (p *Publisher) call(to http.Handler, method, path, token string, body, out any) (int, []byte) {
 	var sent bytes.Buffer
 	if body != nil {
 		_ = json.NewEncoder(&sent).Encode(body)
 	}
 	request := httptest.NewRequest(method, path, &sent)
-	request.Host = "127.0.0.1" // of this process
+	request.Host = "127.0.0.1" // de este proceso
 	request.Header.Set("Content-Type", "application/json")
 	if token != "" {
 		request.Header.Set("Authorization", "Bearer "+token)
@@ -244,9 +245,9 @@ func (p *Publisher) call(to http.Handler, method, path, token string, body, out 
 	return recorder.Code, nil
 }
 
-// CheckAddress says whether an address to listen on is of this machine alone: a loopback IP
-// address (127.0.0.0/8 or ::1) with a port. A name is refused, localhost too: what a name
-// resolves to is not decided here.
+// CheckAddress dice si una dirección en la que escuchar es sólo de esta máquina: una dirección IP
+// de loopback (127.0.0.0/8 o ::1) con puerto. Un nombre se rechaza, localhost también: a qué se
+// resuelve un nombre no se decide aquí.
 func CheckAddress(address string) error {
 	name, _, err := net.SplitHostPort(address)
 	if err != nil {
@@ -258,8 +259,8 @@ func CheckAddress(address string) error {
 	return fmt.Errorf("smoke: the address %q is not a loopback IP address (127.0.0.1 or ::1): the smoke publisher does not listen anywhere else", address)
 }
 
-// localHost says whether the Host of a request names this machine: 127.0.0.1, [::1] or
-// localhost, with any port or none.
+// localHost dice si el Host de una petición nombra esta máquina: 127.0.0.1, [::1] o localhost,
+// con cualquier puerto o sin él.
 func localHost(host string) bool {
 	name := host
 	if h, _, err := net.SplitHostPort(host); err == nil {
@@ -269,7 +270,7 @@ func localHost(host string) bool {
 	return name == "127.0.0.1" || name == "::1" || strings.EqualFold(name, "localhost")
 }
 
-// Listen listens on an address, and only if it is of this machine alone.
+// Listen escucha en una dirección, y sólo si es únicamente de esta máquina.
 func (p *Publisher) Listen(address string) (net.Listener, error) {
 	if err := CheckAddress(address); err != nil {
 		return nil, err
@@ -277,7 +278,7 @@ func (p *Publisher) Listen(address string) (net.Listener, error) {
 	return net.Listen("tcp", address)
 }
 
-// Banner is what the publisher says when it starts, so that nobody takes it for something else.
+// Banner es lo que dice el publicador al arrancar, para que nadie lo tome por otra cosa.
 func Banner(address, database string) string {
 	line := strings.Repeat("!", 78)
 	var b strings.Builder
@@ -295,10 +296,11 @@ func Banner(address, database string) string {
 	return b.String()
 }
 
-// ServeHTTP implements http.Handler. A request whose Host does not name this machine is refused:
-// a page of anywhere, open in the browser of the developer, can make its own name resolve to
-// 127.0.0.1 (DNS rebinding) and would be let in as anybody else. Its Host still says that name.
-// The development proxy of the front sends the Host of its target, which is this machine.
+// ServeHTTP implementa http.Handler. Se rechaza una petición cuyo Host no nombra esta máquina:
+// una página de cualquier sitio, abierta en el navegador del desarrollador, puede hacer que su
+// propio nombre se resuelva a 127.0.0.1 (DNS rebinding) y entraría como cualquier otro. Su Host
+// sigue diciendo ese nombre. El proxy de desarrollo del front envía el Host de su destino, que es
+// esta máquina.
 func (p *Publisher) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !localHost(r.Host) {
 		http.Error(w, "the smoke publisher only answers to 127.0.0.1, [::1] or localhost", http.StatusForbidden)
@@ -307,9 +309,9 @@ func (p *Publisher) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	p.handler.ServeHTTP(w, r)
 }
 
-// Session is what the publisher answers for a profile: what the login of the host answers
-// (accessToken, refreshToken, expiresAt, userId, username, mustChangePassword), the member
-// success the login of the front engine reads, and which profile it is.
+// Session es lo que responde el publicador para un perfil: lo que responde el login del anfitrión
+// (accessToken, refreshToken, expiresAt, userId, username, mustChangePassword), el miembro success
+// que lee el login del motor del front, y qué perfil es.
 type Session struct {
 	Success            bool      `json:"success"`
 	AccessToken        string    `json:"accessToken"`
@@ -321,14 +323,14 @@ type Session struct {
 	Profile            string    `json:"profile"`
 }
 
-// failure is what a login that does not get in answers, as the front engine reads it.
+// failure es lo que responde un login que no entra, como lo lee el motor del front.
 type failure struct {
 	Success      bool   `json:"success"`
 	ErrorMessage string `json:"errorMessage"`
 }
 
-// Open gives a session of a profile: nobody is asked anything. It is a session of the host as
-// any other: the host issued its tokens, and refreshes and ends them.
+// Open da una sesión de un perfil: a nadie se le pregunta nada. Es una sesión del anfitrión como
+// cualquier otra: el anfitrión emitió sus tokens, y los refresca y los termina.
 func (p *Publisher) Open(who Profile) (Session, error) {
 	password, known := p.passwords[who.Username]
 	if !known {
@@ -342,7 +344,7 @@ func (p *Publisher) Open(who Profile) (Session, error) {
 		Username: t.Username, MustChangePassword: t.MustChangePassword, Profile: who.Name}, nil
 }
 
-// asked gives the profile a request asks for with ?as=, or answers 400 saying which there are.
+// asked da el perfil que pide una petición con ?as=, o responde 400 diciendo cuáles hay.
 func asked(w http.ResponseWriter, r *http.Request) (Profile, bool) {
 	who, known := profile(r.URL.Query().Get("as"))
 	if !known {
@@ -351,7 +353,7 @@ func asked(w http.ResponseWriter, r *http.Request) (Profile, bool) {
 	return who, known
 }
 
-// token answers the session of a profile as JSON.
+// token responde la sesión de un perfil como JSON.
 func (p *Publisher) token(w http.ResponseWriter, r *http.Request) {
 	who, known := asked(w, r)
 	if !known {
@@ -365,9 +367,9 @@ func (p *Publisher) token(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s)
 }
 
-// login is the login of the host with one difference: for the fixed profiles (the user is the
-// name of a profile or its username) the password is not looked at. Any other user goes to the
-// host, which asks for its password as always.
+// login es el login del anfitrión con una diferencia: para los perfiles fijos (el usuario es el
+// nombre de un perfil o su username) no se mira la contraseña. Cualquier otro usuario va al
+// anfitrión, que le pide su contraseña como siempre.
 func (p *Publisher) login(w http.ResponseWriter, r *http.Request) {
 	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
 	if err != nil {
@@ -399,8 +401,8 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 	_ = json.NewEncoder(w).Encode(body)
 }
 
-// Seed loads something to look at, through the routes of the host and as the profile admin: one
-// organization in Parties. If there is a party already, it loads nothing. It says what it did.
+// Seed carga algo que mirar, por las rutas del anfitrión y como el perfil admin: una organización
+// en Parties. Si ya hay una party, no carga nada. Dice lo que hizo.
 func (p *Publisher) Seed() (string, error) {
 	admin, _ := profile("admin")
 	s, err := p.Open(admin)

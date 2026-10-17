@@ -1,5 +1,5 @@
-// Package infrastructure stores the Exports context: SQL mapping, versioned schema of the five
-// engines, hot-swap factories and where the files are kept.
+// Package infrastructure persiste el contexto Exports: mapeo SQL, esquema versionado de los cinco
+// motores, factorías intercambiables en caliente y dónde se guardan los ficheros.
 package infrastructure
 
 import (
@@ -28,15 +28,15 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlserver"
 )
 
-// Context is the name of the bounded context.
+// Context es el nombre del contexto delimitado.
 const Context = "exports"
 
-// TableAuditLog is the audit log of the context: who exported what.
+// TableAuditLog es el registro de auditoría del contexto: quién exportó qué.
 const TableAuditLog = "exports_audit_log"
 
 const audit = `created_at {ts}, created_by_id {str:64}, created_by_name {str:200}, modified_at {ts}, modified_by_id {str:64}, modified_by_name {str:200}`
 
-// Text columns are four times the characters they hold: Oracle counts bytes.
+// Las columnas de texto miden cuatro veces los caracteres que guardan: Oracle cuenta bytes.
 var schemaDDL = []string{
 	`CREATE TABLE exp_jobs (id {uuid} NOT NULL PRIMARY KEY, version {bigint} NOT NULL, dataset_key {str:64} NOT NULL, file_format {str:10} NOT NULL,
 	title {str:400}, status {str:20} NOT NULL, row_count {int} NOT NULL, file_name {str:200}, file_key {str:200}, file_size {bigint} NOT NULL,
@@ -66,7 +66,7 @@ func technicalDDL(d string) []string {
 	return nil
 }
 
-// Migrations is the versioned schema of the context.
+// Migrations es el esquema versionado del contexto.
 func Migrations() sqlrepo.MigrationSet {
 	technical := map[string][]string{}
 	for _, d := range sqlrepo.Dialects {
@@ -78,10 +78,10 @@ func Migrations() sqlrepo.MigrationSet {
 	}}
 }
 
-// Tables lists the tables of the context, children first (drop order).
+// Tables enumera las tablas del contexto, las hijas primero (orden de borrado).
 var Tables = []string{"exp_job_scope", "exp_job_filters", "exp_jobs", TableAuditLog}
 
-// DropAll removes the tables of the context and its migration history (tests only).
+// DropAll quita las tablas del contexto y su historial de migraciones (sólo pruebas).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
 	for _, t := range Tables {
 		_, _ = db.ExecContext(ctx, "DROP TABLE "+t)
@@ -117,14 +117,14 @@ func nullTime(r *sqlrepo.Row, col string) time.Time {
 	return time.Time{}
 }
 
-// Engines do not agree on the order of the children: they are sorted here.
+// Los motores no coinciden en el orden de las hijas: se ordenan aquí.
 func byNo(rows []*sqlrepo.Row) []*sqlrepo.Row {
 	out := slices.Clone(rows)
 	slices.SortFunc(out, func(a, b *sqlrepo.Row) int { return int(a.Int64("line_no") - b.Int64("line_no")) })
 	return out
 }
 
-// JobMapping maps Job to exp_jobs, its filters and the scope of who asked.
+// JobMapping mapea Job a exp_jobs, sus filtros y el alcance de quien pidió.
 func JobMapping() sqlrepo.Mapping[domain.JobID, *domain.Job] {
 	return sqlrepo.Mapping[domain.JobID, *domain.Job]{
 		Table: "exp_jobs",
@@ -189,7 +189,7 @@ func JobMapping() sqlrepo.Mapping[domain.JobID, *domain.Job] {
 
 func unsupported(b hotswap.Backend) error { return fmt.Errorf("exports: unsupported backend %T", b) }
 
-// JobRepositoryFactory builds the job repository.
+// JobRepositoryFactory construye el repositorio de trabajos.
 func JobRepositoryFactory(b hotswap.Backend) (domain.JobRepository, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -200,7 +200,7 @@ func JobRepositoryFactory(b hotswap.Backend) (domain.JobRepository, error) {
 	return nil, unsupported(b)
 }
 
-// AuditLogFactory builds the audit log.
+// AuditLogFactory construye el registro de auditoría.
 func AuditLogFactory(b hotswap.Backend) (application.AuditLog, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -215,13 +215,13 @@ type fileKey string
 
 func (k fileKey) String() string { return string(k) }
 
-// MemoryFiles keeps the files in memory (tests, and a single process that can lose them).
+// MemoryFiles guarda los ficheros en memoria (pruebas, y un solo proceso que puede perderlos).
 type MemoryFiles struct {
 	mu    sync.Mutex
 	files map[string][]byte
 }
 
-// NewMemoryFiles returns an empty store.
+// NewMemoryFiles devuelve un almacén vacío.
 func NewMemoryFiles() *MemoryFiles { return &MemoryFiles{files: map[string][]byte{}} }
 
 type memoryFile struct {
@@ -237,12 +237,12 @@ func (f *memoryFile) Close() error {
 	return nil
 }
 
-// Create implements application.Files.
+// Create implementa application.Files.
 func (m *MemoryFiles) Create(_ context.Context, key string) (io.WriteCloser, error) {
 	return &memoryFile{store: m, key: key}, nil
 }
 
-// Open implements application.Files.
+// Open implementa application.Files.
 func (m *MemoryFiles) Open(_ context.Context, key string) (io.ReadCloser, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -253,7 +253,7 @@ func (m *MemoryFiles) Open(_ context.Context, key string) (io.ReadCloser, error)
 	return io.NopCloser(bytes.NewReader(b)), nil
 }
 
-// Remove implements application.Files.
+// Remove implementa application.Files.
 func (m *MemoryFiles) Remove(_ context.Context, key string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -261,7 +261,7 @@ func (m *MemoryFiles) Remove(_ context.Context, key string) error {
 	return nil
 }
 
-// Keys lists what is kept (tests).
+// Keys enumera lo que se guarda (pruebas).
 func (m *MemoryFiles) Keys() []string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -273,10 +273,10 @@ func (m *MemoryFiles) Keys() []string {
 	return out
 }
 
-// DiskFiles keeps the files in a folder every instance of the host shares.
+// DiskFiles guarda los ficheros en una carpeta que comparten todas las instancias del anfitrión.
 type DiskFiles struct{ dir string }
 
-// NewDiskFiles keeps the files in dir, which it creates.
+// NewDiskFiles guarda los ficheros en dir, que crea.
 func NewDiskFiles(dir string) (*DiskFiles, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
@@ -284,16 +284,17 @@ func NewDiskFiles(dir string) (*DiskFiles, error) {
 	return &DiskFiles{dir: dir}, nil
 }
 
-// path refuses a key that is not a plain file name: keys are made here, never taken from a request.
+// path rechaza una clave que no sea un nombre de fichero simple: las claves se hacen aquí, nunca se
+// toman de una petición.
 func (d *DiskFiles) path(key string) (string, error) {
-	// Both slashes are refused on every system: a key written on one is read on another.
+	// Las dos barras se rechazan en todos los sistemas: una clave escrita en uno se lee en otro.
 	if key == "" || key != filepath.Base(key) || key == "." || key == ".." || strings.ContainsAny(key, `/\`) {
 		return "", fmt.Errorf("%w: invalid file key", fw.ErrValidation)
 	}
 	return filepath.Join(d.dir, key), nil
 }
 
-// Create implements application.Files.
+// Create implementa application.Files.
 func (d *DiskFiles) Create(_ context.Context, key string) (io.WriteCloser, error) {
 	p, err := d.path(key)
 	if err != nil {
@@ -302,7 +303,7 @@ func (d *DiskFiles) Create(_ context.Context, key string) (io.WriteCloser, error
 	return os.OpenFile(p, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
 }
 
-// Open implements application.Files.
+// Open implementa application.Files.
 func (d *DiskFiles) Open(_ context.Context, key string) (io.ReadCloser, error) {
 	p, err := d.path(key)
 	if err != nil {
@@ -311,7 +312,7 @@ func (d *DiskFiles) Open(_ context.Context, key string) (io.ReadCloser, error) {
 	return os.Open(p)
 }
 
-// Remove implements application.Files.
+// Remove implementa application.Files.
 func (d *DiskFiles) Remove(_ context.Context, key string) error {
 	p, err := d.path(key)
 	if err != nil {

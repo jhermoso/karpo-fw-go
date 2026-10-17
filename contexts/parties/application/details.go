@@ -12,8 +12,8 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
 )
 
-// addRelationshipDetails wires the use cases that change the details a relationship carries
-// because of its type (docs/PARTIES-UDM.md).
+// addRelationshipDetails conecta los casos de uso que cambian los datos que una relación lleva por
+// su tipo (docs/PARTIES-UDM.md).
 func addRelationshipDetails(svc *Service, s service) {
 	svc.SetProspectTrial = chain(PermRelationshipSetTrial, func(ctx context.Context, c SetProspectTrial) (RelationshipDTO, error) {
 		return s.changeDetails(ctx, c.ID, func(r *domain.Relationship, rt domain.RelationshipType) error {
@@ -33,9 +33,9 @@ func addRelationshipDetails(svc *Service, s service) {
 
 	svc.SetCustomerNumber = chain(PermRelationshipUpdate, func(ctx context.Context, c SetCustomerNumber) (RelationshipDTO, error) {
 		number := domain.NormalizeCustomerNumber(c.CustomerNumber)
-		// The number is of the numbering of the organization (the side that sells): who gives it
-		// must be able to write that organization, not just one of the two parties. Asked first,
-		// so that nobody learns which numbers are taken without being allowed to give one.
+		// El número es de la numeración de la organización (el lado que vende): quien lo da tiene
+		// que poder escribir en esa organización, no sólo en una de las dos parties. Se pregunta
+		// primero, para que nadie sepa qué números están cogidos sin tener permiso para dar uno.
 		r, _, _, err := s.operableRelationship(ctx, c.ID)
 		if err != nil {
 			return RelationshipDTO{}, err
@@ -44,9 +44,9 @@ func addRelationshipDetails(svc *Service, s service) {
 			return RelationshipDTO{}, fmt.Errorf("%w: the customer number is given by the organization that numbers its customers", fw.ErrForbidden)
 		}
 		if number != "" {
-			// A number tells one customer of the organization from the others: no other customer
-			// gets it while a relationship of the first, in force or ended, carries it, and the
-			// same customer keeps it if it comes back.
+			// Un número distingue a un cliente de la organización de los demás: ningún otro cliente
+			// lo recibe mientras una relación del primero, en vigor o terminada, lo lleve, y el
+			// mismo cliente lo conserva si vuelve.
 			same, err := s.relationships.Repository().Find(ctx, spec.And(domain.RelFieldType.Eq(r.Type()), domain.RelFieldTo.Eq(r.To()),
 				domain.RelFieldCustomerNumber.Eq(number)))
 			if err != nil {
@@ -67,8 +67,9 @@ func addRelationshipDetails(svc *Service, s service) {
 	svc.SetPromotionCode = chain(PermRelationshipUpdate, func(ctx context.Context, c SetPromotionCode) (RelationshipDTO, error) {
 		code := domain.NormalizePromotionCode(c.PromotionCode)
 		if code != "" {
-			// A code tells one collaborator of the organization from the others. Asked before
-			// the change, with its own read: who may not see the relationship is told so below.
+			// Un código distingue a un colaborador de la organización de los demás. Se pregunta
+			// antes del cambio, con su propia lectura: a quien no puede ver la relación se le dice
+			// más abajo.
 			if r, err := s.relationships.Repository().Get(ctx, c.ID); err == nil {
 				same, err := s.relationships.Repository().Find(ctx, spec.And(domain.RelFieldType.Eq(r.Type()), domain.RelFieldTo.Eq(r.To()),
 					domain.RelFieldPromotionCode.Eq(code), domain.ActiveAt(fw.Now())))
@@ -92,8 +93,8 @@ func addRelationshipDetails(svc *Service, s service) {
 	}, pipeline.RetryOnConflict[SetPromotionCode, RelationshipDTO](3, 10*time.Millisecond))
 }
 
-// Collaborators implements contracts.Collaborators over the collaborator relationships. Like
-// Directory, it serves contexts, not users: the caller's own use case is what is authorized.
+// Collaborators implementa contracts.Collaborators sobre las relaciones de colaborador. Como
+// Directory, sirve a contextos, no a usuarios: lo que se autoriza es el caso de uso del llamante.
 type Collaborators struct {
 	Relationships domain.RelationshipRepository
 	Catalogs      domain.Catalogs
@@ -101,7 +102,7 @@ type Collaborators struct {
 
 var _ contracts.Collaborators = Collaborators{}
 
-// ByPromotionCode implements contracts.Collaborators.
+// ByPromotionCode implementa contracts.Collaborators.
 func (c Collaborators) ByPromotionCode(ctx context.Context, organization, code string) (contracts.Collaborator, bool, error) {
 	org, err := domain.ParsePartyID(organization)
 	if err != nil {
@@ -132,7 +133,8 @@ func (c Collaborators) ByPromotionCode(ctx context.Context, organization, code s
 	return contracts.Collaborator{PartyID: rs[0].From().String(), RelationshipID: rs[0].ID().String(), PromotionCode: code}, true, nil
 }
 
-// changeDetails loads a relationship the caller may change, applies fn with its type and saves.
+// changeDetails carga una relación que el llamante puede cambiar, le aplica fn con su tipo y la
+// guarda.
 func (s service) changeDetails(ctx context.Context, id domain.RelationshipID, fn func(*domain.Relationship, domain.RelationshipType) error) (RelationshipDTO, error) {
 	types, err := s.relationshipTypes(ctx)
 	if err != nil {
@@ -150,8 +152,8 @@ func (s service) changeDetails(ctx context.Context, id domain.RelationshipID, fn
 	return RelationshipToDTO(r, types), nil
 }
 
-// Trials implements contracts.Trials over the prospect relationships (one query per batch).
-// Like Directory, it serves contexts, not users: the caller's own use case is what is authorized.
+// Trials implementa contracts.Trials sobre las relaciones de prospecto (una consulta por lote).
+// Como Directory, sirve a contextos, no a usuarios: lo que se autoriza es el caso de uso del llamante.
 type Trials struct {
 	Relationships domain.RelationshipRepository
 	Catalogs      domain.Catalogs
@@ -159,7 +161,7 @@ type Trials struct {
 
 var _ contracts.Trials = Trials{}
 
-// Trials implements contracts.Trials.
+// Trials implementa contracts.Trials.
 func (t Trials) Trials(ctx context.Context, organization string, partyIDs []string) (map[string]contracts.Trial, error) {
 	if len(partyIDs) > contracts.MaxDirectoryBatch {
 		return nil, fmt.Errorf("%w: at most %d ids per call", fw.ErrValidation, contracts.MaxDirectoryBatch)

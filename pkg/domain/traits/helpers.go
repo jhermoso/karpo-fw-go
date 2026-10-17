@@ -7,8 +7,8 @@ import (
 	"strings"
 )
 
-// equalValue compares snapshot values: == for comparable values, Equal methods for values that
-// define it (decimals, money, periods), and the textual form as a last resort.
+// equalValue compara valores de instantánea: == para los valores comparables, el método Equal para
+// los valores que lo definen (decimales, dinero, periodos) y la forma textual como último recurso.
 func equalValue(a, b any) bool {
 	if a == nil || b == nil {
 		return a == nil && b == nil
@@ -30,22 +30,22 @@ func sortChanges(c []FieldChange) {
 	slices.SortFunc(c, func(a, b FieldChange) int { return strings.Compare(a.Field, b.Field) })
 }
 
-// TestMarked is implemented by aggregates that can be flagged as test data (C# ITesteable):
-// records created for demos or verification in real environments, which reports exclude.
+// TestMarked lo implementan los agregados que se pueden marcar como datos de prueba (ITesteable de C#):
+// registros creados para demostraciones o comprobaciones en entornos reales, que los informes excluyen.
 type TestMarked interface {
 	IsTest() bool
 }
 
-// TestFlag is the embeddable test-data flag (the zero value is real data).
+// TestFlag es la marca incrustable de datos de prueba (el valor cero son datos reales).
 type TestFlag struct {
 	test bool
 }
 
-// RestoredTestFlag rebuilds the flag from persistence.
+// RestoredTestFlag reconstruye la marca desde la persistencia.
 func RestoredTestFlag(test bool) TestFlag { return TestFlag{test: test} }
 
-// IsTest reports whether the aggregate is test data.
+// IsTest dice si el agregado son datos de prueba.
 func (t TestFlag) IsTest() bool { return t.test }
 
-// MarkAsTest flags the aggregate as test data.
+// MarkAsTest marca el agregado como datos de prueba.
 func (t *TestFlag) MarkAsTest() { t.test = true }

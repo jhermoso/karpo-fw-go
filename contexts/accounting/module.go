@@ -1,4 +1,4 @@
-// Package accounting composes the Accounting bounded context on a hot-swap backend.
+// Package accounting compone el contexto delimitado Accounting sobre un backend intercambiable en caliente.
 package accounting
 
 import (
@@ -19,23 +19,23 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 )
 
-// Source is the name of the bounded context (its inbox partition).
+// Source es el nombre del contexto delimitado (su partición del inbox).
 const Source = "accounting"
 
-// Module is the composed context.
+// Module es el contexto compuesto.
 type Module struct {
 	Service *aapp.Service
 	Audit   application.AuditLog
-	// Consumer receives the facts Accounting posts (invoices, collections, direct debits,
-	// payslips): subscribe it to the transport.
+	// Consumer recibe los hechos que contabiliza Accounting (facturas, cobros, adeudos
+	// domiciliados, nóminas): hay que suscribirlo al transporte.
 	Consumer *messaging.Consumer
-	// Parking stands before Consumer: what a rule keeps from being posted (a company without a
-	// ledger yet) is kept and posted later instead of refused. Subscribe it in place of Consumer
-	// wherever the publishers must not be held back.
+	// Parking está delante de Consumer: lo que una regla impide contabilizar (una empresa aún sin
+	// contabilidad) se guarda y se contabiliza después en vez de rechazarse. Se suscribe en lugar
+	// de Consumer allí donde no se deba retener a los publicadores.
 	Parking *aapp.Parking
 }
 
-// Compose builds the context on sw.
+// Compose construye el contexto sobre sw.
 func Compose(sw *hotswap.Switch) *Module {
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
 	d := aapp.Deps{
@@ -97,7 +97,7 @@ func create[In, Out any](run func(context.Context, In) (Out, error)) http.Handle
 	}
 }
 
-// RegisterRoutes implements distribution.EndpointModule.
+// RegisterRoutes implementa distribution.EndpointModule.
 func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	svc := m.Service
 	acc, led, ent := domain.ParseAccountID, domain.ParseLedgerID, domain.ParseEntryID

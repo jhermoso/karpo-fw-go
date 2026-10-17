@@ -1,6 +1,6 @@
-// Package application holds the Parties use cases: commands and queries, their handlers decorated
-// with the framework pipeline (permissions, validation, idempotency, retries), the DTOs, the
-// translation to the Published Language and the in-process party directory.
+// Package application reúne los casos de uso de Parties: órdenes y consultas, sus manejadores
+// decorados con la cadena del framework (permisos, validación, idempotencia, reintentos), los DTO,
+// la traducción al Published Language y el directorio de parties dentro del proceso.
 package application
 
 import (
@@ -12,45 +12,45 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Permissions of the context ({Subdomain}.{Resource}.{Action}, as in the C# PermissionCodes).
+// Permisos del contexto ({Subdomain}.{Resource}.{Action}, como en los PermissionCodes de C#).
 var (
 	PermPartyRead   = authz.MustPermission("Parties.Party.Read")
 	PermPartyCreate = authz.MustPermission("Parties.Party.Create")
 	PermPartyUpdate = authz.MustPermission("Parties.Party.Update")
-	// PermPartyUpdateRelated lets the caller change a party its organization only relates to:
-	// one it did not register and that is nobody's internal organization. An action of its own:
-	// the organization administrator has it, a standard user does not, and the global
-	// administrator can take it away (docs/DECISIONES-COMUNES.md, D-66).
+	// PermPartyUpdateRelated deja al llamante cambiar una party con la que su organización sólo
+	// se relaciona: una que no dio de alta y que no es organización interna de nadie. Una acción
+	// propia: el administrador de la organización la tiene, un usuario estándar no, y el
+	// administrador global puede quitarla (docs/DECISIONES-COMUNES.md, D-66).
 	PermPartyUpdateRelated = authz.MustPermission("Parties.Party.UpdateRelated")
 	PermRoleAssign         = authz.MustPermission("Parties.PartyRole.Assign")
-	// PermRoleAnnul takes back a role given by mistake, removing it when nothing depends on it:
-	// an action of its own, which the standard rule of Security does not hand out.
+	// PermRoleAnnul retira un rol dado por error, y lo borra cuando nada depende de él: una
+	// acción propia, que la regla estándar de Security no reparte.
 	PermRoleAnnul          = authz.MustPermission("Parties.PartyRole.Annul")
 	PermRelationshipRead   = authz.MustPermission("Parties.Relationship.Read")
 	PermRelationshipCreate = authz.MustPermission("Parties.Relationship.Create")
 	PermRelationshipEnd    = authz.MustPermission("Parties.Relationship.Terminate")
-	// PermRelationshipUpdate changes the details a relationship carries because of its type.
+	// PermRelationshipUpdate cambia los datos que una relación lleva por su tipo.
 	PermRelationshipUpdate = authz.MustPermission("Parties.Relationship.Update")
-	// PermRelationshipSetTrial grants, extends or withdraws the free trial of a prospect. It is an
-	// action of its own, not an update, so that the standard rule of the Security catalog (read,
-	// create, update) does not hand it to every standard user: giving time away is a commercial
-	// decision.
+	// PermRelationshipSetTrial concede, amplía o retira la prueba gratuita de un prospecto. Es una
+	// acción propia, no una actualización, para que la regla estándar del catálogo de Security
+	// (leer, crear, actualizar) no se la dé a todo usuario estándar: regalar tiempo es una
+	// decisión comercial.
 	PermRelationshipSetTrial = authz.MustPermission("Parties.Relationship.SetTrial")
-	// Adding a type to the role catalog changes it for the whole installation: an action of its
-	// own (the standard rule of Security would hand out a "Create"), and only for a global
-	// administrator.
+	// Añadir un tipo al catálogo de roles lo cambia para toda la instalación: una acción propia
+	// (la regla estándar de Security repartiría un «Create»), y sólo para un administrador
+	// global.
 	PermRoleTypeDefine         = authz.MustPermission("Parties.RoleType.Define")
 	PermRelationshipTypeDefine = authz.MustPermission("Parties.RelationshipType.Define")
 )
 
-// Permissions returns the permissions this context declares to the Security catalog.
+// Permissions devuelve los permisos que este contexto declara al catálogo de Security.
 func Permissions() []authz.Permission {
 	return []authz.Permission{PermPartyRead, PermPartyCreate, PermPartyUpdate, PermRoleAssign, PermRelationshipRead,
 		PermRelationshipCreate, PermRelationshipEnd, PermRelationshipUpdate, PermRelationshipSetTrial, PermRoleTypeDefine,
 		PermRelationshipTypeDefine, PermRoleAnnul, PermPartyUpdateRelated}
 }
 
-// RegisterPerson registers a person, optionally with initial roles (the C# CreatePartyWithRole).
+// RegisterPerson da de alta una persona, si se quiere con roles iniciales (el CreatePartyWithRole de C#).
 type RegisterPerson struct {
 	GivenName     string          `json:"givenName"`
 	FirstSurname  string          `json:"firstSurname"`
@@ -59,11 +59,11 @@ type RegisterPerson struct {
 	BirthDate     string          `json:"birthDate,omitempty"` // YYYY-MM-DD
 	MaritalStatus string          `json:"maritalStatus,omitempty"`
 	Roles         []string        `json:"roles,omitempty"`
-	Affiliation   *NewAffiliation `json:"affiliation,omitempty"` // required unless global administrator
+	Affiliation   *NewAffiliation `json:"affiliation,omitempty"` // obligatoria salvo para el administrador global
 	RequestID     string          `json:"-"`                     // Idempotency-Key
 }
 
-// IdempotencyKey implements application.IdempotencyKeyed.
+// IdempotencyKey implementa application.IdempotencyKeyed.
 func (c RegisterPerson) IdempotencyKey() string { return c.RequestID }
 
 func (c RegisterPerson) details() (domain.PersonDetails, error) {
@@ -83,7 +83,7 @@ func (c RegisterPerson) details() (domain.PersonDetails, error) {
 	return domain.PersonDetails{Name: name, Gender: g, BirthDate: birth, MaritalStatus: m}, v.Err()
 }
 
-// RegisterOrganization registers an organization, optionally with initial roles.
+// RegisterOrganization da de alta una organización, si se quiere con roles iniciales.
 type RegisterOrganization struct {
 	LegalName   string          `json:"legalName"`
 	TradeName   string          `json:"tradeName,omitempty"`
@@ -93,40 +93,40 @@ type RegisterOrganization struct {
 	RequestID   string          `json:"-"`
 }
 
-// SetLegalForm changes the legal form of an organization.
+// SetLegalForm cambia la forma jurídica de una organización.
 type SetLegalForm struct {
 	ID        domain.PartyID `json:"-"`
 	LegalForm string         `json:"legalForm"`
 }
 
-// SetShared makes a party a shared catalog entry visible to every organization (global
-// administrators only).
+// SetShared hace de una party una entrada compartida del catálogo, visible para todas las
+// organizaciones (sólo administradores globales).
 type SetShared struct {
 	ID     domain.PartyID `json:"-"`
 	Shared bool           `json:"shared"`
 }
 
-// FlagDocumentIssue marks a party whose identity document was refused: the number as it came and
-// why. An import does it for what it loads; a person may do it too.
+// FlagDocumentIssue marca una party cuyo documento de identidad se rechazó: el número tal como
+// llegó y por qué. Una importación lo hace con lo que carga; una persona también puede hacerlo.
 type FlagDocumentIssue struct {
 	ID     domain.PartyID `json:"-"`
 	Number string         `json:"number,omitempty"`
 	Reason string         `json:"reason"`
 }
 
-// ClearDocumentIssue takes the mark of a refused identity document away.
+// ClearDocumentIssue quita la marca de documento de identidad rechazado.
 type ClearDocumentIssue struct {
 	ID domain.PartyID `json:"-"`
 }
 
-// ListInternalOrganizations lists the internal organizations of the caller's scope.
+// ListInternalOrganizations lista las organizaciones internas del ámbito del llamante.
 type ListInternalOrganizations struct{}
 
-// IdempotencyKey implements application.IdempotencyKeyed.
+// IdempotencyKey implementa application.IdempotencyKeyed.
 func (c RegisterOrganization) IdempotencyKey() string { return c.RequestID }
 
-// RenameParty changes the name of a person (given name and surnames) or an organization
-// (legal and trade name); the fields of the other kind are ignored.
+// RenameParty cambia el nombre de una persona (nombre y apellidos) o de una organización
+// (razón social y nombre comercial); los campos de la otra clase se ignoran.
 type RenameParty struct {
 	ID            domain.PartyID `json:"-"`
 	GivenName     string         `json:"givenName,omitempty"`
@@ -136,8 +136,8 @@ type RenameParty struct {
 	TradeName     string         `json:"tradeName,omitempty"`
 }
 
-// UpdatePerson replaces the gender, birth date and marital status of a person (empty: unknown).
-// The name changes with RenameParty.
+// UpdatePerson sustituye el género, la fecha de nacimiento y el estado civil de una persona
+// (vacío: desconocido). El nombre cambia con RenameParty.
 type UpdatePerson struct {
 	ID            domain.PartyID `json:"-"`
 	Gender        string         `json:"gender,omitempty"`
@@ -145,34 +145,34 @@ type UpdatePerson struct {
 	MaritalStatus string         `json:"maritalStatus,omitempty"`
 }
 
-// SetPartyActive activates or deactivates a party (the C# toggle).
+// SetPartyActive activa o desactiva una party (el conmutador de C#).
 type SetPartyActive struct {
 	ID     domain.PartyID `json:"-"`
 	Active bool           `json:"active"`
 }
 
-// AssignRole makes a party play a role from a moment on (now when From is nil).
+// AssignRole hace que una party desempeñe un rol desde un momento (ahora si From es nil).
 type AssignRole struct {
 	PartyID  domain.PartyID `json:"-"`
 	RoleType string         `json:"roleType"`
 	From     *time.Time     `json:"from,omitempty"`
 }
 
-// EndRole stops a role at a moment (now when At is nil).
+// EndRole termina un rol en un momento (ahora si At es nil).
 type EndRole struct {
 	PartyID domain.PartyID     `json:"-"`
 	RoleID  domain.PartyRoleID `json:"-"`
 	At      *time.Time         `json:"at,omitempty"`
 }
 
-// AnnulRole takes back a role given to a party by mistake.
+// AnnulRole retira un rol dado a una party por error.
 type AnnulRole struct {
 	PartyID domain.PartyID     `json:"-"`
 	RoleID  domain.PartyRoleID `json:"-"`
 }
 
-// EstablishRelationship relates two parties (the roles come from the relationship type). The
-// details of the type, if it has any, may come with it.
+// EstablishRelationship relaciona dos parties (los roles salen del tipo de relación). Los datos
+// del tipo, si tiene, pueden venir con ella.
 type EstablishRelationship struct {
 	Type   string     `json:"type"`
 	From   string     `json:"fromParty"`
@@ -182,14 +182,14 @@ type EstablishRelationship struct {
 	RelationshipDetailsInput
 }
 
-// RelationshipDetailsInput are the details a relationship may carry because of its type; each one
-// is accepted only by the relationship types that have it.
+// RelationshipDetailsInput son los datos que una relación puede llevar por su tipo; cada uno sólo
+// lo aceptan los tipos de relación que lo tienen.
 type RelationshipDetailsInput struct {
-	Prospect  *ProspectInput  `json:"prospect,omitempty"`  // prospect relationships
-	Ownership *OwnershipInput `json:"ownership,omitempty"` // ownership relationships
+	Prospect  *ProspectInput  `json:"prospect,omitempty"`  // relaciones de prospecto
+	Ownership *OwnershipInput `json:"ownership,omitempty"` // relaciones de propiedad
 }
 
-// apply sets the details on a relationship of type rt.
+// apply pone los datos en una relación de tipo rt.
 func (d RelationshipDetailsInput) apply(r *domain.Relationship, rt domain.RelationshipType) error {
 	if d.Prospect != nil {
 		if err := r.SetTrial(rt, d.Prospect.TrialUntil); err != nil {
@@ -206,14 +206,14 @@ func (d RelationshipDetailsInput) apply(r *domain.Relationship, rt domain.Relati
 	return nil
 }
 
-// ProspectInput are the details of a prospect relationship.
+// ProspectInput son los datos de una relación de prospecto.
 type ProspectInput struct {
-	TrialUntil *time.Time `json:"trialUntil"` // null: no trial
+	TrialUntil *time.Time `json:"trialUntil"` // null: sin prueba
 }
 
-// OwnershipInput are the details of an ownership relationship.
+// OwnershipInput son los datos de una relación de propiedad.
 type OwnershipInput struct {
-	Share *string `json:"share"` // points with two decimals at most ("30"); null: unknown
+	Share *string `json:"share"` // puntos con dos decimales como mucho ("30"); null: desconocida
 }
 
 func parseShare(s *string) (*vocab.Percentage, error) {
@@ -230,93 +230,93 @@ func parseShare(s *string) (*vocab.Percentage, error) {
 	return &p, nil
 }
 
-// SetOwnershipShare records, corrects or (with a null share) clears the stake of the shareholder
-// in an ownership relationship.
+// SetOwnershipShare anota, corrige o (con una participación null) borra la participación del
+// accionista en una relación de propiedad.
 type SetOwnershipShare struct {
 	ID    domain.RelationshipID `json:"-"`
 	Share *string               `json:"share"`
 }
 
-// SetCustomerNumber gives a customer its number in the organization, changes it or (with an
-// empty number) takes it away.
+// SetCustomerNumber da a un cliente su número en la organización, lo cambia o (con un número
+// vacío) se lo quita.
 type SetCustomerNumber struct {
 	ID             domain.RelationshipID `json:"-"`
 	CustomerNumber string                `json:"customerNumber"`
 }
 
-// SetPromotionCode gives a collaborator its promotion code, changes it or (with an empty code)
-// takes it away.
+// SetPromotionCode da a un colaborador su código de promoción, lo cambia o (con un código vacío)
+// se lo quita.
 type SetPromotionCode struct {
 	ID            domain.RelationshipID `json:"-"`
 	PromotionCode string                `json:"promotionCode"`
 }
 
-// SetProspectTrial grants, extends, shortens or (with a null end) withdraws the trial of a
-// prospect relationship.
+// SetProspectTrial concede, amplía, acorta o (con un fin null) retira la prueba de una relación
+// de prospecto.
 type SetProspectTrial struct {
 	ID         domain.RelationshipID `json:"-"`
 	TrialUntil *time.Time            `json:"trialUntil"`
 }
 
-// TerminateRelationship ends a relationship (now when At is nil).
+// TerminateRelationship termina una relación (ahora si At es nil).
 type TerminateRelationship struct {
 	ID domain.RelationshipID `json:"-"`
 	At *time.Time            `json:"at,omitempty"`
 }
 
-// GetParty loads one party.
+// GetParty carga una party.
 type GetParty struct{ ID domain.PartyID }
 
-// SearchParties searches parties; every criterion becomes part of one specification executed by
-// the store.
+// SearchParties busca parties; cada criterio pasa a formar parte de una única especificación que
+// ejecuta el almacén.
 type SearchParties struct {
 	Text string
 	Kind string
-	Role string // role type id: parties playing it (or a role below it) now
-	// IncludeEndedRoles makes Role match the roles that are not in force too: the ended ones and
-	// the ones that have not started (docs/DECISIONES-COMUNES.md, D-48).
+	Role string // id del tipo de rol: parties que lo desempeñan (o un rol por debajo) ahora
+	// IncludeEndedRoles hace que Role case también con los roles que no están en vigor: los
+	// terminados y los que no han empezado (docs/DECISIONES-COMUNES.md, D-48).
 	IncludeEndedRoles bool
-	Document          string // identification number
-	Organization      string // internal organization id: parties affiliated with it now
-	Facility          string // facility id: parties with a role at it now
-	Classification    string // classification type id: parties classified so now
+	Document          string // número de identificación
+	Organization      string // id de la organización interna: parties afiliadas a ella ahora
+	Facility          string // id de la instalación: parties con un rol en ella ahora
+	Classification    string // id del tipo de clasificación: parties clasificadas así ahora
 	ActiveOnly        bool
-	DocumentIssue     bool // only the parties marked with a refused identity document
-	// IncludeMergedParties brings the parties marked as the duplicate of another too, which a search
-	// leaves out by default (docs/DECISIONES-COMUNES.md, D-64).
+	DocumentIssue     bool // sólo las parties marcadas con un documento de identidad rechazado
+	// IncludeMergedParties trae también las parties marcadas como duplicado de otra, que una
+	// búsqueda deja fuera por omisión (docs/DECISIONES-COMUNES.md, D-64).
 	IncludeMergedParties bool
 	Page, Size           int
 }
 
-// PartyRelationships lists the relationships of a party.
+// PartyRelationships lista las relaciones de una party.
 type PartyRelationships struct {
 	PartyID    domain.PartyID
 	ActiveOnly bool
 }
 
-// ListRoleTypes lists the role type catalog.
+// ListRoleTypes lista el catálogo de tipos de rol.
 type ListRoleTypes struct{}
 
-// DefineRelationshipType adds a relationship type to the catalog: which role each side plays. It
-// carries no data of its own.
+// DefineRelationshipType añade un tipo de relación al catálogo: qué rol desempeña cada lado. No
+// lleva datos propios.
 type DefineRelationshipType struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
-	Code        string `json:"code,omitempty"` // optional; unique
-	FromRole    string `json:"fromRole"`       // role type id
-	ToRole      string `json:"toRole"`         // role type id
+	Code        string `json:"code,omitempty"` // opcional; único
+	FromRole    string `json:"fromRole"`       // id del tipo de rol
+	ToRole      string `json:"toRole"`         // id del tipo de rol
 }
 
-// DefineRoleType adds a role type to the catalog: a role that can be assigned and carries no
-// data of its own, placed in the hierarchy under its parent.
+// DefineRoleType añade un tipo de rol al catálogo: un rol que se puede asignar y no lleva datos
+// propios, colocado en la jerarquía bajo su padre.
 type DefineRoleType struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
-	Code        string `json:"code,omitempty"` // optional; unique
-	Parent      string `json:"parent"`         // role type id
+	Code        string `json:"code,omitempty"` // opcional; único
+	Parent      string `json:"parent"`         // id del tipo de rol
 }
 
-// ListRelationshipTypes lists the relationship type catalog.
+// ListRelationshipTypes lista el catálogo de tipos de relación.
 type ListRelationshipTypes struct{}
 
 func nowOr(t *time.Time) time.Time {

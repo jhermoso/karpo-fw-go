@@ -27,9 +27,10 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 )
 
-// TestBillingContext runs Billing with Fiscal and Parties on every engine: series, invoice lines
-// with exact decimals, taxes calculated by the Spanish jurisdiction and frozen at issue, gap-free
-// numbering in the same transaction, corrective invoice referencing the original (self FK).
+// TestBillingContext ejecuta Billing con Fiscal y Parties en cada motor: series, líneas de factura
+// con decimales exactos, impuestos calculados por la jurisdicción española y congelados al emitir,
+// numeración sin huecos en la misma transacción, factura rectificativa que referencia a la
+// original (FK a sí misma).
 func TestBillingContext(t *testing.T) {
 	for _, e := range engines {
 		if e.name == "oracle-dotnet-guids" {
@@ -102,7 +103,7 @@ func TestBillingContext(t *testing.T) {
 			}
 			inv, err = svc.Issue.Handle(actx, bapp.IssueInvoice{ID: id, Series: fa.ID, Date: vocab.MustDate(2026, 9, 28)})
 			must(err)
-			// 2.5 × 19.999 = 49.9975 − 12.5 % = 43.747… → 43.75; G21 base 30.09 + 43.75 = 73.84 → 15.51; surcharge 3.84.
+			// 2.5 × 19.999 = 49.9975 − 12.5 % = 43.747… → 43.75; G21 base 30.09 + 43.75 = 73.84 → 15.51; recargo 3.84.
 			got, err := svc.GetInvoice.Handle(actx, bapp.GetInvoice{ID: id})
 			if err != nil || got.Number != "FA-2026-000001" || got.Lines[1].Net != "43.75" || got.Lines[1].Quantity != "2.5" || got.Lines[1].UnitPrice != "19.999" ||
 				got.Taxes.Net != "123.84" || got.Taxes.Tax != "15.51" || got.Taxes.Surcharge != "3.84" || got.Taxes.Total != "143.19" ||

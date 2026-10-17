@@ -1,5 +1,5 @@
-// Package work composes the Work (Trabajos: proyectos, tareas y partes de horas) bounded context on
-// a hot-swap backend.
+// Package work compone el contexto delimitado Work (Trabajos: proyectos, tareas y partes de horas)
+// sobre un backend intercambiable en caliente.
 package work
 
 import (
@@ -21,14 +21,14 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 )
 
-// Module is the composed context.
+// Module es el contexto compuesto.
 type Module struct {
 	Service           *wapp.Service
 	IntegrationOutbox application.OutboxStore
 	Audit             application.AuditLog
 }
 
-// Compose builds the context on sw.
+// Compose construye el contexto sobre sw.
 func Compose(sw *hotswap.Switch) *Module {
 	integration := hotswap.Outbox(sw, infrastructure.IntegrationOutboxFactory)
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
@@ -41,7 +41,7 @@ func Compose(sw *hotswap.Switch) *Module {
 	return &Module{Service: svc, IntegrationOutbox: integration, Audit: audit}
 }
 
-// Relay forwards the Published Language to a transport.
+// Relay reenvía el Published Language a un transporte.
 func (m *Module) Relay(sender application.MessageSender, opts ...outbox.RelayOption) *outbox.Relay {
 	return messaging.NewRelay(contracts.Source, m.IntegrationOutbox, sender, opts...)
 }
@@ -93,7 +93,7 @@ func create[In, Out any](status int, run func(context.Context, In) (Out, error))
 	}
 }
 
-// RegisterRoutes implements distribution.EndpointModule.
+// RegisterRoutes implementa distribution.EndpointModule.
 func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	svc := m.Service
 	wid, tid := domain.ParseWorkID, domain.ParseTimeEntryID

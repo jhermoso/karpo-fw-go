@@ -11,7 +11,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// PlanInput is how a shipment travels.
+// PlanInput es cómo viaja un envío.
 type PlanInput struct {
 	Method           string     `json:"method,omitempty"`
 	Carrier          string     `json:"carrier,omitempty"`
@@ -32,7 +32,7 @@ func (p PlanInput) plan(v *fw.Validation) domain.Plan {
 		Cost: parseDecimal(v, "cost", p.Cost), Instructions: p.Instructions, EstimatedShip: p.EstimatedShip, EstimatedArrival: p.EstimatedArrival}
 }
 
-// LineInput is something that travels in a shipment planned by hand.
+// LineInput es algo que viaja en un envío planificado a mano.
 type LineInput struct {
 	SKU         string `json:"sku,omitempty"`
 	Description string `json:"description"`
@@ -40,41 +40,41 @@ type LineInput struct {
 	UoM         string `json:"uom,omitempty"`
 }
 
-// ScheduleShipment plans by hand a shipment that no delivery note produced (samples, returns to
-// a supplier, material lent).
+// ScheduleShipment planifica a mano un envío que no produjo ningún albarán (muestras, devoluciones
+// a un proveedor, material prestado).
 type ScheduleShipment struct {
 	Company  string `json:"company"`
 	Customer string `json:"customer"`
 	PlanInput
 	Lines []LineInput `json:"lines"`
-	On    vocab.Date  `json:"on,omitzero"` // today by default
+	On    vocab.Date  `json:"on,omitzero"` // hoy por defecto
 }
 
-// ChangeShipment replaces how a shipment travels.
+// ChangeShipment sustituye cómo viaja un envío.
 type ChangeShipment struct {
 	ID domain.ShipmentID `json:"-"`
 	PlanInput
 }
 
-// MoveShipment moves the status: in-transit (dispatch), delivered, returned or cancelled.
+// MoveShipment cambia el estado: in-transit (salida), delivered, returned o cancelled.
 type MoveShipment struct {
 	ID         domain.ShipmentID `json:"-"`
 	To         string            `json:"to"`
-	On         vocab.Date        `json:"on,omitzero"` // today by default
+	On         vocab.Date        `json:"on,omitzero"` // hoy por defecto
 	ReceivedBy string            `json:"receivedBy,omitempty"`
 	Reason     string            `json:"reason,omitempty"`
 }
 
-// GetShipment loads a shipment with its lines and history.
+// GetShipment carga un envío con sus líneas y su historial.
 type GetShipment struct{ ID domain.ShipmentID }
 
-// SearchShipments searches the shipments of the caller's scope.
+// SearchShipments busca los envíos del ámbito de quien llama.
 type SearchShipments struct {
 	Company, Customer, Status, Carrier, Tracking, Delivery string
 	Page, Size                                             int
 }
 
-// ShipmentLineDTO is the transport form of a line.
+// ShipmentLineDTO es la forma de transporte de una línea.
 type ShipmentLineDTO struct {
 	Line        int    `json:"line"`
 	SKU         string `json:"sku,omitempty"`
@@ -83,13 +83,13 @@ type ShipmentLineDTO struct {
 	UoM         string `json:"uom,omitempty"`
 }
 
-// StepDTO is the transport form of a change of status.
+// StepDTO es la forma de transporte de un cambio de estado.
 type StepDTO struct {
 	Status string `json:"status"`
 	On     string `json:"on"`
 }
 
-// ShipmentDTO is the transport form of a shipment.
+// ShipmentDTO es la forma de transporte de un envío.
 type ShipmentDTO struct {
 	ID               string            `json:"id"`
 	Company          string            `json:"company"`
@@ -139,7 +139,7 @@ func shipmentDTO(s *domain.Shipment, detail bool) ShipmentDTO {
 	return d
 }
 
-// carrierOf loads the carrier of a plan and checks it may be used by the company.
+// carrierOf carga el transportista de un plan y comprueba que la empresa puede usarlo.
 func (s service) carrierOf(ctx context.Context, company domain.OrganizationID, id domain.CarrierID, usable bool) (*domain.Carrier, error) {
 	if id.IsZero() {
 		return nil, nil
@@ -219,7 +219,7 @@ func (s service) wireShipments(svc *Service) {
 			return ShipmentDTO{}, err
 		}
 		return update(ctx, c.ID, func(ctx context.Context, shp *domain.Shipment) error {
-			// A blocked carrier stays on the shipments that already had it.
+			// Un transportista bloqueado se queda en los envíos que ya lo tenían.
 			if _, err := s.carrierOf(ctx, shp.State().Company, plan.Carrier, plan.Carrier != shp.State().Carrier); err != nil {
 				return err
 			}
@@ -298,7 +298,7 @@ func (s service) wireShipments(svc *Service) {
 	})
 }
 
-// RegisterCarrier adds a carrier to a company.
+// RegisterCarrier añade un transportista a una empresa.
 type RegisterCarrier struct {
 	Company     string `json:"company"`
 	Code        string `json:"code"`
@@ -307,7 +307,7 @@ type RegisterCarrier struct {
 	TrackingURL string `json:"trackingUrl,omitempty"`
 }
 
-// ChangeCarrier replaces the data of a carrier.
+// ChangeCarrier sustituye los datos de un transportista.
 type ChangeCarrier struct {
 	ID          domain.CarrierID `json:"-"`
 	Name        string           `json:"name"`
@@ -316,10 +316,10 @@ type ChangeCarrier struct {
 	Blocked     bool             `json:"blocked,omitempty"`
 }
 
-// SearchCarriers lists the carriers of a company.
+// SearchCarriers lista los transportistas de una empresa.
 type SearchCarriers struct{ Company string }
 
-// CarrierDTO is the transport form of a carrier.
+// CarrierDTO es la forma de transporte de un transportista.
 type CarrierDTO struct {
 	ID          string `json:"id"`
 	Company     string `json:"company"`

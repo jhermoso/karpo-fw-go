@@ -1,5 +1,5 @@
-// Package infrastructure stores the Assets context: SQL mapping, versioned schema of the five
-// engines and hot-swap factories.
+// Package infrastructure guarda el contexto Assets: mapeo SQL, esquema versionado de los cinco
+// motores y factorías intercambiables en caliente.
 package infrastructure
 
 import (
@@ -21,10 +21,10 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlserver"
 )
 
-// Context is the name of the bounded context.
+// Context es el nombre del contexto delimitado.
 const Context = "assets"
 
-// Technical tables of the context.
+// Tablas técnicas del contexto.
 const (
 	TableOutbox            = "assets_outbox"
 	TableIntegrationOutbox = "assets_integration_outbox"
@@ -59,7 +59,7 @@ func technicalDDL(d string) []string {
 	return nil
 }
 
-// Migrations is the versioned schema of the context.
+// Migrations es el esquema versionado del contexto.
 func Migrations() sqlrepo.MigrationSet {
 	technical := map[string][]string{}
 	for _, d := range sqlrepo.Dialects {
@@ -71,15 +71,15 @@ func Migrations() sqlrepo.MigrationSet {
 	}}
 }
 
-// Migrator returns the schema migrator of the context.
+// Migrator devuelve el migrador del esquema del contexto.
 func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 	return sqlrepo.NewMigrator(db, []sqlrepo.MigrationSet{Migrations()})
 }
 
-// Tables lists the tables of the context, children first (drop order).
+// Tables lista las tablas del contexto, las hijas primero (orden de borrado).
 var Tables = []string{"ast_asset_charges", "ast_assets", TableOutbox, TableIntegrationOutbox, TableAuditLog}
 
-// DropAll removes the tables of the context and its migration history (tests only).
+// DropAll borra las tablas del contexto y su historial de migraciones (sólo para pruebas).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
 	for _, t := range Tables {
 		_, _ = db.ExecContext(ctx, "DROP TABLE "+t)
@@ -101,7 +101,7 @@ func optUUID(u fw.UUID) any {
 	return u
 }
 
-// AssetMapping maps Asset to ast_assets and its charges.
+// AssetMapping mapea Asset a ast_assets y sus cargos.
 func AssetMapping() sqlrepo.Mapping[domain.AssetID, *domain.Asset] {
 	return sqlrepo.Mapping[domain.AssetID, *domain.Asset]{
 		Table: "ast_assets",
@@ -127,7 +127,7 @@ func AssetMapping() sqlrepo.Mapping[domain.AssetID, *domain.Asset] {
 			if r.Bool("disposed") {
 				s.Disposed, s.Disposal, s.Proceeds = r.Date("disposed_on"), r.String("disposal"), r.Decimal("proceeds")
 			}
-			// Engines do not agree on the order of the children: months are sorted here.
+			// Los motores no coinciden en el orden de las hijas: los meses se ordenan aquí.
 			rows := slices.Clone(children.Of("charges"))
 			slices.SortFunc(rows, func(a, b *sqlrepo.Row) int { return int(a.Int64("line_no") - b.Int64("line_no")) })
 			for _, c := range rows {
@@ -159,7 +159,7 @@ func AssetMapping() sqlrepo.Mapping[domain.AssetID, *domain.Asset] {
 
 func unsupported(b hotswap.Backend) error { return fmt.Errorf("assets: unsupported backend %T", b) }
 
-// AssetRepositoryFactory builds the asset repository.
+// AssetRepositoryFactory construye el repositorio de activos.
 func AssetRepositoryFactory(b hotswap.Backend) (domain.AssetRepository, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -170,10 +170,10 @@ func AssetRepositoryFactory(b hotswap.Backend) (domain.AssetRepository, error) {
 	return nil, unsupported(b)
 }
 
-// OutboxFactory builds the domain event outbox.
+// OutboxFactory construye el outbox de eventos de dominio.
 func OutboxFactory(b hotswap.Backend) (application.OutboxStore, error) { return outbox(b, TableOutbox) }
 
-// IntegrationOutboxFactory builds the integration outbox.
+// IntegrationOutboxFactory construye el outbox de integración.
 func IntegrationOutboxFactory(b hotswap.Backend) (application.OutboxStore, error) {
 	return outbox(b, TableIntegrationOutbox)
 }
@@ -188,7 +188,7 @@ func outbox(b hotswap.Backend, table string) (application.OutboxStore, error) {
 	return nil, unsupported(b)
 }
 
-// AuditLogFactory builds the audit log.
+// AuditLogFactory construye el registro de auditoría.
 func AuditLogFactory(b hotswap.Backend) (application.AuditLog, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:

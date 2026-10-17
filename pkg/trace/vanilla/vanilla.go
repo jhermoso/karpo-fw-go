@@ -1,7 +1,7 @@
-// Package vanilla implements trace.Tracer with the standard library only: it generates W3C
-// identifiers, links children to their parents, samples, and hands every finished span to an
-// Exporter (a log line, or an in-memory Recorder for tests). There is no network export here:
-// seeing spans in a viewer needs the OpenTelemetry adapter, which lives in a separate module.
+// Package vanilla implementa trace.Tracer sólo con la biblioteca estándar: genera identificadores
+// W3C, enlaza los hijos con sus padres, hace muestreo y entrega cada span terminado a un Exporter
+// (una línea de log, o un Recorder en memoria para las pruebas). Aquí no hay exportación por red:
+// ver los spans en un visor necesita el adaptador de OpenTelemetry, que está en un módulo aparte.
 package vanilla
 
 import (
@@ -15,24 +15,24 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/trace"
 )
 
-// FinishedSpan is what an Exporter receives when a span ends.
+// FinishedSpan es lo que recibe un Exporter cuando termina un span.
 type FinishedSpan struct {
 	Name       string
 	Kind       trace.Kind
 	Context    trace.SpanContext
-	ParentID   [8]byte // zero for the root of a trace
+	ParentID   [8]byte // cero para la raíz de una traza
 	Start, End time.Time
-	Attributes []any // key/value pairs, in the order they were set
-	Err        error // set by RecordError
+	Attributes []any // pares clave/valor, en el orden en que se pusieron
+	Err        error // lo pone RecordError
 }
 
-// Duration returns how long the span lasted.
+// Duration devuelve cuánto duró el span.
 func (s FinishedSpan) Duration() time.Duration { return s.End.Sub(s.Start) }
 
-// HasParent reports whether the span has a parent (local or remote).
+// HasParent dice si el span tiene padre (local o remoto).
 func (s FinishedSpan) HasParent() bool { return s.ParentID != [8]byte{} }
 
-// Attr returns the last value set for key, or nil.
+// Attr devuelve el último valor puesto para key, o nil.
 func (s FinishedSpan) Attr(key string) any {
 	var v any
 	for i := 0; i+1 < len(s.Attributes); i += 2 {
@@ -43,13 +43,13 @@ func (s FinishedSpan) Attr(key string) any {
 	return v
 }
 
-// Exporter receives every sampled span when it ends. Export must be safe for concurrent use and
-// must not block.
+// Exporter recibe cada span muestreado cuando termina. Export debe admitir uso concurrente y no
+// debe bloquear.
 type Exporter interface {
 	Export(span FinishedSpan)
 }
 
-// Tracer is the dependency-free trace.Tracer.
+// Tracer es el trace.Tracer sin dependencias.
 type Tracer struct {
 	exporters []Exporter
 	ratio     float64
@@ -58,10 +58,10 @@ type Tracer struct {
 
 var _ trace.Tracer = (*Tracer)(nil)
 
-// Option configures a Tracer.
+// Option configura un Tracer.
 type Option func(*Tracer)
 
-// WithExporter adds a destination for finished spans.
+// WithExporter añade un destino para los spans terminados.
 func WithExporter(e Exporter) Option {
 	return func(t *Tracer) {
 		if e != nil {
@@ -70,18 +70,19 @@ func WithExporter(e Exporter) Option {
 	}
 }
 
-// WithSampleRatio sets the share of new traces that are recorded, from 0 to 1 (default 1: every
-// trace). Children and remote parents keep the decision of their trace. Unsampled spans still
-// get identifiers, so log lines of the request share a trace_id.
+// WithSampleRatio fija la proporción de trazas nuevas que se registran, de 0 a 1 (por defecto 1:
+// todas). Los hijos y los padres remotos mantienen la decisión de su traza. Los spans no
+// muestreados reciben igualmente identificadores, para que las líneas de log de la petición
+// compartan trace_id.
 func WithSampleRatio(ratio float64) Option {
 	return func(t *Tracer) { t.ratio = min(max(ratio, 0), 1) }
 }
 
-// WithClock replaces the clock (tests).
+// WithClock sustituye el reloj (pruebas).
 func WithClock(now func() time.Time) Option { return func(t *Tracer) { t.now = now } }
 
-// New creates a Tracer. Without exporters spans are still created (identifiers for the logs)
-// but go nowhere.
+// New crea un Tracer. Sin exporters se siguen creando spans (identificadores para los logs),
+// pero no van a ninguna parte.
 func New(opts ...Option) *Tracer {
 	t := &Tracer{ratio: 1, now: time.Now}
 	for _, opt := range opts {
@@ -90,7 +91,7 @@ func New(opts ...Option) *Tracer {
 	return t
 }
 
-// Start implements trace.Tracer.
+// Start implementa trace.Tracer.
 func (t *Tracer) Start(ctx context.Context, name string, opts ...trace.StartOption) (context.Context, trace.Span) {
 	cfg := trace.NewStartConfig(opts...)
 	parent := trace.SpanContext{}
@@ -114,7 +115,8 @@ func (t *Tracer) Start(ctx context.Context, name string, opts ...trace.StartOpti
 	return trace.ContextWithSpan(ctx, s), s
 }
 
-// sample decides from the trace id, so every process that uses the same ratio agrees.
+// sample decide a partir del id de traza, de modo que todos los procesos que usan la misma
+// proporción coinciden.
 func (t *Tracer) sample(traceID [16]byte) bool {
 	if t.ratio >= 1 {
 		return true
@@ -125,10 +127,10 @@ func (t *Tracer) sample(traceID [16]byte) bool {
 	return float64(binary.BigEndian.Uint64(traceID[8:])>>1) < t.ratio*float64(uint64(1)<<63)
 }
 
-// randomID fills b with random bytes that are not all zero.
+// randomID llena b de bytes aleatorios que no son todos cero.
 func randomID(b []byte) {
 	for {
-		_, _ = rand.Read(b) // crypto/rand.Read never fails
+		_, _ = rand.Read(b) // crypto/rand.Read nunca falla
 		for _, c := range b {
 			if c != 0 {
 				return
@@ -201,15 +203,15 @@ func (s *span) End() {
 	}
 }
 
-// Recorder is an Exporter that keeps the last spans in memory, for tests and diagnostics.
+// Recorder es un Exporter que guarda en memoria los últimos spans, para pruebas y diagnóstico.
 type Recorder struct {
 	mu    sync.Mutex
 	limit int
 	spans []FinishedSpan
 }
 
-// NewRecorder creates a Recorder that keeps at most limit spans (<= 0: 1024), dropping the
-// oldest ones.
+// NewRecorder crea un Recorder que guarda como mucho limit spans (<= 0: 1024) y descarta los
+// más antiguos.
 func NewRecorder(limit int) *Recorder {
 	if limit <= 0 {
 		limit = 1024
@@ -217,7 +219,7 @@ func NewRecorder(limit int) *Recorder {
 	return &Recorder{limit: limit}
 }
 
-// Export implements Exporter.
+// Export implementa Exporter.
 func (r *Recorder) Export(s FinishedSpan) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -227,14 +229,14 @@ func (r *Recorder) Export(s FinishedSpan) {
 	r.spans = append(r.spans, s)
 }
 
-// Spans returns a copy of the recorded spans, in the order they ended.
+// Spans devuelve una copia de los spans registrados, en el orden en que terminaron.
 func (r *Recorder) Spans() []FinishedSpan {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return append([]FinishedSpan(nil), r.spans...)
 }
 
-// Named returns the recorded spans called name.
+// Named devuelve los spans registrados que se llaman name.
 func (r *Recorder) Named(name string) []FinishedSpan {
 	var out []FinishedSpan
 	for _, s := range r.Spans() {
@@ -245,16 +247,16 @@ func (r *Recorder) Named(name string) []FinishedSpan {
 	return out
 }
 
-// Reset forgets the recorded spans.
+// Reset olvida los spans registrados.
 func (r *Recorder) Reset() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.spans = nil
 }
 
-// LogExporter writes one line per finished span to logger, at Debug level: while the destination
-// of the traces is the log, span lines must not multiply the Info output (the request line and
-// the error lines already carry trace_id). Raise the logger to Debug to see them.
+// LogExporter escribe en logger una línea por span terminado, con nivel Debug: mientras el destino
+// de las trazas sea el log, las líneas de span no deben multiplicar la salida Info (la línea de la
+// petición y las de error ya llevan trace_id). Para verlas hay que subir el logger a Debug.
 func LogExporter(logger log.Logger) Exporter { return logExporter{logger} }
 
 type logExporter struct{ logger log.Logger }

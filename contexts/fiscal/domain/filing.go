@@ -15,13 +15,14 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Period is a filing period in AEAT notation: months 01–12, quarters 1T–4T, the year 0A.
+// Period es un periodo de declaración en notación de la AEAT: meses 01–12, trimestres 1T–4T, el
+// año 0A.
 type Period struct {
 	Periodicity Periodicity
-	Index       int // month 1–12, quarter 1–4, 0 for the year
+	Index       int // mes 1–12, trimestre 1–4, 0 para el año
 }
 
-// ParsePeriod parses an AEAT period code.
+// ParsePeriod interpreta un código de periodo de la AEAT.
 func ParsePeriod(s string) (Period, bool) {
 	s = strings.ToUpper(strings.TrimSpace(s))
 	switch {
@@ -37,7 +38,7 @@ func ParsePeriod(s string) (Period, bool) {
 	return Period{}, false
 }
 
-// String returns the AEAT code.
+// String devuelve el código de la AEAT.
 func (p Period) String() string {
 	switch p.Periodicity {
 	case Monthly:
@@ -48,7 +49,7 @@ func (p Period) String() string {
 	return "0A"
 }
 
-// Bounds returns the first and last day of the period in a calendar year.
+// Bounds devuelve el primer y el último día del periodo en un año natural.
 func (p Period) Bounds(year int) (vocab.Date, vocab.Date) {
 	switch p.Periodicity {
 	case Monthly:
@@ -61,30 +62,30 @@ func (p Period) Bounds(year int) (vocab.Date, vocab.Date) {
 	return vocab.MustDate(year, 1, 1), vocab.MustDate(year, 12, 31)
 }
 
-// WithholdingKind is the stable aggregate type name.
+// WithholdingKind es el nombre estable del tipo de agregado.
 const WithholdingKind = "fiscal.withholding"
 
-// Withholding is a payment with withholding reported by Payroll (the projection of
-// payroll.payslip-approved.v1; its identity is the payslip's). The C# forms read the payroll
-// tables directly and dated the payments by the start of the payslip period; here they are dated
-// by the payment date.
+// Withholding es un pago con retención que comunica Payroll (la proyección de
+// payroll.payslip-approved.v1; su identidad es la de la nómina). Los modelos del C# leían
+// directamente las tablas de nóminas y fechaban los pagos por el inicio del periodo de la nómina;
+// aquí se fechan por la fecha de pago.
 type Withholding struct {
 	fw.BaseAggregateRoot[WithholdingID]
 	s WithholdingState
 }
 
-// WithholdingState is the persisted state of a withholding.
+// WithholdingState es el estado persistido de una retención.
 type WithholdingState struct {
 	Payer       OrganizationID
 	Recipient   PartyID
 	PaymentDate vocab.Date
-	Key         string        // Modelo 190 perception key
-	Perceptions vocab.Decimal // withholding base
+	Key         string        // clave de percepción del Modelo 190
+	Perceptions vocab.Decimal // base de retención
 	Withheld    vocab.Decimal
 	Cancelled   bool
 }
 
-// ReconstituteWithholding rebuilds a withholding.
+// ReconstituteWithholding reconstruye una retención.
 func ReconstituteWithholding(id WithholdingID, s WithholdingState) (*Withholding, error) {
 	base, err := fw.NewBaseAggregateRoot(WithholdingKind, id)
 	if err != nil {
@@ -102,13 +103,13 @@ func ReconstituteWithholding(id WithholdingID, s WithholdingState) (*Withholding
 	return &Withholding{BaseAggregateRoot: base, s: s}, nil
 }
 
-// State returns the state.
+// State devuelve el estado.
 func (w *Withholding) State() WithholdingState { return w.s }
 
-// Cancel marks the withholding as cancelled (its payslip was cancelled).
+// Cancel marca la retención como anulada (se anuló su nómina).
 func (w *Withholding) Cancel() { w.s.Cancelled = true }
 
-// Withholding fields.
+// Campos de la retención.
 var (
 	WhFieldID        = spec.Comparable("id", func(w *Withholding) WithholdingID { return w.ID() })
 	WhFieldPayer     = spec.Comparable("payer", func(w *Withholding) OrganizationID { return w.s.Payer })
@@ -116,19 +117,20 @@ var (
 	WhFieldCancelled = spec.Comparable("cancelled", func(w *Withholding) bool { return w.s.Cancelled })
 )
 
-// PaidBetween matches the withholdings of a payer paid in a period, not cancelled.
+// PaidBetween selecciona las retenciones de un pagador pagadas en un periodo y no anuladas.
 func PaidBetween(payer OrganizationID, from, to vocab.Date) spec.Spec[*Withholding] {
 	return spec.And(WhFieldPayer.Eq(payer), WhFieldPaid.Ge(from), WhFieldPaid.Le(to), WhFieldCancelled.Eq(false))
 }
 
-// Identity is the tax identity of a declarant or a recipient.
+// Identity es la identidad fiscal de un declarante o de un perceptor.
 type Identity struct {
 	NIF      string
 	Name     string
 	Province string
 }
 
-// Recipient is a line of a filing: a recipient and a perception key with their amounts.
+// Recipient es una línea de una declaración: un perceptor y una clave de percepción con sus
+// importes.
 type Recipient struct {
 	Party       PartyID
 	Identity    Identity
@@ -138,8 +140,8 @@ type Recipient struct {
 	Withheld    vocab.Decimal
 }
 
-// Summarize groups withholdings by recipient and key, ordered by recipient (one line of the
-// Modelo 190 each).
+// Summarize agrupa las retenciones por perceptor y clave, ordenadas por perceptor (una línea del
+// Modelo 190 cada una).
 func Summarize(ws []*Withholding, identities map[PartyID]Identity) []Recipient {
 	type k struct {
 		p   PartyID
@@ -174,14 +176,14 @@ func Summarize(ws []*Withholding, identities map[PartyID]Identity) []Recipient {
 	return out
 }
 
-// Totals of a filing.
+// Totals son los totales de una declaración.
 type Totals struct {
 	Recipients  int
 	Perceptions vocab.Decimal
 	Withheld    vocab.Decimal
 }
 
-// TotalsOf adds up the lines (recipients are counted once, whatever their keys).
+// TotalsOf suma las líneas (los perceptores se cuentan una vez, tengan las claves que tengan).
 func TotalsOf(rs []Recipient) Totals {
 	t := Totals{Perceptions: vocab.DecimalFromInt(0), Withheld: vocab.DecimalFromInt(0)}
 	seen := map[PartyID]bool{}
@@ -196,12 +198,12 @@ func TotalsOf(rs []Recipient) Totals {
 	return t
 }
 
-// FilingStatus is the status of a filing.
+// FilingStatus es el estado de una declaración.
 type FilingStatus int
 
-// Statuses: a draft is regenerated freely and can be discarded; a submitted filing has its number
-// and AEAT reference; a reverted one no longer counts and frees its period (the C# kept the slot
-// blocked).
+// Estados: un borrador se regenera libremente y se puede descartar; una declaración presentada
+// tiene su número y su referencia de la AEAT; una revertida ya no cuenta y libera su periodo (el C#
+// dejaba el hueco bloqueado).
 const (
 	StatusDraft FilingStatus = iota + 1
 	StatusSubmitted
@@ -210,27 +212,27 @@ const (
 
 var filingStatuses = map[FilingStatus]string{StatusDraft: "draft", StatusSubmitted: "submitted", StatusReverted: "reverted"}
 
-// String returns the stable name.
+// String devuelve el nombre estable.
 func (s FilingStatus) String() string { return filingStatuses[s] }
 
-// ParseFilingStatus parses a status name.
+// ParseFilingStatus interpreta el nombre de un estado.
 func ParseFilingStatus(s string) (FilingStatus, bool) { return parseEnum(filingStatuses, s) }
 
-// FilingKind is the stable aggregate type name.
+// FilingKind es el nombre estable del tipo de agregado.
 const FilingKind = "fiscal.filing"
 
-// Generated lists the forms this phase generates.
+// Generated enumera los modelos que genera esta fase.
 var Generated = []Form{"111", "190"}
 
-// Filing is a tax form of a declarant for a period (it unifies the C# OfficialFormSubmission and
-// the Advisory TaxFiling, each with its own numbering).
+// Filing es un modelo fiscal de un declarante para un periodo (unifica el OfficialFormSubmission
+// del C# y el TaxFiling de Advisory, cada uno con su propia numeración).
 type Filing struct {
 	fw.BaseAggregateRoot[FilingID]
 	traits.Audited
 	s FilingState
 }
 
-// FilingState is the persisted state of a filing.
+// FilingState es el estado persistido de una declaración.
 type FilingState struct {
 	Declarant    OrganizationID
 	Form         Form
@@ -246,7 +248,7 @@ type FilingState struct {
 	Audit        traits.AuditStamp
 }
 
-// ReconstituteFiling rebuilds a filing.
+// ReconstituteFiling reconstruye una declaración.
 func ReconstituteFiling(id FilingID, s FilingState) (*Filing, error) {
 	base, err := fw.NewBaseAggregateRoot(FilingKind, id)
 	if err != nil {
@@ -267,7 +269,7 @@ func ReconstituteFiling(id FilingID, s FilingState) (*Filing, error) {
 	return &Filing{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// DraftFiling generates a draft filing.
+// DraftFiling genera una declaración en borrador.
 func DraftFiling(id FilingID, declarant OrganizationID, form Form, year int, period Period, identity Identity, rs []Recipient) (*Filing, error) {
 	f, err := ReconstituteFiling(id, FilingState{Declarant: declarant, Form: form, Year: year, Period: period, Status: StatusDraft,
 		Identity: identity, Recipients: rs})
@@ -278,17 +280,17 @@ func DraftFiling(id FilingID, declarant OrganizationID, form Form, year int, per
 	return f, nil
 }
 
-// State returns the state (the recipients are a copy).
+// State devuelve el estado (los perceptores son una copia).
 func (f *Filing) State() FilingState {
 	s := f.s
 	s.Recipients = slices.Clone(s.Recipients)
 	return s
 }
 
-// Totals returns the totals of the lines.
+// Totals devuelve los totales de las líneas.
 func (f *Filing) Totals() Totals { return TotalsOf(f.s.Recipients) }
 
-// Regenerate replaces the lines of a draft with fresh data.
+// Regenerate sustituye las líneas de un borrador por datos recientes.
 func (f *Filing) Regenerate(identity Identity, rs []Recipient) error {
 	if f.s.Status != StatusDraft {
 		return fw.Violation("fiscal.filing_not_draft", "only a draft filing is regenerated")
@@ -297,8 +299,8 @@ func (f *Filing) Regenerate(identity Identity, rs []Recipient) error {
 	return nil
 }
 
-// Problems lists what prevents the submission: tax numbers with wrong control characters or
-// missing, and provinces missing in a Modelo 190 (the C# wrote "PENDIENTE-NIF" into the file).
+// Problems enumera lo que impide la presentación: NIF con caracteres de control erróneos o que
+// faltan, y provincias que faltan en un Modelo 190 (el C# escribía "PENDIENTE-NIF" en el fichero).
 func (f *Filing) Problems() []string {
 	var out []string
 	if ok, _ := vocab.ValidCheckDigit("ES_NIF", f.s.Identity.NIF); !ok {
@@ -317,7 +319,7 @@ func (f *Filing) Problems() []string {
 	return out
 }
 
-// Submit records the submission with its number and the AEAT reference (CSV).
+// Submit registra la presentación con su número y la referencia de la AEAT (CSV).
 func (f *Filing) Submit(number int64, reference string, at time.Time) error {
 	if f.s.Status != StatusDraft {
 		return fw.Violation("fiscal.filing_not_draft", "only a draft filing is submitted")
@@ -339,7 +341,7 @@ func (f *Filing) Submit(number int64, reference string, at time.Time) error {
 	return nil
 }
 
-// Revert annuls a submitted filing (a complementary or substitutive one follows).
+// Revert anula una declaración presentada (le sigue una complementaria o sustitutiva).
 func (f *Filing) Revert(reason string) error {
 	if f.s.Status != StatusSubmitted {
 		return fw.Violation("fiscal.filing_not_submitted", "only a submitted filing is reverted; a draft is discarded")
@@ -354,7 +356,7 @@ func (f *Filing) Revert(reason string) error {
 	return nil
 }
 
-// Discard checks a filing can be deleted: only drafts are.
+// Discard comprueba que una declaración se puede borrar: sólo los borradores.
 func (f *Filing) Discard() error {
 	if f.s.Status != StatusDraft {
 		return fw.Violation("fiscal.filing_not_draft", "only a draft filing is discarded")
@@ -362,13 +364,13 @@ func (f *Filing) Discard() error {
 	return nil
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (f *Filing) AuditSnapshot() map[string]any {
 	t := f.Totals()
 	return map[string]any{"status": f.s.Status.String(), "number": f.s.Number, "recipients": t.Recipients, "withheld": t.Withheld.String()}
 }
 
-// Filing fields.
+// Campos de la declaración.
 var (
 	FilFieldID        = spec.Comparable("id", func(f *Filing) FilingID { return f.ID() })
 	FilFieldDeclarant = spec.Comparable("declarant", func(f *Filing) OrganizationID { return f.s.Declarant })
@@ -378,17 +380,18 @@ var (
 	FilFieldStatus    = spec.Comparable("status", func(f *Filing) int { return int(f.s.Status) })
 )
 
-// SameSlot matches the filings of a declarant, form, year and period that are not reverted.
+// SameSlot selecciona las declaraciones de un declarante, modelo, año y periodo que no están
+// revertidas.
 func SameSlot(d OrganizationID, form Form, year int, p Period) spec.Spec[*Filing] {
 	return spec.And(FilFieldDeclarant.Eq(d), FilFieldForm.Eq(string(form)), FilFieldYear.Eq(year), FilFieldPeriod.Eq(p.String()),
 		FilFieldStatus.Ne(int(StatusReverted)))
 }
 
-// CounterKind is the stable aggregate type name.
+// CounterKind es el nombre estable del tipo de agregado.
 const CounterKind = "fiscal.filing_counter"
 
-// Counter numbers the submissions of a form by declarant and year. It is an aggregate so that
-// optimistic concurrency protects it (the C# read, incremented and wrote without a lock).
+// Counter numera las presentaciones de un modelo por declarante y año. Es un agregado para que lo
+// proteja la concurrencia optimista (el C# leía, incrementaba y escribía sin bloqueo).
 type Counter struct {
 	fw.BaseAggregateRoot[CounterID]
 	declarant OrganizationID
@@ -397,7 +400,7 @@ type Counter struct {
 	last      int64
 }
 
-// ReconstituteCounter rebuilds a counter.
+// ReconstituteCounter reconstruye un contador.
 func ReconstituteCounter(id CounterID, declarant OrganizationID, form Form, year int, last int64) (*Counter, error) {
 	base, err := fw.NewBaseAggregateRoot(CounterKind, id)
 	if err != nil {
@@ -411,22 +414,22 @@ func ReconstituteCounter(id CounterID, declarant OrganizationID, form Form, year
 	return &Counter{BaseAggregateRoot: base, declarant: declarant, form: form, year: year, last: last}, nil
 }
 
-// Next returns the next number.
+// Next devuelve el siguiente número.
 func (c *Counter) Next() int64 { c.last++; return c.last }
 
-// Values returns the key and the last number.
+// Values devuelve la clave y el último número.
 func (c *Counter) Values() (OrganizationID, Form, int, int64) {
 	return c.declarant, c.form, c.year, c.last
 }
 
-// Counter fields.
+// Campos del contador.
 var (
 	CntFieldDeclarant = spec.Comparable("declarant", func(c *Counter) OrganizationID { return c.declarant })
 	CntFieldForm      = spec.Comparable("form", func(c *Counter) string { return string(c.form) })
 	CntFieldYear      = spec.Comparable("fiscal_year", func(c *Counter) int { return c.year })
 )
 
-// Repositories and ports of the context.
+// Repositorios y puertos del contexto.
 type (
 	TaxRateRepository     = fw.Repository[TaxRateID, *TaxRate]
 	TreatmentRepository   = fw.Repository[TreatmentID, *Treatment]
@@ -436,8 +439,8 @@ type (
 	WithholdingRepository = fw.Repository[WithholdingID, *Withholding]
 )
 
-// Identities resolves the tax identities of parties (a port Fiscal owns; an adapter implements it
-// over the Parties contracts).
+// Identities resuelve las identidades fiscales de las parties (un puerto de Fiscal; un adaptador lo
+// implementa sobre los contratos de Parties).
 type Identities interface {
 	Identities(ctx context.Context, parties []PartyID) (map[PartyID]Identity, error)
 }

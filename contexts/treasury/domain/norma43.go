@@ -10,9 +10,10 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Norma43Account is the statement of one account inside a Cuaderno 43 file (the AEB/CECA format
-// Spanish banks give statements in): the account as the bank identifies it (bank, office and
-// number, without the IBAN check digits), the period, the balances and the movements.
+// Norma43Account es el extracto de una cuenta dentro de un fichero del Cuaderno 43 (el formato
+// AEB/CECA en que los bancos españoles dan los extractos): la cuenta como la identifica el banco
+// (entidad, oficina y número, sin los dígitos de control del IBAN), el periodo, los saldos y los
+// movimientos.
 type Norma43Account struct {
 	Bank    string
 	Office  string
@@ -24,7 +25,7 @@ type Norma43Account struct {
 	Lines   []StatementLine
 }
 
-// Matches reports whether a Spanish IBAN is this account.
+// Matches dice si un IBAN español es esta cuenta.
 func (a Norma43Account) Matches(iban vocab.IBAN) bool {
 	s := iban.String()
 	return len(s) == 24 && strings.HasPrefix(s, "ES") && s[4:8] == a.Bank && s[8:12] == a.Office && s[14:24] == a.Number
@@ -34,7 +35,8 @@ func n43Error(line int, what string) error {
 	return fw.Violation("treasury.norma43", "line "+strconv.Itoa(line)+": "+what)
 }
 
-// n43Record gives the fields of a record by their 1-based positions in the 80-column layout.
+// n43Record da los campos de un registro por sus posiciones, contadas desde 1, en el formato de 80
+// columnas.
 type n43Record []rune
 
 func (r n43Record) at(from, to int) string {
@@ -59,7 +61,7 @@ func (r n43Record) digits(from, to int) (string, bool) {
 	return s, true
 }
 
-// amount reads an amount of 14 digits with two decimals and its sign key (1 debit, 2 credit).
+// amount lee un importe de 14 dígitos con dos decimales y su clave de signo (1 debe, 2 haber).
 func (r n43Record) amount(key, from int) (vocab.Decimal, bool) {
 	d, ok := r.digits(from, from+13)
 	k := r.at(key, key)
@@ -88,9 +90,9 @@ func (r n43Record) date(from int) (vocab.Date, bool) {
 	return day, err == nil
 }
 
-// ParseNorma43 reads a Cuaderno 43 file: for each account its header (record 11), its movements
-// (22, with their complementary concepts in 23) and its totals (33), which are checked against
-// the movements. The text may come in UTF-8 or in the ISO 8859-1 banks still use.
+// ParseNorma43 lee un fichero del Cuaderno 43: de cada cuenta, su cabecera (registro 11), sus
+// movimientos (22, con sus conceptos complementarios en 23) y sus totales (33), que se comprueban
+// contra los movimientos. El texto puede venir en UTF-8 o en el ISO 8859-1 que aún usan los bancos.
 func ParseNorma43(content string) ([]Norma43Account, error) {
 	var out []Norma43Account
 	var cur *Norma43Account
@@ -103,7 +105,7 @@ func ParseNorma43(content string) ([]Norma43Account, error) {
 		if utf8.ValidString(raw) {
 			rec = n43Record(raw)
 		} else {
-			for j := 0; j < len(raw); j++ { // ISO 8859-1: a byte is a code point
+			for j := 0; j < len(raw); j++ { // ISO 8859-1: un byte es un punto de código
 				rec = append(rec, rune(raw[j]))
 			}
 		}
@@ -156,7 +158,7 @@ func ParseNorma43(content string) ([]Norma43Account, error) {
 			}
 			l := &cur.Lines[len(cur.Lines)-1]
 			if rec.at(3, 4) == "01" {
-				l.Concept = "" // the complementary concepts replace the references of the movement
+				l.Concept = "" // los conceptos complementarios sustituyen a las referencias del movimiento
 			}
 			l.Concept = strings.TrimSpace(l.Concept + " " + rec.text(5, 42) + " " + rec.text(43, 80))
 		case "33":
@@ -188,7 +190,7 @@ func ParseNorma43(content string) ([]Norma43Account, error) {
 			if cur != nil {
 				return nil, n43Error(n, "the file ends inside an account")
 			}
-		case "24": // equivalence of the amount in another currency: not kept
+		case "24": // equivalencia del importe en otra divisa: no se guarda
 		default:
 			return nil, n43Error(n, "unknown record "+rec.at(1, 2))
 		}

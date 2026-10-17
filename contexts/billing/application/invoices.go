@@ -10,7 +10,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// DetailsInput are the editable header fields of a draft.
+// DetailsInput son los campos editables de la cabecera de un borrador.
 type DetailsInput struct {
 	Description          string     `json:"description,omitempty"`
 	OperationDate        vocab.Date `json:"operationDate,omitzero"`
@@ -18,8 +18,8 @@ type DetailsInput struct {
 	EquivalenceSurcharge bool       `json:"equivalenceSurcharge,omitempty"`
 }
 
-// DraftInvoice drafts an invoice: ordinary (seller and customer) or corrective (the invoice it
-// corrects and a reason R1–R5; the customer is the original one).
+// DraftInvoice prepara el borrador de una factura: ordinaria (vendedor y cliente) o rectificativa
+// (la factura que rectifica y un motivo R1–R5; el cliente es el de la original).
 type DraftInvoice struct {
 	Seller   string `json:"seller"`
 	Customer string `json:"customer,omitempty"`
@@ -28,7 +28,7 @@ type DraftInvoice struct {
 	DetailsInput
 }
 
-// AddLine adds a line to a draft.
+// AddLine añade una línea a un borrador.
 type AddLine struct {
 	ID          domain.InvoiceID `json:"-"`
 	Description string           `json:"description"`
@@ -39,46 +39,46 @@ type AddLine struct {
 	Treatment   string           `json:"treatment,omitempty"`
 }
 
-// RemoveLine removes a line of a draft.
+// RemoveLine quita una línea de un borrador.
 type RemoveLine struct {
 	ID   domain.InvoiceID `json:"-"`
 	Line string           `json:"line"`
 }
 
-// SetDetails replaces the editable header fields of a draft.
+// SetDetails sustituye los campos editables de la cabecera de un borrador.
 type SetDetails struct {
 	ID domain.InvoiceID `json:"-"`
 	DetailsInput
 }
 
-// PreviewTaxes calculates the tax breakdown a draft would have if issued on a date (today by
-// default).
+// PreviewTaxes calcula el desglose de impuestos que tendría un borrador si se emitiera en una fecha
+// (hoy, por omisión).
 type PreviewTaxes struct {
 	ID domain.InvoiceID
 	On string
 }
 
-// IssueInvoice issues a draft in a series (the date defaults to today).
+// IssueInvoice emite un borrador en una serie (la fecha, por omisión, es hoy).
 type IssueInvoice struct {
 	ID     domain.InvoiceID `json:"-"`
 	Series string           `json:"series"`
 	Date   vocab.Date       `json:"date,omitzero"`
 }
 
-// DiscardInvoice deletes a draft.
+// DiscardInvoice borra un borrador.
 type DiscardInvoice struct{ ID domain.InvoiceID }
 
-// GetInvoice loads an invoice.
+// GetInvoice carga una factura.
 type GetInvoice struct{ ID domain.InvoiceID }
 
-// SearchInvoices searches invoices of the caller's scope.
+// SearchInvoices busca facturas del ámbito de quien llama.
 type SearchInvoices struct {
 	Seller, Customer, Status string
-	From, To                 string // issue date range
+	From, To                 string // rango de fechas de emisión
 	Page, Size               int
 }
 
-// LineDTO is the transport form of a line.
+// LineDTO es la forma de transporte de una línea.
 type LineDTO struct {
 	ID          string `json:"id"`
 	Description string `json:"description"`
@@ -90,7 +90,7 @@ type LineDTO struct {
 	Net         string `json:"net"`
 }
 
-// TaxLineDTO is a line of the tax breakdown.
+// TaxLineDTO es una línea del desglose de impuestos.
 type TaxLineDTO struct {
 	TaxType         string `json:"taxType,omitempty"`
 	TaxCode         string `json:"taxCode,omitempty"`
@@ -103,7 +103,7 @@ type TaxLineDTO struct {
 	SurchargeAmount string `json:"surchargeAmount,omitempty"`
 }
 
-// BreakdownDTO is the transport form of a tax breakdown.
+// BreakdownDTO es la forma de transporte de un desglose de impuestos.
 type BreakdownDTO struct {
 	Country   string       `json:"country,omitempty"`
 	Lines     []TaxLineDTO `json:"lines"`
@@ -113,7 +113,7 @@ type BreakdownDTO struct {
 	Total     string       `json:"total"`
 }
 
-// InvoiceDTO is the transport form of an invoice.
+// InvoiceDTO es la forma de transporte de una factura.
 type InvoiceDTO struct {
 	ID                   string        `json:"id"`
 	Number               string        `json:"number,omitempty"`
@@ -134,7 +134,7 @@ type InvoiceDTO struct {
 	CustomerName         string        `json:"customerName,omitempty"`
 	Lines                []LineDTO     `json:"lines"`
 	Net                  string        `json:"net"`
-	Taxes                *BreakdownDTO `json:"taxes,omitempty"` // issued invoices
+	Taxes                *BreakdownDTO `json:"taxes,omitempty"` // facturas emitidas
 	SourceType           string        `json:"sourceType,omitempty"`
 	SourceID             string        `json:"sourceId,omitempty"`
 	SourceRef            string        `json:"sourceRef,omitempty"`
@@ -305,7 +305,7 @@ func (s service) invoiceUseCases(svc *Service) {
 		return update(ctx, c.ID, func(ctx context.Context, i *domain.Invoice) error {
 			st := i.State()
 			if st.Status != domain.Draft {
-				return i.Issue(domain.Issuance{}) // reports that it is not a draft
+				return i.Issue(domain.Issuance{}) // informa de que no es un borrador
 			}
 			if st.Kind == domain.Ordinary {
 				if err := s.notBlocked(ctx, st.Customer); err != nil {
@@ -320,7 +320,7 @@ func (s service) invoiceUseCases(svc *Service) {
 			if err != nil {
 				return err
 			}
-			// The number is taken in the same unit of work: if anything fails, nothing is consumed.
+			// El número se toma en la misma unidad de trabajo: si algo falla, no se consume nada.
 			var number string
 			if _, err := s.series.Update(ctx, seriesID, func(_ context.Context, sr *domain.Series) error {
 				n, err := sr.Take(st.Seller, date.Year(), st.Kind == domain.Corrective)

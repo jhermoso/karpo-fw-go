@@ -33,7 +33,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/testing/archtest"
 )
 
-// host composes Parties and Work on one hot-swappable backend.
+// host compone Parties y Work sobre un único backend intercambiable en caliente.
 type host struct {
 	t        *testing.T
 	srv      *httptest.Server
@@ -146,7 +146,7 @@ func (h *host) scenario(tag string) {
 	}
 	h.grant("outsider", globex.ID)
 
-	// The project for the customer and a task in it.
+	// El proyecto para el cliente y una tarea dentro de él.
 	project := map[string]any{"company": acme.ID, "code": "prj-01", "kind": "project", "name": "Reforma de la nave", "purpose": "improvement",
 		"customer": client.ID, "estimatedHours": "120", "budget": "6000", "on": "2026-03-02"}
 	var prj, task, extra wapp.WorkDTO
@@ -163,7 +163,7 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("opened: %+v / %+v", prj, task)
 	}
 
-	// People on the task, each at their hourly rate.
+	// Personas en la tarea, cada una con su tarifa por hora.
 	h.must(h.do("POST", "/api/work/"+task.ID+"/assign", "worker", map[string]any{"person": ana.ID, "rate": "25", "from": "2026-03-09"}, nil), 403, "recording is not planning")
 	h.must(h.do("POST", "/api/work/"+task.ID+"/assign", "planner", map[string]any{"person": ana.ID, "role": "Oficial", "rate": "25", "from": "2026-03-09"}, nil), 200, "assign Ana")
 	h.must(h.do("POST", "/api/work/"+task.ID+"/assign", "planner", map[string]any{"person": luis.ID, "role": "Ayudante", "rate": "15", "from": "2026-03-09"}, &task), 200, "assign Luis")
@@ -171,7 +171,7 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("assignments: %+v", task.Assignments)
 	}
 
-	// The status moves by its rule.
+	// El estado se mueve según su regla.
 	anaDay := map[string]any{"work": task.ID, "person": ana.ID, "date": "2026-03-09", "hours": "7.5", "comment": "Demolición"}
 	h.must(h.do("POST", "/api/time", "worker", anaDay, nil), 422, "time before the work starts")
 	h.must(h.do("POST", "/api/work/"+task.ID+"/progress", "planner", map[string]any{"to": "in-progress", "on": "2026-03-09"}, nil), 403, "planning is not progressing")
@@ -187,7 +187,7 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("started: %+v", task)
 	}
 
-	// Time: who is assigned, on work in progress, at most 24 hours a day.
+	// Tiempo: quien está asignado, en un trabajo en curso, como mucho 24 horas al día.
 	var ta, tl, tl2 wapp.TimeDTO
 	h.must(h.do("POST", "/api/time", "viewer", anaDay, nil), 403, "viewer")
 	h.must(h.do("POST", "/api/time", "outsider", anaDay, nil), 404, "outsider")
@@ -209,7 +209,7 @@ func (h *host) scenario(tag string) {
 	h.must(h.do("PUT", "/api/time/"+ta.ID, "worker", map[string]any{"hours": "1", "billable": true}, nil), 422, "approved time is final")
 	h.must(h.do("DELETE", "/api/time/"+ta.ID, "worker", nil, nil), 422, "approved time is not withdrawn")
 
-	// Completing: no time waiting for approval, no open parts.
+	// Terminar: sin tiempo pendiente de aprobar, sin partes abiertas.
 	h.must(h.do("POST", "/api/work/"+task.ID+"/progress", "lead", map[string]any{"to": "completed", "on": "2026-03-10"}, nil), 422, "time waiting for approval")
 	h.must(h.do("DELETE", "/api/time/"+tl.ID, "lead", nil, nil), 403, "approving is not withdrawing")
 	h.must(h.do("DELETE", "/api/time/"+tl.ID, "worker", nil, nil), 204, "withdraw")
@@ -236,7 +236,7 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("project: %+v", prj)
 	}
 
-	// Two approvals and two completions leave for the other contexts.
+	// Dos aprobaciones y dos terminaciones salen hacia los demás contextos.
 	if n, err := h.work.Relay(h.broker).RelayOnce(context.Background()); err != nil || n != 4 {
 		t.Fatalf("published: %d %v", n, err)
 	}

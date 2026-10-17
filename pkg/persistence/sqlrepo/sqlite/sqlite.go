@@ -1,9 +1,9 @@
-// Package sqlite provides the SQLite dialect for sqlrepo. It does not import a driver: register
-// one in the composition root (e.g. modernc.org/sqlite, pure Go, driver name "sqlite").
+// Package sqlite ofrece el dialecto SQLite para sqlrepo. No importa ningún driver: se registra
+// uno en la raíz de composición (p. ej. modernc.org/sqlite, Go puro, nombre de driver "sqlite").
 //
-// Semantics notes: SQLite LIKE is case-insensitive for ASCII unless PRAGMA case_sensitive_like
-// is enabled; booleans are stored as 0/1; UUIDs as TEXT; instants as fixed-width UTC TEXT
-// (lexicographic order == chronological order).
+// Notas de semántica: el LIKE de SQLite no distingue mayúsculas de minúsculas en ASCII salvo que
+// se active PRAGMA case_sensitive_like; los booleanos se guardan como 0/1; los UUID como TEXT; los
+// instantes como TEXT UTC de ancho fijo (orden lexicográfico == orden cronológico).
 package sqlite
 
 import (
@@ -16,16 +16,16 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 )
 
-// TimeLayout is the fixed-width UTC layout used to store instants.
+// TimeLayout es el formato UTC de ancho fijo con el que se guardan los instantes.
 const TimeLayout = "2006-01-02T15:04:05.000000000Z"
 
-// Dialect implements sqlrepo.Dialect for SQLite.
+// Dialect implementa sqlrepo.Dialect para SQLite.
 type Dialect struct{}
 
-// New returns the SQLite dialect.
+// New devuelve el dialecto SQLite.
 func New() Dialect { return Dialect{} }
 
-// Open wraps an opened SQLite *sql.DB.
+// Open envuelve un *sql.DB de SQLite ya abierto.
 func Open(db *sql.DB, opts ...sqlrepo.Option) *sqlrepo.DB { return sqlrepo.New(db, New(), opts...) }
 
 func (Dialect) Name() string                         { return "sqlite" }
@@ -45,19 +45,20 @@ func (Dialect) BoolValue(b bool) any {
 	return int64(0)
 }
 
-// DateValue binds a civil date as ISO text "YYYY-MM-DD" (lexicographic order is chronological).
+// DateValue enlaza una fecha civil como texto ISO "YYYY-MM-DD" (el orden lexicográfico es el
+// cronológico).
 func (Dialect) DateValue(y int, m time.Month, d int) any {
 	return fmt.Sprintf("%04d-%02d-%02d", y, m, d)
 }
 
-// DateExpr returns the placeholder unchanged.
+// DateExpr devuelve el placeholder sin cambios.
 func (Dialect) DateExpr(ph string) string { return ph }
 
 func (Dialect) IsUniqueViolation(err error) bool {
 	return sqlrepo.ErrorContains(err, "UNIQUE constraint failed", "PRIMARY KEY constraint failed", "(1555)", "(2067)")
 }
 
-// OutboxDDL returns the statements creating the outbox table.
+// OutboxDDL devuelve las sentencias que crean la tabla del outbox.
 func OutboxDDL(table string) []string {
 	if table == "" {
 		table = sqlrepo.DefaultOutboxTable
@@ -80,7 +81,7 @@ func OutboxDDL(table string) []string {
 	}
 }
 
-// AuditDDL returns the statements creating the audit log table.
+// AuditDDL devuelve las sentencias que crean la tabla del registro de auditoría.
 func AuditDDL(table string) []string {
 	if table == "" {
 		table = sqlrepo.DefaultAuditTable
@@ -96,7 +97,7 @@ func AuditDDL(table string) []string {
 
 var _ sqlrepo.Dialect = Dialect{}
 
-// InboxDDL returns the statements creating the inbox table (consumer, message id).
+// InboxDDL devuelve las sentencias que crean la tabla del inbox (consumidor, id del mensaje).
 func InboxDDL(table string) []string {
 	if table == "" {
 		table = sqlrepo.DefaultInboxTable

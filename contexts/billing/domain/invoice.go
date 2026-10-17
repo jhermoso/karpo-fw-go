@@ -12,19 +12,19 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// InvoiceKind is the stable aggregate type name.
+// InvoiceKind es el nombre estable del tipo de agregado.
 const InvoiceKind = "billing.invoice"
 
-// MaxLines bounds the lines of an invoice.
+// MaxLines limita las líneas de una factura.
 const MaxLines = 500
 
 var hundred = vocab.DecimalFromInt(100)
 
-// Kind of invoice: ordinary or corrective (rectificativa). The C# modelled exemption as an
-// invoice type ("Exenta") and credit notes as a separate header without lines.
+// Kind de factura: ordinaria o rectificativa. El C# modelaba la exención como un tipo de factura
+// ("Exenta") y los abonos como una cabecera aparte sin líneas.
 type Kind int
 
-// Invoice kinds.
+// Tipos de factura.
 const (
 	Ordinary Kind = iota + 1
 	Corrective
@@ -32,14 +32,14 @@ const (
 
 var kinds = map[Kind]string{Ordinary: "ordinary", Corrective: "corrective"}
 
-// String returns the stable name.
+// String devuelve el nombre estable.
 func (k Kind) String() string { return kinds[k] }
 
-// Status of an invoice: a draft changes and can be discarded; an issued invoice is immutable and
-// is corrected with a corrective invoice (the C# let issued invoices change and be deleted).
+// Status de una factura: un borrador cambia y puede descartarse; una factura emitida es inmutable y
+// se corrige con una factura rectificativa (el C# dejaba cambiar y borrar las facturas emitidas).
 type Status int
 
-// Statuses.
+// Estados.
 const (
 	Draft Status = iota + 1
 	Issued
@@ -47,10 +47,10 @@ const (
 
 var statuses = map[Status]string{Draft: "draft", Issued: "issued"}
 
-// String returns the stable name.
+// String devuelve el nombre estable.
 func (s Status) String() string { return statuses[s] }
 
-// ParseStatus parses a status name.
+// ParseStatus interpreta el nombre de un estado.
 func ParseStatus(s string) (Status, bool) {
 	for k, n := range statuses {
 		if n == s {
@@ -60,25 +60,26 @@ func ParseStatus(s string) (Status, bool) {
 	return 0, false
 }
 
-// CorrectionReasons are the causes of a corrective invoice (R1: error founded in law and art. 80
-// One, Two and Six LIVA; R2: insolvency, art. 80 Three; R3: bad debts, art. 80 Four; R4: other
-// causes; R5: simplified invoices).
+// CorrectionReasons son las causas de una factura rectificativa (R1: error fundado en derecho y art.
+// 80 Uno, Dos y Seis LIVA; R2: concurso, art. 80 Tres; R3: créditos incobrables, art. 80 Cuatro; R4:
+// resto de causas; R5: facturas simplificadas).
 var CorrectionReasons = []string{"R1", "R2", "R3", "R4", "R5"}
 
-// Line is a line of an invoice. Its net amount is quantity × unit price less the discount,
-// rounded to the cent half away from zero (the C# stored the unrounded product).
+// Line es una línea de una factura. Su importe neto es cantidad × precio unitario menos el
+// descuento, redondeado al céntimo alejándose de cero en el medio (el C# guardaba el producto sin
+// redondear).
 type Line struct {
 	ID          LineID
 	Description string
 	Quantity    vocab.Decimal
 	UnitPrice   vocab.Decimal
-	Discount    vocab.Decimal // percentage
+	Discount    vocab.Decimal // porcentaje
 	TaxCode     string
 	Treatment   string
 	Net         vocab.Decimal
 }
 
-// LineInput is a new line.
+// LineInput es una línea nueva.
 type LineInput struct {
 	Description string
 	Quantity    vocab.Decimal
@@ -88,14 +89,14 @@ type LineInput struct {
 	Treatment   string
 }
 
-// Identity is the fiscal identification of a party on an invoice, frozen at issue.
+// Identity es la identificación fiscal de una party en una factura, congelada al emitirla.
 type Identity struct {
 	NIF     string
 	Name    string
 	Country string
 }
 
-// TaxLine is a line of the tax breakdown frozen at issue.
+// TaxLine es una línea del desglose de impuestos congelado al emitir.
 type TaxLine struct {
 	TaxType         string
 	TaxCode         string
@@ -108,7 +109,7 @@ type TaxLine struct {
 	SurchargeAmount vocab.Decimal
 }
 
-// Breakdown is the tax breakdown of an invoice.
+// Breakdown es el desglose de impuestos de una factura.
 type Breakdown struct {
 	Country   string
 	Lines     []TaxLine
@@ -117,25 +118,25 @@ type Breakdown struct {
 	Surcharge vocab.Decimal
 }
 
-// Total returns net + taxes + surcharge.
+// Total devuelve base + impuestos + recargo.
 func (b Breakdown) Total() vocab.Decimal { return b.Net.Add(b.Tax).Add(b.Surcharge) }
 
-// Source is the document an invoice was drafted from (a delivery note of Orders); empty when it
-// was drafted by hand.
+// Source es el documento del que se preparó una factura (un albarán de Orders); vacío cuando se
+// preparó a mano.
 type Source struct {
 	Type string
 	ID   string
-	Ref  string // its number, to show
+	Ref  string // su número, para mostrarlo
 }
 
-// Invoice is a sales invoice of a seller to a customer, with its lines.
+// Invoice es una factura de venta de un vendedor a un cliente, con sus líneas.
 type Invoice struct {
 	fw.BaseAggregateRoot[InvoiceID]
 	traits.Audited
 	s InvoiceState
 }
 
-// InvoiceState is the persisted state of an invoice.
+// InvoiceState es el estado persistido de una factura.
 type InvoiceState struct {
 	Seller               OrganizationID
 	Customer             PartyID
@@ -143,7 +144,7 @@ type InvoiceState struct {
 	Status               Status
 	Currency             vocab.CurrencyCode
 	Description          string
-	OperationDate        vocab.Date // zero: the issue date
+	OperationDate        vocab.Date // cero: la fecha de emisión
 	DueDate              vocab.Date
 	EquivalenceSurcharge bool
 	Corrects             InvoiceID
@@ -159,7 +160,7 @@ type InvoiceState struct {
 	Audit                traits.AuditStamp
 }
 
-// Details are the editable header fields of a draft.
+// Details son los campos editables de la cabecera de un borrador.
 type Details struct {
 	Description          string
 	OperationDate        vocab.Date
@@ -172,7 +173,7 @@ func checkDetails(v *fw.Validation, d *Details) {
 	v.Require(utf8.RuneCountInString(d.Description) <= 500, "description", "length", "at most 500 characters")
 }
 
-// ReconstituteInvoice rebuilds an invoice.
+// ReconstituteInvoice reconstruye una factura.
 func ReconstituteInvoice(id InvoiceID, s InvoiceState) (*Invoice, error) {
 	base, err := fw.NewBaseAggregateRoot(InvoiceKind, id)
 	if err != nil {
@@ -201,8 +202,8 @@ func ReconstituteInvoice(id InvoiceID, s InvoiceState) (*Invoice, error) {
 	return &Invoice{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// DraftInvoice creates a draft. A corrective draft copies the customer of the original, which the
-// application checks is issued and of the same seller.
+// DraftInvoice crea un borrador. Un borrador rectificativo copia el cliente de la original, de la
+// que la aplicación comprueba que está emitida y es del mismo vendedor.
 func DraftInvoice(id InvoiceID, s InvoiceState) (*Invoice, error) {
 	s.Status, s.Lines, s.Series, s.Number, s.IssueDate = Draft, nil, SeriesID{}, "", vocab.Date{}
 	s.SellerIdentity, s.CustomerIdentity, s.Taxes = Identity{}, Identity{}, Breakdown{}
@@ -212,7 +213,7 @@ func DraftInvoice(id InvoiceID, s InvoiceState) (*Invoice, error) {
 	return ReconstituteInvoice(id, s)
 }
 
-// State returns the state (lines and taxes are copies).
+// State devuelve el estado (las líneas y los impuestos son copias).
 func (i *Invoice) State() InvoiceState {
 	s := i.s
 	s.Lines = slices.Clone(s.Lines)
@@ -220,7 +221,7 @@ func (i *Invoice) State() InvoiceState {
 	return s
 }
 
-// Net returns the sum of the line nets.
+// Net devuelve la suma de los netos de las líneas.
 func (i *Invoice) Net() vocab.Decimal {
 	n := vocab.DecimalFromInt(0)
 	for _, l := range i.s.Lines {
@@ -236,8 +237,8 @@ func (i *Invoice) mustBeDraft() error {
 	return nil
 }
 
-// AddLine adds a line (drafts only). An ordinary invoice has positive quantities and non-negative
-// prices; a corrective invoice (by differences) may have negative quantities.
+// AddLine añade una línea (sólo borradores). Una factura ordinaria tiene cantidades positivas y
+// precios no negativos; una rectificativa (por diferencias) puede tener cantidades negativas.
 func (i *Invoice) AddLine(in LineInput) (LineID, error) {
 	if err := i.mustBeDraft(); err != nil {
 		return LineID{}, err
@@ -266,7 +267,7 @@ func (i *Invoice) AddLine(in LineInput) (LineID, error) {
 	return l.ID, nil
 }
 
-// RemoveLine removes a line (drafts only).
+// RemoveLine quita una línea (sólo borradores).
 func (i *Invoice) RemoveLine(id LineID) error {
 	if err := i.mustBeDraft(); err != nil {
 		return err
@@ -279,7 +280,7 @@ func (i *Invoice) RemoveLine(id LineID) error {
 	return nil
 }
 
-// SetDetails replaces the editable header fields (drafts only).
+// SetDetails sustituye los campos editables de la cabecera (sólo borradores).
 func (i *Invoice) SetDetails(d Details) error {
 	if err := i.mustBeDraft(); err != nil {
 		return err
@@ -293,7 +294,7 @@ func (i *Invoice) SetDetails(d Details) error {
 	return nil
 }
 
-// AccrualDate returns the date the taxes accrue on: the operation date, or the issue date.
+// AccrualDate devuelve la fecha de devengo de los impuestos: la fecha de la operación, o la de emisión.
 func (i *Invoice) AccrualDate(issue vocab.Date) vocab.Date {
 	if !i.s.OperationDate.IsZero() {
 		return i.s.OperationDate
@@ -301,7 +302,7 @@ func (i *Invoice) AccrualDate(issue vocab.Date) vocab.Date {
 	return issue
 }
 
-// Issuance is what the application gathers to issue an invoice.
+// Issuance es lo que la aplicación reúne para emitir una factura.
 type Issuance struct {
 	Series   SeriesID
 	Number   string
@@ -311,10 +312,10 @@ type Issuance struct {
 	Taxes    Breakdown
 }
 
-// Issue freezes the invoice with its number, the identities of the parties and the tax breakdown.
-// Invariants: at least one line; an ordinary invoice has a positive net and a corrective one a
-// non-zero net; the breakdown covers exactly the net of the lines; the seller has a valid Spanish
-// tax number and the customer a tax number; the due date does not precede the issue date.
+// Issue congela la factura con su número, las identidades de las partes y el desglose de
+// impuestos. Invariantes: al menos una línea; una factura ordinaria tiene un neto positivo y una
+// rectificativa un neto distinto de cero; el desglose cubre exactamente el neto de las líneas; el
+// vendedor tiene un NIF español válido y el cliente un número fiscal; el vencimiento no precede a la emisión.
 func (i *Invoice) Issue(x Issuance) error {
 	if err := i.mustBeDraft(); err != nil {
 		return err
@@ -347,9 +348,9 @@ func (i *Invoice) Issue(x Issuance) error {
 	return nil
 }
 
-// Discard checks a draft can be deleted (an issued invoice never is). A draft made from a delivery
-// note is not discarded either: what was delivered is invoiced, and a mistake is corrected after
-// issuing it.
+// Discard comprueba que un borrador puede borrarse (una factura emitida, nunca). Un borrador hecho a
+// partir de un albarán tampoco se descarta: lo entregado se factura, y un error se corrige después
+// de emitirlo.
 func (i *Invoice) Discard() error {
 	if err := i.mustBeDraft(); err != nil {
 		return err
@@ -360,12 +361,12 @@ func (i *Invoice) Discard() error {
 	return nil
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (i *Invoice) AuditSnapshot() map[string]any {
 	return map[string]any{"status": i.s.Status.String(), "number": i.s.Number, "lines": len(i.s.Lines), "net": i.Net().String()}
 }
 
-// Invoice fields.
+// Campos de la factura.
 var (
 	InvFieldID       = spec.Comparable("id", func(i *Invoice) InvoiceID { return i.ID() })
 	InvFieldSeller   = spec.Comparable("seller", func(i *Invoice) OrganizationID { return i.s.Seller })
@@ -378,13 +379,13 @@ var (
 	InvFieldSrcID    = spec.Comparable("source_id", func(i *Invoice) string { return i.s.Source.ID })
 )
 
-// Repositories and ports of the context.
+// Repositorios y puertos del contexto.
 type (
 	SeriesRepository  = fw.Repository[SeriesID, *Series]
 	InvoiceRepository = fw.Repository[InvoiceID, *Invoice]
 )
 
-// TaxableLine is a line sent to the tax engine.
+// TaxableLine es una línea que se envía al motor de impuestos.
 type TaxableLine struct {
 	Ref       string
 	Base      vocab.Decimal
@@ -392,26 +393,26 @@ type TaxableLine struct {
 	Treatment string
 }
 
-// Taxes calculates the tax breakdown of an invoice (a port Billing owns; an adapter implements it
-// over the Fiscal TaxEngine, which picks the jurisdiction of the seller).
+// Taxes calcula el desglose de impuestos de una factura (un puerto propio de Billing; un adaptador
+// lo implementa sobre el TaxEngine de Fiscal, que elige la jurisdicción del vendedor).
 type Taxes interface {
 	Calculate(ctx context.Context, seller OrganizationID, accrual vocab.Date, surcharge bool, lines []TaxableLine) (Breakdown, error)
 }
 
-// Identities resolves the fiscal identities of parties (a port Billing owns; an adapter implements
-// it over the Parties TaxIdentities contract).
+// Identities resuelve las identidades fiscales de las parties (un puerto propio de Billing; un
+// adaptador lo implementa sobre el contrato TaxIdentities de Parties).
 type Identities interface {
 	Identities(ctx context.Context, parties []PartyID) (map[PartyID]Identity, error)
 }
 
-// Blocks answers whether a party takes part in nothing but queries (the duplicate of another, in
-// Parties): an ordinary invoice is not drafted nor issued to it (docs/DECISIONES-COMUNES.md,
-// D-70). A corrective one is: correcting what was invoiced is an obligation.
+// Blocks responde si una party no participa en nada salvo en consultas (el duplicado de otra, en
+// Parties): no se le prepara ni se le emite una factura ordinaria (docs/DECISIONES-COMUNES.md,
+// D-70). Una rectificativa sí: corregir lo facturado es una obligación.
 type Blocks interface {
 	Blocked(ctx context.Context, party PartyID) (bool, error)
 }
 
-// TaxableLines returns the lines of the invoice as the tax engine needs them.
+// TaxableLines devuelve las líneas de la factura tal como las necesita el motor de impuestos.
 func (i *Invoice) TaxableLines() []TaxableLine {
 	out := make([]TaxableLine, 0, len(i.s.Lines))
 	for _, l := range i.s.Lines {

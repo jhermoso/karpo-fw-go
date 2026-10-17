@@ -9,8 +9,9 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/application/messaging"
 )
 
-// Publications registers the translation of Parties domain events into its Published Language.
-// ContactAdded and PartyDeactivated are internal facts: no other context depends on them yet.
+// Publications registra la traducción de los eventos de dominio de Parties a su Published
+// Language. ContactAdded y PartyDeactivated son hechos internos: ningún otro contexto depende
+// todavía de ellos.
 func Publications(r *messaging.Recorder) *messaging.Recorder {
 	messaging.On(r, func(_ context.Context, e domain.PartyRegistered) ([]app.IntegrationEvent, error) {
 		return []app.IntegrationEvent{contracts.PartyRegisteredV1{

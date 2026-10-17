@@ -10,31 +10,31 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// RelationshipKind is the stable aggregate type name of Relationship.
+// RelationshipKind es el nombre estable del tipo de agregado de Relationship.
 const RelationshipKind = "parties.relationship"
 
-// RelationshipType is an entry of the relationship type catalog: the role each side must play
-// ("Employment" relates an Employee to an Internal Organization).
+// RelationshipType es una entrada del catálogo de tipos de relación: el rol que debe desempeñar
+// cada lado ("Employment" relaciona un Employee con una Internal Organization).
 type RelationshipType struct {
 	ID          RelationshipTypeID
 	Name        vocab.Name
 	Description string
 	FromRole    RoleTypeID
 	ToRole      RoleTypeID
-	// Hierarchical types relate a child (From) to its parent (To): a party has one current
-	// parent per type and the hierarchy has no cycles (organization rollups).
+	// Los tipos jerárquicos relacionan un hijo (From) con su padre (To): una party tiene un solo
+	// padre vigente por tipo y la jerarquía no tiene ciclos (agregaciones de organizaciones).
 	Hierarchical bool
-	// Code is the stable, readable key of the type ("prospect"); optional and unique. It is what
-	// tells which details a relationship of the type carries (the UDM subtypes of PARTY
-	// RELATIONSHIP): a type without code, or with a code the domain does not know, carries none,
-	// so adding a type without data of its own stays a catalog row.
+	// Code es la clave estable y legible del tipo ("prospect"); opcional y única. Es lo que dice
+	// qué detalles lleva una relación del tipo (los subtipos UDM de PARTY RELATIONSHIP): un tipo
+	// sin código, o con un código que el dominio no conoce, no lleva ninguno, así que añadir un
+	// tipo sin datos propios se queda en una fila del catálogo.
 	Code string
 }
 
-// NewRelationshipType builds a relationship type somebody adds to the catalog: which role each
-// side plays. It carries no data of its own and is not hierarchical (the types that are have
-// rules of the program hanging from them). Whether the roles exist, and whether the name and the
-// code are free, is checked against the catalogs (AdmitsRelationshipType).
+// NewRelationshipType construye un tipo de relación que alguien añade al catálogo: qué rol
+// desempeña cada lado. No lleva datos propios y no es jerárquico (de los que lo son cuelgan reglas
+// del programa). Que los roles existan, y que el nombre y el código estén libres, se comprueba
+// contra los catálogos (AdmitsRelationshipType).
 func NewRelationshipType(id RelationshipTypeID, name, description, code string, from, to RoleTypeID) (RelationshipType, error) {
 	var v fw.Validation
 	n, err := vocab.NewName(name)
@@ -53,8 +53,8 @@ func NewRelationshipType(id RelationshipTypeID, name, description, code string, 
 	return RelationshipType{ID: id, Code: code, Name: n, Description: description, FromRole: from, ToRole: to}, nil
 }
 
-// AdmitsRelationshipType checks that a new relationship type fits the catalogs: its roles exist,
-// and no relationship type has its name (whatever the case) or its code.
+// AdmitsRelationshipType comprueba que un tipo de relación nuevo encaja en los catálogos: sus
+// roles existen y ningún tipo de relación tiene su nombre (sin distinguir mayúsculas) ni su código.
 func AdmitsRelationshipType(roles RoleCatalog, types map[RelationshipTypeID]RelationshipType, t RelationshipType) error {
 	var v fw.Validation
 	for _, side := range []struct {
@@ -82,7 +82,7 @@ func AdmitsRelationshipType(roles RoleCatalog, types map[RelationshipTypeID]Rela
 	return nil
 }
 
-// IndexRelationshipTypes indexes the catalog by id, refusing two types with the same code.
+// IndexRelationshipTypes indexa el catálogo por id y rechaza dos tipos con el mismo código.
 func IndexRelationshipTypes(types []RelationshipType) (map[RelationshipTypeID]RelationshipType, error) {
 	out := make(map[RelationshipTypeID]RelationshipType, len(types))
 	codes := map[string]RelationshipTypeID{}
@@ -96,9 +96,9 @@ func IndexRelationshipTypes(types []RelationshipType) (map[RelationshipTypeID]Re
 	return out, nil
 }
 
-// Relationship links two parties playing the roles its type requires, during a period
-// (UDM PARTY RELATIONSHIP). It is an aggregate of its own: a party can have thousands of
-// relationships, and each one changes independently.
+// Relationship une durante un periodo a dos parties que desempeñan los roles que exige su tipo
+// (UDM PARTY RELATIONSHIP). Es un agregado propio: una party puede tener miles de relaciones, y
+// cada una cambia por su cuenta.
 type Relationship struct {
 	fw.BaseAggregateRoot[RelationshipID]
 	traits.Audited
@@ -111,63 +111,63 @@ type Relationship struct {
 	details  RelationshipDetails
 }
 
-// RelationshipDetails are the data a relationship carries because of its type (the UDM subtypes
-// of PARTY RELATIONSHIP). As with PersonDetails and OrganizationDetails in Party, the type is
-// data and the details of each type are value objects; the ones of the other types stay zero.
+// RelationshipDetails son los datos que lleva una relación por su tipo (los subtipos UDM de PARTY
+// RELATIONSHIP). Como con PersonDetails y OrganizationDetails en Party, el tipo es un dato y los
+// detalles de cada tipo son objetos de valor; los de los otros tipos se quedan a cero.
 type RelationshipDetails struct {
-	Prospect     ProspectDetails     // types with code CodeProspect
-	Ownership    OwnershipDetails    // types with code CodeOwnership
-	Collaborator CollaboratorDetails // types with code CodeCollaborator
-	Customer     CustomerDetails     // types with code CodeCustomer
+	Prospect     ProspectDetails     // tipos con código CodeProspect
+	Ownership    OwnershipDetails    // tipos con código CodeOwnership
+	Collaborator CollaboratorDetails // tipos con código CodeCollaborator
+	Customer     CustomerDetails     // tipos con código CodeCustomer
 }
 
-// CustomerDetails are the data of a customer relationship: the number the internal organization
-// knows the customer by. Each organization numbers its own customers, so the number belongs to
-// the pair and not to the customer (in the C# it was in the Customer role, one for everybody, and
-// again in the commercial profile of the relationship).
+// CustomerDetails son los datos de una relación de cliente: el número con el que la organización
+// interna conoce al cliente. Cada organización numera a sus propios clientes, así que el número es
+// de la pareja y no del cliente (en C# estaba en el rol Customer, uno para todos, y otra vez en el
+// perfil comercial de la relación).
 type CustomerDetails struct {
-	// Number is written in capitals; empty when the organization has given none.
+	// Number se escribe en mayúsculas; vacío cuando la organización no ha dado ninguno.
 	Number string
 }
 
-// MaxCustomerNumber is the length of the longest customer number.
+// MaxCustomerNumber es la longitud del número de cliente más largo.
 const MaxCustomerNumber = 20
 
-// NormalizeCustomerNumber writes a customer number as it is kept and compared.
+// NormalizeCustomerNumber escribe un número de cliente tal como se guarda y se compara.
 func NormalizeCustomerNumber(s string) string { return strings.ToUpper(strings.TrimSpace(s)) }
 
-// CollaboratorDetails are the data of a collaborator relationship: the code the collaborator
-// gives to whom it refers, by which the internal organization knows whose a piece of business is.
-// (In the C# it was a column of a table without a model, filled by a bulk load.)
+// CollaboratorDetails son los datos de una relación de colaborador: el código que el colaborador
+// da a quienes trae, por el que la organización interna sabe de quién es un negocio. (En C# era
+// una columna de una tabla sin modelo, rellenada por una carga masiva.)
 type CollaboratorDetails struct {
-	// PromotionCode is written in capitals; empty when the collaborator has none.
+	// PromotionCode se escribe en mayúsculas; vacío cuando el colaborador no tiene.
 	PromotionCode string
 }
 
-// MaxPromotionCode is the length of the longest promotion code.
+// MaxPromotionCode es la longitud del código de promoción más largo.
 const MaxPromotionCode = 15
 
-// NormalizePromotionCode writes a promotion code as it is kept and compared.
+// NormalizePromotionCode escribe un código de promoción tal como se guarda y se compara.
 func NormalizePromotionCode(s string) string { return strings.ToUpper(strings.TrimSpace(s)) }
 
-// OwnershipDetails are the data of an ownership relationship: the stake of the shareholder.
+// OwnershipDetails son los datos de una relación de propiedad: la participación del accionista.
 type OwnershipDetails struct {
-	// Share is the direct stake in the organization, in points (30 = 30 %); nil when unknown.
+	// Share es la participación directa en la organización, en puntos (30 = 30 %); nil si no se conoce.
 	Share *vocab.Percentage
 }
 
-// ProspectDetails are the data of a prospect relationship: the free trial the internal
-// organization grants to the prospect.
+// ProspectDetails son los datos de una relación de prospect: la prueba gratuita que la
+// organización interna concede al prospect.
 type ProspectDetails struct {
-	// TrialUntil is when the trial ends (nil: no trial granted). The trial starts with the
-	// relationship; its default length is commercial policy and belongs to whoever grants it.
+	// TrialUntil es el momento en que termina la prueba (nil: no se ha concedido). La prueba empieza con la
+	// relación; su duración por defecto es política comercial y corresponde a quien la concede.
 	TrialUntil *time.Time
 }
 
-// Establish creates a relationship between two parties, checking what the C# left to stubs:
-// the parties differ, are active, and play the roles required by the type (or roles below them
-// in the hierarchy) when the relationship starts. The parties are read, never modified: giving a
-// side the role it lacks is the use case's business, before coming here.
+// Establish crea una relación entre dos parties y comprueba lo que C# dejaba en stubs: las
+// parties son distintas, están activas y desempeñan los roles que exige el tipo (o roles por
+// debajo de ellos en la jerarquía) cuando empieza la relación. Las parties se leen, nunca se
+// modifican: dar a un lado el rol que le falta es cosa del caso de uso, antes de llegar aquí.
 func Establish(id RelationshipID, t RelationshipType, from, to *Party, c RoleCatalog, since time.Time, remark string) (*Relationship, error) {
 	if from.ID() == to.ID() {
 		return nil, fw.Violation("parties.self_relationship", "a party cannot be related to itself")
@@ -204,17 +204,17 @@ func Establish(id RelationshipID, t RelationshipType, from, to *Party, c RoleCat
 	return r, nil
 }
 
-// Meets reports whether the party is what a relationship type asks of one of its sides at t: it
-// plays the role (or one below it), or the role is the category of a whole kind and the party is
-// of that kind; the root asks for any party (Duplicate Of). A type that asks for "an organization" asks for what the party is, whatever roles
-// it plays (an internal organization or a supplier may be a person too:
-// docs/DECISIONES-COMUNES.md, D-53).
+// Meets dice si la party es lo que un tipo de relación pide a uno de sus lados en t: desempeña el
+// rol (o uno por debajo de él), o el rol es la categoría de toda una clase y la party es de esa
+// clase; la raíz pide cualquier party (Duplicate Of). Un tipo que pide «una organización» pide lo
+// que la party es, desempeñe los roles que desempeñe (una organización interna o un proveedor
+// también pueden ser una persona: docs/DECISIONES-COMUNES.md, D-53).
 func (p *Party) Meets(c RoleCatalog, role RoleTypeID, t time.Time) bool {
 	return p.PlaysAt(c, role, t) || role == RolePartyRoot ||
 		(role == RoleOrganizationCategory && p.kind == KindOrganization) || (role == RolePersonCategory && p.kind == KindPerson)
 }
 
-// RelationshipState is the persisted state of a relationship.
+// RelationshipState es el estado persistido de una relación.
 type RelationshipState struct {
 	Type             RelationshipTypeID
 	From, To         PartyID
@@ -225,7 +225,7 @@ type RelationshipState struct {
 	Audit            traits.AuditStamp
 }
 
-// ReconstituteRelationship rebuilds a relationship from persisted state, without events.
+// ReconstituteRelationship reconstruye una relación a partir del estado persistido, sin eventos.
 func ReconstituteRelationship(id RelationshipID, s RelationshipState) (*Relationship, error) {
 	base, err := fw.NewBaseAggregateRoot(RelationshipKind, id)
 	if err != nil {
@@ -243,31 +243,31 @@ func ReconstituteRelationship(id RelationshipID, s RelationshipState) (*Relation
 		from: s.From, to: s.To, fromRole: s.FromRole, toRole: s.ToRole, period: s.Period, remark: s.Remark, details: s.Details}, nil
 }
 
-// Type returns the relationship type.
+// Type devuelve el tipo de relación.
 func (r *Relationship) Type() RelationshipTypeID { return r.relType }
 
-// From returns the origin party.
+// From devuelve la party de origen.
 func (r *Relationship) From() PartyID { return r.from }
 
-// To returns the destination party.
+// To devuelve la party de destino.
 func (r *Relationship) To() PartyID { return r.to }
 
-// FromRole returns the role of the origin party.
+// FromRole devuelve el rol de la party de origen.
 func (r *Relationship) FromRole() RoleTypeID { return r.fromRole }
 
-// ToRole returns the role of the destination party.
+// ToRole devuelve el rol de la party de destino.
 func (r *Relationship) ToRole() RoleTypeID { return r.toRole }
 
-// Period returns the validity of the relationship.
+// Period devuelve la vigencia de la relación.
 func (r *Relationship) Period() vocab.ValidPeriod { return r.period }
 
-// Remark returns the free comment.
+// Remark devuelve el comentario libre.
 func (r *Relationship) Remark() string { return r.remark }
 
-// Since returns when the relationship started.
+// Since devuelve cuándo empezó la relación.
 func (r *Relationship) Since() time.Time { return r.period.From() }
 
-// Until returns when the relationship ended (nil while active).
+// Until devuelve cuándo terminó la relación (nil mientras está activa).
 func (r *Relationship) Until() *time.Time {
 	if t, ok := r.period.To(); ok {
 		return &t
@@ -275,11 +275,11 @@ func (r *Relationship) Until() *time.Time {
 	return nil
 }
 
-// Involves reports whether the party is one of the sides.
+// Involves dice si la party es uno de los lados.
 func (r *Relationship) Involves(p PartyID) bool { return r.from == p || r.to == p }
 
-// Terminate ends the relationship at a moment (not before it started). Terminating an ended
-// relationship earlier than its end moves the end back; later is a no-op.
+// Terminate termina la relación en un instante (no antes de que empezara). Terminar una relación
+// ya terminada antes de su fin adelanta el fin; después no hace nada.
 func (r *Relationship) Terminate(at time.Time) error {
 	if end, closed := r.period.To(); closed && !at.Before(end) {
 		return nil
@@ -293,23 +293,22 @@ func (r *Relationship) Terminate(at time.Time) error {
 	return nil
 }
 
-// Details returns the data the relationship carries because of its type.
+// Details devuelve los datos que lleva la relación por su tipo.
 func (r *Relationship) Details() RelationshipDetails { return r.details }
 
-// TrialUntil returns when the trial of a prospect relationship ends (nil without trial).
+// TrialUntil devuelve cuándo termina la prueba de una relación de prospect (nil si no hay prueba).
 func (r *Relationship) TrialUntil() *time.Time { return r.details.Prospect.TrialUntil }
 
-// InTrialAt reports whether the trial is in force at t: the relationship is, and t is before
-// the end of the trial.
+// InTrialAt dice si la prueba está vigente en t: lo está la relación, y t es anterior al fin de
+// la prueba.
 func (r *Relationship) InTrialAt(t time.Time) bool {
 	until := r.details.Prospect.TrialUntil
 	return until != nil && r.period.IsActiveAt(t) && t.Before(*until)
 }
 
-// SetTrial grants, extends, shortens or (with nil) withdraws the trial of a prospect
-// relationship. t is the type of the relationship: only the types with code CodeProspect carry
-// a trial. The trial ends after the relationship starts, and an ended relationship keeps the
-// trial it had.
+// SetTrial concede, amplía, acorta o (con nil) retira la prueba de una relación de prospect. t es
+// el tipo de la relación: sólo los tipos con código CodeProspect llevan prueba. La prueba termina
+// después de que empiece la relación, y una relación terminada conserva la prueba que tenía.
 func (r *Relationship) SetTrial(t RelationshipType, until *time.Time) error {
 	if t.ID != r.relType || t.Code != CodeProspect {
 		return fw.Violation("parties.not_a_prospect_relationship", "only a prospect relationship has a trial")
@@ -334,7 +333,7 @@ func (r *Relationship) SetTrial(t RelationshipType, until *time.Time) error {
 	return nil
 }
 
-// requireOpen refuses to change the details of a relationship that has ended.
+// requireOpen se niega a cambiar los detalles de una relación que ha terminado.
 func (r *Relationship) requireOpen() error {
 	if end, closed := r.period.To(); closed && !end.After(fw.Now()) {
 		return fw.Violation("parties.relationship_ended", "the details of an ended relationship cannot change")
@@ -342,14 +341,14 @@ func (r *Relationship) requireOpen() error {
 	return nil
 }
 
-// OwnershipShare returns the stake of the shareholder (nil when unknown or not an ownership).
+// OwnershipShare devuelve la participación del accionista (nil si no se conoce o no es una propiedad).
 func (r *Relationship) OwnershipShare() *vocab.Percentage { return r.details.Ownership.Share }
 
 var maxShare = vocab.DecimalFromInt(100)
 
-// SetOwnershipShare records, corrects or (with nil) clears the direct stake of the shareholder in
-// an ownership relationship: above 0 and up to 100 %, with two decimals at most. t is the type of
-// the relationship: only the types with code CodeOwnership carry a stake.
+// SetOwnershipShare registra, corrige o (con nil) borra la participación directa del accionista en
+// una relación de propiedad: por encima de 0 y hasta el 100 %, con dos decimales como mucho. t es
+// el tipo de la relación: sólo los tipos con código CodeOwnership llevan participación.
 func (r *Relationship) SetOwnershipShare(t RelationshipType, share *vocab.Percentage) error {
 	if t.ID != r.relType || t.Code != CodeOwnership {
 		return fw.Violation("parties.not_an_ownership_relationship", "only an ownership relationship has a share")
@@ -375,13 +374,13 @@ func (r *Relationship) SetOwnershipShare(t RelationshipType, share *vocab.Percen
 	return nil
 }
 
-// PromotionCode returns the promotion code of the collaborator ("" when none or not a collaborator).
+// PromotionCode devuelve el código de promoción del colaborador ("" si no tiene o no es un colaborador).
 func (r *Relationship) PromotionCode() string { return r.details.Collaborator.PromotionCode }
 
-// SetPromotionCode gives the collaborator its promotion code, changes it or (with "") takes it
-// away: up to 15 letters, digits, dashes and underscores. t is the type of the relationship: only
-// the types with code CodeCollaborator carry one. That no other collaborator of the organization
-// has the code is for who calls to check.
+// SetPromotionCode da al colaborador su código de promoción, lo cambia o (con "") se lo quita:
+// hasta 15 letras, dígitos, guiones y guiones bajos. t es el tipo de la relación: sólo los tipos
+// con código CodeCollaborator lo llevan. Que ningún otro colaborador de la organización tenga el
+// código lo comprueba quien llama.
 func (r *Relationship) SetPromotionCode(t RelationshipType, code string) error {
 	if t.ID != r.relType || t.Code != CodeCollaborator {
 		return fw.Violation("parties.not_a_collaborator_relationship", "only a collaborator relationship has a promotion code")
@@ -403,14 +402,14 @@ func (r *Relationship) SetPromotionCode(t RelationshipType, code string) error {
 	return nil
 }
 
-// CustomerNumber returns the number the organization knows the customer by ("" when none or not
-// a customer relationship).
+// CustomerNumber devuelve el número con el que la organización conoce al cliente ("" si no tiene
+// o no es una relación de cliente).
 func (r *Relationship) CustomerNumber() string { return r.details.Customer.Number }
 
-// SetCustomerNumber gives the customer its number in the organization, changes it or (with "")
-// takes it away: up to 20 letters, digits, dashes, dots, slashes and underscores. t is the type
-// of the relationship: only the types with code CodeCustomer carry one. That no other customer of
-// the organization has the number is for who calls to check.
+// SetCustomerNumber da al cliente su número en la organización, lo cambia o (con "") se lo quita:
+// hasta 20 letras, dígitos, guiones, puntos, barras y guiones bajos. t es el tipo de la relación:
+// sólo los tipos con código CodeCustomer lo llevan. Que ningún otro cliente de la organización
+// tenga el número lo comprueba quien llama.
 func (r *Relationship) SetCustomerNumber(t RelationshipType, number string) error {
 	if t.ID != r.relType || t.Code != CodeCustomer {
 		return fw.Violation("parties.not_a_customer_relationship", "only a customer relationship has a customer number")
@@ -432,7 +431,7 @@ func (r *Relationship) SetCustomerNumber(t RelationshipType, number string) erro
 	return nil
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (r *Relationship) AuditSnapshot() map[string]any {
 	format := func(t *time.Time) string {
 		if t == nil {
@@ -446,7 +445,7 @@ func (r *Relationship) AuditSnapshot() map[string]any {
 		"customerNumber": r.CustomerNumber()}
 }
 
-// shareText renders a stake with two decimals ("" for nil).
+// shareText escribe una participación con dos decimales ("" para nil).
 func shareText(p *vocab.Percentage) string {
 	if p == nil {
 		return ""

@@ -76,32 +76,32 @@ func TestSchedule(t *testing.T) {
 		NoPayment: domain.MonthRange{From: time.August}}); err == nil {
 		t.Fatal("both months of the no payment period")
 	}
-	// 30/60/90 days: equal parts, the remainder on the last one.
+	// 30/60/90 días: partes iguales, el resto en la última.
 	t369 := terms(t, domain.TermsState{Installments: 3, DaysToFirst: 30, DaysBetween: 30})
 	expect(t, schedule(t, t369, "2026-01-15", "1000", nil), "2026-02-14", "333.33", "2026-03-16", "333.33", "2026-04-15", "333.34")
-	// Commercial months: 30 days are a month.
+	// Meses comerciales: 30 días son un mes.
 	com := terms(t, domain.TermsState{Installments: 3, DaysToFirst: 30, DaysBetween: 30, CommercialMonth: true})
 	expect(t, schedule(t, com, "2026-01-31", "100", nil), "2026-02-28", "33.33", "2026-03-31", "33.33", "2026-04-30", "33.34")
-	// Fixed days 5 and 20; a fixed 31 clamps to the end of the month.
+	// Días fijos 5 y 20; un 31 fijo se queda en el último día del mes.
 	fixed := terms(t, domain.TermsState{DaysToFirst: 30, FixedDays: []int{20, 5}})
 	expect(t, schedule(t, fixed, "2026-01-15", "10", nil), "2026-02-20", "10")
 	expect(t, schedule(t, fixed, "2026-01-25", "10", nil), "2026-03-05", "10")
 	end := terms(t, domain.TermsState{DaysToFirst: 10, FixedDays: []int{31}})
 	expect(t, schedule(t, end, "2026-02-10", "10", nil), "2026-02-28", "10")
-	// No payment in August; the period may wrap around the year.
+	// Sin pagos en agosto; el periodo puede dar la vuelta al año.
 	august := terms(t, domain.TermsState{DaysToFirst: 30, NoPayment: domain.MonthRange{From: time.August, To: time.August}})
 	expect(t, schedule(t, august, "2026-07-10", "10", nil), "2026-09-01", "10")
 	augustFixed := terms(t, domain.TermsState{DaysToFirst: 30, FixedDays: []int{10}, NoPayment: domain.MonthRange{From: time.August, To: time.August}})
 	expect(t, schedule(t, augustFixed, "2026-07-10", "10", nil), "2026-09-10", "10")
 	winter := terms(t, domain.TermsState{DaysToFirst: 30, NoPayment: domain.MonthRange{From: time.December, To: time.January}})
 	expect(t, schedule(t, winter, "2026-11-20", "10", nil), "2027-02-01", "10")
-	// Holidays: back up to BackwardDays, else forward.
+	// Festivos: hacia atrás hasta BackwardDays; si no, hacia delante.
 	cal := holidays{"2026-02-14": true, "2026-02-13": true}
 	back1 := terms(t, domain.TermsState{DaysToFirst: 30, ControlHolidays: true, BackwardDays: 1})
 	expect(t, schedule(t, back1, "2026-01-15", "10", cal), "2026-02-15", "10")
 	back2 := terms(t, domain.TermsState{DaysToFirst: 30, ControlHolidays: true, BackwardDays: 2})
 	expect(t, schedule(t, back2, "2026-01-15", "10", cal), "2026-02-12", "10")
-	// A credit is due at once.
+	// Un abono vence en el acto.
 	expect(t, schedule(t, t369, "2026-01-15", "-36.41", nil), "2026-01-15", "-36.41")
 }
 

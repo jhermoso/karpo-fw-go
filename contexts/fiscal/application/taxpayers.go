@@ -9,7 +9,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// TermsInput are the editable terms of a taxpayer.
+// TermsInput son las condiciones editables de un contribuyente.
 type TermsInput struct {
 	Territory             string `json:"territory"`
 	FiscalYearStartMonth  int    `json:"fiscalYearStartMonth"`
@@ -17,19 +17,19 @@ type TermsInput struct {
 	DifferentiatedSectors bool   `json:"differentiatedSectors,omitempty"`
 }
 
-// RegisterTaxpayer creates the fiscal profile of an internal organization.
+// RegisterTaxpayer crea el perfil fiscal de una organización interna.
 type RegisterTaxpayer struct {
 	Organization string `json:"organization"`
 	TermsInput
 }
 
-// SetTaxpayerTerms replaces the terms of a taxpayer.
+// SetTaxpayerTerms sustituye las condiciones de un contribuyente.
 type SetTaxpayerTerms struct {
 	ID domain.TaxpayerID `json:"-"`
 	TermsInput
 }
 
-// AddActivity adds an economic activity.
+// AddActivity añade una actividad económica.
 type AddActivity struct {
 	ID               domain.TaxpayerID `json:"-"`
 	Code             string            `json:"code"`
@@ -43,14 +43,14 @@ type AddActivity struct {
 	EstimationRegime string            `json:"estimationRegime,omitempty"`
 }
 
-// EndActivity ends an activity.
+// EndActivity termina una actividad.
 type EndActivity struct {
 	ID       domain.TaxpayerID `json:"-"`
 	Activity string            `json:"activity"`
 	On       vocab.Date        `json:"on"`
 }
 
-// AddObligation registers a form to file.
+// AddObligation registra un modelo que hay que presentar.
 type AddObligation struct {
 	ID          domain.TaxpayerID `json:"-"`
 	Form        string            `json:"form"`
@@ -59,20 +59,20 @@ type AddObligation struct {
 	UntilYear   int               `json:"untilYear,omitempty"`
 }
 
-// EndObligation ends an obligation after a year.
+// EndObligation termina una obligación después de un año.
 type EndObligation struct {
 	ID         domain.TaxpayerID `json:"-"`
 	Obligation string            `json:"obligation"`
 	LastYear   int               `json:"lastYear"`
 }
 
-// GetTaxpayer loads a taxpayer by id or by organization.
+// GetTaxpayer carga un contribuyente por id o por organización.
 type GetTaxpayer struct {
 	ID           domain.TaxpayerID
 	Organization string
 }
 
-// ActivityDTO is the transport form of an activity.
+// ActivityDTO es la forma de transporte de una actividad.
 type ActivityDTO struct {
 	ID               string `json:"id"`
 	Code             string `json:"code"`
@@ -86,7 +86,7 @@ type ActivityDTO struct {
 	EstimationRegime string `json:"estimationRegime,omitempty"`
 }
 
-// ObligationDTO is the transport form of an obligation.
+// ObligationDTO es la forma de transporte de una obligación.
 type ObligationDTO struct {
 	ID          string `json:"id"`
 	Form        string `json:"form"`
@@ -95,7 +95,7 @@ type ObligationDTO struct {
 	UntilYear   int    `json:"untilYear,omitempty"`
 }
 
-// TaxpayerDTO is the transport form of a taxpayer.
+// TaxpayerDTO es la forma de transporte de un contribuyente.
 type TaxpayerDTO struct {
 	ID                    string          `json:"id"`
 	Organization          string          `json:"organization"`

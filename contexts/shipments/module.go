@@ -1,4 +1,5 @@
-// Package shipments composes the Shipments (Envíos) bounded context on a hot-swap backend.
+// Package shipments compone el contexto delimitado Shipments (Envíos) sobre un backend
+// intercambiable en caliente.
 package shipments
 
 import (
@@ -20,16 +21,16 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 )
 
-// Module is the composed context.
+// Module es el contexto compuesto.
 type Module struct {
 	Service           *sapp.Service
 	IntegrationOutbox application.OutboxStore
 	Audit             application.AuditLog
-	// Consumer receives the delivery notes of Orders to ship: subscribe it to the transport.
+	// Consumer recibe los albaranes de Orders que hay que enviar: hay que suscribirlo al transporte.
 	Consumer *messaging.Consumer
 }
 
-// Compose builds the context on sw.
+// Compose construye el contexto sobre sw.
 func Compose(sw *hotswap.Switch) *Module {
 	integration := hotswap.Outbox(sw, infrastructure.IntegrationOutboxFactory)
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
@@ -44,7 +45,7 @@ func Compose(sw *hotswap.Switch) *Module {
 	return &Module{Service: sapp.NewService(d), IntegrationOutbox: integration, Audit: audit, Consumer: consumer}
 }
 
-// Relay forwards the Published Language to a transport.
+// Relay reenvía el Published Language a un transporte.
 func (m *Module) Relay(sender application.MessageSender, opts ...outbox.RelayOption) *outbox.Relay {
 	return messaging.NewRelay(contracts.Source, m.IntegrationOutbox, sender, opts...)
 }
@@ -94,7 +95,7 @@ func create[In, Out any](status int, run func(context.Context, In) (Out, error))
 	}
 }
 
-// RegisterRoutes implements distribution.EndpointModule.
+// RegisterRoutes implementa distribution.EndpointModule.
 func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	svc := m.Service
 	sid, cid := domain.ParseShipmentID, domain.ParseCarrierID

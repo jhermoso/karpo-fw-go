@@ -13,21 +13,23 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// EmployeeTerminated is the Parties copy of hr.employee-terminated.v1: only the fields it needs.
+// EmployeeTerminated es la copia en Parties de hr.employee-terminated.v1: sólo los campos que
+// necesita.
 type EmployeeTerminated struct {
 	Person     string `json:"person"`
 	Employer   string `json:"employer"`
-	Terminated string `json:"terminated"` // civil date: the last working day
+	Terminated string `json:"terminated"` // fecha civil: el último día trabajado
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (EmployeeTerminated) IntegrationEventType() string { return "hr.employee-terminated.v1" }
 
-// subscriber is the identity Parties uses when it reacts to other contexts.
+// subscriber es la identidad que usa Parties cuando reacciona a otros contextos.
 var subscriber = fw.MustParseUUID("10000000-0000-0000-00ff-000000000001")
 
-// systemContext authorizes a reaction: a service actor with only the permission it needs and no
-// organization scope limit (the fact comes from a trusted context, not from a user).
+// systemContext autoriza una reacción: un actor de servicio con sólo el permiso que necesita y
+// sin límite de ámbito de organización (el hecho viene de un contexto de confianza, no de un
+// usuario).
 func systemContext(ctx context.Context, name string, perms ...authz.Permission) (context.Context, error) {
 	ac, err := authz.NewContext(authz.Context{Subject: subscriber, SubjectName: name, Kind: authz.Service, ActorPartyID: subscriber,
 		Permissions: perms})
@@ -38,10 +40,10 @@ func systemContext(ctx context.Context, name string, perms ...authz.Permission) 
 	return authz.WithContext(ctx, ac), nil
 }
 
-// Subscribe registers the reactions of Parties to other contexts on c (approved decision 4 of
-// docs/RRHH.md): when HR terminates an employment, the Employment relationship between the person
-// and the employer ends at the end of the last working day, and with it the affiliation.
-// Redeliveries are harmless: an already ended relationship is not found again.
+// Subscribe registra en c las reacciones de Parties a otros contextos (decisión aprobada 4 de
+// docs/RRHH.md): cuando HR da por terminado un empleo, la relación Employment entre la persona y
+// el empleador termina al final del último día trabajado, y con ella la afiliación.
+// Las reentregas no hacen daño: una relación ya terminada no se vuelve a encontrar.
 func Subscribe(c *messaging.Consumer, svc *Service, relationships domain.RelationshipRepository) {
 	messaging.Handle(c, func(ctx context.Context, e EmployeeTerminated, _ app.Envelope) error {
 		person, err1 := domain.ParsePartyID(e.Person)
@@ -65,7 +67,7 @@ func Subscribe(c *messaging.Consumer, svc *Service, relationships domain.Relatio
 		for _, r := range rs {
 			end := at
 			if !end.After(r.Since()) {
-				end = fw.Now() // affiliated after the last working day: it ends when HR reports the fact
+				end = fw.Now() // afiliada después del último día trabajado: termina cuando HR comunica el hecho
 			}
 			if _, err := svc.TerminateRelationship.Handle(sys, TerminateRelationship{ID: r.ID(), At: timePtr(end)}); err != nil {
 				return err

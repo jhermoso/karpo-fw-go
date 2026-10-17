@@ -1,11 +1,12 @@
-// Package messaging implements the integration event contracts of the application layer:
+// Package messaging implementa los contratos de eventos de integración de la capa de aplicación:
 //
-//   - Recorder translates domain events into integration events (Published Language) and
-//     records them in the integration outbox, in the same unit of work as the aggregate;
-//   - NewRelay forwards the integration outbox to a transport (application.MessageSender),
-//     at-least-once;
-//   - Consumer decodes envelopes for a downstream bounded context and runs each handler inside
-//     a unit of work together with the inbox claim, so a redelivered message has no effect.
+//   - Recorder traduce eventos de dominio a eventos de integración (Published Language) y los
+//     registra en el outbox de integración, en la misma unidad de trabajo que el agregado;
+//   - NewRelay reenvía el outbox de integración a un transporte (application.MessageSender),
+//     al menos una vez;
+//   - Consumer decodifica sobres para un contexto delimitado aguas abajo y ejecuta cada manejador
+//     dentro de una unidad de trabajo junto con la reclamación del inbox, de modo que un mensaje
+//     reentregado no tiene efecto.
 package messaging
 
 import (
@@ -24,10 +25,10 @@ import (
 
 var typePattern = regexp.MustCompile(`^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+\.v[1-9][0-9]*$`)
 
-// ValidType reports whether an integration event type follows "{context}.{fact}.v{n}".
+// ValidType dice si un tipo de evento de integración sigue "{context}.{fact}.v{n}".
 func ValidType(t string) bool { return typePattern.MatchString(t) }
 
-// TypeOf returns the integration event type declared by the value type E.
+// TypeOf devuelve el tipo de evento de integración que declara el tipo valor E.
 func TypeOf[E application.IntegrationEvent]() string {
 	var zero E
 	if reflect.TypeFor[E]().Kind() == reflect.Pointer {
@@ -37,12 +38,12 @@ func TypeOf[E application.IntegrationEvent]() string {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Publishing side
+// Lado de publicación
 // ---------------------------------------------------------------------------------------------
 
-// Recorder is the application.EventRecorder of the integration outbox: it runs the translators
-// of a bounded context and appends the resulting integration events to store. Combine it with
-// the domain outbox recorder through outbox.Recorders.
+// Recorder es el application.EventRecorder del outbox de integración: ejecuta los traductores de
+// un contexto delimitado y añade a store los eventos de integración resultantes. Se combina con el
+// registrador del outbox de dominio mediante outbox.Recorders.
 type Recorder struct {
 	source      string
 	store       application.OutboxStore
@@ -53,12 +54,12 @@ type Recorder struct {
 
 var _ application.EventRecorder = (*Recorder)(nil)
 
-// NewRecorder creates a recorder for the bounded context source over the integration outbox.
+// NewRecorder crea un registrador para el contexto delimitado source sobre el outbox de integración.
 func NewRecorder(source string, store application.OutboxStore) *Recorder {
 	return &Recorder{source: source, store: store, byType: map[string][]application.Translator{}}
 }
 
-// Use registers a translator that sees every domain event.
+// Use registra un traductor que ve todos los eventos de dominio.
 func (r *Recorder) Use(t application.Translator) *Recorder {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -66,7 +67,7 @@ func (r *Recorder) Use(t application.Translator) *Recorder {
 	return r
 }
 
-// On registers a typed translation for the domain event E.
+// On registra una traducción tipada para el evento de dominio E.
 //
 //	messaging.On(rec, func(ctx context.Context, e domain.PartyRegistered) ([]application.IntegrationEvent, error) {
 //		return []application.IntegrationEvent{contracts.PartyRegistered{PartyID: e.PartyID.String(), ...}}, nil
@@ -85,7 +86,7 @@ func On[E domain.Event](r *Recorder, fn func(ctx context.Context, evt E) ([]appl
 	}))
 }
 
-// Record implements application.EventRecorder.
+// Record implementa application.EventRecorder.
 func (r *Recorder) Record(ctx context.Context, evts []domain.Event) error {
 	var msgs []application.OutboxMessage
 	r.mu.RLock()
@@ -134,7 +135,7 @@ func (r *Recorder) message(ctx context.Context, evt domain.Event, ie application
 	}, nil
 }
 
-// Envelope builds the wire envelope of an integration outbox message.
+// Envelope construye el sobre de cable de un mensaje del outbox de integración.
 func Envelope(source string, m application.OutboxMessage) application.Envelope {
 	return application.Envelope{
 		ID: m.ID, Type: m.EventType, Source: source, Subject: m.AggregateID, OccurredAt: m.OccurredAt,
@@ -142,8 +143,8 @@ func Envelope(source string, m application.OutboxMessage) application.Envelope {
 	}
 }
 
-// NewRelay forwards the integration outbox of source to sender (at-least-once: consumers
-// deduplicate with their inbox). Run it with Relay.Run or Relay.RelayOnce.
+// NewRelay reenvía el outbox de integración de source a sender (al menos una vez: los consumidores
+// eliminan duplicados con su inbox). Se ejecuta con Relay.Run o Relay.RelayOnce.
 func NewRelay(source string, store application.OutboxStore, sender application.MessageSender, opts ...outbox.RelayOption) *outbox.Relay {
 	opts = append([]outbox.RelayOption{outbox.WithRelayName(source)}, opts...)
 	return outbox.NewForwarder(store, func(ctx context.Context, m application.OutboxMessage) error {
@@ -152,12 +153,12 @@ func NewRelay(source string, store application.OutboxStore, sender application.M
 }
 
 // ---------------------------------------------------------------------------------------------
-// Consuming side
+// Lado de consumo
 // ---------------------------------------------------------------------------------------------
 
-// Consumer is the application.MessageHandler of a downstream bounded context. Each handled
-// message runs in one unit of work with its inbox claim: duplicates are skipped and a failing
-// handler rolls the claim back, so the redelivery is processed again.
+// Consumer es el application.MessageHandler de un contexto delimitado aguas abajo. Cada mensaje
+// manejado se ejecuta en una unidad de trabajo con su reclamación del inbox: los duplicados se
+// saltan y un manejador que falla deshace la reclamación, así que la reentrega se procesa de nuevo.
 type Consumer struct {
 	name     string
 	inbox    application.InboxStore
@@ -169,17 +170,17 @@ type Consumer struct {
 
 var _ application.MessageHandler = (*Consumer)(nil)
 
-// NewConsumer creates the consumer name (the inbox partition, usually the bounded context).
+// NewConsumer crea el consumidor name (la partición del inbox, normalmente el contexto delimitado).
 func NewConsumer(name string, inbox application.InboxStore, uow domain.UnitOfWork) *Consumer {
 	return &Consumer{name: name, inbox: inbox, uow: uow, handlers: map[string]func(context.Context, application.Envelope) error{}}
 }
 
-// Name returns the consumer name.
+// Name devuelve el nombre del consumidor.
 func (c *Consumer) Name() string { return c.name }
 
-// Handle registers a typed handler for the integration event E. The consumer owns its copy of
-// the upstream contract (a struct with the fields it needs): unknown fields are ignored, which
-// lets the upstream add fields without breaking it.
+// Handle registra un manejador tipado para el evento de integración E. El consumidor es dueño de
+// su copia del contrato del proveedor (un struct con los campos que necesita): los campos
+// desconocidos se ignoran, lo que permite al proveedor añadir campos sin romperlo.
 func Handle[E application.IntegrationEvent](c *Consumer, fn func(ctx context.Context, evt E, env application.Envelope) error) {
 	name := TypeOf[E]()
 	c.mu.Lock()
@@ -193,7 +194,7 @@ func Handle[E application.IntegrationEvent](c *Consumer, fn func(ctx context.Con
 	}
 }
 
-// Types returns the integration event types the consumer handles (to subscribe a transport).
+// Types devuelve los tipos de evento de integración que maneja el consumidor (para suscribir un transporte).
 func (c *Consumer) Types() []string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -204,8 +205,8 @@ func (c *Consumer) Types() []string {
 	return out
 }
 
-// HandleMessage implements application.MessageHandler. Messages of types without a handler are
-// acknowledged without effect.
+// HandleMessage implementa application.MessageHandler. Los mensajes de tipos sin manejador se
+// confirman sin efecto.
 func (c *Consumer) HandleMessage(ctx context.Context, env application.Envelope) error {
 	c.mu.RLock()
 	h, ok := c.handlers[env.Type]
@@ -221,14 +222,14 @@ func (c *Consumer) HandleMessage(ctx context.Context, env application.Envelope) 
 	}
 	ctx, done := tel.start(ctx, c.name, env)
 	if env.ID == "" {
-		// Rejected, but still counted and logged: a producer sending envelopes without id is a
-		// fault to see in the metrics, not a silent drop.
+		// Se rechaza, pero se cuenta y se registra igualmente: un productor que envía sobres sin id
+		// es un fallo que hay que ver en las métricas, no un descarte silencioso.
 		err := fmt.Errorf("%w: envelope without id", domain.ErrValidation)
 		done(false, err)
 		return err
 	}
-	// A panicking handler rolls its unit of work back (uow.Do re-raises): the span is closed and
-	// the failure counted before the panic goes on.
+	// Un manejador que entra en pánico deshace su unidad de trabajo (uow.Do lo relanza): el span se
+	// cierra y el fallo se cuenta antes de que el pánico siga su curso.
 	defer func() {
 		if p := recover(); p != nil {
 			done(false, panicError(p))
@@ -248,7 +249,7 @@ func (c *Consumer) HandleMessage(ctx context.Context, env application.Envelope) 
 	return err
 }
 
-// panicError turns a recovered value into the error a panic left.
+// panicError convierte un valor recuperado en el error que dejó un pánico.
 func panicError(r any) error {
 	if err, ok := r.(error); ok {
 		return fmt.Errorf("panic: %w", err)
@@ -256,5 +257,5 @@ func panicError(r any) error {
 	return fmt.Errorf("panic: %v", r)
 }
 
-// Lag returns how long ago the message happened (for metrics and logs).
+// Lag devuelve cuánto hace que ocurrió el mensaje (para métricas y logs).
 func Lag(env application.Envelope) time.Duration { return domain.Now().Sub(env.OccurredAt) }

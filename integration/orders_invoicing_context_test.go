@@ -36,10 +36,11 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 )
 
-// TestOrdersInvoicing runs the sales cycle on every engine with seven contexts migrated in the
-// same database (the Billing and Orders migrations that add columns included): an order, its
-// delivery note, the invoice Billing drafts from it through its SQL inbox with the source of the
-// invoice round trip, the issued invoice recorded on the delivery note and the receivable opened.
+// TestOrdersInvoicing ejecuta el ciclo de venta en cada motor con siete contextos migrados en la
+// misma base de datos (incluidas las migraciones de Billing y Orders que añaden columnas): un
+// pedido, su albarán, la factura que Billing prepara en borrador a partir de él a través de su inbox
+// SQL con ida y vuelta del origen de la factura, la factura emitida anotada en el albarán y la
+// cuenta por cobrar abierta.
 func TestOrdersInvoicing(t *testing.T) {
 	for _, e := range engines {
 		if e.name == "oracle-dotnet-guids" {

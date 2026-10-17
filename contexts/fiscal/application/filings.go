@@ -10,40 +10,40 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
 )
 
-// GenerateFiling generates (or regenerates, while a draft) a form of an organization for a
-// period from the withholdings reported by Payroll.
+// GenerateFiling genera (o regenera, mientras es borrador) un modelo de una organización para un
+// periodo a partir de las retenciones que comunica Payroll.
 type GenerateFiling struct {
 	Organization string `json:"organization"`
 	Form         string `json:"form"`
 	Year         int    `json:"year"`
-	Period       string `json:"period"` // AEAT code: 01–12, 1T–4T, 0A
+	Period       string `json:"period"` // código AEAT: 01–12, 1T–4T, 0A
 }
 
-// SubmitFiling records the submission of a draft with the AEAT reference (CSV).
+// SubmitFiling registra la presentación de un borrador con la referencia de la AEAT (CSV).
 type SubmitFiling struct {
 	ID        domain.FilingID `json:"-"`
 	Reference string          `json:"reference,omitempty"`
 }
 
-// RevertFiling reverts a submitted filing.
+// RevertFiling revierte una declaración presentada.
 type RevertFiling struct {
 	ID     domain.FilingID `json:"-"`
 	Reason string          `json:"reason"`
 }
 
-// DiscardFiling deletes a draft.
+// DiscardFiling borra un borrador.
 type DiscardFiling struct{ ID domain.FilingID }
 
-// GetFiling loads a filing.
+// GetFiling carga una declaración.
 type GetFiling struct{ ID domain.FilingID }
 
-// SearchFilings searches filings of the caller's scope.
+// SearchFilings busca declaraciones del alcance del llamante.
 type SearchFilings struct {
 	Organization, Form, Status string
 	Year, Page, Size           int
 }
 
-// RecipientDTO is a line of a filing.
+// RecipientDTO es una línea de una declaración.
 type RecipientDTO struct {
 	Party       string `json:"party"`
 	NIF         string `json:"nif,omitempty"`
@@ -55,7 +55,7 @@ type RecipientDTO struct {
 	Withheld    string `json:"withheld"`
 }
 
-// FilingDTO is the transport form of a filing.
+// FilingDTO es la forma de transporte de una declaración.
 type FilingDTO struct {
 	ID            string         `json:"id"`
 	Declarant     string         `json:"declarant"`
@@ -93,7 +93,7 @@ func filingDTO(f *domain.Filing) FilingDTO {
 	return d
 }
 
-// content computes the identity of the declarant and the lines of a form for a period.
+// content calcula la identidad del declarante y las líneas de un modelo para un periodo.
 func (s service) content(ctx context.Context, org domain.OrganizationID, year int, p domain.Period) (domain.Identity, []domain.Recipient, error) {
 	from, to := p.Bounds(year)
 	ws, err := s.Withholdings.Find(ctx, domain.PaidBetween(org, from, to))
@@ -111,8 +111,8 @@ func (s service) content(ctx context.Context, org domain.OrganizationID, year in
 	return ids[domain.PartyID{UUID: org.UUID}], domain.Summarize(ws, ids), nil
 }
 
-// next returns the next number of a form for a declarant and year (the counter is created on
-// first use; concurrent submissions conflict and are retried).
+// next devuelve el siguiente número de un modelo para un declarante y un año (el contador se crea
+// en el primer uso; las presentaciones concurrentes chocan y se reintentan).
 func (s service) next(ctx context.Context, d domain.OrganizationID, form domain.Form, year int) (int64, error) {
 	cs, err := s.Counters.Find(ctx, spec.And(domain.CntFieldDeclarant.Eq(d), domain.CntFieldForm.Eq(string(form)), domain.CntFieldYear.Eq(year)))
 	if err != nil {
@@ -201,7 +201,7 @@ func (s service) filingUseCases(svc *Service) {
 	svc.SubmitFiling = guard(PermFilingSubmit, func(ctx context.Context, c SubmitFiling) (FilingDTO, error) {
 		return update(ctx, c.ID, func(ctx context.Context, f *domain.Filing) error {
 			if p := f.Problems(); len(p) > 0 {
-				return f.Submit(1, c.Reference, fw.Now()) // reports the problems without consuming a number
+				return f.Submit(1, c.Reference, fw.Now()) // informa de los problemas sin gastar un número
 			}
 			st := f.State()
 			n, err := s.next(ctx, st.Declarant, st.Form, st.Year)

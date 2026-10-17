@@ -2,7 +2,7 @@ package domain
 
 import fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 
-// PartyRegistered is raised when a party is registered.
+// PartyRegistered se lanza cuando se da de alta una party.
 type PartyRegistered struct {
 	fw.EventMeta
 	Type      string `json:"type"`
@@ -10,20 +10,20 @@ type PartyRegistered struct {
 	TaxID     string `json:"taxId"`
 }
 
-// EventType implements domain.Event.
+// EventType implementa domain.Event.
 func (PartyRegistered) EventType() string { return "parties.party_registered" }
 
-// PartyRenamed is raised when the legal name changes.
+// PartyRenamed se lanza cuando cambia la razón social.
 type PartyRenamed struct {
 	fw.EventMeta
 	From string `json:"from"`
 	To   string `json:"to"`
 }
 
-// EventType implements domain.Event.
+// EventType implementa domain.Event.
 func (PartyRenamed) EventType() string { return "parties.party_renamed" }
 
-// ContactAdded is raised when a contact mechanism is added.
+// ContactAdded se lanza cuando se añade un medio de contacto.
 type ContactAdded struct {
 	fw.EventMeta
 	Kind    string `json:"kind"`
@@ -31,11 +31,11 @@ type ContactAdded struct {
 	Primary bool   `json:"primary"`
 }
 
-// EventType implements domain.Event.
+// EventType implementa domain.Event.
 func (ContactAdded) EventType() string { return "parties.contact_added" }
 
-// PartyDeactivated is raised when a party is deactivated.
+// PartyDeactivated se lanza cuando se desactiva una party.
 type PartyDeactivated struct{ fw.EventMeta }
 
-// EventType implements domain.Event.
+// EventType implementa domain.Event.
 func (PartyDeactivated) EventType() string { return "parties.party_deactivated" }

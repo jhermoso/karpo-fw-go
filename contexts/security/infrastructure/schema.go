@@ -1,6 +1,7 @@
-// Package infrastructure stores the Security context: SQL mappings of its aggregates, the
-// versioned schema of the five engines (with the system roles and the own permissions as seed),
-// the password hasher, the hot-swap factories and the adapters over the Parties contracts.
+// Package infrastructure guarda el contexto Security: los mapeos SQL de sus agregados, el esquema
+// versionado de los cinco motores (con los roles del sistema y los permisos propios como semilla),
+// el hasher de contraseñas, las factorías intercambiables en caliente y los adaptadores sobre los contratos de
+// Parties.
 package infrastructure
 
 import (
@@ -19,10 +20,10 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlserver"
 )
 
-// Context is the name of the bounded context.
+// Context es el nombre del contexto delimitado.
 const Context = "security"
 
-// Technical tables of the context.
+// Tablas técnicas del contexto.
 const (
 	TableOutbox            = "security_outbox"
 	TableIntegrationOutbox = "security_integration_outbox"
@@ -32,9 +33,9 @@ const (
 const auditCols = `created_at {ts}, created_by_id {str:64}, created_by_name {str:200},
 	modified_at {ts}, modified_by_id {str:64}, modified_by_name {str:200}`
 
-// The seven C# tables become eight: union tables lose their own id (they are children of their
-// aggregate, unique by construction), the user gains its external identities, and the columns
-// nobody read are gone (see docs/SEGURIDAD.md, section 4).
+// Las siete tablas de C# pasan a ser ocho: las tablas de unión pierden su id propio (son hijas de
+// su agregado, únicas por construcción), el usuario gana sus identidades externas, y desaparecen
+// las columnas que nadie leía (ver docs/SEGURIDAD.md, sección 4).
 var schemaDDL = []string{
 	`CREATE TABLE sec_permissions (id {uuid} NOT NULL PRIMARY KEY, version {bigint} NOT NULL, code {str:200} NOT NULL,
 	description {str:500}, active {bool} NOT NULL)`,
@@ -82,10 +83,10 @@ func technicalDDL(d string) []string {
 	return nil
 }
 
-// Migrations is the versioned schema of the context. The users of each installation are business
-// data; the seed is the catalog: the permissions Security declares and the five system roles
-// (same GUIDs as the C# WellKnownSecurityCatalog) with the permissions of the standard rule. The
-// permissions of the other contexts enter with Catalog.Sync when the host starts.
+// Migrations es el esquema versionado del contexto. Los usuarios de cada instalación son datos de
+// negocio; la semilla es el catálogo: los permisos que declara Security y los cinco roles del
+// sistema (los mismos GUID que WellKnownSecurityCatalog de C#) con los permisos de la regla
+// estándar. Los permisos de los otros contextos entran con Catalog.Sync al arrancar el anfitrión.
 func Migrations() sqlrepo.MigrationSet {
 	technical := map[string][]string{}
 	for _, d := range sqlrepo.Dialects {
@@ -124,12 +125,12 @@ func seedCatalog(ctx context.Context, db *sqlrepo.DB) error {
 	return db.InsertMany(ctx, "sec_role_permissions", []string{"role_id", "code"}, grants)
 }
 
-// Migrator returns the schema migrator of the context.
+// Migrator devuelve el migrador del esquema del contexto.
 func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 	return sqlrepo.NewMigrator(db, []sqlrepo.MigrationSet{Migrations()})
 }
 
-// DropAll removes the tables of the context and its migration history (tests only).
+// DropAll quita las tablas del contexto y su historial de migraciones (sólo pruebas).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
 	for _, t := range []string{"sec_sessions", "sec_user_identities", "sec_user_accesses", "sec_user_roles", "sec_users",
 		"sec_role_permissions", "sec_roles", "sec_permissions", TableOutbox, TableIntegrationOutbox, TableAuditLog} {

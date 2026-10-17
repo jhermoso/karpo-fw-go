@@ -10,20 +10,21 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// ContactID identifies a contact of a party (child entity; other contexts may reference it, as
-// the C# commercial profiles referenced bill-to and ship-to contact mechanisms).
+// ContactID identifica un contacto de una party (entidad hija; otros contextos pueden
+// referenciarlo, como los perfiles comerciales de C# referenciaban los medios de contacto de
+// facturación y de envío).
 type ContactID struct{ fw.UUID }
 
-// NewContactID returns a new identity.
+// NewContactID devuelve una identidad nueva.
 func NewContactID() ContactID { return ContactID{fw.NewUUID()} }
 
-// ParseContactID parses a textual identity.
+// ParseContactID interpreta una identidad en texto.
 func ParseContactID(s string) (ContactID, error) { u, err := fw.ParseUUID(s); return ContactID{u}, err }
 
-// ContactKind is the channel of a contact.
+// ContactKind es el canal de un contacto.
 type ContactKind string
 
-// Contact kinds (the C# ContactMechanismType rows; social media is a Web URL).
+// Clases de contacto (las filas ContactMechanismType de C#; las redes sociales son una URL web).
 const (
 	ContactEmail  ContactKind = "email"
 	ContactPhone  ContactKind = "phone"
@@ -32,12 +33,12 @@ const (
 	ContactPostal ContactKind = "postal"
 )
 
-// Purpose tells what a contact is used for. Each purpose is held by at most one current contact
-// of each kind (one default e-mail, one billing address...). The C# DEFAULT-POSTAL,
-// DEFAULT-EMAIL, DEFAULT-PHONE and DEFAULT-FAX are PurposeDefault on the matching kind.
+// Purpose dice para qué se usa un contacto. Cada propósito lo tiene como mucho un contacto vigente
+// de cada clase (un e-mail por defecto, una dirección de facturación...). Los DEFAULT-POSTAL,
+// DEFAULT-EMAIL, DEFAULT-PHONE y DEFAULT-FAX de C# son PurposeDefault en la clase que corresponde.
 type Purpose string
 
-// Purposes.
+// Propósitos.
 const (
 	PurposeDefault  Purpose = "default"
 	PurposeBilling  Purpose = "billing"
@@ -46,7 +47,7 @@ const (
 	PurposeWork     Purpose = "work"
 )
 
-// ParsePurpose validates a purpose.
+// ParsePurpose valida un propósito.
 func ParsePurpose(s string) (Purpose, error) {
 	switch p := Purpose(strings.ToLower(strings.TrimSpace(s))); p {
 	case PurposeDefault, PurposeBilling, PurposeShipping, PurposeHome, PurposeWork:
@@ -57,19 +58,19 @@ func ParsePurpose(s string) (Purpose, error) {
 	return "", v.Err()
 }
 
-// GeoRef references the Geography context by identity (decision of the context map: geography
-// is its own context; the address keeps the ids and validates them through a port).
+// GeoRef referencia al contexto Geography por identidad (decisión del mapa de contextos: la
+// geografía es un contexto propio; la dirección guarda los ids y los valida a través de un puerto).
 type GeoRef struct {
-	PostalCode fw.UUID // postal code entry, optional
-	Boundary   fw.UUID // municipality or smallest boundary, optional
+	PostalCode fw.UUID // entrada de código postal, opcional
+	Boundary   fw.UUID // municipio o el límite más pequeño, opcional
 }
 
-// Premises says where in the street the address is, piece by piece (shared vocabulary).
+// Premises dice en qué lugar de la calle está la dirección, pieza a pieza (vocabulario compartido).
 type Premises = vocab.Premises
 
-// PostalAddress is a postal address (value object).
+// PostalAddress es una dirección postal (objeto de valor).
 type PostalAddress struct {
-	StreetType string // code of the reference catalog (CL, AV, PZ...), optional
+	StreetType string // código del catálogo de referencia (CL, AV, PZ...), opcional
 	Line1      string
 	Premises   Premises
 	Line2      string
@@ -101,32 +102,32 @@ func (a PostalAddress) normalized() (PostalAddress, error) {
 	return a, v.Err()
 }
 
-// String returns a one-line rendering of the address.
+// String devuelve la dirección escrita en una sola línea.
 func (a PostalAddress) String() string {
 	parts := []string{strings.TrimSpace(a.StreetType + " " + a.Line1 + " " + a.Premises.String()), a.Line2, strings.TrimSpace(a.PostalCode + " " + a.Locality), a.Region, a.Country.String()}
 	return strings.Join(slices.DeleteFunc(parts, func(s string) bool { return s == "" }), ", ")
 }
 
-// Contact is a contact mechanism of a party with its purposes and validity (it merges the C#
-// ContactMechanism, PartyContactMechanism and PartyContactMechanismPurpose, whose purposes were
-// not even linked to the association).
+// Contact es un medio de contacto de una party con sus propósitos y su vigencia (reúne
+// ContactMechanism, PartyContactMechanism y PartyContactMechanismPurpose de C#, cuyos propósitos
+// ni siquiera estaban ligados a la asociación).
 type Contact struct {
 	ID              ContactID
 	Kind            ContactKind
-	Value           string        // e-mail, E.164 phone or URL; empty for postal
-	Address         PostalAddress // postal only
+	Value           string        // e-mail, teléfono E.164 o URL; vacío en el postal
+	Address         PostalAddress // sólo el postal
 	Purposes        []Purpose
-	NonSolicitation bool // the party does not want to be contacted for marketing here
+	NonSolicitation bool // la party no quiere que se la contacte aquí con fines comerciales
 	Period          vocab.ValidPeriod
 }
 
-// IsActiveAt reports whether the contact is in force at t.
+// IsActiveAt dice si el contacto está vigente en t.
 func (c Contact) IsActiveAt(t time.Time) bool { return c.Period.IsActiveAt(t) }
 
-// Has reports whether the contact holds a purpose.
+// Has dice si el contacto tiene un propósito.
 func (c Contact) Has(p Purpose) bool { return slices.Contains(c.Purposes, p) }
 
-// ContactData is what a user provides for a contact.
+// ContactData es lo que un usuario aporta para un contacto.
 type ContactData struct {
 	Kind            ContactKind
 	Value           string
@@ -172,9 +173,9 @@ func (d ContactData) sameMechanism(c Contact) bool {
 	return strings.EqualFold(d.Value, c.Value)
 }
 
-// AddContact adds a contact from a moment on. Invariants: a valid value for its kind, not the
-// same mechanism twice while current, and each purpose held by one current contact of the kind
-// (a new holder takes the purpose from the previous one).
+// AddContact añade un contacto a partir de un instante. Invariantes: un valor válido para su
+// clase, nunca el mismo medio dos veces mientras esté vigente, y cada propósito en un solo
+// contacto vigente de la clase (el nuevo titular le quita el propósito al anterior).
 func (p *Party) AddContact(d ContactData, from time.Time) (ContactID, error) {
 	if err := p.requireActive("get contacts"); err != nil {
 		return ContactID{}, err
@@ -201,7 +202,7 @@ func (p *Party) AddContact(d ContactData, from time.Time) (ContactID, error) {
 	return c.ID, nil
 }
 
-// SetContactPurposes replaces the purposes of a current contact.
+// SetContactPurposes sustituye los propósitos de un contacto vigente.
 func (p *Party) SetContactPurposes(id ContactID, purposes []Purpose) error {
 	k := slices.IndexFunc(p.contacts, func(c Contact) bool { return c.ID == id })
 	if k < 0 {
@@ -217,8 +218,8 @@ func (p *Party) SetContactPurposes(id ContactID, purposes []Purpose) error {
 	return nil
 }
 
-// assignPurposes gives purposes to contact k and takes them from the other current contacts of
-// the same kind. p.contacts must already be a private copy.
+// assignPurposes da los propósitos al contacto k y se los quita a los demás contactos vigentes de
+// la misma clase. p.contacts ya tiene que ser una copia privada.
 func (p *Party) assignPurposes(k int, purposes []Purpose) {
 	purposes = slices.Compact(slices.Sorted(slices.Values(purposes)))
 	now := fw.Now()
@@ -231,7 +232,7 @@ func (p *Party) assignPurposes(k int, purposes []Purpose) {
 	p.contacts[k].Purposes = purposes
 }
 
-// EndContact stops using a contact at a moment (not before it started). It loses its purposes.
+// EndContact deja de usar un contacto en un instante (no antes de que empezara). Pierde sus propósitos.
 func (p *Party) EndContact(id ContactID, at time.Time) error {
 	k := slices.IndexFunc(p.contacts, func(c Contact) bool { return c.ID == id })
 	if k < 0 {
@@ -251,7 +252,7 @@ func (p *Party) EndContact(id ContactID, at time.Time) error {
 	return nil
 }
 
-// Contacts returns a copy of the contacts, current or past.
+// Contacts devuelve una copia de los contactos, actuales o pasados.
 func (p *Party) Contacts() []Contact {
 	out := slices.Clone(p.contacts)
 	for i := range out {
@@ -260,7 +261,7 @@ func (p *Party) Contacts() []Contact {
 	return out
 }
 
-// ContactFor returns the current contact of a kind holding a purpose (e.g. the default e-mail).
+// ContactFor devuelve el contacto vigente de una clase que tiene un propósito (p. ej. el e-mail por defecto).
 func (p *Party) ContactFor(kind ContactKind, purpose Purpose) (Contact, bool) {
 	now := fw.Now()
 	for _, c := range p.contacts {

@@ -1,7 +1,8 @@
-// Package domain is the model of the Human Resources (RRHH) bounded context: positions and their
-// holders and reporting lines, employments with their labor contracts, work centers and
-// collective agreements. People and organizations belong to Parties, facilities to Facilities,
-// pay and tax data to Payroll: this context references them by identity.
+// Package domain es el modelo del contexto delimitado de Recursos Humanos (RRHH): los puestos con
+// sus titulares y sus líneas de dependencia, las relaciones laborales con sus contratos de trabajo,
+// los centros de trabajo y los convenios colectivos. Las personas y las organizaciones pertenecen
+// a Parties, las instalaciones a Facilities, los datos salariales y fiscales a Payroll: este
+// contexto los referencia por identidad.
 package domain
 
 import (
@@ -13,43 +14,43 @@ import (
 )
 
 type (
-	// PositionID identifies a position.
+	// PositionID identifica un puesto.
 	PositionID struct{ fw.UUID }
-	// PositionTypeID identifies a position type.
+	// PositionTypeID identifica un tipo de puesto.
 	PositionTypeID struct{ fw.UUID }
-	// PositionStatusID identifies a position status.
+	// PositionStatusID identifica un estado de puesto.
 	PositionStatusID struct{ fw.UUID }
-	// PositionClassID identifies a position classification.
+	// PositionClassID identifica una clasificación de puestos.
 	PositionClassID struct{ fw.UUID }
-	// AgreementID identifies a collective agreement.
+	// AgreementID identifica un convenio colectivo.
 	AgreementID struct{ fw.UUID }
-	// EmploymentID identifies an employment.
+	// EmploymentID identifica una relación laboral.
 	EmploymentID struct{ fw.UUID }
-	// ContractID identifies a labor contract (child of an employment).
+	// ContractID identifica un contrato de trabajo (hijo de una relación laboral).
 	ContractID struct{ fw.UUID }
-	// WorkCenterID identifies a work center.
+	// WorkCenterID identifica un centro de trabajo.
 	WorkCenterID struct{ fw.UUID }
-	// PersonID is a person of the Parties context.
+	// PersonID es una persona del contexto Parties.
 	PersonID struct{ fw.UUID }
-	// OrganizationID is an organization (internal organization or unit) of the Parties context.
+	// OrganizationID es una organización (organización interna o unidad) del contexto Parties.
 	OrganizationID struct{ fw.UUID }
-	// FacilityID is a facility of the Facilities context.
+	// FacilityID es una instalación del contexto Facilities.
 	FacilityID struct{ fw.UUID }
 )
 
-// MustPositionStatusID parses a well-known identity.
+// MustPositionStatusID interpreta una identidad conocida.
 func MustPositionStatusID(s string) PositionStatusID { return PositionStatusID{fw.MustParseUUID(s)} }
 
-// MustPositionTypeID parses a well-known identity.
+// MustPositionTypeID interpreta una identidad conocida.
 func MustPositionTypeID(s string) PositionTypeID { return PositionTypeID{fw.MustParseUUID(s)} }
 
-// MustPositionClassID parses a well-known identity.
+// MustPositionClassID interpreta una identidad conocida.
 func MustPositionClassID(s string) PositionClassID { return PositionClassID{fw.MustParseUUID(s)} }
 
-// MustAgreementID parses a well-known identity.
+// MustAgreementID interpreta una identidad conocida.
 func MustAgreementID(s string) AgreementID { return AgreementID{fw.MustParseUUID(s)} }
 
-// Well-known position statuses (C# WellKnownRRHHCatalog).
+// Estados de puesto conocidos (WellKnownRRHHCatalog del C#).
 var (
 	StatusActive          = MustPositionStatusID("20000000-0000-0000-0001-000000000001")
 	StatusInactive        = MustPositionStatusID("20000000-0000-0000-0001-000000000002")
@@ -59,8 +60,8 @@ var (
 	StatusBudgeted        = MustPositionStatusID("20000000-0000-0000-0001-000000000006")
 )
 
-// PositionStatus is an entry of the position status catalog. Vacant is derived (an active position
-// without a current holder) and cannot be set.
+// PositionStatus es una entrada del catálogo de estados de puesto. Vacant se deduce (un puesto
+// activo sin titular actual) y no se puede fijar.
 type PositionStatus struct {
 	ID          PositionStatusID
 	Name        string
@@ -68,20 +69,20 @@ type PositionStatus struct {
 	Active      bool
 }
 
-// PositionClass is a classification of position types (Dirección, Mando, Técnico...).
+// PositionClass es una clasificación de tipos de puesto (Dirección, Mando, Técnico...).
 type PositionClass struct {
 	ID     PositionClassID
 	Name   string
 	Active bool
 }
 
-// PositionTypeClass classifies a position type, with the standard weekly hours of that class.
+// PositionTypeClass clasifica un tipo de puesto, con las horas semanales estándar de esa clase.
 type PositionTypeClass struct {
 	Class               PositionClassID
 	StandardWeeklyHours vocab.Decimal
 }
 
-// PositionType is an entry of the position type catalog (Chief Executive Officer, Administrativo...).
+// PositionType es una entrada del catálogo de tipos de puesto (Chief Executive Officer, Administrativo...).
 type PositionType struct {
 	ID          PositionTypeID
 	Title       string
@@ -90,10 +91,10 @@ type PositionType struct {
 	Classes     []PositionTypeClass
 }
 
-// AgreementScope is the scope of a collective agreement.
+// AgreementScope es el ámbito de un convenio colectivo.
 type AgreementScope int
 
-// Agreement scopes (the C# ConvenioColectivoScope values).
+// Ámbitos de convenio (los valores de ConvenioColectivoScope del C#).
 const (
 	ScopeNational AgreementScope = iota
 	ScopeRegional
@@ -101,22 +102,23 @@ const (
 	ScopeCompany
 )
 
-// Agreement is a collective agreement: one catalog for the two C# concepts (ConvenioColectivo in
-// RRHH and CollectiveAgreement in Parties). A company agreement belongs to its organization.
+// Agreement es un convenio colectivo: un solo catálogo para los dos conceptos del C#
+// (ConvenioColectivo en RRHH y CollectiveAgreement en Parties). Un convenio de empresa pertenece a
+// su organización.
 type Agreement struct {
 	ID              AgreementID
 	Code            string
 	Name            string
 	Scope           AgreementScope
-	Organization    OrganizationID // company agreements only
+	Organization    OrganizationID // sólo los convenios de empresa
 	TerritorialCode string
 	SectoralCode    string
 	Start           vocab.Date
-	End             vocab.Date // zero when open
+	End             vocab.Date // cero mientras está abierto
 	Active          bool
 }
 
-// Validate checks an agreement.
+// Validate comprueba un convenio.
 func (a Agreement) Validate() error {
 	var v fw.Validation
 	code := strings.TrimSpace(a.Code)
@@ -130,7 +132,7 @@ func (a Agreement) Validate() error {
 	return v.Err()
 }
 
-// InForceOn reports whether the agreement applies on a date.
+// InForceOn dice si el convenio se aplica en una fecha.
 func (a Agreement) InForceOn(d vocab.Date) bool {
 	return a.Active && !d.Before(a.Start) && (a.End.IsZero() || !d.After(a.End))
 }

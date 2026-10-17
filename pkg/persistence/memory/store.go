@@ -1,10 +1,10 @@
-// Package memory provides in-memory adapters that honour the same contracts as the database
-// adapters: repositories with optimistic concurrency and specification support, a unit of work
-// with rollback, an outbox store and an idempotency store. Use it for tests, prototypes and as a
-// hot-swappable backend.
+// Package memory ofrece adaptadores en memoria que cumplen los mismos contratos que los
+// adaptadores de base de datos: repositorios con concurrencia optimista y soporte de
+// especificaciones, una unidad de trabajo con rollback, un almacén de outbox y un almacén de
+// idempotencia. Sirve para pruebas, prototipos y como backend intercambiable en caliente.
 //
-// Specifications are evaluated with IsSatisfiedBy: for this adapter memory *is* the store, so
-// that is the native execution, not a fallback.
+// Las especificaciones se evalúan con IsSatisfiedBy: para este adaptador la memoria *es* el
+// almacén, así que ésa es la ejecución nativa, no un recurso de reserva.
 package memory
 
 import (
@@ -14,12 +14,12 @@ import (
 	"sync/atomic"
 )
 
-// ErrClosed is returned when using a closed Store.
+// ErrClosed se devuelve al usar un Store cerrado.
 var ErrClosed = errors.New("memory: store closed")
 
-// Store is an in-memory database: it provides the unit of work shared by the repositories and
-// outbox created on it. Units of work are serialized (one at a time) and roll back every change
-// made through this store's adapters when they fail.
+// Store es una base de datos en memoria: ofrece la unidad de trabajo que comparten los
+// repositorios y el outbox creados sobre él. Las unidades de trabajo van en serie (una cada vez)
+// y, cuando fallan, deshacen todos los cambios hechos a través de los adaptadores de este almacén.
 type Store struct {
 	name   string
 	txMu   sync.Mutex
@@ -32,7 +32,7 @@ type memTx struct {
 	undo []func()
 }
 
-// NewStore creates an empty store.
+// NewStore crea un almacén vacío.
 func NewStore(name string) *Store {
 	if name == "" {
 		name = "memory"
@@ -40,16 +40,16 @@ func NewStore(name string) *Store {
 	return &Store{name: name}
 }
 
-// Name identifies the store (used by hot-swap diagnostics).
+// Name identifica el almacén (lo usan los diagnósticos del cambio en caliente).
 func (s *Store) Name() string { return s.name }
 
-// Close marks the store closed; further units of work fail with ErrClosed.
+// Close marca el almacén como cerrado; las unidades de trabajo posteriores fallan con ErrClosed.
 func (s *Store) Close() error {
 	s.closed.Store(true)
 	return nil
 }
 
-// Do runs fn as a unit of work. Nested calls join the outer unit of work.
+// Do ejecuta fn como unidad de trabajo. Las llamadas anidadas se unen a la unidad de trabajo exterior.
 func (s *Store) Do(ctx context.Context, fn func(ctx context.Context) error) (err error) {
 	if s.closed.Load() {
 		return ErrClosed
@@ -79,7 +79,8 @@ func (s *Store) tx(ctx context.Context) *memTx {
 	return tx
 }
 
-// onRollback registers undo for the unit of work in ctx (no-op outside a unit of work).
+// onRollback registra undo para la unidad de trabajo de ctx (no hace nada fuera de una unidad de
+// trabajo).
 func (s *Store) onRollback(ctx context.Context, undo func()) {
 	if tx := s.tx(ctx); tx != nil {
 		tx.undo = append(tx.undo, undo)

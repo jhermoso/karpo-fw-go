@@ -1,19 +1,19 @@
-// Package time defines the clock abstraction for Karpo applications.
-// Decoupling time from the system clock enables deterministic testing for expiration, timeouts, and temporal workflows.
+// Package time define la abstracción de reloj de las aplicaciones de Karpo.
+// Desacoplar el tiempo del reloj del sistema permite pruebas deterministas de caducidades, tiempos de espera y flujos temporales.
 package time
 
 import (
 	"time"
 )
 
-// Clock provides an abstraction over time queries and pauses.
+// Clock ofrece una abstracción sobre las consultas de hora y las pausas.
 type Clock interface {
-	// Now returns the current time.
+	// Now devuelve la hora actual.
 	Now() time.Time
 
-	// Since returns the elapsed time since t.
+	// Since devuelve el tiempo transcurrido desde t.
 	Since(t time.Time) time.Duration
 
-	// Sleep pauses the current execution for at least duration d.
+	// Sleep detiene la ejecución en curso durante al menos d.
 	Sleep(d time.Duration)
 }

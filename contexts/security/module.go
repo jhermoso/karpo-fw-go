@@ -1,10 +1,11 @@
-// Package security composes the Security bounded context on a hot-swap backend: the use cases,
-// the HTTP module, the real authz.Directory the authorization resolver reads, the authenticator
-// of external identities, the user directory and the relay of its Published Language.
+// Package security compone el contexto delimitado Security sobre un backend intercambiable en caliente: los casos
+// de uso, el módulo HTTP, el authz.Directory real que lee el resolvedor de autorización, el
+// autenticador de identidades externas, el directorio de usuarios y el relay de su Published
+// Language.
 //
-// A host mounts HTTP.RegisterPublicRoutes outside distribution.Authorize and HTTP.RegisterRoutes
-// inside it, builds its resolver with authorization.NewResolver(module.Directory, ...), and on
-// start, after migrating, calls SyncCatalog with the permissions of every context and
+// Un anfitrión monta HTTP.RegisterPublicRoutes fuera de distribution.Authorize y HTTP.RegisterRoutes
+// dentro, construye su resolvedor con authorization.NewResolver(module.Directory, ...), y al
+// arrancar, tras migrar, llama a SyncCatalog con los permisos de cada contexto y a
 // BootstrapFromEnv.
 package security
 
@@ -27,19 +28,19 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 )
 
-// Environment variables of the bootstrap administrator (the same names as the C# seeder). They
-// are read once on start and never stored: remove them after the first sign-in.
+// Variables de entorno del administrador de arranque (los mismos nombres que el sembrador de C#).
+// Se leen una vez al arrancar y nunca se guardan: hay que quitarlas tras el primer inicio de sesión.
 const (
 	EnvBootstrapUser     = "KARPO_BOOTSTRAP_ADMIN_USER"
 	EnvBootstrapPassword = "KARPO_BOOTSTRAP_ADMIN_PASSWORD"
 )
 
-// Module is the composed context.
+// Module es el contexto compuesto.
 type Module struct {
 	Service *sapp.Service
-	// Directory is the authz.Directory backed by the database: pass it to authorization.NewResolver.
+	// Directory es el authz.Directory respaldado por la base de datos: se pasa a authorization.NewResolver.
 	Directory authz.Directory
-	// Users is the user directory for other contexts.
+	// Users es el directorio de usuarios para otros contextos.
 	Users             contracts.Users
 	HTTP              *sdist.Module
 	IntegrationOutbox application.OutboxStore
@@ -48,25 +49,25 @@ type Module struct {
 	users domain.UserRepository
 }
 
-// Option configures the composition.
+// Option configura la composición.
 type Option func(*sapp.Deps)
 
-// WithTokenIssuer sets who issues the access token of the own login (required to sign in with a
-// password; a host that only accepts external identities does not need it).
+// WithTokenIssuer fija quién emite el token de acceso del login propio (necesario para iniciar
+// sesión con contraseña; un anfitrión que sólo acepta identidades externas no lo necesita).
 func WithTokenIssuer(t sapp.TokenIssuer) Option { return func(d *sapp.Deps) { d.Tokens = t } }
 
-// WithPasswordHasher replaces the default hasher (PBKDF2-HMAC-SHA256, 600 000 iterations).
+// WithPasswordHasher sustituye el hasher por defecto (PBKDF2-HMAC-SHA256, 600 000 iteraciones).
 func WithPasswordHasher(h sapp.PasswordHasher) Option { return func(d *sapp.Deps) { d.Hasher = h } }
 
-// WithParties validates the party of a user and the organization of an access with Parties.
+// WithParties valida con Parties la party de un usuario y la organización de un acceso.
 func WithParties(p infrastructure.PartiesDirectory) Option {
 	return func(d *sapp.Deps) { d.Parties, d.Organizations = p, p }
 }
 
-// WithLockout sets the lockout policy (default: 5 failed attempts, 15 minutes).
+// WithLockout fija la política de bloqueo (por defecto: 5 intentos fallidos, 15 minutos).
 func WithLockout(p domain.LockoutPolicy) Option { return func(d *sapp.Deps) { d.Lockout = p } }
 
-// WithLifetimes sets the life of the access token and of the refresh session.
+// WithLifetimes fija la vida del token de acceso y de la sesión de refresco.
 func WithLifetimes(access, session time.Duration) Option {
 	return func(d *sapp.Deps) { d.AccessTTL, d.SessionTTL = access, session }
 }
@@ -77,7 +78,7 @@ func (noIssuer) IssueAccessToken(context.Context, fw.UUID, string, fw.UUID, time
 	return "", errors.New("security: no token issuer configured (security.WithTokenIssuer)")
 }
 
-// Compose builds the context on sw.
+// Compose construye el contexto sobre sw.
 func Compose(sw *hotswap.Switch, opts ...Option) *Module {
 	users := hotswap.Repository(sw, infrastructure.UserRepositoryFactory)
 	roles := hotswap.Repository(sw, infrastructure.RoleRepositoryFactory)
@@ -99,23 +100,23 @@ func Compose(sw *hotswap.Switch, opts ...Option) *Module {
 		Users: sapp.Users{Repository: users}, HTTP: sdist.NewModule(svc), IntegrationOutbox: integration, Audit: audit, users: users}
 }
 
-// Authenticator returns the authz.Authenticator of an external identity provider: verifier
-// validates its tokens and Security maps the asserted identity to the linked user.
+// Authenticator devuelve el authz.Authenticator de un proveedor de identidad externo: verifier
+// valida sus tokens y Security asocia la identidad afirmada con el usuario vinculado.
 func (m *Module) Authenticator(verifier contracts.TokenVerifier) authz.Authenticator {
 	return sapp.Authenticator{Verifier: verifier, Users: m.users}
 }
 
-// SyncCatalog declares the permissions of the bounded contexts of the host (see Catalog.Sync).
+// SyncCatalog declara los permisos de los contextos delimitados del anfitrión (ver Catalog.Sync).
 func (m *Module) SyncCatalog(ctx context.Context, declared ...authz.Permission) (sapp.CatalogSync, error) {
 	return m.Service.Catalog.Sync(ctx, declared...)
 }
 
-// BootstrapFromEnv creates the bootstrap administrator from the environment (see Bootstrap.Run).
+// BootstrapFromEnv crea el administrador de arranque a partir del entorno (ver Bootstrap.Run).
 func (m *Module) BootstrapFromEnv(ctx context.Context) (string, error) {
 	return m.Service.Bootstrap.Run(ctx, os.Getenv(EnvBootstrapUser), os.Getenv(EnvBootstrapPassword))
 }
 
-// Relay forwards the Published Language to a transport (at-least-once).
+// Relay reenvía el Published Language a un transporte (al menos una vez).
 func (m *Module) Relay(sender application.MessageSender, opts ...outbox.RelayOption) *outbox.Relay {
 	return messaging.NewRelay(contracts.Source, m.IntegrationOutbox, sender, opts...)
 }

@@ -1,9 +1,9 @@
-// Package domain is the model of the Receivables (Cobros) bounded context: payment terms and the
-// schedule of due dates they produce, the receivable of each issued invoice with its
-// installments, the collections from customers and their allocation to installments, and the
-// credit profile of each customer (default terms, risk limit, block). Invoices belong to Billing,
-// customers to Parties, bank accounts and remittances to Treasury: this context references them
-// by identity.
+// Package domain es el modelo del contexto delimitado Receivables (Cobros): las condiciones de pago y
+// los vencimientos que producen, el cobro pendiente de cada factura emitida con sus vencimientos,
+// los cobros de los clientes y su aplicación a vencimientos, y el perfil de crédito de cada cliente
+// (condiciones por defecto, límite de riesgo, bloqueo). Las facturas son de Billing, los clientes
+// de Parties, las cuentas bancarias y las remesas de Treasury: este contexto los referencia por
+// identidad.
 package domain
 
 import (
@@ -20,31 +20,31 @@ import (
 )
 
 type (
-	// TermsID identifies payment terms.
+	// TermsID identifica unas condiciones de pago.
 	TermsID struct{ fw.UUID }
-	// ReceivableID identifies a receivable: the id of the invoice it comes from.
+	// ReceivableID identifica un cobro pendiente: el id de la factura de la que viene.
 	ReceivableID struct{ fw.UUID }
-	// CollectionID identifies a collection.
+	// CollectionID identifica un cobro.
 	CollectionID struct{ fw.UUID }
-	// CreditProfileID identifies a credit profile.
+	// CreditProfileID identifica un perfil de crédito.
 	CreditProfileID struct{ fw.UUID }
-	// OrganizationID is the seller, an internal organization of the Parties context.
+	// OrganizationID es el vendedor, una organización interna del contexto Parties.
 	OrganizationID struct{ fw.UUID }
-	// PartyID is the customer, a party of the Parties context.
+	// PartyID es el cliente, una party del contexto Parties.
 	PartyID struct{ fw.UUID }
 )
 
-// TermsKind is the stable aggregate type name.
+// TermsKind es el nombre estable del tipo de agregado.
 const TermsKind = "receivables.payment_terms"
 
-// MonthRange is a period of months (both included) in which nothing falls due (for example
-// August); it may wrap around the year (December to January).
+// MonthRange es un periodo de meses (ambos incluidos) en el que no vence nada (por ejemplo,
+// agosto); puede dar la vuelta al año (de diciembre a enero).
 type MonthRange struct{ From, To time.Month }
 
-// IsZero reports whether no period was set.
+// IsZero dice si no se fijó ningún periodo.
 func (r MonthRange) IsZero() bool { return r.From == 0 && r.To == 0 }
 
-// Contains reports whether a month is in the range.
+// Contains dice si un mes está en el periodo.
 func (r MonthRange) Contains(m time.Month) bool {
 	if r.IsZero() {
 		return false
@@ -55,8 +55,8 @@ func (r MonthRange) Contains(m time.Month) bool {
 	return m >= r.From || m <= r.To
 }
 
-// TermsState is the persisted state of payment terms (the C# PaymentCondition of Parties, which
-// nothing used and nothing turned into due dates).
+// TermsState es el estado persistido de unas condiciones de pago (el PaymentCondition de Parties
+// del C#, que nada usaba y nada convertía en vencimientos).
 type TermsState struct {
 	Seller          OrganizationID
 	Code            string
@@ -64,10 +64,10 @@ type TermsState struct {
 	Installments    int
 	DaysToFirst     int
 	DaysBetween     int
-	FixedDays       []int // days of the month on which payments fall due (up to 3)
+	FixedDays       []int // días del mes en que vencen los pagos (hasta 3)
 	NoPayment       MonthRange
-	CommercialMonth bool // periods of 30 days count as calendar months
-	ControlHolidays bool // a due date on a holiday moves back (at most BackwardDays) or forward
+	CommercialMonth bool // los periodos de 30 días cuentan como meses naturales
+	ControlHolidays bool // un vencimiento en festivo se mueve hacia atrás (como mucho BackwardDays) o hacia delante
 	BackwardDays    int
 	Active          bool
 	Audit           traits.AuditStamp
@@ -96,14 +96,14 @@ func (s *TermsState) check(v *fw.Validation) {
 	v.Require(s.BackwardDays >= 0 && s.BackwardDays <= 31, "backwardDays", "range", "0 to 31 days")
 }
 
-// Terms are payment terms of a seller.
+// Terms son unas condiciones de pago de un vendedor.
 type Terms struct {
 	fw.BaseAggregateRoot[TermsID]
 	traits.Audited
 	s TermsState
 }
 
-// ReconstituteTerms rebuilds payment terms.
+// ReconstituteTerms reconstruye unas condiciones de pago.
 func ReconstituteTerms(id TermsID, s TermsState) (*Terms, error) {
 	base, err := fw.NewBaseAggregateRoot(TermsKind, id)
 	if err != nil {
@@ -117,50 +117,51 @@ func ReconstituteTerms(id TermsID, s TermsState) (*Terms, error) {
 	return &Terms{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// State returns the state.
+// State devuelve el estado.
 func (t *Terms) State() TermsState {
 	s := t.s
 	s.FixedDays = slices.Clone(s.FixedDays)
 	return s
 }
 
-// Retire deactivates the terms.
+// Retire desactiva las condiciones.
 func (t *Terms) Retire() { t.s.Active = false }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (t *Terms) AuditSnapshot() map[string]any {
 	return map[string]any{"code": t.s.Code, "installments": t.s.Installments, "active": t.s.Active}
 }
 
-// Calendar tells the days a seller does not collect on: the holidays of where it is and whatever
-// else its calendar counts (a port; no calendar exists in the C#, the default has none).
+// Calendar dice los días en que un vendedor no cobra: los festivos de donde está y lo demás que
+// cuente su calendario (un puerto; en el C# no existe calendario, el de por defecto no tiene festivos).
 type Calendar interface {
 	IsHoliday(ctx context.Context, seller OrganizationID, d vocab.Date) (bool, error)
 }
 
-// NoHolidays is a calendar without holidays.
+// NoHolidays es un calendario sin festivos.
 type NoHolidays struct{}
 
-// IsHoliday implements Calendar.
+// IsHoliday implementa Calendar.
 func (NoHolidays) IsHoliday(context.Context, OrganizationID, vocab.Date) (bool, error) {
 	return false, nil
 }
 
-// Due is an installment of a schedule.
+// Due es un vencimiento de un calendario de vencimientos.
 type Due struct {
 	Date   vocab.Date
 	Amount vocab.Decimal
 }
 
-// Schedule computes the due dates and amounts of an amount issued on a date:
-//  1. installment k falls DaysToFirst + k × DaysBetween days after the issue date (in calendar
-//     months when CommercialMonth and the days are a multiple of 30);
-//  2. with fixed days, it moves to the next fixed day (clamped to the end of the month);
-//  3. in a month without payments, it moves to the first fixed day (or the 1st) after the period;
-//  4. with ControlHolidays, a holiday moves back up to BackwardDays, else forward to a working day;
-//  5. the amount is split in equal parts rounded to the cent; the last part takes the remainder.
+// Schedule calcula las fechas e importes de vencimiento de un importe emitido en una fecha:
+//  1. el vencimiento k cae DaysToFirst + k × DaysBetween días después de la fecha de emisión (en
+//     meses naturales cuando CommercialMonth y los días son múltiplo de 30);
+//  2. con días fijos, se mueve al siguiente día fijo (como mucho, el último día del mes);
+//  3. en un mes sin pagos, se mueve al primer día fijo (o al día 1) después del periodo;
+//  4. con ControlHolidays, un festivo se mueve hacia atrás hasta BackwardDays; si no, hacia delante
+//     a un día laborable;
+//  5. el importe se reparte en partes iguales redondeadas al céntimo; la última se queda con el resto.
 //
-// A negative amount (a credit) has a single installment due on the issue date.
+// Un importe negativo (un abono) tiene un único vencimiento en la fecha de emisión.
 func (t *Terms) Schedule(ctx context.Context, issued vocab.Date, amount vocab.Decimal, cal Calendar) ([]Due, error) {
 	if amount.IsNegative() {
 		return []Due{{Date: issued, Amount: amount}}, nil
@@ -198,7 +199,7 @@ func (t *Terms) Schedule(ctx context.Context, issued vocab.Date, amount vocab.De
 	return out, nil
 }
 
-// toFixedDay moves a date to the next fixed day, clamping to the end of the month.
+// toFixedDay mueve una fecha al siguiente día fijo, sin pasar del final del mes.
 func (t *Terms) toFixedDay(d vocab.Date) vocab.Date {
 	if len(t.s.FixedDays) == 0 {
 		return d
@@ -244,7 +245,7 @@ func (t *Terms) avoidHolidays(ctx context.Context, d vocab.Date, cal Calendar) (
 	return d, nil
 }
 
-// Terms fields.
+// Campos de las condiciones.
 var (
 	TermsFieldSeller = spec.Comparable("seller", func(t *Terms) OrganizationID { return t.s.Seller })
 	TermsFieldCode   = spec.Ordered("code", func(t *Terms) string { return t.s.Code })

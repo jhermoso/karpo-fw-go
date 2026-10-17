@@ -17,8 +17,8 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// TestAuthorize_EndToEnd wires JWT authentication, the generic resolver, the HTTP middleware and
-// a use case protected by pipeline.RequirePermission, and checks every outcome of contract v1.
+// TestAuthorize_EndToEnd conecta la autenticación JWT, el resolvedor genérico, el middleware HTTP
+// y un caso de uso protegido por pipeline.RequirePermission, y comprueba cada resultado del contrato v1.
 func TestAuthorize_EndToEnd(t *testing.T) {
 	jwt, _ := jwtauth.New(jwtauth.Config{Secret: []byte("test-secret")})
 	dir := authorization.NewMemoryDirectory()
@@ -64,7 +64,7 @@ func TestAuthorize_EndToEnd(t *testing.T) {
 		if scope != "" {
 			req.Header.Set(distribution.OrganizationScopeHeader, scope)
 		}
-		// A client-supplied actor header must be ignored by Authorize.
+		// Authorize debe ignorar una cabecera de actor aportada por el cliente.
 		req.Header.Set(distribution.ActorNameHeader, "Mallory")
 		res, err := http.DefaultClient.Do(req)
 		if err != nil {

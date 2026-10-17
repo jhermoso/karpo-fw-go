@@ -39,9 +39,9 @@ import (
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// histories tells Historial where the history of each kind of aggregate is kept. For now only a
-// global administrator reads them: letting whoever can see an aggregate read its history needs a
-// guard per kind (the query that loads it), which is added kind by kind.
+// histories dice a Historial dónde se guarda la historia de cada clase de agregado. Por ahora sólo
+// las lee un administrador global: dejar que quien puede ver un agregado lea su historia necesita
+// una guarda por clase (la consulta que lo carga), que se añade clase a clase.
 func (h *Host) histories() {
 	for log, kinds := range map[application.AuditLog][]string{
 		h.Parties.Audit:     {pardomain.PartyKind, pardomain.RelationshipKind},
@@ -75,15 +75,15 @@ func (h *Host) histories() {
 	}
 }
 
-// FinancialInstitutions tells Financial which companies are financial institutions: in Parties, an
-// internal organization that also has the role of financial institution, both in force. It asks
-// as the host: it answers a fact about a company, it shows nothing of it.
+// FinancialInstitutions dice a Financial qué empresas son entidades financieras: en Parties, una
+// organización interna que además tiene el rol de entidad financiera, ambos en vigor. Pregunta
+// como el anfitrión: responde un hecho sobre una empresa, no muestra nada de ella.
 type FinancialInstitutions struct {
 	Parties *parties.Module
 	system  func() context.Context
 }
 
-// IsFinancialInstitution implements Financial's Institutions.
+// IsFinancialInstitution implementa Institutions de Financial.
 func (f FinancialInstitutions) IsFinancialInstitution(ctx context.Context, company findomain.OrganizationID) (bool, error) {
 	p, err := f.Parties.Service.Get.Handle(authz.WithContext(ctx, authzOf(f.system())), parapp.GetParty{ID: pardomain.PartyID{UUID: company.UUID}})
 	if errors.Is(err, fw.ErrNotFound) {
@@ -107,21 +107,21 @@ func (f FinancialInstitutions) IsFinancialInstitution(ctx context.Context, compa
 	return internal && institution, nil
 }
 
-// financialCapability is the feature of Modules a financial institution has.
+// financialCapability es la funcionalidad de Modules que tiene una entidad financiera.
 var financialCapability = modapp.FeatureRef{Kind: moddomain.Capability, Code: "financial"}
 
-// SectorCapabilities tells Modules what a company has because of what it is: the financial
-// capability goes with being a financial institution, as the finance sector does. So what the
-// interface shows and what the sector allows are the same thing, decided in one place: the roles
-// of the company in Parties.
+// SectorCapabilities dice a Modules lo que tiene una empresa por lo que es: la capacidad
+// financiera va con ser entidad financiera, como el sector financiero. Así, lo que muestra la
+// interfaz y lo que permite el sector son lo mismo, decidido en un solo sitio: los roles de la
+// empresa en Parties.
 type SectorCapabilities struct{ Institutions FinancialInstitutions }
 
-// Features implements Modules' Derivation.
+// Features implementa Derivation de Modules.
 func (SectorCapabilities) Features() []modapp.FeatureRef {
 	return []modapp.FeatureRef{financialCapability}
 }
 
-// Of implements Modules' Derivation.
+// Of implementa Derivation de Modules.
 func (s SectorCapabilities) Of(ctx context.Context, organization fw.UUID) ([]modapp.FeatureRef, error) {
 	ok, err := s.Institutions.IsFinancialInstitution(ctx, findomain.OrganizationID{UUID: organization})
 	if err != nil || !ok {
@@ -130,7 +130,7 @@ func (s SectorCapabilities) Of(ctx context.Context, organization fw.UUID) ([]mod
 	return []modapp.FeatureRef{financialCapability}, nil
 }
 
-// Holders implements Modules' Derivation.
+// Holders implementa Derivation de Modules.
 func (s SectorCapabilities) Holders(ctx context.Context, f modapp.FeatureRef) ([]fw.UUID, error) {
 	if f != financialCapability {
 		return nil, nil
@@ -154,25 +154,26 @@ func (s SectorCapabilities) Holders(ctx context.Context, f modapp.FeatureRef) ([
 	return out, nil
 }
 
-// CustomerAccounts is the list of the accounts an institution keeps for its customers, as an
-// export: it reads through the search of Financial, so the file has what who asked may see.
+// CustomerAccounts es la lista de las cuentas que una entidad lleva a sus clientes, como
+// exportación: lee a través de la búsqueda de Financial, así que el fichero tiene lo que puede ver
+// quien lo pidió.
 type CustomerAccounts struct{ Financial *financial.Module }
 
-// Key implements exports' Dataset.
+// Key implementa Dataset de exports.
 func (CustomerAccounts) Key() string { return "customer-accounts" }
 
-// Title implements exports' Dataset.
+// Title implementa Dataset de exports.
 func (CustomerAccounts) Title() string { return "Cuentas de clientes" }
 
-// Permission implements exports' Dataset.
+// Permission implementa Dataset de exports.
 func (CustomerAccounts) Permission() authz.Permission { return finapp.PermAccountRead }
 
-// Filters implements exports' Dataset.
+// Filters implementa Dataset de exports.
 func (CustomerAccounts) Filters() []string {
 	return []string{"company", "status", "currency", "name", "use", "party", "demo"}
 }
 
-// Columns implements exports' Dataset.
+// Columns implementa Dataset de exports.
 func (CustomerAccounts) Columns() []expdomain.Column {
 	return []expdomain.Column{{Field: "number", Header: "Número"}, {Field: "name", Header: "Nombre"}, {Field: "currency", Header: "Divisa"},
 		{Field: "status", Header: "Estado"}, {Field: "holder", Header: "Titular"}, {Field: "opened", Header: "Apertura", Type: expdomain.Date},
@@ -180,7 +181,7 @@ func (CustomerAccounts) Columns() []expdomain.Column {
 		{Field: "demo", Header: "Pruebas", Type: expdomain.Boolean}}
 }
 
-// Page implements exports' Dataset: the cursor is the number of the page.
+// Page implementa Dataset de exports: el cursor es el número de la página.
 func (c CustomerAccounts) Page(ctx context.Context, filters map[string]string, cursor string, limit int) ([]expdomain.Row, string, error) {
 	number, _ := strconv.Atoi(cursor)
 	if number < 1 {

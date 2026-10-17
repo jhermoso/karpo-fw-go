@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// Types of a column.
+// Tipos de una columna.
 const (
 	Text     = "text"
 	Number   = "number"
@@ -20,26 +20,26 @@ const (
 	Boolean  = "boolean"
 )
 
-// Column is a column of a list: where its value comes from, what heads it and how it is shown.
+// Column es una columna de una lista: de dónde sale su valor, qué la encabeza y cómo se muestra.
 type Column struct {
 	Field  string
 	Header string
 	Type   string
 }
 
-// Row is a row of a list: the value of each field. A value is text, a number (any integer or
-// float, or a decimal given as text), a bool, a time or nil.
+// Row es una fila de una lista: el valor de cada campo. Un valor es un texto, un número (cualquier
+// entero o float, o un decimal dado como texto), un bool, un time o nil.
 type Row map[string]any
 
-// Words are the words a file uses for what is not data.
+// Words son las palabras que usa un fichero para lo que no son datos.
 type Words struct {
 	Yes, No string
 }
 
-// Spanish are the words of the C# exports.
+// Spanish son las palabras de las exportaciones del C#.
 var Spanish = Words{Yes: "Sí", No: "No"}
 
-// Cell renders the value of a column as text and tells whether it is a number.
+// Cell presenta el valor de una columna como texto y dice si es un número.
 func Cell(c Column, v any, w Words) (string, bool) {
 	switch x := v.(type) {
 	case nil:
@@ -71,7 +71,7 @@ func Cell(c Column, v any, w Words) (string, bool) {
 	return fmt.Sprint(v), false
 }
 
-// number tells whether a text of a number column is a plain decimal number.
+// number dice si un texto de una columna numérica es un número decimal simple.
 func number(c Column, s string) (string, bool) {
 	if c.Type != Number || s == "" {
 		return s, false
@@ -86,18 +86,18 @@ func number(c Column, s string) (string, bool) {
 			return s, false
 		}
 	}
-	return s, digits > 0 && digits <= 15 // beyond fifteen digits a sheet would round it
+	return s, digits > 0 && digits <= 15 // pasados quince dígitos, una hoja lo redondearía
 }
 
-// Writer writes a list row by row.
+// Writer escribe una lista fila a fila.
 type Writer interface {
 	Write(r Row) error
-	// Close ends the file; nothing may be written after it.
+	// Close termina el fichero; después no se puede escribir nada.
 	Close() error
 }
 
-// guard keeps a spreadsheet from running a text as a formula (the C# wrote it as it came): what
-// starts like one is written after an apostrophe.
+// guard impide que una hoja de cálculo ejecute un texto como fórmula (el C# lo escribía tal como
+// venía): lo que empieza como una se escribe tras un apóstrofo.
 func guard(s string) string {
 	if s != "" && strings.ContainsRune("=+-@\t\r", rune(s[0])) {
 		return "'" + s
@@ -129,8 +129,8 @@ func (c *csvWriter) line(fields []string) error {
 	return err
 }
 
-// NewCSV starts a CSV file: UTF-8 with its mark so a spreadsheet reads the accents, commas,
-// CRLF on every machine, and the header first.
+// NewCSV empieza un fichero CSV: UTF-8 con su marca (para que una hoja de cálculo lea los acentos),
+// comas, CRLF en todas las máquinas y la cabecera primero.
 func NewCSV(out io.Writer, columns []Column, words Words) (Writer, error) {
 	c := &csvWriter{w: bufio.NewWriter(out), columns: columns, words: words}
 	c.w.WriteString(string(rune(0xFEFF)))
@@ -163,7 +163,8 @@ type xlsxWriter struct {
 	row     int
 }
 
-// SheetName makes a title fit a sheet: 31 characters, without the ones a sheet name cannot have.
+// SheetName ajusta un título a una hoja: 31 caracteres, sin los que no puede llevar el nombre de
+// una hoja.
 func SheetName(title string) string {
 	name := strings.TrimSpace(strings.Map(func(r rune) rune {
 		if strings.ContainsRune(`[]:*?/\'`, r) || r < 0x20 {
@@ -189,7 +190,7 @@ func escape(s string) string {
 	var b strings.Builder
 	_ = xml.EscapeText(&b, []byte(strings.Map(func(r rune) rune {
 		if r < 0x20 && r != '\t' && r != '\n' && r != '\r' {
-			return -1 // not allowed in XML
+			return -1 // no se admite en XML
 		}
 		return r
 	}, s)))
@@ -205,8 +206,8 @@ func (x *xlsxWriter) part(name, content string) error {
 	return err
 }
 
-// NewXLSX starts a workbook with one sheet, written as it goes (the C# built it whole in memory):
-// texts as texts, numbers as numbers, the header first.
+// NewXLSX empieza un libro con una hoja, escrito sobre la marcha (el C# lo montaba entero en
+// memoria): textos como textos, números como números, la cabecera primero.
 func NewXLSX(out io.Writer, title string, columns []Column, words Words) (Writer, error) {
 	x := &xlsxWriter{zip: zip.NewWriter(out), columns: columns, words: words}
 	parts := [][2]string{
@@ -242,7 +243,7 @@ func NewXLSX(out io.Writer, title string, columns []Column, words Words) (Writer
 	return x, x.line(cells)
 }
 
-// line writes a row of cells: each a text, or a number when its second value says so.
+// line escribe una fila de celdas: cada una un texto, o un número cuando lo dice su segundo valor.
 func (x *xlsxWriter) line(cells [][2]string) error {
 	x.row++
 	fmt.Fprintf(x.sheet, `<row r="%d">`, x.row)
@@ -279,7 +280,7 @@ func (x *xlsxWriter) Close() error {
 	return x.zip.Close()
 }
 
-// NewWriter starts a file of a format.
+// NewWriter empieza un fichero de un formato.
 func NewWriter(format string, out io.Writer, title string, columns []Column, words Words) (Writer, error) {
 	if format == XLSX {
 		return NewXLSX(out, title, columns, words)
@@ -287,7 +288,7 @@ func NewWriter(format string, out io.Writer, title string, columns []Column, wor
 	return NewCSV(out, columns, words)
 }
 
-// ContentType returns the media type of a format.
+// ContentType devuelve el tipo de medio de un formato.
 func ContentType(format string) string {
 	if format == XLSX {
 		return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"

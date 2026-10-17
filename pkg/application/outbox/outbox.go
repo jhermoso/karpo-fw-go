@@ -1,6 +1,6 @@
-// Package outbox implements the transactional outbox on top of the application.OutboxStore port:
-// Recorder serializes domain events in the aggregate's unit of work, and Relay delivers them
-// to a Publisher (at-least-once).
+// Package outbox implementa el outbox transaccional sobre el puerto application.OutboxStore:
+// Recorder serializa los eventos de dominio en la unidad de trabajo del agregado, y Relay los
+// entrega a un Publisher (al menos una vez).
 package outbox
 
 import (
@@ -19,15 +19,15 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/trace"
 )
 
-// Recorder is the application.EventRecorder that serializes events into an OutboxStore.
+// Recorder es el application.EventRecorder que serializa los eventos en un OutboxStore.
 type Recorder struct {
 	store application.OutboxStore
 }
 
-// NewRecorder creates a Recorder over store.
+// NewRecorder crea un Recorder sobre store.
 func NewRecorder(store application.OutboxStore) *Recorder { return &Recorder{store: store} }
 
-// Record serializes evts (JSON) and appends them to the store in the current unit of work.
+// Record serializa evts (JSON) y los añade al almacén en la unidad de trabajo en curso.
 func (o *Recorder) Record(ctx context.Context, evts []domain.Event) error {
 	msgs := make([]application.OutboxMessage, 0, len(evts))
 	for _, evt := range evts {
@@ -59,8 +59,8 @@ func (o *Recorder) Record(ctx context.Context, evts []domain.Event) error {
 	return o.store.Append(ctx, msgs...)
 }
 
-// Relay moves outbox messages to a Publisher (in-process bus, message broker adapter...).
-// Delivery is at-least-once: subscribers must be idempotent (use the event id).
+// Relay lleva los mensajes del outbox a un Publisher (bus en proceso, adaptador de un broker de mensajería...).
+// La entrega es al menos una vez: los suscriptores deben ser idempotentes (con el id del evento).
 type Relay struct {
 	store       application.OutboxStore
 	deliverFn   DeliverFunc
@@ -73,37 +73,37 @@ type Relay struct {
 	relayed     metrics.Counter
 }
 
-// RelayOption configures a Relay.
+// RelayOption configura un Relay.
 type RelayOption func(*Relay)
 
-// WithBatchSize sets how many messages are fetched per iteration (default 100).
+// WithBatchSize fija cuántos mensajes se leen por iteración (por defecto 100).
 func WithBatchSize(n int) RelayOption { return func(r *Relay) { r.batchSize = n } }
 
-// WithMaxAttempts sets after how many failures a message is parked (default 10).
+// WithMaxAttempts fija tras cuántos fallos se aparca un mensaje (por defecto 10).
 func WithMaxAttempts(n int) RelayOption { return func(r *Relay) { r.maxAttempts = n } }
 
-// WithRelayLogger sets the logger of delivery failures. Without it the relay writes to
-// log.Default (the logger of the process): a failed delivery is never silent by omission. Pass
-// log.Discard to silence it on purpose.
+// WithRelayLogger fija el logger de los fallos de entrega. Sin él, el relay escribe en
+// log.Default (el logger del proceso): una entrega fallida nunca queda en silencio por omisión.
+// Se pasa log.Discard para silenciarlo a propósito.
 func WithRelayLogger(l log.Logger) RelayOption { return func(r *Relay) { r.logger = l } }
 
-// WithRelayName names the outbox in metrics and logs (default "outbox"; the integration relay
-// uses the name of its bounded context).
+// WithRelayName da nombre al outbox en métricas y logs (por defecto "outbox"; el relay de integración
+// usa el nombre de su contexto delimitado).
 func WithRelayName(name string) RelayOption { return func(r *Relay) { r.name = name } }
 
-// WithRelayTelemetry instruments the relay: a span per delivered message (a new trace that
-// carries the correlation and causation ids of the message), the counter karpo.outbox.relayed
-// by event type and outcome, and the gauge karpo.outbox.oldest_pending_age, which asks the
-// store for the oldest pending message every time the metrics are read: it grows while the
-// relay is stopped or stuck and returns to zero when the outbox is empty. Either may be nil.
+// WithRelayTelemetry instrumenta el relay: un span por mensaje entregado (una traza nueva que lleva
+// los ids de correlación y de causalidad del mensaje), el contador karpo.outbox.relayed por tipo de
+// evento y desenlace, y el indicador karpo.outbox.oldest_pending_age, que pregunta al almacén por el
+// mensaje pendiente más antiguo cada vez que se leen las métricas: crece mientras el relay está parado
+// o atascado y vuelve a cero cuando el outbox está vacío. Cualquiera de los dos puede ser nil.
 func WithRelayTelemetry(tracer trace.Tracer, meter metrics.Meter) RelayOption {
 	return func(r *Relay) { r.tracer, r.meter = tracer, meter }
 }
 
-// DeliverFunc delivers one outbox message; an error leaves it pending for a retry.
+// DeliverFunc entrega un mensaje del outbox; un error lo deja pendiente para un reintento.
 type DeliverFunc func(ctx context.Context, m application.OutboxMessage) error
 
-// NewRelay creates a relay that decodes domain events and hands them to publisher.
+// NewRelay crea un relay que decodifica eventos de dominio y se los pasa a publisher.
 func NewRelay(store application.OutboxStore, decoder application.EventDecoder, publisher application.Publisher, opts ...RelayOption) *Relay {
 	return NewForwarder(store, func(ctx context.Context, m application.OutboxMessage) error {
 		evt, err := decoder.Decode(m.EventType, m.Payload)
@@ -115,8 +115,8 @@ func NewRelay(store application.OutboxStore, decoder application.EventDecoder, p
 	}, opts...)
 }
 
-// NewForwarder creates a relay with a custom delivery (e.g. the integration relay, which
-// forwards the serialized message to a transport without decoding it).
+// NewForwarder crea un relay con una entrega a medida (p. ej. el relay de integración, que reenvía
+// el mensaje serializado a un transporte sin decodificarlo).
 func NewForwarder(store application.OutboxStore, deliver DeliverFunc, opts ...RelayOption) *Relay {
 	r := &Relay{store: store, deliverFn: deliver, batchSize: 100, maxAttempts: 10, name: "outbox"}
 	for _, opt := range opts {
@@ -134,11 +134,11 @@ func NewForwarder(store application.OutboxStore, deliver DeliverFunc, opts ...Re
 	return r
 }
 
-// The gauge karpo.outbox.oldest_pending_age is one series per outbox name. Relays that share a
-// name in the same meter (several bounded contexts, each with its domain relay and the default
-// name) share that series: it reports the oldest pending message among them, so any of them
-// getting stuck shows. Registering one gauge per relay would let the last one replace the others
-// in silence.
+// El indicador karpo.outbox.oldest_pending_age es una serie por nombre de outbox. Los relays que
+// comparten nombre en el mismo meter (varios contextos delimitados, cada uno con su relay de dominio y
+// el nombre por defecto) comparten esa serie: informa del mensaje pendiente más antiguo entre ellos,
+// así que se ve cuando cualquiera se atasca. Registrar un indicador por relay haría que el último
+// sustituyera a los demás en silencio.
 var pendingAges = struct {
 	sync.Mutex
 	groups map[pendingAgeKey]*pendingAgeGroup
@@ -157,7 +157,7 @@ type pendingAgeGroup struct {
 func registerPendingAge(meter metrics.Meter, r *Relay) {
 	const help = "Age of the oldest outbox message still pending delivery."
 	if !reflect.TypeOf(meter).Comparable() {
-		// Cannot be a map key: one gauge per relay, as best effort.
+		// No puede ser clave de mapa: un indicador por relay, sin garantías.
 		meter.Gauge(metrics.OutboxOldestPendingAge, metrics.UnitSeconds, help, r.oldestPendingAge, metrics.LabelOutbox, r.name)
 		return
 	}
@@ -177,7 +177,7 @@ func registerPendingAge(meter metrics.Meter, r *Relay) {
 	}
 }
 
-// oldest is the largest age among the relays of the group; -1 only when none could be read.
+// oldest es la mayor antigüedad entre los relays del grupo; -1 sólo si no se ha podido leer ninguno.
 func (g *pendingAgeGroup) oldest() float64 {
 	g.mu.Lock()
 	relays := append([]*Relay(nil), g.relays...)
@@ -189,8 +189,8 @@ func (g *pendingAgeGroup) oldest() float64 {
 	return age
 }
 
-// oldestPendingAge asks the store, so it also tells when the relay is not running at all.
-// It returns -1 when the store cannot be read.
+// oldestPendingAge pregunta al almacén, así que también avisa cuando el relay no se está ejecutando.
+// Devuelve -1 cuando no se puede leer el almacén.
 func (r *Relay) oldestPendingAge() float64 {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -204,7 +204,7 @@ func (r *Relay) oldestPendingAge() float64 {
 	return max(domain.Now().Sub(msgs[0].OccurredAt).Seconds(), 0)
 }
 
-// deliver hands one message to the publisher inside its own span.
+// deliver pasa un mensaje al publicador dentro de su propio span.
 func (r *Relay) deliver(ctx context.Context, m application.OutboxMessage) error {
 	ctx, span := r.tracer.Start(ctx, "outbox relay "+m.EventType, trace.WithKind(trace.KindProducer), trace.WithNewRoot())
 	span.SetAttributes("outbox", r.name, "event_type", m.EventType, "message_id", m.ID)
@@ -225,7 +225,7 @@ func (r *Relay) deliver(ctx context.Context, m application.OutboxMessage) error 
 	return err
 }
 
-// RelayOnce delivers one batch of pending messages and returns how many were delivered.
+// RelayOnce entrega un lote de mensajes pendientes y devuelve cuántos se entregaron.
 func (r *Relay) RelayOnce(ctx context.Context) (int, error) {
 	msgs, err := r.store.Pending(ctx, r.batchSize, r.maxAttempts)
 	if err != nil {
@@ -251,8 +251,8 @@ func (r *Relay) RelayOnce(ctx context.Context) (int, error) {
 	return delivered, errors.Join(errs...)
 }
 
-// Recorders combines several recorders (e.g. the domain outbox and the integration outbox)
-// into one application.EventRecorder; all of them record in the same unit of work.
+// Recorders combina varios registradores (p. ej. el outbox de dominio y el de integración)
+// en un solo application.EventRecorder; todos registran en la misma unidad de trabajo.
 func Recorders(recorders ...application.EventRecorder) application.EventRecorder {
 	return multi(recorders)
 }
@@ -268,7 +268,7 @@ func (m multi) Record(ctx context.Context, evts []domain.Event) error {
 	return nil
 }
 
-// Run relays continuously every interval until ctx is cancelled.
+// Run retransmite continuamente cada interval hasta que se cancela ctx.
 func (r *Relay) Run(ctx context.Context, interval time.Duration) error {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()

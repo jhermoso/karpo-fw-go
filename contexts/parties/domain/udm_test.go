@@ -37,7 +37,7 @@ func TestRelationshipTypeCodes(t *testing.T) {
 		t.Fatalf("prospect relationship: %+v", p)
 	}
 
-	// A type without code is a plain catalog row; two types cannot share a code.
+	// Un tipo sin código es una simple fila del catálogo; dos tipos no pueden compartir código.
 	plain := domain.RelationshipType{ID: domain.MustRelationshipTypeID("10000000-0000-0000-0002-0000000000f1"), Name: vocab.MustName("Guarantor")}
 	other := domain.RelationshipType{ID: domain.MustRelationshipTypeID("10000000-0000-0000-0002-0000000000f2"), Name: vocab.MustName("Sponsor")}
 	if _, err := domain.IndexRelationshipTypes(append(types, plain, other)); err != nil {
@@ -69,7 +69,7 @@ func TestProspectTrial(t *testing.T) {
 		t.Fatal("a prospect has no trial until one is granted")
 	}
 
-	// Granting, extending and withdrawing the trial.
+	// Conceder, ampliar y retirar la prueba.
 	until := now.Add(30 * 24 * time.Hour)
 	if err := r.SetTrial(prospectType, &until); err != nil {
 		t.Fatal(err)
@@ -102,7 +102,7 @@ func TestProspectTrial(t *testing.T) {
 		t.Fatalf("withdrawn: %v", err)
 	}
 
-	// The trial ends with the relationship, and an ended relationship keeps what it had.
+	// La prueba termina con la relación, y una relación terminada conserva lo que tenía.
 	_ = r.SetTrial(prospectType, &longer)
 	if err := r.Terminate(now.Add(-time.Minute)); err != nil {
 		t.Fatal(err)
@@ -114,7 +114,7 @@ func TestProspectTrial(t *testing.T) {
 		t.Fatalf("an ended relationship: %v", err)
 	}
 
-	// Only prospect relationships have a trial.
+	// Sólo las relaciones de prospect tienen prueba.
 	employment := relType(t, domain.RelEmployment)
 	_, _ = ana.AssignRole(cat, domain.RoleEmployee, since)
 	job, err := domain.Establish(domain.NewRelationshipID(), employment, ana, paranoia, cat, since, "")
@@ -166,7 +166,7 @@ func TestOwnershipShare(t *testing.T) {
 		t.Fatalf("cleared: %v", err)
 	}
 
-	// Each detail belongs to its own type.
+	// Cada detalle pertenece a su propio tipo.
 	if err := r.SetOwnershipShare(relType(t, domain.RelProspect), &share); !isViolation(err, "parties.not_an_ownership_relationship") {
 		t.Fatalf("the type must be the relationship's own: %v", err)
 	}

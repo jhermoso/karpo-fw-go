@@ -1,7 +1,8 @@
-// Package vanilla implements metrics.Meter with the standard library only: an in-memory Registry
-// (tests read from it) that also serves its content in the Prometheus text exposition format.
+// Package vanilla implementa metrics.Meter sólo con la biblioteca estándar: un Registry en memoria
+// (las pruebas leen de él) que además sirve su contenido en el formato de exposición de texto de
+// Prometheus.
 //
-// Serve Registry.Handler on an internal port, never on the public API port.
+// Registry.Handler se sirve en un puerto interno, nunca en el puerto público de la API.
 package vanilla
 
 import (
@@ -19,8 +20,8 @@ import (
 	fwmetrics "github.com/jhermoso/karpo-fw-go/pkg/metrics"
 )
 
-// DefaultBuckets are the histogram bounds used when none are given: durations in seconds, from
-// 1 ms to 10 s.
+// DefaultBuckets son los límites de histograma que se usan cuando no se da ninguno: duraciones en
+// segundos, de 1 ms a 10 s.
 var DefaultBuckets = []float64{0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10}
 
 type kind int
@@ -31,8 +32,8 @@ const (
 	kindGauge
 )
 
-// Registry is the dependency-free metrics.Meter. Its own lock only guards the set of families;
-// every family has its lock, so recording on one instrument never waits for another.
+// Registry es el metrics.Meter sin dependencias. Su propio lock sólo protege el conjunto de
+// familias; cada familia tiene su lock, así que registrar en un instrumento nunca espera a otro.
 type Registry struct {
 	mu       sync.Mutex
 	families map[string]*family
@@ -40,11 +41,11 @@ type Registry struct {
 
 var _ fwmetrics.Meter = (*Registry)(nil)
 
-// NewRegistry creates an empty Registry.
+// NewRegistry crea un Registry vacío.
 func NewRegistry() *Registry { return &Registry{families: map[string]*family{}} }
 
 type family struct {
-	mu         sync.Mutex // guards series and their values
+	mu         sync.Mutex // protege las series y sus valores
 	name, unit string
 	help       string
 	kind       kind
@@ -53,13 +54,13 @@ type family struct {
 }
 
 type series struct {
-	labels []string // key/value pairs
-	value  float64  // counter
-	counts []uint64 // histogram: one per bucket, plus +Inf
+	labels []string // pares clave/valor
+	value  float64  // contador
+	counts []uint64 // histograma: uno por bucket, más +Inf
 	sum    float64
 	count  uint64
 	read   func() float64 // gauge
-	owner  *byte          // gauge: the registration that set read
+	owner  *byte          // gauge: el registro que puso read
 }
 
 func (r *Registry) family(name, unit, help string, k kind, buckets []float64) *family {
@@ -83,18 +84,18 @@ func (r *Registry) family(name, unit, help string, k kind, buckets []float64) *f
 	return f
 }
 
-// Counter implements metrics.Meter.
+// Counter implementa metrics.Meter.
 func (r *Registry) Counter(name, unit, help string) fwmetrics.Counter {
 	return counter{r.family(name, unit, help, kindCounter, nil)}
 }
 
-// Histogram implements metrics.Meter.
+// Histogram implementa metrics.Meter.
 func (r *Registry) Histogram(name, unit, help string, buckets ...float64) fwmetrics.Histogram {
 	return histogram{r.family(name, unit, help, kindHistogram, buckets)}
 }
 
-// Gauge implements metrics.Meter. Registering the same name and labels again replaces read; the
-// returned function removes the series, unless a later registration replaced it.
+// Gauge implementa metrics.Meter. Registrar otra vez el mismo nombre y las mismas etiquetas
+// sustituye read; la función devuelta quita la serie, salvo que un registro posterior la sustituyera.
 func (r *Registry) Gauge(name, unit, help string, read func() float64, labels ...string) func() {
 	f := r.family(name, unit, help, kindGauge, nil)
 	f.mu.Lock()
@@ -112,7 +113,7 @@ func (r *Registry) Gauge(name, unit, help string, read func() float64, labels ..
 	}
 }
 
-// at returns the series of labels, creating it. The family lock must be held.
+// at devuelve la serie de labels, y la crea si no existe. Hay que tener el lock de la familia.
 func (f *family) at(labels []string) *series {
 	labels = labels[:len(labels)&^1]
 	key := strings.Join(labels, "\xff")
@@ -147,13 +148,13 @@ func (h histogram) Record(_ context.Context, v float64, labels ...string) {
 	h.f.mu.Lock()
 	defer h.f.mu.Unlock()
 	s := h.f.at(labels)
-	i, _ := slices.BinarySearch(h.f.buckets, v) // first bound >= v
+	i, _ := slices.BinarySearch(h.f.buckets, v) // primer límite >= v
 	s.counts[i]++
 	s.sum += v
 	s.count++
 }
 
-// lookup returns the family name if it is of kind k.
+// lookup devuelve la familia name si es de tipo k.
 func (r *Registry) lookup(name string, k kind) *family {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -163,13 +164,13 @@ func (r *Registry) lookup(name string, k kind) *family {
 	return nil
 }
 
-// find returns the series with exactly these labels. The family lock must be held.
+// find devuelve la serie con exactamente estas etiquetas. Hay que tener el lock de la familia.
 func (f *family) find(labels []string) *series {
 	labels = labels[:len(labels)&^1]
 	return f.series[strings.Join(labels, "\xff")]
 }
 
-// CounterValue returns the value of the counter series with exactly these labels (0 if absent).
+// CounterValue devuelve el valor de la serie del contador con exactamente estas etiquetas (0 si no existe).
 func (r *Registry) CounterValue(name string, labels ...string) float64 {
 	f := r.lookup(name, kindCounter)
 	if f == nil {
@@ -183,8 +184,8 @@ func (r *Registry) CounterValue(name string, labels ...string) float64 {
 	return 0
 }
 
-// HistogramCount returns how many observations the histogram series with exactly these labels
-// has (0 if absent).
+// HistogramCount devuelve cuántas observaciones tiene la serie del histograma con exactamente
+// estas etiquetas (0 si no existe).
 func (r *Registry) HistogramCount(name string, labels ...string) uint64 {
 	f := r.lookup(name, kindHistogram)
 	if f == nil {
@@ -198,7 +199,7 @@ func (r *Registry) HistogramCount(name string, labels ...string) uint64 {
 	return 0
 }
 
-// HistogramTotal returns the observations of a histogram across all its series.
+// HistogramTotal devuelve las observaciones de un histograma sumando todas sus series.
 func (r *Registry) HistogramTotal(name string) uint64 {
 	f := r.lookup(name, kindHistogram)
 	if f == nil {
@@ -213,7 +214,7 @@ func (r *Registry) HistogramTotal(name string) uint64 {
 	return n
 }
 
-// GaugeValue reads the gauge series with exactly these labels.
+// GaugeValue lee la serie del gauge con exactamente estas etiquetas.
 func (r *Registry) GaugeValue(name string, labels ...string) (float64, bool) {
 	f := r.lookup(name, kindGauge)
 	if f == nil {
@@ -231,8 +232,8 @@ func (r *Registry) GaugeValue(name string, labels ...string) (float64, bool) {
 	return read(), true
 }
 
-// SeriesLabels returns the label sets recorded for a metric (to assert that no series carries
-// an identifier).
+// SeriesLabels devuelve los conjuntos de etiquetas registrados para una métrica (para comprobar
+// que ninguna serie lleva un identificador).
 func (r *Registry) SeriesLabels(name string) [][]string {
 	r.mu.Lock()
 	f, ok := r.families[name]
@@ -249,7 +250,7 @@ func (r *Registry) SeriesLabels(name string) [][]string {
 	return out
 }
 
-// Handler serves the registry in the Prometheus text exposition format.
+// Handler sirve el registro en el formato de exposición de texto de Prometheus.
 func (r *Registry) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
@@ -262,7 +263,7 @@ type gaugeRead struct {
 	read   func() float64
 }
 
-// WriteText writes the registry in the Prometheus text exposition format, sorted by name.
+// WriteText escribe el registro en el formato de exposición de texto de Prometheus, ordenado por nombre.
 func (r *Registry) WriteText(w io.Writer) error {
 	var sb strings.Builder
 	gauges := map[string][]gaugeRead{}
@@ -282,7 +283,7 @@ func (r *Registry) WriteText(w io.Writer) error {
 		f := families[name]
 		f.mu.Lock()
 		if f.kind == kindGauge {
-			// Gauges are read outside the lock: read functions may be slow or use the registry.
+			// Los gauges se leen fuera del lock: las funciones de lectura pueden ser lentas o usar el registro.
 			for _, k := range sortedKeys(f.series) {
 				gauges[name] = append(gauges[name], gaugeRead{f.series[k].labels, f.series[k].read})
 			}
@@ -347,7 +348,7 @@ func sortedKeys[V any](m map[string]V) []string {
 	return keys
 }
 
-// promName turns "http.server.request.duration" (unit s) into
+// promName convierte "http.server.request.duration" (unidad s) en
 // "http_server_request_duration_seconds".
 func promName(name, unit string) string {
 	n := sanitize(name)
@@ -403,7 +404,7 @@ func promFloat(v float64) string {
 	return strconv.FormatFloat(v, 'g', -1, 64)
 }
 
-// RegisterRuntime registers the Go runtime gauges (goroutines, heap in use, GC cycles) on m.
+// RegisterRuntime registra en m los gauges del runtime de Go (goroutines, heap en uso, ciclos de GC).
 func RegisterRuntime(m fwmetrics.Meter) {
 	read := func(name string) func() float64 {
 		return func() float64 {

@@ -11,19 +11,19 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// BarcodeInput is an identification code.
+// BarcodeInput es un código de identificación.
 type BarcodeInput struct {
 	Type  string `json:"type"`
 	Value string `json:"value"`
 }
 
-// ComponentInput is a component of a kit.
+// ComponentInput es un componente de un kit.
 type ComponentInput struct {
 	Product  string `json:"product"`
 	Quantity string `json:"quantity"`
 }
 
-// SupplierInput is how a supplier names and delivers the product.
+// SupplierInput es cómo nombra y entrega el producto un proveedor.
 type SupplierInput struct {
 	Supplier  string `json:"supplier"`
 	Code      string `json:"code,omitempty"`
@@ -31,7 +31,7 @@ type SupplierInput struct {
 	Preferred bool   `json:"preferred,omitempty"`
 }
 
-// DetailsInput are the editable data of a product.
+// DetailsInput son los datos editables de un producto.
 type DetailsInput struct {
 	Name            string           `json:"name"`
 	Description     string           `json:"description,omitempty"`
@@ -53,35 +53,35 @@ type DetailsInput struct {
 	Suppliers       []SupplierInput  `json:"suppliers,omitempty"`
 }
 
-// RegisterProduct adds a product to the catalog of a company.
+// RegisterProduct añade un producto al catálogo de una empresa.
 type RegisterProduct struct {
 	Company string `json:"company"`
 	SKU     string `json:"sku"`
 	DetailsInput
 }
 
-// ChangeProduct replaces the details of a product.
+// ChangeProduct sustituye los datos de un producto.
 type ChangeProduct struct {
 	ID domain.ProductID `json:"-"`
 	DetailsInput
 }
 
-// DiscontinueProduct retires a product from a date (today by default).
+// DiscontinueProduct retira un producto desde una fecha (hoy por defecto).
 type DiscontinueProduct struct {
 	ID domain.ProductID `json:"-"`
 	On vocab.Date       `json:"on,omitzero"`
 }
 
-// GetProduct loads a product.
+// GetProduct carga un producto.
 type GetProduct struct{ ID domain.ProductID }
 
-// SearchProducts searches the catalog of the caller's scope.
+// SearchProducts busca en el catálogo del ámbito de quien llama.
 type SearchProducts struct {
 	Company, Text, Kind, Category, Barcode string
 	Page, Size                             int
 }
 
-// ProductDTO is the transport form of a product.
+// ProductDTO es la forma de transporte de un producto.
 type ProductDTO struct {
 	ID      string `json:"id"`
 	Company string `json:"company"`
@@ -142,9 +142,10 @@ func details(v *fw.Validation, in DetailsInput) domain.Details {
 	return d
 }
 
-// references checks what a product points to inside its company: its category, that no other
-// product has one of its barcodes, and that its components are goods of the company that do not
-// contain it (the C# checked none of this and kept two unrelated barcode stores).
+// references comprueba aquello a lo que apunta un producto dentro de su empresa: su categoría, que
+// ningún otro producto tenga uno de sus códigos de barras y que sus componentes sean bienes de la
+// empresa que no lo contengan (el C# no comprobaba nada de esto y guardaba en dos sitios los códigos de
+// barras sin relación).
 func (s service) references(ctx context.Context, self domain.ProductID, company domain.OrganizationID, d domain.Details) error {
 	if !d.Category.IsZero() {
 		c, err := s.Categories.Get(ctx, d.Category)
@@ -165,7 +166,7 @@ func (s service) references(ctx context.Context, self domain.ProductID, company 
 			return fw.Violation("products.duplicate_barcode", "another product has the code "+b.Value)
 		}
 	}
-	// Breadth-first through the components: none of them, at any depth, is the product itself.
+	// En anchura por los componentes: ninguno de ellos, a ninguna profundidad, es el propio producto.
 	pending := make([]domain.ProductID, 0, len(d.Components))
 	for _, c := range d.Components {
 		pending = append(pending, c.Product)
@@ -382,7 +383,7 @@ func (s service) productUseCases(svc *Service) {
 	})
 }
 
-// CreateCategory adds a category to the tree of a company.
+// CreateCategory añade una categoría al árbol de una empresa.
 type CreateCategory struct {
 	Company string `json:"company"`
 	Code    string `json:"code"`
@@ -390,16 +391,16 @@ type CreateCategory struct {
 	Parent  string `json:"parent,omitempty"`
 }
 
-// RenameCategory renames a category.
+// RenameCategory cambia el nombre de una categoría.
 type RenameCategory struct {
 	ID   domain.CategoryID `json:"-"`
 	Name string            `json:"name"`
 }
 
-// SearchCategories lists the categories of a company.
+// SearchCategories lista las categorías de una empresa.
 type SearchCategories struct{ Company string }
 
-// CategoryDTO is the transport form of a category.
+// CategoryDTO es la forma de transporte de una categoría.
 type CategoryDTO struct {
 	ID      string `json:"id"`
 	Company string `json:"company"`

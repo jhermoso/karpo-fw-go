@@ -12,20 +12,20 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/log"
 )
 
-// alertTimeout is how long telling somebody may take: the round of chores waits for it.
+// alertTimeout es cuánto puede tardar avisar a alguien: la ronda de tareas lo espera.
 const alertTimeout = 5 * time.Second
 
-// Alerts tells what needs a person: always in the log, and at a webhook when the environment
-// gives one. The webhook gets a JSON object with a "text" a person can read (what the incoming
-// webhooks of the usual chat tools take) and the facts apart, for a program. Nothing of the
-// message itself is sent: only whose it was, its type and why it was refused.
+// Alerts avisa de lo que necesita a una persona: siempre en el log, y en un webhook cuando el
+// entorno da uno. El webhook recibe un objeto JSON con un "text" que una persona puede leer (lo que
+// admiten los webhooks entrantes de las herramientas de chat habituales) y los datos aparte, para
+// un programa. No se envía nada del mensaje en sí: sólo de quién era, su tipo y por qué se rechazó.
 type Alerts struct {
 	Webhook string
 	Logger  log.Logger
-	Client  *http.Client // nil: one with a timeout
+	Client  *http.Client // nil: uno con timeout
 }
 
-// alert is what the webhook gets.
+// alert es lo que recibe el webhook.
 type alert struct {
 	Text     string `json:"text"`
 	Kind     string `json:"kind"`
@@ -37,8 +37,8 @@ type alert struct {
 	Reason   string `json:"reason,omitempty"`
 }
 
-// DeliveryGivenUp tells that a message was given up for a listener. It never fails: an alert that
-// cannot be sent is logged, and the list of deliveries still has what was given up.
+// DeliveryGivenUp avisa de que se abandonó un mensaje para un oyente. Nunca falla: una alerta que
+// no se puede enviar se anota en el log, y la lista de entregas sigue teniendo lo abandonado.
 func (a Alerts) DeliveryGivenUp(ctx context.Context, d mailbox.DTO) {
 	if a.Logger != nil {
 		a.Logger.Error("a message was given up for a listener: it waits for somebody to retry or discard it", "consumer", d.Consumer,

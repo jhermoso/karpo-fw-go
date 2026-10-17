@@ -1,5 +1,6 @@
-// Package infrastructure stores the Payroll context: SQL mappings, versioned schema of the five
-// engines (with the pay concept seed), the catalog reader, hot-swap factories and the HR adapter.
+// Package infrastructure guarda el contexto Payroll: mapeos SQL, esquema versionado de los cinco
+// motores (con la siembra de conceptos retributivos), el lector del catálogo, factorías
+// intercambiables en caliente y el adaptador a HR.
 package infrastructure
 
 import (
@@ -24,10 +25,10 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlserver"
 )
 
-// Context is the name of the bounded context.
+// Context es el nombre del contexto delimitado.
 const Context = "payroll"
 
-// Technical tables of the context.
+// Tablas técnicas del contexto.
 const (
 	TableOutbox            = "payroll_outbox"
 	TableIntegrationOutbox = "payroll_integration_outbox"
@@ -84,7 +85,7 @@ func technicalDDL(d string) []string {
 	return nil
 }
 
-// Migrations is the versioned schema of the context.
+// Migrations es el esquema versionado del contexto.
 func Migrations() sqlrepo.MigrationSet {
 	technical := map[string][]string{}
 	for _, d := range sqlrepo.Dialects {
@@ -103,16 +104,16 @@ func Migrations() sqlrepo.MigrationSet {
 	}}
 }
 
-// Migrator returns the schema migrator of the context.
+// Migrator devuelve el migrador del esquema del contexto.
 func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 	return sqlrepo.NewMigrator(db, []sqlrepo.MigrationSet{Migrations()})
 }
 
-// Tables lists the tables of the context, children first (drop order).
+// Tables enumera las tablas del contexto, las hijas primero (orden de borrado).
 var Tables = []string{"pay_payslip_lines", "pay_payslips", "pay_profile_splits", "pay_profiles", "pay_employer_accounts", "pay_concepts",
 	TableOutbox, TableIntegrationOutbox, TableAuditLog}
 
-// DropAll removes the tables of the context and its migration history (tests only).
+// DropAll borra las tablas del contexto y su historial de migraciones (sólo para pruebas).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
 	for _, t := range Tables {
 		_, _ = db.ExecContext(ctx, "DROP TABLE "+t)
@@ -155,7 +156,7 @@ func iban(r *sqlrepo.Row, col string) (vocab.IBAN, error) {
 	return vocab.IBAN{}, nil
 }
 
-// PayslipMapping maps Payslip to pay_payslips and its lines.
+// PayslipMapping mapea Payslip a pay_payslips y sus líneas.
 func PayslipMapping() sqlrepo.Mapping[domain.PayslipID, *domain.Payslip] {
 	return sqlrepo.Mapping[domain.PayslipID, *domain.Payslip]{
 		Table: "pay_payslips",
@@ -189,8 +190,8 @@ func PayslipMapping() sqlrepo.Mapping[domain.PayslipID, *domain.Payslip] {
 					return nil, err
 				}
 			}
-			// UUID v7 ids are chronological: the byte order is the order the lines were added,
-			// on every engine (SQL Server sorts UNIQUEIDENTIFIER by byte groups).
+			// Los ids UUID v7 son cronológicos: el orden de los bytes es el orden en que se añadieron
+			// las líneas, en todos los motores (SQL Server ordena UNIQUEIDENTIFIER por grupos de bytes).
 			slices.SortFunc(s.Lines, func(a, b domain.Line) int { return bytes.Compare(a.ID.Bytes(), b.ID.Bytes()) })
 			if err := r.Err(); err != nil {
 				return nil, err
@@ -216,7 +217,7 @@ func PayslipMapping() sqlrepo.Mapping[domain.PayslipID, *domain.Payslip] {
 	}
 }
 
-// ProfileMapping maps Profile to pay_profiles and its splits.
+// ProfileMapping mapea Profile a pay_profiles y sus repartos.
 func ProfileMapping() sqlrepo.Mapping[domain.ProfileID, *domain.Profile] {
 	return sqlrepo.Mapping[domain.ProfileID, *domain.Profile]{
 		Table: "pay_profiles",
@@ -276,7 +277,7 @@ func ProfileMapping() sqlrepo.Mapping[domain.ProfileID, *domain.Profile] {
 	}
 }
 
-// AccountMapping maps EmployerAccount to pay_employer_accounts.
+// AccountMapping mapea EmployerAccount a pay_employer_accounts.
 func AccountMapping() sqlrepo.Mapping[domain.EmployerAccountID, *domain.EmployerAccount] {
 	return sqlrepo.Mapping[domain.EmployerAccountID, *domain.EmployerAccount]{
 		Table:   "pay_employer_accounts",
@@ -301,10 +302,10 @@ func AccountMapping() sqlrepo.Mapping[domain.EmployerAccountID, *domain.Employer
 	}
 }
 
-// SQLCatalogs reads the concept catalog from the database.
+// SQLCatalogs lee de la base de datos el catálogo de conceptos.
 type SQLCatalogs struct{ db *sqlrepo.DB }
 
-// Concepts implements domain.Catalogs.
+// Concepts implementa domain.Catalogs.
 func (c SQLCatalogs) Concepts(ctx context.Context) ([]domain.Concept, error) {
 	rows, err := c.db.Select(ctx, "pay_concepts", []string{"id", "code", "name", "kind", "contributable", "taxable", "perception_key", "active"}, "code")
 	if err != nil {
@@ -322,10 +323,10 @@ func (c SQLCatalogs) Concepts(ctx context.Context) ([]domain.Concept, error) {
 	return out, nil
 }
 
-// WellKnownCatalogs serves the seed (in-memory backend).
+// WellKnownCatalogs sirve la siembra (backend en memoria).
 type WellKnownCatalogs struct{}
 
-// Concepts implements domain.Catalogs.
+// Concepts implementa domain.Catalogs.
 func (WellKnownCatalogs) Concepts(context.Context) ([]domain.Concept, error) {
 	return domain.WellKnownConcepts(), nil
 }
@@ -342,22 +343,22 @@ func repository[ID fw.Identifier, T fw.AggregateRoot[ID]](b hotswap.Backend, m s
 	return nil, unsupported(b)
 }
 
-// PayslipRepositoryFactory builds the payslip repository.
+// PayslipRepositoryFactory construye el repositorio de nóminas.
 func PayslipRepositoryFactory(b hotswap.Backend) (domain.PayslipRepository, error) {
 	return repository(b, PayslipMapping())
 }
 
-// ProfileRepositoryFactory builds the profile repository.
+// ProfileRepositoryFactory construye el repositorio de perfiles.
 func ProfileRepositoryFactory(b hotswap.Backend) (domain.ProfileRepository, error) {
 	return repository(b, ProfileMapping())
 }
 
-// AccountRepositoryFactory builds the employer account repository.
+// AccountRepositoryFactory construye el repositorio de cuentas de cotización.
 func AccountRepositoryFactory(b hotswap.Backend) (domain.EmployerAccountRepository, error) {
 	return repository(b, AccountMapping())
 }
 
-// CatalogsFor returns the catalog reader of a backend.
+// CatalogsFor devuelve el lector del catálogo de un backend.
 func CatalogsFor(b hotswap.Backend) (domain.Catalogs, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -368,10 +369,11 @@ func CatalogsFor(b hotswap.Backend) (domain.Catalogs, error) {
 	return nil, unsupported(b)
 }
 
-// OutboxFactory builds the domain event outbox; IntegrationOutboxFactory, the Published Language one.
+// OutboxFactory construye el outbox de eventos de dominio; IntegrationOutboxFactory, el del
+// Published Language.
 func OutboxFactory(b hotswap.Backend) (application.OutboxStore, error) { return outbox(b, TableOutbox) }
 
-// IntegrationOutboxFactory builds the integration outbox.
+// IntegrationOutboxFactory construye el outbox de integración.
 func IntegrationOutboxFactory(b hotswap.Backend) (application.OutboxStore, error) {
 	return outbox(b, TableIntegrationOutbox)
 }
@@ -386,7 +388,7 @@ func outbox(b hotswap.Backend, table string) (application.OutboxStore, error) {
 	return nil, unsupported(b)
 }
 
-// AuditLogFactory builds the audit log.
+// AuditLogFactory construye el registro de auditoría.
 func AuditLogFactory(b hotswap.Backend) (application.AuditLog, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -397,12 +399,12 @@ func AuditLogFactory(b hotswap.Backend) (application.AuditLog, error) {
 	return nil, unsupported(b)
 }
 
-// HRStaff adapts the HR Staff contract to the Payroll Employments port (ACL).
+// HRStaff adapta el contrato Staff de HR al puerto Employments de Payroll (ACL).
 type HRStaff struct{ Staff hr.Staff }
 
 var _ papp.Employments = HRStaff{}
 
-// EmploymentOn implements papp.Employments.
+// EmploymentOn implementa papp.Employments.
 func (h HRStaff) EmploymentOn(ctx context.Context, person domain.PersonID, employer domain.OrganizationID, on vocab.Date) (papp.EmploymentInfo, bool, error) {
 	m, err := h.Staff.EmploymentsOn(ctx, []string{person.String()}, on.String())
 	if err != nil {

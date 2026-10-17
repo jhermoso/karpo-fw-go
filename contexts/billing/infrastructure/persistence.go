@@ -1,5 +1,6 @@
-// Package infrastructure stores the Billing context: SQL mappings, versioned schema of the five
-// engines, hot-swap factories and the adapters to Fiscal (tax engine) and Parties (identities).
+// Package infrastructure guarda el contexto Billing: mapeos SQL, esquema versionado de los cinco
+// motores, factorías intercambiables en caliente y los adaptadores a Fiscal (motor de impuestos) y
+// Parties (identidades).
 package infrastructure
 
 import (
@@ -24,10 +25,10 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlserver"
 )
 
-// Context is the name of the bounded context.
+// Context es el nombre del contexto delimitado.
 const Context = "billing"
 
-// Technical tables of the context.
+// Tablas técnicas del contexto.
 const (
 	TableOutbox            = "billing_outbox"
 	TableIntegrationOutbox = "billing_integration_outbox"
@@ -57,7 +58,7 @@ var schemaDDL = []string{
 	surcharge_amount {str:30}, PRIMARY KEY (invoice_id, line_no), FOREIGN KEY (invoice_id) REFERENCES bil_invoices (id))`,
 }
 
-// TableInbox is the inbox of the events Billing consumes.
+// TableInbox es el inbox de los eventos que consume Billing.
 const TableInbox = "billing_inbox"
 
 var sourceDDL = []string{
@@ -83,7 +84,7 @@ func technicalDDL(d string) []string {
 	return nil
 }
 
-// Migrations is the versioned schema of the context.
+// Migrations es el esquema versionado del contexto.
 func Migrations() sqlrepo.MigrationSet {
 	technical := map[string][]string{}
 	for _, d := range sqlrepo.Dialects {
@@ -98,15 +99,15 @@ func Migrations() sqlrepo.MigrationSet {
 	}}
 }
 
-// Migrator returns the schema migrator of the context.
+// Migrator devuelve el migrador del esquema del contexto.
 func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 	return sqlrepo.NewMigrator(db, []sqlrepo.MigrationSet{Migrations()})
 }
 
-// Tables lists the tables of the context, children first (drop order).
+// Tables lista las tablas del contexto, las hijas primero (orden de borrado).
 var Tables = []string{"bil_invoice_taxes", "bil_invoice_lines", "bil_invoices", "bil_series", TableOutbox, TableIntegrationOutbox, TableAuditLog, TableInbox}
 
-// DropAll removes the tables of the context and its migration history (tests only).
+// DropAll borra las tablas del contexto y su historial de migraciones (sólo para pruebas).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
 	for _, t := range Tables {
 		_, _ = db.ExecContext(ctx, "DROP TABLE "+t)
@@ -142,7 +143,7 @@ func optDecimal(d vocab.Decimal) any {
 	return d.String()
 }
 
-// SeriesMapping maps Series to bil_series.
+// SeriesMapping mapea Series a bil_series.
 func SeriesMapping() sqlrepo.Mapping[domain.SeriesID, *domain.Series] {
 	return sqlrepo.Mapping[domain.SeriesID, *domain.Series]{
 		Table:   "bil_series",
@@ -163,7 +164,7 @@ func SeriesMapping() sqlrepo.Mapping[domain.SeriesID, *domain.Series] {
 	}
 }
 
-// InvoiceMapping maps Invoice to bil_invoices, its lines and its tax breakdown.
+// InvoiceMapping mapea Invoice a bil_invoices, sus líneas y su desglose de impuestos.
 func InvoiceMapping() sqlrepo.Mapping[domain.InvoiceID, *domain.Invoice] {
 	return sqlrepo.Mapping[domain.InvoiceID, *domain.Invoice]{
 		Table: "bil_invoices",
@@ -272,20 +273,20 @@ func repository[ID fw.Identifier, T fw.AggregateRoot[ID]](b hotswap.Backend, m s
 	return nil, unsupported(b)
 }
 
-// SeriesRepositoryFactory builds the series repository.
+// SeriesRepositoryFactory construye el repositorio de series.
 func SeriesRepositoryFactory(b hotswap.Backend) (domain.SeriesRepository, error) {
 	return repository(b, SeriesMapping())
 }
 
-// InvoiceRepositoryFactory builds the invoice repository.
+// InvoiceRepositoryFactory construye el repositorio de facturas.
 func InvoiceRepositoryFactory(b hotswap.Backend) (domain.InvoiceRepository, error) {
 	return repository(b, InvoiceMapping())
 }
 
-// OutboxFactory builds the domain event outbox; IntegrationOutboxFactory, the Published Language one.
+// OutboxFactory construye el outbox de eventos de dominio; IntegrationOutboxFactory, el del Published Language.
 func OutboxFactory(b hotswap.Backend) (application.OutboxStore, error) { return outbox(b, TableOutbox) }
 
-// IntegrationOutboxFactory builds the integration outbox.
+// IntegrationOutboxFactory construye el outbox de integración.
 func IntegrationOutboxFactory(b hotswap.Backend) (application.OutboxStore, error) {
 	return outbox(b, TableIntegrationOutbox)
 }
@@ -300,7 +301,7 @@ func outbox(b hotswap.Backend, table string) (application.OutboxStore, error) {
 	return nil, unsupported(b)
 }
 
-// AuditLogFactory builds the audit log.
+// AuditLogFactory construye el registro de auditoría.
 func AuditLogFactory(b hotswap.Backend) (application.AuditLog, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -311,12 +312,12 @@ func AuditLogFactory(b hotswap.Backend) (application.AuditLog, error) {
 	return nil, unsupported(b)
 }
 
-// FiscalTaxes adapts the Fiscal TaxEngine to the Billing Taxes port (ACL).
+// FiscalTaxes adapta el TaxEngine de Fiscal al puerto Taxes de Billing (ACL).
 type FiscalTaxes struct{ Engine fiscal.TaxEngine }
 
 var _ domain.Taxes = FiscalTaxes{}
 
-// Calculate implements domain.Taxes.
+// Calculate implementa domain.Taxes.
 func (f FiscalTaxes) Calculate(ctx context.Context, seller domain.OrganizationID, accrual vocab.Date, surcharge bool, lines []domain.TaxableLine) (domain.Breakdown, error) {
 	doc := fiscal.TaxableDocument{Seller: seller.String(), Date: accrual.String(), EquivalenceSurcharge: surcharge}
 	for _, l := range lines {
@@ -344,14 +345,14 @@ func (f FiscalTaxes) Calculate(ctx context.Context, seller domain.OrganizationID
 	return out, err
 }
 
-// PartiesIdentities adapts the Parties TaxIdentities contract to the Billing Identities port (ACL).
+// PartiesIdentities adapta el contrato TaxIdentities de Parties al puerto Identities de Billing (ACL).
 type PartiesIdentities struct{ TaxIdentities parties.TaxIdentities }
 
 var _ domain.Identities = PartiesIdentities{}
 
 var _ domain.Blocks = PartiesIdentities{}
 
-// Blocked implements domain.Blocks; a party Parties does not know is not blocked.
+// Blocked implementa domain.Blocks; una party que Parties no conoce no está bloqueada.
 func (p PartiesIdentities) Blocked(ctx context.Context, party domain.PartyID) (bool, error) {
 	m, err := p.TaxIdentities.TaxIdentities(ctx, []string{party.String()})
 	if err != nil {
@@ -360,7 +361,7 @@ func (p PartiesIdentities) Blocked(ctx context.Context, party domain.PartyID) (b
 	return m[party.String()].Blocked, nil
 }
 
-// Identities implements domain.Identities.
+// Identities implementa domain.Identities.
 func (p PartiesIdentities) Identities(ctx context.Context, ids []domain.PartyID) (map[domain.PartyID]domain.Identity, error) {
 	req := make([]string, 0, len(ids))
 	for _, id := range ids {
@@ -381,7 +382,7 @@ func (p PartiesIdentities) Identities(ctx context.Context, ids []domain.PartyID)
 	return out, nil
 }
 
-// InboxFactory builds the inbox of the events Billing consumes.
+// InboxFactory construye el inbox de los eventos que consume Billing.
 func InboxFactory(b hotswap.Backend) (application.InboxStore, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:

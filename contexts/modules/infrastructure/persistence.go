@@ -1,5 +1,5 @@
-// Package infrastructure stores the Modules context: SQL mappings, versioned schema of the five
-// engines and hot-swap factories.
+// Package infrastructure guarda el contexto de Modules: los mapeos SQL, el esquema versionado de
+// los cinco motores y las factorías para el intercambio en caliente.
 package infrastructure
 
 import (
@@ -20,10 +20,10 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlserver"
 )
 
-// Context is the name of the bounded context.
+// Context es el nombre del contexto delimitado.
 const Context = "modules"
 
-// Technical tables of the context.
+// Tablas técnicas del contexto.
 const (
 	TableOutbox            = "modules_outbox"
 	TableIntegrationOutbox = "modules_integration_outbox"
@@ -32,8 +32,8 @@ const (
 
 const audit = `created_at {ts}, created_by_id {str:64}, created_by_name {str:200}, modified_at {ts}, modified_by_id {str:64}, modified_by_name {str:200}`
 
-// One row per feature of the catalog, and one per company and feature: both unique in every
-// engine (the C# rule was a filtered index only some of them had).
+// Una fila por funcionalidad del catálogo, y una por empresa y funcionalidad: las dos únicas en
+// todos los motores (la regla del C# era un índice filtrado que sólo algunos tenían).
 var schemaDDL = []string{
 	`CREATE TABLE mod_features (id {uuid} NOT NULL PRIMARY KEY, version {bigint} NOT NULL, kind {str:20} NOT NULL, code {str:30} NOT NULL,
 	name {str:100} NOT NULL, description {str:500}, retired {bool} NOT NULL, ` + audit + `)`,
@@ -61,7 +61,7 @@ func technicalDDL(d string) []string {
 	return nil
 }
 
-// Migrations is the versioned schema of the context.
+// Migrations es el esquema versionado del contexto.
 func Migrations() sqlrepo.MigrationSet {
 	technical := map[string][]string{}
 	for _, d := range sqlrepo.Dialects {
@@ -73,15 +73,15 @@ func Migrations() sqlrepo.MigrationSet {
 	}}
 }
 
-// Migrator returns the schema migrator of the context.
+// Migrator devuelve el migrador del esquema del contexto.
 func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 	return sqlrepo.NewMigrator(db, []sqlrepo.MigrationSet{Migrations()})
 }
 
-// Tables lists the tables of the context (drop order).
+// Tables lista las tablas del contexto (orden de borrado).
 var Tables = []string{"mod_activations", "mod_features", TableOutbox, TableIntegrationOutbox, TableAuditLog}
 
-// DropAll removes the tables of the context and its migration history (tests only).
+// DropAll borra las tablas del contexto y su historial de migraciones (sólo pruebas).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
 	for _, t := range Tables {
 		_, _ = db.ExecContext(ctx, "DROP TABLE "+t)
@@ -96,7 +96,7 @@ func opt(s string) any {
 	return s
 }
 
-// FeatureMapping maps Feature to mod_features.
+// FeatureMapping mapea Feature a mod_features.
 func FeatureMapping() sqlrepo.Mapping[domain.FeatureID, *domain.Feature] {
 	return sqlrepo.Mapping[domain.FeatureID, *domain.Feature]{
 		Table:   "mod_features",
@@ -117,7 +117,7 @@ func FeatureMapping() sqlrepo.Mapping[domain.FeatureID, *domain.Feature] {
 	}
 }
 
-// ActivationMapping maps Activation to mod_activations.
+// ActivationMapping mapea Activation a mod_activations.
 func ActivationMapping() sqlrepo.Mapping[domain.ActivationID, *domain.Activation] {
 	return sqlrepo.Mapping[domain.ActivationID, *domain.Activation]{
 		Table: "mod_activations",
@@ -165,20 +165,20 @@ func repository[ID fw.Identifier, T fw.AggregateRoot[ID]](b hotswap.Backend, m s
 	return nil, unsupported(b)
 }
 
-// FeatureRepositoryFactory builds the catalog repository.
+// FeatureRepositoryFactory construye el repositorio del catálogo.
 func FeatureRepositoryFactory(b hotswap.Backend) (domain.FeatureRepository, error) {
 	return repository(b, FeatureMapping())
 }
 
-// ActivationRepositoryFactory builds the activation repository.
+// ActivationRepositoryFactory construye el repositorio de activaciones.
 func ActivationRepositoryFactory(b hotswap.Backend) (domain.ActivationRepository, error) {
 	return repository(b, ActivationMapping())
 }
 
-// OutboxFactory builds the domain event outbox.
+// OutboxFactory construye el outbox de eventos de dominio.
 func OutboxFactory(b hotswap.Backend) (application.OutboxStore, error) { return outbox(b, TableOutbox) }
 
-// IntegrationOutboxFactory builds the integration outbox.
+// IntegrationOutboxFactory construye el outbox de integración.
 func IntegrationOutboxFactory(b hotswap.Backend) (application.OutboxStore, error) {
 	return outbox(b, TableIntegrationOutbox)
 }
@@ -193,7 +193,7 @@ func outbox(b hotswap.Backend, table string) (application.OutboxStore, error) {
 	return nil, unsupported(b)
 }
 
-// AuditLogFactory builds the audit log.
+// AuditLogFactory construye el registro de auditoría.
 func AuditLogFactory(b hotswap.Backend) (application.AuditLog, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:

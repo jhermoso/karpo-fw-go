@@ -47,8 +47,8 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/testing/archtest"
 )
 
-// host composes Parties, Fiscal, Billing, Receivables and Treasury on one hot-swappable backend,
-// with one in-process broker carrying the Published Language between them.
+// host compone Parties, Fiscal, Billing, Receivables y Treasury sobre un único backend
+// intercambiable en caliente, con un broker en proceso que lleva el Published Language entre ellos.
 type host struct {
 	t        *testing.T
 	srv      *httptest.Server
@@ -151,7 +151,7 @@ func (h *host) ok(err error) {
 	}
 }
 
-// deliver relays the Published Language of Billing and Treasury to Receivables.
+// deliver retransmite el Published Language de Billing y Treasury a Receivables.
 func (h *host) deliver() {
 	for _, r := range []interface {
 		RelayOnce(context.Context) (int, error)
@@ -219,10 +219,10 @@ func (h *host) scenario(tag string) {
 	}
 	invAna := invoice(ana.ID, "100", vocab.MustDate(2026, 10, 15))  // 121.00
 	invBea := invoice(bea.ID, "50", vocab.MustDate(2026, 10, 25))   // 60.50
-	invCarl := invoice(carl.ID, "10", vocab.MustDate(2026, 10, 10)) // 12.10, no mandate
+	invCarl := invoice(carl.ID, "10", vocab.MustDate(2026, 10, 10)) // 12.10, sin mandato
 	h.deliver()
 
-	// Account and mandates.
+	// Cuenta y mandatos.
 	var acc tapp.AccountDTO
 	account := map[string]any{"owner": acme.ID, "iban": "ES91 2100 0418 4502 0005 1332", "bic": "CAIXESBBXXX", "alias": "Cobros " + tag,
 		"collections": true, "opened": "2020-01-01"}
@@ -241,7 +241,7 @@ func (h *host) scenario(tag string) {
 	h.must(h.do("POST", "/api/treasury/mandates", "clerk", map[string]any{"creditor": acme.ID, "debtor": bea.ID, "iban": "ES6621000418401234567891",
 		"reference": "MAND-BEA", "scheme": "CORE", "signed": "2026-01-10"}, nil), 422, "duplicate reference")
 
-	// A remittance with what is due by 15 October: Ana (Carl has no mandate).
+	// Una remesa con lo que vence hasta el 15 de octubre: Ana (Carl no tiene mandato).
 	var r1 tapp.RemittanceDTO
 	h.must(h.do("POST", "/api/treasury/remittances", "clerk", map[string]any{"creditor": acme.ID, "account": acc.ID, "scheme": "CORE",
 		"collectionDate": "2026-10-20", "dueTo": "2026-10-15"}, &r1), 201, "propose")
@@ -262,7 +262,7 @@ func (h *host) scenario(tag string) {
 	}
 	h.must(h.do("GET", "/api/treasury/remittances/"+r1.ID, "outsider", nil, nil), 404, "outsider")
 
-	// A second proposal does not repeat Ana: it takes Bea.
+	// Una segunda propuesta no repite a Ana: toma a Bea.
 	var r2 tapp.RemittanceDTO
 	h.must(h.do("POST", "/api/treasury/remittances", "clerk", map[string]any{"creditor": acme.ID, "account": acc.ID, "scheme": "CORE",
 		"collectionDate": "2026-10-30", "dueTo": "2026-10-31"}, &r2), 201, "second proposal")
@@ -270,7 +270,7 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("second proposal: %+v", r2)
 	}
 
-	// The bank charges: Receivables registers the collection; a return cancels it.
+	// El banco cobra: Receivables registra el cobro; una devolución lo anula.
 	h.must(h.do("POST", "/api/treasury/remittances/"+r1.ID+"/settle", "sender", map[string]any{"on": "2026-10-20"}, nil), 403, "sending is not settling")
 	h.must(h.do("POST", "/api/treasury/remittances/"+r1.ID+"/settle", "banker", map[string]any{"on": "2026-10-20"}, nil), 200, "settle")
 	h.deliver()
@@ -287,7 +287,7 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("carl untouched: %+v", r)
 	}
 
-	// Ana goes again, now as a recurrent collection.
+	// Ana vuelve a ir, ahora como cobro recurrente.
 	var r3 tapp.RemittanceDTO
 	h.must(h.do("POST", "/api/treasury/remittances", "clerk", map[string]any{"creditor": acme.ID, "account": acc.ID, "scheme": "CORE",
 		"collectionDate": "2026-11-05", "dueTo": "2026-10-15"}, &r3), 201, "third proposal")

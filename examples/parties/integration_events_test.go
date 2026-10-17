@@ -16,8 +16,8 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlite"
 )
 
-// crmPartyRegistered is the downstream copy of the Parties contract: a tolerant reader with only
-// the fields the CRM needs (extra upstream fields are ignored).
+// crmPartyRegistered es la copia aguas abajo del contrato de Parties: un lector tolerante con
+// sólo los campos que necesita el CRM (los campos de más de aguas arriba se ignoran).
 type crmPartyRegistered struct {
 	PartyID   string `json:"partyId"`
 	LegalName string `json:"legalName"`
@@ -32,10 +32,10 @@ type crmPartyRenamed struct {
 
 func (crmPartyRenamed) IntegrationEventType() string { return "parties.party-renamed.v1" }
 
-// TestParties_IntegrationEvents: Parties publishes its Published Language through the integration
-// outbox; two downstream contexts consume it through their own inboxes (the CRM on SQLite, the
-// billing context in memory). A consumer that fails once forces a redelivery to everybody, and
-// the inboxes make it harmless.
+// TestParties_IntegrationEvents: Parties publica su Published Language a través del outbox de
+// integración; dos contextos aguas abajo lo consumen a través de sus propios inbox (el CRM en
+// SQLite, el contexto de facturación en memoria). Un consumidor que falla una vez obliga a
+// reenviar a todos, y los inbox lo hacen inofensivo.
 func TestParties_IntegrationEvents(t *testing.T) {
 	ctx := context.Background()
 	e := compose(t)
@@ -44,12 +44,12 @@ func TestParties_IntegrationEvents(t *testing.T) {
 	if status, body := e.do("PUT", "/parties/"+acme.ID.String()+"/legal-name", map[string]string{"legalName": "Acme Renamed"}, nil); status != 200 {
 		t.Fatalf("rename: %d %s", status, body)
 	}
-	// ContactAdded is internal: it reaches the domain outbox but not the integration outbox.
+	// ContactAdded es interno: llega al outbox de dominio pero no al outbox de integración.
 	if status, body := e.do("POST", "/parties/"+acme.ID.String()+"/contacts", map[string]any{"kind": "email", "value": "a@acme.test", "primary": true}, nil); status != 200 {
 		t.Fatalf("contact: %d %s", status, body)
 	}
 
-	// CRM: its own SQLite database with an inbox; its read model lives in the same database.
+	// CRM: su propia base de datos SQLite con un inbox; su modelo de lectura vive en la misma base.
 	raw, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "crm.db")+"?_pragma=busy_timeout(5000)")
 	if err != nil {
 		t.Fatal(err)
@@ -69,15 +69,15 @@ func TestParties_IntegrationEvents(t *testing.T) {
 			t.Errorf("envelope: %+v", env)
 		}
 		_, err := crmDB.ExecContext(ctx, "INSERT INTO crm_customers (party_id, name) VALUES (?, ?)", evt.PartyID, evt.LegalName)
-		return err // a duplicate would violate the primary key: the inbox must prevent it
+		return err // un duplicado violaría la clave primaria: el inbox debe impedirlo
 	})
 	messaging.Handle(crm, func(ctx context.Context, evt crmPartyRenamed, _ application.Envelope) error {
 		_, err := crmDB.ExecContext(ctx, "UPDATE crm_customers SET name = ? WHERE party_id = ?", evt.LegalName, evt.PartyID)
 		return err
 	})
 
-	// Billing: in memory; it fails the first time it sees Acme's registration, so the message is
-	// redelivered to the CRM too, whose INSERT would then violate its primary key.
+	// Facturación: en memoria; falla la primera vez que ve el alta de Acme, así que el mensaje se
+	// reenvía también al CRM, cuyo INSERT violaría entonces su clave primaria.
 	billingStore := memory.NewStore("billing")
 	billing := messaging.NewConsumer("billing", memory.NewInbox(billingStore), billingStore)
 	registered, failures := map[string]int{}, 0
@@ -99,7 +99,7 @@ func TestParties_IntegrationEvents(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n != 2 { // Globex and the rename delivered; Acme failed in billing and stays pending
+	if n != 2 { // Globex y el cambio de nombre entregados; Acme falló en facturación y sigue pendiente
 		t.Fatalf("first pass delivered %d", n)
 	}
 	if n, err := relay.RelayOnce(ctx); err != nil || n != 1 {

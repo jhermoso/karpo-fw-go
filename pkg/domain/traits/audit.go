@@ -6,7 +6,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// AuditStamp records who created and last modified an aggregate, and when.
+// AuditStamp registra quién creó y quién modificó por última vez un agregado, y cuándo.
 type AuditStamp struct {
 	CreatedAt  time.Time   `json:"createdAt"`
 	CreatedBy  vocab.Actor `json:"createdBy"`
@@ -14,38 +14,38 @@ type AuditStamp struct {
 	ModifiedBy vocab.Actor `json:"modifiedBy,omitzero"`
 }
 
-// Auditable is implemented by aggregates that embed Audited. The interface is sealed: the stamp
-// can only be written through Stamp, which the application layer calls with the actor of the
-// request, so aggregates cannot forge it (in C# the entity stamped itself and always recorded
-// Actor.System).
+// Auditable lo implementan los agregados que incrustan Audited. La interfaz está sellada: el sello
+// sólo se escribe mediante Stamp, que la capa de aplicación llama con el actor de la petición, así
+// que los agregados no pueden falsificarlo (en C# la entidad se sellaba a sí misma y siempre
+// registraba Actor.System).
 type Auditable interface {
 	AuditStamp() AuditStamp
 	stamp(actor vocab.Actor, at time.Time)
 }
 
-// Audited is the embeddable audit stamp. The change history ("audit trail") is not kept inside
-// the aggregate: the application layer records it in an audit log together with the state
-// change (see application.AuditLog), like the C# EfUnitOfWork did.
+// Audited es el sello de auditoría incrustable. El historial de cambios («rastro de auditoría») no
+// se guarda dentro del agregado: la capa de aplicación lo registra en un log de auditoría junto con
+// el cambio de estado (véase application.AuditLog), como hacía el EfUnitOfWork de C#.
 type Audited struct {
 	s AuditStamp
 }
 
-// RestoredAudit rebuilds the stamp from persistence.
+// RestoredAudit reconstruye el sello desde la persistencia.
 func RestoredAudit(s AuditStamp) Audited { return Audited{s: s} }
 
-// AuditStamp returns the stamp.
+// AuditStamp devuelve el sello.
 func (a Audited) AuditStamp() AuditStamp { return a.s }
 
-// CreatedAt returns the creation instant (zero until first saved).
+// CreatedAt devuelve el instante de creación (cero hasta que se guarda por primera vez).
 func (a Audited) CreatedAt() time.Time { return a.s.CreatedAt }
 
-// CreatedBy returns the creator.
+// CreatedBy devuelve quién lo creó.
 func (a Audited) CreatedBy() vocab.Actor { return a.s.CreatedBy }
 
-// ModifiedAt returns the last modification instant (zero if never modified).
+// ModifiedAt devuelve el instante de la última modificación (cero si nunca se ha modificado).
 func (a Audited) ModifiedAt() time.Time { return a.s.ModifiedAt }
 
-// ModifiedBy returns the last modifier.
+// ModifiedBy devuelve quién lo modificó por última vez.
 func (a Audited) ModifiedBy() vocab.Actor { return a.s.ModifiedBy }
 
 func (a *Audited) stamp(actor vocab.Actor, at time.Time) {
@@ -56,26 +56,26 @@ func (a *Audited) stamp(actor vocab.Actor, at time.Time) {
 	a.s.ModifiedAt, a.s.ModifiedBy = at, actor
 }
 
-// Stamp records that actor created (first time) or modified the aggregate at t.
-// Reserved for the application layer (orchestration.Orchestrator calls it before saving).
+// Stamp registra que actor creó (la primera vez) o modificó el agregado en t.
+// Reservada a la capa de aplicación (orchestration.Orchestrator la llama antes de guardar).
 func Stamp(x Auditable, actor vocab.Actor, at time.Time) { x.stamp(actor, at.UTC()) }
 
-// Snapshotter is implemented by aggregates that expose the fields to audit as a flat map of
-// comparable values (strings, numbers, booleans, identifiers...). The application layer diffs
-// the snapshots taken before and after a command to record field-level changes, the Go
-// counterpart of the C# change-tracker based audit.
+// Snapshotter lo implementan los agregados que exponen los campos a auditar como un mapa plano de
+// valores comparables (cadenas, números, booleanos, identificadores...). La capa de aplicación compara
+// las instantáneas tomadas antes y después de una orden para registrar los cambios campo a campo:
+// la contrapartida en Go de la auditoría de C# basada en el change tracker.
 type Snapshotter interface {
 	AuditSnapshot() map[string]any
 }
 
-// FieldChange is one audited field change.
+// FieldChange es un cambio auditado de un campo.
 type FieldChange struct {
 	Field string `json:"field"`
 	Old   any    `json:"old,omitempty"`
 	New   any    `json:"new,omitempty"`
 }
 
-// Diff compares two snapshots and returns the changed fields sorted by name.
+// Diff compara dos instantáneas y devuelve los campos cambiados ordenados por nombre.
 func Diff(before, after map[string]any) []FieldChange {
 	var out []FieldChange
 	seen := map[string]bool{}

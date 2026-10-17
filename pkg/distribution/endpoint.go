@@ -4,13 +4,13 @@ import (
 	"net/http"
 )
 
-// EndpointModule defines the contract for subdomains or vertical slices to register HTTP routes.
+// EndpointModule define el contrato con el que los subdominios o los cortes verticales registran rutas HTTP.
 type EndpointModule interface {
-	// RegisterRoutes mounts the module's HTTP endpoints onto the target mux.
+	// RegisterRoutes monta los endpoints HTTP del módulo en el mux de destino.
 	RegisterRoutes(mux *http.ServeMux)
 }
 
-// EndpointModuleFunc adapts a function into an EndpointModule.
+// EndpointModuleFunc adapta una función a EndpointModule.
 type EndpointModuleFunc func(mux *http.ServeMux)
 
 func (fn EndpointModuleFunc) RegisterRoutes(mux *http.ServeMux) {

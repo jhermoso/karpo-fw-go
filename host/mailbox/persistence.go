@@ -10,10 +10,10 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 )
 
-// Context is the name the schema of the mailboxes is versioned under.
+// Context es el nombre bajo el que se versiona el esquema de los buzones.
 const Context = "host"
 
-// Table is where the deliveries are kept.
+// Table es donde se guardan las entregas.
 const Table = "host_deliveries"
 
 var ddl = []string{
@@ -27,20 +27,20 @@ var ddl = []string{
 	`CREATE INDEX ix_host_deliveries_status ON host_deliveries (status)`,
 }
 
-// Migrations is the versioned schema of the mailboxes.
+// Migrations es el esquema versionado de los buzones.
 func Migrations() sqlrepo.MigrationSet {
 	return sqlrepo.MigrationSet{Context: Context, Migrations: []sqlrepo.Migration{
 		{Version: 1, Name: "messages kept for the listeners that could not take them", Up: sqlrepo.RenderDDLAll(ddl...)},
 	}}
 }
 
-// DropAll removes the table and its migration history (tests only).
+// DropAll quita la tabla y su historial de migraciones (sólo pruebas).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
 	_, _ = db.ExecContext(ctx, "DROP TABLE "+Table)
 	_, _ = db.ExecContext(ctx, "DELETE FROM "+sqlrepo.DefaultMigrationsTable+" WHERE context = '"+Context+"'")
 }
 
-// Mapping maps Delivery to host_deliveries.
+// Mapping asocia Delivery con host_deliveries.
 func Mapping() sqlrepo.Mapping[ID, *Delivery] {
 	text := func(s string) any {
 		if s == "" {
@@ -86,7 +86,7 @@ func Mapping() sqlrepo.Mapping[ID, *Delivery] {
 	}
 }
 
-// RepositoryFactory builds the repository of the deliveries on a backend.
+// RepositoryFactory construye el repositorio de las entregas sobre un backend.
 func RepositoryFactory(b hotswap.Backend) (Repository, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:

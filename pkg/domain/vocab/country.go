@@ -2,10 +2,10 @@ package vocab
 
 import "strings"
 
-// CountryCode is an officially assigned ISO 3166-1 alpha-2 country code ("ES", "PT"...).
+// CountryCode es un código de país ISO 3166-1 alfa-2 asignado oficialmente ("ES", "PT"...).
 type CountryCode struct{ code string }
 
-// Spain is the default country of many Karpo rules.
+// Spain es el país por defecto de muchas reglas de Karpo.
 var Spain = CountryCode{"ES"}
 
 const isoCountries = "AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS " +
@@ -24,7 +24,7 @@ var countries = func() map[string]bool {
 	return m
 }()
 
-// NewCountryCode validates an ISO 3166-1 alpha-2 code (case-insensitive).
+// NewCountryCode valida un código ISO 3166-1 alfa-2 (sin distinguir mayúsculas).
 func NewCountryCode(s string) (CountryCode, error) {
 	c := strings.ToUpper(strings.TrimSpace(s))
 	if !countries[c] {
@@ -33,7 +33,7 @@ func NewCountryCode(s string) (CountryCode, error) {
 	return CountryCode{c}, nil
 }
 
-// MustCountryCode is like NewCountryCode but panics on error.
+// MustCountryCode es como NewCountryCode pero entra en pánico si hay error.
 func MustCountryCode(s string) CountryCode {
 	c, err := NewCountryCode(s)
 	if err != nil {
@@ -42,16 +42,16 @@ func MustCountryCode(s string) CountryCode {
 	return c
 }
 
-// String returns the code.
+// String devuelve el código.
 func (c CountryCode) String() string { return c.code }
 
-// IsZero reports whether the code is absent.
+// IsZero dice si falta el código.
 func (c CountryCode) IsZero() bool { return c.code == "" }
 
-// MarshalText implements encoding.TextMarshaler.
+// MarshalText implementa encoding.TextMarshaler.
 func (c CountryCode) MarshalText() ([]byte, error) { return []byte(c.code), nil }
 
-// UnmarshalText implements encoding.TextUnmarshaler.
+// UnmarshalText implementa encoding.TextUnmarshaler.
 func (c *CountryCode) UnmarshalText(b []byte) error {
 	if len(b) == 0 {
 		*c = CountryCode{}

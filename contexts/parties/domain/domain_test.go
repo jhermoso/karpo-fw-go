@@ -113,7 +113,7 @@ func TestRoleTypes_CodesAndAdding(t *testing.T) {
 			t.Errorf("code of %q: %q, want %q", name, got, want)
 		}
 	}
-	cat := domain.WellKnownRoleCatalog() // panics if two role types of the program shared a code
+	cat := domain.WellKnownRoleCatalog() // entra en pánico si dos tipos de rol del programa compartieran código
 	for _, rt := range cat.All() {
 		if got, ok := cat.ByCode(rt.Code); rt.Code == "" || !ok || got.ID != rt.ID || !domain.IsWellKnownRoleType(rt.ID) {
 			t.Errorf("%s: code %q does not lead back to it", rt.Name, rt.Code)
@@ -163,7 +163,7 @@ func TestRoleTypes_CodesAndAdding(t *testing.T) {
 		t.Errorf("a parent nobody has: %v", err)
 	}
 
-	// With it in the catalog, it is a role of persons like the ones of the program.
+	// Ya en el catálogo, es un rol de personas como los del programa.
 	withIt, err := domain.NewRoleCatalog(append(domain.WellKnownRoleTypes(), guarantor), domain.RolePersonCategory, domain.RoleOrganizationCategory)
 	if err != nil || withIt.Applicability(id) != domain.AppliesToPerson || !withIt.IsA(id, domain.RolePersonCategory) {
 		t.Fatalf("catalog with the new role type: %v", err)
@@ -256,8 +256,8 @@ func TestParty_Roles(t *testing.T) {
 	}
 }
 
-// A self-employed person may be a supplier, and an internal organization like any company of the
-// group: one that has employees and units (docs/DECISIONES-COMUNES.md, D-53).
+// Un autónomo puede ser proveedor, y organización interna como cualquier empresa del grupo: una
+// que tiene empleados y unidades (docs/DECISIONES-COMUNES.md, D-53).
 func TestParty_APersonMayBeSupplierAndInternalOrganization(t *testing.T) {
 	types := map[domain.RelationshipTypeID]domain.RelationshipType{}
 	for _, rt := range domain.WellKnownRelationshipTypes() {
@@ -276,7 +276,7 @@ func TestParty_APersonMayBeSupplierAndInternalOrganization(t *testing.T) {
 	if _, err := domain.Establish(domain.NewRelationshipID(), types[domain.RelEmployment], ana, luis, cat, t0, ""); err != nil {
 		t.Fatalf("an employee of a person who is an internal organization: %v", err)
 	}
-	// "An organization" as the parent of a unit is what the party is, not a role it plays.
+	// «Una organización» como padre de una unidad es lo que la party es, no un rol que desempeña.
 	acme, shop := org(t, "Acme", ""), org(t, "Tienda", "")
 	if _, err := shop.AssignRole(cat, domain.RoleDepartment, t0); err != nil {
 		t.Fatal(err)

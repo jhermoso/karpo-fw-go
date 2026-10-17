@@ -9,22 +9,23 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/traits"
 )
 
-// TrackingPlaceholder is where the tracking number goes in a carrier's tracking link.
+// TrackingPlaceholder es dónde va el número de seguimiento en el enlace de seguimiento de un
+// transportista.
 const TrackingPlaceholder = "{tracking}"
 
-// CarrierState is the persisted state of a carrier.
+// CarrierState es el estado persistido de un transportista.
 type CarrierState struct {
 	Company     OrganizationID
 	Code        string
 	Name        string
-	Party       PartyID // the carrier as a party, when it is one (it may also be a supplier)
-	TrackingURL string  // link of a shipment, with {tracking} where its number goes
+	Party       PartyID // el transportista como party, cuando lo es (también puede ser un proveedor)
+	TrackingURL string  // enlace de un envío, con {tracking} donde va su número
 	Blocked     bool
 	Audit       traits.AuditStamp
 }
 
-// Carrier is who carries the shipments of a company (in C# a party role whose table held only an
-// id, and which no shipment referred to).
+// Carrier es quien transporta los envíos de una empresa (en C#, un rol de party cuya tabla sólo
+// guardaba un id y al que ningún envío hacía referencia).
 type Carrier struct {
 	fw.BaseAggregateRoot[CarrierID]
 	traits.Audited
@@ -38,7 +39,7 @@ func checkCarrier(v *fw.Validation, s *CarrierState) {
 		strings.Count(s.TrackingURL, TrackingPlaceholder) == 1), "trackingUrl", "format", "an https link with {tracking} once")
 }
 
-// ReconstituteCarrier rebuilds a carrier.
+// ReconstituteCarrier reconstruye un transportista.
 func ReconstituteCarrier(id CarrierID, s CarrierState) (*Carrier, error) {
 	base, err := fw.NewBaseAggregateRoot(CarrierKind, id)
 	if err != nil {
@@ -59,10 +60,11 @@ func ReconstituteCarrier(id CarrierID, s CarrierState) (*Carrier, error) {
 	return &Carrier{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// State returns the state.
+// State devuelve el estado.
 func (c *Carrier) State() CarrierState { return c.s }
 
-// Change replaces the name, the party, the tracking link and whether the carrier is blocked.
+// Change sustituye el nombre, la party, el enlace de seguimiento y si el transportista está
+// bloqueado.
 func (c *Carrier) Change(name string, party PartyID, trackingURL string, blocked bool) error {
 	s := c.s
 	s.Name, s.Party, s.TrackingURL, s.Blocked = name, party, trackingURL, blocked
@@ -75,8 +77,8 @@ func (c *Carrier) Change(name string, party PartyID, trackingURL string, blocked
 	return nil
 }
 
-// TrackingLink returns the link of a shipment with this carrier, or nothing without a number or
-// a link.
+// TrackingLink devuelve el enlace de un envío con este transportista, o nada si no hay número o
+// enlace.
 func (c *Carrier) TrackingLink(tracking string) string {
 	if tracking == "" || c.s.TrackingURL == "" {
 		return ""
@@ -84,8 +86,8 @@ func (c *Carrier) TrackingLink(tracking string) string {
 	return strings.Replace(c.s.TrackingURL, TrackingPlaceholder, urlEscape(tracking), 1)
 }
 
-// urlEscape percent-encodes what is not unreserved in a URL (standard library only in the
-// domain, and no dependency on net/url semantics for spaces).
+// urlEscape codifica con porcentajes lo que no es «unreserved» en una URL (en el dominio sólo
+// biblioteca estándar, y sin depender de la semántica de net/url para los espacios).
 func urlEscape(s string) string {
 	const hex = "0123456789ABCDEF"
 	var b strings.Builder
@@ -102,22 +104,22 @@ func urlEscape(s string) string {
 	return b.String()
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (c *Carrier) AuditSnapshot() map[string]any {
 	return map[string]any{"code": c.s.Code, "name": c.s.Name, "blocked": c.s.Blocked}
 }
 
-// Carrier fields.
+// Campos del transportista.
 var (
 	CarFieldCompany = spec.Comparable("company", func(c *Carrier) OrganizationID { return c.s.Company })
 	CarFieldCode    = spec.Ordered("code", func(c *Carrier) string { return c.s.Code })
 )
 
-// NewCarrierID returns a new identity.
+// NewCarrierID devuelve una identidad nueva.
 func NewCarrierID() CarrierID { return CarrierID{fw.NewUUID()} }
 
-// ParseCarrierID parses a textual identity.
+// ParseCarrierID analiza una identidad textual.
 func ParseCarrierID(s string) (CarrierID, error) { u, err := fw.ParseUUID(s); return CarrierID{u}, err }
 
-// CarrierRepository stores carriers.
+// CarrierRepository guarda transportistas.
 type CarrierRepository = fw.Repository[CarrierID, *Carrier]

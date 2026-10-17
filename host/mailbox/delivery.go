@@ -1,8 +1,8 @@
-// Package mailbox gives every listener of the host a mailbox of its own: a message a listener
-// cannot take is kept for that listener and tried again later, instead of being refused. A
-// refusal would make the publisher send the message again to everybody and, in the end, give it
-// up for everybody. With the in-process transport the host is who delivers, so the mailboxes are
-// the host's; a broker with a queue per consumer does the same on its own.
+// Package mailbox da a cada oyente del anfitrión un buzón propio: un mensaje que un oyente no
+// puede recoger se le guarda a ese oyente y se vuelve a intentar más tarde, en vez de rechazarlo.
+// Un rechazo haría que el publicador enviara el mensaje otra vez a todos y, al final, lo abandonara
+// para todos. Con el transporte en proceso quien entrega es el anfitrión, así que los buzones son
+// del anfitrión; un broker con una cola por consumidor hace lo mismo por su cuenta.
 package mailbox
 
 import (
@@ -16,40 +16,40 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/traits"
 )
 
-// Kind is the aggregate type name of a delivery.
+// Kind es el nombre de tipo de agregado de una entrega.
 const Kind = "host.delivery"
 
-// ID identifies a delivery.
+// ID identifica una entrega.
 type ID struct{ fw.UUID }
 
-// NewID returns a fresh identity.
+// NewID devuelve una identidad nueva.
 func NewID() ID { return ID{fw.NewUUID()} }
 
-// ParseID parses a textual identity.
+// ParseID interpreta una identidad en texto.
 func ParseID(s string) (ID, error) { u, err := fw.ParseUUID(s); return ID{u}, err }
 
-// Status is where a delivery is.
+// Status dice en qué punto está una entrega.
 type Status string
 
-// Statuses of a delivery. One that reaches its listener is not kept: it is removed.
+// Estados de una entrega. Una que llega a su oyente no se guarda: se quita.
 const (
-	Waiting   Status = "waiting"   // it will be tried again
-	GivenUp   Status = "given-up"  // tried too many times: it waits for somebody to look at it
-	Discarded Status = "discarded" // somebody decided the listener will not get it
+	Waiting   Status = "waiting"   // se volverá a intentar
+	GivenUp   Status = "given-up"  // intentada demasiadas veces: espera a que alguien la mire
+	Discarded Status = "discarded" // alguien decidió que el oyente no la recibirá
 )
 
-// Statuses lists the valid statuses.
+// Statuses lista los estados válidos.
 var Statuses = []Status{Waiting, GivenUp, Discarded}
 
-// BehindCode is why a delivery waits without having failed: an earlier one about the same thing
-// has not reached the listener yet.
+// BehindCode es por qué una entrega espera sin haber fallado: una anterior sobre lo mismo aún no ha
+// llegado al oyente.
 const BehindCode = "mailbox.behind"
 
-// MaxAttempts is how many times a delivery is tried before it is given up.
+// MaxAttempts es cuántas veces se intenta una entrega antes de abandonarla.
 const MaxAttempts = 10
 
-// State is the persisted state of a delivery: the message as it came, whom it is for and what
-// happened each time it was tried.
+// State es el estado persistido de una entrega: el mensaje tal como llegó, para quién es y qué
+// pasó cada vez que se intentó.
 type State struct {
 	Consumer      string
 	EventType     string
@@ -59,19 +59,19 @@ type State struct {
 	OccurredAt    time.Time
 	CorrelationID string
 	CausationID   string
-	Data          string // the message, as JSON
+	Data          string // el mensaje, como JSON
 	Code          string
-	Reason        string // what the listener answered the last time
+	Reason        string // lo que contestó el oyente la última vez
 	ReceivedAt    time.Time
 	Attempts      int
-	NextAttempt   time.Time // zero when it is not to be tried on its own
+	NextAttempt   time.Time // cero cuando no se ha de intentar por su cuenta
 	Status        Status
 	ResolvedAt    time.Time
-	Note          string // of who discarded it
+	Note          string // de quien la descartó
 	Audit         traits.AuditStamp
 }
 
-// Delivery is a message kept for a listener that could not take it.
+// Delivery es un mensaje guardado para un oyente que no pudo recogerlo.
 type Delivery struct {
 	fw.BaseAggregateRoot[ID]
 	traits.Audited
@@ -86,7 +86,7 @@ func clip(s string, n int) string {
 	return string([]rune(s)[:n])
 }
 
-// Reconstitute rebuilds a delivery.
+// Reconstitute reconstruye una entrega.
 func Reconstitute(id ID, s State) (*Delivery, error) {
 	base, err := fw.NewBaseAggregateRoot(Kind, id)
 	if err != nil {
@@ -106,7 +106,7 @@ func Reconstitute(id ID, s State) (*Delivery, error) {
 	return &Delivery{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// backoff is how long a delivery waits after it failed n times: a minute, two, four... up to an hour.
+// backoff es cuánto espera una entrega tras fallar n veces: un minuto, dos, cuatro... hasta una hora.
 func backoff(n int) time.Duration {
 	if n > 6 {
 		return time.Hour
@@ -114,14 +114,14 @@ func backoff(n int) time.Duration {
 	return time.Minute << (max(n, 1) - 1)
 }
 
-// Keep keeps a message a listener refused: it was tried once and will be tried again.
+// Keep guarda un mensaje que rechazó un oyente: se intentó una vez y se volverá a intentar.
 func Keep(id ID, s State, code, reason string, now time.Time) (*Delivery, error) {
 	s.Code, s.Reason, s.ReceivedAt, s.Attempts, s.Status = clip(code, 100), clip(reason, 500), now.UTC(), 1, Waiting
 	s.NextAttempt, s.ResolvedAt, s.Note = now.UTC().Add(backoff(1)), time.Time{}, ""
 	return normalized(id, s)
 }
 
-// Queue keeps a message that was not tried: an earlier one about the same thing goes first.
+// Queue guarda un mensaje que no se intentó: va antes uno anterior sobre lo mismo.
 func Queue(id ID, s State, now time.Time) (*Delivery, error) {
 	s.Code, s.Reason, s.ReceivedAt, s.Attempts, s.Status = BehindCode, "an earlier message about the same thing has not been delivered yet", now.UTC(), 0, Waiting
 	s.NextAttempt, s.ResolvedAt, s.Note = now.UTC(), time.Time{}, ""
@@ -133,14 +133,14 @@ func normalized(id ID, s State) (*Delivery, error) {
 	return Reconstitute(id, s)
 }
 
-// State returns the state.
+// State devuelve el estado.
 func (d *Delivery) State() State { return d.s }
 
-// Open reports whether the listener may still get the message.
+// Open dice si el oyente aún puede recibir el mensaje.
 func (d *Delivery) Open() bool { return d.s.Status == Waiting || d.s.Status == GivenUp }
 
-// Refused notes a try the listener refused. After MaxAttempts the delivery is given up: it is
-// not tried again until somebody asks.
+// Refused anota un intento que rechazó el oyente. Tras MaxAttempts la entrega se abandona: no se
+// vuelve a intentar hasta que alguien lo pida.
 func (d *Delivery) Refused(code, reason string, now time.Time) {
 	if !d.Open() {
 		return
@@ -154,14 +154,14 @@ func (d *Delivery) Refused(code, reason string, now time.Time) {
 	d.s.Status, d.s.NextAttempt = Waiting, now.UTC().Add(backoff(d.s.Attempts))
 }
 
-// Again puts a delivery that was given up back among those that are tried.
+// Again devuelve una entrega abandonada a las que se intentan.
 func (d *Delivery) Again(now time.Time) {
 	if d.s.Status == GivenUp {
 		d.s.Status, d.s.Attempts, d.s.NextAttempt = Waiting, 0, now.UTC()
 	}
 }
 
-// Discard gives up a delivery for good: the listener will not get it. Whoever does it says why.
+// Discard abandona una entrega para siempre: el oyente no la recibirá. Quien lo hace dice por qué.
 func (d *Delivery) Discard(note string, now time.Time) error {
 	if !d.Open() {
 		return fw.Violation("mailbox.not_open", "the delivery is already "+string(d.s.Status))
@@ -173,12 +173,12 @@ func (d *Delivery) Discard(note string, now time.Time) error {
 	return nil
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (d *Delivery) AuditSnapshot() map[string]any {
 	return map[string]any{"consumer": d.s.Consumer, "eventType": d.s.EventType, "status": string(d.s.Status), "attempts": d.s.Attempts, "note": d.s.Note}
 }
 
-// Delivery fields.
+// Campos de Delivery.
 var (
 	FieldConsumer = spec.Comparable("consumer", func(d *Delivery) string { return d.s.Consumer })
 	FieldStatus   = spec.Comparable("status", func(d *Delivery) string { return string(d.s.Status) })
@@ -187,5 +187,5 @@ var (
 	FieldReceived = spec.OrderedBy("received_at", func(d *Delivery) time.Time { return d.s.ReceivedAt }, func(a, b time.Time) int { return a.Compare(b) })
 )
 
-// Repository stores deliveries.
+// Repository guarda entregas.
 type Repository = fw.Repository[ID, *Delivery]

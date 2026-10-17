@@ -9,10 +9,10 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/trace"
 )
 
-// Outcomes of a consumed message, besides application.OutcomeOK and application.OutcomeError.
+// Desenlaces de un mensaje consumido, además de application.OutcomeOK y application.OutcomeError.
 const (
-	OutcomeDuplicate = "duplicate" // already claimed in the inbox: skipped
-	OutcomeIgnored   = "ignored"   // no handler for its type: acknowledged without effect
+	OutcomeDuplicate = "duplicate" // ya reclamado en el inbox: se salta
+	OutcomeIgnored   = "ignored"   // sin manejador para su tipo: se confirma sin efecto
 )
 
 type consumerTelemetry struct {
@@ -22,13 +22,13 @@ type consumerTelemetry struct {
 	lag     metrics.Histogram
 }
 
-// WithTelemetry instruments the consumer and returns it: a span per consumed message (a new
-// trace that carries the correlation and causation ids of the envelope), the counter
-// karpo.messaging.handled by consumer, event type and outcome (ok, duplicate, error, ignored),
-// the histogram karpo.messaging.lag (seconds between the fact and its effect) and a log line
-// with the correlation id when a handler fails. Any argument may be nil.
+// WithTelemetry instrumenta el consumidor y lo devuelve: un span por mensaje consumido (una traza
+// nueva que lleva los ids de correlación y de causalidad del sobre), el contador
+// karpo.messaging.handled por consumidor, tipo de evento y desenlace (ok, duplicate, error, ignored),
+// el histograma karpo.messaging.lag (segundos entre el hecho y su efecto) y una línea de log con el
+// id de correlación cuando un manejador falla. Cualquier argumento puede ser nil.
 //
-// Ignored messages are counted under the event type "other": their types are not a closed set.
+// Los mensajes ignorados se cuentan bajo el tipo de evento "other": sus tipos no son un conjunto cerrado.
 func (c *Consumer) WithTelemetry(logger log.Logger, tracer trace.Tracer, meter metrics.Meter) *Consumer {
 	m := metrics.OrNoop(meter)
 	tel := &consumerTelemetry{
@@ -51,7 +51,7 @@ func (t *consumerTelemetry) ignored(ctx context.Context, consumer string) {
 	t.handled.Add(ctx, 1, metrics.LabelConsumer, consumer, metrics.LabelEventType, "other", metrics.LabelOutcome, OutcomeIgnored)
 }
 
-// start opens the span of a message; the returned function closes it and records the outcome.
+// start abre el span de un mensaje; la función devuelta lo cierra y registra el desenlace.
 func (t *consumerTelemetry) start(ctx context.Context, consumer string, env application.Envelope) (context.Context, func(duplicate bool, err error)) {
 	if t == nil {
 		return ctx, func(bool, error) {}

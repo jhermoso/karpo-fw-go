@@ -29,8 +29,8 @@ import (
 
 const bom = "\ufeff"
 
-// datasetsScenario loads two companies with their people and exports each list of Parties the
-// grid asks for, as an administrator and as someone who sees one company only.
+// datasetsScenario carga dos empresas con su gente y exporta cada lista de Parties que pide la
+// rejilla, como administrador y como alguien que sólo ve una empresa.
 func datasetsScenario(t *testing.T, sw *hotswap.Switch) {
 	ctx := context.Background()
 	h, err := host.Compose(sw, host.Options{JWTSecret: []byte("datasets-test-secret")})
@@ -44,7 +44,7 @@ func datasetsScenario(t *testing.T, sw *hotswap.Switch) {
 	admin.GlobalAdmin = true
 	actx := authz.WithContext(ctx, admin)
 
-	// The organization: two companies, and a department of the first one.
+	// La organización: dos empresas, y un departamento de la primera.
 	register := func(name string, role string) string {
 		t.Helper()
 		d, err := h.Parties.Service.RegisterOrganization.Handle(actx, parapp.RegisterOrganization{LegalName: name, Roles: []string{role}})
@@ -60,7 +60,7 @@ func datasetsScenario(t *testing.T, sw *hotswap.Switch) {
 		From: department, To: company}); err != nil {
 		t.Fatal(err)
 	}
-	// People, registered with the company that hires them; hired by HR, and Luis by a second one.
+	// Personas, dadas de alta con la empresa que las contrata; contratadas por HR, y Luis por una segunda.
 	person := func(given, surname, gender, employer string) string {
 		t.Helper()
 		p, err := h.Parties.Service.RegisterPerson.Handle(actx, parapp.RegisterPerson{GivenName: given, FirstSurname: surname, Gender: gender,
@@ -70,8 +70,8 @@ func datasetsScenario(t *testing.T, sw *hotswap.Switch) {
 		}
 		return p.ID
 	}
-	// As the import of the people did: when HR does not know yet that the company is one the person
-	// works for, Parties is told first, and that they are an employee if they are not one yet.
+	// Como hacía la importación de las personas: cuando HR aún no sabe que la empresa es una para la
+	// que trabaja la persona, se le dice antes a Parties, y que es empleada si aún no lo es.
 	hireAt := func(who, employer, number, hired, left string) {
 		t.Helper()
 		start, _ := vocab.ParseDate(hired)
@@ -117,7 +117,7 @@ func datasetsScenario(t *testing.T, sw *hotswap.Switch) {
 	hireAt(luis, company, "P-2", "2021-05-10", "2024-12-31")
 	hireAt(luis, karpo, "P-2", "2021-05-10", "2024-12-31")
 	hireAt(eva, karpo, "P-3", "2025-02-03", "")
-	// A customer of the first company, with its tax number.
+	// Un cliente de la primera empresa, con su número fiscal.
 	customer, err := h.Parties.Service.RegisterOrganization.Handle(actx, parapp.RegisterOrganization{LegalName: "Cliente Uno SL",
 		Roles: []string{pardomain.RoleCustomer.String()}, Affiliation: &parapp.NewAffiliation{Organization: company, RelationshipType: pardomain.RelCustomer.String()}})
 	if err != nil {
@@ -129,7 +129,7 @@ func datasetsScenario(t *testing.T, sw *hotswap.Switch) {
 		t.Fatal(err)
 	}
 
-	// export asks for a list as a file, lets the chores write it and reads it.
+	// export pide una lista como fichero, deja que las tareas la escriban y la lee.
 	export := func(c context.Context, dataset string, filter map[string]string) []string {
 		t.Helper()
 		job, err := h.Exports.Service.Start.Handle(c, expapp.StartExport{Dataset: dataset, Filter: filter})
@@ -147,7 +147,7 @@ func datasetsScenario(t *testing.T, sw *hotswap.Switch) {
 		defer file.Content.Close()
 		body, _ := io.ReadAll(file.Content)
 		lines := strings.Split(strings.TrimSuffix(strings.TrimPrefix(string(body), bom), "\r\n"), "\r\n")
-		slices.Sort(lines[1:]) // the header first, the rows in a known order
+		slices.Sort(lines[1:]) // primero la cabecera, las filas en un orden conocido
 		return lines
 	}
 	same := func(what string, got []string, want ...string) {
@@ -167,7 +167,7 @@ func datasetsScenario(t *testing.T, sw *hotswap.Switch) {
 		t.Fatalf("lists that can be exported: %v %v", keys, err)
 	}
 
-	// People: a surname with a comma goes between quotes.
+	// Personas: un apellido con una coma va entre comillas.
 	same("persons", export(actx, "persons", nil), "Nombre,Tipo,Estado",
 		"\"Ana García, de la O\",Persona,Activo", "Eva =Ruiz,Persona,Activo", "Luis Pérez,Persona,Activo")
 	same("persons of Karpo", export(actx, "persons", map[string]string{"organization": karpo}), "Nombre,Tipo,Estado",
@@ -180,17 +180,17 @@ func datasetsScenario(t *testing.T, sw *hotswap.Switch) {
 	if all := export(actx, "parties", nil); len(all) != 1+7 {
 		t.Fatalf("parties: %v", all)
 	}
-	// Customers, with the tax number the C# column always left empty.
+	// Clientes, con el número fiscal que la columna de C# siempre dejaba vacío.
 	same("customers", export(actx, "customers", nil), "Nombre,Tipo,CIF/NIF,Estado", "Cliente Uno SL,Organización,A58818501,Activo")
 
-	// Employees come from HR, with the name of Parties.
+	// Los empleados vienen de HR, con el nombre de Parties.
 	same("employees", export(actx, "employees", nil), "Nombre,Número empleado,Fecha contratación,Fecha baja,Activo",
 		"\"Ana García, de la O\",P-1,2020-03-01,,Sí", "Eva =Ruiz,P-3,2025-02-03,,Sí", "Luis Pérez,P-2,2021-05-10,2024-12-31,No",
 		"Luis Pérez,P-2,2021-05-10,2024-12-31,No")
 	same("employees of Karpo still there", export(actx, "employees", map[string]string{"organization": karpo, "active": "true"}),
 		"Nombre,Número empleado,Fecha contratación,Fecha baja,Activo", "Eva =Ruiz,P-3,2025-02-03,,Sí")
 
-	// A row per role, and each relationship once, from the side it starts at.
+	// Una fila por rol, y cada relación una vez, desde el lado en que empieza.
 	roles := export(actx, "party-roles", map[string]string{"name": "Luis"})
 	if len(roles) != 2 || roles[0] != "Participante,Tipo de rol,Fecha inicio,Fecha expiración,Activo" || !strings.HasPrefix(roles[1], "Luis Pérez,Employee,") ||
 		!strings.HasSuffix(roles[1], ",,Sí") {
@@ -213,7 +213,7 @@ func datasetsScenario(t *testing.T, sw *hotswap.Switch) {
 		t.Fatalf("relationships: %v", rels)
 	}
 
-	// Who sees one company gets the file of that company, whatever they ask for.
+	// Quien sólo ve una empresa recibe el fichero de esa empresa, pida lo que pida.
 	scoped := func(perms ...authz.Permission) context.Context {
 		ac, err := authz.NewContext(authz.Context{Subject: fw.NewUUID(), SubjectName: "clerk", Kind: authz.Service,
 			Permissions: append([]authz.Permission{expapp.PermJobRead, expapp.PermJobCreate}, perms...),
@@ -225,14 +225,14 @@ func datasetsScenario(t *testing.T, sw *hotswap.Switch) {
 	}
 	clerk := scoped(parapp.PermPartyRead, hrapp.PermEmploymentRead)
 	same("what the clerk of Karpo sees", export(clerk, "persons", nil), "Nombre,Tipo,Estado", "Eva =Ruiz,Persona,Activo", "Luis Pérez,Persona,Activo")
-	// Asking for another company narrows what one sees, it never widens it: Luis, whom the clerk
-	// sees because he also works for Karpo; not Ana, who works for the first company only.
+	// Pedir otra empresa estrecha lo que se ve, nunca lo amplía: Luis, a quien el administrativo ve
+	// porque también trabaja para Karpo; no Ana, que sólo trabaja para la primera empresa.
 	same("asking for another company", export(clerk, "persons", map[string]string{"organization": company}), "Nombre,Tipo,Estado",
 		"Luis Pérez,Persona,Activo")
 	if emp := export(clerk, "employees", nil); len(emp) != 1+2 {
 		t.Fatalf("employees the clerk sees: %v", emp)
 	}
-	// Each list asks for the permission of what it lists.
+	// Cada lista pide el permiso de lo que lista.
 	if _, err := h.Exports.Service.Start.Handle(scoped(parapp.PermPartyRead), expapp.StartExport{Dataset: "employees"}); !errors.Is(err, fw.ErrForbidden) {
 		t.Fatalf("employees without the permission of HR: %v", err)
 	}

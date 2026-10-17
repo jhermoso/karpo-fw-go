@@ -23,10 +23,10 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 )
 
-// TestDocumentsContext runs Documents on every engine, fed with the Published Language of the
-// issuing contexts as they declare it (their contract types, so a renamed field breaks here): the
-// register through the SQL inbox, one entry per fact, cancellations, the round trip of the
-// optional columns, the searches (text, dates, party) and the trail.
+// TestDocumentsContext ejecuta Documents en cada motor, alimentado con el Published Language de
+// los contextos emisores tal como lo declaran (sus tipos de contrato, así que un campo renombrado
+// rompe aquí): el registro a través del inbox SQL, una entrada por hecho, cancelaciones, la ida y
+// vuelta de las columnas opcionales, las búsquedas (texto, fechas, party) y el rastro.
 func TestDocumentsContext(t *testing.T) {
 	for _, e := range engines {
 		if e.name == "oracle-dotnet-guids" {
@@ -61,7 +61,7 @@ func TestDocumentsContext(t *testing.T) {
 				must(err)
 				env := application.Envelope{ID: fw.NewUUID().String(), Type: ev.IntegrationEventType(), Source: "test", OccurredAt: at, Data: raw}
 				must(broker.Send(ctx, env))
-				must(broker.Send(ctx, env)) // delivered twice: the inbox drops the second
+				must(broker.Send(ctx, env)) // entregado dos veces: el inbox descarta el segundo
 			}
 			id := func() string { return fw.NewUUID().String() }
 			day := func(m time.Month, d int) time.Time { return time.Date(2026, m, d, 10, 0, 0, 0, time.UTC) }

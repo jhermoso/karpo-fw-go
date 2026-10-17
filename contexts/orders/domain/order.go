@@ -1,8 +1,9 @@
-// Package domain is the Orders model of phase 1: the sales orders of a company (priced lines,
-// confirmation, stock held by Inventory, deliveries), the delivery notes that serve them and the
-// terms of each customer. The C# workflow passed its tests on fakes and could not run on the real
-// schema; nothing linked orders, shipments, delivery notes and stock, reservations were never
-// released and the stored unit price already carried a discount stored again beside it.
+// Package domain es el modelo de Orders de la fase 1: los pedidos de venta de una empresa (líneas
+// con precio, confirmación, existencias retenidas por Inventory, entregas), los albaranes que los
+// sirven y las condiciones de cada cliente. El flujo de C# pasaba sus pruebas sobre falsos y no
+// podía funcionar sobre el esquema real; nada enlazaba pedidos, envíos, albaranes y existencias, las
+// reservas no se liberaban nunca y el precio unitario guardado ya llevaba un descuento que se
+// guardaba otra vez a su lado.
 package domain
 
 import (
@@ -18,7 +19,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Aggregate type names.
+// Nombres de tipo de los agregados.
 const (
 	OrderKind    = "orders.sales_order"
 	DeliveryKind = "orders.delivery"
@@ -26,37 +27,37 @@ const (
 	CounterKind  = "orders.counter"
 )
 
-// MaxLines bounds the lines of an order.
+// MaxLines limita las líneas de un pedido.
 const MaxLines = 500
 
-// Identities of the context.
+// Identidades del contexto.
 type (
-	// OrderID identifies a sales order.
+	// OrderID identifica un pedido de venta.
 	OrderID struct{ fw.UUID }
-	// DeliveryID identifies a delivery note.
+	// DeliveryID identifica un albarán.
 	DeliveryID struct{ fw.UUID }
-	// TermsID identifies the terms of a customer.
+	// TermsID identifica las condiciones de un cliente.
 	TermsID struct{ fw.UUID }
-	// CounterID identifies a numbering counter.
+	// CounterID identifica un contador de numeración.
 	CounterID struct{ fw.UUID }
-	// OrganizationID is the selling company, an internal organization of the Parties context.
+	// OrganizationID es la empresa que vende, una organización interna del contexto Parties.
 	OrganizationID struct{ fw.UUID }
-	// PartyID is the customer, a party of the Parties context.
+	// PartyID es el cliente, una party del contexto Parties.
 	PartyID struct{ fw.UUID }
-	// ProductID is a product of the Products context.
+	// ProductID es un producto del contexto Products.
 	ProductID struct{ fw.UUID }
-	// WarehouseID is a warehouse of the Inventory context.
+	// WarehouseID es un almacén del contexto Inventory.
 	WarehouseID struct{ fw.UUID }
-	// PriceListID is a price list of the Products context.
+	// PriceListID es una tarifa del contexto Products.
 	PriceListID struct{ fw.UUID }
 )
 
-// Status is the status of an order (the C# kept three unsynchronised ones, two of them freely
-// writable).
+// Status es el estado de un pedido (el C# llevaba tres sin sincronizar, dos de ellos de escritura
+// libre).
 type Status int
 
-// Statuses. A confirmed order is served by deliveries until it is delivered in full, closed with
-// part pending, or cancelled before any delivery.
+// Estados. Un pedido confirmado se sirve con entregas hasta que se entrega entero, se cierra con
+// parte pendiente o se anula antes de ninguna entrega.
 const (
 	Draft Status = iota + 1
 	Confirmed
@@ -67,10 +68,10 @@ const (
 
 var statuses = map[Status]string{Draft: "draft", Confirmed: "confirmed", Delivered: "delivered", Closed: "closed", Cancelled: "cancelled"}
 
-// String returns the stable name.
+// String devuelve el nombre estable.
 func (s Status) String() string { return statuses[s] }
 
-// ParseStatus parses a status name.
+// ParseStatus interpreta el nombre de un estado.
 func ParseStatus(s string) (Status, bool) {
 	for k, n := range statuses {
 		if n == s {
@@ -90,9 +91,9 @@ func percent(p vocab.Decimal) bool {
 	return !p.IsNegative() && !p.GreaterThan(hundred()) && p.Equal(p.Round(2))
 }
 
-// Line is a line of an order. UnitPrice is the price before any discount; Discount is the one of
-// the price list; the customer discount of the order applies on top. NetPrice and Amount are
-// derived, so no discount is ever applied twice.
+// Line es una línea de un pedido. UnitPrice es el precio antes de cualquier descuento; Discount es
+// el de la tarifa; el descuento de cliente del pedido se aplica encima. NetPrice y Amount se
+// derivan, así que ningún descuento se aplica nunca dos veces.
 type Line struct {
 	No          int
 	Product     ProductID
@@ -100,20 +101,20 @@ type Line struct {
 	Description string
 	UoM         string
 	TaxCode     string
-	Stocked     bool // its stock is held and issued by Inventory
+	Stocked     bool // Inventory retiene y da salida a sus existencias
 	Quantity    vocab.Decimal
 	UnitPrice   vocab.Decimal
-	Discount    vocab.Decimal // percentage
-	NetPrice    vocab.Decimal // unit price after both discounts, 4 decimals
-	Amount      vocab.Decimal // quantity × net price, in cents
-	Reserved    vocab.Decimal // held by Inventory and not yet delivered
+	Discount    vocab.Decimal // porcentaje
+	NetPrice    vocab.Decimal // precio unitario tras los dos descuentos, 4 decimales
+	Amount      vocab.Decimal // cantidad × precio neto, en céntimos
+	Reserved    vocab.Decimal // retenido por Inventory y aún no entregado
 	Delivered   vocab.Decimal
 }
 
-// Pending returns what is still to deliver.
+// Pending devuelve lo que queda por entregar.
 func (l Line) Pending() vocab.Decimal { return l.Quantity.Sub(l.Delivered) }
 
-// Short returns what is pending and not held: what Inventory is still asked for.
+// Short devuelve lo pendiente y no retenido: lo que aún se pide a Inventory.
 func (l Line) Short() vocab.Decimal {
 	if !l.Stocked {
 		return zero()
@@ -121,23 +122,23 @@ func (l Line) Short() vocab.Decimal {
 	return l.Pending().Sub(l.Reserved)
 }
 
-// price derives the net price and the amount of a line.
+// price deriva el precio neto y el importe de una línea.
 func price(l Line, customerDiscount vocab.Decimal) Line {
 	l.NetPrice = l.UnitPrice.Mul(hundred().Sub(l.Discount)).Div(hundred()).Mul(hundred().Sub(customerDiscount)).Div(hundred()).Round(4)
 	l.Amount = l.NetPrice.Mul(l.Quantity).Round(2)
 	return l
 }
 
-// OrderState is the persisted state of an order.
+// OrderState es el estado persistido de un pedido.
 type OrderState struct {
 	Company          OrganizationID
 	Customer         PartyID
-	Number           string // assigned on confirmation
+	Number           string // se asigna al confirmar
 	Date             vocab.Date
-	Warehouse        WarehouseID // where its stocked lines are served from
-	PriceList        PriceListID // the list its lines were priced with
+	Warehouse        WarehouseID // desde donde se sirven sus líneas con existencias
+	PriceList        PriceListID // la tarifa con la que se puso precio a sus líneas
 	CustomerDiscount vocab.Decimal
-	Reference        string // the customer's own reference
+	Reference        string // la referencia propia del cliente
 	Notes            string
 	Status           Status
 	Lines            []Line
@@ -145,14 +146,14 @@ type OrderState struct {
 	Audit            traits.AuditStamp
 }
 
-// Order is a sales order.
+// Order es un pedido de venta.
 type Order struct {
 	fw.BaseAggregateRoot[OrderID]
 	traits.Audited
 	s OrderState
 }
 
-// ReconstituteOrder rebuilds an order.
+// ReconstituteOrder reconstruye un pedido.
 func ReconstituteOrder(id OrderID, s OrderState) (*Order, error) {
 	base, err := fw.NewBaseAggregateRoot(OrderKind, id)
 	if err != nil {
@@ -183,20 +184,20 @@ func ReconstituteOrder(id OrderID, s OrderState) (*Order, error) {
 	return &Order{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// DraftOrder opens a draft.
+// DraftOrder abre un borrador.
 func DraftOrder(id OrderID, s OrderState) (*Order, error) {
 	s.Status, s.Number, s.Lines, s.CloseReason = Draft, "", nil, ""
 	return ReconstituteOrder(id, s)
 }
 
-// State returns the state (lines are a copy).
+// State devuelve el estado (las líneas son una copia).
 func (o *Order) State() OrderState {
 	s := o.s
 	s.Lines = slices.Clone(s.Lines)
 	return s
 }
 
-// Total returns the sum of the lines, before taxes.
+// Total devuelve la suma de las líneas, antes de impuestos.
 func (o *Order) Total() vocab.Decimal {
 	t := zero()
 	for _, l := range o.s.Lines {
@@ -205,7 +206,7 @@ func (o *Order) Total() vocab.Decimal {
 	return t
 }
 
-// PendingAmount returns the amount of what is still to deliver.
+// PendingAmount devuelve el importe de lo que queda por entregar.
 func (o *Order) PendingAmount() vocab.Decimal {
 	t := zero()
 	for _, l := range o.s.Lines {
@@ -221,7 +222,7 @@ func (o *Order) mustBe(st Status, code, msg string) error {
 	return nil
 }
 
-// AddLine adds a priced line to a draft and returns its number.
+// AddLine añade una línea con precio a un borrador y devuelve su número.
 func (o *Order) AddLine(l Line) (int, error) {
 	if err := o.mustBe(Draft, "orders.not_draft", "only a draft order changes"); err != nil {
 		return 0, err
@@ -243,7 +244,7 @@ func (o *Order) AddLine(l Line) (int, error) {
 	return l.No, nil
 }
 
-// RemoveLine removes a line from a draft.
+// RemoveLine quita una línea de un borrador.
 func (o *Order) RemoveLine(no int) error {
 	if err := o.mustBe(Draft, "orders.not_draft", "only a draft order changes"); err != nil {
 		return err
@@ -256,8 +257,8 @@ func (o *Order) RemoveLine(no int) error {
 	return nil
 }
 
-// Confirm commits the order with its number. A confirmed order no longer changes: it is served,
-// closed or cancelled.
+// Confirm cierra el pedido con su número. Un pedido confirmado ya no cambia: se sirve, se
+// cierra o se anula.
 func (o *Order) Confirm(number string) error {
 	if err := o.mustBe(Draft, "orders.not_draft", "only a draft order is confirmed"); err != nil {
 		return err
@@ -282,7 +283,7 @@ func (o *Order) stocked() bool {
 	return slices.ContainsFunc(o.s.Lines, func(l Line) bool { return l.Stocked })
 }
 
-// requestStock raises the request of what is pending and not held, if anything.
+// requestStock lanza la petición de lo pendiente y no retenido, si hay algo.
 func (o *Order) requestStock() bool {
 	var want []StockLine
 	for _, l := range o.s.Lines {
@@ -297,7 +298,7 @@ func (o *Order) requestStock() bool {
 	return true
 }
 
-// RequestStock asks Inventory again for what is still short.
+// RequestStock vuelve a pedir a Inventory lo que aún falta.
 func (o *Order) RequestStock() error {
 	if err := o.mustBe(Confirmed, "orders.not_confirmed", "only a confirmed order holds stock"); err != nil {
 		return err
@@ -308,8 +309,8 @@ func (o *Order) RequestStock() error {
 	return nil
 }
 
-// Hold records stock held by Inventory for a line: it is added to what the line holds, never
-// beyond what is pending. It is ignored when the order no longer waits for it.
+// Hold registra existencias retenidas por Inventory para una línea: se suman a lo que la línea
+// retiene, nunca más allá de lo pendiente. Se ignora cuando el pedido ya no las espera.
 func (o *Order) Hold(no int, added vocab.Decimal) {
 	if o.s.Status != Confirmed || !added.IsPositive() {
 		return
@@ -326,15 +327,15 @@ func (o *Order) Hold(no int, added vocab.Decimal) {
 	}
 }
 
-// Pick is a quantity of a line to deliver.
+// Pick es una cantidad de una línea que se entrega.
 type Pick struct {
 	Line     int
 	Quantity vocab.Decimal
 }
 
-// Deliver serves part of the order and returns the lines of its delivery note. Invariants: a
-// confirmed order, positive quantities within what is pending and, for a stocked line, within
-// what Inventory holds for it (the C# had no link between an order and what left the warehouse).
+// Deliver sirve parte del pedido y devuelve las líneas de su albarán. Invariantes: un pedido
+// confirmado, cantidades positivas dentro de lo pendiente y, en una línea con existencias, dentro
+// de lo que Inventory retiene para ella (el C# no enlazaba un pedido con lo que salía del almacén).
 func (o *Order) Deliver(picks []Pick) ([]DeliveryLine, error) {
 	if err := o.mustBe(Confirmed, "orders.not_confirmed", "only a confirmed order is delivered"); err != nil {
 		return nil, err
@@ -382,7 +383,7 @@ func (o *Order) end(st Status, reason string) error {
 	lines := slices.Clone(o.s.Lines)
 	for k := range lines {
 		if lines[k].Stocked && o.s.Status == Confirmed {
-			held = append(held, lines[k].No) // Inventory may hold, or be about to hold, stock for it
+			held = append(held, lines[k].No) // Inventory puede retener, o estar a punto de retener, existencias para ella
 		}
 		lines[k].Reserved = zero()
 	}
@@ -391,7 +392,7 @@ func (o *Order) end(st Status, reason string) error {
 	return nil
 }
 
-// Cancel withdraws an order nothing was delivered of; what it holds is released.
+// Cancel retira un pedido del que no se entregó nada; lo que retiene se libera.
 func (o *Order) Cancel(reason string) error {
 	if o.s.Status != Draft && o.s.Status != Confirmed {
 		return fw.Violation("orders.closed", "the order is already "+o.s.Status.String())
@@ -402,8 +403,8 @@ func (o *Order) Cancel(reason string) error {
 	return o.end(Cancelled, reason)
 }
 
-// Close ends a partly delivered order: what is pending will not be served and what it holds is
-// released.
+// Close termina un pedido entregado en parte: lo pendiente no se servirá y lo que retiene se
+// libera.
 func (o *Order) Close(reason string) error {
 	if err := o.mustBe(Confirmed, "orders.not_confirmed", "only a confirmed order is closed"); err != nil {
 		return err
@@ -414,7 +415,7 @@ func (o *Order) Close(reason string) error {
 	return o.end(Closed, reason)
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (o *Order) AuditSnapshot() map[string]any {
 	return map[string]any{"number": o.s.Number, "status": o.s.Status.String(), "total": o.Total().String(), "lines": len(o.s.Lines)}
 }
@@ -423,7 +424,7 @@ type lineNo int
 
 func (n lineNo) String() string { return fmt.Sprint(int(n)) }
 
-// Order fields.
+// Campos del pedido.
 var (
 	OrdFieldCompany  = spec.Comparable("company", func(o *Order) OrganizationID { return o.s.Company })
 	OrdFieldCustomer = spec.Comparable("customer", func(o *Order) PartyID { return o.s.Customer })
@@ -432,9 +433,9 @@ var (
 	OrdFieldNumber   = spec.Ordered("order_number", func(o *Order) string { return o.s.Number })
 )
 
-// DeliveryLine is a line of a delivery note.
+// DeliveryLine es una línea de un albarán.
 type DeliveryLine struct {
-	Line        int // the order line it serves
+	Line        int // la línea del pedido que sirve
 	Product     ProductID
 	SKU         string
 	Description string
@@ -446,7 +447,7 @@ type DeliveryLine struct {
 	Amount      vocab.Decimal
 }
 
-// DeliveryState is the persisted state of a delivery note.
+// DeliveryState es el estado persistido de un albarán.
 type DeliveryState struct {
 	Company     OrganizationID
 	Customer    PartyID
@@ -456,20 +457,20 @@ type DeliveryState struct {
 	Date        vocab.Date
 	Warehouse   WarehouseID
 	Lines       []DeliveryLine
-	Invoice     string // id of the invoice of Billing that bills it
+	Invoice     string // id de la factura de Billing que lo factura
 	InvoiceNo   string
 	Audit       traits.AuditStamp
 }
 
-// Delivery is a delivery note (albarán): what left for the customer of an order, with its lines
-// (the C# DeliveryNote was a header with no lines and no order, editable after being issued).
+// Delivery es un albarán: lo que salió para el cliente de un pedido, con sus líneas (el
+// DeliveryNote de C# era una cabecera sin líneas ni pedido, editable después de emitido).
 type Delivery struct {
 	fw.BaseAggregateRoot[DeliveryID]
 	traits.Audited
 	s DeliveryState
 }
 
-// ReconstituteDelivery rebuilds a delivery note.
+// ReconstituteDelivery reconstruye un albarán.
 func ReconstituteDelivery(id DeliveryID, s DeliveryState) (*Delivery, error) {
 	base, err := fw.NewBaseAggregateRoot(DeliveryKind, id)
 	if err != nil {
@@ -485,15 +486,15 @@ func ReconstituteDelivery(id DeliveryID, s DeliveryState) (*Delivery, error) {
 	return &Delivery{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// MarkInvoiced records the invoice that bills the delivery note (its goods and prices never
-// change; this is the only thing added to it). The first invoice stays.
+// MarkInvoiced registra la factura que factura el albarán (sus mercancías y precios no cambian
+// nunca; esto es lo único que se le añade). Se queda la primera factura.
 func (d *Delivery) MarkInvoiced(invoice, number string) {
 	if d.s.Invoice == "" && invoice != "" {
 		d.s.Invoice, d.s.InvoiceNo = invoice, number
 	}
 }
 
-// IssueDelivery issues the delivery note of what an order just delivered. It never changes.
+// IssueDelivery emite el albarán de lo que un pedido acaba de entregar. No cambia nunca.
 func IssueDelivery(id DeliveryID, o *Order, number string, date vocab.Date, lines []DeliveryLine) (*Delivery, error) {
 	os := o.State()
 	d, err := ReconstituteDelivery(id, DeliveryState{Company: os.Company, Customer: os.Customer, Order: o.ID(), OrderNumber: os.Number, Number: number,
@@ -505,14 +506,14 @@ func IssueDelivery(id DeliveryID, o *Order, number string, date vocab.Date, line
 	return d, nil
 }
 
-// State returns the state (lines are a copy).
+// State devuelve el estado (las líneas son una copia).
 func (d *Delivery) State() DeliveryState {
 	s := d.s
 	s.Lines = slices.Clone(s.Lines)
 	return s
 }
 
-// Total returns the sum of the lines, before taxes.
+// Total devuelve la suma de las líneas, antes de impuestos.
 func (d *Delivery) Total() vocab.Decimal {
 	t := zero()
 	for _, l := range d.s.Lines {
@@ -521,12 +522,12 @@ func (d *Delivery) Total() vocab.Decimal {
 	return t
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (d *Delivery) AuditSnapshot() map[string]any {
 	return map[string]any{"number": d.s.Number, "order": d.s.OrderNumber, "total": d.Total().String()}
 }
 
-// Delivery fields.
+// Campos del albarán.
 var (
 	DelFieldCompany  = spec.Comparable("company", func(d *Delivery) OrganizationID { return d.s.Company })
 	DelFieldCustomer = spec.Comparable("customer", func(d *Delivery) PartyID { return d.s.Customer })
@@ -535,28 +536,28 @@ var (
 	DelFieldInvoiced = spec.Comparable("invoiced", func(d *Delivery) bool { return d.s.Invoice != "" })
 )
 
-// TermsState is the persisted state of the terms of a customer.
+// TermsState es el estado persistido de las condiciones de un cliente.
 type TermsState struct {
 	Company       OrganizationID
 	Customer      PartyID
 	PriceList     PriceListID
-	Discount      vocab.Decimal // percentage on every line
+	Discount      vocab.Decimal // porcentaje sobre cada línea
 	BlockOrders   bool
 	BlockDelivery bool
 	Audit         traits.AuditStamp
 }
 
-// Terms are the sales terms a company gives a customer (the sales side of the C#
-// CustomerRelationshipCommercialProfile, which was looked up ignoring the company, whose
-// BlockDelivery nothing enforced and whose MaxRisk compared one order alone: the credit limit is
-// in Receivables).
+// Terms son las condiciones de venta que una empresa da a un cliente (la parte de ventas del
+// CustomerRelationshipCommercialProfile de C#, que se buscaba sin mirar la empresa, cuyo
+// BlockDelivery nada hacía cumplir y cuyo MaxRisk comparaba un solo pedido: el límite de crédito
+// está en Receivables).
 type Terms struct {
 	fw.BaseAggregateRoot[TermsID]
 	traits.Audited
 	s TermsState
 }
 
-// ReconstituteTerms rebuilds the terms of a customer.
+// ReconstituteTerms reconstruye las condiciones de un cliente.
 func ReconstituteTerms(id TermsID, s TermsState) (*Terms, error) {
 	base, err := fw.NewBaseAggregateRoot(TermsKind, id)
 	if err != nil {
@@ -571,10 +572,10 @@ func ReconstituteTerms(id TermsID, s TermsState) (*Terms, error) {
 	return &Terms{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// State returns the state.
+// State devuelve el estado.
 func (t *Terms) State() TermsState { return t.s }
 
-// Change replaces the terms (company and customer stay).
+// Change sustituye las condiciones (empresa y cliente se quedan).
 func (t *Terms) Change(s TermsState) error {
 	s.Company, s.Customer, s.Audit = t.s.Company, t.s.Customer, t.s.Audit
 	if _, err := ReconstituteTerms(t.ID(), s); err != nil {
@@ -584,27 +585,27 @@ func (t *Terms) Change(s TermsState) error {
 	return nil
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (t *Terms) AuditSnapshot() map[string]any {
 	return map[string]any{"discount": t.s.Discount.String(), "blockOrders": t.s.BlockOrders, "blockDelivery": t.s.BlockDelivery}
 }
 
-// Terms fields.
+// Campos de las condiciones.
 var (
 	TrmFieldCompany  = spec.Comparable("company", func(t *Terms) OrganizationID { return t.s.Company })
 	TrmFieldCustomer = spec.Comparable("customer", func(t *Terms) PartyID { return t.s.Customer })
 )
 
-// Counter numbers the orders or the delivery notes of a company and year.
+// Counter numera los pedidos o los albaranes de una empresa y año.
 type Counter struct {
 	fw.BaseAggregateRoot[CounterID]
 	company OrganizationID
-	series  string // PED or ALB
+	series  string // PED o ALB
 	year    int
 	last    int64
 }
 
-// ReconstituteCounter rebuilds a counter.
+// ReconstituteCounter reconstruye un contador.
 func ReconstituteCounter(id CounterID, company OrganizationID, series string, year int, last int64) (*Counter, error) {
 	base, err := fw.NewBaseAggregateRoot(CounterKind, id)
 	if err != nil {
@@ -616,27 +617,27 @@ func ReconstituteCounter(id CounterID, company OrganizationID, series string, ye
 	return &Counter{BaseAggregateRoot: base, company: company, series: series, year: year, last: last}, nil
 }
 
-// Next takes the next number, rendered SERIES-YEAR-NNNNNN.
+// Next toma el número siguiente, con la forma SERIE-AÑO-NNNNNN.
 func (c *Counter) Next() string {
 	c.last++
 	return fmt.Sprintf("%s-%d-%06d", c.series, c.year, c.last)
 }
 
-// Values returns the persisted values.
+// Values devuelve los valores persistidos.
 func (c *Counter) Values() (OrganizationID, string, int, int64) {
 	return c.company, c.series, c.year, c.last
 }
 
-// Counter fields.
+// Campos del contador.
 var (
 	CntFieldCompany = spec.Comparable("company", func(c *Counter) OrganizationID { return c.company })
 	CntFieldSeries  = spec.Comparable("series", func(c *Counter) string { return c.series })
 	CntFieldYear    = spec.Comparable("fiscal_year", func(c *Counter) int { return c.year })
 )
 
-// Events of the context.
+// Eventos del contexto.
 type (
-	// OrderConfirmed is raised when an order is confirmed.
+	// OrderConfirmed se lanza al confirmar un pedido.
 	OrderConfirmed struct {
 		fw.EventMeta
 		Company  string `json:"company"`
@@ -644,20 +645,20 @@ type (
 		Number   string `json:"number"`
 		Total    string `json:"total"`
 	}
-	// StockLine is a quantity of a line to hold.
+	// StockLine es una cantidad de una línea que se retiene.
 	StockLine struct {
 		Line     int    `json:"line"`
 		Product  string `json:"product"`
 		Quantity string `json:"quantity"`
 	}
-	// StockRequested is raised when an order asks Inventory to hold what it is short of.
+	// StockRequested se lanza cuando un pedido pide a Inventory que retenga lo que le falta.
 	StockRequested struct {
 		fw.EventMeta
 		Company   string      `json:"company"`
 		Warehouse string      `json:"warehouse"`
 		Lines     []StockLine `json:"lines"`
 	}
-	// OrderClosed is raised when an order is cancelled or closed, with the lines that may hold stock.
+	// OrderClosed se lanza al anular o cerrar un pedido, con las líneas que pueden retener existencias.
 	OrderClosed struct {
 		fw.EventMeta
 		Company string `json:"company"`
@@ -665,35 +666,35 @@ type (
 		Reason  string `json:"reason"`
 		Lines   []int  `json:"lines"`
 	}
-	// DeliveryIssued is raised when a delivery note is issued, with its state.
+	// DeliveryIssued se lanza al emitir un albarán, con su estado.
 	DeliveryIssued struct {
 		fw.EventMeta
 		Snapshot DeliveryState `json:"snapshot"`
 	}
 )
 
-// EventType implementations.
+// Implementaciones de EventType.
 func (OrderConfirmed) EventType() string { return "orders.order_confirmed" }
 func (StockRequested) EventType() string { return "orders.stock_requested" }
 func (OrderClosed) EventType() string    { return "orders.order_closed" }
 func (DeliveryIssued) EventType() string { return "orders.delivery_issued" }
 
-// New identities and parsing.
+// Identidades nuevas e interpretación.
 func NewOrderID() OrderID       { return OrderID{fw.NewUUID()} }
 func NewDeliveryID() DeliveryID { return DeliveryID{fw.NewUUID()} }
 func NewTermsID() TermsID       { return TermsID{fw.NewUUID()} }
 func NewCounterID() CounterID   { return CounterID{fw.NewUUID()} }
 
-// ParseOrderID parses a textual identity.
+// ParseOrderID interpreta una identidad en texto.
 func ParseOrderID(s string) (OrderID, error) { u, err := fw.ParseUUID(s); return OrderID{u}, err }
 
-// ParseDeliveryID parses a textual identity.
+// ParseDeliveryID interpreta una identidad en texto.
 func ParseDeliveryID(s string) (DeliveryID, error) {
 	u, err := fw.ParseUUID(s)
 	return DeliveryID{u}, err
 }
 
-// Repositories of the context.
+// Repositorios del contexto.
 type (
 	OrderRepository    = fw.Repository[OrderID, *Order]
 	DeliveryRepository = fw.Repository[DeliveryID, *Delivery]
@@ -701,7 +702,7 @@ type (
 	CounterRepository  = fw.Repository[CounterID, *Counter]
 )
 
-// Item is what Orders needs of a product to sell it.
+// Item es lo que Orders necesita de un producto para venderlo.
 type Item struct {
 	Company   OrganizationID
 	SKU       string
@@ -709,33 +710,33 @@ type Item struct {
 	UoM       string
 	TaxCode   string
 	Stocked   bool
-	Sellable  bool // for sale, not blocked
+	Sellable  bool // a la venta, no bloqueado
 	Retired   vocab.Date
-	UnitPrice vocab.Decimal // from the price list or the base price
+	UnitPrice vocab.Decimal // de la tarifa o el precio base
 	Discount  vocab.Decimal
 }
 
-// Catalog prices a product for a customer order (a port Orders owns over the Products Catalog and
-// Pricing contracts). An unknown product is reported with ok false.
+// Catalog pone precio a un producto para un pedido de cliente (un puerto propio de Orders sobre los
+// contratos Catalog y Pricing de Products). Un producto desconocido se señala con ok false.
 type Catalog interface {
 	Price(ctx context.Context, company OrganizationID, product ProductID, list PriceListID, q vocab.Decimal, on vocab.Date) (Item, bool, error)
 }
 
-// Credit is the credit situation of a customer with the company (a port Orders owns over the
-// Receivables Credit contract, approved decision 2 of docs/COBROS.md).
+// Credit es la situación de crédito de un cliente con la empresa (un puerto propio de Orders sobre
+// el contrato Credit de Receivables, decisión aprobada 2 de docs/COBROS.md).
 type Credit struct {
 	Blocked   bool
 	Limited   bool
 	Available vocab.Decimal
 }
 
-// Blocks answers whether a party takes part in nothing but queries (the duplicate of another, in
-// Parties): it is not sold to (docs/DECISIONES-COMUNES.md, D-70). nil: nobody is blocked.
+// Blocks responde si una party no participa más que en consultas (el duplicado de otra, en
+// Parties): no se le vende (docs/DECISIONES-COMUNES.md, D-70). nil: nadie está bloqueado.
 type Blocks interface {
 	Blocked(ctx context.Context, party PartyID) (bool, error)
 }
 
-// CreditCheck answers the credit of a customer on a date; nil: no credit control.
+// CreditCheck responde el crédito de un cliente en una fecha; nil: sin control de crédito.
 type CreditCheck interface {
 	Credit(ctx context.Context, company OrganizationID, customer PartyID, on vocab.Date) (Credit, error)
 }

@@ -14,7 +14,7 @@ type fixed time.Time
 
 func (f fixed) Now() time.Time { return time.Time(f) }
 
-// contract is an aggregate composed from traits instead of a BusinessEntity base class.
+// contract es un agregado compuesto con rasgos en lugar de con una clase base BusinessEntity.
 type contract struct {
 	traits.Activation
 	traits.Validity
@@ -100,7 +100,7 @@ func TestAuditStamp(t *testing.T) {
 func TestDiff(t *testing.T) {
 	c := contract{amount: vocab.MustMoney("10.0", "EUR")}
 	before := c.AuditSnapshot()
-	c.amount = vocab.MustMoney("10.00", "EUR") // numerically equal: not a change
+	c.amount = vocab.MustMoney("10.00", "EUR") // numéricamente igual: no es un cambio
 	c.Deactivate()
 	c.tags, _ = vocab.NewTagSet("vip")
 	changes := traits.Diff(before, c.AuditSnapshot())

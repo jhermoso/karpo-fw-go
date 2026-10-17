@@ -1,8 +1,8 @@
-// Package host is the composition root of Karpo: it builds every bounded context on one backend,
-// gives each the ports it asks of the others, carries the Published Language between them,
-// declares their permissions to Security, serves their routes behind authentication and runs what
-// they leave for a scheduler. Nothing here is business: it is wiring, and the only place that
-// knows every context.
+// Package host es la raíz de composición de Karpo: construye cada contexto delimitado sobre un
+// mismo backend, da a cada uno los puertos que pide de los otros, lleva el Published Language entre
+// ellos, declara sus permisos a Security, sirve sus rutas tras la autenticación y ejecuta lo que
+// dejan para un planificador. Aquí nada es negocio: es cableado, y el único sitio que conoce todos
+// los contextos.
 package host
 
 import (
@@ -100,20 +100,20 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 )
 
-// Options is what the deployment decides.
+// Options es lo que decide el despliegue.
 type Options struct {
-	// JWTSecret signs the sessions; it is required.
+	// JWTSecret firma las sesiones; es obligatorio.
 	JWTSecret []byte
-	// Files keeps the files of the exports (nil: in memory, lost on a restart).
+	// Files guarda los ficheros de las exportaciones (nil: en memoria, se pierden al reiniciar).
 	Files expapp.Files
-	// ServicePrincipals are the processes that call the API with their own token.
+	// ServicePrincipals son los procesos que llaman a la API con su propio token.
 	ServicePrincipals []authz.ServicePrincipal
-	// OnDeliveryGivenUp is told when a message is given up for a listener after too many tries:
-	// from then on it waits for a person. Nil: nobody is told.
+	// OnDeliveryGivenUp recibe aviso cuando se abandona un mensaje para un oyente tras demasiados
+	// intentos: desde entonces espera a una persona. Nil: no se avisa a nadie.
 	OnDeliveryGivenUp func(context.Context, mailbox.DTO)
 }
 
-// Host is Karpo composed.
+// Host es Karpo compuesto.
 type Host struct {
 	Switch *hotswap.Switch
 	Broker *inprocess.Broker
@@ -148,16 +148,16 @@ type Host struct {
 	resolver *authorization.Resolver
 	relays   []*outbox.Relay
 
-	// Deliveries keeps, for each listener, the messages it could not take.
+	// Deliveries guarda, para cada oyente, los mensajes que no pudo recoger.
 	Deliveries *mailbox.Office
 	system     context.Context
 }
 
-// systemSubject is who the host is when it runs what nobody asked for by hand.
+// systemSubject es quién es el anfitrión cuando ejecuta lo que nadie pidió a mano.
 var systemSubject = fw.MustParseUUID("00000000-0000-7000-8000-00000000c0de")
 
-// Migrations lists the schema of every context that stores something, in the order they are
-// composed. The deployment migrates with it and the host verifies it before it starts.
+// Migrations lista el esquema de cada contexto que guarda algo, en el orden en que se componen. El
+// despliegue migra con ella y el anfitrión la verifica antes de arrancar.
 func Migrations() []sqlrepo.MigrationSet {
 	return []sqlrepo.MigrationSet{geoinfra.Migrations(), facinfra.Migrations(), parinfra.Migrations(), secinfra.Migrations(), proinfra.Migrations(),
 		fisinfra.Migrations(), hrinfra.Migrations(), prlinfra.Migrations(), recinfra.Migrations(), invinfra.Migrations(), ordinfra.Migrations(),
@@ -166,7 +166,7 @@ func Migrations() []sqlrepo.MigrationSet {
 		expinfra.Migrations(), mailbox.Migrations()}
 }
 
-// Permissions lists what every business context checks: what Security is told at start-up.
+// Permissions lista lo que comprueba cada contexto de negocio: lo que se le dice a Security al arrancar.
 func Permissions() []authz.Permission {
 	return slices.Concat(geoapp.Permissions(), facapp.Permissions(), parapp.Permissions(), proapp.Permissions(), fisapp.Permissions(), hrapp.Permissions(),
 		prlapp.Permissions(), recapp.Permissions(), invapp.Permissions(), ordapp.Permissions(), bilapp.Permissions(), purapp.Permissions(),
@@ -175,7 +175,7 @@ func Permissions() []authz.Permission {
 		audapp.Permissions())
 }
 
-// Compose builds every context on sw, each with the ports of the others it asks for.
+// Compose construye cada contexto sobre sw, cada uno con los puertos de los otros que pide.
 func Compose(sw *hotswap.Switch, o Options) (*Host, error) {
 	jwt, err := jwtauth.New(jwtauth.Config{Secret: o.JWTSecret})
 	if err != nil {
@@ -221,8 +221,8 @@ func Compose(sw *hotswap.Switch, o Options) (*Host, error) {
 	h.Audit = audit.Compose()
 	h.histories()
 
-	// The Published Language: what each context publishes reaches those that listen to it. Each
-	// listener has a mailbox: what it cannot take is kept for it and the others are not held back.
+	// El Published Language: lo que publica cada contexto llega a quienes lo escuchan. Cada oyente
+	// tiene un buzón: lo que no puede recoger se le guarda y a los otros no se les retiene.
 	h.Deliveries = mailbox.New(sw)
 	h.Deliveries.OnGivenUp(o.OnDeliveryGivenUp)
 	for _, c := range []mailbox.Listener{h.Accounting.Parking, h.Billing.Consumer, h.Documents.Consumer, h.Fiscal.Consumer, h.Inventory.Consumer, h.Orders.Consumer, h.Parties.Consumer,
@@ -247,16 +247,16 @@ func Compose(sw *hotswap.Switch, o Options) (*Host, error) {
 	return h, nil
 }
 
-// Started is what starting found and did.
+// Started es lo que el arranque encontró e hizo.
 type Started struct {
-	Permissions int    // declared to Security
-	Features    int    // added to the catalog of modules
-	Bootstrap   string // what happened with the first administrator: created, not needed, or no credentials in the environment
+	Permissions int    // declarados a Security
+	Features    int    // añadidas al catálogo de módulos
+	Bootstrap   string // qué pasó con el primer administrador: creado, no hacía falta, o sin credenciales en el entorno
 }
 
-// Start prepares a composed host on a migrated backend: Security learns the permissions of every
-// context, the catalog of modules is completed and, if nobody administers the installation yet,
-// the administrator the environment names is created. It is safe to call on every start.
+// Start prepara un anfitrión compuesto sobre un backend migrado: Security aprende los permisos de
+// cada contexto, se completa el catálogo de módulos y, si nadie administra aún la instalación, se
+// crea el administrador que nombra el entorno. Se puede llamar sin peligro en cada arranque.
 func (h *Host) Start(ctx context.Context) (Started, error) {
 	var out Started
 	declared := Permissions()
@@ -275,8 +275,8 @@ func (h *Host) Start(ctx context.Context) (Started, error) {
 	return out, nil
 }
 
-// Handler serves the routes of every context: the session routes are open, everything else needs
-// a session and goes through the permissions and the scope of who calls.
+// Handler sirve las rutas de cada contexto: las rutas de sesión están abiertas, todo lo demás
+// necesita una sesión y pasa por los permisos y el ámbito de quien llama.
 func (h *Host) Handler() http.Handler {
 	protected := http.NewServeMux()
 	for _, m := range []distribution.EndpointModule{h.Geography.HTTP, h.Geography.HolidaysHTTP, h.Facilities, h.Parties.HTTP, h.Security.HTTP, h.Products, h.Fiscal, h.HR, h.Payroll,
@@ -290,9 +290,9 @@ func (h *Host) Handler() http.Handler {
 	return distribution.Chain(mux, distribution.Correlation())
 }
 
-// Deliver carries what the contexts have published to those that listen, until nothing is left.
-// It returns how many messages moved. A message a listener cannot take stays for the next time;
-// the others go on.
+// Deliver lleva lo que han publicado los contextos a quienes escuchan, hasta que no queda nada.
+// Devuelve cuántos mensajes se movieron. Un mensaje que un oyente no puede recoger se queda para la
+// próxima vez; los otros siguen.
 func (h *Host) Deliver(ctx context.Context) (int, error) {
 	total := 0
 	var failed error
@@ -311,26 +311,26 @@ func (h *Host) Deliver(ctx context.Context) (int, error) {
 	return total, failed
 }
 
-// Chores is what a round of the scheduler did.
+// Chores es lo que hizo una ronda del planificador.
 type Chores struct {
 	ExportsWritten int
 	ExportsExpired int
 	ExportsGivenUp int
-	Reservations   int // of currency, nobody collected in time
-	Quotes         int // nobody answered within their validity
-	Postings       int // facts Accounting had kept and could post now
-	Redelivered    int // messages a listener could not take before and took now
+	Reservations   int // de divisa, que nadie recogió a tiempo
+	Quotes         int // que nadie contestó dentro de su validez
+	Postings       int // hechos que Accounting había guardado y ahora pudo contabilizar
+	Redelivered    int // mensajes que un oyente no pudo recoger antes y recogió ahora
 }
 
-// MaxExportsPerRound bounds how many exports a round writes, so the rest of the chores get their
-// turn.
+// MaxExportsPerRound limita cuántas exportaciones escribe una ronda, para que el resto de las
+// tareas tenga su turno.
 const MaxExportsPerRound = 20
 
-// RunChores does once what the contexts leave for a scheduler: it closes the imports whose process
-// died, writes the exports that wait and removes the files kept long enough, and closes, company
-// by company, the currency reservations and the quotes whose time went by, and posts what
-// Accounting had kept for when it could. One chore that fails does not stop the others; every
-// failure comes back.
+// RunChores hace una vez lo que los contextos dejan para un planificador: cierra las importaciones
+// cuyo proceso murió, escribe las exportaciones que esperan y quita los ficheros guardados el tiempo
+// suficiente, y cierra, empresa a empresa, las reservas de divisa y las ofertas cuyo plazo pasó, y
+// contabiliza lo que Accounting había guardado para cuando pudiera. Una tarea que falla no detiene
+// a las otras; se devuelven todos los fallos.
 func (h *Host) RunChores(ctx context.Context) (Chores, error) {
 	var out Chores
 	var failed error
@@ -339,7 +339,7 @@ func (h *Host) RunChores(ctx context.Context) (Chores, error) {
 			failed = errors.Join(failed, fmt.Errorf("%s: %w", what, err))
 		}
 	}
-	// As the transport delivers: without anybody's session.
+	// Como entrega el transporte: sin la sesión de nadie.
 	again, err := h.Deliveries.Redeliver(ctx, false)
 	note("deliveries", err)
 	out.Redelivered = again.Delivered
@@ -380,8 +380,8 @@ func authzOf(ctx context.Context) *authz.Context {
 	return ac
 }
 
-// Run delivers and does the chores until ctx ends: messages every deliver, chores every chores.
-// What fails is reported and tried again on the next round.
+// Run entrega y hace las tareas hasta que acaba ctx: mensajes cada deliver, tareas cada chores.
+// Lo que falla se informa y se vuelve a intentar en la ronda siguiente.
 func (h *Host) Run(ctx context.Context, deliver, chores time.Duration, report func(error)) {
 	if report == nil {
 		report = func(error) {}

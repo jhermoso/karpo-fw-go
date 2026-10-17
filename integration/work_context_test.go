@@ -33,10 +33,11 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 )
 
-// TestWorkContext runs Work with Parties on every engine: a project with a task, the round trip
-// of the plan with its optional dates, the assignments and the history in order, time recorded,
-// corrected, withdrawn and approved, the daily limit over the SQL rows, completion with the hours
-// and cost of the approved time, the searches and the Published Language in the outbox.
+// TestWorkContext ejecuta Work con Parties en cada motor: un proyecto con una tarea, la ida y
+// vuelta del plan con sus fechas opcionales, las asignaciones y la historia en orden, tiempo
+// registrado, corregido, retirado y aprobado, el límite diario sobre las filas SQL, la
+// finalización con las horas y el coste del tiempo aprobado, las búsquedas y el Published Language
+// en el outbox.
 func TestWorkContext(t *testing.T) {
 	for _, e := range engines {
 		if e.name == "oracle-dotnet-guids" {
@@ -183,7 +184,7 @@ func TestWorkContext(t *testing.T) {
 			if err != nil || len(sheet.Entries) != 1 || sheet.Hours != "8.00" || sheet.ApprovedHours != "8.00" || sheet.Cost != "200.00" {
 				t.Fatalf("timesheet: %+v %v", sheet, err)
 			}
-			// Two approvals and one completion.
+			// Dos aprobaciones y una finalización.
 			if n, err := wm.Relay(inprocess.NewBroker()).RelayOnce(ctx); err != nil || n != 3 {
 				t.Fatalf("published: %d %v", n, err)
 			}

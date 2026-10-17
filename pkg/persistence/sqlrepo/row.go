@@ -11,10 +11,10 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// Row gives dialect-independent, typed access to a scanned row. Conversions are lenient
-// (e.g. booleans stored as NUMBER(1), UUIDs stored as RAW(16), CHAR(36) or UNIQUEIDENTIFIER),
-// so one Hydrate function works on every engine. The first conversion error is kept and
-// reported by Err; the repository checks it after Hydrate.
+// Row da acceso tipado, independiente del dialecto, a una fila leída. Las conversiones son
+// tolerantes (p. ej. booleanos guardados como NUMBER(1), UUID guardados como RAW(16), CHAR(36) o
+// UNIQUEIDENTIFIER), así que una misma función Hydrate funciona en todos los motores. El primer
+// error de conversión se guarda y lo devuelve Err; el repositorio lo comprueba tras Hydrate.
 type Row struct {
 	d     Dialect
 	index map[string]int
@@ -36,10 +36,10 @@ func (r *Row) fail(col string, err error) {
 	}
 }
 
-// Err returns the first conversion error.
+// Err devuelve el primer error de conversión.
 func (r *Row) Err() error { return r.err }
 
-// Raw returns the value as delivered by the driver.
+// Raw devuelve el valor tal como lo entrega el driver.
 func (r *Row) Raw(col string) any {
 	i, ok := r.index[col]
 	if !ok {
@@ -49,10 +49,10 @@ func (r *Row) Raw(col string) any {
 	return r.vals[i]
 }
 
-// IsNull reports whether the column is NULL.
+// IsNull dice si la columna es NULL.
 func (r *Row) IsNull(col string) bool { return r.Raw(col) == nil }
 
-// String returns a text column ("" for NULL).
+// String devuelve una columna de texto ("" si es NULL).
 func (r *Row) String(col string) string {
 	switch x := r.Raw(col).(type) {
 	case nil:
@@ -74,7 +74,7 @@ func (r *Row) String(col string) string {
 	}
 }
 
-// NullString returns nil for NULL.
+// NullString devuelve nil si es NULL.
 func (r *Row) NullString(col string) *string {
 	if r.IsNull(col) {
 		return nil
@@ -83,7 +83,7 @@ func (r *Row) NullString(col string) *string {
 	return &s
 }
 
-// Int64 returns an integer column (0 for NULL).
+// Int64 devuelve una columna entera (0 si es NULL).
 func (r *Row) Int64(col string) int64 {
 	n, err := toInt64(r.Raw(col))
 	if err != nil {
@@ -92,7 +92,7 @@ func (r *Row) Int64(col string) int64 {
 	return n
 }
 
-// NullInt64 returns nil for NULL.
+// NullInt64 devuelve nil si es NULL.
 func (r *Row) NullInt64(col string) *int64 {
 	if r.IsNull(col) {
 		return nil
@@ -101,7 +101,7 @@ func (r *Row) NullInt64(col string) *int64 {
 	return &n
 }
 
-// Float64 returns a numeric column (0 for NULL).
+// Float64 devuelve una columna numérica (0 si es NULL).
 func (r *Row) Float64(col string) float64 {
 	switch x := r.Raw(col).(type) {
 	case nil:
@@ -124,7 +124,7 @@ func (r *Row) Float64(col string) float64 {
 	}
 }
 
-// Bool returns a boolean column; accepts native booleans, numbers and "1"/"true"/"Y" text.
+// Bool devuelve una columna booleana; acepta booleanos nativos, números y texto "1"/"true"/"Y".
 func (r *Row) Bool(col string) bool {
 	switch x := r.Raw(col).(type) {
 	case nil:
@@ -161,7 +161,7 @@ var timeLayouts = []string{
 	"2006-01-02",
 }
 
-// Time returns an instant column in UTC (zero time for NULL).
+// Time devuelve una columna de instante en UTC (el tiempo cero si es NULL).
 func (r *Row) Time(col string) time.Time {
 	switch x := r.Raw(col).(type) {
 	case nil:
@@ -183,7 +183,7 @@ func (r *Row) Time(col string) time.Time {
 	}
 }
 
-// NullTime returns nil for NULL.
+// NullTime devuelve nil si es NULL.
 func (r *Row) NullTime(col string) *time.Time {
 	if r.IsNull(col) {
 		return nil
@@ -192,7 +192,7 @@ func (r *Row) NullTime(col string) *time.Time {
 	return &t
 }
 
-// UUID returns a UUID column using the dialect's representation (zero UUID for NULL).
+// UUID devuelve una columna UUID con la representación del dialecto (el UUID cero si es NULL).
 func (r *Row) UUID(col string) domain.UUID {
 	u, err := r.d.ParseUUID(r.Raw(col))
 	if err != nil {
@@ -201,7 +201,7 @@ func (r *Row) UUID(col string) domain.UUID {
 	return u
 }
 
-// Bytes returns a binary column (nil for NULL).
+// Bytes devuelve una columna binaria (nil si es NULL).
 func (r *Row) Bytes(col string) []byte {
 	switch x := r.Raw(col).(type) {
 	case nil:
@@ -224,8 +224,9 @@ func stringOf(v any) string {
 	return s
 }
 
-// Decimal returns an exact numeric column (zero for NULL). Drivers deliver NUMERIC/DECIMAL as
-// text, bytes or, for some engines, float64/int64; text is parsed exactly.
+// Decimal devuelve una columna numérica exacta (cero si es NULL). Los drivers entregan
+// NUMERIC/DECIMAL como texto, bytes o, en algunos motores, float64/int64; el texto se interpreta
+// de forma exacta.
 func (r *Row) Decimal(col string) vocab.Decimal {
 	switch x := r.Raw(col).(type) {
 	case nil:
@@ -248,8 +249,9 @@ func (r *Row) Decimal(col string) vocab.Decimal {
 	}
 }
 
-// Date returns a civil date column (zero Date for NULL). DATE values are read in the location
-// the driver reports, without converting to UTC, so the calendar day never shifts.
+// Date devuelve una columna de fecha civil (el Date cero si es NULL). Los valores DATE se leen en
+// la zona que indica el driver, sin convertir a UTC, para que el día del calendario nunca se
+// desplace.
 func (r *Row) Date(col string) vocab.Date {
 	switch x := r.Raw(col).(type) {
 	case nil:

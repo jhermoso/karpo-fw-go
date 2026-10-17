@@ -1,21 +1,21 @@
-// Package vocab is the common ubiquitous language of Karpo: value objects every bounded context
-// can share (names, contact data, identification documents, dates and periods, money...).
+// Package vocab es el lenguaje ubicuo común de Karpo: objetos de valor que todo contexto delimitado
+// puede compartir (nombres, datos de contacto, documentos de identificación, fechas y periodos, dinero...).
 //
-// Each type was re-evaluated before porting it from the C# framework (see
-// docs/LENGUAJE-UBICUO.md): only generic, domain-agnostic terms live here. Person- or
-// organization-specific terms (PersonalName, OrganizationName, Gender, MaritalStatus) belong to
-// the Parties bounded context.
+// Cada tipo se reevaluó antes de portarlo desde el framework de C# (véase
+// docs/LENGUAJE-UBICUO.md): aquí sólo viven términos genéricos, ajenos al dominio concreto. Los
+// términos propios de personas u organizaciones (PersonalName, OrganizationName, Gender, MaritalStatus)
+// pertenecen al contexto delimitado Parties.
 //
-// Conventions shared by every type:
-//   - constructors validate and normalize; they return a *domain.ValidationError with a field
-//     error per problem, never panic (Must* variants exist for constants and tests);
-//   - values are immutable and comparable with == unless documented otherwise (Decimal, Money
-//     and TagSet define Equal/Cmp because they hold pointers or slices);
-//   - the zero value means "absent" and reports IsZero;
-//   - single-value types implement encoding.TextMarshaler, so they serialize as JSON strings.
+// Convenciones comunes a todos los tipos:
+//   - los constructores validan y normalizan; devuelven un *domain.ValidationError con un error de
+//     campo por problema, nunca entran en pánico (las variantes Must* existen para constantes y pruebas);
+//   - los valores son inmutables y comparables con == salvo que se documente lo contrario (Decimal, Money
+//     y TagSet definen Equal/Cmp porque guardan punteros o slices);
+//   - el valor cero significa «ausente» y lo indica IsZero;
+//   - los tipos de un solo valor implementan encoding.TextMarshaler, así que se serializan como cadenas JSON.
 //
-// Decimal is github.com/shopspring/decimal: the only third-party dependency allowed in the
-// domain (Go has no decimal type; floating point is not acceptable for amounts).
+// Decimal es github.com/shopspring/decimal: la única dependencia de terceros permitida en el
+// dominio (Go no tiene tipo decimal; la coma flotante no es aceptable para importes).
 package vocab
 
 import "github.com/jhermoso/karpo-fw-go/pkg/domain"

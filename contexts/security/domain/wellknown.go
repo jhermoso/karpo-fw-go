@@ -1,10 +1,10 @@
 package domain
 
-// Namespace is the first segment of the permissions of this context.
+// Namespace es el primer segmento de los permisos de este contexto.
 const Namespace = "Security"
 
-// System roles (C# WellKnownSecurityCatalog.Roles, same GUIDs). They cannot be renamed, edited or
-// retired, and their permissions are computed by StandardPermissions.
+// Roles del sistema (WellKnownSecurityCatalog.Roles de C#, los mismos GUID). No se pueden
+// renombrar, editar ni retirar, y sus permisos los calcula StandardPermissions.
 var (
 	RoleGlobalSuperAdmin  = MustRoleID("20000000-0000-0000-0001-000000000001")
 	RoleOrganizationAdmin = MustRoleID("20000000-0000-0000-0001-000000000002")
@@ -13,17 +13,17 @@ var (
 	RoleCustomer          = MustRoleID("20000000-0000-0000-0001-000000000005")
 )
 
-// GlobalSuperAdminName is the name the authorization resolver recognizes as global administrator.
+// GlobalSuperAdminName es el nombre que el resolvedor de autorización reconoce como administrador global.
 const GlobalSuperAdminName = "GlobalSuperAdmin"
 
-// SystemRole is the seed of a system role.
+// SystemRole es la semilla de un rol del sistema.
 type SystemRole struct {
 	ID          RoleID
 	Name        string
 	Description string
 }
 
-// SystemRoles returns the seed of the system roles.
+// SystemRoles devuelve la semilla de los roles del sistema.
 func SystemRoles() []SystemRole {
 	return []SystemRole{
 		{RoleGlobalSuperAdmin, GlobalSuperAdminName, "Full access to the entire system"},
@@ -34,15 +34,15 @@ func SystemRoles() []SystemRole {
 	}
 }
 
-// Bootstrap administrator (C# WellKnownSecurityCatalog.Users, same GUIDs): the technical global
-// administrator created on first start from environment credentials. Its party is a reserved
-// identity: Security never writes into Parties (decision 7).
+// Administrador de arranque (WellKnownSecurityCatalog.Users de C#, los mismos GUID): el
+// administrador global técnico creado en el primer arranque a partir de credenciales del entorno.
+// Su party es una identidad reservada: Security nunca escribe en Parties (decisión 7).
 var (
 	BootstrapAdminUser  = MustUserID("20000000-0000-0000-0002-000000000003")
 	BootstrapAdminParty = PartyID{MustUserID("20000000-0000-0000-0002-000000000004").UUID}
 )
 
-// Permissions of the Security context itself.
+// Permisos del propio contexto Security.
 const (
 	PermUserRead     Permission = "Security.User.Read"
 	PermUserCreate   Permission = "Security.User.Create"
@@ -54,13 +54,13 @@ const (
 	PermRoleUpdate   Permission = "Security.Role.Update"
 )
 
-// PermissionDeclaration is a permission with its description, as a context declares it.
+// PermissionDeclaration es un permiso con su descripción, tal como lo declara un contexto.
 type PermissionDeclaration struct {
 	Code        Permission
 	Description string
 }
 
-// OwnPermissions returns the permissions Security declares, plus the wildcard.
+// OwnPermissions devuelve los permisos que declara Security, más el comodín.
 func OwnPermissions() []PermissionDeclaration {
 	return []PermissionDeclaration{
 		{Wildcard, DefaultDescription(Wildcard)},
@@ -75,6 +75,6 @@ func OwnPermissions() []PermissionDeclaration {
 	}
 }
 
-// GlobalOnlyPermissions are never given to OrganizationAdmin: roles and the catalog belong to the
-// global administrator (decision P3).
+// GlobalOnlyPermissions nunca se dan a OrganizationAdmin: los roles y el catálogo son del
+// administrador global (decisión P3).
 var GlobalOnlyPermissions = []Permission{PermRoleUpdate}

@@ -1,7 +1,7 @@
-// Package domain is the model of the Financial (Cuentas de clientes) bounded context: the
-// accounts an institution keeps for its customers, who holds each, what it is used for and
-// whether it can operate. In C# this was split in two models that never met: FinancialAccount, an
-// empty shell with no data, and BankAccount, which held everything that was real.
+// Package domain es el modelo del contexto delimitado Financial (Cuentas de clientes): las cuentas que
+// una entidad lleva a sus clientes, quién es titular de cada una, para qué se usa y si puede
+// operar. En el C# esto estaba partido en dos modelos que nunca se encontraban: FinancialAccount,
+// una cáscara vacía sin datos, y BankAccount, que tenía todo lo que era real.
 package domain
 
 import (
@@ -16,108 +16,108 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// AccountKind is the aggregate type name of an account.
+// AccountKind es el nombre del tipo de agregado de una cuenta.
 const AccountKind = "financial.account"
 
-// Limits of an account.
+// Límites de una cuenta.
 const (
 	MaxHolders = 50
 	MaxUses    = 50
 )
 
-// Identities of the context.
+// Identidades del contexto.
 type (
-	// AccountID identifies an account.
+	// AccountID identifica una cuenta.
 	AccountID struct{ fw.UUID }
-	// OrganizationID is the institution, an internal organization of Parties.
+	// OrganizationID es la entidad, una organización interna de Parties.
 	OrganizationID struct{ fw.UUID }
-	// PartyID is a customer or anyone related to an account.
+	// PartyID es un cliente o cualquiera relacionado con una cuenta.
 	PartyID struct{ fw.UUID }
 )
 
-// NewAccountID returns a fresh identity.
+// NewAccountID devuelve una identidad nueva.
 func NewAccountID() AccountID { return AccountID{fw.NewUUID()} }
 
-// ParseAccountID parses a textual identity.
+// ParseAccountID interpreta una identidad en texto.
 func ParseAccountID(s string) (AccountID, error) { u, err := fw.ParseUUID(s); return AccountID{u}, err }
 
-// Status is whether an account can operate.
+// Status es si una cuenta puede operar.
 type Status string
 
-// Statuses (the C# Active, Blocked and Abandoned, the ones of Apiscore, plus the closing it lacked).
+// Estados (Active, Blocked y Abandoned del C#, los de Apiscore, más el cierre que le faltaba).
 const (
 	Active    Status = "active"
-	Blocked   Status = "blocked"   // it cannot operate until it is released
-	Abandoned Status = "abandoned" // its holder stopped using it; the money waits apart
+	Blocked   Status = "blocked"   // no puede operar hasta que se libere
+	Abandoned Status = "abandoned" // su titular dejó de usarla; el dinero espera aparte
 	Closed    Status = "closed"
 )
 
-// Statuses lists the valid statuses.
+// Statuses enumera los estados válidos.
 var Statuses = []Status{Active, Blocked, Abandoned, Closed}
 
-// Roles of a party on an account (the C# PartyBankAccountRole).
+// Papeles de una party en una cuenta (PartyBankAccountRole del C#).
 const (
 	RoleHolder      = "holder"
 	RoleAuthorized  = "authorized"
 	RoleBeneficiary = "beneficiary"
 )
 
-// Roles lists the valid roles.
+// Roles enumera los papeles válidos.
 var Roles = []string{RoleHolder, RoleAuthorized, RoleBeneficiary}
 
-// Uses an account may have (the ten the C# seeded as a table; the accounts of the institution
-// itself are those of Treasury).
+// Uses son los usos que puede tener una cuenta (los diez que el C# sembraba como tabla; las cuentas de la propia
+// entidad son las de Treasury).
 var Uses = []string{"customer-payment", "virtual-multicurrency", "agent", "player", "player-operating", "player-transit", "cash-operating",
 	"segregated", "abandonment"}
 
-// Holder is a party related to an account between two days.
+// Holder es una party relacionada con una cuenta entre dos días.
 type Holder struct {
 	Party   PartyID
 	Role    string
 	From    vocab.Date
-	Thru    vocab.Date // the last day; zero while it lasts
-	Primary bool       // the one the account is filed under
+	Thru    vocab.Date // el último día; cero mientras dura
+	Primary bool       // aquél a cuyo nombre está archivada la cuenta
 }
 
-// Current reports whether the relation lasts.
+// Current dice si la relación dura.
 func (h Holder) Current() bool { return h.Thru.IsZero() }
 
-// Use is something an account is used for between two days.
+// Use es algo para lo que se usa una cuenta entre dos días.
 type Use struct {
 	Code string
 	From vocab.Date
 	Thru vocab.Date
 }
 
-// AccountState is the persisted state of an account.
+// AccountState es el estado persistido de una cuenta.
 type AccountState struct {
 	Company   OrganizationID
-	Number    string     // the IBAN without spaces, or the institution's own identifier when it is virtual
-	Virtual   bool       // it has no IBAN: it exists only in the books of the institution
-	IBAN      vocab.IBAN // of an account that is not virtual
+	Number    string     // el IBAN sin espacios, o el identificador propio de la entidad cuando es virtual
+	Virtual   bool       // no tiene IBAN: sólo existe en los libros de la entidad
+	IBAN      vocab.IBAN // de una cuenta que no es virtual
 	BIC       string
 	Currency  vocab.CurrencyCode
 	Name      string
-	Product   fw.UUID // the financial product it is an instance of
-	Agreement fw.UUID // the agreement that governs it
+	Product   fw.UUID // el producto financiero del que es una instancia
+	Agreement fw.UUID // el acuerdo que la rige
 	Status    Status
-	Demo      bool // a test account of the institution: it is never real money
+	Demo      bool // una cuenta de prueba de la entidad: nunca es dinero real
 	Opened    vocab.Date
 	Closed    vocab.Date
-	Reason    string // of the block, the abandonment or the closing
+	Reason    string // del bloqueo, el abandono o el cierre
 	Holders   []Holder
 	Uses      []Use
 	Audit     traits.AuditStamp
 }
 
-// Account is an account an institution keeps for its customers.
+// Account es una cuenta que una entidad lleva a sus clientes.
 type Account struct {
 	fw.BaseAggregateRoot[AccountID]
 	traits.Audited
 	s AccountState
 }
 
-// NormalizeNumber removes the spaces and raises the letters of an account number.
+// NormalizeNumber quita los espacios y pasa a mayúsculas las letras de un número de cuenta.
 func NormalizeNumber(s string) string {
 	return strings.ToUpper(strings.Join(strings.Fields(s), ""))
 }
@@ -146,7 +146,7 @@ func validNumber(s string) bool {
 	return true
 }
 
-// ReconstituteAccount rebuilds an account.
+// ReconstituteAccount reconstruye una cuenta.
 func ReconstituteAccount(id AccountID, s AccountState) (*Account, error) {
 	base, err := fw.NewBaseAggregateRoot(AccountKind, id)
 	if err != nil {
@@ -191,7 +191,7 @@ func ReconstituteAccount(id AccountID, s AccountState) (*Account, error) {
 			v.Require(!h.Primary, f, "primary", "the account is filed under someone who still holds it")
 		}
 	}
-	// A closed account keeps its history, not its holders.
+	// Una cuenta cerrada conserva su historia, no sus titulares.
 	v.Require(s.Status == Closed || holders >= 1 && primaries == 1, "holders", "required", "an account has at least one holder, and is filed under one of them")
 	open := map[string]bool{}
 	for i, u := range s.Uses {
@@ -210,7 +210,7 @@ func ReconstituteAccount(id AccountID, s AccountState) (*Account, error) {
 	return &Account{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// Opening is what an account is opened with.
+// Opening es aquello con lo que se abre una cuenta.
 type Opening struct {
 	Company   OrganizationID
 	Number    string
@@ -226,9 +226,9 @@ type Opening struct {
 	Uses      []string
 }
 
-// Open opens an account for a customer, who holds it from that day and under whom it is filed.
-// The number of an account that is not virtual is an IBAN, and its check digits must be right
-// (the C# checked only its length).
+// Open abre una cuenta a un cliente, que es su titular desde ese día y a cuyo nombre se archiva.
+// El número de una cuenta que no es virtual es un IBAN, y sus dígitos de control tienen que ser
+// correctos (el C# sólo comprobaba su longitud).
 func Open(id AccountID, o Opening) (*Account, error) {
 	s := AccountState{Company: o.Company, Number: NormalizeNumber(o.Number), Virtual: o.Virtual, BIC: o.BIC, Currency: o.Currency, Name: o.Name,
 		Product: o.Product, Agreement: o.Agreement, Status: Active, Demo: o.Demo, Opened: o.Opened,
@@ -254,15 +254,15 @@ func Open(id AccountID, o Opening) (*Account, error) {
 	return a, nil
 }
 
-// State returns the state (slices are copies).
+// State devuelve el estado (los slices son copias).
 func (a *Account) State() AccountState {
 	s := a.s
 	s.Holders, s.Uses = slices.Clone(s.Holders), slices.Clone(s.Uses)
 	return s
 }
 
-// PrimaryHolder returns the holder the account is filed under (zero for a closed account that
-// ended them all).
+// PrimaryHolder devuelve el titular a cuyo nombre está archivada la cuenta (cero en una cuenta
+// cerrada que los terminó a todos).
 func (a *Account) PrimaryHolder() PartyID {
 	for _, h := range a.s.Holders {
 		if h.Primary {
@@ -272,7 +272,7 @@ func (a *Account) PrimaryHolder() PartyID {
 	return PartyID{}
 }
 
-// try applies a change if the account stays valid.
+// try aplica un cambio si la cuenta sigue siendo válida.
 func (a *Account) try(change func(*AccountState)) error {
 	s := a.State()
 	change(&s)
@@ -291,7 +291,7 @@ func (a *Account) open() error {
 	return nil
 }
 
-// Describe changes the name, the BIC, the product and the agreement of an account.
+// Describe cambia el nombre, el BIC, el producto y el acuerdo de una cuenta.
 func (a *Account) Describe(name, bic string, product, agreement fw.UUID) error {
 	if err := a.open(); err != nil {
 		return err
@@ -299,8 +299,8 @@ func (a *Account) Describe(name, bic string, product, agreement fw.UUID) error {
 	return a.try(func(s *AccountState) { s.Name, s.BIC, s.Product, s.Agreement = name, bic, product, agreement })
 }
 
-// Relate gives a party a role on the account from a day. As primary, the account is filed under
-// it from then on.
+// Relate da a una party un papel en la cuenta desde un día. Si la party es principal, la cuenta se archiva a
+// su nombre desde entonces.
 func (a *Account) Relate(party PartyID, role string, from vocab.Date, primary bool) error {
 	if err := a.open(); err != nil {
 		return err
@@ -320,8 +320,8 @@ func (a *Account) Relate(party PartyID, role string, from vocab.Date, primary bo
 	})
 }
 
-// Unrelate ends the role of a party on a day. The last holder cannot leave, and whoever the
-// account is filed under leaves only after another takes its place.
+// Unrelate termina el papel de una party en un día. El último titular no puede irse, y aquél a
+// cuyo nombre está archivada la cuenta sólo se va después de que otro ocupe su lugar.
 func (a *Account) Unrelate(party PartyID, role string, on vocab.Date) error {
 	if err := a.open(); err != nil {
 		return err
@@ -336,7 +336,7 @@ func (a *Account) Unrelate(party PartyID, role string, on vocab.Date) error {
 	return a.try(func(s *AccountState) { s.Holders[k].Thru = on })
 }
 
-// FileUnder files the account under another of its holders.
+// FileUnder archiva la cuenta a nombre de otro de sus titulares.
 func (a *Account) FileUnder(party PartyID) error {
 	if err := a.open(); err != nil {
 		return err
@@ -352,7 +352,7 @@ func (a *Account) FileUnder(party PartyID) error {
 	})
 }
 
-// Assign gives the account a use from a day.
+// Assign da a la cuenta un uso desde un día.
 func (a *Account) Assign(code string, from vocab.Date) error {
 	if err := a.open(); err != nil {
 		return err
@@ -363,7 +363,7 @@ func (a *Account) Assign(code string, from vocab.Date) error {
 	return a.try(func(s *AccountState) { s.Uses = append(s.Uses, Use{Code: code, From: from}) })
 }
 
-// Withdraw ends a use of the account on a day.
+// Withdraw termina un uso de la cuenta en un día.
 func (a *Account) Withdraw(code string, on vocab.Date) error {
 	if err := a.open(); err != nil {
 		return err
@@ -375,7 +375,7 @@ func (a *Account) Withdraw(code string, on vocab.Date) error {
 	return a.try(func(s *AccountState) { s.Uses[k].Thru = on })
 }
 
-// Used reports whether the account has a use now.
+// Used dice si la cuenta tiene ahora un uso.
 func (a *Account) Used(code string) bool {
 	return slices.ContainsFunc(a.s.Uses, func(u Use) bool { return u.Code == code && u.Thru.IsZero() })
 }
@@ -397,7 +397,7 @@ func reasoned(reason string) error {
 	return nil
 }
 
-// Block stops an active account from operating, saying why.
+// Block impide operar a una cuenta activa, diciendo por qué.
 func (a *Account) Block(reason string) error {
 	if a.s.Status != Active {
 		return fw.Violation("financial.transition", "only an active account is blocked; this one is "+string(a.s.Status))
@@ -408,7 +408,7 @@ func (a *Account) Block(reason string) error {
 	return a.become(Blocked, reason, vocab.Date{})
 }
 
-// Abandon sets apart an account its holder stopped using, saying why.
+// Abandon aparta una cuenta que su titular dejó de usar, diciendo por qué.
 func (a *Account) Abandon(reason string) error {
 	if a.s.Status != Active && a.s.Status != Blocked {
 		return fw.Violation("financial.transition", "an account "+string(a.s.Status)+" is not set apart as abandoned")
@@ -419,7 +419,7 @@ func (a *Account) Abandon(reason string) error {
 	return a.become(Abandoned, reason, vocab.Date{})
 }
 
-// Release lets a blocked or abandoned account operate again.
+// Release deja que una cuenta bloqueada o abandonada vuelva a operar.
 func (a *Account) Release() error {
 	if a.s.Status != Blocked && a.s.Status != Abandoned {
 		return fw.Violation("financial.transition", "only a blocked or abandoned account is released; this one is "+string(a.s.Status))
@@ -427,7 +427,7 @@ func (a *Account) Release() error {
 	return a.become(Active, "", vocab.Date{})
 }
 
-// Close ends the account on a day: its holders and its uses end with it, and it changes no more.
+// Close termina la cuenta en un día: sus titulares y sus usos terminan con ella, y ya no cambia más.
 func (a *Account) Close(on vocab.Date, reason string) error {
 	if err := a.open(); err != nil {
 		return err
@@ -464,7 +464,7 @@ func later(a, b vocab.Date) vocab.Date {
 	return a
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (a *Account) AuditSnapshot() map[string]any {
 	holders, uses := []string{}, []string{}
 	for _, h := range a.s.Holders {
@@ -483,7 +483,7 @@ func (a *Account) AuditSnapshot() map[string]any {
 		"uses": strings.Join(uses, ","), "primary": a.PrimaryHolder().String()}
 }
 
-// Account fields.
+// Campos de la cuenta.
 var (
 	AccFieldCompany   = spec.Comparable("company", func(a *Account) OrganizationID { return a.s.Company })
 	AccFieldNumber    = spec.Ordered("account_number", func(a *Account) string { return a.s.Number })
@@ -502,12 +502,12 @@ var (
 	UseFieldCurrent   = spec.Comparable("current_use", func(u Use) bool { return u.Thru.IsZero() })
 )
 
-// AccountRepository stores accounts.
+// AccountRepository guarda las cuentas.
 type AccountRepository = fw.Repository[AccountID, *Account]
 
-// Events of an account.
+// Eventos de una cuenta.
 type (
-	// AccountOpened is raised when an account is opened.
+	// AccountOpened se lanza cuando se abre una cuenta.
 	AccountOpened struct {
 		fw.EventMeta
 		Company  string     `json:"company"`
@@ -518,7 +518,7 @@ type (
 		Demo     bool       `json:"demo"`
 		Opened   vocab.Date `json:"opened"`
 	}
-	// AccountStatusChanged is raised when an account is blocked, set apart, released or closed.
+	// AccountStatusChanged se lanza cuando una cuenta se bloquea, se aparta, se libera o se cierra.
 	AccountStatusChanged struct {
 		fw.EventMeta
 		Company string `json:"company"`
@@ -530,6 +530,6 @@ type (
 	}
 )
 
-// EventType implementations.
+// Implementaciones de EventType.
 func (AccountOpened) EventType() string        { return "financial.account_opened" }
 func (AccountStatusChanged) EventType() string { return "financial.account_status_changed" }

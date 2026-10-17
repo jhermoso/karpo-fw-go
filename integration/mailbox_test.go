@@ -32,8 +32,8 @@ func (l *fickleListener) HandleMessage(_ context.Context, env app.Envelope) erro
 	return nil
 }
 
-// TestMailbox keeps on every engine what a listener refuses, delivers it later in order, gives it
-// up after too many tries and lets an administrator discard it.
+// TestMailbox guarda en cada motor lo que un listener rechaza, lo entrega más tarde en orden, lo
+// abandona tras demasiados intentos y deja que un administrador lo descarte.
 func TestMailbox(t *testing.T) {
 	for _, e := range engines {
 		if e.name == "oracle-dotnet-guids" {

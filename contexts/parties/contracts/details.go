@@ -5,10 +5,10 @@ import (
 	"time"
 )
 
-// ProspectTrialChangedV1 is published when the free trial an internal organization grants to a
-// prospect is granted, extended, shortened or withdrawn (TrialUntil absent). The end of the
-// relationship itself is RelationshipTerminatedV1: a trial is in force only while the prospect
-// relationship is.
+// ProspectTrialChangedV1 se publica cuando la prueba gratuita que una organización interna
+// concede a un prospect se concede, se amplía, se acorta o se retira (TrialUntil ausente). El fin
+// de la relación misma es RelationshipTerminatedV1: una prueba sólo está en vigor mientras lo
+// está la relación de prospect.
 type ProspectTrialChangedV1 struct {
 	RelationshipID string     `json:"relationshipId"`
 	Prospect       string     `json:"prospect"`
@@ -17,14 +17,14 @@ type ProspectTrialChangedV1 struct {
 	ChangedAt      time.Time  `json:"changedAt"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (ProspectTrialChangedV1) IntegrationEventType() string {
 	return "parties.prospect-trial-changed.v1"
 }
 
-// OwnershipShareChangedV1 is published when the direct stake of a shareholder in an organization
-// is recorded, corrected or cleared (Share absent). Share is in points with two decimals
-// ("30.00" is 30 %).
+// OwnershipShareChangedV1 se publica cuando la participación directa de un accionista en una
+// organización se anota, se corrige o se borra (Share ausente). Share va en puntos con dos
+// decimales («30.00» es el 30 %).
 type OwnershipShareChangedV1 struct {
 	RelationshipID string    `json:"relationshipId"`
 	Shareholder    string    `json:"shareholder"`
@@ -33,36 +33,36 @@ type OwnershipShareChangedV1 struct {
 	ChangedAt      time.Time `json:"changedAt"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (OwnershipShareChangedV1) IntegrationEventType() string {
 	return "parties.ownership-share-changed.v1"
 }
 
-// Trial is the free trial of a prospect with an internal organization.
+// Trial es la prueba gratuita de un prospect con una organización interna.
 type Trial struct {
 	PartyID        string     `json:"partyId"`
 	RelationshipID string     `json:"relationshipId"`
 	Since          time.Time  `json:"since"`
-	Until          *time.Time `json:"until,omitempty"` // absent: no trial granted
+	Until          *time.Time `json:"until,omitempty"` // ausente: no hay prueba concedida
 	InForce        bool       `json:"inForce"`
 }
 
-// Collaborator is who a promotion code belongs to.
+// Collaborator es a quién pertenece un código de promoción.
 type Collaborator struct {
 	PartyID        string `json:"partyId"`
 	RelationshipID string `json:"relationshipId"`
 	PromotionCode  string `json:"promotionCode"`
 }
 
-// Collaborators tells whose a promotion code is: the collaborator of an internal organization
-// that has it now. Codes are compared without minding capitals.
+// Collaborators dice de quién es un código de promoción: el colaborador de una organización
+// interna que lo tiene ahora. Los códigos se comparan sin distinguir mayúsculas.
 type Collaborators interface {
 	ByPromotionCode(ctx context.Context, organization, code string) (Collaborator, bool, error)
 }
 
-// Trials answers whether the trial of a prospect is still in force (what a subscriptions context
-// asks before letting a prospect work), in batches of at most MaxDirectoryBatch ids. A party
-// without a current prospect relationship with the organization is absent from the result.
+// Trials responde si la prueba de un prospect sigue en vigor (lo que pregunta un contexto de
+// suscripciones antes de dejar trabajar a un prospect), en lotes de como mucho MaxDirectoryBatch
+// ids. Una party sin relación de prospect vigente con la organización no aparece en el resultado.
 type Trials interface {
 	Trials(ctx context.Context, organization string, partyIDs []string) (map[string]Trial, error)
 }

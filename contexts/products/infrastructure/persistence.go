@@ -1,6 +1,6 @@
-// Package infrastructure stores the Products context: SQL mappings, versioned schema of the five
-// engines and hot-swap factories. No product is seeded (the C# had none) and the units of measure
-// are code, not rows.
+// Package infrastructure guarda el contexto Products: mapeos SQL, esquema versionado de los cinco
+// motores y factorías intercambiables en caliente. No se siembra ningún producto (el C# no tenía
+// ninguno) y las unidades de medida son código, no filas.
 package infrastructure
 
 import (
@@ -22,10 +22,10 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlserver"
 )
 
-// Context is the name of the bounded context.
+// Context es el nombre del contexto delimitado.
 const Context = "products"
 
-// Technical tables of the context.
+// Tablas técnicas del contexto.
 const (
 	TableOutbox            = "products_outbox"
 	TableIntegrationOutbox = "products_integration_outbox"
@@ -76,7 +76,7 @@ func technicalDDL(d string) []string {
 	return nil
 }
 
-// Migrations is the versioned schema of the context.
+// Migrations es el esquema versionado del contexto.
 func Migrations() sqlrepo.MigrationSet {
 	technical := map[string][]string{}
 	for _, d := range sqlrepo.Dialects {
@@ -88,16 +88,16 @@ func Migrations() sqlrepo.MigrationSet {
 	}}
 }
 
-// Migrator returns the schema migrator of the context.
+// Migrator devuelve el migrador del esquema del contexto.
 func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 	return sqlrepo.NewMigrator(db, []sqlrepo.MigrationSet{Migrations()})
 }
 
-// Tables lists the tables of the context, children first (drop order).
+// Tables lista las tablas del contexto, primero las hijas (orden de borrado).
 var Tables = []string{"prd_price_lines", "prd_price_lists", "prd_product_suppliers", "prd_components", "prd_barcodes", "prd_products", "prd_categories",
 	TableOutbox, TableIntegrationOutbox, TableAuditLog}
 
-// DropAll removes the tables of the context and its migration history (tests only).
+// DropAll borra las tablas del contexto y su historial de migraciones (sólo pruebas).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
 	for _, t := range Tables {
 		_, _ = db.ExecContext(ctx, "DROP TABLE "+t)
@@ -132,7 +132,7 @@ func byNo(rows []*sqlrepo.Row) []*sqlrepo.Row {
 	return out
 }
 
-// CategoryMapping maps Category to prd_categories.
+// CategoryMapping mapea Category a prd_categories.
 func CategoryMapping() sqlrepo.Mapping[domain.CategoryID, *domain.Category] {
 	return sqlrepo.Mapping[domain.CategoryID, *domain.Category]{
 		Table:   "prd_categories",
@@ -153,7 +153,7 @@ func CategoryMapping() sqlrepo.Mapping[domain.CategoryID, *domain.Category] {
 	}
 }
 
-// ProductMapping maps Product to prd_products, its barcodes, components and suppliers.
+// ProductMapping mapea Product a prd_products, sus códigos de barras, componentes y proveedores.
 func ProductMapping() sqlrepo.Mapping[domain.ProductID, *domain.Product] {
 	return sqlrepo.Mapping[domain.ProductID, *domain.Product]{
 		Table: "prd_products",
@@ -230,7 +230,7 @@ func ProductMapping() sqlrepo.Mapping[domain.ProductID, *domain.Product] {
 	}
 }
 
-// PriceListMapping maps PriceList to prd_price_lists and its lines.
+// PriceListMapping mapea PriceList a prd_price_lists y sus líneas.
 func PriceListMapping() sqlrepo.Mapping[domain.PriceListID, *domain.PriceList] {
 	return sqlrepo.Mapping[domain.PriceListID, *domain.PriceList]{
 		Table:   "prd_price_lists",
@@ -286,25 +286,25 @@ func repository[ID fw.Identifier, T fw.AggregateRoot[ID]](b hotswap.Backend, m s
 	return nil, unsupported(b)
 }
 
-// ProductRepositoryFactory builds the product repository.
+// ProductRepositoryFactory construye el repositorio de productos.
 func ProductRepositoryFactory(b hotswap.Backend) (domain.ProductRepository, error) {
 	return repository(b, ProductMapping())
 }
 
-// CategoryRepositoryFactory builds the category repository.
+// CategoryRepositoryFactory construye el repositorio de categorías.
 func CategoryRepositoryFactory(b hotswap.Backend) (domain.CategoryRepository, error) {
 	return repository(b, CategoryMapping())
 }
 
-// PriceListRepositoryFactory builds the price list repository.
+// PriceListRepositoryFactory construye el repositorio de listas de precios.
 func PriceListRepositoryFactory(b hotswap.Backend) (domain.PriceListRepository, error) {
 	return repository(b, PriceListMapping())
 }
 
-// OutboxFactory builds the domain event outbox.
+// OutboxFactory construye el outbox de eventos de dominio.
 func OutboxFactory(b hotswap.Backend) (application.OutboxStore, error) { return outbox(b, TableOutbox) }
 
-// IntegrationOutboxFactory builds the integration outbox.
+// IntegrationOutboxFactory construye el outbox de integración.
 func IntegrationOutboxFactory(b hotswap.Backend) (application.OutboxStore, error) {
 	return outbox(b, TableIntegrationOutbox)
 }
@@ -319,7 +319,7 @@ func outbox(b hotswap.Backend, table string) (application.OutboxStore, error) {
 	return nil, unsupported(b)
 }
 
-// AuditLogFactory builds the audit log.
+// AuditLogFactory construye el registro de auditoría.
 func AuditLogFactory(b hotswap.Backend) (application.AuditLog, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:

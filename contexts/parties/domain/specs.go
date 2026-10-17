@@ -8,22 +8,22 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
 )
 
-// Repositories (contracts; implementations live in infrastructure).
+// Repositorios (contratos; las implementaciones están en infrastructure).
 type (
-	// PartyRepository stores parties.
+	// PartyRepository guarda parties.
 	PartyRepository = fw.Repository[PartyID, *Party]
-	// RelationshipRepository stores relationships.
+	// RelationshipRepository guarda relaciones.
 	RelationshipRepository = fw.Repository[RelationshipID, *Relationship]
 )
 
-// Catalogs are read by the use cases; they change through their own use cases (not in this
-// phase) and through migrations.
+// Catalogs los leen los casos de uso; cambian a través de sus propios casos de uso (no en esta
+// fase) y de las migraciones.
 type Catalogs interface {
 	RoleTypes(ctx context.Context) ([]RoleType, error)
-	// AddRoleType adds a role type to the catalog. The caller has checked that it fits.
+	// AddRoleType añade un tipo de rol al catálogo. Quien llama ya ha comprobado que encaja.
 	AddRoleType(ctx context.Context, t RoleType) error
 	RelationshipTypes(ctx context.Context) ([]RelationshipType, error)
-	// AddRelationshipType adds a relationship type to the catalog. The caller has checked that it fits.
+	// AddRelationshipType añade un tipo de relación al catálogo. Quien llama ya ha comprobado que encaja.
 	AddRelationshipType(ctx context.Context, t RelationshipType) error
 	DocumentTypes(ctx context.Context) ([]DocumentType, error)
 	CountryDocumentRules(ctx context.Context) ([]CountryDocumentRule, error)
@@ -32,7 +32,7 @@ type Catalogs interface {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Party fields and specifications
+// Campos y especificaciones de Party
 // ---------------------------------------------------------------------------------------------
 
 func roleEnd(r PartyRole) *time.Time {
@@ -42,7 +42,7 @@ func roleEnd(r PartyRole) *time.Time {
 	return nil
 }
 
-// Party fields.
+// Campos de Party.
 var (
 	FieldID     = spec.Comparable("id", func(p *Party) PartyID { return p.ID() })
 	FieldKind   = spec.Comparable("kind", (*Party).Kind)
@@ -52,9 +52,9 @@ var (
 	FieldRoles  = spec.Collection("roles", (*Party).Roles)
 
 	FieldShared = spec.Comparable("shared", (*Party).IsShared)
-	// FieldDuplicate tells the parties marked as the duplicate of another (D-64).
+	// FieldDuplicate distingue las parties marcadas como duplicado de otra (D-64).
 	FieldDuplicate = spec.Comparable("duplicate", (*Party).IsDuplicate)
-	// FieldDocumentIssue tells the parties marked with a refused identity document.
+	// FieldDocumentIssue distingue las parties marcadas con un documento de identidad rechazado.
 	FieldDocumentIssue = spec.Comparable("doc_issue", (*Party).HasDocumentIssue)
 	FieldAffiliations  = spec.Collection("affiliations", (*Party).Affiliations)
 	AffFieldOrg        = spec.Comparable("organization", func(a Affiliation) PartyID { return a.Organization })
@@ -84,21 +84,21 @@ var (
 	RoleFieldType  = spec.Comparable("role_type", func(r PartyRole) RoleTypeID { return r.RoleType })
 	RoleFieldFrom  = spec.Time("valid_from", func(r PartyRole) time.Time { return r.Period.From() })
 	RoleFieldUntil = spec.OptionalTime("valid_to", roleEnd)
-	// RoleFieldAnnulled tells the roles given by mistake and taken back, which count for nothing.
+	// RoleFieldAnnulled distingue los roles dados por error y retirados, que no cuentan para nada.
 	RoleFieldAnnulled = spec.Comparable("annulled", func(r PartyRole) bool { return r.Annulled })
 )
 
-// WithIDs matches the given parties.
+// WithIDs selecciona las parties dadas.
 func WithIDs(ids ...PartyID) spec.Spec[*Party] { return FieldID.In(ids...) }
 
-// VisibleTo matches the parties an organization scope may see at t (decision P1): the
-// organizations themselves, shared catalog entries, and parties with an active affiliation to
-// one of them.
+// VisibleTo selecciona las parties que un ámbito de organizaciones puede ver en t (decisión P1):
+// las propias organizaciones, las entradas del catálogo compartido y las parties con una afiliación
+// activa a alguna de ellas.
 func VisibleTo(orgs []PartyID, t time.Time) spec.Spec[*Party] {
 	return spec.Or(WithIDs(orgs...), FieldShared.Eq(true), AffiliatedAt(t, orgs...))
 }
 
-// AffiliatedAt matches parties affiliated with any of the organizations at t.
+// AffiliatedAt selecciona las parties afiliadas a alguna de las organizaciones en t.
 func AffiliatedAt(t time.Time, orgs ...PartyID) spec.Spec[*Party] {
 	return FieldAffiliations.Any(spec.And(
 		AffFieldOrg.In(orgs...),
@@ -107,22 +107,23 @@ func AffiliatedAt(t time.Time, orgs ...PartyID) spec.Spec[*Party] {
 	))
 }
 
-// OwnedBy matches the relationships where one side is one of the organizations.
+// OwnedBy selecciona las relaciones en las que uno de los lados es una de las organizaciones.
 func OwnedBy(orgs []PartyID) spec.Spec[*Relationship] {
 	return RelFieldFrom.In(orgs...).Or(RelFieldTo.In(orgs...))
 }
 
-// HoldsDocument matches parties holding the document (the duplicate check across parties).
+// HoldsDocument selecciona las parties que tienen el documento (la comprobación de duplicados
+// entre parties).
 func HoldsDocument(t DocumentTypeID, country string, number string) spec.Spec[*Party] {
 	return FieldIdentifications.Any(spec.And(IdFieldType.Eq(t), IdFieldCountry.Eq(country), IdFieldNumber.Eq(number)))
 }
 
-// WithDocumentNumber matches parties holding a document with that canonical number.
+// WithDocumentNumber selecciona las parties que tienen un documento con ese número canónico.
 func WithDocumentNumber(number string) spec.Spec[*Party] {
 	return FieldIdentifications.Any(IdFieldNumber.Eq(number))
 }
 
-// ClassifiedAt matches parties with any of the classifications at t.
+// ClassifiedAt selecciona las parties con alguna de las clasificaciones en t.
 func ClassifiedAt(t time.Time, types ...ClassificationTypeID) spec.Spec[*Party] {
 	return FieldClassifications.Any(spec.And(
 		ClassFieldType.In(types...),
@@ -131,23 +132,23 @@ func ClassifiedAt(t time.Time, types ...ClassificationTypeID) spec.Spec[*Party] 
 	))
 }
 
-// NameContains matches parties whose display name contains text, ignoring case.
+// NameContains selecciona las parties cuyo nombre visible contiene text, sin distinguir mayúsculas.
 func NameContains(text string) spec.Spec[*Party] { return FieldName.ContainsFold(text) }
 
-// OfKind matches people or organizations.
+// OfKind selecciona personas u organizaciones.
 func OfKind(k Kind) spec.Spec[*Party] { return FieldKind.Eq(k) }
 
-// HasPlayed matches parties with any of the role types, whenever: the ones in force, the ended
-// ones and the ones that have not started yet.
+// HasPlayed selecciona las parties con alguno de los tipos de rol, en cualquier momento: los
+// vigentes, los terminados y los que todavía no han empezado.
 func HasPlayed(roles ...RoleTypeID) spec.Spec[*Party] {
 	return FieldRoles.Any(spec.And(RoleFieldType.In(roles...), RoleFieldAnnulled.Eq(false)))
 }
 
-// Active matches active parties.
+// Active selecciona las parties activas.
 func Active() spec.Spec[*Party] { return FieldActive.Eq(true) }
 
-// PlaysAt matches parties playing any of the role types at t. Pass the role and its
-// descendants (Catalog.Descendants) to honour the virtual inheritance of roles.
+// PlaysAt selecciona las parties que desempeñan alguno de los tipos de rol en t. Hay que pasar el
+// rol y sus descendientes (Catalog.Descendants) para respetar la herencia virtual de los roles.
 func PlaysAt(t time.Time, roles ...RoleTypeID) spec.Spec[*Party] {
 	return FieldRoles.Any(spec.And(
 		RoleFieldType.In(roles...),
@@ -158,10 +159,10 @@ func PlaysAt(t time.Time, roles ...RoleTypeID) spec.Spec[*Party] {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Relationship fields and specifications
+// Campos y especificaciones de Relationship
 // ---------------------------------------------------------------------------------------------
 
-// Relationship fields.
+// Campos de Relationship.
 var (
 	RelFieldID    = spec.Comparable("id", (*Relationship).ID)
 	RelFieldType  = spec.Comparable("type", (*Relationship).Type)
@@ -177,28 +178,28 @@ var (
 	RelFieldCustomerNumber = spec.Comparable("customer_number", (*Relationship).CustomerNumber)
 )
 
-// InTrialAt matches the prospect relationships whose trial is in force at t.
+// InTrialAt selecciona las relaciones de prospect cuya prueba está vigente en t.
 func InTrialAt(t time.Time) spec.Spec[*Relationship] {
 	return ActiveAt(t).And(RelFieldTrialUntil.After(t))
 }
 
-// Involving matches relationships where p is either side.
+// Involving selecciona las relaciones en las que p es cualquiera de los dos lados.
 func Involving(p PartyID) spec.Spec[*Relationship] { return RelFieldFrom.Eq(p).Or(RelFieldTo.Eq(p)) }
 
-// ActiveAt matches relationships in force at t.
+// ActiveAt selecciona las relaciones vigentes en t.
 func ActiveAt(t time.Time) spec.Spec[*Relationship] {
 	return RelFieldSince.AtOrBefore(t).And(RelFieldUntil.IsNull().Or(RelFieldUntil.After(t)))
 }
 
-// NotEndedAt matches the relationships that have not ended at t: the ones in force and the ones
-// that have not started yet.
+// NotEndedAt selecciona las relaciones que no han terminado en t: las vigentes y las que todavía
+// no han empezado.
 func NotEndedAt(t time.Time) spec.Spec[*Relationship] {
 	return RelFieldUntil.IsNull().Or(RelFieldUntil.After(t))
 }
 
-// SameRelationship matches relationships of the same type between the same parties (both
-// directions for symmetric types, where FromRole equals ToRole) still open or ending after t:
-// the duplicate check of Establish.
+// SameRelationship selecciona las relaciones del mismo tipo entre las mismas parties (en los dos
+// sentidos en los tipos simétricos, en los que FromRole es igual a ToRole) todavía abiertas o que
+// terminan después de t: la comprobación de duplicados de Establish.
 func SameRelationship(t RelationshipType, from, to PartyID, since time.Time) spec.Spec[*Relationship] {
 	pair := RelFieldFrom.Eq(from).And(RelFieldTo.Eq(to))
 	if t.FromRole == t.ToRole {

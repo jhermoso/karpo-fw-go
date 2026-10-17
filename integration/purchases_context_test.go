@@ -38,10 +38,11 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 )
 
-// TestPurchasesContext runs Purchases with Fiscal, Payments, Accounting and Parties on every
-// engine: supplier profile round trip, invoices booked with the Fiscal tax engine (two rates,
-// withholding, non-deductible tax, corrective), their round trip with lines, breakdown and
-// accounts, the payables, entries and withholdings fed through the SQL inboxes, and a cancellation.
+// TestPurchasesContext ejecuta Purchases con Fiscal, Payments, Accounting y Parties en cada motor:
+// ida y vuelta del perfil de proveedor, facturas registradas con el motor de impuestos de Fiscal
+// (dos tipos, retención, impuesto no deducible, rectificativa), su ida y vuelta con líneas,
+// desglose y cuentas, las cuentas por pagar, asientos y retenciones alimentados a través de los
+// inbox SQL, y una cancelación.
 func TestPurchasesContext(t *testing.T) {
 	for _, e := range engines {
 		if e.name == "oracle-dotnet-guids" {
@@ -151,7 +152,7 @@ func TestPurchasesContext(t *testing.T) {
 				t.Fatalf("supplier profile upsert: %+v %v", prof, err)
 			}
 
-			// 333.33 of advice at 21% (70.00) with 7% withheld (23.33), paid to the profile account.
+			// 333.33 de asesoría al 21 % (70.00) con un 7 % retenido (23.33), pagados a la cuenta del perfil.
 			a, err := svc.RegisterInvoice.Handle(actx, uapp.RegisterInvoice{Company: acme.ID, Supplier: asesor.ID, SupplierNumber: "2026/0042",
 				Issued: vocab.MustDate(2026, 9, 30), Received: vocab.MustDate(2026, 10, 2), Total: "403.33",
 				Lines: []uapp.LineInput{{Description: "Asesoría fiscal", Base: "333.33", TaxCode: "g21"}}})

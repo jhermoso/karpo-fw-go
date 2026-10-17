@@ -1,14 +1,15 @@
-// Package sqlserver provides the Microsoft SQL Server dialect for sqlrepo. It does not import a
-// driver: register one in the composition root (github.com/microsoft/go-mssqldb, driver
-// "sqlserver", which binds positional arguments as @p1..@pN).
+// Package sqlserver ofrece el dialecto Microsoft SQL Server para sqlrepo. No importa ningún
+// driver: se registra uno en la raíz de composición (github.com/microsoft/go-mssqldb, driver
+// "sqlserver", que enlaza los argumentos posicionales como @p1..@pN).
 //
-// Identities are stored as UNIQUEIDENTIFIER (compatible with the existing .NET Karpo databases:
-// the mixed-endian byte order returned by the driver is converted transparently), booleans as
-// BIT, instants as DATETIME2 in UTC.
+// Las identidades se guardan como UNIQUEIDENTIFIER (compatible con las bases de datos de Karpo
+// en .NET que ya existen: el orden de bytes mixed-endian que devuelve el driver se convierte de
+// forma transparente), los booleanos como BIT y los instantes como DATETIME2 en UTC.
 //
-// Semantics notes: the default collations are case-insensitive and ignore trailing spaces in
-// equality, so Contains/StartsWith/Eq on text may match more rows than the in-memory evaluation.
-// Use a case-sensitive collation (e.g. Latin1_General_100_CS_AS) where exact semantics matter.
+// Notas de semántica: las collations por defecto no distinguen mayúsculas de minúsculas e ignoran
+// los espacios finales en la igualdad, así que Contains/StartsWith/Eq sobre texto pueden casar con
+// más filas que la evaluación en memoria. Donde importe la semántica exacta, conviene una
+// collation que distinga mayúsculas (p. ej. Latin1_General_100_CS_AS).
 package sqlserver
 
 import (
@@ -21,20 +22,20 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 )
 
-// Dialect implements sqlrepo.Dialect for SQL Server 2012+.
+// Dialect implementa sqlrepo.Dialect para SQL Server 2012+.
 type Dialect struct{}
 
-// New returns the SQL Server dialect.
+// New devuelve el dialecto SQL Server.
 func New() Dialect { return Dialect{} }
 
-// Open wraps an opened SQL Server *sql.DB.
+// Open envuelve un *sql.DB de SQL Server ya abierto.
 func Open(db *sql.DB, opts ...sqlrepo.Option) *sqlrepo.DB { return sqlrepo.New(db, New(), opts...) }
 
 func (Dialect) Name() string                { return "sqlserver" }
 func (Dialect) Placeholder(n int) string    { return fmt.Sprintf("@p%d", n) }
 func (Dialect) Quote(ident string) string   { return "[" + strings.ReplaceAll(ident, "]", "]]") + "]" }
 func (Dialect) LikeEscape() string          { return `ESCAPE '\'` }
-func (Dialect) MaxInList() int              { return 2000 } // 2100 parameters per request
+func (Dialect) MaxInList() int              { return 2000 } // 2100 parámetros por petición
 func (Dialect) BoolValue(b bool) any        { return b }
 func (Dialect) UUIDValue(u domain.UUID) any { return u.String() }
 func (Dialect) TimeValue(t time.Time) any   { return t.UTC() }
@@ -43,7 +44,7 @@ func (Dialect) LimitOffset(l, o int) string {
 	return fmt.Sprintf("OFFSET %d ROWS FETCH NEXT %d ROWS ONLY", o, l)
 }
 
-// ParseUUID converts UNIQUEIDENTIFIER values: the driver returns 16 bytes in mixed-endian order.
+// ParseUUID convierte valores UNIQUEIDENTIFIER: el driver devuelve 16 bytes en orden mixed-endian.
 func (Dialect) ParseUUID(v any) (domain.UUID, error) {
 	if b, ok := v.([]byte); ok && len(b) == 16 {
 		return domain.UUID(sqlrepo.SwapGUIDBytes([16]byte(b))), nil
@@ -51,19 +52,19 @@ func (Dialect) ParseUUID(v any) (domain.UUID, error) {
 	return sqlrepo.ParseUUIDDefault(v)
 }
 
-// DateValue binds a civil date as midnight UTC into a DATE column.
+// DateValue enlaza una fecha civil como medianoche UTC en una columna DATE.
 func (Dialect) DateValue(y int, m time.Month, d int) any {
 	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
 }
 
-// DateExpr returns the placeholder unchanged.
+// DateExpr devuelve el placeholder sin cambios.
 func (Dialect) DateExpr(ph string) string { return ph }
 
 func (Dialect) IsUniqueViolation(err error) bool {
 	return sqlrepo.ErrorContains(err, "Error 2627", "Error 2601", "Violation of PRIMARY KEY", "Violation of UNIQUE KEY", "Cannot insert duplicate key")
 }
 
-// OutboxDDL returns the statements creating the outbox table.
+// OutboxDDL devuelve las sentencias que crean la tabla del outbox.
 func OutboxDDL(table string) []string {
 	if table == "" {
 		table = sqlrepo.DefaultOutboxTable
@@ -86,7 +87,7 @@ func OutboxDDL(table string) []string {
 	}
 }
 
-// AuditDDL returns the statements creating the audit log table.
+// AuditDDL devuelve las sentencias que crean la tabla del registro de auditoría.
 func AuditDDL(table string) []string {
 	if table == "" {
 		table = sqlrepo.DefaultAuditTable
@@ -103,7 +104,7 @@ func AuditDDL(table string) []string {
 
 var _ sqlrepo.Dialect = Dialect{}
 
-// InboxDDL returns the statements creating the inbox table (consumer, message id).
+// InboxDDL devuelve las sentencias que crean la tabla del inbox (consumidor, id del mensaje).
 func InboxDDL(table string) []string {
 	if table == "" {
 		table = sqlrepo.DefaultInboxTable

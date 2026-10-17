@@ -32,7 +32,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/testing/archtest"
 )
 
-// institutions plays Parties: which companies are financial institutions.
+// institutions hace de Parties: qué empresas son entidades financieras.
 type institutions map[domain.OrganizationID]bool
 
 func (i institutions) IsFinancialInstitution(_ context.Context, company domain.OrganizationID) (bool, error) {
@@ -90,7 +90,7 @@ func (h *host) grant(user, org string) {
 	h.dir.Put(h.ids[user], s)
 }
 
-// do sends a request and decodes the answer into out, emptied first.
+// do envía una petición y decodifica la respuesta en out, vaciado antes.
 func (h *host) do(method, path, user string, body, out any) int {
 	h.t.Helper()
 	var buf bytes.Buffer
@@ -105,7 +105,7 @@ func (h *host) do(method, path, user string, body, out any) int {
 	}
 	defer res.Body.Close()
 	if out != nil && res.StatusCode < 300 {
-		switch o := out.(type) { // omitted fields must not keep what a previous answer left
+		switch o := out.(type) { // los campos omitidos no deben conservar lo que dejó una respuesta anterior
 		case *fapp.AccountDTO:
 			*o = fapp.AccountDTO{}
 		case *fapp.ProductDTO:
@@ -136,18 +136,19 @@ func (h *host) scenario() {
 	}
 	h.grant("opener", shop)
 	h.grant("outsider", globex)
-	// Acme and Globex are financial institutions; the shop is a company like any other.
+	// Acme y Globex son entidades financieras; la tienda es una empresa como cualquier otra.
 	h.banks[domain.OrganizationID{UUID: fw.MustParseUUID(acme)}] = true
 	h.banks[domain.OrganizationID{UUID: fw.MustParseUUID(globex)}] = true
 	today := vocab.DateOf(fw.Now())
 	path := func(a fapp.AccountDTO, action string) string { return "/api/financial/accounts/" + a.ID + "/" + action }
 
-	// The finance sector is for financial institutions only: for any other company it has nothing.
+	// El sector financiero es sólo para entidades financieras: para cualquier otra empresa no tiene
+	// nada.
 	h.must(h.do("POST", "/api/financial/products", "opener", map[string]any{"company": shop, "code": "CTA", "name": "Cuenta", "family": "payment"}, nil), 422, "a shop has no financial products")
 	h.must(h.do("POST", "/api/financial/agreements", "opener", map[string]any{"company": shop, "customer": ana, "number": "C-1", "name": "Contrato", "family": "payment"}, nil), 422, "nor agreements")
 	h.must(h.do("POST", "/api/financial/accounts", "opener", map[string]any{"company": shop, "number": "ES9121000418450200051332", "holder": ana}, nil), 422, "nor accounts")
 
-	// What the institution offers.
+	// Lo que ofrece la entidad.
 	var payment, deposit fapp.ProductDTO
 	define := map[string]any{"company": acme, "code": "cta-pago", "name": "Cuenta de pago", "family": "Payment", "regulatoryCode": "mifid-x1"}
 	h.must(h.do("POST", "/api/financial/products", "viewer", define, nil), 403, "viewer")
@@ -190,7 +191,7 @@ func (h *host) scenario() {
 		t.Fatalf("reinstated: %+v", deposit)
 	}
 
-	// What is signed with each customer.
+	// Lo que se firma con cada cliente.
 	var contract, old fapp.AgreementDTO
 	sign := map[string]any{"company": acme, "customer": ana, "number": "ctr-2026-001", "name": "Contrato marco de servicios de pago", "product": payment.ID}
 	h.must(h.do("POST", "/api/financial/agreements", "viewer", sign, nil), 403, "viewer")
@@ -229,7 +230,7 @@ func (h *host) scenario() {
 	h.must(h.do("GET", "/api/financial/agreements?status=signed", "viewer", nil, nil), 400, "status")
 	h.must(h.do("GET", "/api/financial/agreements/"+contract.ID, "outsider", nil, nil), 404, "outsider")
 
-	// Opening: an IBAN whose digits are right, or an identifier of the institution's own.
+	// Apertura: un IBAN con los dígitos correctos, o un identificador propio de la entidad.
 	open := map[string]any{"company": acme, "number": "es91 2100 0418 4502 0005 1332", "holder": ana, "name": "Cuenta de pago de Ana",
 		"uses": []string{"customer-payment", "Customer-Payment"}, "product": payment.ID, "agreement": contract.ID}
 	var acc fapp.AccountDTO
@@ -261,7 +262,7 @@ func (h *host) scenario() {
 		t.Fatalf("virtual and demo: %+v %+v", wallet, demo)
 	}
 
-	// Its details.
+	// Sus datos.
 	h.must(h.do("PUT", "/api/financial/accounts/"+acc.ID, "officer", map[string]any{"name": "x"}, nil), 403, "stopping is not keeping")
 	h.must(h.do("PUT", "/api/financial/accounts/"+acc.ID, "outsider", map[string]any{"name": "x"}, nil), 404, "outsider")
 	h.must(h.do("PUT", "/api/financial/accounts/"+acc.ID, "opener", map[string]any{"name": "x", "bic": "CAIX"}, nil), 400, "bic")
@@ -274,7 +275,8 @@ func (h *host) scenario() {
 		t.Fatalf("described: %+v", acc)
 	}
 
-	// Who is related to it: the account is always filed under one of its holders.
+	// Quién está relacionado con ella: la cuenta siempre está archivada a nombre de uno de sus
+	// titulares.
 	rel := func(party, role string, primary bool) map[string]any {
 		return map[string]any{"party": party, "role": role, "primary": primary}
 	}
@@ -294,7 +296,7 @@ func (h *host) scenario() {
 		t.Fatalf("holders: %+v", acc)
 	}
 
-	// What it is used for.
+	// Para qué se usa.
 	h.must(h.do("POST", path(acc, "uses"), "opener", map[string]any{"use": "savings"}, nil), 400, "unknown use")
 	h.must(h.do("POST", path(acc, "uses"), "opener", map[string]any{"use": "customer-payment"}, nil), 422, "it already has it")
 	h.must(h.do("POST", path(acc, "uses"), "opener", map[string]any{"use": "player"}, &acc), 200, "another use")
@@ -305,7 +307,7 @@ func (h *host) scenario() {
 		t.Fatalf("uses: %+v", acc.Uses)
 	}
 
-	// Stopping it and letting it go on.
+	// Pararla y dejar que siga.
 	why := map[string]any{"reason": "Orden judicial 123/2026"}
 	h.must(h.do("POST", path(acc, "block"), "opener", why, nil), 403, "keeping is not stopping")
 	h.must(h.do("POST", path(acc, "block"), "outsider", why, nil), 404, "outsider")
@@ -321,11 +323,11 @@ func (h *host) scenario() {
 	if acc.Status != "active" || acc.Reason != "" {
 		t.Fatalf("released: %+v", acc)
 	}
-	// A blocked account still has its holders and uses kept.
+	// Una cuenta bloqueada sigue conservando sus titulares y usos.
 	h.must(h.do("POST", path(wallet, "block"), "officer", why, &wallet), 200, "block the wallet")
 	h.must(h.do("PUT", "/api/financial/accounts/"+wallet.ID, "opener", map[string]any{"name": "Monedero de Luis"}, &wallet), 200, "describe a blocked account")
 
-	// Reading and searching (before anything is closed).
+	// Leer y buscar (antes de cerrar nada).
 	var got fapp.AccountDTO
 	h.must(h.do("GET", "/api/financial/accounts/"+acc.ID, "outsider", nil, nil), 404, "outsider")
 	h.must(h.do("GET", "/api/financial/accounts/nope", "viewer", nil, nil), 400, "bad id")
@@ -347,10 +349,10 @@ func (h *host) scenario() {
 			}
 		}
 	}
-	search("viewer", "company="+acme, demo.ID, acc.ID, wallet.ID) // by number: DE…, ES…, VIRT…
+	search("viewer", "company="+acme, demo.ID, acc.ID, wallet.ID) // por número: DE…, ES…, VIRT…
 	search("viewer", "party="+luis, acc.ID, wallet.ID)
-	search("viewer", "party="+ana)                  // she left: nothing now
-	search("viewer", "party="+eva, demo.ID, acc.ID) // authorized on one, holder of the other
+	search("viewer", "party="+ana)                  // se fue: ahora nada
+	search("viewer", "party="+eva, demo.ID, acc.ID) // autorizada en una, titular de la otra
 	search("viewer", "status=blocked", wallet.ID)
 	search("viewer", "use=player", acc.ID)
 	search("viewer", "currency=usd", wallet.ID)
@@ -362,7 +364,7 @@ func (h *host) scenario() {
 	h.must(h.do("GET", "/api/financial/accounts?status=frozen", "viewer", nil, nil), 400, "status")
 	h.must(h.do("GET", "/api/financial/accounts?demo=maybe", "viewer", nil, nil), 400, "demo")
 
-	// Counting, within the company one may see; demo accounts apart.
+	// Contar, dentro de la empresa que uno puede ver; las cuentas de demostración aparte.
 	var stats fapp.StatsDTO
 	h.must(h.do("GET", "/api/financial/accounts/stats?company="+acme, "outsider", nil, nil), 404, "outsider")
 	h.must(h.do("GET", "/api/financial/accounts/stats", "viewer", nil, nil), 400, "which company")
@@ -372,7 +374,7 @@ func (h *host) scenario() {
 		t.Fatalf("stats: %+v", stats)
 	}
 
-	// What other contexts ask: the accounts of a party, and whether each can operate.
+	// Lo que preguntan otros contextos: las cuentas de una party, y si cada una puede operar.
 	refs, err := h.fin.Accounts.OfParty(context.Background(), acme, luis)
 	if err != nil || len(refs) != 2 || refs[0].Number != acc.Number || !refs[0].Operable || refs[0].Role != "holder" || refs[1].Operable || refs[1].Status != "blocked" {
 		t.Fatalf("accounts of luis: %+v %v", refs, err)
@@ -384,7 +386,7 @@ func (h *host) scenario() {
 		t.Fatalf("ids: %v", err)
 	}
 
-	// Closing: its holders and uses end with it, and it changes no more.
+	// Cierre: sus titulares y usos terminan con ella, y ya no cambia más.
 	h.must(h.do("POST", path(wallet, "close"), "officer", nil, nil), 403, "stopping is not closing")
 	h.must(h.do("POST", path(wallet, "close"), "closer", map[string]any{"on": today.AddDays(-31).String()}, nil), 422, "before it was opened")
 	h.must(h.do("POST", path(wallet, "close"), "closer", map[string]any{"reason": "A petición del titular"}, &wallet), 200, "close")
@@ -402,11 +404,11 @@ func (h *host) scenario() {
 	if got.Status != "closed" || len(got.Holders) != 1 {
 		t.Fatalf("closed, read back: %+v", got)
 	}
-	// Its number stays taken.
+	// Su número sigue ocupado.
 	h.must(h.do("POST", "/api/financial/accounts", "opener", map[string]any{"company": acme, "number": "VIRT-000001", "virtual": true, "holder": ana}, nil), 422, "taken")
 
-	// Two agreements signed and one terminated; three accounts opened; blocked, abandoned and
-	// released; the wallet blocked and closed.
+	// Dos acuerdos firmados y uno terminado; tres cuentas abiertas; bloqueada, abandonada y
+	// liberada; el monedero bloqueado y cerrado.
 	if n, err := h.fin.Relay(inprocess.NewBroker()).RelayOnce(context.Background()); err != nil || n != 11 {
 		t.Fatalf("published: %d %v", n, err)
 	}
@@ -460,7 +462,8 @@ func TestAccount_Rules(t *testing.T) {
 	if s := a.State(); s.Number != "GB82WEST12345698765432" || s.IBAN.Country() != "GB" || a.PrimaryHolder() != ana || !a.Used("agent") || len(a.PendingEvents()) != 1 {
 		t.Fatalf("opened: %+v", s)
 	}
-	// A relation or a use does not end before it began, and a bad change leaves all as it was.
+	// Una relación o un uso no termina antes de empezar, y un cambio erróneo lo deja todo como
+	// estaba.
 	if err := a.Relate(luis, domain.RoleBeneficiary, day("2026-02-01"), false); err != nil {
 		t.Fatal(err)
 	}
@@ -471,7 +474,7 @@ func TestAccount_Rules(t *testing.T) {
 		t.Fatalf("ending a use before it began: %v", err)
 	}
 	violates(a.Withdraw("player", day("2026-03-01")), "financial.not_used")
-	violates(a.FileUnder(luis), "financial.not_related") // a beneficiary does not hold it
+	violates(a.FileUnder(luis), "financial.not_related") // un beneficiario no es titular
 	violates(a.Abandon(" "), "financial.reason")
 	if err := a.Abandon("sin uso"); err != nil || a.State().Status != domain.Abandoned {
 		t.Fatalf("abandon: %v", err)
@@ -479,7 +482,7 @@ func TestAccount_Rules(t *testing.T) {
 	violates(a.Block("x"), "financial.transition")
 	violates(a.Abandon("x"), "financial.transition")
 	violates(a.Close(day("2026-01-09"), ""), "financial.closing_date")
-	// Closed the day it was opened: what began later ends the day it began.
+	// Cerrada el día en que se abrió: lo que empezó después termina el día en que empezó.
 	if err := a.Close(day("2026-01-10"), ""); err != nil {
 		t.Fatal(err)
 	}
@@ -492,7 +495,7 @@ func TestAccount_Rules(t *testing.T) {
 	if _, err := domain.ReconstituteAccount(a.ID(), s); err != nil {
 		t.Fatalf("a closed account is rebuilt: %v", err)
 	}
-	// An account that is not closed has a holder it is filed under.
+	// Una cuenta que no está cerrada tiene un titular a cuyo nombre está archivada.
 	live := open().State()
 	live.Holders[0].Primary = false
 	if _, err := domain.ReconstituteAccount(domain.NewAccountID(), live); !errors.Is(err, fw.ErrValidation) {

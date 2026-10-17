@@ -11,10 +11,10 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// CountryID identifies a country profile.
+// CountryID identifica un perfil de país.
 type CountryID struct{ fw.UUID }
 
-// CountryCurrency is a currency used in a country.
+// CountryCurrency es una moneda que se usa en un país.
 type CountryCurrency struct {
 	ID          fw.UUID
 	Currency    fw.UUID
@@ -23,7 +23,7 @@ type CountryCurrency struct {
 	Order       int
 }
 
-// CountryLanguage is a language spoken in a country.
+// CountryLanguage es un idioma que se habla en un país.
 type CountryLanguage struct {
 	ID       fw.UUID
 	Language fw.UUID
@@ -32,15 +32,16 @@ type CountryLanguage struct {
 	Order    int
 }
 
-// CountryTimeZone is a time zone of a country.
+// CountryTimeZone es un huso horario de un país.
 type CountryTimeZone struct {
 	ID       fw.UUID
 	TimeZone fw.UUID
 	Primary  bool
 }
 
-// CountryProfile is the reference data of a country (ISO 3166 codes, telephone and banking
-// formats, postal code format, EU membership...), with its currencies, languages and time zones.
+// CountryProfile son los datos de referencia de un país (códigos ISO 3166, formatos telefónicos y
+// bancarios, formato del código postal, pertenencia a la UE...), con sus monedas, idiomas y husos
+// horarios.
 type CountryProfile struct {
 	ID                  CountryID
 	Boundary            BoundaryID
@@ -64,13 +65,13 @@ type CountryProfile struct {
 	TimeZones           []CountryTimeZone
 }
 
-// Country is the aggregate of a country profile.
+// Country es el agregado de un perfil de país.
 type Country struct {
 	fw.BaseAggregateRoot[CountryID]
 	p CountryProfile
 }
 
-var patterns sync.Map // pattern -> *regexp.Regexp
+var patterns sync.Map // patrón -> *regexp.Regexp
 
 func compiled(p string) (*regexp.Regexp, error) {
 	if re, ok := patterns.Load(p); ok {
@@ -84,7 +85,8 @@ func compiled(p string) (*regexp.Regexp, error) {
 	return re, nil
 }
 
-// ReconstituteCountry rebuilds a country from stored data, compiling its formats.
+// ReconstituteCountry reconstruye un país a partir de los datos guardados, compilando sus
+// formatos.
 func ReconstituteCountry(p CountryProfile) (*Country, error) {
 	base, err := fw.NewBaseAggregateRoot(CountryKind, p.ID)
 	if err != nil {
@@ -106,20 +108,21 @@ func ReconstituteCountry(p CountryProfile) (*Country, error) {
 	return &Country{BaseAggregateRoot: base, p: p}, nil
 }
 
-// Profile returns a copy of the profile.
+// Profile devuelve una copia del perfil.
 func (c *Country) Profile() CountryProfile {
 	p := c.p
 	p.Currencies, p.Languages, p.TimeZones = slices.Clone(p.Currencies), slices.Clone(p.Languages), slices.Clone(p.TimeZones)
 	return p
 }
 
-// Alpha2 returns the ISO 3166 alpha-2 code.
+// Alpha2 devuelve el código ISO 3166 alfa-2.
 func (c *Country) Alpha2() string { return c.p.Alpha2.String() }
 
-// Boundary returns the boundary of the country.
+// Boundary devuelve el límite del país.
 func (c *Country) Boundary() BoundaryID { return c.p.Boundary }
 
-// CheckPostalCode validates a postal code with the country format (none: any non-empty code).
+// CheckPostalCode valida un código postal con el formato del país (si no tiene: cualquier código
+// no vacío).
 func (c *Country) CheckPostalCode(code string) (string, error) {
 	code = NormalizePostalCode(code)
 	var v fw.Validation
@@ -134,8 +137,8 @@ func (c *Country) CheckPostalCode(code string) (string, error) {
 	return code, v.Err()
 }
 
-// CheckIBAN validates an IBAN (ISO 13616 check digits) against the country: its country code,
-// length and national format.
+// CheckIBAN valida un IBAN (dígitos de control ISO 13616) contra el país: su código de país, su
+// longitud y su formato nacional.
 func (c *Country) CheckIBAN(i vocab.IBAN) error {
 	var v fw.Validation
 	v.Require(i.Country() == c.Alpha2(), "iban", "country", "the IBAN is not from "+c.Alpha2())
@@ -147,13 +150,13 @@ func (c *Country) CheckIBAN(i vocab.IBAN) error {
 	return v.Err()
 }
 
-// Country fields.
+// Campos de los países.
 var (
 	FieldAlpha2          = spec.Text("alpha2", (*Country).Alpha2)
 	FieldCountryBoundary = spec.Comparable("boundary", (*Country).Boundary)
 )
 
-// CountryAlpha2 matches a country by ISO code (case-insensitive input).
+// CountryAlpha2 selecciona un país por su código ISO (la entrada no distingue mayúsculas).
 func CountryAlpha2(code string) spec.Spec[*Country] {
 	return FieldAlpha2.Eq(strings.ToUpper(strings.TrimSpace(code)))
 }

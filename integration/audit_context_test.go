@@ -23,10 +23,11 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 )
 
-// TestAuditContext reads through Audit, on every engine, the history two contexts keep in their
-// SQL audit logs: versions in order, the changed fields with their old and new values as each
-// engine gives them back (text and booleans), the events raised, and the guard (the history of
-// an asset for who can see it, the catalog of Modules for global administrators).
+// TestAuditContext lee a través de Audit, en cada motor, la historia que dos contextos guardan en
+// sus registros de auditoría SQL: versiones en orden, los campos cambiados con sus valores antiguo
+// y nuevo tal como los devuelve cada motor (texto y booleanos), los eventos lanzados, y la guarda
+// (la historia de un activo para quien puede verlo, el catálogo de Modules para los
+// administradores globales).
 func TestAuditContext(t *testing.T) {
 	for _, e := range engines {
 		if e.name == "oracle-dotnet-guids" {
@@ -89,7 +90,7 @@ func TestAuditContext(t *testing.T) {
 				t.Fatalf("the sale: %+v", trail[2])
 			}
 
-			// Someone of the company who can see the asset and read histories; someone of another one.
+			// Alguien de la empresa que puede ver el activo y leer historias; alguien de otra.
 			member := func(org fw.UUID) context.Context {
 				ac, _ := authz.NewContext(authz.Context{Subject: fw.NewUUID(), SubjectName: "member", Kind: authz.Service,
 					Permissions: []authz.Permission{happ.PermTrailRead, asapp.PermAssetRead}, Grants: []authz.Grant{{OrganizationID: org, Level: authz.Full}}})

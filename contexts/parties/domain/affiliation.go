@@ -9,18 +9,18 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Affiliation records that the party has an active relationship with an internal organization.
-// It is what makes the party visible to that organization (decision P1 of the authorization
-// contract): the relationship is the source, the affiliation its projection inside the party,
-// kept in the same unit of work so visibility is a query over one aggregate. It also answers
-// the C# IPartyOrganizationMembership.
+// Affiliation deja constancia de que la party tiene una relación activa con una organización
+// interna. Es lo que hace visible la party a esa organización (decisión P1 del contrato de
+// autorización): la relación es la fuente y la afiliación su proyección dentro de la party,
+// guardada en la misma unidad de trabajo para que la visibilidad sea una consulta sobre un solo
+// agregado. También responde a IPartyOrganizationMembership de C#.
 type Affiliation struct {
 	Organization PartyID
 	Relationship RelationshipID
 	Period       vocab.ValidPeriod
 }
 
-// Affiliate records an affiliation from a relationship (idempotent per relationship).
+// Affiliate registra una afiliación a partir de una relación (idempotente por relación).
 func (p *Party) Affiliate(org PartyID, rel RelationshipID, from time.Time) error {
 	if org == p.ID() {
 		return nil
@@ -37,7 +37,7 @@ func (p *Party) Affiliate(org PartyID, rel RelationshipID, from time.Time) error
 	return nil
 }
 
-// EndAffiliation ends the affiliation of a relationship at a moment (no-op when unknown).
+// EndAffiliation termina en un instante la afiliación de una relación (no hace nada si no la conoce).
 func (p *Party) EndAffiliation(rel RelationshipID, at time.Time) error {
 	k := slices.IndexFunc(p.affiliations, func(a Affiliation) bool { return a.Relationship == rel })
 	if k < 0 {
@@ -57,10 +57,10 @@ func (p *Party) EndAffiliation(rel RelationshipID, at time.Time) error {
 	return nil
 }
 
-// Affiliations returns a copy of the affiliations, current or past.
+// Affiliations devuelve una copia de las afiliaciones, actuales o pasadas.
 func (p *Party) Affiliations() []Affiliation { return slices.Clone(p.affiliations) }
 
-// OrganizationsAt returns the internal organizations the party is affiliated with at t.
+// OrganizationsAt devuelve las organizaciones internas a las que la party está afiliada en t.
 func (p *Party) OrganizationsAt(t time.Time) []PartyID {
 	var out []PartyID
 	for _, a := range p.affiliations {
@@ -71,8 +71,9 @@ func (p *Party) OrganizationsAt(t time.Time) []PartyID {
 	return out
 }
 
-// Share makes the party a shared catalog entry, visible to every organization (the C# "Public
-// Catalog" party type: banks, regulators, carriers everybody works with).
+// Share convierte la party en una entrada del catálogo compartido, visible para todas las
+// organizaciones (el tipo de party «Public Catalog» de C#: bancos, reguladores, transportistas con
+// los que trabaja todo el mundo).
 func (p *Party) Share(shared bool) {
 	if p.shared == shared {
 		return
@@ -81,14 +82,14 @@ func (p *Party) Share(shared bool) {
 	p.Raise(PartySharingChanged{EventMeta: p.NewEventMeta(), Shared: shared})
 }
 
-// IsShared reports whether the party is a shared catalog entry.
+// IsShared dice si la party es una entrada del catálogo compartido.
 func (p *Party) IsShared() bool { return p.shared }
 
-// LegalForm of an organization (the C# party types 3..8, which were legal forms, not
-// classifications).
+// LegalForm es la forma jurídica de una organización (los tipos de party 3..8 de C#, que eran
+// formas jurídicas, no clasificaciones).
 type LegalForm string
 
-// Legal forms, with the GUID of the C# party_type they replace.
+// Formas jurídicas, con el GUID del party_type de C# al que sustituyen.
 const (
 	LegalFormUnspecified        LegalForm = ""
 	LegalFormCorporation        LegalForm = "corporation"         // 20000000-0000-0000-0005-000000000003
@@ -99,7 +100,7 @@ const (
 	LegalFormTeam               LegalForm = "team"                // …000000000008 (informal)
 )
 
-// ParseLegalForm validates a legal form.
+// ParseLegalForm valida una forma jurídica.
 func ParseLegalForm(s string) (LegalForm, error) {
 	switch f := LegalForm(strings.ToLower(strings.TrimSpace(s))); f {
 	case LegalFormUnspecified, LegalFormCorporation, LegalFormGovernmentAgency, LegalFormNonProfit, LegalFormPartnership,
@@ -111,7 +112,7 @@ func ParseLegalForm(s string) (LegalForm, error) {
 	return "", v.Err()
 }
 
-// SetLegalForm changes the legal form of an organization.
+// SetLegalForm cambia la forma jurídica de una organización.
 func (p *Party) SetLegalForm(f LegalForm) error {
 	if p.kind != KindOrganization {
 		return fw.Violation("parties.kind_mismatch", "only an organization has a legal form")

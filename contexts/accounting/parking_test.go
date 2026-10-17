@@ -23,8 +23,8 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlite"
 )
 
-// parkingScenario walks a company that starts selling before it has books: what Accounting cannot
-// post yet waits, in order, and is posted when it can.
+// parkingScenario recorre una empresa que empieza a vender antes de tener libros: lo que Accounting
+// aún no puede contabilizar espera, en orden, y se contabiliza cuando se puede.
 func parkingScenario(t *testing.T, sw *hotswap.Switch) {
 	ctx := context.Background()
 	am := accounting.Compose(sw)
@@ -53,7 +53,7 @@ func parkingScenario(t *testing.T, sw *hotswap.Switch) {
 		return envelope("receivables.collection-allocated.v1", fw.NewUUID().String(), map[string]any{"collectionId": fw.NewUUID().String(), "seller": company,
 			"payer": fw.NewUUID().String(), "method": "cash", "invoiceId": inv.Subject, "installment": 1, "amount": "121.00", "on": "2026-03-12"})
 	}
-	// books opens the chart and the ledger of a company; roles says which accounts its profile has.
+	// books abre el plan de cuentas y la contabilidad de una empresa; roles dice qué cuentas tiene su perfil.
 	books := func(company string, roles map[string]string) aapp.LedgerDTO {
 		t.Helper()
 		for code, name := range map[string]string{"4300": "Clientes", "7000": "Ventas", "4770": "HP IVA repercutido", "5700": "Caja"} {
@@ -95,20 +95,20 @@ func parkingScenario(t *testing.T, sw *hotswap.Switch) {
 	full := map[string]string{"customers": "4300", "revenue": "7000", "output-tax": "4770", "cash": "5700"}
 	books(old, full)
 
-	// The consumer alone refuses the fact of a company without books: its publisher would send it
-	// again and again, and with it hold back every other listener.
+	// Sólo el consumidor rechaza el hecho de una empresa sin libros: su publicador lo enviaría una y
+	// otra vez, y con él retendría a todos los demás oyentes.
 	first := invoice(shop, "F-1", "2026-03-10")
 	violates(am.Consumer.HandleMessage(ctx, first), "accounting.no_ledger")
 
-	// Behind the parking, the fact is taken and kept. Sent again, it is not kept twice.
+	// Tras el aparcamiento, el hecho se acepta y se guarda. Enviado otra vez, no se guarda dos veces.
 	must(am.Parking.HandleMessage(ctx, first))
 	must(am.Parking.HandleMessage(ctx, first))
 	paid := collection(shop, first)
 	must(am.Parking.HandleMessage(ctx, paid))
-	// A fact that names no company follows the one it is about.
+	// Un hecho que no nombra empresa sigue a aquél del que trata.
 	cancel := envelope("payroll.payslip-cancelled.v1", first.Subject, map[string]any{"payslipId": first.Subject})
 	must(am.Parking.HandleMessage(ctx, cancel))
-	// What Accounting does not post is none of its business.
+	// Lo que Accounting no contabiliza no es asunto suyo.
 	must(am.Parking.HandleMessage(ctx, envelope("parties.party-registered.v1", first.Subject, map[string]any{"partyId": first.Subject})))
 	waiting := parked(aapp.SearchParked{Company: shop})
 	if len(waiting) != 3 || waiting[0].Code != "accounting.no_ledger" || waiting[0].Attempts != 1 || waiting[0].EventType != "billing.invoice-issued.v1" ||
@@ -120,27 +120,27 @@ func parkingScenario(t *testing.T, sw *hotswap.Switch) {
 		t.Fatal("nothing posted yet")
 	}
 
-	// A company with books is not held back by one without.
+	// Una empresa con libros no queda retenida por una sin ellos.
 	must(am.Parking.HandleMessage(ctx, invoice(old, "F-9", "2026-03-11")))
 	if entries(old) != 1 || len(parked(aapp.SearchParked{Company: old})) != 0 {
 		t.Fatal("the company with books posts at once")
 	}
 
-	// Trying again changes nothing while the reason stands, not even the count of attempts.
+	// Volver a intentarlo no cambia nada mientras siga el motivo, ni siquiera la cuenta de intentos.
 	retry(shop, 0, 3)
 	if w := parked(aapp.SearchParked{Company: shop}); w[0].Attempts != 1 || w[1].Attempts != 1 || w[0].Version != 1 {
 		t.Fatalf("attempts: %+v", w)
 	}
 
-	// The shop opens its books, without an account for cash: the invoice is posted, the collection
-	// stops, and what came after it stays behind.
+	// La tienda abre sus libros, sin cuenta para la caja: la factura se contabiliza, el cobro se
+	// detiene, y lo que vino después se queda detrás.
 	ledger := books(shop, map[string]string{"customers": "4300", "revenue": "7000", "output-tax": "4770"})
 	retry(shop, 1, 2)
 	w := parked(aapp.SearchParked{Company: shop, Status: "parked"})
 	if len(w) != 2 || w[0].Code != "accounting.role_undefined" || w[0].EventType != "receivables.collection-allocated.v1" || entries(shop) != 1 {
 		t.Fatalf("after the books: %+v, %d entries", w, entries(shop))
 	}
-	// While something waits, what arrives now waits too: facts are posted in the order they happened.
+	// Mientras algo espera, lo que llega ahora espera también: los hechos se contabilizan en el orden en que ocurrieron.
 	late := invoice(shop, "F-2", "2026-03-13")
 	must(am.Parking.HandleMessage(ctx, late))
 	if entries(shop) != 1 {
@@ -149,11 +149,11 @@ func parkingScenario(t *testing.T, sw *hotswap.Switch) {
 	lid, _ := fw.ParseUUID(ledger.ID)
 	_, err := svc.SetProfile.Handle(actx, aapp.SetProfile{ID: domain.LedgerID{UUID: lid}, Accounts: full})
 	must(err)
-	retry("", 3, 0) // every company at once, as the scheduler does
+	retry("", 3, 0) // todas las empresas a la vez, como hace el planificador
 	if entries(shop) != 3 || len(parked(aapp.SearchParked{Company: shop, Status: "parked"})) != 0 || len(parked(aapp.SearchParked{Company: shop, Status: "posted"})) != 4 {
 		t.Fatalf("all posted: %d entries, %+v", entries(shop), parked(aapp.SearchParked{Company: shop}))
 	}
-	// Nothing waits any more: a fact is posted as it arrives, and one already posted is not posted again.
+	// Ya no espera nada: un hecho se contabiliza al llegar, y uno ya contabilizado no se contabiliza otra vez.
 	must(am.Parking.HandleMessage(ctx, invoice(shop, "F-3", "2026-03-14")))
 	must(am.Parking.HandleMessage(ctx, first))
 	must(am.Consumer.HandleMessage(ctx, first))
@@ -161,7 +161,7 @@ func parkingScenario(t *testing.T, sw *hotswap.Switch) {
 		t.Fatalf("entries: %d", entries(shop))
 	}
 
-	// A fact that will never be posted (it is wrong) holds its company until somebody gives it up.
+	// Un hecho que nunca se contabilizará (está mal) retiene a su empresa hasta que alguien renuncia a él.
 	other := fw.NewUUID().String()
 	books(other, full)
 	wrong := invoice(other, "F-X", "not-a-date")
@@ -186,12 +186,12 @@ func parkingScenario(t *testing.T, sw *hotswap.Switch) {
 	if entries(other) != 1 {
 		t.Fatalf("entries of the other: %d", entries(other))
 	}
-	must(am.Parking.HandleMessage(ctx, wrong)) // sent again after it was given up: still given up
+	must(am.Parking.HandleMessage(ctx, wrong)) // enviado otra vez después de renunciar a él: sigue descartado
 	if len(parked(aapp.SearchParked{Company: other})) != 2 {
 		t.Fatal("a discarded fact is not kept again")
 	}
 
-	// Each one sees what waits in its companies; nobody tries again those of another.
+	// Cada uno ve lo que espera en sus empresas; nadie reintenta los de otra.
 	scoped := func(perms []authz.Permission, orgs ...string) context.Context {
 		c := authz.Context{Subject: fw.NewUUID(), SubjectName: "accountant", Kind: authz.Service, Permissions: perms}
 		for _, o := range orgs {
@@ -239,7 +239,7 @@ func TestAccounting_KeepsWhatItCannotPostYet_MemoryThenSQLite(t *testing.T) {
 	parkingScenario(t, hotswap.New(db))
 }
 
-// stubInner is a consumer that answers each message what the test says.
+// stubInner es un consumidor que responde a cada mensaje lo que dice la prueba.
 type stubInner struct {
 	answer func(app.Envelope) error
 }
@@ -250,7 +250,7 @@ func (s *stubInner) HandleMessage(_ context.Context, env app.Envelope) error {
 	return s.answer(env)
 }
 
-// countedParked counts what is written of the parked facts.
+// countedParked cuenta lo que se escribe de los hechos aparcados.
 type countedParked struct {
 	domain.ParkedRepository
 	saves int
@@ -261,9 +261,9 @@ func (c *countedParked) Save(ctx context.Context, f *domain.ParkedFact) error {
 	return c.ParkedRepository.Save(ctx, f)
 }
 
-// parkingOver puts the parking before a consumer of the test, on a backend in memory. It gives
-// the service, the parking, a context that may do everything, what makes the invoice of a
-// company at a minute, and the repository, which counts what is written.
+// parkingOver pone el aparcamiento delante de un consumidor de la prueba, sobre un backend en
+// memoria. Devuelve el servicio, el aparcamiento, un contexto que puede hacerlo todo, lo que hace la
+// factura de una empresa en un minuto, y el repositorio, que cuenta lo que se escribe.
 func parkingOver(t *testing.T, inner aapp.Inner) (*aapp.Service, *aapp.Parking, context.Context, func(company string, minute int) app.Envelope, *countedParked) {
 	t.Helper()
 	sw := hotswap.New(memory.NewStore("memory"))
@@ -287,7 +287,7 @@ func parkingOver(t *testing.T, inner aapp.Inner) (*aapp.Service, *aapp.Parking, 
 	return aapp.NewService(d), d.Parking, authz.WithContext(context.Background(), admin), invoice, parked
 }
 
-// A fact that fails with something that is not a rule stops its own company and no other.
+// Un hecho que falla por algo que no es una regla detiene su propia empresa y ninguna otra.
 func TestParking_AFailureThatIsNoRuleStopsItsCompanyAlone(t *testing.T) {
 	inner := &stubInner{answer: func(app.Envelope) error { return fw.Violation("accounting.no_ledger", "the company has no ledger") }}
 	svc, parking, actx, invoice, _ := parkingOver(t, inner)
@@ -299,7 +299,7 @@ func TestParking_AFailureThatIsNoRuleStopsItsCompanyAlone(t *testing.T) {
 		}
 	}
 
-	// The oldest fact, the one tried first, now fails with a validation; the rest could be posted.
+	// El hecho más antiguo, el que se intenta primero, falla ahora con una validación; el resto podría contabilizarse.
 	tried := []string{}
 	inner.answer = func(env app.Envelope) error {
 		tried = append(tried, env.ID)
@@ -338,8 +338,8 @@ func TestParking_AFailureThatIsNoRuleStopsItsCompanyAlone(t *testing.T) {
 	}
 }
 
-// The scheduler retries every round. A fact refused again for the same reason is written once,
-// when it is kept, and not once a round; when the reason changes, once more.
+// El planificador reintenta cada vuelta. Un hecho rechazado otra vez por el mismo motivo se escribe
+// una vez, cuando se guarda, y no una por vuelta; cuando cambia el motivo, una vez más.
 func TestParking_TheSameRefusalIsNotWrittenAgain(t *testing.T) {
 	refusal := fw.Violation("accounting.no_ledger", "the company has no ledger")
 	tries := 0
@@ -366,12 +366,12 @@ func TestParking_TheSameRefusalIsNotWrittenAgain(t *testing.T) {
 	if f := rounds(n); tries != 1+n || parked.saves != 1 || f.Attempts != 1 || f.Version != 1 || f.Code != "accounting.no_ledger" {
 		t.Fatalf("%d rounds for the same reason: %d tries, %d writes, %+v; want one write", n, tries, parked.saves, f)
 	}
-	// Another reason is news: it is written, once.
+	// Otro motivo es una novedad: se escribe, una vez.
 	refusal = fw.Violation("accounting.role_undefined", "the profile has no account for cash")
 	if f := rounds(n); parked.saves != 2 || f.Attempts != 2 || f.Version != 2 || f.Code != "accounting.role_undefined" {
 		t.Fatalf("%d rounds for another reason: %d writes, %+v; want two writes", n, parked.saves, f)
 	}
-	// And so is a failure that is no rule (it is given back every round, and written once).
+	// Y también lo es un fallo que no es una regla (se devuelve cada vuelta, y se escribe una vez).
 	refusal = errors.New("the database is down")
 	for range n {
 		if _, err := svc.RetryParked.Handle(actx, aapp.RetryParked{}); err == nil {

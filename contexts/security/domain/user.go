@@ -11,21 +11,21 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/traits"
 )
 
-// UserKind is the stable aggregate type name.
+// UserKind es el nombre estable del tipo de agregado.
 const UserKind = "security.user"
 
-// AccessLevel is the access a user has to an organization (contract v1, P2: Full writes,
-// ReadOnly reads, Restricted behaves as ReadOnly).
+// AccessLevel es el acceso que tiene un usuario a una organización (contrato v1, P2: Full escribe,
+// ReadOnly lee, Restricted se comporta como ReadOnly).
 type AccessLevel string
 
-// Access levels.
+// Niveles de acceso.
 const (
 	Full       AccessLevel = "Full"
 	ReadOnly   AccessLevel = "ReadOnly"
 	Restricted AccessLevel = "Restricted"
 )
 
-// ParseAccessLevel parses a level. Unlike the C# free text, an unknown level is rejected.
+// ParseAccessLevel interpreta un nivel. A diferencia del texto libre de C#, se rechaza un nivel desconocido.
 func ParseAccessLevel(s string) (AccessLevel, error) {
 	switch l := AccessLevel(s); l {
 	case Full, ReadOnly, Restricted:
@@ -36,23 +36,23 @@ func ParseAccessLevel(s string) (AccessLevel, error) {
 	return "", v.Err()
 }
 
-// OrganizationAccess is the access of a user to one internal organization. IncludeSubsidiaries
-// travels in the authorization contract but expands nothing in v1 (decision P2).
+// OrganizationAccess es el acceso de un usuario a una organización interna. IncludeSubsidiaries
+// viaja en el contrato de autorización pero no expande nada en v1 (decisión P2).
 type OrganizationAccess struct {
 	Organization        OrganizationID
 	Level               AccessLevel
 	IncludeSubsidiaries bool
 }
 
-// ExternalIdentity links a user with an identity of an external identity provider: the issuer of
-// its tokens and the subject inside that issuer (decision 1). The pair is unique in the
-// installation.
+// ExternalIdentity vincula un usuario con una identidad de un proveedor de identidad externo: el
+// emisor de sus tokens y el sujeto dentro de ese emisor (decisión 1). El par es único en la
+// instalación.
 type ExternalIdentity struct {
 	Issuer  string
 	Subject string
 }
 
-// NewExternalIdentity validates an external identity.
+// NewExternalIdentity valida una identidad externa.
 func NewExternalIdentity(issuer, subject string) (ExternalIdentity, error) {
 	id := ExternalIdentity{Issuer: strings.TrimSpace(issuer), Subject: strings.TrimSpace(subject)}
 	var v fw.Validation
@@ -63,8 +63,9 @@ func NewExternalIdentity(issuer, subject string) (ExternalIdentity, error) {
 
 var usernamePattern = regexp.MustCompile(`^[\p{L}\p{N}][\p{L}\p{N}._@+-]*$`)
 
-// NormalizeUsername validates a user name: 3 to 100 characters, letters, digits and . _ @ + -,
-// starting with a letter or a digit. Case is kept for display; uniqueness ignores it.
+// NormalizeUsername valida un nombre de usuario: de 3 a 100 caracteres, letras, dígitos y
+// . _ @ + -, empezando por una letra o un dígito. Las mayúsculas se conservan para mostrarlo; la
+// unicidad no las distingue.
 func NormalizeUsername(s string) (string, error) {
 	s = strings.TrimSpace(s)
 	var v fw.Validation
@@ -74,27 +75,28 @@ func NormalizeUsername(s string) (string, error) {
 	return s, v.Err()
 }
 
-// UsernameKey returns the form used to keep user names unique and to look them up.
+// UsernameKey devuelve la forma que se usa para que los nombres de usuario sean únicos y para buscarlos.
 func UsernameKey(s string) string { return strings.ToLower(strings.TrimSpace(s)) }
 
-// LockoutPolicy locks a user after too many failed logins.
+// LockoutPolicy bloquea a un usuario tras demasiados logins fallidos.
 type LockoutPolicy struct {
 	MaxAttempts int
 	Duration    time.Duration
 }
 
-// DefaultLockout is the C# default: 5 failed attempts lock the user for 15 minutes.
+// DefaultLockout es el valor por defecto de C#: 5 intentos fallidos bloquean al usuario 15 minutos.
 var DefaultLockout = LockoutPolicy{MaxAttempts: 5, Duration: 15 * time.Minute}
 
-// User is who can sign in and act: a party with credentials (an optional password, external
-// identities), roles and accesses to organizations. A user is never deleted, only deactivated.
+// User es quien puede iniciar sesión y actuar: una party con credenciales (una contraseña
+// opcional, identidades externas), roles y accesos a organizaciones. Un usuario nunca se borra,
+// sólo se desactiva.
 type User struct {
 	fw.BaseAggregateRoot[UserID]
 	traits.Activation
 	traits.Audited
 	party              PartyID
 	username           string
-	passwordHash       string // self-describing hash; empty when the user has no password
+	passwordHash       string // hash autodescriptivo; vacío cuando el usuario no tiene contraseña
 	mustChangePassword bool
 	failedAttempts     int
 	lockedUntil        *time.Time
@@ -104,7 +106,7 @@ type User struct {
 	identities         []ExternalIdentity
 }
 
-// UserState is the persisted state of a user.
+// UserState es el estado persistido de un usuario.
 type UserState struct {
 	Party              PartyID
 	Username           string
@@ -120,7 +122,7 @@ type UserState struct {
 	Audit              traits.AuditStamp
 }
 
-// ReconstituteUser rebuilds a user from persisted state.
+// ReconstituteUser reconstruye un usuario a partir del estado persistido.
 func ReconstituteUser(id UserID, s UserState) (*User, error) {
 	base, err := fw.NewBaseAggregateRoot(UserKind, id)
 	if err != nil {
@@ -153,7 +155,7 @@ func ReconstituteUser(id UserID, s UserState) (*User, error) {
 	if err := v.Err(); err != nil {
 		return nil, err
 	}
-	// A stable order whatever the engine returns (SQL Server sorts GUIDs by byte groups).
+	// Un orden estable devuelva lo que devuelva el motor (SQL Server ordena los GUID por grupos de bytes).
 	slices.SortFunc(u.roles, func(a, b RoleID) int { return strings.Compare(a.String(), b.String()) })
 	slices.SortFunc(u.accesses, func(a, b OrganizationAccess) int {
 		return strings.Compare(a.Organization.String(), b.Organization.String())
@@ -164,7 +166,7 @@ func ReconstituteUser(id UserID, s UserState) (*User, error) {
 	return u, nil
 }
 
-// RegisterUser creates an active user without credentials, roles or accesses.
+// RegisterUser crea un usuario activo sin credenciales, roles ni accesos.
 func RegisterUser(id UserID, party PartyID, username string) (*User, error) {
 	u, err := ReconstituteUser(id, UserState{Party: party, Username: username, Active: true})
 	if err != nil {
@@ -182,54 +184,54 @@ func cloneTime(t *time.Time) *time.Time {
 	return &c
 }
 
-// Party returns the party behind the user.
+// Party devuelve la party que hay detrás del usuario.
 func (u *User) Party() PartyID { return u.party }
 
-// Username returns the user name as registered.
+// Username devuelve el nombre de usuario tal como se dio de alta.
 func (u *User) Username() string { return u.username }
 
-// UsernameKey returns the lookup form of the user name.
+// UsernameKey devuelve la forma de búsqueda del nombre de usuario.
 func (u *User) UsernameKey() string { return UsernameKey(u.username) }
 
-// PasswordHash returns the stored hash ("" when the user has no password). It never leaves the
-// application layer.
+// PasswordHash devuelve el hash guardado ("" cuando el usuario no tiene contraseña). Nunca sale de
+// la capa de aplicación.
 func (u *User) PasswordHash() string { return u.passwordHash }
 
-// HasPassword reports whether the user can sign in with a password.
+// HasPassword dice si el usuario puede iniciar sesión con contraseña.
 func (u *User) HasPassword() bool { return u.passwordHash != "" }
 
-// MustChangePassword reports whether the user has to change the password before doing anything.
+// MustChangePassword dice si el usuario tiene que cambiar la contraseña antes de hacer nada.
 func (u *User) MustChangePassword() bool { return u.mustChangePassword }
 
-// FailedAttempts returns the consecutive failed logins.
+// FailedAttempts devuelve los logins fallidos consecutivos.
 func (u *User) FailedAttempts() int { return u.failedAttempts }
 
-// LockedUntil returns the end of the lock, if any.
+// LockedUntil devuelve el final del bloqueo, si lo hay.
 func (u *User) LockedUntil() *time.Time { return cloneTime(u.lockedUntil) }
 
-// LastLoginAt returns the last successful password login, if any.
+// LastLoginAt devuelve el último login con contraseña correcto, si lo hay.
 func (u *User) LastLoginAt() *time.Time { return cloneTime(u.lastLoginAt) }
 
-// Roles returns the assigned roles.
+// Roles devuelve los roles asignados.
 func (u *User) Roles() []RoleID { return slices.Clone(u.roles) }
 
-// Accesses returns the organization accesses.
+// Accesses devuelve los accesos a organizaciones.
 func (u *User) Accesses() []OrganizationAccess { return slices.Clone(u.accesses) }
 
-// Identities returns the linked external identities.
+// Identities devuelve las identidades externas vinculadas.
 func (u *User) Identities() []ExternalIdentity { return slices.Clone(u.identities) }
 
-// HasRole reports whether the role is assigned.
+// HasRole dice si el rol está asignado.
 func (u *User) HasRole(r RoleID) bool { return slices.Contains(u.roles, r) }
 
 func (u *User) accessIndex(org OrganizationID) int {
 	return slices.IndexFunc(u.accesses, func(a OrganizationAccess) bool { return a.Organization == org })
 }
 
-// IsLockedAt reports whether the user is locked at t.
+// IsLockedAt dice si el usuario está bloqueado en t.
 func (u *User) IsLockedAt(t time.Time) bool { return u.lockedUntil != nil && t.Before(*u.lockedUntil) }
 
-// CanSignInAt reports whether the user may authenticate at t: active and not locked.
+// CanSignInAt dice si el usuario puede autenticarse en t: activo y no bloqueado.
 func (u *User) CanSignInAt(t time.Time) bool { return u.IsActive() && !u.IsLockedAt(t) }
 
 func (u *User) requireActive(action string) error {
@@ -239,7 +241,7 @@ func (u *User) requireActive(action string) error {
 	return nil
 }
 
-// Rename changes the user name.
+// Rename cambia el nombre de usuario.
 func (u *User) Rename(username string) error {
 	if err := u.requireActive("be renamed"); err != nil {
 		return err
@@ -256,9 +258,9 @@ func (u *User) Rename(username string) error {
 	return nil
 }
 
-// SetPassword stores a new password hash (computed by the application from a password that
-// passed the policy). reset tells whether an administrator set it; mustChange forces the user to
-// change it before doing anything else. Changing the password lifts the lock.
+// SetPassword guarda un hash de contraseña nuevo (calculado por la aplicación a partir de una
+// contraseña que pasó la política). reset dice si la fijó un administrador; mustChange obliga al
+// usuario a cambiarla antes de hacer nada más. Cambiar la contraseña levanta el bloqueo.
 func (u *User) SetPassword(hash string, mustChange, reset bool) error {
 	if err := u.requireActive("change the password"); err != nil {
 		return err
@@ -274,25 +276,25 @@ func (u *User) SetPassword(hash string, mustChange, reset bool) error {
 	return nil
 }
 
-// UpgradePasswordHash replaces the hash of the same password with a stronger one (more
-// iterations or another algorithm) after a successful login. It is not a password change.
+// UpgradePasswordHash sustituye el hash de la misma contraseña por uno más fuerte (más iteraciones
+// u otro algoritmo) tras un login correcto. No es un cambio de contraseña.
 func (u *User) UpgradePasswordHash(hash string) {
 	if hash != "" && u.passwordHash != "" {
 		u.passwordHash = hash
 	}
 }
 
-// RecordLogin records a successful password login.
+// RecordLogin anota un login con contraseña correcto.
 func (u *User) RecordLogin(at time.Time) {
 	u.failedAttempts, u.lockedUntil = 0, nil
 	u.lastLoginAt = cloneTime(&at)
 	u.Raise(UserLoggedIn{EventMeta: u.NewEventMeta()})
 }
 
-// RecordFailedLogin counts a failed password check and locks the user when the policy says so.
-// It reports whether the user became locked.
+// RecordFailedLogin cuenta una comprobación de contraseña fallida y bloquea al usuario cuando lo
+// dice la política. Dice si el usuario quedó bloqueado.
 func (u *User) RecordFailedLogin(p LockoutPolicy, at time.Time) bool {
-	if u.lockedUntil != nil && !at.Before(*u.lockedUntil) { // an expired lock starts a new count
+	if u.lockedUntil != nil && !at.Before(*u.lockedUntil) { // un bloqueo vencido empieza una cuenta nueva
 		u.failedAttempts, u.lockedUntil = 0, nil
 	}
 	u.failedAttempts++
@@ -306,7 +308,7 @@ func (u *User) RecordFailedLogin(p LockoutPolicy, at time.Time) bool {
 	return true
 }
 
-// Unlock lifts the lock and forgets the failed attempts.
+// Unlock levanta el bloqueo y olvida los intentos fallidos.
 func (u *User) Unlock() {
 	if u.lockedUntil == nil && u.failedAttempts == 0 {
 		return
@@ -315,21 +317,21 @@ func (u *User) Unlock() {
 	u.Raise(UserUnlocked{EventMeta: u.NewEventMeta()})
 }
 
-// Deactivate deactivates the user: it can no longer authenticate nor be authorized.
+// Deactivate desactiva al usuario: ya no puede autenticarse ni ser autorizado.
 func (u *User) Deactivate() {
 	if u.Activation.Deactivate() {
 		u.Raise(UserActivationChanged{EventMeta: u.NewEventMeta(), Active: false})
 	}
 }
 
-// Activate reactivates the user.
+// Activate reactiva al usuario.
 func (u *User) Activate() {
 	if u.Activation.Activate() {
 		u.Raise(UserActivationChanged{EventMeta: u.NewEventMeta(), Active: true})
 	}
 }
 
-// AssignRole assigns a role. Assigning it twice changes nothing.
+// AssignRole asigna un rol. Asignarlo dos veces no cambia nada.
 func (u *User) AssignRole(r *Role) error {
 	if err := u.requireActive("receive roles"); err != nil {
 		return err
@@ -342,7 +344,7 @@ func (u *User) AssignRole(r *Role) error {
 	return nil
 }
 
-// RevokeRole removes a role. It reports whether the user had it.
+// RevokeRole quita un rol. Dice si el usuario lo tenía.
 func (u *User) RevokeRole(id RoleID) bool {
 	if !u.HasRole(id) {
 		return false
@@ -352,7 +354,7 @@ func (u *User) RevokeRole(id RoleID) bool {
 	return true
 }
 
-// GrantAccess gives the user access to an organization, or changes the access it already has.
+// GrantAccess da al usuario acceso a una organización, o cambia el acceso que ya tiene.
 func (u *User) GrantAccess(a OrganizationAccess) error {
 	if err := u.requireActive("receive organization accesses"); err != nil {
 		return err
@@ -379,7 +381,7 @@ func (u *User) GrantAccess(a OrganizationAccess) error {
 	return nil
 }
 
-// RevokeAccess removes the access to an organization. It reports whether the user had it.
+// RevokeAccess quita el acceso a una organización. Dice si el usuario lo tenía.
 func (u *User) RevokeAccess(org OrganizationID) bool {
 	i := u.accessIndex(org)
 	if i < 0 {
@@ -390,7 +392,7 @@ func (u *User) RevokeAccess(org OrganizationID) bool {
 	return true
 }
 
-// LinkIdentity links an external identity. The application checks no other user has it.
+// LinkIdentity vincula una identidad externa. La aplicación comprueba que ningún otro usuario la tiene.
 func (u *User) LinkIdentity(id ExternalIdentity) error {
 	if err := u.requireActive("link identities"); err != nil {
 		return err
@@ -407,7 +409,7 @@ func (u *User) LinkIdentity(id ExternalIdentity) error {
 	return nil
 }
 
-// UnlinkIdentity removes an external identity. It reports whether the user had it.
+// UnlinkIdentity quita una identidad externa. Dice si el usuario la tenía.
 func (u *User) UnlinkIdentity(id ExternalIdentity) bool {
 	i := slices.Index(u.identities, id)
 	if i < 0 {
@@ -418,8 +420,8 @@ func (u *User) UnlinkIdentity(id ExternalIdentity) bool {
 	return true
 }
 
-// AuditSnapshot implements traits.Snapshotter. It never exposes the password hash, and leaves
-// out the login counters, which change on every sign-in.
+// AuditSnapshot implementa traits.Snapshotter. Nunca expone el hash de la contraseña, y deja fuera
+// los contadores de login, que cambian en cada inicio de sesión.
 func (u *User) AuditSnapshot() map[string]any {
 	roles := make([]string, len(u.roles))
 	for i, r := range u.roles {

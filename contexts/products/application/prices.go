@@ -11,14 +11,14 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// CreatePriceList creates a price list of a company.
+// CreatePriceList crea una lista de precios de una empresa.
 type CreatePriceList struct {
 	Company string `json:"company"`
 	Code    string `json:"code"`
 	Name    string `json:"name"`
 }
 
-// SetPrice adds the price of a product to a list.
+// SetPrice añade el precio de un producto a una lista.
 type SetPrice struct {
 	ID          domain.PriceListID `json:"-"`
 	Product     string             `json:"product"`
@@ -29,7 +29,7 @@ type SetPrice struct {
 	To          vocab.Date         `json:"to,omitzero"`
 }
 
-// RemovePrice removes a price from a list.
+// RemovePrice quita un precio de una lista.
 type RemovePrice struct {
 	ID          domain.PriceListID `json:"-"`
 	Product     string             `json:"product"`
@@ -37,22 +37,22 @@ type RemovePrice struct {
 	From        vocab.Date         `json:"from"`
 }
 
-// SetPriceListActive enables or retires a list.
+// SetPriceListActive activa o retira una lista.
 type SetPriceListActive struct {
 	ID     domain.PriceListID `json:"-"`
 	Active bool               `json:"active"`
 }
 
-// GetPriceList loads a price list with its lines.
+// GetPriceList carga una lista de precios con sus líneas.
 type GetPriceList struct{ ID domain.PriceListID }
 
-// SearchPriceLists lists the price lists of a company (without lines).
+// SearchPriceLists lista las listas de precios de una empresa (sin líneas).
 type SearchPriceLists struct{ Company string }
 
-// GetQuote prices a product for a quantity on a date, with an optional price list.
+// GetQuote pone precio a un producto para una cantidad en una fecha, con una lista de precios opcional.
 type GetQuote struct{ Company, Product, PriceList, Quantity, On string }
 
-// PriceLineDTO is the transport form of a price.
+// PriceLineDTO es la forma de transporte de un precio.
 type PriceLineDTO struct {
 	Product     string `json:"product"`
 	MinQuantity string `json:"minQuantity"`
@@ -62,7 +62,7 @@ type PriceLineDTO struct {
 	To          string `json:"to,omitempty"`
 }
 
-// PriceListDTO is the transport form of a price list.
+// PriceListDTO es la forma de transporte de una lista de precios.
 type PriceListDTO struct {
 	ID       string         `json:"id"`
 	Company  string         `json:"company"`

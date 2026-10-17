@@ -10,7 +10,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// ProblemDetails is an RFC 9457 (formerly 7807) error response.
+// ProblemDetails es una respuesta de error RFC 9457 (antes 7807).
 type ProblemDetails struct {
 	Type     string              `json:"type,omitempty"`
 	Title    string              `json:"title"`
@@ -19,11 +19,11 @@ type ProblemDetails struct {
 	Instance string              `json:"instance,omitempty"`
 	Code     string              `json:"code,omitempty"`
 	Errors   []domain.FieldError `json:"errors,omitempty"`
-	// CorrelationID is what the caller quotes to find the request in the logs.
+	// CorrelationID es lo que cita quien llama para encontrar la petición en los logs.
 	CorrelationID string `json:"correlationId,omitempty"`
 }
 
-// WriteJSON writes v as JSON with the given status.
+// WriteJSON escribe v como JSON con el estado dado.
 func WriteJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
@@ -32,8 +32,8 @@ func WriteJSON(w http.ResponseWriter, status int, v any) {
 	}
 }
 
-// Problem maps an error to ProblemDetails using the domain error taxonomy (errors.Is/As),
-// never by inspecting message text. Unknown errors become 500 without leaking internals.
+// Problem traduce un error a ProblemDetails con la taxonomía de errores del dominio (errors.Is/As),
+// nunca mirando el texto del mensaje. Los errores desconocidos pasan a 500 sin filtrar detalles internos.
 func Problem(r *http.Request, err error) ProblemDetails {
 	p := ProblemDetails{Status: http.StatusInternalServerError, Title: "Internal Server Error",
 		Detail: "An unexpected error occurred"}
@@ -42,8 +42,8 @@ func Problem(r *http.Request, err error) ProblemDetails {
 		p.CorrelationID = application.CorrelationID(r.Context())
 	}
 
-	// The kind of a NotFoundError or ConflictError may be the Go type of the aggregate (the
-	// repositories take it from the type), so the caller is told what happened, never the kind.
+	// El kind de un NotFoundError o un ConflictError puede ser el tipo Go del agregado (los
+	// repositorios lo toman del tipo), así que a quien llama se le dice qué ha pasado, nunca el kind.
 	var (
 		ve *domain.ValidationError
 		rv *domain.RuleViolationError
@@ -76,8 +76,8 @@ func Problem(r *http.Request, err error) ProblemDetails {
 	return p
 }
 
-// WriteError writes err as an application/problem+json response. The caller never sees the
-// cause of a 5xx; Observe, when mounted, logs it with the correlation id returned here.
+// WriteError escribe err como respuesta application/problem+json. Quien llama nunca ve la causa
+// de un 5xx; Observe, si está montado, la registra en el log con el id de correlación que se devuelve aquí.
 func WriteError(w http.ResponseWriter, r *http.Request, err error) {
 	p := Problem(r, err)
 	RecordError(r, err)
@@ -86,8 +86,8 @@ func WriteError(w http.ResponseWriter, r *http.Request, err error) {
 	_ = json.NewEncoder(w).Encode(p)
 }
 
-// Respond writes the (value, error) pair returned by a use case: the error as problem details,
-// or v with successStatus (200 when <= 0).
+// Respond escribe el par (valor, error) que devuelve un caso de uso: el error como problem details,
+// o v con successStatus (200 cuando es <= 0).
 func Respond[T any](w http.ResponseWriter, r *http.Request, v T, err error, successStatus int) {
 	if err != nil {
 		WriteError(w, r, err)

@@ -1,5 +1,5 @@
-// Package application holds the Exports use cases: asking for a list as a file, writing it with
-// the sight of who asked, and handing it over.
+// Package application reúne los casos de uso de Exports: pedir una lista como fichero, escribirla
+// con la vista de quien la pidió y entregarla.
 package application
 
 import (
@@ -22,63 +22,64 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
 )
 
-// Permissions (the C# checked the read permission of the list by hand and nothing else). Asking
-// for an export also needs the permission of the list itself.
+// Permisos (el C# comprobaba a mano el permiso de lectura de la lista y nada más). Pedir una
+// exportación también necesita el permiso de la propia lista.
 var (
 	PermJobRead   = authz.MustPermission("Exports.Job.Read")
 	PermJobCreate = authz.MustPermission("Exports.Job.Create")
 	PermJobRun    = authz.MustPermission("Exports.Job.Run")
 )
 
-// Permissions returns the permissions this context declares to the Security catalog.
+// Permissions devuelve los permisos que este contexto declara al catálogo de Security.
 func Permissions() []authz.Permission {
 	return []authz.Permission{PermJobRead, PermJobCreate, PermJobRun}
 }
 
-// Defaults of the service.
+// Valores por defecto del servicio.
 const (
-	DefaultKeep  = 24 * time.Hour   // how long a file waits to be downloaded
-	DefaultStuck = 30 * time.Minute // a job writing for longer is given up
+	DefaultKeep  = 24 * time.Hour   // cuánto espera un fichero a que lo descarguen
+	DefaultStuck = 30 * time.Minute // un trabajo que lleva más tiempo escribiendo se abandona
 	BatchSize    = 2000
-	// ProgressEvery is how many pages go by between two notes of the progress of a job.
+	// ProgressEvery es cuántas páginas pasan entre dos anotaciones del avance de un trabajo.
 	ProgressEvery = 10
 )
 
-// Dataset is a list that can be exported. The host writes one over the queries of the context
-// that owns the list, which apply the scope of the caller: the job calls it as who asked.
+// Dataset es una lista que se puede exportar. El anfitrión escribe una sobre las consultas del
+// contexto dueño de la lista, que aplican el alcance del llamante: el trabajo la llama como quien
+// la pidió.
 type Dataset interface {
-	// Key names the list (parties, customers...).
+	// Key nombra la lista (parties, customers...).
 	Key() string
-	// Title heads the sheet when the request gives none.
+	// Title encabeza la hoja cuando la petición no trae ninguno.
 	Title() string
-	// Permission is what reading the list requires.
+	// Permission es lo que exige leer la lista.
 	Permission() authz.Permission
-	// Columns are the columns of the file, in order.
+	// Columns son las columnas del fichero, en orden.
 	Columns() []domain.Column
-	// Filters are the names of the conditions it understands.
+	// Filters son los nombres de las condiciones que entiende.
 	Filters() []string
-	// Page returns the rows after a cursor ("" is the start) and the cursor of the next page ("":
-	// there are no more).
+	// Page devuelve las filas tras un cursor ("" es el principio) y el cursor de la página
+	// siguiente ("": no hay más).
 	Page(ctx context.Context, filters map[string]string, cursor string, limit int) ([]domain.Row, string, error)
 }
 
-// Files keeps the files of the jobs (a folder, a bucket).
+// Files guarda los ficheros de los trabajos (una carpeta, un bucket).
 type Files interface {
 	Create(ctx context.Context, key string) (io.WriteCloser, error)
 	Open(ctx context.Context, key string) (io.ReadCloser, error)
 	Remove(ctx context.Context, key string) error
 }
 
-// Registry holds the lists the host offers.
+// Registry reúne las listas que ofrece el anfitrión.
 type Registry struct {
 	mu       sync.RWMutex
 	datasets map[string]Dataset
 }
 
-// NewRegistry returns an empty registry.
+// NewRegistry devuelve un registro vacío.
 func NewRegistry() *Registry { return &Registry{datasets: map[string]Dataset{}} }
 
-// Offer adds lists; one with the key of another replaces it.
+// Offer añade listas; una con la clave de otra la sustituye.
 func (r *Registry) Offer(ds ...Dataset) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -105,7 +106,8 @@ func (r *Registry) all() []Dataset {
 	return out
 }
 
-// Deps are the ports the use cases need; Audit is optional, Keep and Stuck have defaults.
+// Deps son los puertos que necesitan los casos de uso; Audit es opcional, Keep y Stuck tienen
+// valores por defecto.
 type Deps struct {
 	Jobs     domain.JobRepository
 	Files    Files
@@ -117,32 +119,33 @@ type Deps struct {
 	Stuck    time.Duration
 }
 
-// Commands and queries.
+// Comandos y consultas.
 type (
-	// StartExport asks for a list as a file.
+	// StartExport pide una lista como fichero.
 	StartExport struct {
 		Dataset string            `json:"dataset"`
-		Format  string            `json:"format,omitempty"` // csv (default) or xlsx
+		Format  string            `json:"format,omitempty"` // csv (por defecto) o xlsx
 		Title   string            `json:"title,omitempty"`
 		Filter  map[string]string `json:"filter,omitempty"`
 	}
-	// RunNext writes the job that has waited longest (for a worker of the host).
+	// RunNext escribe el trabajo que más ha esperado (para un worker del anfitrión).
 	RunNext struct{}
-	// Purge removes the files kept long enough and gives up the jobs that stopped being written.
+	// Purge quita los ficheros guardados el tiempo suficiente y abandona los trabajos que dejaron de
+	// escribirse.
 	Purge struct{}
-	// GetJob reads a job.
+	// GetJob lee un trabajo.
 	GetJob struct{ ID domain.JobID }
-	// CancelJob gives up a job that waits or runs.
+	// CancelJob abandona un trabajo que espera o se ejecuta.
 	CancelJob struct{ ID domain.JobID }
-	// DownloadJob opens the file of a completed job.
+	// DownloadJob abre el fichero de un trabajo terminado.
 	DownloadJob struct{ ID domain.JobID }
-	// ListJobs lists the jobs of the caller, the latest first; All, those of everybody (global
-	// administrators only).
+	// ListJobs lista los trabajos del llamante, los últimos primero; All, los de todos (sólo
+	// administradores globales).
 	ListJobs struct {
 		All        bool
 		Page, Size int
 	}
-	// ListDatasets lists the lists the caller may export.
+	// ListDatasets lista las listas que el llamante puede exportar.
 	ListDatasets struct{}
 )
 
@@ -165,7 +168,7 @@ type (
 		ExpiresAt   string `json:"expiresAt,omitempty"`
 		Version     int64  `json:"version"`
 	}
-	// RanDTO is what a worker did: the job it wrote, if any waited.
+	// RanDTO es lo que hizo un worker: el trabajo que escribió, si alguno esperaba.
 	RanDTO struct {
 		Job *JobDTO `json:"job,omitempty"`
 	}
@@ -184,7 +187,7 @@ type (
 		Columns []ColumnDTO `json:"columns"`
 		Filters []string    `json:"filters"`
 	}
-	// File is the file of a job, open: whoever takes it closes it.
+	// File es el fichero de un trabajo, abierto: quien lo toma lo cierra.
 	File struct {
 		Name        string
 		ContentType string
@@ -193,7 +196,7 @@ type (
 	}
 )
 
-// Service exposes the use cases.
+// Service expone los casos de uso.
 type Service struct {
 	Start    app.CommandHandler[StartExport, JobDTO]
 	RunNext  app.CommandHandler[RunNext, RanDTO]
@@ -228,7 +231,7 @@ func guard[In, Out any](p authz.Permission, fn func(context.Context, In) (Out, e
 	return app.Chain[In, Out](app.HandlerFunc[In, Out](fn), append([]app.Middleware[In, Out]{pipeline.RequirePermission[In, Out](p)}, mw...)...)
 }
 
-// requesterOf captures who asks and what they can see now.
+// requesterOf captura quién pide y qué puede ver ahora.
 func requesterOf(ctx context.Context) (domain.Requester, bool) {
 	ac, ok := authz.FromContext(ctx)
 	if !ok {
@@ -247,7 +250,7 @@ func requesterOf(ctx context.Context) (domain.Requester, bool) {
 	return r, true
 }
 
-// as rebuilds the sight of who asked, with the permission of the list and nothing else.
+// as reconstruye la vista de quien pidió, con el permiso de la lista y nada más.
 func as(ctx context.Context, r domain.Requester, p authz.Permission) (context.Context, error) {
 	c := authz.Context{Subject: r.Subject, SubjectName: r.Name, Kind: authz.ActorKind(r.Kind), ActorPartyID: r.Party, GlobalAdmin: r.Global,
 		Permissions: []authz.Permission{p}, EffectiveOrganizations: []fw.UUID{}}
@@ -262,7 +265,7 @@ func as(ctx context.Context, r domain.Requester, p authz.Permission) (context.Co
 	return authz.WithContext(ctx, ac), nil
 }
 
-// visible returns nil when the caller asked for the job or administers everything.
+// visible devuelve nil cuando el llamante pidió el trabajo o lo administra todo.
 func visible(ctx context.Context, j *domain.Job) error {
 	if ac, ok := authz.FromContext(ctx); ok && (ac.GlobalAdmin || j.OwnedBy(ac.Subject)) {
 		return nil
@@ -270,8 +273,8 @@ func visible(ctx context.Context, j *domain.Job) error {
 	return fw.NotFound(domain.JobKind, j.ID())
 }
 
-// update changes a job, again if somebody changed it meanwhile (a cancellation and the progress
-// of the worker may meet).
+// update cambia un trabajo, y lo reintenta si alguien lo cambió entretanto (una cancelación y el avance
+// del worker pueden coincidir).
 func (s service) update(ctx context.Context, id domain.JobID, fn func(*domain.Job)) (*domain.Job, error) {
 	var (
 		j   *domain.Job
@@ -298,7 +301,7 @@ func (c *counter) Write(p []byte) (int, error) {
 
 var errCancelled = errors.New("cancelled")
 
-// write writes the list of a job into its file and returns the rows and the bytes written.
+// write escribe la lista de un trabajo en su fichero y devuelve las filas y los bytes escritos.
 func (s service) write(ctx context.Context, j *domain.Job, ds Dataset, key string) (int, int64, error) {
 	st := j.State()
 	rctx, err := as(ctx, st.Requester, ds.Permission())
@@ -349,7 +352,8 @@ func (s service) write(ctx context.Context, j *domain.Job, ds Dataset, key strin
 			break
 		}
 		cursor = next
-		// Between pages a job somebody gave up stops; the progress is told every few pages.
+		// Entre páginas, un trabajo que alguien abandonó se para; el avance se cuenta cada pocas
+		// páginas.
 		pages++
 		now, err := s.Jobs.Get(ctx, j.ID())
 		if err != nil {
@@ -370,7 +374,7 @@ func (s service) write(ctx context.Context, j *domain.Job, ds Dataset, key strin
 	return rows, count.n, out.Close()
 }
 
-// run writes a job that was just taken and closes it whatever happens.
+// run escribe un trabajo recién tomado y lo cierra pase lo que pase.
 func (s service) run(ctx context.Context, j *domain.Job) (*domain.Job, error) {
 	st := j.State()
 	closing := context.WithoutCancel(ctx)
@@ -402,9 +406,9 @@ func (s service) run(ctx context.Context, j *domain.Job) (*domain.Job, error) {
 	}()
 	var rv *fw.RuleViolationError
 	switch {
-	case errors.As(err, &rv): // a rule: its text is for the person who asked
+	case errors.As(err, &rv): // una regla: su texto es para la persona que pidió
 		return give(rv.Error(), nil)
-	case err != nil: // anything else stays in the server: the worker gets it, the person does not
+	case err != nil: // cualquier otra cosa se queda en el servidor: la recibe el worker, no la persona
 		return give("the file could not be written", err)
 	}
 	name := fmt.Sprintf("export-%s-%s.%s", st.Dataset, fw.Now().UTC().Format("20060102_1504"), st.Format)
@@ -416,7 +420,7 @@ func (s service) run(ctx context.Context, j *domain.Job) (*domain.Job, error) {
 	return done, err
 }
 
-// NewService wires the use cases.
+// NewService conecta los casos de uso.
 func NewService(d Deps) *Service {
 	var opts []orchestration.Option
 	if d.Audit != nil {
@@ -498,7 +502,7 @@ func NewService(d Deps) *Service {
 			if err != nil {
 				return RanDTO{}, err
 			}
-			if !taken { // cancelled, or another worker has it
+			if !taken { // cancelado, o lo tiene otro worker
 				continue
 			}
 			done, err := s.run(ctx, j)
@@ -565,7 +569,7 @@ func NewService(d Deps) *Service {
 		if err != nil {
 			return JobDTO{}, err
 		}
-		if !cur.Active() { // already over: nothing to give up
+		if !cur.Active() { // ya terminado: nada que abandonar
 			return jobDTO(cur), nil
 		}
 		j, err := s.update(ctx, c.ID, func(x *domain.Job) { x.Cancel(fw.Now()) })

@@ -164,8 +164,8 @@ func TestAggregate_EventsVersionAndMetadata(t *testing.T) {
 }
 
 func TestAggregateRoot_TypeSafety(t *testing.T) {
-	// Compile-time guarantees: *Account is an AggregateRoot[PartyID] and *Order an
-	// AggregateRoot[OrderID]; a repository of one cannot receive the other.
+	// Garantías en compilación: *Account es un AggregateRoot[PartyID] y *Order un
+	// AggregateRoot[OrderID]; un repositorio de uno no puede recibir el otro.
 	var _ domain.AggregateRoot[PartyID] = (*Account)(nil)
 	var _ domain.AggregateRoot[OrderID] = (*Order)(nil)
 }
@@ -210,7 +210,7 @@ func TestPage(t *testing.T) {
 	if req.Number != 1 || req.Size != domain.MaxPageSize || req.Offset() != 0 {
 		t.Fatalf("normalize: %+v", req)
 	}
-	// A page number whose offset does not fit in an int must not wrap around to a negative one.
+	// Un número de página cuyo desplazamiento no cabe en un int no debe dar la vuelta a uno negativo.
 	for _, number := range []int{math.MaxInt, math.MaxInt/20 + 2} {
 		if off := (domain.PageRequest[*Account]{Number: number, Size: 20}).Offset(); off != math.MaxInt {
 			t.Fatalf("page %d: offset %d, want math.MaxInt", number, off)

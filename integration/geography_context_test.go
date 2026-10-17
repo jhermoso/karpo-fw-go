@@ -18,9 +18,9 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 )
 
-// TestGeographyContext loads the 32,500-row seed on every engine (batched inserts, INSERT ALL on
-// Oracle) and walks it: search, ancestors, all of Spain (IN lists within SQL Server's parameter
-// limit), postal codes, countries and IBAN.
+// TestGeographyContext carga la semilla de 32.500 filas en cada motor (inserciones por lotes,
+// INSERT ALL en Oracle) y la recorre: búsqueda, ascendientes, toda España (listas IN dentro del
+// límite de parámetros de SQL Server), códigos postales, países e IBAN.
 func TestGeographyContext(t *testing.T) {
 	for _, e := range engines {
 		t.Run(e.name, func(t *testing.T) {
@@ -61,7 +61,7 @@ func TestGeographyContext(t *testing.T) {
 				t.Fatalf("Madrid: %+v", towns.Items)
 			}
 
-			// Levels (migrations 5 and 6): the autonomous communities, an island and its province.
+			// Niveles (migraciones 5 y 6): las comunidades autónomas, una isla y su provincia.
 			communities, err := svc.SearchBoundaries.Handle(ctx, gapp.SearchBoundaries{Country: "ES", Level: "2", Size: 50})
 			if err != nil || communities.Total != 19 || communities.Items[0].TypeName != "Autonomous Community" {
 				t.Fatalf("level 2 of Spain: %d %v", communities.Total, err)

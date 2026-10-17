@@ -1,12 +1,12 @@
-// Package contracts is what other bounded contexts may depend on: the Published Language of
-// Orders (Inventory holds, issues and releases the stock of orders; Billing will invoice the
-// delivery notes).
+// Package contracts es aquello de lo que pueden depender los demás contextos delimitados: el
+// Published Language de Orders (Inventory retiene, da salida y libera las existencias de los
+// pedidos; Billing facturará los albaranes).
 package contracts
 
-// Source is the name of the publishing bounded context.
+// Source es el nombre del contexto delimitado que publica.
 const Source = "orders"
 
-// OrderConfirmedV1 is published when a sales order is confirmed. Total is before taxes.
+// OrderConfirmedV1 se publica al confirmar un pedido de venta. Total es antes de impuestos.
 type OrderConfirmedV1 struct {
 	OrderID  string `json:"orderId"`
 	Company  string `json:"company"`
@@ -15,19 +15,19 @@ type OrderConfirmedV1 struct {
 	Total    string `json:"total"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (OrderConfirmedV1) IntegrationEventType() string { return "orders.order-confirmed.v1" }
 
-// StockLine is a quantity of an order line to hold.
+// StockLine es una cantidad de una línea de pedido que se retiene.
 type StockLine struct {
 	Line     int    `json:"line"`
 	Product  string `json:"product"`
 	Quantity string `json:"quantity"`
 }
 
-// StockRequestedV1 is published when an order asks to hold stock: on confirmation and each time
-// it asks again for what it is still short of. Inventory holds what is available and answers with
-// inventory.stock-reserved.v1 (source type orders.sales-order, source id "order|line").
+// StockRequestedV1 se publica cuando un pedido pide retener existencias: al confirmarse y cada vez
+// que vuelve a pedir lo que aún le falta. Inventory retiene lo disponible y responde con
+// inventory.stock-reserved.v1 (tipo de origen orders.sales-order, id de origen "order|line").
 type StockRequestedV1 struct {
 	OrderID   string      `json:"orderId"`
 	Company   string      `json:"company"`
@@ -35,11 +35,11 @@ type StockRequestedV1 struct {
 	Lines     []StockLine `json:"lines"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (StockRequestedV1) IntegrationEventType() string { return "orders.stock-requested.v1" }
 
-// OrderClosedV1 is published when an order is cancelled or closed with part pending: what its
-// lines still hold is released. Status is cancelled or closed.
+// OrderClosedV1 se publica cuando un pedido se anula o se cierra con parte pendiente: lo que aún
+// retienen sus líneas se libera. Status es cancelled o closed.
 type OrderClosedV1 struct {
 	OrderID string `json:"orderId"`
 	Company string `json:"company"`
@@ -48,10 +48,10 @@ type OrderClosedV1 struct {
 	Lines   []int  `json:"lines"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (OrderClosedV1) IntegrationEventType() string { return "orders.order-closed.v1" }
 
-// DeliveryLine is a line of a delivery note. NetPrice has up to four decimals; Amount two.
+// DeliveryLine es una línea de un albarán. NetPrice tiene hasta cuatro decimales; Amount, dos.
 type DeliveryLine struct {
 	Line        int    `json:"line"`
 	Product     string `json:"product"`
@@ -65,8 +65,8 @@ type DeliveryLine struct {
 	Amount      string `json:"amount"`
 }
 
-// DeliveryIssuedV1 is published when a delivery note is issued: Inventory issues its stocked
-// lines against the reservations of the order. Total is before taxes.
+// DeliveryIssuedV1 se publica al emitir un albarán: Inventory da salida a sus líneas con
+// existencias contra las reservas del pedido. Total es antes de impuestos.
 type DeliveryIssuedV1 struct {
 	DeliveryID  string         `json:"deliveryId"`
 	OrderID     string         `json:"orderId"`
@@ -80,11 +80,11 @@ type DeliveryIssuedV1 struct {
 	Lines       []DeliveryLine `json:"lines"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (DeliveryIssuedV1) IntegrationEventType() string { return "orders.delivery-issued.v1" }
 
-// QuoteSentV1 is published when a quote is sent to a customer, with its number. Date and
-// ValidUntil are days (YYYY-MM-DD); Total is before taxes.
+// QuoteSentV1 se publica al enviar un presupuesto a un cliente, con su número. Date y ValidUntil
+// son días (YYYY-MM-DD); Total es antes de impuestos.
 type QuoteSentV1 struct {
 	QuoteID    string `json:"quoteId"`
 	Company    string `json:"company"`
@@ -95,11 +95,11 @@ type QuoteSentV1 struct {
 	Total      string `json:"total"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (QuoteSentV1) IntegrationEventType() string { return "orders.quote-sent.v1" }
 
-// QuoteClosedV1 is published when a sent quote is accepted (OrderID is the draft order it
-// became), rejected, withdrawn or expires.
+// QuoteClosedV1 se publica cuando un presupuesto enviado se acepta (OrderID es el pedido en
+// borrador en que se convirtió), se rechaza, se retira o caduca.
 type QuoteClosedV1 struct {
 	QuoteID  string `json:"quoteId"`
 	Company  string `json:"company"`
@@ -111,5 +111,5 @@ type QuoteClosedV1 struct {
 	Total    string `json:"total"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (QuoteClosedV1) IntegrationEventType() string { return "orders.quote-closed.v1" }

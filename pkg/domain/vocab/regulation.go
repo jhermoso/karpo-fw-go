@@ -5,11 +5,11 @@ import (
 	"strings"
 )
 
-// RegionCode is an ISO 3166-2 subdivision code ("ES-MD", "ES-CT", "PT-11"): the country code,
-// a dash and 1 to 3 letters or digits. The country part must be a valid CountryCode.
+// RegionCode es un código de subdivisión ISO 3166-2 ("ES-MD", "ES-CT", "PT-11"): el código de país,
+// un guion y de 1 a 3 letras o dígitos. La parte del país debe ser un CountryCode válido.
 type RegionCode struct{ code string }
 
-// NewRegionCode validates an ISO 3166-2 code (case-insensitive).
+// NewRegionCode valida un código ISO 3166-2 (sin distinguir mayúsculas).
 func NewRegionCode(s string) (RegionCode, error) {
 	c := strings.ToUpper(strings.TrimSpace(s))
 	country, sub, ok := strings.Cut(c, "-")
@@ -22,7 +22,7 @@ func NewRegionCode(s string) (RegionCode, error) {
 	return RegionCode{c}, nil
 }
 
-// MustRegionCode is like NewRegionCode but panics on error.
+// MustRegionCode es como NewRegionCode pero entra en pánico si hay error.
 func MustRegionCode(s string) RegionCode {
 	r, err := NewRegionCode(s)
 	if err != nil {
@@ -31,22 +31,22 @@ func MustRegionCode(s string) RegionCode {
 	return r
 }
 
-// Country returns the country of the region.
+// Country devuelve el país de la región.
 func (r RegionCode) Country() CountryCode {
 	c, _, _ := strings.Cut(r.code, "-")
 	return CountryCode{c}
 }
 
-// String returns the code.
+// String devuelve el código.
 func (r RegionCode) String() string { return r.code }
 
-// IsZero reports whether the code is absent.
+// IsZero dice si falta el código.
 func (r RegionCode) IsZero() bool { return r.code == "" }
 
-// MarshalText implements encoding.TextMarshaler.
+// MarshalText implementa encoding.TextMarshaler.
 func (r RegionCode) MarshalText() ([]byte, error) { return []byte(r.code), nil }
 
-// UnmarshalText implements encoding.TextUnmarshaler.
+// UnmarshalText implementa encoding.TextUnmarshaler.
 func (r *RegionCode) UnmarshalText(b []byte) error {
 	if len(b) == 0 {
 		*r = RegionCode{}
@@ -59,9 +59,9 @@ func (r *RegionCode) UnmarshalText(b []byte) error {
 	return err
 }
 
-// RegulationSource is the origin of a regulated rule (a law, a regulator's circular, an internal
-// policy) and its territorial scope. It replaces the C# IRegulationSource + ICountryDelimited +
-// IRegionDelimited interfaces with a single value.
+// RegulationSource es el origen de una regla regulada (una ley, una circular de un regulador, una
+// política interna) y su ámbito territorial. Sustituye las interfaces IRegulationSource +
+// ICountryDelimited + IRegionDelimited de C# por un único valor.
 type RegulationSource struct {
 	Name           Name          `json:"name"`
 	Description    Description   `json:"description,omitzero"`
@@ -71,8 +71,8 @@ type RegulationSource struct {
 	Justification  Description   `json:"justification,omitzero"`
 }
 
-// NewRegulationSource validates a source: it needs a name, and an internal policy must be
-// justified. Regions must belong to the listed countries when countries are given.
+// NewRegulationSource valida un origen: necesita un nombre, y una política interna debe estar
+// justificada. Si se dan países, las regiones deben pertenecer a los países indicados.
 func NewRegulationSource(name Name, countries []CountryCode, regions []RegionCode, internalPolicy bool, justification Description) (RegulationSource, error) {
 	if name.IsZero() {
 		return RegulationSource{}, invalid("name", "required", "regulation source name is required")
@@ -91,13 +91,13 @@ func NewRegulationSource(name Name, countries []CountryCode, regions []RegionCod
 	}, nil
 }
 
-// AppliesIn reports whether the source applies in a country (no countries = everywhere).
+// AppliesIn dice si el origen se aplica en un país (sin países = en todas partes).
 func (s RegulationSource) AppliesIn(c CountryCode) bool {
 	return len(s.Countries) == 0 || slices.Contains(s.Countries, c)
 }
 
-// AppliesInRegion reports whether the source applies in a region: listed explicitly, or no
-// regions listed and the region's country is covered.
+// AppliesInRegion dice si el origen se aplica en una región: porque figura expresamente o porque
+// no hay regiones indicadas y el país de la región está cubierto.
 func (s RegulationSource) AppliesInRegion(r RegionCode) bool {
 	if len(s.Regions) > 0 {
 		return slices.Contains(s.Regions, r)

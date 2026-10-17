@@ -53,7 +53,7 @@ func TestWriteError_MapsDomainTaxonomy(t *testing.T) {
 		{"conflict", domain.Conflict("x", stringID("1"), 3, "stale version"), http.StatusConflict},
 		{"forbidden", domain.ErrForbidden, http.StatusForbidden},
 		{"unsupported", domain.ErrUnsupported, http.StatusNotImplemented},
-		// Message text is irrelevant: an unknown error mentioning "not found" is still a 500.
+		// El texto del mensaje no importa: un error desconocido que menciona "not found" sigue siendo un 500.
 		{"unknown", errors.New("dependency not found in cache"), http.StatusInternalServerError},
 	}
 	for _, tc := range cases {
@@ -72,8 +72,8 @@ func TestWriteError_MapsDomainTaxonomy(t *testing.T) {
 	}
 }
 
-// The repositories name a missing or stale aggregate by its Go type: that name stays in the
-// error (and in the logs) and never reaches the caller.
+// Los repositorios nombran un agregado ausente u obsoleto por su tipo Go: ese nombre se queda en
+// el error (y en los logs) y nunca llega a quien llama.
 func TestWriteError_DoesNotNameInternalTypes(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -195,7 +195,7 @@ func TestCORSMiddleware(t *testing.T) {
 		distribution.CORS(),
 	)
 
-	// Pre-flight OPTIONS request
+	// Petición OPTIONS de pre-flight
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodOptions, "/api/data", nil)
 	handler.ServeHTTP(rec, req)
@@ -222,7 +222,7 @@ func TestHealthRegistry(t *testing.T) {
 		t.Fatalf("expected 200 for liveness, got %d", recLive.Code)
 	}
 
-	// 2. Readiness with OK probe
+	// 2. Readiness con sonda correcta
 	health.RegisterReadinessProbe("db", func(_ context.Context) error {
 		return nil
 	})
@@ -235,7 +235,7 @@ func TestHealthRegistry(t *testing.T) {
 		t.Fatalf("expected 200 for readiness with healthy db, got %d", recReady.Code)
 	}
 
-	// 3. Readiness with failing probe
+	// 3. Readiness con sonda que falla
 	health.RegisterReadinessProbe("cache", func(_ context.Context) error {
 		return errors.New("connection refused")
 	})

@@ -103,7 +103,7 @@ func TestAccessLevels_P2(t *testing.T) {
 			t.Errorf("case %d: read=%v write=%v", i, c.CanRead(tc.org), c.CanWrite(tc.org))
 		}
 	}
-	// Full grant outside the requested scope does not allow writing.
+	// Una concesión Full fuera del ámbito pedido no permite escribir.
 	scoped := human(t, func(c *authz.Context) { c.RequestedOrganizations = []domain.UUID{orgB} })
 	if scoped.CanWrite(orgA) {
 		t.Fatal("writes are limited to the effective scope")

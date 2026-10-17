@@ -1,6 +1,6 @@
-// Package application holds the Human Resources use cases (with permissions and organization
-// scope), the ports HR consumes from Parties and Facilities, its query ports for other contexts
-// and the translation to its Published Language.
+// Package application contiene los casos de uso de Recursos Humanos (con permisos y ámbito de
+// organización), los puertos que RRHH consume de Parties y Facilities, sus puertos de consulta
+// para otros contextos y la traducción a su Published Language.
 package application
 
 import (
@@ -18,7 +18,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
 )
 
-// Permissions (the C# resources RRHH/Position, RRHH/Employee, RRHH/WorkCenter and catalogs).
+// Permisos (los recursos RRHH/Position, RRHH/Employee, RRHH/WorkCenter y catálogos del C#).
 var (
 	PermPositionRead     = authz.MustPermission("HR.Position.Read")
 	PermPositionCreate   = authz.MustPermission("HR.Position.Create")
@@ -32,37 +32,39 @@ var (
 	PermCatalogRead      = authz.MustPermission("HR.Catalog.Read")
 )
 
-// MaxDepth bounds the reporting chains walked (cycle checks and org charts).
+// MaxDepth acota las cadenas de dependencia que se recorren (comprobación de ciclos y
+// organigramas).
 const MaxDepth = 20
 
-// chunk is the size of the IN lists of the level-by-level queries.
+// chunk es el tamaño de las listas IN de las consultas nivel a nivel.
 const chunk = 500
 
-// Organizations is what HR needs of Parties (the port HR owns; an adapter implements it over the
-// Parties contracts).
+// Organizations es lo que RRHH necesita de Parties (el puerto es de RRHH; un adaptador lo
+// implementa sobre los contratos de Parties).
 type Organizations interface {
-	// InternalOrganizationOf returns the internal organization each unit (department, division...)
-	// belongs to; an internal organization maps to itself, unknown units are absent.
+	// InternalOrganizationOf devuelve la organización interna a la que pertenece cada unidad
+	// (departamento, división...); una organización interna se corresponde consigo misma, las
+	// unidades desconocidas no aparecen.
 	InternalOrganizationOf(ctx context.Context, units []domain.OrganizationID) (map[domain.OrganizationID]domain.OrganizationID, error)
-	// Affiliated reports whether the person is affiliated with the organization now.
+	// Affiliated dice si la persona está afiliada ahora a la organización.
 	Affiliated(ctx context.Context, person domain.PersonID, org domain.OrganizationID) (bool, error)
 }
 
-// FacilityInfo is what HR needs of a facility.
+// FacilityInfo es lo que RRHH necesita de una instalación.
 type FacilityInfo struct {
 	Name   string
 	Owner  domain.OrganizationID
 	Active bool
 }
 
-// Facilities is what HR needs of the Facilities context.
+// Facilities es lo que RRHH necesita del contexto Facilities.
 type Facilities interface {
 	Facility(ctx context.Context, id domain.FacilityID) (FacilityInfo, bool, error)
 }
 
-// Deps are the ports the use cases need. Recorder and Audit are optional; without Organizations
-// a unit is its own organization and affiliation is not checked, without Facilities the
-// facility of a work center is not checked (standalone use).
+// Deps son los puertos que necesitan los casos de uso. Recorder y Audit son opcionales; sin
+// Organizations una unidad es su propia organización y no se comprueba la afiliación, sin
+// Facilities no se comprueba la instalación de un centro de trabajo (uso independiente).
 type Deps struct {
 	Positions     domain.PositionRepository
 	Employments   domain.EmploymentRepository
@@ -75,7 +77,7 @@ type Deps struct {
 	Facilities    Facilities
 }
 
-// Service exposes the use cases.
+// Service expone los casos de uso.
 type Service struct {
 	OpenPosition      app.CommandHandler[OpenPosition, PositionDTO]
 	SetPositionStatus app.CommandHandler[SetPositionStatus, PositionDTO]
@@ -108,9 +110,9 @@ type Service struct {
 	Agreements       app.QueryHandler[ListAgreements, []AgreementDTO]
 }
 
-// scope: positions belong to their internal organization, employments and work centers to their
-// employer; they are visible inside that organization's scope (uniform 404 elsewhere) and
-// writable with a Full grant on it.
+// scope: los puestos pertenecen a su organización interna, las relaciones laborales y los centros
+// de trabajo a su empleador; son visibles dentro del ámbito de esa organización (un 404 uniforme
+// fuera de él) y se pueden escribir con una concesión Full sobre ella.
 type scope struct {
 	global bool
 	ac     *authz.Context
@@ -135,7 +137,7 @@ func (s scope) writes(org domain.OrganizationID) bool {
 	return s.global || (s.ac != nil && s.ac.CanWrite(org.UUID))
 }
 
-// check returns a uniform 404 outside the scope and 403 when the scope is read-only.
+// check devuelve un 404 uniforme fuera del ámbito y un 403 cuando el ámbito es de sólo lectura.
 func (s scope) check(kind string, id fmt.Stringer, org domain.OrganizationID, write bool) error {
 	if !s.sees(org) {
 		return fw.NotFound(kind, id)
@@ -146,7 +148,7 @@ func (s scope) check(kind string, id fmt.Stringer, org domain.OrganizationID, wr
 	return nil
 }
 
-// within restricts a query to the scope through the organization field of an aggregate.
+// within restringe una consulta al ámbito mediante el campo de organización de un agregado.
 func within[T any](s scope, field spec.Field[T, domain.OrganizationID]) spec.Spec[T] {
 	switch {
 	case s.global:
@@ -170,7 +172,7 @@ func parseID(v *fw.Validation, field, s string) fw.UUID {
 	return u
 }
 
-// at returns the moment of a command (now when absent).
+// at devuelve el momento de un comando (ahora, si no lo trae).
 func at(t *time.Time) time.Time {
 	if t == nil || t.IsZero() {
 		return fw.Now()
@@ -178,7 +180,7 @@ func at(t *time.Time) time.Time {
 	return t.UTC()
 }
 
-// NewService wires the use cases.
+// NewService monta los casos de uso.
 func NewService(d Deps) *Service {
 	var opts []orchestration.Option
 	if d.Recorder != nil {

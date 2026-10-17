@@ -1,13 +1,13 @@
-// Command karpo runs the whole of Karpo in one process on a SQLite file: every bounded context,
-// their messages carried in memory, their chores on a timer. It is what a developer starts; the
-// deployment on PostgreSQL (or Supabase) is cmd/karpo-postgres, the same program with another
-// driver.
+// Command karpo ejecuta Karpo entero en un proceso sobre un fichero SQLite: todos los contextos
+// delimitados, sus mensajes llevados en memoria, sus tareas periódicas con un temporizador. Es lo
+// que arranca un desarrollador; el despliegue en PostgreSQL (o Supabase) es cmd/karpo-postgres,
+// el mismo programa con otro driver.
 //
-//	karpo migrate   applies the schema of every context
-//	karpo serve     verifies the schema and serves (the default)
+//	karpo migrate   aplica el esquema de todos los contextos
+//	karpo serve     comprueba el esquema y sirve (lo predeterminado)
 //
-// KARPO_SQLITE is the path of the database file (required); the rest of the configuration is that
-// of package serve.
+// KARPO_SQLITE es la ruta del fichero de la base de datos (obligatoria); el resto de la
+// configuración es la del paquete serve.
 package main
 
 import (
@@ -42,7 +42,7 @@ func run(ctx context.Context, command string, logger log.Logger) error {
 		return err
 	}
 	defer raw.Close()
-	raw.SetMaxOpenConns(1) // SQLite takes one writer; the host is its only client
+	raw.SetMaxOpenConns(1) // SQLite admite un solo escritor; el anfitrión es su único cliente
 	return serve.Run(ctx, command, sqlite.Open(raw, sqlrepo.WithName("sqlite")), raw.PingContext, cfg, logger)
 }
 

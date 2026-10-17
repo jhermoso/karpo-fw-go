@@ -17,9 +17,9 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlite"
 )
 
-// officialNUTS reads the classification Eurostat publishes (GISCO, NUTS_AT_2024.csv, downloaded
-// on 2026-10-12 from https://gisco-services.ec.europa.eu/distribution/v2/nuts/csv/): code -> name
-// of the regions of a country.
+// officialNUTS lee la clasificación que publica Eurostat (GISCO, NUTS_AT_2024.csv, descargado el
+// 2026-10-12 de https://gisco-services.ec.europa.eu/distribution/v2/nuts/csv/): código -> nombre
+// de las regiones de un país.
 func officialNUTS(t *testing.T, country string) map[string]string {
 	t.Helper()
 	f, err := os.Open(filepath.Join("seed", "official", "NUTS_AT_"+domain.NUTSVersion+".csv.gz"))
@@ -37,7 +37,7 @@ func officialNUTS(t *testing.T, country string) map[string]string {
 	}
 	col := map[string]int{}
 	for i, h := range rows[0] {
-		col[strings.TrimPrefix(h, "\ufeff")] = i // the file may start with a byte order mark
+		col[strings.TrimPrefix(h, "\ufeff")] = i // el fichero puede empezar con una marca de orden de bytes
 	}
 	out := map[string]string{}
 	for _, r := range rows[1:] {
@@ -48,8 +48,8 @@ func officialNUTS(t *testing.T, country string) map[string]string {
 	return out
 }
 
-// Every NUTS code of the seed is an official one, every official one is in the seed, and the
-// level of a region is the one its code says.
+// Todo código NUTS de la semilla es oficial, todo código oficial está en la semilla, y el nivel
+// de una región es el que dice su código.
 func TestSeed_NUTSCodesAreTheOfficialOnes(t *testing.T) {
 	official := officialNUTS(t, "ES")
 	if len(official) != 86 {
@@ -100,8 +100,8 @@ func TestSeed_NUTSCodesAreTheOfficialOnes(t *testing.T) {
 	}
 }
 
-// Every municipality is in the NUTS 3 region the official LAU table says: its province on the
-// mainland, its island in the Balearic and Canary Islands.
+// Todo municipio está en la región NUTS 3 que dice la tabla LAU oficial: su provincia en la
+// península, su isla en Baleares y Canarias.
 func TestSeed_MunicipalitiesAreInTheirOfficialRegion(t *testing.T) {
 	f, err := os.Open(filepath.Join("seed", "official", "LAU_ES_2024.csv.gz"))
 	if err != nil {
@@ -116,7 +116,7 @@ func TestSeed_MunicipalitiesAreInTheirOfficialRegion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	official := map[string]string{} // LAU code -> NUTS 3
+	official := map[string]string{} // código LAU -> NUTS 3
 	for _, r := range rows[1:] {
 		official[r[1]] = r[0]
 	}
@@ -157,8 +157,8 @@ func TestSeed_MunicipalitiesAreInTheirOfficialRegion(t *testing.T) {
 	}
 }
 
-// A database seeded before the levels existed converges on the same data as a new one, and
-// running the migration again changes nothing.
+// Una base sembrada antes de que existieran los niveles llega a los mismos datos que una nueva, y
+// volver a ejecutar la migración no cambia nada.
 func TestSeedLevels_UpgradesAnOldDatabase(t *testing.T) {
 	ctx := context.Background()
 	raw, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "geo.db")+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)")
@@ -203,9 +203,9 @@ func TestSeedLevels_UpgradesAnOldDatabase(t *testing.T) {
 	}
 	fresh := snapshot()
 
-	// Back to what migration 2 left with the seed of before.
+	// Vuelta a lo que dejaba la migración 2 con la semilla de antes.
 	for _, stmt := range []string{
-		// The municipalities of the islands, back under their province.
+		// Los municipios de las islas, otra vez bajo su provincia.
 		`UPDATE geo_boundary_links SET parent = (SELECT l.parent FROM geo_boundary_links l WHERE l.boundary_id = geo_boundary_links.parent
 			AND l.kind = 'containment') WHERE kind = 'containment' AND parent IN (SELECT id FROM geo_boundaries WHERE boundary_level = '3' AND ine_code IS NULL)`,
 		"DELETE FROM geo_country_levels",

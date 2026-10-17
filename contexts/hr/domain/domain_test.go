@@ -126,7 +126,8 @@ func TestPosition(t *testing.T) {
 	if _, held := ceo.HolderAt(t1.Add(2 * time.Hour)); held {
 		t.Fatal("closing vacates")
 	}
-	// A position filled, reporting and closed at one instant: what started then ends then.
+	// Un puesto ocupado, con dependencia y cerrado en un mismo instante: lo que empezó entonces
+	// termina entonces.
 	desk, _ := domain.OpenPosition(domain.NewPositionID(), pt, st)
 	if err := desk.Fill(ana, t0); err != nil {
 		t.Fatal(err)

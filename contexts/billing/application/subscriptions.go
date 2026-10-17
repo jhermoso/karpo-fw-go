@@ -13,10 +13,10 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// DeliverySource is the source type of the invoices drafted from delivery notes of Orders.
+// DeliverySource es el tipo de origen de las facturas preparadas a partir de albaranes de Orders.
 const DeliverySource = "orders.delivery"
 
-// DeliveryIssued is the Billing copy of orders.delivery-issued.v1 (only the fields it needs).
+// DeliveryIssued es la copia en Billing de orders.delivery-issued.v1 (sólo los campos que necesita).
 type DeliveryIssued struct {
 	DeliveryID  string `json:"deliveryId"`
 	OrderNumber string `json:"orderNumber"`
@@ -33,13 +33,13 @@ type DeliveryIssued struct {
 	} `json:"lines"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (DeliveryIssued) IntegrationEventType() string { return "orders.delivery-issued.v1" }
 
-// Subscribe drafts the invoice of each delivery note (approved decision 5 of docs/PEDIDOS.md:
-// Orders publishes, Billing invoices). The draft takes the lines of the delivery note at their net
-// prices and tax codes, with the delivery date as the date of the operation; a person reviews it
-// and issues it in a series. One draft per delivery note: redeliveries are harmless.
+// Subscribe prepara el borrador de la factura de cada albarán (decisión aprobada 5 de
+// docs/PEDIDOS.md: Orders publica, Billing factura). El borrador toma las líneas del albarán con sus
+// precios netos y códigos de impuesto, con la fecha de entrega como fecha de la operación; una
+// persona lo revisa y lo emite en una serie. Un borrador por albarán: los mensajes entregados otra vez no hacen daño.
 func Subscribe(c *messaging.Consumer, d Deps) {
 	s := newService(d)
 	messaging.Handle(c, func(ctx context.Context, e DeliveryIssued, _ app.Envelope) error {

@@ -10,7 +10,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Hire hires a person affiliated with an internal organization.
+// Hire contrata a una persona afiliada a una organización interna.
 type Hire struct {
 	Person      string     `json:"person"`
 	Employer    string     `json:"employer"`
@@ -20,7 +20,7 @@ type Hire struct {
 	WageGroup   string     `json:"wageGroup,omitempty"`
 }
 
-// AddContract adds a labor contract to an employment.
+// AddContract añade un contrato de trabajo a una relación laboral.
 type AddContract struct {
 	ID          domain.EmploymentID `json:"-"`
 	TypeCode    string              `json:"typeCode"`
@@ -34,7 +34,7 @@ type AddContract struct {
 	Primary     bool                `json:"primary"`
 }
 
-// EndContract ends a labor contract.
+// EndContract termina un contrato de trabajo.
 type EndContract struct {
 	ID       domain.EmploymentID `json:"-"`
 	Contract string              `json:"contract"`
@@ -42,31 +42,32 @@ type EndContract struct {
 	Reason   string              `json:"reason,omitempty"`
 }
 
-// Terminate ends an employment, its contracts and the positions the person holds in the employer.
+// Terminate termina una relación laboral, sus contratos y los puestos que la persona ocupa en el
+// empleador.
 type Terminate struct {
 	ID     domain.EmploymentID `json:"-"`
 	On     vocab.Date          `json:"on"`
 	Reason string              `json:"reason,omitempty"`
 }
 
-// SetClassification changes the job category and wage group.
+// SetClassification cambia la categoría profesional y el grupo salarial.
 type SetClassification struct {
 	ID          domain.EmploymentID `json:"-"`
 	JobCategory string              `json:"jobCategory"`
 	WageGroup   string              `json:"wageGroup"`
 }
 
-// GetEmployment loads an employment.
+// GetEmployment carga una relación laboral.
 type GetEmployment struct{ ID domain.EmploymentID }
 
-// SearchEmployments searches employments of the caller's scope.
+// SearchEmployments busca relaciones laborales del ámbito del que llama.
 type SearchEmployments struct {
 	Employer, Person, Number string
 	ActiveOnly               bool
 	Page, Size               int
 }
 
-// ContractDTO is the transport form of a labor contract.
+// ContractDTO es la forma de transporte de un contrato de trabajo.
 type ContractDTO struct {
 	ID                string `json:"id"`
 	TypeCode          string `json:"typeCode"`
@@ -81,7 +82,7 @@ type ContractDTO struct {
 	TerminationReason string `json:"terminationReason,omitempty"`
 }
 
-// EmploymentDTO is the transport form of an employment.
+// EmploymentDTO es la forma de transporte de una relación laboral.
 type EmploymentDTO struct {
 	ID                string        `json:"id"`
 	Person            string        `json:"person"`
@@ -158,8 +159,8 @@ func (s service) employmentUseCases(svc *Service) {
 				return EmploymentDTO{}, err
 			}
 			if !ok {
-				// The person is registered in Parties with an Employment affiliation first: that is
-				// what makes them visible to the employer's users.
+				// La persona se registra antes en Parties con una afiliación Employment: es lo que la
+				// hace visible a los usuarios del empleador.
 				return EmploymentDTO{}, fw.Violation("hr.not_affiliated", "the person is not affiliated with the employer")
 			}
 		}
@@ -251,7 +252,7 @@ func (s service) employmentUseCases(svc *Service) {
 		if err != nil {
 			return EmploymentDTO{}, err
 		}
-		// The person leaves the positions held in the employer at the end of the last day.
+		// La persona deja los puestos que ocupa en el empleador al final del último día.
 		leave := c.On.AddDays(1).BaseTime()
 		person := domain.PersonID{UUID: fw.MustParseUUID(dto.Person)}
 		held, err := s.Positions.Find(ctx, domain.PosFieldOrganization.Eq(domain.OrganizationID{UUID: fw.MustParseUUID(dto.Employer)}).And(
@@ -261,7 +262,7 @@ func (s service) employmentUseCases(svc *Service) {
 		}
 		for _, p := range held {
 			if h, ok := p.HolderAt(leave.Add(-1)); !ok || h != person {
-				continue // the holding starts later: HR decides what to do with it
+				continue // la ocupación empieza más tarde: RRHH decide qué hacer con ella
 			}
 			if _, err := s.positions.Update(ctx, p.ID(), func(_ context.Context, p *domain.Position) error { return p.Vacate(leave) }); err != nil {
 				return EmploymentDTO{}, err

@@ -1,7 +1,7 @@
-// Package sqlconformance wires the repository conformance suite (pkg/testing/repotest) to any
-// SQL dialect: it provides the Widget mapping, the DDL for every supported engine and a harness
-// that resets the schema before each test. Each dialect's tests (and the integration module for
-// servers) call Run with an opened *sqlrepo.DB.
+// Package sqlconformance conecta la suite de conformidad de repositorios (pkg/testing/repotest)
+// con cualquier dialecto SQL: ofrece el mapeo de Widget, el DDL de cada motor soportado y un
+// arnés que reinicia el esquema antes de cada prueba. Las pruebas de cada dialecto (y el módulo de
+// integración para los servidores) llaman a Run con un *sqlrepo.DB abierto.
 package sqlconformance
 
 import (
@@ -14,8 +14,8 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/testing/repotest"
 )
 
-// WidgetMapping maps repotest.Widget: a root table, a child table and a custom specification.
-// The same mapping serves every dialect.
+// WidgetMapping mapea repotest.Widget: una tabla raíz, una tabla hija y una especificación propia.
+// El mismo mapeo sirve para todos los dialectos.
 func WidgetMapping() sqlrepo.Mapping[repotest.WidgetID, *repotest.Widget] {
 	return sqlrepo.Mapping[repotest.WidgetID, *repotest.Widget]{
 		Table:   "widgets",
@@ -80,7 +80,8 @@ func WidgetMapping() sqlrepo.Mapping[repotest.WidgetID, *repotest.Widget] {
 	}
 }
 
-// Schema returns the DROP and CREATE statements of the conformance tables for a dialect name.
+// Schema devuelve las sentencias DROP y CREATE de las tablas de conformidad para un nombre de
+// dialecto.
 func Schema(dialect string) (drop, create []string) {
 	drop = []string{"DROP TABLE widget_parts", "DROP TABLE widgets"}
 	switch dialect {
@@ -129,7 +130,7 @@ func Schema(dialect string) (drop, create []string) {
 	return drop, create
 }
 
-// Reset drops (ignoring errors) and recreates the conformance tables.
+// Reset borra (sin hacer caso de los errores) y vuelve a crear las tablas de conformidad.
 func Reset(ctx context.Context, db *sqlrepo.DB) error {
 	drop, create := Schema(db.Dialect().Name())
 	if create == nil {
@@ -146,7 +147,7 @@ func Reset(ctx context.Context, db *sqlrepo.DB) error {
 	return nil
 }
 
-// Run executes the repository conformance suite against db.
+// Run ejecuta la suite de conformidad de repositorios contra db.
 func Run(t *testing.T, db *sqlrepo.DB) {
 	repotest.Run(t, repotest.Harness{
 		New: func(t *testing.T) (domain.Repository[repotest.WidgetID, *repotest.Widget], domain.UnitOfWork) {

@@ -39,11 +39,12 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/time/fake"
 )
 
-// TestPaymentsContext runs Payments with Treasury, Accounting and Parties on every engine:
-// a supplier invoice with its account and a tax form (through the SQL inbox) as payables, a
-// transfer order proposed from them, its pain.001 file, executed (payments registered through the
-// inbox and posted by Accounting) and a transfer rejected (payment cancelled, entry reversed), a
-// cash payment and the round trip of payables and payments.
+// TestPaymentsContext ejecuta Payments con Treasury, Accounting y Parties en cada motor: una
+// factura de proveedor con su cuenta y un modelo fiscal (a través del inbox SQL) como cuentas por
+// pagar, una orden de transferencias propuesta a partir de ellas, su fichero pain.001, ejecutada
+// (pagos registrados a través del inbox y contabilizados por Accounting) y una transferencia
+// rechazada (pago cancelado, asiento revertido), un pago en efectivo y la ida y vuelta de cuentas
+// por pagar y pagos.
 func TestPaymentsContext(t *testing.T) {
 	for _, e := range engines {
 		if e.name == "oracle-dotnet-guids" {
@@ -70,9 +71,9 @@ func TestPaymentsContext(t *testing.T) {
 			if _, err := m.Migrate(ctx); err != nil {
 				t.Fatal(err)
 			}
-			// Treasury stamps a transfer order with the moment its file is generated and settles it on
-			// that day or later: the scenario runs on a fixed clock, so that its dates hold whatever
-			// the day the test runs.
+			// Treasury marca una orden de transferencias con el momento en que se genera su fichero y la
+			// liquida ese día o después: el escenario corre con un reloj fijo, para que sus fechas se
+			// cumplan sea cual sea el día en que corre la prueba.
 			t.Cleanup(fw.SetClock(fake.New(time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC))))
 			sw := hotswap.New(db)
 			pm := parties.Compose(sw, nil)
@@ -81,7 +82,7 @@ func TestPaymentsContext(t *testing.T) {
 			am := accounting.Compose(sw)
 			broker := inprocess.NewBroker()
 			broker.Subscribe("payments", ym.Consumer)
-			// The received invoices are played with the fields Payments reads: Accounting posts only the payments here.
+			// Las facturas recibidas se simulan con los campos que lee Payments: aquí Accounting sólo contabiliza los pagos.
 			broker.Subscribe("accounting", am.Consumer, "payments.payment-allocated.v1", "payments.allocation-reversed.v1")
 			must := func(err error) {
 				t.Helper()
@@ -132,7 +133,7 @@ func TestPaymentsContext(t *testing.T) {
 				}
 			}
 
-			// Two received invoices (one paid to two accounts, sent twice) and a Modelo 111 through the inbox.
+			// Dos facturas recibidas (una pagada a dos cuentas, enviada dos veces) y un modelo 111 a través del inbox.
 			send := func(id, typ string, data any) {
 				raw, _ := json.Marshal(data)
 				must(broker.Send(ctx, application.Envelope{ID: id, Type: typ, OccurredAt: time.Date(2026, 10, 2, 0, 0, 0, 0, time.UTC), Data: raw}))
@@ -165,7 +166,7 @@ func TestPaymentsContext(t *testing.T) {
 				t.Fatalf("tax payable: %+v %v", taxes.Items, err)
 			}
 
-			// A transfer order with the first invoice (the second is not due, the tax has no account).
+			// Una orden de transferencias con la primera factura (la segunda no ha vencido, el impuesto no tiene cuenta).
 			acc, err := tm.Service.OpenAccount.Handle(actx, tapp.OpenAccount{Owner: acme.ID, IBAN: "ES1000492352082414205416", BIC: "BSCHESMMXXX", Alias: "Pagos",
 				Payments: true, Opened: vocab.MustDate(2020, 1, 1)})
 			must(err)
@@ -182,7 +183,7 @@ func TestPaymentsContext(t *testing.T) {
 				!strings.Contains(string(file), "<BIC>BSCHESMMXXX</BIC>") {
 				t.Fatalf("pain.001 from the stored order: %v\n%s", err, file)
 			}
-			// Executed on the day the file was generated (that of the fixed clock), never before.
+			// Ejecutada el día en que se generó el fichero (el del reloj fijo), nunca antes.
 			_, err = tm.Service.SettleTransfers.Handle(actx, tapp.SettleTransfers{ID: oid, On: vocab.MustDate(2026, 10, 5)})
 			must(err)
 			deliver()
@@ -202,7 +203,7 @@ func TestPaymentsContext(t *testing.T) {
 			}
 			balances(map[string]string{"4000": p1.Paid, "5720": "-" + p1.Paid})
 
-			// The tax at the bank and the second invoice in cash, the payment round trip.
+			// El impuesto en el banco y la segunda factura en efectivo, la ida y vuelta del pago.
 			pay, err := svc.RegisterPayment.Handle(actx, yapp.RegisterPayment{Company: acme.ID, Authority: "AEAT", Date: vocab.MustDate(2026, 10, 20), Amount: "216.00",
 				Method: "transfer", Reference: "NRC-0001", Allocations: []yapp.AllocationInput{{Payable: taxes.Items[0].ID, Amount: "216.00"}}})
 			must(err)

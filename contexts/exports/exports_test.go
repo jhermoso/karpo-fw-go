@@ -47,13 +47,13 @@ type customer struct {
 	active bool
 }
 
-// customers plays the list of a context: its rows belong to companies and it shows each caller
-// those of the companies they can read.
+// customers hace de lista de un contexto: sus filas pertenecen a empresas y muestra a cada llamante
+// las de las empresas que puede leer.
 type customers struct {
 	key    string
 	rows   []customer
-	repeat int                  // the rows, this many times over
-	onPage func(page int) error // what happens while a page is read
+	repeat int                  // las filas, repetidas este número de veces
+	onPage func(page int) error // lo que pasa mientras se lee una página
 	mu     sync.Mutex
 	pages  int
 }
@@ -120,7 +120,7 @@ func compose(t *testing.T) *host {
 	return mount(t, sw)
 }
 
-// mount builds a host on a backend: its own lists and files, the storage of sw.
+// mount monta un anfitrión sobre un backend: sus propias listas y ficheros, el almacenamiento de sw.
 func mount(t *testing.T, sw *hotswap.Switch) *host {
 	files := einfra.NewMemoryFiles()
 	em := exports.Compose(sw, files)
@@ -156,7 +156,8 @@ func (h *host) grant(user string, org fw.UUID) {
 	h.dir.Put(h.ids[user], s)
 }
 
-// do sends a request; out is a DTO to decode into (emptied first) or a *http.Response holder.
+// do envía una petición; out es un DTO en el que decodificar (vaciado antes) o un contenedor de
+// *http.Response.
 func (h *host) do(method, path, user string, body, out any) int {
 	h.t.Helper()
 	var buf bytes.Buffer
@@ -200,7 +201,7 @@ func (h *host) must(got, want int, what string) {
 	}
 }
 
-// start asks for an export as clerk and returns the job.
+// start pide una exportación como clerk y devuelve el trabajo.
 func (h *host) start(user string, body map[string]any) eapp.JobDTO {
 	h.t.Helper()
 	var j eapp.JobDTO
@@ -208,7 +209,7 @@ func (h *host) start(user string, body map[string]any) eapp.JobDTO {
 	return j
 }
 
-// work makes the worker write the next job.
+// work hace que el worker escriba el siguiente trabajo.
 func (h *host) work() eapp.JobDTO {
 	h.t.Helper()
 	var ran eapp.RanDTO
@@ -236,7 +237,7 @@ func (h *host) scenario() {
 	h.exp.Offer(list)
 	svc := h.exp.Service
 
-	// What can be exported is what one may read.
+	// Lo que se puede exportar es lo que uno puede leer.
 	var sets []eapp.DatasetDTO
 	h.must(h.do("GET", "/api/exports/datasets", "worker", nil, nil), 403, "worker")
 	h.must(h.do("GET", "/api/exports/datasets", "limited", nil, &sets), 200, "limited")
@@ -248,7 +249,7 @@ func (h *host) scenario() {
 		t.Fatalf("datasets: %+v", sets)
 	}
 
-	// Asking.
+	// Pedir.
 	ask := map[string]any{"dataset": "customers"}
 	h.must(h.do("POST", "/api/exports", "worker", ask, nil), 403, "the worker asks for nothing")
 	h.must(h.do("POST", "/api/exports", "limited", ask, nil), 403, "may not read the list")
@@ -262,8 +263,8 @@ func (h *host) scenario() {
 	}
 	h.must(h.do("GET", "/api/exports/"+first.ID+"/download", "clerk", nil, nil), 422, "nothing to download yet")
 
-	// The file is written with the sight of who asked when they asked: being given another
-	// company afterwards changes nothing.
+	// El fichero se escribe con la vista de quien pidió cuando pidió: que después le den otra
+	// empresa no cambia nada.
 	h.grant("clerk", globex)
 	h.must(h.do("POST", "/api/exports/run-next", "clerk", nil, nil), 403, "asking is not writing")
 	done := h.work()
@@ -277,7 +278,7 @@ func (h *host) scenario() {
 		t.Fatalf("nothing waited: %+v", ran)
 	}
 
-	// Handing it over: to who asked, and to nobody else.
+	// Entregarlo: a quien lo pidió y a nadie más.
 	var file download
 	h.must(h.do("GET", "/api/exports/"+first.ID+"/download", "other", nil, nil), 404, "somebody else")
 	h.must(h.do("GET", "/api/exports/"+first.ID, "other", nil, nil), 404, "somebody else")
@@ -303,12 +304,12 @@ func (h *host) scenario() {
 	} else {
 		admin.Content.Close()
 	}
-	// Who exported what stays written.
+	// Quién exportó qué queda escrito.
 	if trail, err := h.exp.Audit.Trail(context.Background(), domain.JobKind, first.ID); err != nil || len(trail) != 3 || trail[0].Actor.Name != "clerk" {
 		t.Fatalf("audit: %+v %v", trail, err)
 	}
 
-	// A sheet, filtered and with its title; now clerk sees both companies.
+	// Una hoja, filtrada y con su título; ahora clerk ve las dos empresas.
 	sheet := h.start("clerk", map[string]any{"dataset": "customers", "format": "XLSX", "title": "Clientes activos", "filter": map[string]string{"active": "true", "name": " "}})
 	done = h.work()
 	if done.ID != sheet.ID || done.Rows != 3 || !strings.HasSuffix(done.FileName, ".xlsx") {
@@ -333,7 +334,7 @@ func (h *host) scenario() {
 		t.Fatalf("sheet: %s\n%s", parts["xl/workbook.xml"], xml)
 	}
 
-	// Who sees no company gets the header and nothing else.
+	// Quien no ve ninguna empresa recibe la cabecera y nada más.
 	empty := h.start("outsider", ask)
 	if done = h.work(); done.ID != empty.ID || done.Rows != 0 || done.Status != "completed" {
 		t.Fatalf("empty: %+v", done)
@@ -343,7 +344,7 @@ func (h *host) scenario() {
 		t.Fatalf("empty file: %q", file.body)
 	}
 
-	// Giving up a job that waits: the worker passes it by.
+	// Abandonar un trabajo que espera: el worker lo pasa de largo.
 	var gone eapp.JobDTO
 	waiting := h.start("other", ask)
 	h.must(h.do("POST", "/api/exports/"+waiting.ID+"/cancel", "other", nil, &gone), 200, "cancel")
@@ -361,7 +362,7 @@ func (h *host) scenario() {
 	}
 	h.must(h.do("GET", "/api/exports/"+waiting.ID+"/download", "other", nil, nil), 422, "cancelled")
 
-	// Five at a time each.
+	// Cinco a la vez cada uno.
 	mine := []eapp.JobDTO{}
 	for range domain.MaxActiveJobs {
 		mine = append(mine, h.start("other", ask))
@@ -375,7 +376,7 @@ func (h *host) scenario() {
 		}
 	}
 
-	// Given up while it is being written: it stops at the next page and leaves no file.
+	// Abandonado mientras se escribe: se para en la página siguiente y no deja fichero.
 	long := &customers{key: "long", rows: list.rows, repeat: 2000}
 	h.exp.Offer(long)
 	var cancelled eapp.JobDTO
@@ -393,7 +394,7 @@ func (h *host) scenario() {
 		t.Fatalf("it stopped after the page it was reading: %d", long.pages)
 	}
 
-	// A list that breaks: the person is told it failed, the worker is told why.
+	// Una lista que se rompe: a la persona se le dice que falló; al worker, por qué.
 	long.pages, long.onPage = 0, func(int) error { return errors.New("dial tcp 10.0.0.7:5432: password authentication failed") }
 	broken := h.start("clerk", map[string]any{"dataset": "long"})
 	h.must(h.do("POST", "/api/exports/run-next", "worker", nil, nil), 500, "the worker learns it failed")
@@ -402,14 +403,14 @@ func (h *host) scenario() {
 		t.Fatalf("failed: %+v", gone)
 	}
 
-	// More rows than a sheet holds: it fails saying so, to the person too.
+	// Más filas de las que caben en una hoja: falla diciéndolo, también a la persona.
 	long.pages, long.onPage, long.repeat = 0, nil, domain.MaxRows/4+1
 	huge := h.start("clerk", map[string]any{"dataset": "long"})
 	if done = h.work(); done.ID != huge.ID || done.Status != "failed" || !strings.Contains(done.Error, "narrow it") {
 		t.Fatalf("too many rows: %+v", done)
 	}
 
-	// A job nobody finishes writing is given up; when its worker comes back, it stays so.
+	// Un trabajo que nadie termina de escribir se abandona; cuando su worker vuelve, sigue así.
 	long.pages, long.repeat = 0, 2000
 	hold, held := make(chan struct{}), make(chan struct{})
 	long.onPage = func(page int) error {
@@ -440,7 +441,7 @@ func (h *host) scenario() {
 		t.Fatalf("its worker comes back: %+v", out.Job)
 	}
 
-	// Only what was completed keeps a file; a day later, none.
+	// Sólo lo terminado conserva un fichero; un día después, ninguno.
 	if keys := h.files.Keys(); len(keys) != 3 {
 		t.Fatalf("files kept: %v", keys)
 	}
@@ -458,7 +459,7 @@ func (h *host) scenario() {
 		t.Fatalf("expired: %+v", gone)
 	}
 
-	// Each one's jobs, the latest first.
+	// Los trabajos de cada uno, los últimos primero.
 	var page fw.Page[eapp.JobDTO]
 	h.must(h.do("GET", "/api/exports?size=50", "clerk", nil, &page), 200, "mine")
 	if page.Total != 7 || page.Items[0].ID != stuck.ID || page.Items[6].ID != first.ID {
@@ -529,7 +530,7 @@ func TestDiskFiles(t *testing.T) {
 	if _, err := files.Open(ctx, "a.csv"); err == nil {
 		t.Fatal("removed")
 	}
-	// A key is a plain file name: nothing leaves the folder.
+	// Una clave es un nombre de fichero simple: nada sale de la carpeta.
 	for _, key := range []string{"", "..", "../a.csv", "sub/a.csv", `..\a.csv`} {
 		if _, err := files.Create(ctx, key); !errors.Is(err, fw.ErrValidation) {
 			t.Fatalf("key %q: %v", key, err)

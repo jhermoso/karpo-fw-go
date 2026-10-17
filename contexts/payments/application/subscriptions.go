@@ -15,9 +15,9 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// The Payments copies of the events it consumes (only the fields it needs).
+// Las copias de Payments de los eventos que consume (sólo los campos que necesita).
 
-// PayslipApproved is payroll.payslip-approved.v1.
+// PayslipApproved es payroll.payslip-approved.v1.
 type PayslipApproved struct {
 	PayslipID   string `json:"payslipId"`
 	Person      string `json:"person"`
@@ -27,19 +27,19 @@ type PayslipApproved struct {
 	Net         string `json:"net"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (PayslipApproved) IntegrationEventType() string { return "payroll.payslip-approved.v1" }
 
-// PayslipCancelled is payroll.payslip-cancelled.v1.
+// PayslipCancelled es payroll.payslip-cancelled.v1.
 type PayslipCancelled struct {
 	PayslipID string `json:"payslipId"`
 	Reason    string `json:"reason"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (PayslipCancelled) IntegrationEventType() string { return "payroll.payslip-cancelled.v1" }
 
-// FilingSubmitted is fiscal.filing-submitted.v1.
+// FilingSubmitted es fiscal.filing-submitted.v1.
 type FilingSubmitted struct {
 	FilingID  string `json:"filingId"`
 	Declarant string `json:"declarant"`
@@ -49,19 +49,19 @@ type FilingSubmitted struct {
 	Withheld  string `json:"withheld"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (FilingSubmitted) IntegrationEventType() string { return "fiscal.filing-submitted.v1" }
 
-// FilingReverted is fiscal.filing-reverted.v1.
+// FilingReverted es fiscal.filing-reverted.v1.
 type FilingReverted struct {
 	FilingID string `json:"filingId"`
 	Reason   string `json:"reason"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (FilingReverted) IntegrationEventType() string { return "fiscal.filing-reverted.v1" }
 
-// InvoiceRegistered is purchases.invoice-registered.v1.
+// InvoiceRegistered es purchases.invoice-registered.v1.
 type InvoiceRegistered struct {
 	InvoiceID      string `json:"invoiceId"`
 	Company        string `json:"company"`
@@ -76,19 +76,19 @@ type InvoiceRegistered struct {
 	} `json:"payTo"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (InvoiceRegistered) IntegrationEventType() string { return "purchases.invoice-registered.v1" }
 
-// InvoiceCancelled is purchases.invoice-cancelled.v1.
+// InvoiceCancelled es purchases.invoice-cancelled.v1.
 type InvoiceCancelled struct {
 	InvoiceID string `json:"invoiceId"`
 	Reason    string `json:"reason"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (InvoiceCancelled) IntegrationEventType() string { return "purchases.invoice-cancelled.v1" }
 
-// TransferExecuted is treasury.transfer-executed.v1.
+// TransferExecuted es treasury.transfer-executed.v1.
 type TransferExecuted struct {
 	EndToEnd   string `json:"endToEnd"`
 	Debtor     string `json:"debtor"`
@@ -97,41 +97,42 @@ type TransferExecuted struct {
 	ExecutedOn string `json:"executedOn"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (TransferExecuted) IntegrationEventType() string { return "treasury.transfer-executed.v1" }
 
-// TransferRejected is treasury.transfer-rejected.v1.
+// TransferRejected es treasury.transfer-rejected.v1.
 type TransferRejected struct {
 	EndToEnd string `json:"endToEnd"`
 	Debtor   string `json:"debtor"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (TransferRejected) IntegrationEventType() string { return "treasury.transfer-rejected.v1" }
 
-// TaxAuthority is the payee of the tax payables of phase 1 (Spanish forms).
+// TaxAuthority es el beneficiario de las obligaciones fiscales de la fase 1 (modelos españoles).
 const TaxAuthority = "AEAT"
 
 func invalid(event string, err error) error {
 	return fw.Violation("payments.invalid_event", event+": "+err.Error())
 }
 
-// Subscribe registers the reactions to the other contexts (approved decisions of docs/NOMINAS.md,
-// docs/FISCAL.md, docs/TESORERIA.md and docs/COMPRAS.md: each publishes, Payments records what is
-// owed and Treasury executes the transfers):
+// Subscribe registra las reacciones a los demás contextos (decisiones aprobadas de
+// docs/NOMINAS.md, docs/FISCAL.md, docs/TESORERIA.md y docs/COMPRAS.md: cada uno publica, Payments
+// registra lo que se debe y Treasury ejecuta las transferencias):
 //
-//   - a received invoice owes what is paid to the supplier (its total minus the withholding) on
-//     its due date, to the accounts it carries; a corrective one (negative) owes nothing here; a
-//     cancelled invoice withdraws it while unpaid;
-//   - an approved payslip owes its net pay to the employee on its payment date, to the accounts
-//     of its split (Payroll's Remittance port); a cancelled one withdraws it while unpaid;
-//   - a submitted tax form with an amount owes it to the tax authority by its legal deadline; a
-//     reverted one withdraws it while unpaid;
-//   - an executed transfer becomes a payment by transfer allocated to its payable (left
-//     unallocated if the payable was paid meanwhile, for a person to decide); a rejected one
-//     cancels that payment.
+//   - una factura recibida debe lo que se paga al proveedor (su total menos la retención) en su
+//     fecha de vencimiento, a las cuentas que lleva; una rectificativa (negativa) no debe nada
+//     aquí; una factura anulada retira esa obligación mientras no esté pagada;
+//   - una nómina aprobada debe su líquido al empleado en su fecha de pago, a las cuentas de su
+//     reparto (el puerto Remittance de Payroll); una anulada retira esa obligación mientras no esté pagada;
+//   - un modelo fiscal presentado con importe lo debe a la administración tributaria en su plazo
+//     legal; uno revertido retira esa obligación mientras no esté pagado;
+//   - una transferencia ejecutada se convierte en un pago por transferencia aplicado a su
+//     obligación (sin aplicar si la obligación se pagó entretanto, para que decida una persona);
+//     una rechazada anula ese pago.
 //
-// Redeliveries are harmless: payables are unique by source and payments by reference.
+// Los mensajes entregados otra vez no hacen daño: las obligaciones son únicas por origen y los pagos por
+// referencia.
 func Subscribe(c *messaging.Consumer, d Deps) {
 	s := newService(d)
 	bySource := func(ctx context.Context, typ, id string) ([]*domain.Payable, error) {
@@ -155,7 +156,7 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 		}
 		for _, p := range found {
 			if p.State().Cancelled || p.State().Paid.IsPositive() {
-				continue // a paid obligation is refunded by a person, not withdrawn
+				continue // una obligación pagada la reembolsa una persona, no se retira
 			}
 			if _, err := s.payables.Update(ctx, p.ID(), func(_ context.Context, p *domain.Payable) error { return p.Cancel(reason) }); err != nil {
 				return err
@@ -175,7 +176,7 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 			return invalid(invoiceRegistered, err)
 		}
 		if !amount.IsPositive() {
-			return nil // a credit of the supplier: offsets are phase 2
+			return nil // un abono del proveedor: las compensaciones son de la fase 2
 		}
 		st := domain.PayableState{Company: domain.OrganizationID{UUID: company}, Payee: domain.PartyID{UUID: supplier}, Kind: domain.SupplierInvoice,
 			Source: domain.Source{Type: invoiceRegistered, ID: e.InvoiceID}, Document: e.SupplierNumber, Issued: issued, Due: due, Currency: euro,
@@ -223,7 +224,7 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 				sum = sum.Add(t.Amount)
 			}
 			if sum.Equal(net) {
-				st.PayTo = splits[e.PayslipID] // a split that does not add up is left for a person
+				st.PayTo = splits[e.PayslipID] // un reparto que no cuadra se deja para una persona
 			}
 		}
 		return create(ctx, st)
@@ -234,7 +235,7 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 
 	const filingSubmitted = "fiscal.filing-submitted.v1"
 	messaging.Handle(c, func(ctx context.Context, e FilingSubmitted, env app.Envelope) error {
-		if strings.TrimSpace(e.Form) == "190" { // informative: nothing to pay
+		if strings.TrimSpace(e.Form) == "190" { // informativo: nada que pagar
 			return nil
 		}
 		declarant, err1 := fw.ParseUUID(e.Declarant)
@@ -247,11 +248,11 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 		}
 		due, err := domain.TaxDue(e.Year, e.Period)
 		if err != nil {
-			return nil // a period without payment (annual summaries)
+			return nil // un periodo sin pago (resúmenes anuales)
 		}
 		issued := vocab.DateOf(env.OccurredAt)
 		if due.Before(issued) {
-			due = issued // filed late: due at once
+			due = issued // presentado tarde: vence en el acto
 		}
 		return create(ctx, domain.PayableState{Company: domain.OrganizationID{UUID: declarant}, Authority: TaxAuthority, Kind: domain.Tax,
 			Source: domain.Source{Type: filingSubmitted, ID: e.FilingID}, Document: fmt.Sprintf("Modelo %s %d-%s", e.Form, e.Year, e.Period),
@@ -322,12 +323,12 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 	})
 }
 
-// PayablePort implements contracts.Payable (it serves Treasury, not users).
+// PayablePort implementa contracts.Payable (sirve a Treasury, no a usuarios).
 type PayablePort struct{ Payables domain.PayableRepository }
 
 var _ contracts.Payable = PayablePort{}
 
-// DueForTransfer implements contracts.Payable.
+// DueForTransfer implementa contracts.Payable.
 func (p PayablePort) DueForTransfer(ctx context.Context, company, dueTo string) ([]contracts.DueItem, int, error) {
 	var v fw.Validation
 	cid := domain.OrganizationID{UUID: parseID(&v, "company", company)}
@@ -345,7 +346,7 @@ func (p PayablePort) DueForTransfer(ctx context.Context, company, dueTo string) 
 	for _, b := range ps {
 		s := b.State()
 		if !s.Paid.IsZero() {
-			continue // partly paid: a person decides the rest
+			continue // pagada en parte: el resto lo decide una persona
 		}
 		if len(s.PayTo) == 0 {
 			without++

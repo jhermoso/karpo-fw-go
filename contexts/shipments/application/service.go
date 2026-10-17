@@ -1,5 +1,5 @@
-// Package application holds the Shipments use cases (with permissions and company scope), the
-// subscription to the delivery notes of Orders and the translation to the Published Language.
+// Package application contiene los casos de uso de Shipments (con permisos y ámbito de empresa), la
+// suscripción a los albaranes de Orders y la traducción al Published Language.
 package application
 
 import (
@@ -22,10 +22,10 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// DeliverySource is the source type of the shipments planned from delivery notes of Orders.
+// DeliverySource es el tipo de origen de los envíos planificados a partir de albaranes de Orders.
 const DeliverySource = "orders.delivery"
 
-// Deps are the ports the use cases need; Recorder and Audit are optional.
+// Deps son los puertos que necesitan los casos de uso; Recorder y Audit son opcionales.
 type Deps struct {
 	Shipments domain.ShipmentRepository
 	Carriers  domain.CarrierRepository
@@ -34,7 +34,7 @@ type Deps struct {
 	Audit     app.AuditLog
 }
 
-// Service exposes the use cases.
+// Service expone los casos de uso.
 type Service struct {
 	Schedule        app.CommandHandler[ScheduleShipment, ShipmentDTO]
 	Change          app.CommandHandler[ChangeShipment, ShipmentDTO]
@@ -83,7 +83,7 @@ func scopeOf(ctx context.Context) scope {
 	return s
 }
 
-// check returns a uniform 404 outside the company's scope and 403 when it is read-only.
+// check devuelve un 404 uniforme fuera del ámbito de la empresa y 403 cuando es de sólo lectura.
 func (s scope) check(kind string, id fmt.Stringer, org domain.OrganizationID, write bool) error {
 	if !s.global && !slices.Contains(s.orgs, org) {
 		return fw.NotFound(kind, id)
@@ -155,7 +155,7 @@ func changing[In, Out any](uow fw.UnitOfWork, p authz.Permission, fn func(contex
 	return guard(p, fn, pipeline.RetryOnConflict[In, Out](5, 10*time.Millisecond), pipeline.Transactional[In, Out](uow))
 }
 
-// NewService wires the use cases.
+// NewService conecta los casos de uso.
 func NewService(d Deps) *Service {
 	s := newService(d)
 	svc := &Service{}
@@ -164,7 +164,8 @@ func NewService(d Deps) *Service {
 	return svc
 }
 
-// DeliveryIssued is the Shipments copy of orders.delivery-issued.v1 (only the fields it needs).
+// DeliveryIssued es la copia de Shipments de orders.delivery-issued.v1 (sólo los campos que
+// necesita).
 type DeliveryIssued struct {
 	DeliveryID string `json:"deliveryId"`
 	Company    string `json:"company"`
@@ -180,12 +181,12 @@ type DeliveryIssued struct {
 	} `json:"lines"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (DeliveryIssued) IntegrationEventType() string { return "orders.delivery-issued.v1" }
 
-// Subscribe plans the shipment of each delivery note (Orders publishes, Shipments dispatches):
-// the goods of the note, on its date, with nothing decided yet about how they travel. Services
-// are not shipped: a delivery note without goods plans nothing. One shipment per delivery note.
+// Subscribe planifica el envío de cada albarán (Orders publica, Shipments expide): los bienes del
+// albarán, en su fecha, sin nada decidido todavía sobre cómo viajan. Los servicios no se envían: un
+// albarán sin bienes no planifica nada. Un envío por albarán.
 func Subscribe(c *messaging.Consumer, d Deps) {
 	s := newService(d)
 	messaging.Handle(c, func(ctx context.Context, e DeliveryIssued, _ app.Envelope) error {
@@ -224,7 +225,7 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 	})
 }
 
-// Publications translates the domain events into the Published Language.
+// Publications traduce los eventos de dominio al Published Language.
 func Publications(r *messaging.Recorder) *messaging.Recorder {
 	messaging.On(r, func(_ context.Context, e domain.ShipmentDispatched) ([]app.IntegrationEvent, error) {
 		return []app.IntegrationEvent{contracts.ShipmentDispatchedV1{ShipmentID: e.AggregateID, Company: e.Company, Customer: e.Customer,

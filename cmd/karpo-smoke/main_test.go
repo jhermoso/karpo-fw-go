@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-// out is what the program writes, read while it runs.
+// out es lo que escribe el programa, leído mientras se ejecuta.
 type out struct {
 	mu sync.Mutex
 	b  bytes.Buffer
@@ -39,7 +39,7 @@ func clean(t *testing.T) {
 	t.Setenv("KARPO_BOOTSTRAP_ADMIN_PASSWORD", "")
 }
 
-// Outside development the program stops before it creates or opens anything.
+// Fuera de desarrollo el programa se para antes de crear o abrir nada.
 func TestRun_RefusesOutsideDevelopment(t *testing.T) {
 	clean(t)
 	for _, env := range []string{"", "production", "Development"} {
@@ -54,7 +54,7 @@ func TestRun_RefusesOutsideDevelopment(t *testing.T) {
 	}
 }
 
-// In development it serves on 127.0.0.1, lets the profile in and stops when it is told.
+// En desarrollo sirve en 127.0.0.1, deja entrar al perfil y se para cuando se le dice.
 func TestRun_ServesOnThisMachineAndLetsIn(t *testing.T) {
 	clean(t)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -83,7 +83,7 @@ func TestRun_ServesOnThisMachineAndLetsIn(t *testing.T) {
 			t.Errorf("it does not say %q:\n%s", piece, said)
 		}
 	}
-	// Neither the key nor a password is ever written.
+	// Nunca se escribe ni la clave ni una contraseña.
 	for _, word := range []string{"password", "secret", "Bearer"} {
 		if strings.Contains(strings.ToLower(said), strings.ToLower(word)) {
 			t.Errorf("it writes %q:\n%s", word, said)
@@ -132,18 +132,18 @@ func TestRun_ServesOnThisMachineAndLetsIn(t *testing.T) {
 		t.Fatal("it did not stop")
 	}
 
-	// The same file again: it exists, so it is not even opened.
+	// El mismo fichero otra vez: existe, así que ni siquiera se abre.
 	err = run(context.Background(), []string{"-port", "0", "-db", db}, "development", &out{}, nil)
 	if err == nil || !strings.Contains(err.Error(), "new database") {
 		t.Fatalf("it started again on the same database: %v", err)
 	}
 }
 
-// A file that is already there is never touched: it could be the database of a real installation
-// without an administrator yet, and the publisher would leave its own there for good.
+// Un fichero que ya está ahí nunca se toca: podría ser la base de datos de una instalación real
+// todavía sin administrador, y el publicador dejaría allí el suyo para siempre.
 func TestRun_RefusesADatabaseThatAlreadyExists(t *testing.T) {
 	clean(t)
-	// An empty file is a database SQLite opens and migrates; the other is not one at all.
+	// Un fichero vacío es una base de datos que SQLite abre y migra; el otro no lo es en absoluto.
 	for _, before := range [][]byte{{}, []byte("whatever is here is not of the smoke publisher")} {
 		dir := t.TempDir()
 		db := filepath.Join(dir, "karpo.db")
@@ -160,7 +160,7 @@ func TestRun_RefusesADatabaseThatAlreadyExists(t *testing.T) {
 		if err != nil || !bytes.Equal(before, after) {
 			t.Fatalf("the file was changed: %d bytes, %v", len(after), err)
 		}
-		// Nothing was put next to it either (the journal of SQLite, the folder of the exports).
+		// Tampoco se puso nada a su lado (el diario de SQLite, la carpeta de las exportaciones).
 		if around, _ := os.ReadDir(dir); len(around) != 1 {
 			t.Fatalf("something was created next to the file: %v", around)
 		}

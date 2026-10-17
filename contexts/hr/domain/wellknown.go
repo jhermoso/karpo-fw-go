@@ -1,12 +1,12 @@
-// Code generated from the C# seed (040-Data/schema/sqlserver/02-semillas.sql, schema rrhh) with
-// the same GUIDs. BenefitPercent and RoleTypeId of the C# position types are not ported: the
-// first is payroll data, the second was never read.
+// Código generado a partir de la semilla del C# (040-Data/schema/sqlserver/02-semillas.sql,
+// esquema rrhh) con los mismos GUID. BenefitPercent y RoleTypeId de los tipos de puesto del C# no
+// se portan: el primero es un dato de nómina, el segundo nunca se leía.
 
 package domain
 
 import "github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 
-// WellKnownPositionStatuses returns the seed of the position status catalog.
+// WellKnownPositionStatuses devuelve la semilla del catálogo de estados de puesto.
 func WellKnownPositionStatuses() []PositionStatus {
 	return []PositionStatus{
 		{ID: MustPositionStatusID("20000000-0000-0000-0001-000000000001"), Name: "Active", Description: "Position is currently active and can be filled", Active: true},
@@ -18,7 +18,7 @@ func WellKnownPositionStatuses() []PositionStatus {
 	}
 }
 
-// WellKnownPositionClasses returns the seed of the position classification catalog.
+// WellKnownPositionClasses devuelve la semilla del catálogo de clasificaciones de puesto.
 func WellKnownPositionClasses() []PositionClass {
 	return []PositionClass{
 		{ID: MustPositionClassID("20000000-0000-0000-0003-000000000001"), Name: "Dirección", Active: true},
@@ -33,7 +33,7 @@ func WellKnownPositionClasses() []PositionClass {
 	}
 }
 
-// WellKnownPositionTypes returns the seed of the position type catalog.
+// WellKnownPositionTypes devuelve la semilla del catálogo de tipos de puesto.
 func WellKnownPositionTypes() []PositionType {
 	return []PositionType{
 		{ID: MustPositionTypeID("20000000-0000-0000-0002-000000000001"), Title: "Chief Executive Officer", Description: "CEO - Maximum executive authority", Active: false, Classes: []PositionTypeClass{}},
@@ -96,7 +96,7 @@ func WellKnownPositionTypes() []PositionType {
 	}
 }
 
-// WellKnownAgreements returns the seed of the collective agreement catalog (the C# ConvenioColectivo).
+// WellKnownAgreements devuelve la semilla del catálogo de convenios colectivos (el ConvenioColectivo del C#).
 func WellKnownAgreements() []Agreement {
 	return []Agreement{
 		{ID: MustAgreementID("b3800000-0003-0000-0000-000000000001"), Code: "ES-OFICINAS-DESPACHOS-NAC-2024", Name: "Convenio Colectivo de Oficinas y Despachos (Nacional)", Scope: ScopeNational, TerritorialCode: "", SectoralCode: "82", Start: vocab.MustDate(2024, 1, 1), End: vocab.Date{}, Active: true},

@@ -10,8 +10,8 @@ import (
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// registerDetails mounts the routes that change the details a relationship carries because of
-// its type (docs/PARTIES-UDM.md).
+// registerDetails monta las rutas que cambian los detalles que lleva una relación por su tipo
+// (docs/PARTIES-UDM.md).
 func (m *Module) registerDetails(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/party-relationships/{id}/trial", m.setProspectTrial)
 	mux.HandleFunc("PUT /api/party-relationships/{id}/ownership", m.setOwnershipShare)

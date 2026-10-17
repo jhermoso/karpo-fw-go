@@ -1,5 +1,5 @@
-// Package infrastructure stores the Receivables context: SQL mappings, versioned schema of the five
-// engines (with the inbox of the Billing events), hot-swap factories.
+// Package infrastructure guarda el contexto Receivables: mapeos SQL, esquema versionado de los cinco
+// motores (con el inbox de los eventos de Billing), factorías intercambiables en caliente.
 package infrastructure
 
 import (
@@ -25,10 +25,10 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlserver"
 )
 
-// Context is the name of the bounded context.
+// Context es el nombre del contexto delimitado.
 const Context = "receivables"
 
-// Technical tables of the context.
+// Tablas técnicas del contexto.
 const (
 	TableOutbox            = "receivables_outbox"
 	TableIntegrationOutbox = "receivables_integration_outbox"
@@ -82,7 +82,7 @@ func technicalDDL(d string) []string {
 	return nil
 }
 
-// Migrations is the versioned schema of the context.
+// Migrations es el esquema versionado del contexto.
 func Migrations() sqlrepo.MigrationSet {
 	technical := map[string][]string{}
 	for _, d := range sqlrepo.Dialects {
@@ -94,16 +94,16 @@ func Migrations() sqlrepo.MigrationSet {
 	}}
 }
 
-// Migrator returns the schema migrator of the context.
+// Migrator devuelve el migrador del esquema del contexto.
 func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 	return sqlrepo.NewMigrator(db, []sqlrepo.MigrationSet{Migrations()})
 }
 
-// Tables lists the tables of the context, children first (drop order).
+// Tables lista las tablas del contexto, primero las hijas (orden de borrado).
 var Tables = []string{"rec_allocations", "rec_collections", "rec_installments", "rec_receivables", "rec_credit_profiles", "rec_terms",
 	TableOutbox, TableIntegrationOutbox, TableAuditLog, TableInbox}
 
-// DropAll removes the tables of the context and its migration history (tests only).
+// DropAll borra las tablas del contexto y su historial de migraciones (sólo pruebas).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
 	for _, t := range Tables {
 		_, _ = db.ExecContext(ctx, "DROP TABLE "+t)
@@ -148,7 +148,7 @@ func splitDays(s string) ([]int, error) {
 	return out, nil
 }
 
-// TermsMapping maps Terms to rec_terms.
+// TermsMapping mapea Terms a rec_terms.
 func TermsMapping() sqlrepo.Mapping[domain.TermsID, *domain.Terms] {
 	return sqlrepo.Mapping[domain.TermsID, *domain.Terms]{
 		Table: "rec_terms",
@@ -180,7 +180,7 @@ func TermsMapping() sqlrepo.Mapping[domain.TermsID, *domain.Terms] {
 	}
 }
 
-// CreditMapping maps CreditProfile to rec_credit_profiles.
+// CreditMapping mapea CreditProfile a rec_credit_profiles.
 func CreditMapping() sqlrepo.Mapping[domain.CreditProfileID, *domain.CreditProfile] {
 	return sqlrepo.Mapping[domain.CreditProfileID, *domain.CreditProfile]{
 		Table:   "rec_credit_profiles",
@@ -208,7 +208,7 @@ func CreditMapping() sqlrepo.Mapping[domain.CreditProfileID, *domain.CreditProfi
 	}
 }
 
-// ReceivableMapping maps Receivable to rec_receivables and its installments.
+// ReceivableMapping mapea Receivable a rec_receivables y sus vencimientos.
 func ReceivableMapping() sqlrepo.Mapping[domain.ReceivableID, *domain.Receivable] {
 	return sqlrepo.Mapping[domain.ReceivableID, *domain.Receivable]{
 		Table:   "rec_receivables",
@@ -254,7 +254,7 @@ func ReceivableMapping() sqlrepo.Mapping[domain.ReceivableID, *domain.Receivable
 	}
 }
 
-// CollectionMapping maps Collection to rec_collections and its allocations.
+// CollectionMapping mapea Collection a rec_collections y sus aplicaciones.
 func CollectionMapping() sqlrepo.Mapping[domain.CollectionID, *domain.Collection] {
 	return sqlrepo.Mapping[domain.CollectionID, *domain.Collection]{
 		Table:   "rec_collections",
@@ -315,7 +315,7 @@ func repository[ID fw.Identifier, T fw.AggregateRoot[ID]](b hotswap.Backend, m s
 	return nil, unsupported(b)
 }
 
-// Repository factories.
+// Factorías de repositorios.
 func TermsRepositoryFactory(b hotswap.Backend) (domain.TermsRepository, error) {
 	return repository(b, TermsMapping())
 }
@@ -332,10 +332,11 @@ func CollectionRepositoryFactory(b hotswap.Backend) (domain.CollectionRepository
 	return repository(b, CollectionMapping())
 }
 
-// OutboxFactory builds the domain event outbox; IntegrationOutboxFactory, the Published Language one.
+// OutboxFactory construye el outbox de eventos de dominio; IntegrationOutboxFactory, el del
+// Published Language.
 func OutboxFactory(b hotswap.Backend) (application.OutboxStore, error) { return outbox(b, TableOutbox) }
 
-// IntegrationOutboxFactory builds the integration outbox.
+// IntegrationOutboxFactory construye el outbox de integración.
 func IntegrationOutboxFactory(b hotswap.Backend) (application.OutboxStore, error) {
 	return outbox(b, TableIntegrationOutbox)
 }
@@ -350,7 +351,7 @@ func outbox(b hotswap.Backend, table string) (application.OutboxStore, error) {
 	return nil, unsupported(b)
 }
 
-// AuditLogFactory builds the audit log.
+// AuditLogFactory construye el registro de auditoría.
 func AuditLogFactory(b hotswap.Backend) (application.AuditLog, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -361,7 +362,7 @@ func AuditLogFactory(b hotswap.Backend) (application.AuditLog, error) {
 	return nil, unsupported(b)
 }
 
-// InboxFactory builds the inbox of the Billing events.
+// InboxFactory construye el inbox de los eventos de Billing.
 func InboxFactory(b hotswap.Backend) (application.InboxStore, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:

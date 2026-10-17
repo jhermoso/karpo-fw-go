@@ -8,9 +8,10 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 )
 
-// RunStrings checks that a {str:N} column of sqlrepo.RenderDDL holds N characters on db, whatever
-// bytes they take: the domain validates lengths in runes, so a text of N accented characters
-// must fit (Oracle's VARCHAR2(N) counts bytes unless it is declared in CHAR).
+// RunStrings comprueba que una columna {str:N} de sqlrepo.RenderDDL admite N caracteres en db,
+// ocupen los bytes que ocupen: el dominio valida las longitudes en runas, así que un texto de N
+// caracteres acentuados debe caber (el VARCHAR2(N) de Oracle cuenta bytes salvo que se declare en
+// CHAR).
 func RunStrings(t *testing.T, db *sqlrepo.DB) {
 	ctx := context.Background()
 	dialect := db.Dialect().Name()
@@ -21,12 +22,13 @@ func RunStrings(t *testing.T, db *sqlrepo.DB) {
 	}
 
 	cases := []struct{ short, body string }{
-		{"áéíóúñüç€ß", strings.Repeat("ñ", 1000)},            // 2 bytes each in UTF-8
-		{strings.Repeat("€", 10), strings.Repeat("€", 1000)}, // 3 bytes each
+		{"áéíóúñüç€ß", strings.Repeat("ñ", 1000)},            // 2 bytes cada uno en UTF-8
+		{strings.Repeat("€", 10), strings.Repeat("€", 1000)}, // 3 bytes cada uno
 		{strings.Repeat("語", 10), strings.Repeat("añ€語", 250)},
 	}
-	// Outside the Basic Multilingual Plane (4 bytes in UTF-8): 1,000 of them are exactly the
-	// 4,000 bytes of an Oracle VARCHAR2. SQL Server's NVARCHAR counts them as two code units.
+	// Fuera del plano multilingüe básico (4 bytes en UTF-8): 1.000 de ellos son justo los 4.000
+	// bytes de un VARCHAR2 de Oracle. El NVARCHAR de SQL Server los cuenta como dos unidades de
+	// código.
 	if dialect != "sqlserver" {
 		cases = append(cases, struct{ short, body string }{strings.Repeat("😀", 10), strings.Repeat("😀", 1000)})
 	}

@@ -1,12 +1,13 @@
-// Package contracts is what other bounded contexts may depend on: the Published Language of Work.
+// Package contracts es aquello de lo que pueden depender otros contextos delimitados: el Published
+// Language de Work.
 package contracts
 
-// Source is the name of the publishing bounded context.
+// Source es el nombre del contexto delimitado que publica.
 const Source = "work"
 
-// WorkCompletedV1 is published when a piece of work is finished. Hours are the approved hours
-// recorded against it and Cost what they cost at the rates of the assignments; decimal strings
-// with two decimals.
+// WorkCompletedV1 se publica cuando se termina un trabajo. Hours son las horas aprobadas anotadas
+// en él y Cost lo que cuestan a las tarifas de las asignaciones; cadenas decimales con dos
+// decimales.
 type WorkCompletedV1 struct {
 	WorkID   string `json:"workId"`
 	Company  string `json:"company"`
@@ -19,11 +20,11 @@ type WorkCompletedV1 struct {
 	Cost     string `json:"cost"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (WorkCompletedV1) IntegrationEventType() string { return "work.work-completed.v1" }
 
-// TimeApprovedV1 is published when the time a person worked on a piece of work in a day becomes
-// final.
+// TimeApprovedV1 se publica cuando el tiempo que una persona trabajó en un trabajo en un día pasa a
+// ser definitivo.
 type TimeApprovedV1 struct {
 	EntryID  string `json:"entryId"`
 	WorkID   string `json:"workId"`
@@ -35,5 +36,5 @@ type TimeApprovedV1 struct {
 	Billable bool   `json:"billable"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (TimeApprovedV1) IntegrationEventType() string { return "work.time-approved.v1" }

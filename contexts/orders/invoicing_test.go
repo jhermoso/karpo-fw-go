@@ -41,8 +41,8 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlite"
 )
 
-// chain composes the whole sales cycle on one backend: Parties, Fiscal, Products, Inventory,
-// Receivables, Orders and Billing, with one broker between them.
+// chain compone el ciclo de venta entero sobre un único backend: Parties, Fiscal, Products,
+// Inventory, Receivables, Orders y Billing, con un broker entre ellos.
 type chain struct {
 	t      *testing.T
 	sw     *hotswap.Switch
@@ -105,14 +105,14 @@ func (c *chain) scenario(tag string) {
 	c.ok(err)
 	ana, err := c.pm.Service.RegisterPerson.Handle(ctx, papp.RegisterPerson{GivenName: "Ana", FirstSurname: "Núñez " + tag})
 	c.ok(err)
-	// Each scenario has its own company, with a tax number of its own.
+	// Cada escenario tiene su propia empresa, con un número fiscal propio.
 	nif := map[string][2]string{"m": {"A58818501", "12345678Z"}, "s": {"B86561412", "00000000T"}}[tag]
 	for party, d := range map[string][2]string{acme.ID: {"c0000000-0004-0000-0000-000000000003", nif[0]}, ana.ID: {"c0000000-0004-0000-0000-000000000002", nif[1]}} {
 		id, _ := pdomain.ParsePartyID(party)
 		_, err := c.pm.Service.AddIdentification.Handle(ctx, papp.AddIdentification{PartyID: id, DocumentType: d[0], Country: "ES", Number: d[1], Primary: true})
 		c.ok(err)
 	}
-	// The rates are a catalog of the backend: each one (memory, then SQLite) gets its own.
+	// Los tipos son un catálogo del backend: cada uno (memoria, luego SQLite) recibe el suyo.
 	_, err = c.fm.Service.CreateRate.Handle(ctx, fapp.CreateRate{Type: "vat", Territory: "common", Code: "G21", Description: "General", Rate: "21",
 		From: vocab.MustDate(2012, 9, 1)})
 	c.ok(err)
@@ -137,7 +137,7 @@ func (c *chain) scenario(tag string) {
 	_, err = c.rm.Service.SetCredit.Handle(ctx, rapp.SetCredit{Seller: acme.ID, Customer: ana.ID, Limit: &limit})
 	c.ok(err)
 
-	// The duplicate of another party is not sold to (D-70).
+	// Al duplicado de otra party no se le vende (D-70).
 	dup, err := c.pm.Service.RegisterPerson.Handle(ctx, papp.RegisterPerson{GivenName: "Duplicada", FirstSurname: tag})
 	c.ok(err)
 	_, err = c.pm.Service.EstablishRelationship.Handle(ctx, papp.EstablishRelationship{Type: pdomain.RelDuplicateOf.String(), From: dup.ID, To: ana.ID})
@@ -161,12 +161,12 @@ func (c *chain) scenario(tag string) {
 		return id, err
 	}
 
-	// A product without a tax code cannot be sold: its delivery could not be invoiced.
+	// Un producto sin código de impuesto no se puede vender: su albarán no se podría facturar.
 	if _, err := order(map[string]string{sinIVA.ID: "1"}); !isViolation(err, "orders.no_tax_code") {
 		t.Fatalf("no tax code: %v", err)
 	}
 
-	// Order, delivery note and, from it, the draft invoice.
+	// Pedido, albarán y, a partir de él, la factura en borrador.
 	oid, err := order(map[string]string{tornillo.ID: "60", montaje.ID: "1"})
 	c.ok(err)
 	c.deliver()
@@ -193,7 +193,7 @@ func (c *chain) scenario(tag string) {
 		t.Fatalf("delivery notes to invoice: %+v %v", open.Items, err)
 	}
 
-	// Issued: the delivery note knows its invoice and Receivables what the customer owes.
+	// Emitida: el albarán conoce su factura y Receivables lo que debe el cliente.
 	inv, err = c.bm.Service.Issue.Handle(ctx, bapp.IssueInvoice{ID: iid, Series: series.ID, Date: vocab.MustDate(2026, 10, 6)})
 	c.ok(err)
 	c.deliver()
@@ -210,7 +210,7 @@ func (c *chain) scenario(tag string) {
 		t.Fatalf("exposure: %+v %v", exp, err)
 	}
 
-	// The next order counts what is already owed: 110.00 does not fit in the 85.05 available.
+	// El pedido siguiente cuenta lo que ya se debe: 110.00 no cabe en los 85.05 disponibles.
 	if _, err := order(map[string]string{tornillo.ID: "40", montaje.ID: "2"}); !isViolation(err, "orders.credit_exceeded") {
 		t.Fatalf("credit with the open invoice: %v", err)
 	}

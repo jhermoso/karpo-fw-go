@@ -120,8 +120,8 @@ func TestShipment_Rules(t *testing.T) {
 	}
 }
 
-// host composes Shipments on a hot-swappable backend; the test plays Orders by sending its
-// delivery notes to the broker.
+// host compone Shipments sobre un backend intercambiable en caliente; la prueba hace de Orders
+// enviando sus albaranes al broker.
 type host struct {
 	t      *testing.T
 	srv    *httptest.Server
@@ -197,7 +197,7 @@ func (h *host) must(got, want int, what string) {
 	}
 }
 
-// deliveryNote plays Orders: a delivery note reaches the broker.
+// deliveryNote hace de Orders: un albarán llega al broker.
 func (h *host) deliveryNote(msg, id, company, customer, number string, lines []map[string]any) {
 	h.t.Helper()
 	raw, _ := json.Marshal(map[string]any{"deliveryId": id, "orderId": fw.NewUUID().String(), "company": company, "customer": customer, "number": number,
@@ -217,7 +217,7 @@ func (h *host) scenario(tag string) {
 	}
 	h.grant("outsider", globex)
 
-	// Carriers.
+	// Transportistas.
 	seurBody := map[string]any{"company": acme, "code": "seur", "name": "SEUR", "trackingUrl": "https://seur.example/track?n={tracking}"}
 	var seur, old sapp.CarrierDTO
 	h.must(h.do("POST", "/api/carriers", "viewer", seurBody, nil), 403, "viewer")
@@ -233,7 +233,7 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("carriers: %+v", carriers)
 	}
 
-	// The delivery note of Orders plans the shipment of its goods, once; services are not shipped.
+	// El albarán de Orders planifica el envío de sus bienes, una sola vez; los servicios no se envían.
 	goods := []map[string]any{{"line": 1, "sku": "TOR-01", "description": "Tornillos", "uom": "ud", "stocked": true, "quantity": "100"},
 		{"line": 2, "sku": "MON-01", "description": "Montaje", "uom": "h", "stocked": false, "quantity": "2"},
 		{"line": 3, "sku": "TUE-01", "description": "Tuercas", "uom": "ud", "stocked": true, "quantity": "50.5"}}
@@ -255,7 +255,7 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("shipment: %+v", shp)
 	}
 
-	// How it travels.
+	// Cómo viaja.
 	move := func(to, on string) map[string]any { return map[string]any{"to": to, "on": on} }
 	h.must(h.do("POST", "/api/shipments/"+sid+"/move", "planner", move("in-transit", "2026-05-07"), nil), 403, "preparing is not dispatching")
 	h.must(h.do("POST", "/api/shipments/"+sid+"/move", "dock", move("lost", "2026-05-07"), nil), 400, "status")
@@ -279,7 +279,7 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("plan: %+v", shp)
 	}
 
-	// Dispatch, tracking, delivery.
+	// Salida, seguimiento, entrega.
 	h.must(h.do("POST", "/api/shipments/"+sid+"/move", "dock", move("in-transit", "2026-05-05"), nil), 422, "before it was planned")
 	h.must(h.do("POST", "/api/shipments/"+sid+"/move", "dock", move("in-transit", "2026-05-07"), &shp), 200, "dispatch")
 	h.must(h.do("PUT", "/api/shipments/"+sid, "planner", with("destination", "Otra calle"), nil), 422, "destination in transit")
@@ -294,7 +294,7 @@ func (h *host) scenario(tag string) {
 	h.must(h.do("POST", "/api/shipments/"+sid+"/move", "dock", move("delivered", "2026-05-09"), nil), 422, "delivered once")
 	h.must(h.do("PUT", "/api/shipments/"+sid, "planner", plan, nil), 422, "closed")
 
-	// Shipments planned by hand: one collected by the customer that comes back, one cancelled.
+	// Envíos planificados a mano: uno que recoge el cliente y que vuelve, uno anulado.
 	byHand := map[string]any{"company": acme, "customer": customer, "method": "pickup", "packages": 1, "on": "2026-05-10",
 		"lines": []map[string]any{{"description": "Muestras", "quantity": "3", "uom": "ud"}}}
 	var samples, dropped sapp.ShipmentDTO
@@ -310,7 +310,7 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("by hand: %+v / %+v", samples, dropped)
 	}
 
-	// Two dispatches, a delivery and a return leave for the other contexts.
+	// Dos salidas, una entrega y una devolución salen hacia los demás contextos.
 	if n, err := h.shp.Relay(inprocess.NewBroker()).RelayOnce(context.Background()); err != nil || n != 4 {
 		t.Fatalf("published: %d %v", n, err)
 	}

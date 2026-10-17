@@ -1,8 +1,7 @@
-// Package domain is the Assets model: the fixed assets of a company with their cost, residual
-// value and useful life, their straight-line depreciation month by month, and their disposal. The
-// C# FixedAsset had no amount at all (no cost, no useful life), depreciation was a free-text
-// "formula" nothing interpreted and an accounting header with no lines, and assets were never
-// disposed of.
+// Package domain es el modelo de Assets: el inmovilizado de una empresa con su coste, valor residual
+// y vida útil, su amortización lineal mes a mes, y su baja. El FixedAsset del C# no tenía ningún
+// importe (ni coste ni vida útil), la amortización era una «fórmula» de texto libre que nada
+// interpretaba y una cabecera contable sin líneas, y los activos nunca se daban de baja.
 package domain
 
 import (
@@ -18,25 +17,25 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// AssetKind is the stable aggregate type name.
+// AssetKind es el nombre estable del tipo de agregado.
 const AssetKind = "assets.asset"
 
-// Identities of the context.
+// Identidades del contexto.
 type (
-	// AssetID identifies a fixed asset.
+	// AssetID identifica un elemento del inmovilizado.
 	AssetID struct{ fw.UUID }
-	// OrganizationID is the owning company, an internal organization of the Parties context.
+	// OrganizationID es la empresa propietaria, una organización interna del contexto Parties.
 	OrganizationID struct{ fw.UUID }
-	// PartyID is the supplier, a party of the Parties context.
+	// PartyID es el proveedor, una party del contexto Parties.
 	PartyID struct{ fw.UUID }
-	// FacilityID is where the asset is, a facility of the Facilities context.
+	// FacilityID es donde está el activo, una instalación del contexto Facilities.
 	FacilityID struct{ fw.UUID }
 )
 
-// Class is the kind of a fixed asset (the C# kept four empty side tables for it).
+// Class es la clase de un elemento del inmovilizado (el C# tenía para ello cuatro tablas auxiliares vacías).
 type Class string
 
-// Classes. Land does not depreciate.
+// Clases. Los terrenos no se amortizan.
 const (
 	Land      Class = "land"
 	Buildings Class = "buildings"
@@ -49,24 +48,24 @@ const (
 	Other     Class = "other"
 )
 
-// Classes lists the valid classes.
+// Classes lista las clases válidas.
 var Classes = []Class{Land, Buildings, Machinery, Tooling, Furniture, Computers, Vehicles, Software, Other}
 
-// Period is a month of a year.
+// Period es un mes de un año.
 type Period struct {
 	Year  int
 	Month int
 }
 
-// PeriodOf returns the month of a date.
+// PeriodOf devuelve el mes de una fecha.
 func PeriodOf(d vocab.Date) Period { return Period{d.Year(), int(d.Month())} }
 
 func (p Period) index() int { return p.Year*12 + p.Month - 1 }
 
-// Before reports whether p is an earlier month than o.
+// Before dice si p es un mes anterior a o.
 func (p Period) Before(o Period) bool { return p.index() < o.index() }
 
-// Next returns the following month.
+// Next devuelve el mes siguiente.
 func (p Period) Next() Period {
 	if p.Month == 12 {
 		return Period{p.Year + 1, 1}
@@ -74,60 +73,60 @@ func (p Period) Next() Period {
 	return Period{p.Year, p.Month + 1}
 }
 
-// End returns the last day of the month.
+// End devuelve el último día del mes.
 func (p Period) End() vocab.Date {
 	n := p.Next()
 	return vocab.MustDate(n.Year, time.Month(n.Month), 1).AddDays(-1)
 }
 
-// String renders YYYY-MM.
+// String lo escribe como YYYY-MM.
 func (p Period) String() string { return fmt.Sprintf("%04d-%02d", p.Year, p.Month) }
 
-// Valid reports whether p is a real month.
+// Valid dice si p es un mes real.
 func (p Period) Valid() bool {
 	return p.Year >= 1990 && p.Year <= 2200 && p.Month >= 1 && p.Month <= 12
 }
 
-// Charge is the depreciation of a month.
+// Charge es la amortización de un mes.
 type Charge struct {
 	Period Period
 	Amount vocab.Decimal
 }
 
-// Disposal kinds.
+// Tipos de baja.
 const (
 	Sale  = "sale"
 	Scrap = "scrap"
 )
 
-// Details are the descriptive data of an asset, which may change.
+// Details son los datos descriptivos de un activo, que pueden cambiar.
 type Details struct {
 	Name     string
 	Serial   string
 	Location FacilityID
 }
 
-// AssetState is the persisted state of an asset.
+// AssetState es el estado persistido de un activo.
 type AssetState struct {
 	Company OrganizationID
 	Code    string
 	Class   Class
 	Details
 	Supplier   PartyID
-	Document   string // the supplier's invoice it was bought with
+	Document   string // la factura del proveedor con la que se compró
 	Acquired   vocab.Date
-	InService  vocab.Date // depreciation starts on this day
+	InService  vocab.Date // la amortización empieza este día
 	Cost       vocab.Decimal
 	Residual   vocab.Decimal
-	LifeMonths int // useful life; zero for land
+	LifeMonths int // vida útil; cero para los terrenos
 	Charges    []Charge
 	Disposed   vocab.Date
-	Disposal   string        // sale or scrap
-	Proceeds   vocab.Decimal // what the sale brought
+	Disposal   string        // venta o desecho
+	Proceeds   vocab.Decimal // lo que dio la venta
 	Audit      traits.AuditStamp
 }
 
-// Asset is a fixed asset of a company.
+// Asset es un elemento del inmovilizado de una empresa.
 type Asset struct {
 	fw.BaseAggregateRoot[AssetID]
 	traits.Audited
@@ -156,7 +155,7 @@ func checkDetails(v *fw.Validation, d *Details) {
 	v.Require(utf8.RuneCountInString(d.Serial) <= 60, "serial", "length", "at most 60 characters")
 }
 
-// ReconstituteAsset rebuilds an asset.
+// ReconstituteAsset reconstruye un activo.
 func ReconstituteAsset(id AssetID, s AssetState) (*Asset, error) {
 	base, err := fw.NewBaseAggregateRoot(AssetKind, id)
 	if err != nil {
@@ -186,7 +185,7 @@ func ReconstituteAsset(id AssetID, s AssetState) (*Asset, error) {
 	return &Asset{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// RegisterAsset puts an asset in the register of a company.
+// RegisterAsset da de alta un activo en el registro de una empresa.
 func RegisterAsset(id AssetID, s AssetState) (*Asset, error) {
 	s.Charges, s.Disposed, s.Disposal, s.Proceeds = nil, vocab.Date{}, "", zero()
 	a, err := ReconstituteAsset(id, s)
@@ -197,14 +196,14 @@ func RegisterAsset(id AssetID, s AssetState) (*Asset, error) {
 	return a, nil
 }
 
-// State returns the state (charges are a copy).
+// State devuelve el estado (los cargos son una copia).
 func (a *Asset) State() AssetState {
 	s := a.s
 	s.Charges = slices.Clone(s.Charges)
 	return s
 }
 
-// Depreciable returns what is depreciated over the useful life: cost less residual value.
+// Depreciable devuelve lo que se amortiza a lo largo de la vida útil: el coste menos el valor residual.
 func (a *Asset) Depreciable() vocab.Decimal {
 	if a.s.LifeMonths == 0 {
 		return zero()
@@ -212,7 +211,7 @@ func (a *Asset) Depreciable() vocab.Decimal {
 	return a.s.Cost.Sub(a.s.Residual)
 }
 
-// Accumulated returns the depreciation charged so far.
+// Accumulated devuelve la amortización cargada hasta ahora.
 func (a *Asset) Accumulated() vocab.Decimal {
 	t := zero()
 	for _, c := range a.s.Charges {
@@ -221,10 +220,10 @@ func (a *Asset) Accumulated() vocab.Decimal {
 	return t
 }
 
-// NetBookValue returns the cost less the accumulated depreciation.
+// NetBookValue devuelve el coste menos la amortización acumulada.
 func (a *Asset) NetBookValue() vocab.Decimal { return a.s.Cost.Sub(a.Accumulated()) }
 
-// Monthly returns the charge of a full month.
+// Monthly devuelve el cargo de un mes completo.
 func (a *Asset) Monthly() vocab.Decimal {
 	if a.s.LifeMonths == 0 {
 		return zero()
@@ -232,10 +231,10 @@ func (a *Asset) Monthly() vocab.Decimal {
 	return a.Depreciable().Div(vocab.DecimalFromInt(int64(a.s.LifeMonths))).Round(2)
 }
 
-// FullyDepreciated reports whether nothing remains to depreciate.
+// FullyDepreciated dice si no queda nada por amortizar.
 func (a *Asset) FullyDepreciated() bool { return !a.Depreciable().GreaterThan(a.Accumulated()) }
 
-// next returns the month of the next charge.
+// next devuelve el mes del próximo cargo.
 func (a *Asset) next() Period {
 	if n := len(a.s.Charges); n > 0 {
 		return a.s.Charges[n-1].Period.Next()
@@ -243,8 +242,8 @@ func (a *Asset) next() Period {
 	return PeriodOf(a.s.InService)
 }
 
-// chargeOf computes the charge of the next month: the monthly amount, the days in service of the
-// first month, and never more than what remains (so the last charge absorbs the rounding).
+// chargeOf calcula el cargo del mes siguiente: el importe mensual, los días en servicio del primer
+// mes, y nunca más de lo que queda (así el último cargo absorbe el redondeo).
 func (a *Asset) chargeOf(p Period) vocab.Decimal {
 	amount := a.Monthly()
 	if p == PeriodOf(a.s.InService) {
@@ -257,9 +256,9 @@ func (a *Asset) chargeOf(p Period) vocab.Decimal {
 	return amount
 }
 
-// DepreciateThrough charges every month not yet charged up to one, in order, and returns the new
-// charges (none when the asset is up to date, fully depreciated, disposed of or land). Months are
-// charged once and never skipped.
+// DepreciateThrough carga cada mes aún no cargado hasta uno dado, en orden, y devuelve los cargos
+// nuevos (ninguno cuando el activo está al día, totalmente amortizado, dado de baja o es un
+// terreno). Los meses se cargan una vez y nunca se saltan.
 func (a *Asset) DepreciateThrough(until Period) ([]Charge, error) {
 	if !until.Valid() {
 		return nil, fw.Violation("assets.period", "a month of a year is required")
@@ -282,8 +281,8 @@ func (a *Asset) DepreciateThrough(until Period) ([]Charge, error) {
 	return out, nil
 }
 
-// Change replaces the descriptive data. Cost, residual value and useful life never change: they
-// are what the charges already made were computed with.
+// Change sustituye los datos descriptivos. El coste, el valor residual y la vida útil nunca cambian:
+// son con lo que se calcularon los cargos ya hechos.
 func (a *Asset) Change(d Details) error {
 	var v fw.Validation
 	checkDetails(&v, &d)
@@ -294,9 +293,9 @@ func (a *Asset) Change(d Details) error {
 	return nil
 }
 
-// Dispose removes the asset from the register on a date: sold for some proceeds, or scrapped for
-// none. It is depreciated first through the month before, so the result is the proceeds less the
-// net book value of that day.
+// Dispose saca el activo del registro en una fecha: vendido por un importe, o desechado sin él.
+// Antes se amortiza hasta el mes anterior, así que el resultado es lo obtenido menos el valor neto
+// contable de ese día.
 func (a *Asset) Dispose(on vocab.Date, kind string, proceeds vocab.Decimal) error {
 	if !a.s.Disposed.IsZero() {
 		return fw.Violation("assets.disposed", "the asset is already disposed of")
@@ -327,7 +326,7 @@ func (a *Asset) Dispose(on vocab.Date, kind string, proceeds vocab.Decimal) erro
 	return nil
 }
 
-// Result returns the gain (positive) or loss of the disposal.
+// Result devuelve el beneficio (positivo) o la pérdida de la baja.
 func (a *Asset) Result() vocab.Decimal {
 	if a.s.Disposed.IsZero() {
 		return zero()
@@ -335,7 +334,7 @@ func (a *Asset) Result() vocab.Decimal {
 	return a.s.Proceeds.Sub(a.NetBookValue())
 }
 
-// Status returns in-service, depreciated or disposed.
+// Status devuelve in-service, depreciated o disposed.
 func (a *Asset) Status() string {
 	switch {
 	case !a.s.Disposed.IsZero():
@@ -346,12 +345,12 @@ func (a *Asset) Status() string {
 	return "in-service"
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (a *Asset) AuditSnapshot() map[string]any {
 	return map[string]any{"code": a.s.Code, "cost": a.s.Cost.String(), "accumulated": a.Accumulated().String(), "status": a.Status()}
 }
 
-// Asset fields.
+// Campos del activo.
 var (
 	AstFieldCompany  = spec.Comparable("company", func(a *Asset) OrganizationID { return a.s.Company })
 	AstFieldCode     = spec.Ordered("code", func(a *Asset) string { return a.s.Code })
@@ -359,9 +358,9 @@ var (
 	AstFieldDisposed = spec.Comparable("disposed", func(a *Asset) bool { return !a.s.Disposed.IsZero() })
 )
 
-// Events of the context.
+// Eventos del contexto.
 type (
-	// AssetRegistered is raised when an asset enters the register.
+	// AssetRegistered se lanza cuando un activo entra en el registro.
 	AssetRegistered struct {
 		fw.EventMeta
 		Company string `json:"company"`
@@ -369,7 +368,7 @@ type (
 		Class   string `json:"class"`
 		Cost    string `json:"cost"`
 	}
-	// DepreciationCharged is raised for each month charged.
+	// DepreciationCharged se lanza por cada mes cargado.
 	DepreciationCharged struct {
 		fw.EventMeta
 		Company     string `json:"company"`
@@ -380,7 +379,7 @@ type (
 		Amount      string `json:"amount"`
 		Accumulated string `json:"accumulated"`
 	}
-	// AssetDisposed is raised when an asset is sold or scrapped.
+	// AssetDisposed se lanza cuando un activo se vende o se desecha.
 	AssetDisposed struct {
 		fw.EventMeta
 		Company     string `json:"company"`
@@ -395,16 +394,16 @@ type (
 	}
 )
 
-// EventType implementations.
+// Implementaciones de EventType.
 func (AssetRegistered) EventType() string     { return "assets.asset_registered" }
 func (DepreciationCharged) EventType() string { return "assets.depreciation_charged" }
 func (AssetDisposed) EventType() string       { return "assets.asset_disposed" }
 
-// NewAssetID returns a new identity.
+// NewAssetID devuelve una identidad nueva.
 func NewAssetID() AssetID { return AssetID{fw.NewUUID()} }
 
-// ParseAssetID parses a textual identity.
+// ParseAssetID interpreta una identidad en texto.
 func ParseAssetID(s string) (AssetID, error) { u, err := fw.ParseUUID(s); return AssetID{u}, err }
 
-// AssetRepository stores assets.
+// AssetRepository guarda los activos.
 type AssetRepository = fw.Repository[AssetID, *Asset]

@@ -1,9 +1,10 @@
-// Package mysql provides the MySQL / MariaDB dialect for sqlrepo. It does not import a driver:
-// register one in the composition root (github.com/go-sql-driver/mysql, driver "mysql"; use
-// parseTime=true&loc=UTC in the DSN).
+// Package mysql ofrece el dialecto MySQL / MariaDB para sqlrepo. No importa ningún driver: se
+// registra uno en la raíz de composición (github.com/go-sql-driver/mysql, driver "mysql"; con
+// parseTime=true&loc=UTC en el DSN).
 //
-// Identities are stored as CHAR(36), booleans as TINYINT(1)/BOOLEAN, instants as DATETIME(6) UTC.
-// Semantics note: default collations are case-insensitive.
+// Las identidades se guardan como CHAR(36), los booleanos como TINYINT(1)/BOOLEAN y los instantes
+// como DATETIME(6) en UTC. Nota de semántica: las collations por defecto no distinguen mayúsculas
+// de minúsculas.
 package mysql
 
 import (
@@ -16,39 +17,39 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 )
 
-// Dialect implements sqlrepo.Dialect for MySQL 8+ / MariaDB 10.5+.
+// Dialect implementa sqlrepo.Dialect para MySQL 8+ / MariaDB 10.5+.
 type Dialect struct{}
 
-// New returns the MySQL dialect.
+// New devuelve el dialecto MySQL.
 func New() Dialect { return Dialect{} }
 
-// Open wraps an opened MySQL *sql.DB.
+// Open envuelve un *sql.DB de MySQL ya abierto.
 func Open(db *sql.DB, opts ...sqlrepo.Option) *sqlrepo.DB { return sqlrepo.New(db, New(), opts...) }
 
 func (Dialect) Name() string                         { return "mysql" }
 func (Dialect) Placeholder(int) string               { return "?" }
 func (Dialect) Quote(ident string) string            { return "`" + strings.ReplaceAll(ident, "`", "``") + "`" }
 func (Dialect) LimitOffset(l, o int) string          { return fmt.Sprintf("LIMIT %d OFFSET %d", l, o) }
-func (Dialect) LikeEscape() string                   { return `ESCAPE '\\'` } // backslash is an escape in MySQL literals
+func (Dialect) LikeEscape() string                   { return `ESCAPE '\\'` } // en los literales de MySQL la barra invertida escapa
 func (Dialect) MaxInList() int                       { return 10000 }
 func (Dialect) BoolValue(b bool) any                 { return b }
 func (Dialect) UUIDValue(u domain.UUID) any          { return u.String() }
 func (Dialect) TimeValue(t time.Time) any            { return t.UTC() }
 func (Dialect) ParseUUID(v any) (domain.UUID, error) { return sqlrepo.ParseUUIDDefault(v) }
 
-// DateValue binds a civil date as midnight UTC into a DATE column.
+// DateValue enlaza una fecha civil como medianoche UTC en una columna DATE.
 func (Dialect) DateValue(y int, m time.Month, d int) any {
 	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
 }
 
-// DateExpr returns the placeholder unchanged.
+// DateExpr devuelve el placeholder sin cambios.
 func (Dialect) DateExpr(ph string) string { return ph }
 
 func (Dialect) IsUniqueViolation(err error) bool {
 	return sqlrepo.ErrorContains(err, "Error 1062", "Duplicate entry")
 }
 
-// OutboxDDL returns the statements creating the outbox table.
+// OutboxDDL devuelve las sentencias que crean la tabla del outbox.
 func OutboxDDL(table string) []string {
 	if table == "" {
 		table = sqlrepo.DefaultOutboxTable
@@ -71,7 +72,7 @@ func OutboxDDL(table string) []string {
 	}
 }
 
-// AuditDDL returns the statements creating the audit log table.
+// AuditDDL devuelve las sentencias que crean la tabla del registro de auditoría.
 func AuditDDL(table string) []string {
 	if table == "" {
 		table = sqlrepo.DefaultAuditTable
@@ -88,7 +89,7 @@ func AuditDDL(table string) []string {
 
 var _ sqlrepo.Dialect = Dialect{}
 
-// InboxDDL returns the statements creating the inbox table (consumer, message id).
+// InboxDDL devuelve las sentencias que crean la tabla del inbox (consumidor, id del mensaje).
 func InboxDDL(table string) []string {
 	if table == "" {
 		table = sqlrepo.DefaultInboxTable

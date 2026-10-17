@@ -8,17 +8,17 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/application"
 )
 
-// AuditLog is an in-memory application.AuditLog bound to a Store's unit of work.
+// AuditLog es un application.AuditLog en memoria ligado a la unidad de trabajo de un Store.
 type AuditLog struct {
 	store   *Store
 	mu      sync.Mutex
 	records []application.AuditRecord
 }
 
-// NewAuditLog creates an audit log on store.
+// NewAuditLog crea un registro de auditoría sobre store.
 func NewAuditLog(store *Store) *AuditLog { return &AuditLog{store: store} }
 
-// Append adds records; they are removed again if the unit of work rolls back.
+// Append añade registros; se vuelven a quitar si la unidad de trabajo hace rollback.
 func (l *AuditLog) Append(ctx context.Context, records ...application.AuditRecord) error {
 	if l.store.closed.Load() {
 		return ErrClosed
@@ -35,7 +35,7 @@ func (l *AuditLog) Append(ctx context.Context, records ...application.AuditRecor
 	return nil
 }
 
-// Trail returns the records of one aggregate in insertion order.
+// Trail devuelve los registros de un agregado en el orden en que se insertaron.
 func (l *AuditLog) Trail(_ context.Context, aggregateType, aggregateID string) ([]application.AuditRecord, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()

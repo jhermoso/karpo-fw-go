@@ -5,9 +5,10 @@ import (
 	"strings"
 )
 
-// Check-digit algorithms of national identification numbers, keyed as in the C#
-// country_document_rule.ChecksumKey column, so the country rules of Karpo keep working.
-// Each algorithm receives a normalized number (upper case, no spaces, dashes, dots or slashes).
+// Algoritmos de dígito de control de los números de identificación nacionales, con las mismas
+// claves que la columna country_document_rule.ChecksumKey de C#, para que las reglas por país de
+// Karpo sigan funcionando. Cada algoritmo recibe un número normalizado (en mayúsculas, sin espacios,
+// guiones, puntos ni barras).
 var checkDigits = map[string]func(string) bool{
 	"ES_DNI_MOD23":   func(n string) bool { return esDNI(n) == "" },
 	"ES_NIE_MOD23":   func(n string) bool { return esNIE(n) == "" },
@@ -24,7 +25,7 @@ var checkDigits = map[string]func(string) bool{
 	"HR_OIB_ISO7064": func(n string) bool { return len(n) == 11 && digits(n) && iso7064Mod11_10(n) },
 }
 
-// CheckDigitKeys returns the known algorithm keys.
+// CheckDigitKeys devuelve las claves de algoritmo conocidas.
 func CheckDigitKeys() []string {
 	out := make([]string, 0, len(checkDigits))
 	for k := range checkDigits {
@@ -33,8 +34,8 @@ func CheckDigitKeys() []string {
 	return out
 }
 
-// ValidCheckDigit validates number with the algorithm key. known is false for an unknown key
-// (a rule that names an algorithm nobody implemented must not pass silently).
+// ValidCheckDigit valida number con el algoritmo key. known es false si la clave es desconocida
+// (una regla que nombra un algoritmo que nadie ha implementado no debe pasar en silencio).
 func ValidCheckDigit(key, number string) (valid, known bool) {
 	fn, ok := checkDigits[key]
 	if !ok {
@@ -43,15 +44,15 @@ func ValidCheckDigit(key, number string) (valid, known bool) {
 	return fn(NormalizeDocumentNumber(number)), true
 }
 
-// NormalizeDocumentNumber upper-cases a document number and removes spaces, dashes, dots,
-// slashes and plus signs.
+// NormalizeDocumentNumber pasa a mayúsculas un número de documento y le quita espacios, guiones,
+// puntos, barras y signos más.
 func NormalizeDocumentNumber(s string) string {
 	return strings.ToUpper(strings.NewReplacer(" ", "", "-", "", ".", "", "/", "", "+", "").Replace(strings.TrimSpace(s)))
 }
 
 func atoi64(s string) int64 { n, _ := strconv.ParseInt(s, 10, 64); return n }
 
-// ptNIF: Portuguese NIF, 9 digits, weights 9..2, mod 11.
+// ptNIF: NIF portugués, 9 dígitos, pesos 9..2, módulo 11.
 func ptNIF(n string) bool {
 	if len(n) != 9 || !digits(n) || n[0] == '0' {
 		return false
@@ -63,7 +64,7 @@ func ptNIF(n string) bool {
 	return int(n[8]-'0') == (11-sum%11)%11%10
 }
 
-// itCodiceFiscale: Italian fiscal code, 16 characters, odd/even tables, mod 26.
+// itCodiceFiscale: código fiscal italiano, 16 caracteres, tablas de impares/pares, módulo 26.
 func itCodiceFiscale(n string) bool {
 	if len(n) != 16 || !alnum(n) {
 		return false
@@ -86,13 +87,13 @@ func itCodiceFiscale(n string) bool {
 	return n[15] == byte('A'+code%26)
 }
 
-// frSPI: French tax number (numéro fiscal), 13 digits, first 10 mod 511 = last 3.
+// frSPI: número fiscal francés (numéro fiscal), 13 dígitos, los 10 primeros módulo 511 = los 3 últimos.
 func frSPI(n string) bool {
 	return len(n) == 13 && digits(n) && n[0] <= '3' && atoi64(n[:10])%511 == atoi64(n[10:])
 }
 
-// deIdNr: German tax id, 11 digits: in the first 10, exactly one digit repeats (2 or 3 times),
-// and ISO 7064 MOD 11,10 holds.
+// deIdNr: identificador fiscal alemán, 11 dígitos: en los 10 primeros se repite exactamente un dígito
+// (2 o 3 veces) y se cumple ISO 7064 MOD 11,10.
 func deIdNr(n string) bool {
 	if len(n) != 11 || !digits(n) || n[0] == '0' {
 		return false
@@ -111,7 +112,7 @@ func deIdNr(n string) bool {
 	return repeated == 1 && (times == 2 || times == 3) && iso7064Mod11_10(n)
 }
 
-// nlBSN: Dutch citizen number, 9 digits, "11 test" with the last weight -1.
+// nlBSN: número de ciudadano neerlandés, 9 dígitos, «prueba del 11» con el último peso -1.
 func nlBSN(n string) bool {
 	if len(n) != 9 || !digits(n) || atoi64(n) == 0 {
 		return false
@@ -123,8 +124,8 @@ func nlBSN(n string) bool {
 	return (sum-int(n[8]-'0'))%11 == 0
 }
 
-// beNN: Belgian national number, 11 digits, 97 - (first 9 mod 97) = last 2, with the "2" prefix
-// for people born from 2000.
+// beNN: número nacional belga, 11 dígitos, 97 - (los 9 primeros módulo 97) = los 2 últimos, con el
+// prefijo "2" para los nacidos desde 2000.
 func beNN(n string) bool {
 	if len(n) != 11 || !digits(n) || atoi64(n) == 0 {
 		return false
@@ -133,7 +134,7 @@ func beNN(n string) bool {
 	return 97-atoi64(n[:9])%97 == check || 97-atoi64("2"+n[:9])%97 == check
 }
 
-// elAFM: Greek tax number, 9 digits, sum of d_i * 2^(8-i) mod 11 mod 10.
+// elAFM: número fiscal griego, 9 dígitos, suma de d_i * 2^(8-i) módulo 11 módulo 10.
 func elAFM(n string) bool {
 	if len(n) != 9 || !digits(n) {
 		return false
@@ -145,7 +146,7 @@ func elAFM(n string) bool {
 	return int(n[8]-'0') == sum*2%11%10
 }
 
-// iso7064Mod11_10 is ISO 7064 MOD 11,10 over all the digits (Croatian OIB, German IdNr).
+// iso7064Mod11_10 es ISO 7064 MOD 11,10 sobre todos los dígitos (OIB croata, IdNr alemán).
 func iso7064Mod11_10(n string) bool {
 	check := 5
 	for i := range len(n) {

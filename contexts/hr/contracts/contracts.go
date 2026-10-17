@@ -1,28 +1,28 @@
-// Package contracts is what other bounded contexts may depend on: the Published Language of
-// Human Resources and its query ports (Payroll reads the primary contract of an employee;
-// WorkEffort and approvals read who holds a position and who supervises it).
+// Package contracts es aquello de lo que pueden depender otros contextos delimitados: el Published
+// Language de Recursos Humanos y sus puertos de consulta (Payroll lee el contrato principal de un
+// empleado; WorkEffort y las aprobaciones leen quién ocupa un puesto y quién lo supervisa).
 package contracts
 
 import "context"
 
-// Source is the name of the publishing bounded context.
+// Source es el nombre del contexto delimitado que publica.
 const Source = "hr"
 
-// MaxBatch is the maximum number of ids per call.
+// MaxBatch es el número máximo de ids por llamada.
 const MaxBatch = 900
 
-// ContractRef is the primary labor contract of an employment on a date.
+// ContractRef es el contrato de trabajo principal de una relación laboral en una fecha.
 type ContractRef struct {
 	ID          string `json:"id"`
 	TypeCode    string `json:"typeCode"`
-	Start       string `json:"start"`         // civil date
-	End         string `json:"end,omitempty"` // civil date
+	Start       string `json:"start"`         // fecha civil
+	End         string `json:"end,omitempty"` // fecha civil
 	Agreement   string `json:"agreement"`
 	WorkCenter  string `json:"workCenter"`
 	WeeklyHours string `json:"weeklyHours,omitempty"`
 }
 
-// EmploymentRef is an employment of a person.
+// EmploymentRef es una relación laboral de una persona.
 type EmploymentRef struct {
 	ID          string       `json:"id"`
 	Person      string       `json:"person"`
@@ -32,16 +32,17 @@ type EmploymentRef struct {
 	Terminated  string       `json:"terminated,omitempty"`
 	JobCategory string       `json:"jobCategory,omitempty"`
 	WageGroup   string       `json:"wageGroup,omitempty"`
-	Contract    *ContractRef `json:"contract,omitempty"` // the primary contract on the date asked
+	Contract    *ContractRef `json:"contract,omitempty"` // el contrato principal en la fecha pedida
 }
 
-// Staff answers who is employed (what the C# Payroll read from the Employee role and the
-// LaborContract tables). Missing people are absent; date is a civil date (YYYY-MM-DD).
+// Staff responde quién está empleado (lo que el Payroll del C# leía del rol Employee y de las
+// tablas de LaborContract). Las personas que no están no aparecen; date es una fecha civil
+// (YYYY-MM-DD).
 type Staff interface {
 	EmploymentsOn(ctx context.Context, personIDs []string, date string) (map[string][]EmploymentRef, error)
 }
 
-// PositionRef is a position with its current holder and primary supervisor position.
+// PositionRef es un puesto con su titular actual y su puesto supervisor principal.
 type PositionRef struct {
 	ID           string `json:"id"`
 	Unit         string `json:"unit"`
@@ -52,14 +53,14 @@ type PositionRef struct {
 	Active       bool   `json:"active"`
 }
 
-// Positions resolves positions in batches (holders and supervisors now). Missing positions are
-// absent.
+// Positions resuelve puestos por lotes (titulares y supervisores de ahora). Los puestos que no
+// están no aparecen.
 type Positions interface {
 	Resolve(ctx context.Context, ids []string) (map[string]PositionRef, error)
 	HeldBy(ctx context.Context, personID string) ([]PositionRef, error)
 }
 
-// EmployeeHiredV1 is published when a person is hired.
+// EmployeeHiredV1 se publica cuando se contrata a una persona.
 type EmployeeHiredV1 struct {
 	EmploymentID string `json:"employmentId"`
 	Person       string `json:"person"`
@@ -68,10 +69,10 @@ type EmployeeHiredV1 struct {
 	Hired        string `json:"hired"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (EmployeeHiredV1) IntegrationEventType() string { return "hr.employee-hired.v1" }
 
-// EmployeeTerminatedV1 is published when an employment ends.
+// EmployeeTerminatedV1 se publica cuando termina una relación laboral.
 type EmployeeTerminatedV1 struct {
 	EmploymentID string `json:"employmentId"`
 	Person       string `json:"person"`
@@ -80,10 +81,10 @@ type EmployeeTerminatedV1 struct {
 	Reason       string `json:"reason,omitempty"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (EmployeeTerminatedV1) IntegrationEventType() string { return "hr.employee-terminated.v1" }
 
-// ContractStartedV1 is published when a labor contract is added.
+// ContractStartedV1 se publica cuando se añade un contrato de trabajo.
 type ContractStartedV1 struct {
 	EmploymentID string `json:"employmentId"`
 	ContractID   string `json:"contractId"`
@@ -94,10 +95,10 @@ type ContractStartedV1 struct {
 	Primary      bool   `json:"primary"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (ContractStartedV1) IntegrationEventType() string { return "hr.contract-started.v1" }
 
-// ContractEndedV1 is published when a labor contract ends.
+// ContractEndedV1 se publica cuando termina un contrato de trabajo.
 type ContractEndedV1 struct {
 	EmploymentID string `json:"employmentId"`
 	ContractID   string `json:"contractId"`
@@ -105,25 +106,25 @@ type ContractEndedV1 struct {
 	Reason       string `json:"reason,omitempty"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (ContractEndedV1) IntegrationEventType() string { return "hr.contract-ended.v1" }
 
-// PositionFilledV1 is published when a person takes a position.
+// PositionFilledV1 se publica cuando una persona ocupa un puesto.
 type PositionFilledV1 struct {
 	PositionID string `json:"positionId"`
 	Person     string `json:"person"`
 	From       string `json:"from"` // RFC 3339
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (PositionFilledV1) IntegrationEventType() string { return "hr.position-filled.v1" }
 
-// PositionVacatedV1 is published when the holder leaves a position.
+// PositionVacatedV1 se publica cuando el titular deja un puesto.
 type PositionVacatedV1 struct {
 	PositionID string `json:"positionId"`
 	Person     string `json:"person"`
 	At         string `json:"at"` // RFC 3339
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (PositionVacatedV1) IntegrationEventType() string { return "hr.position-vacated.v1" }

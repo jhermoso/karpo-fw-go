@@ -17,9 +17,9 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/time/fake"
 )
 
-// TestPartiesContext runs the Parties bounded context on every engine: migrations with the
-// seeded catalogs (same GUIDs as C#, also in .NET byte order on Oracle), roles with validity
-// translated to SQL (EXISTS + nullable end), relationships, directory and audit.
+// TestPartiesContext ejecuta el contexto delimitado Parties en cada motor: migraciones con los
+// catálogos sembrados (los mismos GUID que en C#, también en el orden de bytes de .NET en Oracle),
+// roles con vigencia traducidos a SQL (EXISTS + fin que admite NULL), relaciones, directorio y auditoría.
 func TestPartiesContext(t *testing.T) {
 	for _, e := range engines {
 		t.Run(e.name, func(t *testing.T) {
@@ -45,11 +45,11 @@ func TestPartiesContext(t *testing.T) {
 			ac.GlobalAdmin = true
 			ctx = authz.WithContext(ctx, ac)
 
-			// The scenario runs on the framework's fake clock: the system clock advances in ticks
-			// (up to 15.6 ms on Windows), so two use cases could share an instant or not depending
-			// on the run, and the employment below would end with or without a length. It starts
-			// at a whole second, which every engine stores exactly: an instant read back equals
-			// the clock's.
+			// El escenario corre con el reloj falso del framework: el reloj del sistema avanza a saltos
+			// (de hasta 15,6 ms en Windows), así que dos casos de uso podrían compartir un instante o
+			// no según la ejecución, y el empleo de más abajo terminaría con o sin duración. Empieza
+			// en un segundo exacto, que todos los motores guardan sin pérdida: un instante releído es
+			// igual al del reloj.
 			clock := fake.New(time.Now().Truncate(time.Second))
 			t.Cleanup(fw.SetClock(clock))
 
@@ -61,7 +61,7 @@ func TestPartiesContext(t *testing.T) {
 			if err != nil || len(types) != len(domain.WellKnownRoleTypes()) {
 				t.Fatalf("seeded role types: %d %v", len(types), err)
 			}
-			// Migration 16: every role type of the program has its code, and one can be added.
+			// Migración 16: cada tipo de rol del programa tiene su código, y se puede añadir uno.
 			for _, rt := range types {
 				if rt.Code != domain.CodeOf(rt.Name) || !rt.WellKnown {
 					t.Fatalf("role type %s: code %q", rt.Name, rt.Code)
@@ -108,7 +108,7 @@ func TestPartiesContext(t *testing.T) {
 
 			past := fw.Now().Add(-48 * time.Hour)
 			yesterday := fw.Now().Add(-24 * time.Hour)
-			// Luis was a customer until yesterday; Ana is a bill-to customer now.
+			// Luis fue cliente hasta ayer; Ana es ahora cliente de facturación.
 			if _, err := svc.AssignRole.Handle(ctx, papp.AssignRole{PartyID: luisID, RoleType: domain.RoleCustomer.String(), From: &past}); err != nil {
 				t.Fatal(err)
 			}
@@ -142,7 +142,7 @@ func TestPartiesContext(t *testing.T) {
 				t.Fatalf("duplicate: %v", err)
 			}
 			relID, _ := domain.ParseRelationshipID(rel.ID)
-			clock.Advance(time.Millisecond) // the employment lasts a moment
+			clock.Advance(time.Millisecond) // el empleo dura un momento
 			if _, err := svc.TerminateRelationship.Handle(ctx, papp.TerminateRelationship{ID: relID}); err != nil {
 				t.Fatal(err)
 			}
@@ -160,10 +160,10 @@ func TestPartiesContext(t *testing.T) {
 				t.Fatalf("directory: %+v %v", refs, err)
 			}
 			trail, err := mod.Audit.Trail(ctx, domain.PartyKind, ana.ID)
-			if err != nil || len(trail) != 4 { // registered, role, affiliated by the employment, affiliation ended
+			if err != nil || len(trail) != 4 { // alta, rol, afiliada por el empleo, afiliación terminada
 				t.Fatalf("audit: %d %v", len(trail), err)
 			}
-			// Phase 2: identifications, contacts and classifications.
+			// Fase 2: identificaciones, contactos y clasificaciones.
 			opts, err := svc.DocumentOptions.Handle(ctx, papp.DocumentOptions{Country: "ES"})
 			if err != nil || len(opts) != 5 || opts[0].Code != "NIDN" {
 				t.Fatalf("document options from SQL: %+v %v", opts, err)
@@ -215,7 +215,7 @@ func TestPartiesContext(t *testing.T) {
 				t.Fatalf("search by classification: %+v %v", byClass, err)
 			}
 
-			// Phase 3: organization scope (P1), registration in scope, hierarchy and ports.
+			// Fase 3: ámbito de organización (P1), alta dentro del ámbito, jerarquía y puertos.
 			clerk, _ := authz.NewContext(authz.Context{Subject: fw.NewUUID(), SubjectName: "clerk", Kind: authz.Service,
 				Permissions: []authz.Permission{authz.Wildcard}, Grants: []authz.Grant{{OrganizationID: acmeID.UUID, Level: authz.Full}}})
 			clerkCtx := authz.WithContext(context.Background(), clerk)
@@ -224,7 +224,7 @@ func TestPartiesContext(t *testing.T) {
 			if err != nil || len(pedro.Organizations) != 1 || pedro.Organizations[0] != acme.ID {
 				t.Fatalf("register in scope: %+v %v", pedro, err)
 			}
-			// Migration 18: the mark of a refused identity document, and the search by it.
+			// Migración 18: la marca de un documento de identidad rechazado, y la búsqueda por ella.
 			flagged, err := svc.FlagDocumentIssue.Handle(clerkCtx, papp.FlagDocumentIssue{ID: mustParty(t, pedro.ID), Number: "12345678A",
 				Reason: "the DNI does not pass its check digits"})
 			if err != nil || flagged.DocumentIssue == nil || flagged.DocumentIssue.Number != "12345678A" {
@@ -241,7 +241,7 @@ func TestPartiesContext(t *testing.T) {
 				t.Fatalf("nobody is marked now: %d %v", marked.Total, err)
 			}
 
-			// Migration 17: the customer number is a detail of the customer relationship.
+			// Migración 17: el número de cliente es un detalle de la relación de cliente.
 			pedroID, _ := domain.ParsePartyID(pedro.ID)
 			buys, err := svc.Relationships.Handle(clerkCtx, papp.PartyRelationships{PartyID: pedroID, ActiveOnly: true})
 			if err != nil || len(buys) != 1 || buys[0].Customer == nil || buys[0].Customer.Number != "" {
@@ -270,7 +270,7 @@ func TestPartiesContext(t *testing.T) {
 				t.Fatalf("the number of another customer of the organization: %v", err)
 			}
 			seen, err := svc.Search.Handle(clerkCtx, papp.SearchParties{Kind: "person"})
-			if err != nil || seen.Total != 1 || seen.Items[0].ID != pedro.ID { // ana's employment was terminated; luis never related
+			if err != nil || seen.Total != 1 || seen.Items[0].ID != pedro.ID { // el empleo de ana se terminó; luis nunca tuvo relación
 				names := []string{}
 				for _, p := range seen.Items {
 					names = append(names, p.Name)
@@ -307,10 +307,10 @@ func TestPartiesContext(t *testing.T) {
 				t.Fatalf("membership: %+v %v", member, err)
 			}
 
-			// Details by relationship type (docs/PARTIES-UDM.md): the codes read from SQL, the
-			// prospect relationship added by migration 11 and its trial in a nullable column.
+			// Detalles por tipo de relación (docs/PARTIES-UDM.md): los códigos leídos de SQL, la
+			// relación de cliente potencial que añade la migración 11 y su periodo de prueba en una columna que admite NULL.
 			relTypes, err := svc.ListRelationshipTypes.Handle(ctx, papp.ListRelationshipTypes{})
-			if err != nil || len(relTypes) != len(domain.WellKnownRelationshipTypes())+1 { // the seed and the one added above
+			if err != nil || len(relTypes) != len(domain.WellKnownRelationshipTypes())+1 { // la semilla y la añadida más arriba
 				t.Fatalf("seeded relationship types: %d %v", len(relTypes), err)
 			}
 			for _, rt := range relTypes {
@@ -356,7 +356,7 @@ func TestPartiesContext(t *testing.T) {
 				t.Fatalf("withdrawn trial: %+v %v", withdrawn, err)
 			}
 
-			// The share of an ownership relationship, an exact decimal in a nullable text column.
+			// La participación de una relación de propiedad, un decimal exacto en una columna de texto que admite NULL.
 			if _, err := svc.AssignRole.Handle(ctx, papp.AssignRole{PartyID: luisID, RoleType: domain.RoleShareholder.String()}); err != nil {
 				t.Fatal(err)
 			}
@@ -379,15 +379,15 @@ func TestPartiesContext(t *testing.T) {
 				t.Fatalf("a prospect relationship has no share: %v", err)
 			}
 
-			// The personal details of a person are edited after registration.
+			// Los datos personales de una persona se editan después del alta.
 			edited, err := svc.UpdatePerson.Handle(clerkCtx, papp.UpdatePerson{ID: luisID, Gender: "male", BirthDate: "1988-02-29", MaritalStatus: "single"})
 			if err != nil || edited.Person.BirthDate != "1988-02-29" || edited.Person.Gender != "male" || edited.Person.MaritalStatus != "single" {
 				t.Fatalf("person details round trip: %+v %v", edited.Person, err)
 			}
 
-			// What starts and ends at one instant of the clock (it does not move below): every
-			// engine stores the empty period and reads it back, no query finds it in force, and it
-			// is in the way of nothing that starts at that instant.
+			// Lo que empieza y termina en un mismo instante del reloj (más abajo no se mueve): todos
+			// los motores guardan el periodo vacío y lo releen, ninguna consulta lo encuentra en vigor,
+			// y no estorba a nada que empiece en ese instante.
 			instant := fw.Now()
 			eva, err := svc.RegisterPerson.Handle(ctx, papp.RegisterPerson{GivenName: "Eva", FirstSurname: "Sanz", Roles: []string{domain.RoleEmployee.String()}})
 			if err != nil {

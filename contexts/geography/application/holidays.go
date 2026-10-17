@@ -17,53 +17,53 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Permissions of the calendar of holidays.
+// Permisos del calendario de festivos.
 var (
 	PermHolidayRead   = authz.MustPermission("Geography.Holiday.Read")
 	PermHolidayUpdate = authz.MustPermission("Geography.Holiday.Update")
 )
 
-// MaxHolidaysPerCall bounds a declaration: the holidays of a place for a few years.
+// MaxHolidaysPerCall acota una declaración: los festivos de un lugar para unos pocos años.
 const MaxHolidaysPerCall = 200
 
-// Holidays keeps the calendar of holidays and answers whether a day is one in a place. It is the
-// one part of the context that is written to; the rest is a catalog.
+// Holidays lleva el calendario de festivos y responde si un día lo es en un lugar. Es la única
+// parte del contexto en la que se escribe; el resto es un catálogo.
 type Holidays struct {
 	holidays domain.HolidayRepository
 	ports    Ports
 	orch     *orchestration.Orchestrator[domain.HolidayID, *domain.Holiday]
 }
 
-// NewHolidays builds the calendar.
+// NewHolidays construye el calendario.
 func NewHolidays(repo domain.HolidayRepository, ports Ports, uow fw.UnitOfWork) *Holidays {
 	return &Holidays{holidays: repo, ports: ports, orch: orchestration.New[domain.HolidayID, *domain.Holiday](repo, uow)}
 }
 
 var _ contracts.Calendar = (*Holidays)(nil)
 
-// Commands, queries and DTOs.
+// Comandos, consultas y DTO.
 type (
-	// DayInput is a holiday to declare.
+	// DayInput es un festivo que declarar.
 	DayInput struct {
 		Date vocab.Date `json:"date"`
 		Name string     `json:"name"`
 	}
-	// DeclareHolidays declares holidays in a boundary. A day the boundary already has is left as
-	// it is, so the calendar of a year can be sent again.
+	// DeclareHolidays declara festivos en un límite. Un día que el límite ya tiene se deja como
+	// está, así que el calendario de un año se puede volver a enviar.
 	DeclareHolidays struct {
 		Boundary string     `json:"boundary"`
 		Days     []DayInput `json:"days"`
 	}
-	// RemoveHoliday removes a holiday declared by mistake.
+	// RemoveHoliday quita un festivo declarado por error.
 	RemoveHoliday struct{ ID domain.HolidayID }
-	// SearchHolidays lists the holidays of a boundary in a year: its own and, with Inherited,
-	// those of the boundaries that contain it.
+	// SearchHolidays lista los festivos de un límite en un año: los suyos y, con Inherited, los de
+	// los límites que lo contienen.
 	SearchHolidays struct {
 		Boundary  string
 		Year      int
 		Inherited bool
 	}
-	// HolidayDTO is the transport form of a holiday.
+	// HolidayDTO es la forma de transporte de un festivo.
 	HolidayDTO struct {
 		ID           string `json:"id"`
 		Boundary     string `json:"boundary"`
@@ -75,7 +75,7 @@ type (
 
 func require(ctx context.Context, p authz.Permission) error { return authz.Require(ctx, p) }
 
-// boundary parses the identity of a boundary that exists.
+// boundary interpreta la identidad de un límite que existe.
 func (h *Holidays) boundary(ctx context.Context, id string) (domain.BoundaryID, error) {
 	bid, err := domain.ParseBoundaryID(id)
 	if err != nil || bid.IsZero() {
@@ -89,7 +89,7 @@ func (h *Holidays) boundary(ctx context.Context, id string) (domain.BoundaryID, 
 	return bid, nil
 }
 
-// chain returns a boundary and those that contain it, nearest first, with their names.
+// chain devuelve un límite y los que lo contienen, el más cercano primero, con sus nombres.
 func (h *Holidays) chain(ctx context.Context, id domain.BoundaryID) ([]domain.BoundaryID, map[string]string, error) {
 	up, err := h.ports.Ancestors(ctx, id.String())
 	if err != nil {
@@ -105,14 +105,15 @@ func (h *Holidays) chain(ctx context.Context, id domain.BoundaryID) ([]domain.Bo
 	return ids, names, nil
 }
 
-// Locate finds the boundary a calendar names by its code, as the official calendars do:
+// Locate encuentra el límite que un calendario nombra por su código, como hacen los calendarios
+// oficiales:
 //
-//	ES      a country, by its ISO 3166-1 code
-//	ES-MD   a region of a country, by its ISO 3166-2 code
-//	28      a province, by its code of the INE
-//	28079   a municipality, by its code of the INE
+//	ES      un país, por su código ISO 3166-1
+//	ES-MD   una región de un país, por su código ISO 3166-2
+//	28      una provincia, por su código del INE
+//	28079   un municipio, por su código del INE
 //
-// It serves other contexts, as IsHoliday does.
+// Sirve a otros contextos, como IsHoliday.
 func (h *Holidays) Locate(ctx context.Context, place string) (contracts.BoundaryRef, error) {
 	place = strings.ToUpper(strings.TrimSpace(place))
 	unknown := fw.Violation("geography.unknown_place", "no boundary has the code "+place+
@@ -132,7 +133,7 @@ func (h *Holidays) Locate(ctx context.Context, place string) (contracts.Boundary
 		}
 		return contracts.BoundaryRef{}, errors.Join(unknown, rerr)
 	case len(place) > 3 && place[2] == '-':
-		// The regions of a country are its levels 1 and 2, whatever each country calls them.
+		// Las regiones de un país son sus niveles 1 y 2, los llame como los llame cada país.
 		found, err = h.ports.Boundaries.Find(ctx, spec.And(domain.FieldCountry.Eq(place[:2]),
 			domain.FieldLevel.In(string(domain.Level1), string(domain.Level2)), domain.FieldAbbreviation.Eq(place[3:])))
 	case digits && len(place) == 2:
@@ -154,7 +155,7 @@ func (h *Holidays) Locate(ctx context.Context, place string) (contracts.Boundary
 	return refs[id], nil
 }
 
-// Declare declares holidays in a boundary and returns those that were new.
+// Declare declara festivos en un límite y devuelve los que eran nuevos.
 func (h *Holidays) Declare(ctx context.Context, c DeclareHolidays) ([]HolidayDTO, error) {
 	if err := require(ctx, PermHolidayUpdate); err != nil {
 		return nil, err
@@ -194,7 +195,7 @@ func (h *Holidays) Declare(ctx context.Context, c DeclareHolidays) ([]HolidayDTO
 	return out, nil
 }
 
-// Remove removes a holiday.
+// Remove quita un festivo.
 func (h *Holidays) Remove(ctx context.Context, c RemoveHoliday) error {
 	if err := require(ctx, PermHolidayUpdate); err != nil {
 		return err
@@ -207,7 +208,7 @@ func holidayDTO(h *domain.Holiday, names map[string]string) HolidayDTO {
 	return HolidayDTO{ID: h.ID().String(), Boundary: s.Boundary.String(), BoundaryName: names[s.Boundary.String()], Date: s.Date.String(), Name: s.Name}
 }
 
-// Search lists the holidays of a boundary in a year, in the order of the calendar.
+// Search lista los festivos de un límite en un año, en el orden del calendario.
 func (h *Holidays) Search(ctx context.Context, q SearchHolidays) ([]HolidayDTO, error) {
 	if err := require(ctx, PermHolidayRead); err != nil {
 		return nil, err
@@ -245,9 +246,9 @@ func (h *Holidays) Search(ctx context.Context, q SearchHolidays) ([]HolidayDTO, 
 	return out, nil
 }
 
-// IsHoliday implements contracts.Calendar: whether the day is a holiday in the boundary or in
-// one that contains it. It serves other contexts, not users: the caller's own use case is what
-// is authorized. A boundary nobody knows has no holidays.
+// IsHoliday implementa contracts.Calendar: si el día es festivo en el límite o en uno que lo
+// contiene. Sirve a otros contextos, no a usuarios: lo que se autoriza es el caso de uso del que
+// llama. Un límite que nadie conoce no tiene festivos.
 func (h *Holidays) IsHoliday(ctx context.Context, boundary, day string) (bool, error) {
 	date, err := vocab.ParseDate(day)
 	if err != nil {

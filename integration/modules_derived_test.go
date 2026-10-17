@@ -16,7 +16,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 )
 
-// financialOf plays Parties: the companies that are financial institutions.
+// financialOf hace de Parties: las empresas que son entidades financieras.
 type financialOf map[fw.UUID]bool
 
 var financialRef = mapp.FeatureRef{Kind: mdomain.Capability, Code: "financial"}
@@ -40,9 +40,9 @@ func (f financialOf) Holders(context.Context, mapp.FeatureRef) ([]fw.UUID, error
 	return out, nil
 }
 
-// TestModulesDerivedCapability runs on every engine what happens to an installation that had
-// switched the financial capability on by hand when it starts being derived from what the company
-// is: what was recorded stays in the table and stops counting, for every way of asking.
+// TestModulesDerivedCapability ejecuta en cada motor lo que le pasa a una instalación que había
+// encendido a mano la capacidad financiera cuando ésta empieza a deducirse de lo que es la empresa:
+// lo registrado se queda en la tabla y deja de contar, se pregunte como se pregunte.
 func TestModulesDerivedCapability(t *testing.T) {
 	for _, e := range engines {
 		if e.name == "oracle-dotnet-guids" {
@@ -65,7 +65,7 @@ func TestModulesDerivedCapability(t *testing.T) {
 			actx := authz.WithContext(ctx, admin)
 			shop, bank := fw.NewUUID(), fw.NewUUID()
 
-			// Before: by hand, and to the wrong company.
+			// Antes: a mano, y a la empresa equivocada.
 			before := modules.Compose(sw)
 			if _, err := before.EnsureCatalog(ctx); err != nil {
 				t.Fatal(err)
@@ -79,7 +79,7 @@ func TestModulesDerivedCapability(t *testing.T) {
 				t.Fatal("switched on by hand")
 			}
 
-			// After: the bank has it and the shop does not, whatever the table says.
+			// Después: el banco la tiene y la tienda no, diga lo que diga la tabla.
 			after := modules.Compose(sw, modules.WithDerivation(financialOf{bank: true}))
 			for org, want := range map[fw.UUID]bool{shop: false, bank: true} {
 				if ok, err := after.Features.Has(ctx, org.String(), "capability", "financial"); err != nil || ok != want {

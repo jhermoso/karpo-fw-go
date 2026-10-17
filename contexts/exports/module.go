@@ -1,5 +1,5 @@
-// Package exports composes the Exports (Exportación de listados) bounded context on a hot-swap
-// backend.
+// Package exports compone el contexto delimitado Exports (Exportación de listados) sobre un backend
+// intercambiable en caliente.
 package exports
 
 import (
@@ -19,16 +19,16 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 )
 
-// Module is the composed context.
+// Module es el contexto compuesto.
 type Module struct {
 	Service  *eapp.Service
 	Registry *eapp.Registry
 	Audit    application.AuditLog
 }
 
-// Compose builds the context on sw, keeping its files in files (a folder every instance shares,
-// a bucket). The host says which lists can be exported with Offer, and runs a worker that calls
-// RunNext and Purge.
+// Compose monta el contexto sobre sw y guarda sus ficheros en files (una carpeta que comparten
+// todas las instancias, un bucket). El anfitrión dice con Offer qué listas se pueden exportar, y
+// ejecuta un worker que llama a RunNext y Purge.
 func Compose(sw *hotswap.Switch, files eapp.Files) *Module {
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
 	registry := eapp.NewRegistry()
@@ -36,13 +36,13 @@ func Compose(sw *hotswap.Switch, files eapp.Files) *Module {
 	return &Module{Service: svc, Registry: registry, Audit: audit}
 }
 
-// Offer adds lists that can be exported.
+// Offer añade listas que se pueden exportar.
 func (m *Module) Offer(ds ...eapp.Dataset) *Module {
 	m.Registry.Offer(ds...)
 	return m
 }
 
-// RegisterRoutes implements distribution.EndpointModule.
+// RegisterRoutes implementa distribution.EndpointModule.
 func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	svc := m.Service
 	job := func(run func(r *http.Request, id domain.JobID) (any, error)) http.HandlerFunc {
@@ -108,7 +108,7 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 		w.Header().Set("Content-Type", f.ContentType)
 		w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": f.Name}))
 		w.Header().Set("Content-Length", strconv.FormatInt(f.Size, 10))
-		w.Header().Set("Cache-Control", "no-store") // personal data: nobody in between keeps it
+		w.Header().Set("Cache-Control", "no-store") // datos personales: nadie por el camino los guarda
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		_, _ = io.Copy(w, f.Content)
 	})

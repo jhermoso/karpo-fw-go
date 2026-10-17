@@ -14,8 +14,8 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Permissions of transfer orders: preparing, generating the file and recording what the bank did
-// are separate, as for remittances.
+// Permisos de las órdenes de transferencias: preparar, generar el fichero y registrar lo que hizo
+// el banco van por separado, como en las remesas.
 var (
 	PermTransferRead = authz.MustPermission("Treasury.Transfer.Read")
 	PermTransferEdit = authz.MustPermission("Treasury.Transfer.Update")
@@ -23,11 +23,11 @@ var (
 	PermTransferBank = authz.MustPermission("Treasury.Transfer.Settle")
 )
 
-// TaxAuthorityName is the name of the tax authority on a transfer.
+// TaxAuthorityName es el nombre de la administración tributaria en una transferencia.
 const TaxAuthorityName = "Agencia Estatal de Administracion Tributaria"
 
-// ProposeTransfers drafts a transfer order with what Payments has to pay by transfer up to a due
-// date.
+// ProposeTransfers prepara en borrador una orden de transferencias con lo que Payments tiene que
+// pagar por transferencia hasta una fecha de vencimiento.
 type ProposeTransfers struct {
 	Debtor        string     `json:"debtor"`
 	Account       string     `json:"account"`
@@ -35,27 +35,27 @@ type ProposeTransfers struct {
 	DueTo         vocab.Date `json:"dueTo"`
 }
 
-// RemoveTransfer removes the transfers of a payable from a draft.
+// RemoveTransfer quita de un borrador las transferencias de una obligación de pago.
 type RemoveTransfer struct {
 	ID      domain.TransferOrderID `json:"-"`
 	Payable string                 `json:"payable"`
 }
 
-// GenerateTransfers freezes a draft order.
+// GenerateTransfers congela una orden en borrador.
 type GenerateTransfers struct {
 	ID domain.TransferOrderID `json:"-"`
 }
 
-// GetTransferFile returns the pain.001 file of a generated order.
+// GetTransferFile devuelve el fichero pain.001 de una orden generada.
 type GetTransferFile struct{ ID domain.TransferOrderID }
 
-// SettleTransfers records that the bank executed the order.
+// SettleTransfers registra que el banco ejecutó la orden.
 type SettleTransfers struct {
 	ID domain.TransferOrderID `json:"-"`
 	On vocab.Date             `json:"on"`
 }
 
-// RejectTransfer records a transfer rejected by the payee's bank.
+// RejectTransfer registra una transferencia rechazada por el banco del beneficiario.
 type RejectTransfer struct {
 	ID       domain.TransferOrderID `json:"-"`
 	EndToEnd string                 `json:"endToEnd"`
@@ -63,21 +63,21 @@ type RejectTransfer struct {
 	Reason   string                 `json:"reason"`
 }
 
-// CancelTransfers cancels an order not executed.
+// CancelTransfers anula una orden no ejecutada.
 type CancelTransfers struct {
 	ID domain.TransferOrderID `json:"-"`
 }
 
-// GetTransferOrder loads an order.
+// GetTransferOrder carga una orden.
 type GetTransferOrder struct{ ID domain.TransferOrderID }
 
-// SearchTransferOrders searches orders of the caller's scope.
+// SearchTransferOrders busca órdenes del ámbito de quien llama.
 type SearchTransferOrders struct {
 	Debtor     string
 	Page, Size int
 }
 
-// TransferDTO is the transport form of a transfer.
+// TransferDTO es la forma de transporte de una transferencia.
 type TransferDTO struct {
 	EndToEnd  string `json:"endToEnd"`
 	Payable   string `json:"payable"`
@@ -90,7 +90,7 @@ type TransferDTO struct {
 	Reason    string `json:"reason,omitempty"`
 }
 
-// TransferOrderDTO is the transport form of an order.
+// TransferOrderDTO es la forma de transporte de una orden.
 type TransferOrderDTO struct {
 	ID             string        `json:"id"`
 	Debtor         string        `json:"debtor"`
@@ -100,7 +100,7 @@ type TransferOrderDTO struct {
 	Total          string        `json:"total"`
 	Settled        string        `json:"settled,omitempty"`
 	Transfers      []TransferDTO `json:"transfers"`
-	WithoutAccount int           `json:"withoutAccount,omitempty"` // due payables without accounts, on a proposal
+	WithoutAccount int           `json:"withoutAccount,omitempty"` // obligaciones vencidas sin cuentas, en una propuesta
 	Version        int64         `json:"version"`
 }
 
@@ -115,7 +115,7 @@ func transferOrderDTO(o *domain.TransferOrder) TransferOrderDTO {
 	return d
 }
 
-// inOrders returns the payables already in orders not cancelled (and not rejected).
+// inOrders devuelve las obligaciones que ya están en órdenes no anuladas (y no rechazadas).
 func (s service) inOrders(ctx context.Context, debtor domain.OrganizationID) (map[domain.PayableID]bool, error) {
 	os, err := s.Transfers.Find(ctx, spec.And(domain.TrfFieldDebtor.Eq(debtor), domain.TrfFieldStatus.Ne(int(domain.RemCancelled))))
 	if err != nil {
@@ -293,7 +293,7 @@ func (s service) transferUseCases(svc *Service) {
 	})
 }
 
-// transferPublications translates the transfer events into the Published Language.
+// transferPublications traduce los eventos de las transferencias al Published Language.
 func transferPublications(r *messaging.Recorder) {
 	messaging.On(r, func(_ context.Context, e domain.TransfersExecuted) ([]app.IntegrationEvent, error) {
 		out := make([]app.IntegrationEvent, 0, len(e.Transfers))

@@ -11,12 +11,13 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// WorkCenterKind is the stable aggregate type name.
+// WorkCenterKind es el nombre estable de tipo de agregado.
 const WorkCenterKind = "hr.work_center"
 
-// WorkCenter is a facility registered as work center of an employer (the code of the labor
-// authorities, headquarters flag, opening and closing). Its address is the facility's location
-// in the Facilities context (approved decision: no more address strings copied here).
+// WorkCenter es una instalación dada de alta como centro de trabajo de un empleador (el código de
+// la autoridad laboral, la marca de sede, la apertura y el cierre). Su dirección es la ubicación de
+// la instalación en el contexto Facilities (decisión aprobada: no se copian aquí más cadenas de
+// dirección).
 type WorkCenter struct {
 	fw.BaseAggregateRoot[WorkCenterID]
 	traits.Audited
@@ -28,7 +29,7 @@ type WorkCenter struct {
 	closed       vocab.Date
 }
 
-// WorkCenterState is the persisted state of a work center.
+// WorkCenterState es el estado persistido de un centro de trabajo.
 type WorkCenterState struct {
 	Employer     OrganizationID
 	Facility     FacilityID
@@ -39,7 +40,7 @@ type WorkCenterState struct {
 	Audit        traits.AuditStamp
 }
 
-// ReconstituteWorkCenter rebuilds a work center.
+// ReconstituteWorkCenter reconstruye un centro de trabajo.
 func ReconstituteWorkCenter(id WorkCenterID, s WorkCenterState) (*WorkCenter, error) {
 	base, err := fw.NewBaseAggregateRoot(WorkCenterKind, id)
 	if err != nil {
@@ -59,7 +60,7 @@ func ReconstituteWorkCenter(id WorkCenterID, s WorkCenterState) (*WorkCenter, er
 		code: code, headquarters: s.Headquarters, opened: s.Opened, closed: s.Closed}, nil
 }
 
-// OpenWorkCenter registers a work center.
+// OpenWorkCenter da de alta un centro de trabajo.
 func OpenWorkCenter(id WorkCenterID, s WorkCenterState) (*WorkCenter, error) {
 	s.Closed = vocab.Date{}
 	w, err := ReconstituteWorkCenter(id, s)
@@ -70,29 +71,29 @@ func OpenWorkCenter(id WorkCenterID, s WorkCenterState) (*WorkCenter, error) {
 	return w, nil
 }
 
-// Employer returns the employer.
+// Employer devuelve el empleador.
 func (w *WorkCenter) Employer() OrganizationID { return w.employer }
 
-// Facility returns the facility.
+// Facility devuelve la instalación.
 func (w *WorkCenter) Facility() FacilityID { return w.facility }
 
-// Code returns the code.
+// Code devuelve el código.
 func (w *WorkCenter) Code() string { return w.code }
 
-// IsHeadquarters reports whether it is the employer's headquarters.
+// IsHeadquarters dice si es la sede del empleador.
 func (w *WorkCenter) IsHeadquarters() bool { return w.headquarters }
 
-// Opened returns the opening date.
+// Opened devuelve la fecha de apertura.
 func (w *WorkCenter) Opened() vocab.Date { return w.opened }
 
-// Closed returns the closing date (zero while open).
+// Closed devuelve la fecha de cierre (cero mientras está abierto).
 func (w *WorkCenter) Closed() vocab.Date { return w.closed }
 
-// IsOpen reports whether the work center has not been closed.
+// IsOpen dice si el centro de trabajo no se ha cerrado.
 func (w *WorkCenter) IsOpen() bool { return w.closed.IsZero() }
 
-// MarkHeadquarters sets or clears the headquarters flag. One open headquarters per employer is
-// checked by the application (it touches several work centers).
+// MarkHeadquarters pone o quita la marca de sede. Que haya una sola sede abierta por empleador lo
+// comprueba la aplicación (afecta a varios centros de trabajo).
 func (w *WorkCenter) MarkHeadquarters(hq bool) error {
 	if hq && !w.IsOpen() {
 		return fw.Violation("hr.work_center_closed", "a closed work center cannot be the headquarters")
@@ -101,7 +102,7 @@ func (w *WorkCenter) MarkHeadquarters(hq bool) error {
 	return nil
 }
 
-// Close closes the work center on a date.
+// Close cierra el centro de trabajo en una fecha.
 func (w *WorkCenter) Close(on vocab.Date) error {
 	if !w.IsOpen() {
 		return nil
@@ -114,13 +115,13 @@ func (w *WorkCenter) Close(on vocab.Date) error {
 	return nil
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (w *WorkCenter) AuditSnapshot() map[string]any {
 	return map[string]any{"code": w.code, "facility": w.facility.String(), "headquarters": w.headquarters,
 		"opened": w.opened.String(), "closed": w.closed.String()}
 }
 
-// Work center fields.
+// Campos de los centros de trabajo.
 var (
 	WCFieldEmployer = spec.Comparable("employer", (*WorkCenter).Employer)
 	WCFieldCode     = spec.Ordered("code", (*WorkCenter).Code)
@@ -130,14 +131,14 @@ var (
 	WCFieldOpen     = spec.Comparable("open_flag", (*WorkCenter).IsOpen)
 )
 
-// Repositories and catalogs of the context.
+// Repositorios y catálogos del contexto.
 type (
 	PositionRepository   = fw.Repository[PositionID, *Position]
 	EmploymentRepository = fw.Repository[EmploymentID, *Employment]
 	WorkCenterRepository = fw.Repository[WorkCenterID, *WorkCenter]
 )
 
-// Catalogs reads the reference lists of the context.
+// Catalogs lee las listas de referencia del contexto.
 type Catalogs interface {
 	PositionStatuses(ctx context.Context) ([]PositionStatus, error)
 	PositionClasses(ctx context.Context) ([]PositionClass, error)

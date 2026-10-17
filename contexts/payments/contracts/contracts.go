@@ -1,15 +1,16 @@
-// Package contracts is what other bounded contexts may depend on: the Published Language of
-// Payments and its port for Treasury (the payables due to pay by transfer).
+// Package contracts es aquello de lo que pueden depender los demás contextos delimitados: el
+// Published Language de Payments y su puerto para Treasury (las obligaciones vencidas que se pagan
+// por transferencia).
 package contracts
 
 import "context"
 
-// Source is the name of the publishing bounded context.
+// Source es el nombre del contexto delimitado que publica.
 const Source = "payments"
 
-// PaymentAllocatedV1 is published when part of a payment is applied to a payable (Accounting
-// posts the payable account against the bank or cash). Kind is supplier-invoice, payroll or tax;
-// Payee is a party id, or the tax authority (AEAT).
+// PaymentAllocatedV1 se publica cuando parte de un pago se aplica a una obligación (Accounting
+// contabiliza la cuenta de la obligación contra el banco o la caja). Kind es supplier-invoice,
+// payroll o tax; Payee es un id de party, o la administración tributaria (AEAT).
 type PaymentAllocatedV1 struct {
 	PaymentID string `json:"paymentId"`
 	Company   string `json:"company"`
@@ -21,10 +22,10 @@ type PaymentAllocatedV1 struct {
 	On        string `json:"on"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (PaymentAllocatedV1) IntegrationEventType() string { return "payments.payment-allocated.v1" }
 
-// AllocationReversedV1 is published when an allocation is reversed (or its payment cancelled).
+// AllocationReversedV1 se publica cuando una aplicación se revierte (o se anula su pago).
 type AllocationReversedV1 struct {
 	PaymentID string `json:"paymentId"`
 	Company   string `json:"company"`
@@ -34,10 +35,10 @@ type AllocationReversedV1 struct {
 	Amount    string `json:"amount"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (AllocationReversedV1) IntegrationEventType() string { return "payments.allocation-reversed.v1" }
 
-// PayableSettledV1 is published when an obligation is fully paid.
+// PayableSettledV1 se publica cuando una obligación queda pagada del todo.
 type PayableSettledV1 struct {
 	PayableID string `json:"payableId"`
 	Company   string `json:"company"`
@@ -45,16 +46,16 @@ type PayableSettledV1 struct {
 	Document  string `json:"document"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (PayableSettledV1) IntegrationEventType() string { return "payments.payable-settled.v1" }
 
-// PayTo is a bank account a payable is paid to, and how much.
+// PayTo es una cuenta bancaria a la que se paga una obligación, y cuánto.
 type PayTo struct {
 	IBAN   string `json:"iban"`
 	Amount string `json:"amount"`
 }
 
-// DueItem is a payable to pay by transfer: unpaid, with its accounts.
+// DueItem es una obligación que se paga por transferencia: sin pagar, con sus cuentas.
 type DueItem struct {
 	PayableID string  `json:"payableId"`
 	Kind      string  `json:"kind"`
@@ -65,8 +66,9 @@ type DueItem struct {
 	PayTo     []PayTo `json:"payTo"`
 }
 
-// Payable answers what a company has to pay by transfer up to a due date: the payables not paid
-// at all that carry their accounts, oldest due first, and how many due ones lack accounts.
+// Payable responde lo que una empresa tiene que pagar por transferencia hasta una fecha de
+// vencimiento: las obligaciones sin pagar nada que llevan sus cuentas, las de vencimiento más
+// antiguo primero, y cuántas vencidas no tienen cuentas.
 type Payable interface {
 	DueForTransfer(ctx context.Context, company, dueTo string) (items []DueItem, withoutAccount int, err error)
 }

@@ -1,5 +1,5 @@
-// Package application holds the Assets use cases (with permissions and company scope) and the
-// translation to the Published Language.
+// Package application contiene los casos de uso de Assets (con permisos y ámbito de empresa) y la
+// traducción al Published Language.
 package application
 
 import (
@@ -21,8 +21,8 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Permissions (the C# asset endpoints required authentication only). Keeping the register,
-// running the depreciation of a month and disposing of an asset are separate.
+// Permisos (los endpoints de activos del C# sólo exigían autenticación). Llevar el registro,
+// ejecutar la amortización de un mes y dar de baja un activo van por separado.
 var (
 	PermAssetRead    = authz.MustPermission("Assets.Asset.Read")
 	PermAssetUpdate  = authz.MustPermission("Assets.Asset.Update")
@@ -30,7 +30,7 @@ var (
 	PermDepreciate   = authz.MustPermission("Assets.Depreciation.Run")
 )
 
-// Deps are the ports the use cases need; Recorder and Audit are optional.
+// Deps son los puertos que necesitan los casos de uso; Recorder y Audit son opcionales.
 type Deps struct {
 	Assets   domain.AssetRepository
 	UoW      fw.UnitOfWork
@@ -38,7 +38,7 @@ type Deps struct {
 	Audit    app.AuditLog
 }
 
-// Service exposes the use cases.
+// Service expone los casos de uso.
 type Service struct {
 	Register     app.CommandHandler[RegisterAsset, AssetDTO]
 	Change       app.CommandHandler[ChangeAsset, AssetDTO]
@@ -67,7 +67,7 @@ func scopeOf(ctx context.Context) scope {
 	return s
 }
 
-// check returns a uniform 404 outside the company's scope and 403 when it is read-only.
+// check devuelve un 404 uniforme fuera del ámbito de la empresa y un 403 cuando es de sólo lectura.
 func (s scope) check(kind string, id fmt.Stringer, org domain.OrganizationID, write bool) error {
 	if !s.global && !slices.Contains(s.orgs, org) {
 		return fw.NotFound(kind, id)
@@ -127,7 +127,7 @@ func changing[In, Out any](uow fw.UnitOfWork, p authz.Permission, fn func(contex
 	return guard(p, fn, pipeline.RetryOnConflict[In, Out](5, 10*time.Millisecond), pipeline.Transactional[In, Out](uow))
 }
 
-// RegisterAsset puts an asset in the register of a company.
+// RegisterAsset da de alta un activo en el registro de una empresa.
 type RegisterAsset struct {
 	Company    string     `json:"company"`
 	Code       string     `json:"code"`
@@ -138,13 +138,13 @@ type RegisterAsset struct {
 	Supplier   string     `json:"supplier,omitempty"`
 	Document   string     `json:"document,omitempty"`
 	Acquired   vocab.Date `json:"acquired"`
-	InService  vocab.Date `json:"inService,omitzero"` // the acquisition date by default
+	InService  vocab.Date `json:"inService,omitzero"` // la fecha de adquisición, por omisión
 	Cost       string     `json:"cost"`
 	Residual   string     `json:"residual,omitempty"`
 	LifeMonths int        `json:"lifeMonths,omitempty"`
 }
 
-// ChangeAsset replaces the descriptive data of an asset.
+// ChangeAsset sustituye los datos descriptivos de un activo.
 type ChangeAsset struct {
 	ID       domain.AssetID `json:"-"`
 	Name     string         `json:"name"`
@@ -152,7 +152,7 @@ type ChangeAsset struct {
 	Location string         `json:"location,omitempty"`
 }
 
-// DisposeAsset sells or scraps an asset on a date.
+// DisposeAsset vende o desecha un activo en una fecha.
 type DisposeAsset struct {
 	ID       domain.AssetID `json:"-"`
 	Date     vocab.Date     `json:"date"`
@@ -160,33 +160,33 @@ type DisposeAsset struct {
 	Proceeds string         `json:"proceeds,omitempty"`
 }
 
-// RunDepreciation charges the depreciation of every asset of a company through a month.
+// RunDepreciation carga la amortización de todos los activos de una empresa hasta un mes.
 type RunDepreciation struct {
 	Company string `json:"company"`
 	Year    int    `json:"year"`
 	Month   int    `json:"month"`
 }
 
-// GetAsset loads an asset with its charges.
+// GetAsset carga un activo con sus cargos.
 type GetAsset struct{ ID domain.AssetID }
 
-// SearchAssets searches the register of the caller's scope.
+// SearchAssets busca en el registro del ámbito de quien llama.
 type SearchAssets struct {
 	Company, Class string
-	InService      bool // not disposed of
+	InService      bool // no dados de baja
 	Page, Size     int
 }
 
-// GetBook returns the register of a company with its totals.
+// GetBook devuelve el registro de una empresa con sus totales.
 type GetBook struct{ Company string }
 
-// ChargeDTO is the transport form of a charge.
+// ChargeDTO es la forma de transporte de un cargo.
 type ChargeDTO struct {
 	Period string `json:"period"`
 	Amount string `json:"amount"`
 }
 
-// AssetDTO is the transport form of an asset.
+// AssetDTO es la forma de transporte de un activo.
 type AssetDTO struct {
 	ID           string      `json:"id"`
 	Company      string      `json:"company"`
@@ -232,15 +232,15 @@ func assetDTO(a *domain.Asset, charges bool) AssetDTO {
 	return d
 }
 
-// RunDTO is the result of a depreciation run.
+// RunDTO es el resultado de una ejecución de la amortización.
 type RunDTO struct {
 	Period  string `json:"period"`
-	Assets  int    `json:"assets"`  // assets charged
-	Charges int    `json:"charges"` // months charged
+	Assets  int    `json:"assets"`  // activos cargados
+	Charges int    `json:"charges"` // meses cargados
 	Total   string `json:"total"`
 }
 
-// BookDTO is the register of a company with its totals.
+// BookDTO es el registro de una empresa con sus totales.
 type BookDTO struct {
 	Assets       []AssetDTO `json:"assets"`
 	Cost         string     `json:"cost"`
@@ -248,7 +248,7 @@ type BookDTO struct {
 	NetBookValue string     `json:"netBookValue"`
 }
 
-// NewService wires the use cases.
+// NewService conecta los casos de uso.
 func NewService(d Deps) *Service {
 	var opts []orchestration.Option
 	if d.Recorder != nil {
@@ -331,8 +331,8 @@ func NewService(d Deps) *Service {
 		return update(ctx, c.ID, func(a *domain.Asset) error { return a.Dispose(c.Date, strings.TrimSpace(c.Kind), proceeds) })
 	})
 
-	// The run charges each asset in its own step of the same unit of work: all the months it is
-	// behind, through the one asked. Running it again charges nothing.
+	// La ejecución carga cada activo en su propio paso de la misma unidad de trabajo: todos los meses
+	// que lleva de retraso, hasta el pedido. Ejecutarla otra vez no carga nada.
 	svc.Depreciate = changing(d.UoW, PermDepreciate, func(ctx context.Context, c RunDepreciation) (RunDTO, error) {
 		var v fw.Validation
 		company := domain.OrganizationID{UUID: parseID(&v, "company", c.Company)}
@@ -433,7 +433,7 @@ func NewService(d Deps) *Service {
 	return svc
 }
 
-// Publications translates the domain events into the Published Language.
+// Publications traduce los eventos de dominio al Published Language.
 func Publications(r *messaging.Recorder) *messaging.Recorder {
 	messaging.On(r, func(_ context.Context, e domain.DepreciationCharged) ([]app.IntegrationEvent, error) {
 		return []app.IntegrationEvent{contracts.DepreciationChargedV1{AssetID: e.AggregateID, Company: e.Company, Code: e.Code, Class: e.Class,

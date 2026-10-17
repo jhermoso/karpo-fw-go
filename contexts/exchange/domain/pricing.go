@@ -1,8 +1,8 @@
-// Package domain is the Exchange model: the currency-exchange bureau of a company. What it sells
-// foreign cash for (a reference rate, a margin per customer segment, and the smallest note it
-// hands over), and the reservations customers make to collect that cash at an office. In C# the
-// reservation trusted the rate the client sent, nothing ever made a reservation expire, and the
-// rounding to notes was applied by the screen only.
+// Package domain es el modelo de Exchange: la casa de cambio de una empresa. Por cuánto vende el
+// efectivo en divisa (un cambio de referencia, un margen por segmento de clientes, y el billete más
+// pequeño que entrega), y las reservas que hacen los clientes para recoger ese efectivo en una
+// oficina. En C# la reserva se fiaba del cambio que enviaba el cliente, nada hacía caducar nunca una
+// reserva, y el redondeo a billetes sólo lo aplicaba la pantalla.
 package domain
 
 import (
@@ -17,7 +17,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Aggregate type names.
+// Nombres de los tipos de agregado.
 const (
 	CurrencyKind    = "exchange.currency"
 	MarginKindName  = "exchange.margin"
@@ -25,19 +25,19 @@ const (
 	ReservationKind = "exchange.reservation"
 )
 
-// Identities of the context.
+// Identidades del contexto.
 type (
-	// CurrencyID identifies a currency a company deals in.
+	// CurrencyID identifica una moneda con la que opera una empresa.
 	CurrencyID struct{ fw.UUID }
-	// MarginID identifies the margin of a currency for a segment.
+	// MarginID identifica el margen de una moneda para un segmento.
 	MarginID struct{ fw.UUID }
-	// SettingsID identifies the settings of a company.
+	// SettingsID identifica la configuración de una empresa.
 	SettingsID struct{ fw.UUID }
-	// ReservationID identifies a reservation.
+	// ReservationID identifica una reserva.
 	ReservationID struct{ fw.UUID }
-	// OrganizationID is the company, an internal organization of Parties.
+	// OrganizationID es la empresa, una organización interna de Parties.
 	OrganizationID struct{ fw.UUID }
-	// PartyID is a customer or a collaborator.
+	// PartyID es un cliente o un colaborador.
 	PartyID struct{ fw.UUID }
 )
 
@@ -45,7 +45,7 @@ func zero() vocab.Decimal { return vocab.DecimalFromInt(0) }
 
 func places(d vocab.Decimal, n int32) bool { return d.Equal(d.Round(n)) }
 
-// NormalizeCode trims and uppercases a currency or segment code.
+// NormalizeCode recorta y pasa a mayúsculas un código de moneda o de segmento.
 func NormalizeCode(s string) string { return strings.ToUpper(strings.TrimSpace(s)) }
 
 func validCode(s string, max int) bool {
@@ -60,21 +60,21 @@ func validCode(s string, max int) bool {
 	return true
 }
 
-// CurrencyState is the persisted state of a currency of a company.
+// CurrencyState es el estado persistido de una moneda de una empresa.
 type CurrencyState struct {
 	Company OrganizationID
 	Code    string
 	Name    string
-	Rate    vocab.Decimal // reference rate: euros for one unit, six decimals; zero while unknown
-	RateOn  vocab.Date    // the day of the reference rate
-	Facial  vocab.Decimal // smallest note handed over; zero: any amount
+	Rate    vocab.Decimal // cambio de referencia: euros por una unidad, seis decimales; cero mientras no se sabe
+	RateOn  vocab.Date    // el día del cambio de referencia
+	Facial  vocab.Decimal // billete más pequeño que se entrega; cero: cualquier importe
 	Crypto  bool
 	Blocked bool
 	Audit   traits.AuditStamp
 }
 
-// Currency is a currency a company exchanges, with its reference rate (in C# the rate came from an
-// HTTP service that answered zero instead of failing).
+// Currency es una moneda que cambia una empresa, con su cambio de referencia (en C# el cambio venía
+// de un servicio HTTP que respondía cero en vez de fallar).
 type Currency struct {
 	fw.BaseAggregateRoot[CurrencyID]
 	traits.Audited
@@ -89,7 +89,7 @@ func checkCurrency(v *fw.Validation, s *CurrencyState) {
 	v.Require(!s.Facial.IsNegative() && places(s.Facial, 2), "facial", "range", "a note that is not negative, in cents")
 }
 
-// ReconstituteCurrency rebuilds a currency.
+// ReconstituteCurrency reconstruye una moneda.
 func ReconstituteCurrency(id CurrencyID, s CurrencyState) (*Currency, error) {
 	base, err := fw.NewBaseAggregateRoot(CurrencyKind, id)
 	if err != nil {
@@ -106,10 +106,10 @@ func ReconstituteCurrency(id CurrencyID, s CurrencyState) (*Currency, error) {
 	return &Currency{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// State returns the state.
+// State devuelve el estado.
 func (c *Currency) State() CurrencyState { return c.s }
 
-// Change replaces the name, the note and whether the currency is crypto or blocked.
+// Change sustituye el nombre, el billete y si la moneda es cripto o está bloqueada.
 func (c *Currency) Change(name string, facial vocab.Decimal, crypto, blocked bool) error {
 	s := c.s
 	s.Name, s.Facial, s.Crypto, s.Blocked = name, facial, crypto, blocked
@@ -122,7 +122,7 @@ func (c *Currency) Change(name string, facial vocab.Decimal, crypto, blocked boo
 	return nil
 }
 
-// SetRate fixes the reference rate of a day: positive, and not of a day before the current one.
+// SetRate fija el cambio de referencia de un día: positivo, y no de un día anterior al vigente.
 func (c *Currency) SetRate(rate vocab.Decimal, on vocab.Date) error {
 	if !rate.IsPositive() || !places(rate, 6) || on.IsZero() {
 		return fw.Violation("exchange.rate", "a positive rate with six decimals, and its day")
@@ -134,22 +134,22 @@ func (c *Currency) SetRate(rate vocab.Decimal, on vocab.Date) error {
 	return nil
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (c *Currency) AuditSnapshot() map[string]any {
 	return map[string]any{"code": c.s.Code, "rate": c.s.Rate.String(), "facial": c.s.Facial.String(), "blocked": c.s.Blocked}
 }
 
-// MarginKind is how a margin makes the rate dearer.
+// MarginKind es cómo encarece un margen el cambio.
 type MarginKind string
 
-// Margin kinds.
+// Tipos de margen.
 const (
 	Percent  MarginKind = "percent"  // rate × (1 + v / 100)
 	Absolute MarginKind = "absolute" // rate + v
 	Pip      MarginKind = "pip"      // rate + v × 0.0001
 )
 
-// MarginKinds lists the valid kinds.
+// MarginKinds lista los tipos válidos.
 var MarginKinds = []MarginKind{Percent, Absolute, Pip}
 
 var (
@@ -157,8 +157,8 @@ var (
 	pipUnit = vocab.MustDecimal("0.0001")
 )
 
-// Apply returns the rate offered to the customer: the reference rate plus the margin, with six
-// decimals.
+// Apply devuelve el cambio que se ofrece al cliente: el cambio de referencia más el margen, con seis
+// decimales.
 func (k MarginKind) Apply(rate, value vocab.Decimal) vocab.Decimal {
 	switch k {
 	case Absolute:
@@ -171,7 +171,7 @@ func (k MarginKind) Apply(rate, value vocab.Decimal) vocab.Decimal {
 	return rate.Round(6)
 }
 
-// AsPercent expresses a margin as a percentage of the reference rate, for reporting.
+// AsPercent expresa un margen como porcentaje del cambio de referencia, para los informes.
 func (k MarginKind) AsPercent(rate, value vocab.Decimal) vocab.Decimal {
 	switch {
 	case k == Percent:
@@ -184,23 +184,23 @@ func (k MarginKind) AsPercent(rate, value vocab.Decimal) vocab.Decimal {
 	return value.Div(rate).Mul(hundred).Round(6)
 }
 
-// Levels of price: three margins per currency and segment, of which the company applies one.
+// Niveles de precio: tres márgenes por moneda y segmento, de los que la empresa aplica uno.
 const (
 	MinLevel = 1
 	MaxLevel = 3
 )
 
-// MarginState is the persisted state of a margin.
+// MarginState es el estado persistido de un margen.
 type MarginState struct {
 	Company  OrganizationID
 	Currency string
 	Segment  string
 	Kind     MarginKind
-	Values   [MaxLevel]vocab.Decimal // one per level of price
+	Values   [MaxLevel]vocab.Decimal // uno por nivel de precio
 	Audit    traits.AuditStamp
 }
 
-// Margin is what a company adds to the reference rate of a currency for a customer segment.
+// Margin es lo que una empresa añade al cambio de referencia de una moneda para un segmento de clientes.
 type Margin struct {
 	fw.BaseAggregateRoot[MarginID]
 	traits.Audited
@@ -214,7 +214,7 @@ func checkMargin(v *fw.Validation, s *MarginState) {
 	}
 }
 
-// ReconstituteMargin rebuilds a margin.
+// ReconstituteMargin reconstruye un margen.
 func ReconstituteMargin(id MarginID, s MarginState) (*Margin, error) {
 	base, err := fw.NewBaseAggregateRoot(MarginKindName, id)
 	if err != nil {
@@ -232,10 +232,10 @@ func ReconstituteMargin(id MarginID, s MarginState) (*Margin, error) {
 	return &Margin{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// State returns the state.
+// State devuelve el estado.
 func (m *Margin) State() MarginState { return m.s }
 
-// Change replaces the kind and the three values.
+// Change sustituye el tipo y los tres valores.
 func (m *Margin) Change(kind MarginKind, values [MaxLevel]vocab.Decimal) error {
 	s := m.s
 	s.Kind, s.Values = kind, values
@@ -248,52 +248,52 @@ func (m *Margin) Change(kind MarginKind, values [MaxLevel]vocab.Decimal) error {
 	return nil
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (m *Margin) AuditSnapshot() map[string]any {
 	return map[string]any{"currency": m.s.Currency, "segment": m.s.Segment, "kind": string(m.s.Kind), "level1": m.s.Values[0].String(),
 		"level2": m.s.Values[1].String(), "level3": m.s.Values[2].String()}
 }
 
-// Promotion code modes.
+// Modos del código de promoción.
 const (
-	PromotionDisabled = "disabled" // codes are ignored
+	PromotionDisabled = "disabled" // los códigos se ignoran
 	PromotionOptional = "optional"
 	PromotionRequired = "required"
 )
 
-// Defaults of the settings (those of the C#: second level of price, optional validated codes, a
-// reservation waits four hours after the agreed pickup).
+// Valores por omisión de la configuración (los del C#: segundo nivel de precio, códigos opcionales
+// validados, una reserva espera cuatro horas tras la recogida acordada).
 const (
 	DefaultLevel       = 2
 	DefaultExpiryHours = 4
 	DefaultSegment     = "WEB"
 )
 
-// SettingsState is the persisted state of the settings of a company.
+// SettingsState es el estado persistido de la configuración de una empresa.
 type SettingsState struct {
 	Company           OrganizationID
-	Level             int    // level of price applied, 1 to 3
-	PromotionMode     string // disabled, optional or required
-	ValidatePromotion bool   // a code must be that of a collaborator
-	ExpiryHours       int    // hours a reservation waits after its pickup time
+	Level             int    // nivel de precio aplicado, de 1 a 3
+	PromotionMode     string // disabled, optional o required
+	ValidatePromotion bool   // un código debe ser el de un colaborador
+	ExpiryHours       int    // horas que espera una reserva tras su hora de recogida
 	CryptoEnabled     bool
 	Audit             traits.AuditStamp
 }
 
-// Settings are how a company runs its reservations (in C# one global row for the promotion codes,
-// and application settings nobody could change at run time for the rest).
+// Settings es cómo lleva una empresa sus reservas (en C#, una fila global para los códigos de
+// promoción, y para el resto ajustes de aplicación que nadie podía cambiar en ejecución).
 type Settings struct {
 	fw.BaseAggregateRoot[SettingsID]
 	traits.Audited
 	s SettingsState
 }
 
-// DefaultSettings returns the settings a company has until it changes them.
+// DefaultSettings devuelve la configuración que tiene una empresa hasta que la cambia.
 func DefaultSettings(company OrganizationID) SettingsState {
 	return SettingsState{Company: company, Level: DefaultLevel, PromotionMode: PromotionOptional, ValidatePromotion: true, ExpiryHours: DefaultExpiryHours}
 }
 
-// ReconstituteSettings rebuilds the settings.
+// ReconstituteSettings reconstruye la configuración.
 func ReconstituteSettings(id SettingsID, s SettingsState) (*Settings, error) {
 	base, err := fw.NewBaseAggregateRoot(SettingsKind, id)
 	if err != nil {
@@ -311,10 +311,10 @@ func ReconstituteSettings(id SettingsID, s SettingsState) (*Settings, error) {
 	return &Settings{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// State returns the state.
+// State devuelve el estado.
 func (s *Settings) State() SettingsState { return s.s }
 
-// Change replaces the settings.
+// Change sustituye la configuración.
 func (s *Settings) Change(n SettingsState) error {
 	n.Company, n.Audit = s.s.Company, s.s.Audit
 	checked, err := ReconstituteSettings(s.ID(), n)
@@ -325,32 +325,32 @@ func (s *Settings) Change(n SettingsState) error {
 	return nil
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (s *Settings) AuditSnapshot() map[string]any {
 	return map[string]any{"level": s.s.Level, "promotionMode": s.s.PromotionMode, "validatePromotion": s.s.ValidatePromotion,
 		"expiryHours": s.s.ExpiryHours, "cryptoEnabled": s.s.CryptoEnabled}
 }
 
-// Quotation is what a customer is offered for an amount of a currency.
+// Quotation es lo que se ofrece a un cliente por un importe de una moneda.
 type Quotation struct {
 	Currency      string
 	Segment       string
-	Amount        vocab.Decimal // what was asked for
-	BaseRate      vocab.Decimal // reference rate, euros for one unit
+	Amount        vocab.Decimal // lo que se pidió
+	BaseRate      vocab.Decimal // cambio de referencia, euros por una unidad
 	RateOn        vocab.Date
-	OfferedRate   vocab.Decimal // with the margin
+	OfferedRate   vocab.Decimal // con el margen
 	MarginKind    MarginKind
 	Level         int
 	MarginValue   vocab.Decimal
 	MarginPercent vocab.Decimal
 	Facial        vocab.Decimal
-	Delivered     vocab.Decimal // what is handed over: the amount in whole notes
-	Eur           vocab.Decimal // what the customer pays
-	NoMargin      bool          // the currency has no margin for the segment: the reference rate is offered
+	Delivered     vocab.Decimal // lo que se entrega: el importe en billetes enteros
+	Eur           vocab.Decimal // lo que paga el cliente
+	NoMargin      bool          // la moneda no tiene margen para el segmento: se ofrece el cambio de referencia
 }
 
-// RoundDownToFacial returns the amount in whole notes. An amount under one note is left as asked,
-// and so is any amount when the currency has no note.
+// RoundDownToFacial devuelve el importe en billetes enteros. Un importe inferior a un billete se
+// deja como se pidió, y también cualquier importe cuando la moneda no tiene billete.
 func RoundDownToFacial(amount, facial vocab.Decimal) vocab.Decimal {
 	if !facial.IsPositive() || !amount.IsPositive() {
 		return amount
@@ -361,9 +361,9 @@ func RoundDownToFacial(amount, facial vocab.Decimal) vocab.Decimal {
 	return amount
 }
 
-// Quote prices an amount of a currency for a segment at the level of price of the company:
-// reference rate plus margin (six decimals), the amount in whole notes, and its value in euros
-// (cents, half away from zero). margin may be nil.
+// Quote pone precio a un importe de una moneda para un segmento al nivel de precio de la empresa:
+// cambio de referencia más margen (seis decimales), el importe en billetes enteros, y su valor en
+// euros (céntimos, redondeando el medio lejos de cero). margin puede ser nil.
 func Quote(c *Currency, m *Margin, set SettingsState, segment string, amount vocab.Decimal) (Quotation, error) {
 	if !amount.IsPositive() || !places(amount, 2) {
 		return Quotation{}, fw.Violation("exchange.amount", "a positive amount in cents")
@@ -389,7 +389,7 @@ func Quote(c *Currency, m *Margin, set SettingsState, segment string, amount voc
 	return q, nil
 }
 
-// Pricing fields.
+// Campos de precios.
 var (
 	CurFieldCompany = spec.Comparable("company", func(c *Currency) OrganizationID { return c.s.Company })
 	CurFieldCode    = spec.Ordered("code", func(c *Currency) string { return c.s.Code })
@@ -399,22 +399,22 @@ var (
 	SetFieldCompany = spec.Comparable("company", func(s *Settings) OrganizationID { return s.s.Company })
 )
 
-// Identities.
+// Identidades.
 func NewCurrencyID() CurrencyID       { return CurrencyID{fw.NewUUID()} }
 func NewMarginID() MarginID           { return MarginID{fw.NewUUID()} }
 func NewSettingsID() SettingsID       { return SettingsID{fw.NewUUID()} }
 func NewReservationID() ReservationID { return ReservationID{fw.NewUUID()} }
 
-// ParseCurrencyID parses a textual identity.
+// ParseCurrencyID interpreta una identidad en texto.
 func ParseCurrencyID(s string) (CurrencyID, error) {
 	u, err := fw.ParseUUID(s)
 	return CurrencyID{u}, err
 }
 
-// ParseMarginID parses a textual identity.
+// ParseMarginID interpreta una identidad en texto.
 func ParseMarginID(s string) (MarginID, error) { u, err := fw.ParseUUID(s); return MarginID{u}, err }
 
-// Repositories.
+// Repositorios.
 type (
 	CurrencyRepository    = fw.Repository[CurrencyID, *Currency]
 	MarginRepository      = fw.Repository[MarginID, *Margin]
@@ -422,9 +422,9 @@ type (
 	ReservationRepository = fw.Repository[ReservationID, *Reservation]
 )
 
-// Collaborators resolves the promotion code of a collaborator (a port Exchange owns; without it no
-// code can be validated).
+// Collaborators resuelve el código de promoción de un colaborador (un puerto propio de Exchange; sin
+// él no se puede validar ningún código).
 type Collaborators interface {
-	// ByPromotionCode returns the collaborator of a code and whether there is an active one.
+	// ByPromotionCode devuelve el colaborador de un código y si hay uno activo.
 	ByPromotionCode(ctx context.Context, company OrganizationID, code string) (PartyID, bool, error)
 }

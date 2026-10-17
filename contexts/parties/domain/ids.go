@@ -1,64 +1,64 @@
-// Package domain is the model of the Parties bounded context: who takes part in the business
-// (people and organizations), the roles they play and the relationships between them
-// (UDM Vol. 1, ch. 2). It is written only against the framework's pure domain packages.
+// Package domain es el modelo del contexto delimitado Parties: quién toma parte en el negocio
+// (personas y organizaciones), los roles que desempeñan y las relaciones entre ellos
+// (UDM Vol. 1, cap. 2). Sólo se escribe contra los paquetes de dominio puros del framework.
 package domain
 
 import fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 
-// PartyID identifies a party. The value is the same GUID used by the C# IdParty.
+// PartyID identifica una party. El valor es el mismo GUID que usa IdParty en C#.
 type PartyID struct{ fw.UUID }
 
-// NewPartyID returns a new identity.
+// NewPartyID devuelve una identidad nueva.
 func NewPartyID() PartyID { return PartyID{fw.NewUUID()} }
 
-// ParsePartyID parses a textual identity.
+// ParsePartyID interpreta una identidad en texto.
 func ParsePartyID(s string) (PartyID, error) { u, err := fw.ParseUUID(s); return PartyID{u}, err }
 
-// PartyRoleID identifies a role played by a party (child entity of the Party aggregate).
+// PartyRoleID identifica un rol que desempeña una party (entidad hija del agregado Party).
 type PartyRoleID struct{ fw.UUID }
 
-// NewPartyRoleID returns a new identity.
+// NewPartyRoleID devuelve una identidad nueva.
 func NewPartyRoleID() PartyRoleID { return PartyRoleID{fw.NewUUID()} }
 
-// ParsePartyRoleID parses a textual identity.
+// ParsePartyRoleID interpreta una identidad en texto.
 func ParsePartyRoleID(s string) (PartyRoleID, error) {
 	u, err := fw.ParseUUID(s)
 	return PartyRoleID{u}, err
 }
 
-// RoleTypeID identifies a role type of the catalog.
+// RoleTypeID identifica un tipo de rol del catálogo.
 type RoleTypeID struct{ fw.UUID }
 
-// ParseRoleTypeID parses a textual identity.
+// ParseRoleTypeID interpreta una identidad en texto.
 func ParseRoleTypeID(s string) (RoleTypeID, error) {
 	u, err := fw.ParseUUID(s)
 	return RoleTypeID{u}, err
 }
 
-// MustRoleTypeID parses a well-known identity (panics on a malformed literal).
+// MustRoleTypeID interpreta una identidad conocida (entra en pánico con un literal mal formado).
 func MustRoleTypeID(s string) RoleTypeID { return RoleTypeID{fw.MustParseUUID(s)} }
 
-// RelationshipTypeID identifies a relationship type of the catalog.
+// RelationshipTypeID identifica un tipo de relación del catálogo.
 type RelationshipTypeID struct{ fw.UUID }
 
-// ParseRelationshipTypeID parses a textual identity.
+// ParseRelationshipTypeID interpreta una identidad en texto.
 func ParseRelationshipTypeID(s string) (RelationshipTypeID, error) {
 	u, err := fw.ParseUUID(s)
 	return RelationshipTypeID{u}, err
 }
 
-// MustRelationshipTypeID parses a well-known identity (panics on a malformed literal).
+// MustRelationshipTypeID interpreta una identidad conocida (entra en pánico con un literal mal formado).
 func MustRelationshipTypeID(s string) RelationshipTypeID {
 	return RelationshipTypeID{fw.MustParseUUID(s)}
 }
 
-// RelationshipID identifies a relationship between two parties.
+// RelationshipID identifica una relación entre dos parties.
 type RelationshipID struct{ fw.UUID }
 
-// NewRelationshipID returns a new identity.
+// NewRelationshipID devuelve una identidad nueva.
 func NewRelationshipID() RelationshipID { return RelationshipID{fw.NewUUID()} }
 
-// ParseRelationshipID parses a textual identity.
+// ParseRelationshipID interpreta una identidad en texto.
 func ParseRelationshipID(s string) (RelationshipID, error) {
 	u, err := fw.ParseUUID(s)
 	return RelationshipID{u}, err

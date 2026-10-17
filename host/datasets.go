@@ -15,11 +15,11 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
 )
 
-// The lists of Parties the grid exports (the C# ExportService served them from a switch of its
-// own; here each is a dataset over the searches of the context that owns the list). They read as
-// who asked for the file, so each file has what that person may see.
+// Las listas de Parties que exporta la rejilla (el ExportService de C# las servía desde un switch
+// propio; aquí cada una es un dataset sobre las búsquedas del contexto dueño de la lista). Leen
+// como quien pidió el fichero, así que cada fichero tiene lo que esa persona puede ver.
 
-// PartyLists builds the lists of parties: all, and those of a kind or with a role.
+// PartyLists construye las listas de parties: todas, y las de una clase o con un rol.
 func PartyLists(p *parties.Module, h *hr.Module) []expapp.Dataset {
 	return []expapp.Dataset{
 		partyList{p: p, key: "parties", title: "Participantes"},
@@ -59,7 +59,7 @@ func status(active bool) string {
 	return "Inactivo"
 }
 
-// search runs the search of Parties with the filters of an export.
+// search ejecuta la búsqueda de Parties con los filtros de una exportación.
 func search(ctx context.Context, p *parties.Module, kind, role string, filters map[string]string, cursor string, limit int) (int, int, []parapp.PartyDTO, error) {
 	q := parapp.SearchParties{Text: filters["name"], Kind: kind, Role: role, Document: filters["document"], Organization: filters["organization"],
 		ActiveOnly: filters["active"] == "true", Page: page(cursor), Size: limit}
@@ -72,8 +72,8 @@ func search(ctx context.Context, p *parties.Module, kind, role string, filters m
 
 var partyFilters = []string{"name", "document", "organization", "active", "role"}
 
-// partyList is a list of parties: name, kind and whether it is active (the C# columns), and for
-// customers their tax number, which the C# column had and always left empty.
+// partyList es una lista de parties: nombre, clase y si está activa (las columnas de C#), y para
+// los clientes su número fiscal, que la columna de C# tenía y siempre dejaba vacío.
 type partyList struct {
 	p          *parties.Module
 	key, title string
@@ -124,7 +124,7 @@ func (l partyList) Page(ctx context.Context, filters map[string]string, cursor s
 	return rows, next(number, total), nil
 }
 
-// partyRoles is the list of the roles the parties play: a row per role.
+// partyRoles es la lista de los roles que desempeñan las parties: una fila por rol.
 type partyRoles struct{ p *parties.Module }
 
 func (partyRoles) Key() string                  { return "party-roles" }
@@ -155,9 +155,9 @@ func (l partyRoles) Page(ctx context.Context, filters map[string]string, cursor 
 	return rows, next(number, total), nil
 }
 
-// partyRelationships is the list of the relationships between parties: each once, from the side it
-// starts at. Parties has no search of relationships, so they are read party by party; a file of
-// them takes longer than the others.
+// partyRelationships es la lista de las relaciones entre parties: cada una una vez, desde el lado
+// en que empieza. Parties no tiene búsqueda de relaciones, así que se leen party a party; un
+// fichero de ellas tarda más que los otros.
 type partyRelationships struct{ p *parties.Module }
 
 func (partyRelationships) Key() string                  { return "party-relationships" }
@@ -171,7 +171,7 @@ func (partyRelationships) Columns() []expdomain.Column {
 }
 
 func (l partyRelationships) Page(ctx context.Context, filters map[string]string, cursor string, limit int) ([]expdomain.Row, string, error) {
-	// A hundred parties a page: each brings its relationships.
+	// Cien parties por página: cada una trae sus relaciones.
 	number, total, items, err := search(ctx, l.p, "", "", filters, cursor, min(limit, 100))
 	if err != nil {
 		return nil, "", err
@@ -218,7 +218,7 @@ func (l partyRelationships) Page(ctx context.Context, filters map[string]string,
 	return rows, next(number, total), nil
 }
 
-// employees is the list of the employments of HR, with the name Parties gives each person.
+// employees es la lista de los empleos de HR, con el nombre que Parties da a cada persona.
 type employees struct {
 	p *parties.Module
 	h *hr.Module

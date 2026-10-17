@@ -1,7 +1,8 @@
 package domain
 
-// Well-known facility types (C# WellKnownCatalog.FacilityTypes and the seed, same GUIDs). The C#
-// code catalog lacked Currency Exchange Office, which only existed in the seed.
+// Tipos de instalación conocidos (WellKnownCatalog.FacilityTypes del C# y la semilla, los mismos
+// GUID). Al catálogo en código del C# le faltaba Currency Exchange Office, que sólo existía en la
+// semilla.
 var (
 	TypeWarehouse          = MustFacilityTypeID("10000000-0000-0000-0008-000000000001")
 	TypePlant              = MustFacilityTypeID("10000000-0000-0000-0008-000000000002")
@@ -14,9 +15,9 @@ var (
 	TypeCurrencyExchange   = MustFacilityTypeID("10000000-0000-0000-0008-000000000009")
 )
 
-// WellKnownFacilityTypes returns the seed of the facility type catalog. Offices and currency
-// exchange offices receive the public: they require an address and a phone (the rule the C#
-// checked only when an endpoint asked for it).
+// WellKnownFacilityTypes devuelve la semilla del catálogo de tipos de instalación. Las oficinas y
+// las oficinas de cambio de divisa atienden al público: exigen dirección y teléfono (la regla que
+// el C# sólo comprobaba cuando un endpoint lo pedía).
 func WellKnownFacilityTypes() []FacilityType {
 	return []FacilityType{
 		{ID: TypeWarehouse, Name: "Warehouse", Description: "Storage facility for goods and materials", Active: true},

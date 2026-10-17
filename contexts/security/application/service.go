@@ -11,10 +11,10 @@ import (
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// Service exposes the use cases.
+// Service expone los casos de uso.
 type Service struct {
-	// Authentication with the own password. Login, Refresh and Logout are anonymous; ChangePassword
-	// needs an authenticated caller and no permission.
+	// Autenticación con la contraseña propia. Login, Refresh y Logout son anónimos; ChangePassword
+	// necesita que quien llama esté autenticado, pero ningún permiso.
 	Login          app.CommandHandler[Login, Tokens]
 	Refresh        app.CommandHandler[Refresh, Tokens]
 	Logout         app.CommandHandler[Logout, Done]
@@ -42,8 +42,8 @@ type Service struct {
 	ListRoles          app.QueryHandler[ListRoles, []RoleDTO]
 	ListPermissions    app.QueryHandler[ListPermissions, []PermissionDTO]
 
-	// Catalog keeps the permission catalog and the system roles; Bootstrap creates the first
-	// global administrator. Both are for the host, not for users.
+	// Catalog mantiene el catálogo de permisos y los roles del sistema; Bootstrap crea el primer
+	// administrador global. Los dos son para el anfitrión, no para los usuarios.
 	Catalog   Catalog
 	Bootstrap Bootstrap
 }
@@ -52,10 +52,10 @@ type service struct {
 	Deps
 	users     *orchestration.Orchestrator[domain.UserID, *domain.User]
 	roles     *orchestration.Orchestrator[domain.RoleID, *domain.Role]
-	dummyHash string // verified when there is no user to check, so every failed login costs the same
+	dummyHash string // se verifica cuando no hay usuario que comprobar, para que cada login fallido cueste lo mismo
 }
 
-// NewService wires the use cases.
+// NewService conecta los casos de uso.
 func NewService(d Deps) *Service {
 	d = d.withDefaults()
 	var opts []orchestration.Option
@@ -124,7 +124,7 @@ func NewService(d Deps) *Service {
 		if err := domain.CheckPassword(c.Password, target.Username()); err != nil {
 			return UserDTO{}, err
 		}
-		hash, err := d.Hasher.Hash(c.Password) // computed outside the transaction: it is slow on purpose
+		hash, err := d.Hasher.Hash(c.Password) // calculado fuera de la transacción: es lento a propósito
 		if err != nil {
 			return UserDTO{}, err
 		}

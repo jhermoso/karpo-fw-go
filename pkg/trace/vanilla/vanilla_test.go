@@ -23,7 +23,7 @@ func TestTracer_ParentAndChildShareTheTrace(t *testing.T) {
 	child.SetAttributes("db.operation", "INSERT", "dangling")
 	child.RecordError(errors.New("boom"))
 	child.End()
-	child.End() // a second End has no effect
+	child.End() // un segundo End no tiene efecto
 	parent.SetName("GET /parties/{id}")
 	parent.End()
 
@@ -92,7 +92,7 @@ func TestTracer_Sampling(t *testing.T) {
 		t.Fatalf("unsampled spans must not be exported, got %d", n)
 	}
 
-	// A remote parent keeps its own decision, whatever the local ratio is.
+	// Un padre remoto mantiene su propia decisión, sea cual sea la proporción local.
 	remote, _ := trace.ParseTraceParent("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
 	_, s2 := tr.Start(context.Background(), "remote", trace.WithRemoteParent(remote))
 	s2.End()

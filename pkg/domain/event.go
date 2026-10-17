@@ -2,8 +2,8 @@ package domain
 
 import "time"
 
-// Event is a fact that happened in the domain. Concrete events are immutable value types that
-// embed EventMeta and declare their stable type name with a method on the value receiver:
+// Event es un hecho ocurrido en el dominio. Los eventos concretos son tipos valor inmutables que
+// incrustan EventMeta y declaran su nombre de tipo estable con un método de receptor valor:
 //
 //	type PartyRegistered struct {
 //		domain.EventMeta
@@ -11,15 +11,15 @@ import "time"
 //	}
 //	func (PartyRegistered) EventType() string { return "parties.party_registered" }
 //
-// The event struct itself is the payload; it is serialized as JSON by the outbox.
+// El propio struct del evento es la carga; el outbox lo serializa como JSON.
 type Event interface {
-	// EventType is the stable name used for routing, serialization and subscriptions.
+	// EventType es el nombre estable que se usa para el enrutado, la serialización y las suscripciones.
 	EventType() string
-	// Meta returns the envelope metadata (id, timestamp, originating aggregate).
+	// Meta devuelve los metadatos del sobre (id, marca de tiempo, agregado de origen).
 	Meta() EventMeta
 }
 
-// EventMeta is the metadata envelope shared by all domain events.
+// EventMeta es el sobre de metadatos que comparten todos los eventos de dominio.
 type EventMeta struct {
 	EventID          string    `json:"eventId"`
 	OccurredAt       time.Time `json:"occurredAt"`
@@ -28,11 +28,11 @@ type EventMeta struct {
 	AggregateVersion int64     `json:"aggregateVersion,omitempty"`
 }
 
-// Meta returns m. Embedding EventMeta gives concrete events their Meta method.
+// Meta devuelve m. Incrustar EventMeta da a los eventos concretos su método Meta.
 func (m EventMeta) Meta() EventMeta { return m }
 
-// NewEventMeta returns metadata with a fresh id and the current domain time.
-// Inside an aggregate prefer BaseAggregateRoot.NewEventMeta, which also fills the aggregate fields.
+// NewEventMeta devuelve metadatos con un id nuevo y la hora actual del dominio.
+// Dentro de un agregado es preferible BaseAggregateRoot.NewEventMeta, que rellena además los campos del agregado.
 func NewEventMeta() EventMeta {
 	return EventMeta{EventID: NewUUID().String(), OccurredAt: Now()}
 }

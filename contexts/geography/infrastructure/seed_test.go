@@ -26,11 +26,11 @@ func TestSeed(t *testing.T) {
 	}
 }
 
-// mojibake are the traces of UTF-8 text read as Latin-1 or Windows-1252 and encoded again
-// ("Ã±" for "ñ", "â€™" for an apostrophe), and of a failed decoding.
+// mojibake son las huellas de un texto UTF-8 leído como Latin-1 o Windows-1252 y vuelto a
+// codificar («Ã±» por «ñ», «â€™» por un apóstrofo), y de una decodificación fallida.
 var mojibake = []string{"Ã", "Â", "â€", "\uFFFD"}
 
-// Every text of every seed file, whether or not the domain reads the column.
+// Todos los textos de todos los ficheros de la semilla, lea o no el dominio la columna.
 func TestSeed_NoTextHasABrokenEncoding(t *testing.T) {
 	for _, name := range []string{"boundary_types", "boundaries", "associations", "postal_codes", "countries", "currencies",
 		"languages", "time_zones", "street_types", "country_currencies", "country_languages", "country_time_zones", "country_levels"} {
@@ -59,7 +59,7 @@ func TestSeed_NoTextHasABrokenEncoding(t *testing.T) {
 	}
 }
 
-// The seed is decoded once per process and loaded into as many stores as needed.
+// La semilla se decodifica una vez por proceso y se carga en tantos almacenes como haga falta.
 func TestLoadMemory_LeavesTheSeedUntouched(t *testing.T) {
 	ctx := context.Background()
 	for range 2 {

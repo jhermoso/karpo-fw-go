@@ -6,11 +6,11 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// Decimal is an arbitrary-precision decimal number (the Go counterpart of C# decimal).
-// Compare with Equal/Cmp, never with ==.
+// Decimal es un número decimal de precisión arbitraria (la contrapartida en Go del decimal de C#).
+// Se compara con Equal/Cmp, nunca con ==.
 type Decimal = decimal.Decimal
 
-// ParseDecimal parses a decimal written with '.' as the decimal separator ("1234.56").
+// ParseDecimal analiza un decimal escrito con '.' como separador decimal ("1234.56").
 func ParseDecimal(s string) (Decimal, error) {
 	d, err := decimal.NewFromString(strings.TrimSpace(s))
 	if err != nil {
@@ -19,7 +19,7 @@ func ParseDecimal(s string) (Decimal, error) {
 	return d, nil
 }
 
-// MustDecimal is like ParseDecimal but panics on error (constants and tests).
+// MustDecimal es como ParseDecimal pero entra en pánico si hay error (constantes y pruebas).
 func MustDecimal(s string) Decimal {
 	d, err := ParseDecimal(s)
 	if err != nil {
@@ -28,10 +28,10 @@ func MustDecimal(s string) Decimal {
 	return d
 }
 
-// DecimalFromInt returns n as a Decimal.
+// DecimalFromInt devuelve n como Decimal.
 func DecimalFromInt(n int64) Decimal { return decimal.NewFromInt(n) }
 
-// CompareDecimal compares two decimals (for spec.OrderedBy).
+// CompareDecimal compara dos decimales (para spec.OrderedBy).
 func CompareDecimal(a, b Decimal) int { return a.Cmp(b) }
 
 func quote(s string) string { return "\"" + s + "\"" }

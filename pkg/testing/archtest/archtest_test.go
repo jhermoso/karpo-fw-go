@@ -11,8 +11,8 @@ import (
 
 const module = "github.com/jhermoso/karpo-fw-go"
 
-// decimalLib is the only third-party package allowed in the domain: Go has no decimal type and
-// floating point is not acceptable for amounts (decision recorded in docs/LENGUAJE-UBICUO.md).
+// decimalLib es el único paquete de terceros permitido en el dominio: Go no tiene tipo decimal y
+// la coma flotante no es aceptable para importes (decisión anotada en docs/LENGUAJE-UBICUO.md).
 const decimalLib = "github.com/shopspring/decimal"
 
 func root(t *testing.T, parts ...string) string {
@@ -24,23 +24,24 @@ func root(t *testing.T, parts ...string) string {
 	return filepath.Join(append([]string{r}, parts...)...)
 }
 
-// Contract packages: the Go counterpart of the C# *.Contracts assemblies. They hold interfaces
-// and pure building blocks (no I/O, no third-party code) and may depend only on the standard
-// library and on other contract packages.
+// Paquetes de contratos: el equivalente en Go de los ensamblados *.Contracts de C#. Contienen
+// interfaces y piezas puras (sin E/S, sin código de terceros) y sólo pueden depender de la
+// biblioteca estándar y de otros paquetes de contratos.
 var contracts = []string{
 	archtest.Std,
-	module + "/pkg/domain/...",        // tactical contracts + pure building blocks (Fw.Domain.Contracts)
-	module + "/pkg/application",       // application contracts and ports (Fw.Application.Contracts)
-	module + "/pkg/application/authz", // authorization contracts (Fw.Application.Contracts/Authorization)
-	module + "/pkg/log",               // logging contract
-	module + "/pkg/cache",             // cache contract
-	module + "/pkg/time",              // clock contract
-	module + "/pkg/trace",             // tracing contract
-	module + "/pkg/metrics",           // metrics contract
+	module + "/pkg/domain/...",        // contratos tácticos + piezas puras (Fw.Domain.Contracts)
+	module + "/pkg/application",       // contratos y puertos de aplicación (Fw.Application.Contracts)
+	module + "/pkg/application/authz", // contratos de autorización (Fw.Application.Contracts/Authorization)
+	module + "/pkg/log",               // contrato de registro
+	module + "/pkg/cache",             // contrato de caché
+	module + "/pkg/time",              // contrato de reloj
+	module + "/pkg/trace",             // contrato de trazas
+	module + "/pkg/metrics",           // contrato de métricas
 }
 
-// Rule 1: the domain contracts are pure: standard library, the domain tree and the approved
-// decimal library only. The core packages (domain, spec) stay standard-library only.
+// Regla 1: los contratos de dominio son puros: sólo biblioteca estándar, el árbol del dominio y
+// la biblioteca decimal aprobada. Los paquetes núcleo (domain, spec) se quedan en sólo
+// biblioteca estándar.
 func TestDomainContracts_ArePure(t *testing.T) {
 	archtest.AssertOnlyImports(t, root(t, "pkg", "domain"), true, archtest.Std, decimalLib, module+"/pkg/domain/...")
 	archtest.AssertOnlyImports(t, root(t, "pkg", "domain"), false, archtest.Std, module+"/pkg/domain/...")
@@ -48,8 +49,8 @@ func TestDomainContracts_ArePure(t *testing.T) {
 	archtest.AssertTreeDoesNotImport(t, root(t, "pkg", "domain"), []string{"database/sql", "net/http", "unsafe"})
 }
 
-// Rule 2: the application contracts package depends only on contracts, never on its own
-// implementations (pipeline, orchestration, outbox, hosting) nor on adapters.
+// Regla 2: el paquete de contratos de aplicación sólo depende de contratos, nunca de sus propias
+// implementaciones (pipeline, orchestration, outbox, hosting) ni de adaptadores.
 func TestApplicationContracts_DependOnContractsOnly(t *testing.T) {
 	archtest.AssertOnlyImports(t, root(t, "pkg", "application"), false, contracts...)
 	archtest.AssertOnlyImports(t, root(t, "pkg", "application", "authz"), false, contracts...)
@@ -58,23 +59,24 @@ func TestApplicationContracts_DependOnContractsOnly(t *testing.T) {
 	}
 }
 
-// Rule 3: application implementations depend on contracts only: never on persistence adapters,
-// the transport layer, database packages or third-party code.
+// Regla 3: las implementaciones de aplicación sólo dependen de contratos: nunca de adaptadores
+// de persistencia, de la capa de transporte, de paquetes de base de datos ni de código de terceros.
 func TestApplicationImplementations_DependOnContractsOnly(t *testing.T) {
 	for _, pkg := range []string{"pipeline", "orchestration", "outbox", "hosting", "authorization"} {
 		archtest.AssertOnlyImports(t, root(t, "pkg", "application", pkg), true, contracts...)
 	}
-	// messaging reuses the relay engine of outbox (a sibling implementation, never an adapter).
+	// messaging reutiliza el motor de reenvío de outbox (una implementación hermana, nunca un adaptador).
 	archtest.AssertOnlyImports(t, root(t, "pkg", "application", "messaging"), false, append(contracts, module+"/pkg/application/outbox")...)
 }
 
-// Rule 4: the distribution layer talks to the application, never to persistence adapters.
+// Regla 4: la capa de distribución habla con la aplicación, nunca con adaptadores de persistencia.
 func TestDistribution_DoesNotReachPersistence(t *testing.T) {
 	archtest.AssertTreeDoesNotImport(t, root(t, "pkg", "distribution"), []string{"/pkg/persistence", "database/sql"})
 }
 
-// Rule 5: persistence adapters are technology agnostic (no drivers, no third-party code) and
-// never depend on the transport layer or on application implementations.
+// Regla 5: los adaptadores de persistencia son agnósticos de la tecnología (sin drivers, sin
+// código de terceros) y nunca dependen de la capa de transporte ni de implementaciones de
+// aplicación.
 func TestPersistence_IsDriverAgnostic(t *testing.T) {
 	archtest.AssertTreeDoesNotImport(t, root(t, "pkg", "persistence"), []string{
 		"/pkg/distribution", "net/http",
@@ -84,8 +86,8 @@ func TestPersistence_IsDriverAgnostic(t *testing.T) {
 	archtest.AssertOnlyImports(t, root(t, "pkg", "persistence"), true, archtest.Std, decimalLib, module+"/...")
 }
 
-// Rule 6: event infrastructure and message transports implement application contracts and
-// depend on nothing else.
+// Regla 6: la infraestructura de eventos y los transportes de mensajes implementan contratos de
+// aplicación y no dependen de nada más.
 func TestEvents_DependOnContractsOnly(t *testing.T) {
 	archtest.AssertOnlyImports(t, root(t, "pkg", "events"), true, append(contracts, module+"/pkg/events/...")...)
 	archtest.AssertOnlyImports(t, root(t, "pkg", "messaging"), false, append(contracts, module+"/pkg/messaging/...")...)
@@ -119,8 +121,9 @@ func TestMatchesAndImports(t *testing.T) {
 	}
 }
 
-// Rule 7: bounded contexts talk through contracts. A context may import another one only through
-// its contracts package (Published Language and Open Host Service), and never in its domain.
+// Regla 7: los contextos delimitados hablan a través de contratos. Un contexto sólo puede
+// importar otro a través de su paquete de contratos (Published Language y Open Host Service), y
+// nunca en su dominio.
 func TestContexts_DependOnEachOtherThroughContracts(t *testing.T) {
 	dirs, err := os.ReadDir(root(t, "contexts"))
 	if err != nil {
@@ -151,21 +154,22 @@ func TestContexts_DependOnEachOtherThroughContracts(t *testing.T) {
 	}
 }
 
-// Rule 8: the observability trees (contracts and their dependency-free implementations) use the
-// standard library and this module only. Rule 2 covers the contract packages; this one is
-// recursive, so log/vanilla, trace/vanilla and metrics/vanilla cannot grow a third-party import.
+// Regla 8: los árboles de observabilidad (los contratos y sus implementaciones sin dependencias)
+// sólo usan la biblioteca estándar y este módulo. La regla 2 cubre los paquetes de contratos;
+// ésta es recursiva, así que log/vanilla, trace/vanilla y metrics/vanilla no pueden ganar una
+// importación de terceros.
 func TestObservability_IsStandardLibraryOnly(t *testing.T) {
 	for _, c := range []string{"log", "trace", "metrics"} {
 		archtest.AssertOnlyImports(t, root(t, "pkg", c), true, archtest.Std, module+"/...")
 	}
-	// The contracts stay free of the transport and of persistence.
+	// Los contratos se mantienen libres del transporte y de la persistencia.
 	for _, c := range []string{"trace", "metrics"} {
 		archtest.AssertTreeDoesNotImport(t, root(t, "pkg", c), []string{"/pkg/distribution", "/pkg/persistence", "database/sql"})
 	}
 }
 
-// Rule 9: OpenTelemetry never enters the framework nor the bounded contexts. Its adapter
-// implements trace.Tracer and metrics.Meter in a separate module with its own go.mod.
+// Regla 9: OpenTelemetry nunca entra en el framework ni en los contextos delimitados. Su
+// adaptador implementa trace.Tracer y metrics.Meter en un módulo aparte con su propio go.mod.
 func TestOpenTelemetry_StaysOutOfTheFramework(t *testing.T) {
 	for _, tree := range []string{"pkg", "contexts", "examples"} {
 		archtest.AssertTreeDoesNotImport(t, root(t, tree), []string{"go.opentelemetry.io"})

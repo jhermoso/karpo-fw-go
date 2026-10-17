@@ -12,7 +12,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// CreateTerms creates payment terms of a seller.
+// CreateTerms crea condiciones de pago de un vendedor.
 type CreateTerms struct {
 	Seller          string `json:"seller"`
 	Code            string `json:"code"`
@@ -28,25 +28,26 @@ type CreateTerms struct {
 	BackwardDays    int    `json:"backwardDays,omitempty"`
 }
 
-// RetireTerms deactivates payment terms.
+// RetireTerms desactiva condiciones de pago.
 type RetireTerms struct {
 	ID domain.TermsID `json:"-"`
 }
 
-// SearchTerms lists the terms of a seller.
+// SearchTerms lista las condiciones de un vendedor.
 type SearchTerms struct {
 	Seller     string
 	ActiveOnly bool
 }
 
-// PreviewSchedule shows the due dates terms produce for an amount issued on a date.
+// PreviewSchedule muestra los vencimientos que producen unas condiciones para un importe emitido
+// en una fecha.
 type PreviewSchedule struct {
 	ID     domain.TermsID
 	Issued string
 	Amount string
 }
 
-// TermsDTO is the transport form of payment terms.
+// TermsDTO es la forma de transporte de unas condiciones de pago.
 type TermsDTO struct {
 	ID              string `json:"id"`
 	Seller          string `json:"seller"`
@@ -64,7 +65,7 @@ type TermsDTO struct {
 	Active          bool   `json:"active"`
 }
 
-// DueDTO is a due date of a schedule.
+// DueDTO es una fecha de vencimiento de un calendario de vencimientos.
 type DueDTO struct {
 	Date   string `json:"date"`
 	Amount string `json:"amount"`
@@ -81,16 +82,16 @@ func termsDTO(t *domain.Terms) TermsDTO {
 		CommercialMonth: s.CommercialMonth, ControlHolidays: s.ControlHolidays, BackwardDays: s.BackwardDays, Active: s.Active}
 }
 
-// SetCredit sets the credit profile of a customer (created on first use).
+// SetCredit fija el perfil de crédito de un cliente (se crea la primera vez que se usa).
 type SetCredit struct {
 	Seller   string  `json:"seller"`
 	Customer string  `json:"customer"`
 	Terms    string  `json:"terms,omitempty"`
-	Limit    *string `json:"limit,omitempty"` // absent: no limit
+	Limit    *string `json:"limit,omitempty"` // ausente: sin límite
 	Blocked  bool    `json:"blocked,omitempty"`
 }
 
-// GetExposure returns the credit situation of a customer.
+// GetExposure devuelve la situación de crédito de un cliente.
 type GetExposure struct {
 	Seller, Customer, On string
 }
@@ -100,7 +101,7 @@ type GetExposure struct {
 // cada cliente (docs/DECISIONES-COMUNES.md, D-73).
 type SearchCredit struct{ Seller string }
 
-// CreditDTO is the transport form of a credit profile.
+// CreditDTO es la forma de transporte de un perfil de crédito.
 type CreditDTO struct {
 	ID       string `json:"id"`
 	Seller   string `json:"seller"`
@@ -301,7 +302,7 @@ func (s service) termsUseCases(svc *Service) {
 	})
 }
 
-// CreditPort implements contracts.Credit (it serves contexts, not users).
+// CreditPort implementa contracts.Credit (sirve a contextos, no a usuarios).
 type CreditPort struct {
 	Receivables domain.ReceivableRepository
 	Credit      domain.CreditProfileRepository
@@ -309,8 +310,8 @@ type CreditPort struct {
 
 var _ contracts.Credit = CreditPort{}
 
-// Exposure implements contracts.Credit: open and overdue amounts of the customer with the seller
-// against its limit (the C# only compared each order with MaxRisk).
+// Exposure implementa contracts.Credit: importes abiertos y vencidos del cliente con el vendedor
+// frente a su límite (el C# sólo comparaba cada pedido con MaxRisk).
 func (p CreditPort) Exposure(ctx context.Context, seller, customer, on string) (contracts.Exposure, error) {
 	var v fw.Validation
 	sid := domain.OrganizationID{UUID: parseID(&v, "seller", seller)}

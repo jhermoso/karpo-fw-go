@@ -9,30 +9,31 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// FacilityRoleTypeID identifies what a party does at a facility (headquarters, work center...).
+// FacilityRoleTypeID identifica lo que hace una party en una instalación (sede central, centro de
+// trabajo...).
 type FacilityRoleTypeID struct{ fw.UUID }
 
-// MustFacilityRoleTypeID parses a well-known identity.
+// MustFacilityRoleTypeID interpreta una identidad conocida.
 func MustFacilityRoleTypeID(s string) FacilityRoleTypeID {
 	return FacilityRoleTypeID{fw.MustParseUUID(s)}
 }
 
-// ParseFacilityRoleTypeID parses a textual identity.
+// ParseFacilityRoleTypeID interpreta una identidad en texto.
 func ParseFacilityRoleTypeID(s string) (FacilityRoleTypeID, error) {
 	u, err := fw.ParseUUID(s)
 	return FacilityRoleTypeID{u}, err
 }
 
-// FacilityRoleID identifies a facility role of a party (child entity).
+// FacilityRoleID identifica un rol de una party en una instalación (entidad hija).
 type FacilityRoleID struct{ fw.UUID }
 
-// ParseFacilityRoleID parses a textual identity.
+// ParseFacilityRoleID interpreta una identidad en texto.
 func ParseFacilityRoleID(s string) (FacilityRoleID, error) {
 	u, err := fw.ParseUUID(s)
 	return FacilityRoleID{u}, err
 }
 
-// FacilityRoleType is an entry of the facility role catalog.
+// FacilityRoleType es una entrada del catálogo de roles en instalaciones.
 type FacilityRoleType struct {
 	ID          FacilityRoleTypeID
 	Name        string
@@ -40,7 +41,7 @@ type FacilityRoleType struct {
 	Active      bool
 }
 
-// Well-known facility role types (C# WellKnownCatalog.FacilityRoleTypes and the seed).
+// Tipos de rol en instalaciones conocidos (WellKnownCatalog.FacilityRoleTypes de C# y la semilla).
 var (
 	FacilityHeadquarters  = MustFacilityRoleTypeID("10000000-0000-0000-0009-000000000001")
 	FacilityBranch        = MustFacilityRoleTypeID("10000000-0000-0000-0009-000000000002")
@@ -53,8 +54,8 @@ var (
 	FacilityThirdOperator = MustFacilityRoleTypeID("10000000-0000-0000-0009-000000000009")
 )
 
-// WellKnownFacilityRoleTypes returns the seed of the facility role catalog (the C# code catalog
-// lacked the two operator roles, which only existed in the seed).
+// WellKnownFacilityRoleTypes devuelve la semilla del catálogo de roles en instalaciones (al
+// catálogo en código de C# le faltaban los dos roles de operador, que sólo existían en la semilla).
 func WellKnownFacilityRoleTypes() []FacilityRoleType {
 	return []FacilityRoleType{
 		{ID: FacilityHeadquarters, Name: "Headquarters", Description: "Primary corporate headquarters", Active: true},
@@ -69,8 +70,8 @@ func WellKnownFacilityRoleTypes() []FacilityRoleType {
 	}
 }
 
-// FacilityRole is a role the party plays at a facility of the Facilities context (the C#
-// PartyFacility, which stays in Parties: it is the party side of the relationship).
+// FacilityRole es un rol que la party desempeña en una instalación del contexto Facilities (el
+// PartyFacility de C#, que se queda en Parties: es el lado de la party en la relación).
 type FacilityRole struct {
 	ID       FacilityRoleID
 	Facility fw.UUID
@@ -78,9 +79,10 @@ type FacilityRole struct {
 	Period   vocab.ValidPeriod
 }
 
-// AssignFacilityRole makes the party play a role at a facility from a moment on. The facility
-// is checked by the application against the Facilities directory. Invariants: a known, active
-// role type; no overlapping period of the same role at the same facility.
+// AssignFacilityRole hace que la party desempeñe un rol en una instalación a partir de un
+// instante. La aplicación comprueba la instalación contra el directorio de Facilities.
+// Invariantes: un tipo de rol conocido y activo; ningún periodo solapado del mismo rol en la misma
+// instalación.
 func (p *Party) AssignFacilityRole(types []FacilityRoleType, facility fw.UUID, role FacilityRoleTypeID, from time.Time) (FacilityRoleID, error) {
 	if err := p.requireActive("be given facility roles"); err != nil {
 		return FacilityRoleID{}, err
@@ -107,7 +109,7 @@ func (p *Party) AssignFacilityRole(types []FacilityRoleType, facility fw.UUID, r
 	return r.ID, nil
 }
 
-// EndFacilityRole ends a facility role at a moment (not before it started).
+// EndFacilityRole termina un rol en una instalación en un instante (no antes de que empezara).
 func (p *Party) EndFacilityRole(id FacilityRoleID, at time.Time) error {
 	k := slices.IndexFunc(p.facilityRoles, func(r FacilityRole) bool { return r.ID == id })
 	if k < 0 {
@@ -127,10 +129,10 @@ func (p *Party) EndFacilityRole(id FacilityRoleID, at time.Time) error {
 	return nil
 }
 
-// FacilityRoles returns a copy of the facility roles, current or past.
+// FacilityRoles devuelve una copia de los roles en instalaciones, actuales o pasados.
 func (p *Party) FacilityRoles() []FacilityRole { return slices.Clone(p.facilityRoles) }
 
-// PartyFacilityRoleAssigned is raised when a party starts playing a role at a facility.
+// PartyFacilityRoleAssigned se lanza cuando una party empieza a desempeñar un rol en una instalación.
 type PartyFacilityRoleAssigned struct {
 	fw.EventMeta
 	RoleID   string    `json:"roleId"`
@@ -139,10 +141,10 @@ type PartyFacilityRoleAssigned struct {
 	From     time.Time `json:"from"`
 }
 
-// EventType implements domain.Event.
+// EventType implementa domain.Event.
 func (PartyFacilityRoleAssigned) EventType() string { return "parties.facility_role_assigned" }
 
-// PartyFacilityRoleEnded is raised when a facility role ends.
+// PartyFacilityRoleEnded se lanza cuando termina un rol en una instalación.
 type PartyFacilityRoleEnded struct {
 	fw.EventMeta
 	RoleID   string    `json:"roleId"`
@@ -150,10 +152,10 @@ type PartyFacilityRoleEnded struct {
 	At       time.Time `json:"at"`
 }
 
-// EventType implements domain.Event.
+// EventType implementa domain.Event.
 func (PartyFacilityRoleEnded) EventType() string { return "parties.facility_role_ended" }
 
-// Facility role fields.
+// Campos de los roles en instalaciones.
 var (
 	FieldFacilityRoles = spec.Collection("facility_roles", (*Party).FacilityRoles)
 	FacFieldFacility   = spec.Comparable("facility", func(r FacilityRole) fw.UUID { return r.Facility })
@@ -166,7 +168,8 @@ var (
 	})
 )
 
-// AtFacility matches parties playing any role at the facility at t (employees of an office).
+// AtFacility selecciona las parties que desempeñan cualquier rol en la instalación en t (los
+// empleados de una oficina).
 func AtFacility(t time.Time, facility fw.UUID) spec.Spec[*Party] {
 	return FieldFacilityRoles.Any(spec.And(FacFieldFacility.Eq(facility), FacFieldFrom.AtOrBefore(t),
 		FacFieldUntil.IsNull().Or(FacFieldUntil.After(t))))

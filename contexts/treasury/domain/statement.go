@@ -11,34 +11,34 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// StatementKind is the stable aggregate type name.
+// StatementKind es el nombre estable del tipo de agregado.
 const StatementKind = "treasury.statement"
 
-// MaxStatementLines bounds the movements of a statement.
+// MaxStatementLines limita los movimientos de un extracto.
 const MaxStatementLines = 5000
 
-// StatementID identifies a bank statement.
+// StatementID identifica un extracto bancario.
 type StatementID struct{ fw.UUID }
 
-// What a statement line is reconciled against.
+// Contra qué se concilia una línea de extracto.
 const (
-	MatchRemittance = "remittance"     // a remittance of direct debits credited by the bank
-	MatchTransfers  = "transfer-order" // an order of credit transfers charged by the bank
-	MatchOther      = "other"          // anything else, explained by a note (fees, interest, taxes)
+	MatchRemittance = "remittance"     // una remesa de adeudos abonada por el banco
+	MatchTransfers  = "transfer-order" // una orden de transferencias cargada por el banco
+	MatchOther      = "other"          // cualquier otra cosa, explicada con una nota (comisiones, intereses, impuestos)
 )
 
-// Match is what explains a line of a statement.
+// Match es lo que explica una línea de un extracto.
 type Match struct {
 	Kind string
 	ID   string
 	Note string
 }
 
-// IsZero reports whether the line is not reconciled.
+// IsZero dice si la línea no está conciliada.
 func (m Match) IsZero() bool { return m.Kind == "" }
 
-// StatementLine is a movement of the account as the bank reports it: positive when the bank
-// credits the account, negative when it charges it.
+// StatementLine es un movimiento de la cuenta tal como lo da el banco: positivo cuando el banco
+// abona en la cuenta, negativo cuando carga en ella.
 type StatementLine struct {
 	No        int
 	Date      vocab.Date
@@ -49,7 +49,7 @@ type StatementLine struct {
 	Match     Match
 }
 
-// StatementState is the persisted state of a statement.
+// StatementState es el estado persistido de un extracto.
 type StatementState struct {
 	Owner   OrganizationID
 	Account AccountID
@@ -61,9 +61,9 @@ type StatementState struct {
 	Audit   traits.AuditStamp
 }
 
-// Statement is what the bank says happened in an account in a period: its balances and its
-// movements, each reconciled against what explains it (the C# BankStatementLine pointed at no
-// bank account, and nothing ever set it as matched).
+// Statement es lo que el banco dice que pasó en una cuenta en un periodo: sus saldos y sus
+// movimientos, cada uno conciliado contra lo que lo explica (el BankStatementLine de C# no apuntaba
+// a ninguna cuenta bancaria, y nada lo marcaba nunca como conciliado).
 type Statement struct {
 	fw.BaseAggregateRoot[StatementID]
 	traits.Audited
@@ -90,7 +90,7 @@ func validMatch(m Match) bool {
 	return false
 }
 
-// ReconstituteStatement rebuilds a statement.
+// ReconstituteStatement reconstruye un extracto.
 func ReconstituteStatement(id StatementID, s StatementState) (*Statement, error) {
 	base, err := fw.NewBaseAggregateRoot(StatementKind, id)
 	if err != nil {
@@ -124,7 +124,7 @@ func ReconstituteStatement(id StatementID, s StatementState) (*Statement, error)
 
 func cents(d vocab.Decimal) bool { return d.Equal(d.Round(2)) }
 
-// ImportStatement records a statement of an account as the bank gave it, with nothing reconciled.
+// ImportStatement registra un extracto de una cuenta tal como lo dio el banco, sin nada conciliado.
 func ImportStatement(id StatementID, s StatementState) (*Statement, error) {
 	s.Lines = slices.Clone(s.Lines)
 	for i := range s.Lines {
@@ -139,14 +139,14 @@ func ImportStatement(id StatementID, s StatementState) (*Statement, error) {
 	return st, nil
 }
 
-// State returns the state (lines are a copy).
+// State devuelve el estado (las líneas son una copia).
 func (s *Statement) State() StatementState {
 	st := s.s
 	st.Lines = slices.Clone(st.Lines)
 	return st
 }
 
-// Pending returns the movements not reconciled yet.
+// Pending devuelve los movimientos aún sin conciliar.
 func (s *Statement) Pending() int {
 	n := 0
 	for _, l := range s.s.Lines {
@@ -157,7 +157,7 @@ func (s *Statement) Pending() int {
 	return n
 }
 
-// Line returns a movement by its number.
+// Line devuelve un movimiento por su número.
 func (s *Statement) Line(no int) (StatementLine, error) {
 	if no < 1 || no > len(s.s.Lines) {
 		return StatementLine{}, fw.Violation("treasury.statement_line", "the statement has no such movement")
@@ -165,7 +165,7 @@ func (s *Statement) Line(no int) (StatementLine, error) {
 	return s.s.Lines[no-1], nil
 }
 
-// Reconcile explains a movement: once, until it is released.
+// Reconcile explica un movimiento: una vez, hasta que se libera.
 func (s *Statement) Reconcile(no int, m Match) error {
 	l, err := s.Line(no)
 	if err != nil {
@@ -187,7 +187,7 @@ func (s *Statement) Reconcile(no int, m Match) error {
 	return nil
 }
 
-// Release undoes the reconciliation of a movement.
+// Release deshace la conciliación de un movimiento.
 func (s *Statement) Release(no int) error {
 	l, err := s.Line(no)
 	if err != nil {
@@ -202,13 +202,13 @@ func (s *Statement) Release(no int) error {
 	return nil
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (s *Statement) AuditSnapshot() map[string]any {
 	return map[string]any{"account": s.s.Account.String(), "from": s.s.From.String(), "to": s.s.To.String(), "closing": s.s.Closing.String(),
 		"pending": s.Pending()}
 }
 
-// Statement fields.
+// Campos del extracto.
 var (
 	StmFieldOwner     = spec.Comparable("owner", func(s *Statement) OrganizationID { return s.s.Owner })
 	StmFieldAccount   = spec.Comparable("account_id", func(s *Statement) AccountID { return s.s.Account })
@@ -220,14 +220,14 @@ var (
 	LineFieldMatchRef = spec.Comparable("match_id", func(l StatementLine) string { return l.Match.ID })
 )
 
-// ReconciledAgainst selects the statements with a movement reconciled against something.
+// ReconciledAgainst selecciona los extractos con un movimiento conciliado contra algo.
 func ReconciledAgainst(kind, id string) spec.Spec[*Statement] {
 	return StmFieldLines.Any(LineFieldMatch.Eq(kind).And(LineFieldMatchRef.Eq(id)))
 }
 
-// Events of statements.
+// Eventos de los extractos.
 type (
-	// StatementImported is raised when a statement is recorded.
+	// StatementImported se lanza al registrar un extracto.
 	StatementImported struct {
 		fw.EventMeta
 		Owner     string `json:"owner"`
@@ -237,7 +237,7 @@ type (
 		Movements int    `json:"movements"`
 		Closing   string `json:"closing"`
 	}
-	// StatementReconciled is raised when the last movement of a statement is explained.
+	// StatementReconciled se lanza cuando se explica el último movimiento de un extracto.
 	StatementReconciled struct {
 		fw.EventMeta
 		Owner   string `json:"owner"`
@@ -246,18 +246,18 @@ type (
 	}
 )
 
-// EventType implementations.
+// Implementaciones de EventType.
 func (StatementImported) EventType() string   { return "treasury.statement_imported" }
 func (StatementReconciled) EventType() string { return "treasury.statement_reconciled" }
 
-// NewStatementID returns a new identity.
+// NewStatementID devuelve una identidad nueva.
 func NewStatementID() StatementID { return StatementID{fw.NewUUID()} }
 
-// ParseStatementID parses a textual identity.
+// ParseStatementID interpreta una identidad en texto.
 func ParseStatementID(s string) (StatementID, error) {
 	u, err := fw.ParseUUID(s)
 	return StatementID{u}, err
 }
 
-// StatementRepository stores statements.
+// StatementRepository guarda extractos.
 type StatementRepository = fw.Repository[StatementID, *Statement]

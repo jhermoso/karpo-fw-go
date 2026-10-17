@@ -1,10 +1,11 @@
-// Package contracts is what other bounded contexts and hosts may depend on: the Published
-// Language of Security (versioned integration events), its user directory and the port through
-// which an external identity provider plugs in. No event carries passwords, hashes or tokens.
+// Package contracts es aquello de lo que pueden depender otros contextos delimitados y anfitriones:
+// el Published Language de Security (eventos de integración versionados), su directorio de
+// usuarios y el puerto por el que se conecta un proveedor de identidad externo. Ningún evento lleva
+// contraseñas, hashes ni tokens.
 //
-// The main port Security offers is not declared here: it is the framework's authz.Directory,
-// implemented by the Security module, which the generic authorization resolver reads on every
-// request.
+// El puerto principal que ofrece Security no se declara aquí: es el authz.Directory del framework,
+// implementado por el módulo de Security, que el resolvedor de autorización genérico lee en cada
+// petición.
 package contracts
 
 import (
@@ -12,13 +13,13 @@ import (
 	"time"
 )
 
-// Source is the name of the publishing bounded context (Envelope.Source).
+// Source es el nombre del contexto delimitado que publica (Envelope.Source).
 const Source = "security"
 
-// MaxBatch is the maximum number of ids per directory call.
+// MaxBatch es el número máximo de ids por llamada al directorio.
 const MaxBatch = 900
 
-// UserRef is what other contexts need of a user.
+// UserRef es lo que otros contextos necesitan de un usuario.
 type UserRef struct {
 	ID       string `json:"id"`
 	Username string `json:"username"`
@@ -26,173 +27,173 @@ type UserRef struct {
 	Active   bool   `json:"active"`
 }
 
-// Users resolves users in batches. Missing users are absent.
+// Users resuelve usuarios por lotes. Los usuarios que no existen no aparecen.
 type Users interface {
-	// Resolve returns the users with those ids, by id.
+	// Resolve devuelve los usuarios con esos ids, por id.
 	Resolve(ctx context.Context, userIDs []string) (map[string]UserRef, error)
-	// ByParty returns the users of those parties, by party id.
+	// ByParty devuelve los usuarios de esas parties, por id de party.
 	ByParty(ctx context.Context, partyIDs []string) (map[string][]UserRef, error)
 }
 
-// ExternalIdentity is who an external identity provider says the caller is: the issuer of the
-// token and the subject inside that issuer.
+// ExternalIdentity es quién dice un proveedor de identidad externo que es quien llama: el emisor
+// del token y el sujeto dentro de ese emisor.
 type ExternalIdentity struct {
 	Issuer  string
 	Subject string
 }
 
-// TokenVerifier validates the token of an external identity provider (signature, issuer,
-// audience, lifetime) and returns the identity it asserts. An adapter per provider implements it
-// (OIDC with public keys); Security only links the identity with one of its users.
+// TokenVerifier valida el token de un proveedor de identidad externo (firma, emisor, audiencia,
+// vigencia) y devuelve la identidad que afirma. Lo implementa un adaptador por proveedor (OIDC con
+// claves públicas); Security sólo vincula la identidad con uno de sus usuarios.
 type TokenVerifier interface {
 	Verify(ctx context.Context, credentials string) (ExternalIdentity, error)
 }
 
-// UserRegisteredV1 is published when a user is registered.
+// UserRegisteredV1 se publica cuando se da de alta un usuario.
 type UserRegisteredV1 struct {
 	UserID   string `json:"userId"`
 	Username string `json:"username"`
 	PartyID  string `json:"partyId"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (UserRegisteredV1) IntegrationEventType() string { return "security.user-registered.v1" }
 
-// UserDeactivatedV1 is published when a user is deactivated: it can no longer sign in.
+// UserDeactivatedV1 se publica cuando se desactiva un usuario: ya no puede iniciar sesión.
 type UserDeactivatedV1 struct {
 	UserID string `json:"userId"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (UserDeactivatedV1) IntegrationEventType() string { return "security.user-deactivated.v1" }
 
-// UserReactivatedV1 is published when a user is reactivated.
+// UserReactivatedV1 se publica cuando se reactiva un usuario.
 type UserReactivatedV1 struct {
 	UserID string `json:"userId"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (UserReactivatedV1) IntegrationEventType() string { return "security.user-reactivated.v1" }
 
-// UserLockedV1 is published when too many failed logins lock a user.
+// UserLockedV1 se publica cuando demasiados logins fallidos bloquean a un usuario.
 type UserLockedV1 struct {
 	UserID string    `json:"userId"`
 	Until  time.Time `json:"until"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (UserLockedV1) IntegrationEventType() string { return "security.user-locked.v1" }
 
-// UserPasswordChangedV1 is published when the password of a user changes.
+// UserPasswordChangedV1 se publica cuando cambia la contraseña de un usuario.
 type UserPasswordChangedV1 struct {
 	UserID string `json:"userId"`
-	Reset  bool   `json:"reset"` // set by an administrator
+	Reset  bool   `json:"reset"` // fijada por un administrador
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (UserPasswordChangedV1) IntegrationEventType() string {
 	return "security.user-password-changed.v1"
 }
 
-// UserRoleAssignedV1 is published when a role is assigned to a user.
+// UserRoleAssignedV1 se publica cuando se asigna un rol a un usuario.
 type UserRoleAssignedV1 struct {
 	UserID string `json:"userId"`
 	RoleID string `json:"roleId"`
 	Role   string `json:"role"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (UserRoleAssignedV1) IntegrationEventType() string { return "security.user-role-assigned.v1" }
 
-// UserRoleRevokedV1 is published when a role is revoked from a user.
+// UserRoleRevokedV1 se publica cuando se retira un rol a un usuario.
 type UserRoleRevokedV1 struct {
 	UserID string `json:"userId"`
 	RoleID string `json:"roleId"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (UserRoleRevokedV1) IntegrationEventType() string { return "security.user-role-revoked.v1" }
 
-// OrganizationAccessGrantedV1 is published when a user gets access to an organization.
+// OrganizationAccessGrantedV1 se publica cuando un usuario recibe acceso a una organización.
 type OrganizationAccessGrantedV1 struct {
 	UserID       string `json:"userId"`
 	Organization string `json:"organization"`
 	Level        string `json:"level"` // Full | ReadOnly | Restricted
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (OrganizationAccessGrantedV1) IntegrationEventType() string {
 	return "security.organization-access-granted.v1"
 }
 
-// OrganizationAccessChangedV1 is published when the access level of a user changes.
+// OrganizationAccessChangedV1 se publica cuando cambia el nivel de acceso de un usuario.
 type OrganizationAccessChangedV1 struct {
 	UserID       string `json:"userId"`
 	Organization string `json:"organization"`
 	Level        string `json:"level"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (OrganizationAccessChangedV1) IntegrationEventType() string {
 	return "security.organization-access-changed.v1"
 }
 
-// OrganizationAccessRevokedV1 is published when a user loses the access to an organization.
+// OrganizationAccessRevokedV1 se publica cuando un usuario pierde el acceso a una organización.
 type OrganizationAccessRevokedV1 struct {
 	UserID       string `json:"userId"`
 	Organization string `json:"organization"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (OrganizationAccessRevokedV1) IntegrationEventType() string {
 	return "security.organization-access-revoked.v1"
 }
 
-// IdentityLinkedV1 is published when an external identity is linked with a user.
+// IdentityLinkedV1 se publica cuando una identidad externa se vincula con un usuario.
 type IdentityLinkedV1 struct {
 	UserID string `json:"userId"`
 	Issuer string `json:"issuer"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (IdentityLinkedV1) IntegrationEventType() string { return "security.identity-linked.v1" }
 
-// IdentityUnlinkedV1 is published when an external identity is unlinked from a user.
+// IdentityUnlinkedV1 se publica cuando una identidad externa se desvincula de un usuario.
 type IdentityUnlinkedV1 struct {
 	UserID string `json:"userId"`
 	Issuer string `json:"issuer"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (IdentityUnlinkedV1) IntegrationEventType() string { return "security.identity-unlinked.v1" }
 
-// RoleDefinedV1 is published when a custom role is defined.
+// RoleDefinedV1 se publica cuando se define un rol propio.
 type RoleDefinedV1 struct {
 	RoleID      string   `json:"roleId"`
 	Name        string   `json:"name"`
 	Permissions []string `json:"permissions"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (RoleDefinedV1) IntegrationEventType() string { return "security.role-defined.v1" }
 
-// RolePermissionsChangedV1 is published when the permissions of a role change.
+// RolePermissionsChangedV1 se publica cuando cambian los permisos de un rol.
 type RolePermissionsChangedV1 struct {
 	RoleID      string   `json:"roleId"`
 	Name        string   `json:"name"`
 	Permissions []string `json:"permissions"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (RolePermissionsChangedV1) IntegrationEventType() string {
 	return "security.role-permissions-changed.v1"
 }
 
-// RoleRetiredV1 is published when a custom role is retired.
+// RoleRetiredV1 se publica cuando se retira un rol propio.
 type RoleRetiredV1 struct {
 	RoleID string `json:"roleId"`
 	Name   string `json:"name"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (RoleRetiredV1) IntegrationEventType() string { return "security.role-retired.v1" }

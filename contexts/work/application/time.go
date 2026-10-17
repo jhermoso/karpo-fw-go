@@ -9,8 +9,8 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// RecordTime records the time a person worked on a piece of work in a day. Billable defaults to
-// whether the work is for a customer.
+// RecordTime anota el tiempo que una persona trabajó en un trabajo en un día. Billable, por
+// defecto, es cierto si el trabajo es para un cliente.
 type RecordTime struct {
 	Work     string     `json:"work"`
 	Person   string     `json:"person"`
@@ -20,7 +20,7 @@ type RecordTime struct {
 	Comment  string     `json:"comment,omitempty"`
 }
 
-// CorrectTime changes a draft entry.
+// CorrectTime cambia una anotación en borrador.
 type CorrectTime struct {
 	ID       domain.TimeEntryID `json:"-"`
 	Hours    string             `json:"hours"`
@@ -28,25 +28,25 @@ type CorrectTime struct {
 	Comment  string             `json:"comment,omitempty"`
 }
 
-// WithdrawTime deletes a draft entry.
+// WithdrawTime borra una anotación en borrador.
 type WithdrawTime struct{ ID domain.TimeEntryID }
 
-// ApproveTime makes an entry final.
+// ApproveTime hace definitiva una anotación.
 type ApproveTime struct {
 	ID domain.TimeEntryID `json:"-"`
 }
 
-// SearchTime searches the time of the caller's scope.
+// SearchTime busca el tiempo del ámbito de quien llama.
 type SearchTime struct {
 	Company, Work, Person, From, To string
-	Pending                         bool // not approved yet
+	Pending                         bool // aún no aprobado
 	Page, Size                      int
 }
 
-// GetTimesheet returns the time of a person of a company between two days.
+// GetTimesheet devuelve el tiempo de una persona de una empresa entre dos días.
 type GetTimesheet struct{ Company, Person, From, To string }
 
-// TimeDTO is the transport form of a time entry.
+// TimeDTO es la forma de transporte de una anotación de tiempo.
 type TimeDTO struct {
 	ID       string `json:"id"`
 	Company  string `json:"company"`
@@ -69,8 +69,8 @@ func timeDTO(t *domain.TimeEntry) TimeDTO {
 		Version: t.Version()}
 }
 
-// TimesheetDTO is the time of a person in a period (the C# Timesheet was a header with neither
-// period nor status: here it is a view of the entries).
+// TimesheetDTO es el tiempo de una persona en un periodo (el Timesheet del C# era una cabecera sin
+// periodo ni estado: aquí es una vista de las anotaciones).
 type TimesheetDTO struct {
 	Entries       []TimeDTO `json:"entries"`
 	Hours         string    `json:"hours"`
@@ -78,7 +78,7 @@ type TimesheetDTO struct {
 	Cost          string    `json:"cost"`
 }
 
-// daily refuses more than 24 hours of a person in a day over all the work of the company.
+// daily rechaza más de 24 horas de una persona en un día sumando todos los trabajos de la empresa.
 func (s service) daily(ctx context.Context, company domain.OrganizationID, person domain.PartyID, on vocab.Date, except domain.TimeEntryID, hours vocab.Decimal) error {
 	es, err := s.Times.Find(ctx, spec.And(domain.TimFieldCompany.Eq(company), domain.TimFieldPerson.Eq(person), domain.TimFieldDate.Eq(on)))
 	if err != nil {

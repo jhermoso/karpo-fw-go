@@ -37,7 +37,7 @@ var (
 	supplier = domain.PartyID{UUID: fw.NewUUID()}
 )
 
-// A professional's invoice: 1000 of services and 200 of supplies at 21%, 15% withheld.
+// La factura de un profesional: 1000 de servicios y 200 de suministros al 21 %, con un 15 % retenido.
 func draft() domain.Draft {
 	return domain.Draft{Company: company, Supplier: supplier, SupplierNumber: " 2026/0042 ", Issued: date("2026-09-30"), Received: date("2026-10-02"),
 		Due: date("2026-10-30"), WithholdingRate: dec("15"), DeclaredTotal: dec("1452.00"),
@@ -115,7 +115,7 @@ func TestNonDeductibleTaxIsShared(t *testing.T) {
 	d.WithholdingRate, d.NonDeductible = dec("0"), true
 	d.Lines = append(d.Lines, domain.Line{No: 3, Category: domain.Supplies, Base: dec("100.01"), TaxCode: "G21"})
 	d.Lines[0].Base = dec("333.33")
-	// net 633.34 at 21% = 133.00
+	// neto 633.34 al 21 % = 133.00
 	d.DeclaredTotal = dec("766.34")
 	inv, err := domain.Register(domain.NewInvoiceID(), d, breakdown("633.34", "133.00"), 2026, 1)
 	if err != nil {

@@ -7,24 +7,25 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// ValidPeriod is the validity ("vigencia") of a fact: it starts at From and, if closed, ends at
-// To. It unifies the C# ValidPeriod, Milestone (start instant) and ExpirationDate (end instant).
+// ValidPeriod es la vigencia de un hecho: empieza en From y, si está cerrado, termina en To.
+// Unifica ValidPeriod, Milestone (instante de inicio) y ExpirationDate (instante de fin) de C#.
 //
-// The interval is half-open, [From, To): an element valid until 2025-01-01T00:00Z is no longer
-// valid at that instant, so consecutive periods never overlap. Every "now" check uses the
-// domain clock (domain.Now), so it is deterministic in tests.
+// El intervalo es semiabierto, [From, To): un elemento vigente hasta 2025-01-01T00:00Z ya no está
+// vigente en ese instante, así que los periodos consecutivos nunca se solapan. Toda comprobación de
+// «ahora» usa el reloj del dominio (domain.Now), de modo que es determinista en las pruebas.
 //
-// A period may end at the instant it starts: [t, t) is the empty period of a fact that was ended
-// at once, never in force and overlapping nothing. Two readings of a clock can be the same
-// instant (the system clock advances in ticks and a store keeps fewer digits than the clock
-// gives), so "it ends after it starts" cannot be demanded of what starts and ends "now".
+// Un periodo puede terminar en el instante en que empieza: [t, t) es el periodo vacío de un hecho
+// que se terminó en el acto, que nunca estuvo en vigor y no se solapa con nada. Dos lecturas de un
+// reloj pueden dar el mismo instante (el reloj del sistema avanza a saltos y un almacén guarda menos
+// dígitos de los que da el reloj), así que no se puede exigir «termina después de empezar» a lo que
+// empieza y termina «ahora».
 type ValidPeriod struct {
 	from time.Time
 	to   *time.Time
 }
 
-// NewValidPeriod creates a period starting at from; to is nil for an open-ended period and is
-// never before from.
+// NewValidPeriod crea un periodo que empieza en from; to es nil para un periodo abierto y nunca
+// es anterior a from.
 func NewValidPeriod(from time.Time, to *time.Time) (ValidPeriod, error) {
 	var v domain.Validation
 	v.Require(!from.IsZero(), "from", "required", "start is required")
@@ -42,17 +43,17 @@ func NewValidPeriod(from time.Time, to *time.Time) (ValidPeriod, error) {
 	return p, nil
 }
 
-// OpenPeriodFrom creates an open-ended period starting at from.
+// OpenPeriodFrom crea un periodo abierto que empieza en from.
 func OpenPeriodFrom(from time.Time) (ValidPeriod, error) { return NewValidPeriod(from, nil) }
 
-// OpenPeriodNow creates an open-ended period starting now (domain clock).
+// OpenPeriodNow crea un periodo abierto que empieza ahora (reloj del dominio).
 func OpenPeriodNow() ValidPeriod {
 	p, _ := NewValidPeriod(domain.Now(), nil)
 	return p
 }
 
-// PeriodBetweenDates creates the period covering whole civil days [first, last] in loc
-// (UTC when nil): from midnight of first to midnight after last.
+// PeriodBetweenDates crea el periodo que cubre los días civiles completos [first, last] en loc
+// (UTC si es nil): desde la medianoche de first hasta la medianoche siguiente a last.
 func PeriodBetweenDates(first, last Date, loc *time.Location) (ValidPeriod, error) {
 	if last.Before(first) {
 		var v domain.Validation
@@ -63,10 +64,10 @@ func PeriodBetweenDates(first, last Date, loc *time.Location) (ValidPeriod, erro
 	return NewValidPeriod(first.Time(loc), &end)
 }
 
-// From returns the start instant (UTC).
+// From devuelve el instante de inicio (UTC).
 func (p ValidPeriod) From() time.Time { return p.from }
 
-// To returns the end instant and whether the period is closed.
+// To devuelve el instante de fin y si el periodo está cerrado.
 func (p ValidPeriod) To() (time.Time, bool) {
 	if p.to == nil {
 		return time.Time{}, false
@@ -74,30 +75,30 @@ func (p ValidPeriod) To() (time.Time, bool) {
 	return *p.to, true
 }
 
-// IsZero reports whether the period is absent.
+// IsZero dice si falta el periodo.
 func (p ValidPeriod) IsZero() bool { return p.from.IsZero() }
 
-// IsOpenEnded reports whether the period has no end.
+// IsOpenEnded dice si el periodo no tiene fin.
 func (p ValidPeriod) IsOpenEnded() bool { return p.to == nil }
 
-// IsEmpty reports whether the period ends at the instant it starts: it holds no instant.
+// IsEmpty dice si el periodo termina en el instante en que empieza: no contiene ningún instante.
 func (p ValidPeriod) IsEmpty() bool { return p.to != nil && !p.to.After(p.from) }
 
-// IsActiveAt reports whether t is inside [From, To).
+// IsActiveAt dice si t está dentro de [From, To).
 func (p ValidPeriod) IsActiveAt(t time.Time) bool {
 	return !t.Before(p.from) && (p.to == nil || t.Before(*p.to))
 }
 
-// IsActive reports whether the period is active now (domain clock).
+// IsActive dice si el periodo está vigente ahora (reloj del dominio).
 func (p ValidPeriod) IsActive() bool { return p.IsActiveAt(domain.Now()) }
 
-// HasExpiredAt reports whether the period ended at or before t.
+// HasExpiredAt dice si el periodo terminó en t o antes.
 func (p ValidPeriod) HasExpiredAt(t time.Time) bool { return p.to != nil && !t.Before(*p.to) }
 
-// HasExpired reports whether the period has ended (domain clock).
+// HasExpired dice si el periodo ha terminado (reloj del dominio).
 func (p ValidPeriod) HasExpired() bool { return p.HasExpiredAt(domain.Now()) }
 
-// Duration returns the length of a closed period.
+// Duration devuelve la duración de un periodo cerrado.
 func (p ValidPeriod) Duration() (time.Duration, bool) {
 	if p.to == nil {
 		return 0, false
@@ -105,7 +106,7 @@ func (p ValidPeriod) Duration() (time.Duration, bool) {
 	return p.to.Sub(p.from), true
 }
 
-// Overlaps reports whether both periods share at least one instant (an empty period shares none).
+// Overlaps dice si ambos periodos comparten al menos un instante (un periodo vacío no comparte ninguno).
 func (p ValidPeriod) Overlaps(o ValidPeriod) bool {
 	if p.IsEmpty() || o.IsEmpty() {
 		return false
@@ -115,10 +116,10 @@ func (p ValidPeriod) Overlaps(o ValidPeriod) bool {
 	return startsBeforeOtherEnds && otherStartsBeforeEnd
 }
 
-// CloseAt returns the period ending at t (t must not be before From).
+// CloseAt devuelve el periodo que termina en t (t no puede ser anterior a From).
 func (p ValidPeriod) CloseAt(t time.Time) (ValidPeriod, error) { return NewValidPeriod(p.from, &t) }
 
-// Equal compares both bounds as instants.
+// Equal compara ambos límites como instantes.
 func (p ValidPeriod) Equal(o ValidPeriod) bool {
 	if !p.from.Equal(o.from) || (p.to == nil) != (o.to == nil) {
 		return false
@@ -131,12 +132,12 @@ type periodJSON struct {
 	To   *time.Time `json:"to,omitempty"`
 }
 
-// MarshalJSON renders {"from":"...","to":"..."}.
+// MarshalJSON escribe {"from":"...","to":"..."}.
 func (p ValidPeriod) MarshalJSON() ([]byte, error) {
 	return json.Marshal(periodJSON{From: p.from, To: p.to})
 }
 
-// UnmarshalJSON parses {"from":"...","to":"..."}.
+// UnmarshalJSON analiza {"from":"...","to":"..."}.
 func (p *ValidPeriod) UnmarshalJSON(b []byte) error {
 	var j periodJSON
 	if err := json.Unmarshal(b, &j); err != nil {

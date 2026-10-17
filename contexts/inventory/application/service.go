@@ -1,5 +1,5 @@
-// Package application holds the Inventory use cases (with permissions and company scope), the
-// availability port and the translation to the Published Language.
+// Package application contiene los casos de uso de Inventario (con permisos y ámbito de empresa),
+// el puerto de disponibilidad y la traducción al Published Language.
 package application
 
 import (
@@ -20,8 +20,8 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Permissions (the C# stock endpoints required authentication only, and anyone could adjust).
-// Moving stock and correcting it with a count are separate permissions.
+// Permisos (los endpoints de existencias del C# sólo exigían autenticación, y cualquiera podía
+// ajustar). Mover existencias y corregirlas con un recuento son permisos distintos.
 var (
 	PermWarehouseRead   = authz.MustPermission("Inventory.Warehouse.Read")
 	PermWarehouseUpdate = authz.MustPermission("Inventory.Warehouse.Update")
@@ -30,7 +30,7 @@ var (
 	PermStockAdjust     = authz.MustPermission("Inventory.Stock.Adjust")
 )
 
-// Deps are the ports the use cases need; Recorder and Audit are optional.
+// Deps son los puertos que necesitan los casos de uso; Recorder y Audit son opcionales.
 type Deps struct {
 	Warehouses   domain.WarehouseRepository
 	Levels       domain.LevelRepository
@@ -42,7 +42,7 @@ type Deps struct {
 	Audit        app.AuditLog
 }
 
-// Service exposes the use cases.
+// Service expone los casos de uso.
 type Service struct {
 	CreateWarehouse  app.CommandHandler[CreateWarehouse, WarehouseDTO]
 	CloseWarehouse   app.CommandHandler[CloseWarehouse, WarehouseDTO]
@@ -80,7 +80,8 @@ func scopeOf(ctx context.Context) scope {
 	return s
 }
 
-// check returns a uniform 404 outside the company's scope and 403 when it is read-only.
+// check devuelve un 404 uniforme fuera del ámbito de la empresa y un 403 cuando es de sólo
+// lectura.
 func (s scope) check(kind string, id fmt.Stringer, org domain.OrganizationID, write bool) error {
 	if !s.global && !slices.Contains(s.orgs, org) {
 		return fw.NotFound(kind, id)
@@ -113,7 +114,7 @@ func newService(d Deps) service {
 	}
 }
 
-// NewService wires the use cases.
+// NewService monta los casos de uso.
 func NewService(d Deps) *Service {
 	s := newService(d)
 	svc := &Service{}
@@ -149,13 +150,13 @@ func guard[In, Out any](p authz.Permission, fn func(context.Context, In) (Out, e
 	return app.Chain[In, Out](app.HandlerFunc[In, Out](fn), append([]app.Middleware[In, Out]{pipeline.RequirePermission[In, Out](p)}, mw...)...)
 }
 
-// moving wraps a stock-changing use case: retried on a version conflict of its level, in one unit
-// of work with its movement.
+// moving envuelve un caso de uso que cambia existencias: se reintenta ante un conflicto de versión
+// de su nivel, en una unidad de trabajo con su movimiento.
 func moving[In, Out any](s service, p authz.Permission, fn func(context.Context, In) (Out, error)) app.Handler[In, Out] {
 	return guard(p, fn, pipeline.RetryOnConflict[In, Out](5, 10*time.Millisecond), pipeline.Transactional[In, Out](s.UoW))
 }
 
-// Publications translates the domain events into the Published Language.
+// Publications traduce los eventos de dominio al Published Language.
 func Publications(r *messaging.Recorder) *messaging.Recorder {
 	messaging.On(r, func(_ context.Context, e domain.StockMoved) ([]app.IntegrationEvent, error) {
 		m := e.Snapshot
@@ -170,12 +171,12 @@ func Publications(r *messaging.Recorder) *messaging.Recorder {
 	return r
 }
 
-// AvailabilityPort implements contracts.Availability (it serves other contexts, not users).
+// AvailabilityPort implementa contracts.Availability (sirve a otros contextos, no a usuarios).
 type AvailabilityPort struct{ Levels domain.LevelRepository }
 
 var _ contracts.Availability = AvailabilityPort{}
 
-// Stock implements contracts.Availability.
+// Stock implementa contracts.Availability.
 func (a AvailabilityPort) Stock(ctx context.Context, company, product, warehouse string) (contracts.Stock, error) {
 	var v fw.Validation
 	parts := []spec.Specification[*domain.Level]{domain.LvlFieldCompany.Eq(domain.OrganizationID{UUID: parseID(&v, "company", company)}),
@@ -197,7 +198,7 @@ func (a AvailabilityPort) Stock(ctx context.Context, company, product, warehouse
 	return contracts.Stock{OnHand: on.String(), Reserved: res.String(), Available: on.Sub(res).String()}, nil
 }
 
-// warehouse loads a warehouse of the caller's scope; for a movement it must be active.
+// warehouse carga un almacén del ámbito del que llama; para un movimiento debe estar activo.
 func (s service) warehouse(ctx context.Context, id domain.WarehouseID, write bool) (*domain.Warehouse, error) {
 	w, err := s.Warehouses.Get(ctx, id)
 	if err != nil {
@@ -212,8 +213,8 @@ func (s service) warehouse(ctx context.Context, id domain.WarehouseID, write boo
 	return w, nil
 }
 
-// item checks that a product is a stocked good of the company and that a tracked one comes with
-// its lot or serial.
+// item comprueba que un producto es un bien con existencias de la empresa y que uno con
+// trazabilidad viene con su lote o número de serie.
 func (s service) item(ctx context.Context, company domain.OrganizationID, product domain.ProductID, lot string, needLot bool) (domain.Item, error) {
 	items, err := s.Catalog.Items(ctx, []domain.ProductID{product})
 	if err != nil {
@@ -232,7 +233,7 @@ func (s service) item(ctx context.Context, company domain.OrganizationID, produc
 	return it, nil
 }
 
-// level returns the stock level of a product in a warehouse, new and empty when it has none.
+// level devuelve el nivel de existencias de un producto en un almacén, nuevo y vacío si no tiene.
 func (s service) level(ctx context.Context, w *domain.Warehouse, product domain.ProductID) (*domain.Level, error) {
 	ls, err := s.Levels.Find(ctx, spec.And(domain.LvlFieldWarehouse.Eq(w.ID()), domain.LvlFieldProduct.Eq(product)))
 	if err != nil {
@@ -244,7 +245,7 @@ func (s service) level(ctx context.Context, w *domain.Warehouse, product domain.
 	return domain.OpenLevel(domain.NewLevelID(), w.State().Company, w.ID(), product)
 }
 
-// post saves a level and the movement that explains its change.
+// post guarda un nivel y el movimiento que explica su cambio.
 func (s service) post(ctx context.Context, l *domain.Level, seq int64, kind domain.MoveKind, date vocab.Date, q, cost vocab.Decimal, lot, note string,
 	src domain.Source) (*domain.Movement, error) {
 	if err := s.Levels.Save(ctx, l); err != nil {
@@ -260,8 +261,8 @@ func (s service) post(ctx context.Context, l *domain.Level, seq int64, kind doma
 	return m, nil
 }
 
-// posted returns the movement a source already produced for a product in a warehouse, so a
-// redelivered fact moves the stock once.
+// posted devuelve el movimiento que un origen ya produjo para un producto en un almacén, para que
+// un hecho entregado otra vez mueva las existencias una sola vez.
 func (s service) posted(ctx context.Context, w domain.WarehouseID, product domain.ProductID, kind domain.MoveKind, src domain.Source) (*domain.Movement, error) {
 	if src.Type == "" || src.ID == "" {
 		return nil, nil

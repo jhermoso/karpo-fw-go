@@ -1,8 +1,8 @@
-// Package domain is the Purchases model of phase 1: the invoices a company receives from its
-// suppliers (registered with their tax breakdown and professional withholding, numbered in the
-// register of received invoices) and the purchase profile of each supplier. The C# had a single
-// "Purchase Invoice" seed row: no supplier number, no input VAT, no withholding, and every invoice
-// lost its billed parties when saved.
+// Package domain es el modelo de Purchases de la fase 1: las facturas que una empresa recibe de sus
+// proveedores (registradas con su desglose de impuestos y su retención profesional, numeradas en el
+// registro de facturas recibidas) y el perfil de compra de cada proveedor. El C# tenía una sola
+// fila de siembra «Purchase Invoice»: sin número del proveedor, sin IVA soportado, sin retención, y
+// toda factura perdía sus partes facturadas al guardarse.
 package domain
 
 import (
@@ -18,17 +18,17 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// InvoiceKind is the stable aggregate type name.
+// InvoiceKind es el nombre estable del tipo de agregado.
 const InvoiceKind = "purchases.received_invoice"
 
-// MaxLines bounds the lines of an invoice.
+// MaxLines limita las líneas de una factura.
 const MaxLines = 500
 
-// Category is the nature of what was bought: Accounting posts each to its expense account (the
-// PGC subgroups 60 and 62).
+// Category es la naturaleza de lo comprado: Accounting contabiliza cada una en su cuenta de gasto
+// (los subgrupos 60 y 62 del PGC).
 type Category string
 
-// Categories.
+// Categorías.
 const (
 	Goods                Category = "goods"                 // 600
 	Rent                 Category = "rent"                  // 621
@@ -39,30 +39,30 @@ const (
 	Advertising          Category = "advertising"           // 627
 	Supplies             Category = "supplies"              // 628
 	OtherServices        Category = "other-services"        // 629
-	FixedAsset           Category = "fixed-asset"           // 21x: an investment, not an expense
+	FixedAsset           Category = "fixed-asset"           // 21x: una inversión, no un gasto
 )
 
-// Categories lists the valid categories.
+// Categories lista las categorías válidas.
 var Categories = []Category{Goods, Rent, Repairs, ProfessionalServices, Transport, Insurance, Advertising, Supplies, OtherServices, FixedAsset}
 
-// ValidCategory reports whether c is a category.
+// ValidCategory dice si c es una categoría.
 func ValidCategory(c Category) bool { return slices.Contains(Categories, c) }
 
-// ProfessionalKey is the Modelo 190 perception key of professional activities, the only
-// withholding of phase 1 (rents go to Modelo 115, phase 2).
+// ProfessionalKey es la clave de percepción del Modelo 190 de las actividades profesionales, la única
+// retención de la fase 1 (los alquileres van al Modelo 115, fase 2).
 const ProfessionalKey = "G"
 
-// Line is a line of a received invoice.
+// Line es una línea de una factura recibida.
 type Line struct {
 	No          int
 	Description string
 	Category    Category
-	Base        vocab.Decimal // negative on a corrective invoice
+	Base        vocab.Decimal // negativa en una factura rectificativa
 	TaxCode     string
-	Treatment   string // exempt or not subject, instead of a tax code
+	Treatment   string // exenta o no sujeta, en lugar de un código fiscal
 }
 
-// TaxableLine is a line as the tax engine needs it.
+// TaxableLine es una línea tal como la necesita el motor de impuestos.
 type TaxableLine struct {
 	Ref       string
 	Base      vocab.Decimal
@@ -70,7 +70,7 @@ type TaxableLine struct {
 	Treatment string
 }
 
-// TaxLine is a line of the tax breakdown.
+// TaxLine es una línea del desglose de impuestos.
 type TaxLine struct {
 	TaxType       string
 	TaxCode       string
@@ -81,7 +81,7 @@ type TaxLine struct {
 	Amount        vocab.Decimal
 }
 
-// Breakdown is the tax breakdown of an invoice.
+// Breakdown es el desglose de impuestos de una factura.
 type Breakdown struct {
 	Country string
 	Lines   []TaxLine
@@ -89,38 +89,38 @@ type Breakdown struct {
 	Tax     vocab.Decimal
 }
 
-// Taxes calculates the breakdown (a port Purchases owns over the Fiscal TaxEngine, with the
-// jurisdiction of the buying company).
+// Taxes calcula el desglose (un puerto propio de Purchases sobre el TaxEngine de Fiscal, con la
+// jurisdicción de la empresa compradora).
 type Taxes interface {
 	Calculate(ctx context.Context, company OrganizationID, accrual vocab.Date, lines []TaxableLine) (Breakdown, error)
 }
 
-// PayTo is an account the invoice is paid to.
+// PayTo es una cuenta a la que se paga la factura.
 type PayTo struct {
 	IBAN   vocab.IBAN
 	Amount vocab.Decimal
 }
 
-// Draft is what is registered: the invoice as the supplier issued it.
+// Draft es lo que se registra: la factura tal como la emitió el proveedor.
 type Draft struct {
 	Company         OrganizationID
 	Supplier        PartyID
 	SupplierNumber  string
-	Issued          vocab.Date // date of the supplier's invoice (accrual)
-	Received        vocab.Date // date it is booked
+	Issued          vocab.Date // fecha de la factura del proveedor (devengo)
+	Received        vocab.Date // fecha en que se registra
 	Due             vocab.Date
 	Lines           []Line
-	NonDeductible   bool          // the input tax is a cost (not deductible)
-	WithholdingRate vocab.Decimal // percentage on the net
-	DeclaredTotal   vocab.Decimal // the total printed on the invoice, checked against the breakdown
+	NonDeductible   bool          // el impuesto soportado es un coste (no deducible)
+	WithholdingRate vocab.Decimal // porcentaje sobre el neto
+	DeclaredTotal   vocab.Decimal // el total impreso en la factura, que se comprueba con el desglose
 	PayTo           []PayTo
-	Corrects        InvoiceID // the invoice a corrective one rectifies
+	Corrects        InvoiceID // la factura que rectifica una rectificativa
 }
 
-// InvoiceState is the persisted state of a received invoice.
+// InvoiceState es el estado persistido de una factura recibida.
 type InvoiceState struct {
 	Draft
-	Register     string // number in the register of received invoices
+	Register     string // número en el registro de facturas recibidas
 	Year         int
 	Breakdown    Breakdown
 	Withholding  vocab.Decimal
@@ -129,7 +129,7 @@ type InvoiceState struct {
 	Audit        traits.AuditStamp
 }
 
-// Invoice is an invoice received from a supplier, booked in the register.
+// Invoice es una factura recibida de un proveedor, anotada en el registro.
 type Invoice struct {
 	fw.BaseAggregateRoot[InvoiceID]
 	traits.Audited
@@ -160,7 +160,7 @@ func checkDraft(v *fw.Validation, d *Draft) {
 	}
 }
 
-// ReconstituteInvoice rebuilds an invoice.
+// ReconstituteInvoice reconstruye una factura.
 func ReconstituteInvoice(id InvoiceID, s InvoiceState) (*Invoice, error) {
 	base, err := fw.NewBaseAggregateRoot(InvoiceKind, id)
 	if err != nil {
@@ -176,13 +176,13 @@ func ReconstituteInvoice(id InvoiceID, s InvoiceState) (*Invoice, error) {
 	return &Invoice{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// RegisterNumber renders the number of the register of received invoices.
+// RegisterNumber compone el número del registro de facturas recibidas.
 func RegisterNumber(year int, n int64) string { return fmt.Sprintf("FR-%d-%06d", year, n) }
 
-// Register books a received invoice with its breakdown and register number. Invariants (none of
-// them existed in the C#): the breakdown covers the lines, the computed total equals the total
-// printed by the supplier, the withholding is the rate on the net, the accounts add up to what is
-// paid to the supplier (total minus withholding), and a corrective invoice is negative.
+// Register registra una factura recibida con su desglose y su número de registro. Invariantes
+// (ninguna existía en el C#): el desglose cubre las líneas, el total calculado es igual al total
+// impreso por el proveedor, la retención es el tipo sobre el neto, las cuentas suman lo que se paga
+// al proveedor (total menos retención) y una factura rectificativa es negativa.
 func Register(id InvoiceID, d Draft, b Breakdown, year int, n int64) (*Invoice, error) {
 	var v fw.Validation
 	checkDraft(&v, &d)
@@ -227,28 +227,28 @@ func Register(id InvoiceID, d Draft, b Breakdown, year int, n int64) (*Invoice, 
 	return inv, nil
 }
 
-// State returns the state (slices are copies).
+// State devuelve el estado (los slices son copias).
 func (i *Invoice) State() InvoiceState {
 	s := i.s
 	s.Lines, s.PayTo, s.Breakdown.Lines = slices.Clone(s.Lines), slices.Clone(s.PayTo), slices.Clone(s.Breakdown.Lines)
 	return s
 }
 
-// Total returns net plus taxes.
+// Total devuelve el neto más los impuestos.
 func (i *Invoice) Total() vocab.Decimal { return i.s.Breakdown.Net.Add(i.s.Breakdown.Tax) }
 
-// Payable returns what is paid to the supplier: the total minus the withholding.
+// Payable devuelve lo que se paga al proveedor: el total menos la retención.
 func (i *Invoice) Payable() vocab.Decimal { return i.Total().Sub(i.s.Withholding) }
 
-// Expense is the cost of a category: its bases, plus its share of the tax when not deductible.
+// Expense es el coste de una categoría: sus bases más su parte del impuesto cuando no es deducible.
 type Expense struct {
 	Category Category
 	Amount   vocab.Decimal
 }
 
-// Expenses returns the cost per category (in the order of first appearance) and the deductible
-// tax. A non-deductible tax is shared among the categories in proportion to their bases, the last
-// one taking the rounding.
+// Expenses devuelve el coste por categoría (en el orden en que aparecen por primera vez) y el
+// impuesto deducible. Un impuesto no deducible se reparte entre las categorías en proporción a sus
+// bases, y la última se queda con el redondeo.
 func (i *Invoice) Expenses() ([]Expense, vocab.Decimal) {
 	var out []Expense
 	for _, l := range i.s.Lines {
@@ -275,8 +275,8 @@ func (i *Invoice) Expenses() ([]Expense, vocab.Decimal) {
 	return out, vocab.DecimalFromInt(0)
 }
 
-// Cancel annuls a registered invoice booked by mistake (a real correction is a corrective invoice
-// of the supplier).
+// Cancel anula una factura registrada por error (una corrección de verdad es una factura
+// rectificativa del proveedor).
 func (i *Invoice) Cancel(reason string) error {
 	if i.s.Cancelled {
 		return fw.Violation("purchases.invoice_cancelled", "the invoice is already cancelled")
@@ -290,12 +290,12 @@ func (i *Invoice) Cancel(reason string) error {
 	return nil
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (i *Invoice) AuditSnapshot() map[string]any {
 	return map[string]any{"register": i.s.Register, "supplierNumber": i.s.SupplierNumber, "total": i.Total().String(), "cancelled": i.s.Cancelled}
 }
 
-// Invoice fields.
+// Campos de la factura.
 var (
 	InvFieldCompany   = spec.Comparable("company", func(i *Invoice) OrganizationID { return i.s.Company })
 	InvFieldSupplier  = spec.Comparable("supplier", func(i *Invoice) PartyID { return i.s.Supplier })
@@ -307,7 +307,7 @@ var (
 	InvFieldCancelled = spec.Comparable("cancelled", func(i *Invoice) bool { return i.s.Cancelled })
 )
 
-// Counter numbers the register of received invoices of a company and year.
+// Counter numera el registro de facturas recibidas de una empresa y año.
 type Counter struct {
 	fw.BaseAggregateRoot[CounterID]
 	company OrganizationID
@@ -315,7 +315,7 @@ type Counter struct {
 	last    int64
 }
 
-// ReconstituteCounter rebuilds a counter.
+// ReconstituteCounter reconstruye un contador.
 func ReconstituteCounter(id CounterID, company OrganizationID, year int, last int64) (*Counter, error) {
 	base, err := fw.NewBaseAggregateRoot(CounterKind, id)
 	if err != nil {
@@ -327,17 +327,17 @@ func ReconstituteCounter(id CounterID, company OrganizationID, year int, last in
 	return &Counter{BaseAggregateRoot: base, company: company, year: year, last: last}, nil
 }
 
-// Next takes the next number.
+// Next toma el siguiente número.
 func (c *Counter) Next() int64 { c.last++; return c.last }
 
-// Values returns the persisted values.
+// Values devuelve los valores persistidos.
 func (c *Counter) Values() (OrganizationID, int, int64) { return c.company, c.year, c.last }
 
-// Counter fields.
+// Campos del contador.
 var (
 	CntFieldCompany = spec.Comparable("company", func(c *Counter) OrganizationID { return c.company })
 	CntFieldYear    = spec.Comparable("fiscal_year", func(c *Counter) int { return c.year })
 )
 
-// CounterKind is the stable aggregate type name.
+// CounterKind es el nombre estable del tipo de agregado.
 const CounterKind = "purchases.register_counter"

@@ -9,9 +9,10 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/time/fake"
 )
 
-// What starts "now" can end "now": the clock of the host may not have moved between the two use
-// cases (the system clock advances in ticks), and a user may undo at once what was just entered.
-// The scenario runs on a clock that stands still, so every start and every end is the same instant.
+// Lo que empieza «ahora» puede terminar «ahora»: puede que el reloj del anfitrión no se haya movido
+// entre los dos casos de uso (el reloj del sistema avanza a saltos), y un usuario puede deshacer en
+// el acto lo que acaba de introducir. El escenario corre con un reloj parado, así que cada inicio y
+// cada fin son el mismo instante.
 func TestEndingAtTheInstantOfTheStart(t *testing.T) {
 	clock := fake.New(t0)
 	t.Cleanup(fw.SetClock(clock))
@@ -70,7 +71,7 @@ func TestEndingAtTheInstantOfTheStart(t *testing.T) {
 		return
 	}
 
-	// What ended at once was never in force, at that instant or later.
+	// Lo que terminó en el acto nunca estuvo vigente, ni en ese instante ni después.
 	now, later := fw.Now(), fw.Now().Add(time.Hour)
 	if _, ok := ana.ContactFor(domain.ContactEmail, domain.PurposeDefault); ok || ana.Contacts()[0].IsActiveAt(now) {
 		t.Error("the contact was never in use")
@@ -84,8 +85,8 @@ func TestEndingAtTheInstantOfTheStart(t *testing.T) {
 	if domain.ActiveAt(now).IsSatisfiedBy(rel) || domain.ActiveAt(later).IsSatisfiedBy(rel) || rel.Until() == nil {
 		t.Error("the relationship was never in force")
 	}
-	// It stays in the history and is in the way of nothing: the same fact can start again at that
-	// instant, or earlier with an open end.
+	// Se queda en la historia y no estorba a nada: el mismo hecho puede volver a empezar en ese
+	// instante, o antes con el fin abierto.
 	if len(ana.Contacts()) != 1 || len(ana.Roles()) != 1 {
 		t.Fatalf("history: %d contacts, %d roles", len(ana.Contacts()), len(ana.Roles()))
 	}
@@ -101,7 +102,7 @@ func TestEndingAtTheInstantOfTheStart(t *testing.T) {
 	if _, err := acme.AssignFacilityRole(domain.WellKnownFacilityRoleTypes(), facility, domain.FacilityHeadquarters, now); err != nil {
 		t.Errorf("the same facility role again at that instant: %v", err)
 	}
-	// Ending again is a no-op, and the start is still the earliest end there is.
+	// Terminar otra vez no hace nada, y el inicio sigue siendo el fin más temprano que hay.
 	if err := ana.EndContact(contact, later); err != nil {
 		t.Errorf("ending an ended contact later: %v", err)
 	}

@@ -1,5 +1,5 @@
-// Package infrastructure stores the Financial context: SQL mapping, versioned schema of the five
-// engines and hot-swap factories.
+// Package infrastructure persiste el contexto Financial: mapeo SQL, esquema versionado de los cinco
+// motores y factorías intercambiables en caliente.
 package infrastructure
 
 import (
@@ -21,10 +21,10 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlserver"
 )
 
-// Context is the name of the bounded context.
+// Context es el nombre del contexto delimitado.
 const Context = "financial"
 
-// Technical tables of the context.
+// Tablas técnicas del contexto.
 const (
 	TableOutbox            = "financial_outbox"
 	TableIntegrationOutbox = "financial_integration_outbox"
@@ -33,7 +33,8 @@ const (
 
 const audit = `created_at {ts}, created_by_id {str:64}, created_by_name {str:200}, modified_at {ts}, modified_by_id {str:64}, modified_by_name {str:200}`
 
-// Text columns that take accents are four times the characters they hold: Oracle counts bytes.
+// Las columnas de texto que admiten acentos miden cuatro veces los caracteres que guardan: Oracle
+// cuenta bytes.
 var schemaDDL = []string{
 	`CREATE TABLE fin_accounts (id {uuid} NOT NULL PRIMARY KEY, version {bigint} NOT NULL, company {uuid} NOT NULL, account_number {str:34} NOT NULL,
 	virtual_account {bool} NOT NULL, bic {str:11}, currency {str:3} NOT NULL, account_name {str:800}, product {uuid}, status {str:20} NOT NULL,
@@ -64,7 +65,7 @@ func technicalDDL(d string) []string {
 	return nil
 }
 
-// Migrations is the versioned schema of the context.
+// Migrations es el esquema versionado del contexto.
 func Migrations() sqlrepo.MigrationSet {
 	technical := map[string][]string{}
 	for _, d := range sqlrepo.Dialects {
@@ -77,10 +78,10 @@ func Migrations() sqlrepo.MigrationSet {
 	}}
 }
 
-// Tables lists the tables of the context, children first (drop order).
+// Tables enumera las tablas del contexto, las hijas primero (orden de borrado).
 var Tables = []string{"fin_account_uses", "fin_account_holders", "fin_accounts", "fin_agreements", "fin_products", TableOutbox, TableIntegrationOutbox, TableAuditLog}
 
-// DropAll removes the tables of the context and its migration history (tests only).
+// DropAll quita las tablas del contexto y su historial de migraciones (sólo pruebas).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
 	for _, t := range Tables {
 		_, _ = db.ExecContext(ctx, "DROP TABLE "+t)
@@ -109,14 +110,14 @@ func optDate(d vocab.Date) any {
 	return d
 }
 
-// Engines do not agree on the order of the children: they are sorted here.
+// Los motores no coinciden en el orden de las hijas: se ordenan aquí.
 func byNo(rows []*sqlrepo.Row) []*sqlrepo.Row {
 	out := slices.Clone(rows)
 	slices.SortFunc(out, func(a, b *sqlrepo.Row) int { return int(a.Int64("line_no") - b.Int64("line_no")) })
 	return out
 }
 
-// AccountMapping maps Account to fin_accounts, its holders and its uses.
+// AccountMapping mapea Account a fin_accounts, sus titulares y sus usos.
 func AccountMapping() sqlrepo.Mapping[domain.AccountID, *domain.Account] {
 	return sqlrepo.Mapping[domain.AccountID, *domain.Account]{
 		Table: "fin_accounts",
@@ -187,7 +188,7 @@ func AccountMapping() sqlrepo.Mapping[domain.AccountID, *domain.Account] {
 
 func unsupported(b hotswap.Backend) error { return fmt.Errorf("financial: unsupported backend %T", b) }
 
-// AccountRepositoryFactory builds the account repository.
+// AccountRepositoryFactory construye el repositorio de cuentas.
 func AccountRepositoryFactory(b hotswap.Backend) (domain.AccountRepository, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -198,10 +199,10 @@ func AccountRepositoryFactory(b hotswap.Backend) (domain.AccountRepository, erro
 	return nil, unsupported(b)
 }
 
-// OutboxFactory builds the domain event outbox.
+// OutboxFactory construye el outbox de eventos de dominio.
 func OutboxFactory(b hotswap.Backend) (application.OutboxStore, error) { return outbox(b, TableOutbox) }
 
-// IntegrationOutboxFactory builds the integration outbox.
+// IntegrationOutboxFactory construye el outbox de integración.
 func IntegrationOutboxFactory(b hotswap.Backend) (application.OutboxStore, error) {
 	return outbox(b, TableIntegrationOutbox)
 }
@@ -216,7 +217,7 @@ func outbox(b hotswap.Backend, table string) (application.OutboxStore, error) {
 	return nil, unsupported(b)
 }
 
-// AuditLogFactory builds the audit log.
+// AuditLogFactory construye el registro de auditoría.
 func AuditLogFactory(b hotswap.Backend) (application.AuditLog, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:

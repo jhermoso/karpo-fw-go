@@ -1,5 +1,5 @@
-// Package infrastructure stores the Treasury context: SQL mappings, versioned schema of the five
-// engines, hot-swap factories and the adapters to Receivables and Parties.
+// Package infrastructure guarda el contexto Treasury: mapeos SQL, esquema versionado de los cinco
+// motores, factorías intercambiables en caliente y los adaptadores a Receivables y Parties.
 package infrastructure
 
 import (
@@ -25,10 +25,10 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlserver"
 )
 
-// Context is the name of the bounded context.
+// Context es el nombre del contexto delimitado.
 const Context = "treasury"
 
-// Technical tables of the context.
+// Tablas técnicas del contexto.
 const (
 	TableOutbox            = "treasury_outbox"
 	TableIntegrationOutbox = "treasury_integration_outbox"
@@ -70,7 +70,7 @@ var transfersDDL = []string{
 	`CREATE INDEX ix_trs_transfers_payable ON trs_transfers (payable)`,
 }
 
-// A statement belongs to an account; "pending" counts its movements not reconciled yet.
+// Un extracto pertenece a una cuenta; "pending" cuenta sus movimientos aún sin conciliar.
 var statementsDDL = []string{
 	`CREATE TABLE trs_statements (id {uuid} NOT NULL PRIMARY KEY, version {bigint} NOT NULL, owner {uuid} NOT NULL, account_id {uuid} NOT NULL,
 	period_from {date} NOT NULL, period_to {date} NOT NULL, opening {str:30} NOT NULL, closing {str:30} NOT NULL, pending {int} NOT NULL,
@@ -98,7 +98,7 @@ func technicalDDL(d string) []string {
 	return nil
 }
 
-// Migrations is the versioned schema of the context.
+// Migrations es el esquema versionado del contexto.
 func Migrations() sqlrepo.MigrationSet {
 	technical := map[string][]string{}
 	for _, d := range sqlrepo.Dialects {
@@ -112,15 +112,15 @@ func Migrations() sqlrepo.MigrationSet {
 	}}
 }
 
-// Migrator returns the schema migrator of the context.
+// Migrator devuelve el migrador del esquema del contexto.
 func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 	return sqlrepo.NewMigrator(db, []sqlrepo.MigrationSet{Migrations()})
 }
 
-// Tables lists the tables of the context, children first (drop order).
+// Tables enumera las tablas del contexto, las hijas primero (orden de borrado).
 var Tables = []string{"trs_statement_lines", "trs_statements", "trs_transfers", "trs_transfer_orders", "trs_remittance_items", "trs_remittances", "trs_mandates", "trs_accounts", TableOutbox, TableIntegrationOutbox, TableAuditLog}
 
-// DropAll removes the tables of the context and its migration history (tests only).
+// DropAll borra las tablas del contexto y su historial de migraciones (sólo para pruebas).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
 	for _, t := range Tables {
 		_, _ = db.ExecContext(ctx, "DROP TABLE "+t)
@@ -149,7 +149,7 @@ func ibanOf(r *sqlrepo.Row, col string) (vocab.IBAN, error) {
 	return vocab.IBAN{}, nil
 }
 
-// AccountMapping maps Account to trs_accounts.
+// AccountMapping mapea Account a trs_accounts.
 func AccountMapping() sqlrepo.Mapping[domain.AccountID, *domain.Account] {
 	return sqlrepo.Mapping[domain.AccountID, *domain.Account]{
 		Table:   "trs_accounts",
@@ -180,7 +180,7 @@ func AccountMapping() sqlrepo.Mapping[domain.AccountID, *domain.Account] {
 	}
 }
 
-// MandateMapping maps Mandate to trs_mandates.
+// MandateMapping mapea Mandate a trs_mandates.
 func MandateMapping() sqlrepo.Mapping[domain.MandateID, *domain.Mandate] {
 	return sqlrepo.Mapping[domain.MandateID, *domain.Mandate]{
 		Table:   "trs_mandates",
@@ -206,7 +206,7 @@ func MandateMapping() sqlrepo.Mapping[domain.MandateID, *domain.Mandate] {
 	}
 }
 
-// RemittanceMapping maps Remittance to trs_remittances and its items.
+// RemittanceMapping mapea Remittance a trs_remittances y sus adeudos.
 func RemittanceMapping() sqlrepo.Mapping[domain.RemittanceID, *domain.Remittance] {
 	return sqlrepo.Mapping[domain.RemittanceID, *domain.Remittance]{
 		Table: "trs_remittances",
@@ -280,7 +280,7 @@ func RemittanceMapping() sqlrepo.Mapping[domain.RemittanceID, *domain.Remittance
 	}
 }
 
-// TransferOrderMapping maps TransferOrder to trs_transfer_orders and its transfers.
+// TransferOrderMapping mapea TransferOrder a trs_transfer_orders y sus transferencias.
 func TransferOrderMapping() sqlrepo.Mapping[domain.TransferOrderID, *domain.TransferOrder] {
 	return sqlrepo.Mapping[domain.TransferOrderID, *domain.TransferOrder]{
 		Table: "trs_transfer_orders",
@@ -341,7 +341,7 @@ func TransferOrderMapping() sqlrepo.Mapping[domain.TransferOrderID, *domain.Tran
 	}
 }
 
-// StatementMapping maps Statement to trs_statements and its movements.
+// StatementMapping mapea Statement a trs_statements y sus movimientos.
 func StatementMapping() sqlrepo.Mapping[domain.StatementID, *domain.Statement] {
 	return sqlrepo.Mapping[domain.StatementID, *domain.Statement]{
 		Table:   "trs_statements",
@@ -362,7 +362,7 @@ func StatementMapping() sqlrepo.Mapping[domain.StatementID, *domain.Statement] {
 					return nil, err
 				}
 			}
-			// Engines do not agree on the order of the children: movements are sorted here.
+			// Los motores no coinciden en el orden de los hijos: los movimientos se ordenan aquí.
 			slices.SortFunc(st.Lines, func(a, b domain.StatementLine) int { return a.No - b.No })
 			if err := r.Err(); err != nil {
 				return nil, err
@@ -385,22 +385,22 @@ func StatementMapping() sqlrepo.Mapping[domain.StatementID, *domain.Statement] {
 	}
 }
 
-// StatementRepositoryFactory builds the statement repository.
+// StatementRepositoryFactory construye el repositorio de extractos.
 func StatementRepositoryFactory(b hotswap.Backend) (domain.StatementRepository, error) {
 	return repository(b, StatementMapping())
 }
 
-// TransferOrderRepositoryFactory builds the transfer order repository.
+// TransferOrderRepositoryFactory construye el repositorio de órdenes de transferencias.
 func TransferOrderRepositoryFactory(b hotswap.Backend) (domain.TransferOrderRepository, error) {
 	return repository(b, TransferOrderMapping())
 }
 
-// PaymentsPayables adapts the Payments Payable contract to the Treasury port (ACL).
+// PaymentsPayables adapta el contrato Payable de Payments al puerto de Treasury (ACL).
 type PaymentsPayables struct{ Payable payments.Payable }
 
 var _ domain.Payables = PaymentsPayables{}
 
-// DueForTransfer implements domain.Payables.
+// DueForTransfer implementa domain.Payables.
 func (p PaymentsPayables) DueForTransfer(ctx context.Context, debtor domain.OrganizationID, dueTo vocab.Date) ([]domain.PayableDue, int, error) {
 	items, without, err := p.Payable.DueForTransfer(ctx, debtor.String(), dueTo.String())
 	if err != nil {
@@ -439,7 +439,7 @@ func repository[ID fw.Identifier, T fw.AggregateRoot[ID]](b hotswap.Backend, m s
 	return nil, unsupported(b)
 }
 
-// Repository factories.
+// Factorías de repositorios.
 func AccountRepositoryFactory(b hotswap.Backend) (domain.AccountRepository, error) {
 	return repository(b, AccountMapping())
 }
@@ -452,10 +452,11 @@ func RemittanceRepositoryFactory(b hotswap.Backend) (domain.RemittanceRepository
 	return repository(b, RemittanceMapping())
 }
 
-// OutboxFactory builds the domain event outbox; IntegrationOutboxFactory, the Published Language one.
+// OutboxFactory construye el outbox de eventos de dominio; IntegrationOutboxFactory, el del
+// Published Language.
 func OutboxFactory(b hotswap.Backend) (application.OutboxStore, error) { return outbox(b, TableOutbox) }
 
-// IntegrationOutboxFactory builds the integration outbox.
+// IntegrationOutboxFactory construye el outbox de integración.
 func IntegrationOutboxFactory(b hotswap.Backend) (application.OutboxStore, error) {
 	return outbox(b, TableIntegrationOutbox)
 }
@@ -470,7 +471,7 @@ func outbox(b hotswap.Backend, table string) (application.OutboxStore, error) {
 	return nil, unsupported(b)
 }
 
-// AuditLogFactory builds the audit log.
+// AuditLogFactory construye el registro de auditoría.
 func AuditLogFactory(b hotswap.Backend) (application.AuditLog, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -481,12 +482,12 @@ func AuditLogFactory(b hotswap.Backend) (application.AuditLog, error) {
 	return nil, unsupported(b)
 }
 
-// ReceivablesDueItems adapts the Receivables Collectable contract to the Treasury port (ACL).
+// ReceivablesDueItems adapta el contrato Collectable de Receivables al puerto de Treasury (ACL).
 type ReceivablesDueItems struct{ Collectable receivables.Collectable }
 
 var _ domain.Receivables = ReceivablesDueItems{}
 
-// DueItems implements domain.Receivables.
+// DueItems implementa domain.Receivables.
 func (r ReceivablesDueItems) DueItems(ctx context.Context, seller domain.OrganizationID, dueTo vocab.Date) ([]domain.DueItem, error) {
 	items, err := r.Collectable.DueItems(ctx, seller.String(), dueTo.String())
 	if err != nil {
@@ -507,12 +508,12 @@ func (r ReceivablesDueItems) DueItems(ctx context.Context, seller domain.Organiz
 	return out, nil
 }
 
-// PartiesIdentities adapts the Parties TaxIdentities contract to the Treasury port (ACL).
+// PartiesIdentities adapta el contrato TaxIdentities de Parties al puerto de Treasury (ACL).
 type PartiesIdentities struct{ TaxIdentities parties.TaxIdentities }
 
 var _ domain.Identities = PartiesIdentities{}
 
-// Identities implements domain.Identities.
+// Identities implementa domain.Identities.
 func (p PartiesIdentities) Identities(ctx context.Context, ids []domain.PartyID) (map[domain.PartyID]domain.Identity, error) {
 	out := map[domain.PartyID]domain.Identity{}
 	var req []string

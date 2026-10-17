@@ -9,53 +9,54 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// ClassificationTypeID identifies a classification (same GUIDs as the C# party_type rows).
+// ClassificationTypeID identifica una clasificación (los mismos GUID que las filas party_type de C#).
 type ClassificationTypeID struct{ fw.UUID }
 
-// ParseClassificationTypeID parses a textual identity.
+// ParseClassificationTypeID interpreta una identidad en texto.
 func ParseClassificationTypeID(s string) (ClassificationTypeID, error) {
 	u, err := fw.ParseUUID(s)
 	return ClassificationTypeID{u}, err
 }
 
-// MustClassificationTypeID parses a well-known identity.
+// MustClassificationTypeID interpreta una identidad conocida.
 func MustClassificationTypeID(s string) ClassificationTypeID {
 	return ClassificationTypeID{fw.MustParseUUID(s)}
 }
 
-// ClassificationID identifies a classification of a party (child entity).
+// ClassificationID identifica una clasificación de una party (entidad hija).
 type ClassificationID struct{ fw.UUID }
 
-// NewClassificationID returns a new identity.
+// NewClassificationID devuelve una identidad nueva.
 func NewClassificationID() ClassificationID { return ClassificationID{fw.NewUUID()} }
 
-// ParseClassificationID parses a textual identity.
+// ParseClassificationID interpreta una identidad en texto.
 func ParseClassificationID(s string) (ClassificationID, error) {
 	u, err := fw.ParseUUID(s)
 	return ClassificationID{u}, err
 }
 
-// ClassificationType is an entry of the classification catalog: families (customer segment,
-// activity sector, organization size, acquisition channel, AML risk) group the leaves that are
-// assigned to parties. An inactive family (AML until compliance enables it) and its leaves
-// cannot be assigned. In an exclusive family a party has one current leaf at a time.
+// ClassificationType es una entrada del catálogo de clasificaciones: las familias (segmento de
+// cliente, sector de actividad, tamaño de organización, canal de captación, riesgo AML) agrupan
+// las hojas que se asignan a las parties. Una familia inactiva (AML hasta que cumplimiento la
+// habilite) y sus hojas no se pueden asignar. En una familia exclusiva una party tiene una sola
+// hoja vigente a la vez.
 type ClassificationType struct {
 	ID          ClassificationTypeID
 	Name        vocab.Name
 	Description string
-	Family      *ClassificationTypeID // nil for a family
+	Family      *ClassificationTypeID // nil en una familia
 	Active      bool
 	AppliesTo   Applicability
 	Exclusive   bool
 }
 
-// ClassificationCatalog answers questions about classifications.
+// ClassificationCatalog responde a preguntas sobre las clasificaciones.
 type ClassificationCatalog struct {
 	types map[ClassificationTypeID]ClassificationType
 	order []ClassificationTypeID
 }
 
-// NewClassificationCatalog builds the catalog: two levels, families first.
+// NewClassificationCatalog construye el catálogo: dos niveles, primero las familias.
 func NewClassificationCatalog(types []ClassificationType) (*ClassificationCatalog, error) {
 	c := &ClassificationCatalog{types: map[ClassificationTypeID]ClassificationType{}}
 	for _, t := range types {
@@ -74,13 +75,13 @@ func NewClassificationCatalog(types []ClassificationType) (*ClassificationCatalo
 	return c, nil
 }
 
-// Type returns a classification type.
+// Type devuelve un tipo de clasificación.
 func (c *ClassificationCatalog) Type(id ClassificationTypeID) (ClassificationType, bool) {
 	t, ok := c.types[id]
 	return t, ok
 }
 
-// All returns every type in declaration order.
+// All devuelve todos los tipos en el orden en que se declararon.
 func (c *ClassificationCatalog) All() []ClassificationType {
 	out := make([]ClassificationType, len(c.order))
 	for i, id := range c.order {
@@ -89,16 +90,16 @@ func (c *ClassificationCatalog) All() []ClassificationType {
 	return out
 }
 
-// Classification is a classification of a party during a period (child entity of Party).
+// Classification es una clasificación de una party durante un periodo (entidad hija de Party).
 type Classification struct {
 	ID     ClassificationID
 	Type   ClassificationTypeID
 	Period vocab.ValidPeriod
 }
 
-// Classify classifies the party from a moment on. Invariants: the type is an active leaf of an
-// active family, suits the party kind, is not already current, and, in an exclusive family, no
-// other leaf of the family is current in the period.
+// Classify clasifica la party a partir de un instante. Invariantes: el tipo es una hoja activa de
+// una familia activa, encaja con la clase de party, no está ya vigente y, en una familia
+// exclusiva, ninguna otra hoja de la familia está vigente en el periodo.
 func (p *Party) Classify(c *ClassificationCatalog, typ ClassificationTypeID, from time.Time) (ClassificationID, error) {
 	if err := p.requireActive("be classified"); err != nil {
 		return ClassificationID{}, err
@@ -141,7 +142,7 @@ func (p *Party) Classify(c *ClassificationCatalog, typ ClassificationTypeID, fro
 	return cl.ID, nil
 }
 
-// EndClassification ends a classification at a moment (not before it started).
+// EndClassification termina una clasificación en un instante (no antes de que empezara).
 func (p *Party) EndClassification(id ClassificationID, at time.Time) error {
 	k := slices.IndexFunc(p.classifications, func(c Classification) bool { return c.ID == id })
 	if k < 0 {
@@ -161,5 +162,5 @@ func (p *Party) EndClassification(id ClassificationID, at time.Time) error {
 	return nil
 }
 
-// Classifications returns a copy of the classifications, current or past.
+// Classifications devuelve una copia de las clasificaciones, actuales o pasadas.
 func (p *Party) Classifications() []Classification { return slices.Clone(p.classifications) }

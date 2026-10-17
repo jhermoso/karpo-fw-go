@@ -12,16 +12,17 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
 )
 
-// AccessInput is an organization access in a command.
+// AccessInput es un acceso a una organización en un comando.
 type AccessInput struct {
 	Organization        string `json:"organization"`
 	Level               string `json:"level"`
 	IncludeSubsidiaries bool   `json:"includeSubsidiaries,omitempty"`
 }
 
-// RegisterUser registers a user. Access is the first organization access: it is mandatory unless
-// the caller is a global administrator, as nobody else could administer a user without accesses.
-// A password set here must be changed by the user on the first sign-in.
+// RegisterUser da de alta un usuario. Access es el primer acceso a una organización: es obligatorio
+// salvo que quien llama sea un administrador global, porque nadie más podría administrar a un
+// usuario sin accesos. Una contraseña fijada aquí la tiene que cambiar el usuario en el primer
+// inicio de sesión.
 type RegisterUser struct {
 	Username string       `json:"username"`
 	Party    string       `json:"party"`
@@ -29,40 +30,40 @@ type RegisterUser struct {
 	Access   *AccessInput `json:"access,omitempty"`
 }
 
-// RenameUser changes the user name.
+// RenameUser cambia el nombre de usuario.
 type RenameUser struct {
 	ID       domain.UserID `json:"-"`
 	Username string        `json:"username"`
 }
 
-// SetUserActive deactivates or reactivates a user.
+// SetUserActive desactiva o reactiva un usuario.
 type SetUserActive struct {
 	ID     domain.UserID
 	Active bool
 }
 
-// UnlockUser lifts the lock of a user.
+// UnlockUser levanta el bloqueo de un usuario.
 type UnlockUser struct{ ID domain.UserID }
 
-// ResetPassword sets a new password the user must change on the next sign-in.
+// ResetPassword fija una contraseña nueva que el usuario tiene que cambiar en el siguiente inicio de sesión.
 type ResetPassword struct {
 	ID       domain.UserID `json:"-"`
 	Password string        `json:"password"`
 }
 
-// AssignRole assigns a role to a user; RevokeRole revokes it.
+// AssignRole asigna un rol a un usuario; RevokeRole se lo retira.
 type AssignRole struct {
 	ID   domain.UserID
 	Role domain.RoleID
 }
 
-// RevokeRole revokes a role from a user.
+// RevokeRole retira un rol a un usuario.
 type RevokeRole struct {
 	ID   domain.UserID
 	Role domain.RoleID
 }
 
-// GrantAccess grants the access to an organization or changes its level.
+// GrantAccess concede el acceso a una organización o cambia su nivel.
 type GrantAccess struct {
 	ID                  domain.UserID         `json:"-"`
 	Organization        domain.OrganizationID `json:"-"`
@@ -70,50 +71,50 @@ type GrantAccess struct {
 	IncludeSubsidiaries bool                  `json:"includeSubsidiaries,omitempty"`
 }
 
-// RevokeAccess revokes the access to an organization.
+// RevokeAccess retira el acceso a una organización.
 type RevokeAccess struct {
 	ID           domain.UserID
 	Organization domain.OrganizationID
 }
 
-// LinkIdentity links an external identity (issuer + subject) with a user.
+// LinkIdentity vincula una identidad externa (emisor + sujeto) con un usuario.
 type LinkIdentity struct {
 	ID      domain.UserID `json:"-"`
 	Issuer  string        `json:"issuer"`
 	Subject string        `json:"subject"`
 }
 
-// UnlinkIdentity removes an external identity of a user.
+// UnlinkIdentity quita una identidad externa de un usuario.
 type UnlinkIdentity struct {
 	ID      domain.UserID `json:"-"`
 	Issuer  string        `json:"issuer"`
 	Subject string        `json:"subject"`
 }
 
-// GetUser loads a user.
+// GetUser carga un usuario.
 type GetUser struct{ ID domain.UserID }
 
-// SearchUsers searches the users visible to the caller. Administrable keeps only the ones the
-// caller may administer.
+// SearchUsers busca los usuarios visibles para quien llama. Administrable deja sólo los que quien
+// llama puede administrar.
 type SearchUsers struct {
 	Text, Organization, Role  string
 	ActiveOnly, Administrable bool
 	Page, Size                int
 }
 
-// RoleRefDTO names a role of a user.
+// RoleRefDTO nombra un rol de un usuario.
 type RoleRefDTO struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 }
 
-// IdentityDTO is an external identity of a user.
+// IdentityDTO es una identidad externa de un usuario.
 type IdentityDTO struct {
 	Issuer  string `json:"issuer"`
 	Subject string `json:"subject"`
 }
 
-// UserDTO is the transport form of a user. It never carries the password hash.
+// UserDTO es la forma de transporte de un usuario. Nunca lleva el hash de la contraseña.
 type UserDTO struct {
 	ID                 string        `json:"id"`
 	Username           string        `json:"username"`
@@ -130,7 +131,7 @@ type UserDTO struct {
 	Version            int64         `json:"version"`
 }
 
-// roleNames resolves the names of the roles of users (one query).
+// roleNames resuelve los nombres de los roles de los usuarios (una consulta).
 func (s *service) roleNames(ctx context.Context, users ...*domain.User) (map[domain.RoleID]string, error) {
 	var ids []domain.RoleID
 	for _, u := range users {
@@ -154,7 +155,7 @@ func (s *service) roleNames(ctx context.Context, users ...*domain.User) (map[dom
 	return names, nil
 }
 
-// userDTO maps a user. The accesses are shown only to callers holding the permission to read them.
+// userDTO traduce un usuario. Los accesos sólo se muestran a quien tiene el permiso para leerlos.
 func userDTO(ctx context.Context, u *domain.User, names map[domain.RoleID]string) UserDTO {
 	d := UserDTO{ID: u.ID().String(), Username: u.Username(), Party: u.Party().String(), Active: u.IsActive(),
 		Locked: u.IsLockedAt(fw.Now()), LockedUntil: u.LockedUntil(), HasPassword: u.HasPassword(),
@@ -186,7 +187,7 @@ func (s *service) userResult(ctx context.Context, u *domain.User, err error) (Us
 	return userDTO(ctx, u, names), nil
 }
 
-// parseAccess validates an access of a command and checks its organization is internal.
+// parseAccess valida un acceso de un comando y comprueba que su organización es interna.
 func (s *service) parseAccess(ctx context.Context, org domain.OrganizationID, level string, subsidiaries bool) (domain.OrganizationAccess, error) {
 	l, err := domain.ParseAccessLevel(level)
 	if err != nil {
@@ -218,7 +219,7 @@ func (s *service) usernameFree(ctx context.Context, username string, except doma
 	return nil
 }
 
-// keepsGlobalAdmin checks that another active global administrator remains besides u.
+// keepsGlobalAdmin comprueba que queda otro administrador global activo además de u.
 func (s *service) keepsGlobalAdmin(ctx context.Context, u *domain.User) error {
 	if !u.IsActive() || !u.HasRole(domain.RoleGlobalSuperAdmin) {
 		return nil
@@ -233,9 +234,9 @@ func (s *service) keepsGlobalAdmin(ctx context.Context, u *domain.User) error {
 	return nil
 }
 
-// administer loads a user and applies fn if the caller may administer it: a user outside the
-// caller's sight does not exist (uniform 404); a visible one the caller does not fully encompass
-// is forbidden (403).
+// administer carga un usuario y aplica fn si quien llama puede administrarlo: un usuario fuera de
+// la vista de quien llama no existe (404 uniforme); uno visible que quien llama no abarca por
+// completo está prohibido (403).
 func (s *service) administer(ctx context.Context, id domain.UserID, fn func(ctx context.Context, a domain.Administrator, u *domain.User) error) (UserDTO, error) {
 	a, err := administratorOf(ctx)
 	if err != nil {
@@ -253,8 +254,9 @@ func (s *service) administer(ctx context.Context, id domain.UserID, fn func(ctx 
 	return s.userResult(ctx, u, err)
 }
 
-// changeAccess loads a user and applies fn if the caller may change its access to org. The user
-// needs not be visible: granting your organization to a user of another one is how it becomes so.
+// changeAccess carga un usuario y aplica fn si quien llama puede cambiar su acceso a org. El
+// usuario no tiene por qué ser visible: conceder la propia organización a un usuario de otra es
+// como pasa a serlo.
 func (s *service) changeAccess(ctx context.Context, id domain.UserID, org domain.OrganizationID, fn func(ctx context.Context, u *domain.User) error) (UserDTO, error) {
 	a, err := administratorOf(ctx)
 	if err != nil {

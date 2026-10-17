@@ -46,10 +46,11 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 )
 
-// TestHost migrates every context into one database of each engine (no two of them may want the
-// same table or index), verifies the schema, starts the host on it and does what only the whole
-// does: an import that registers companies in Parties, an account in one of them, its export
-// written by the chores, and the messages of every context delivered.
+// TestHost migra todos los contextos a una sola base de datos de cada motor (no puede haber dos que
+// quieran la misma tabla o el mismo índice), verifica el esquema, arranca el anfitrión sobre ella y
+// hace lo que sólo hace el conjunto: una importación que da de alta empresas en Parties, una cuenta
+// en una de ellas, su exportación escrita por las tareas de fondo, y los mensajes de todos los
+// contextos entregados.
 func TestHost(t *testing.T) {
 	for _, e := range engines {
 		if e.name == "oracle-dotnet-guids" {
@@ -72,7 +73,7 @@ func TestHost(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(applied) < 2*len(host.Migrations()) { // every context has its tables and its technical ones at least
+			if len(applied) < 2*len(host.Migrations()) { // cada contexto tiene al menos sus tablas y las técnicas
 				t.Fatalf("migrated %d steps of %d contexts", len(applied), len(host.Migrations()))
 			}
 			if err := m.Verify(ctx); err != nil {
@@ -96,7 +97,7 @@ func TestHost(t *testing.T) {
 			admin, _ := authz.NewContext(authz.Context{Subject: fw.NewUUID(), SubjectName: "admin", Kind: authz.Service, Permissions: []authz.Permission{authz.Wildcard}})
 			admin.GlobalAdmin = true
 			actx := authz.WithContext(ctx, admin)
-			// Two companies in Parties, which the import of the organization used to register.
+			// Dos empresas en Parties, las que antes daba de alta la importación de la organización.
 			for _, name := range []string{"Añil Cambios", "Karpo Servicios"} {
 				if _, err := h.Parties.Service.RegisterOrganization.Handle(actx, parapp.RegisterOrganization{LegalName: name, Roles: []string{pardomain.RoleInternalOrganization.String()}}); err != nil {
 					t.Fatal(err)
@@ -107,7 +108,7 @@ func TestHost(t *testing.T) {
 				t.Fatalf("companies: %+v %v", companies, err)
 			}
 
-			// The finance sector exists only for a financial institution: the role is given in Parties.
+			// El sector financiero sólo existe para una entidad financiera: el rol se da en Parties.
 			open := finapp.OpenAccount{Company: companies[0].ID, Number: "ES9121000418450200051332", Holder: companies[1].ID, Name: "Cuenta de pago"}
 			var rv *fw.RuleViolationError
 			if _, err := h.Financial.Service.Open.Handle(actx, open); !errors.As(err, &rv) || rv.Code != "financial.not_an_institution" {

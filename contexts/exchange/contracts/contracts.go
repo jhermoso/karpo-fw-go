@@ -1,12 +1,12 @@
-// Package contracts is what other bounded contexts may depend on: the Published Language of
-// Exchange.
+// Package contracts es aquello de lo que pueden depender otros contextos delimitados: el Published
+// Language de Exchange.
 package contracts
 
-// Source is the name of the publishing bounded context.
+// Source es el nombre del contexto delimitado que publica.
 const Source = "exchange"
 
-// ReservationRegisteredV1 is published when a customer reserves foreign cash. Pickup and ExpiresAt
-// are RFC 3339 instants in UTC; Total is in euros with two decimals.
+// ReservationRegisteredV1 se publica cuando un cliente reserva efectivo en divisa. Pickup y
+// ExpiresAt son instantes RFC 3339 en UTC; Total va en euros con dos decimales.
 type ReservationRegisteredV1 struct {
 	ReservationID string `json:"reservationId"`
 	Reference     string `json:"reference"`
@@ -19,14 +19,14 @@ type ReservationRegisteredV1 struct {
 	Total         string `json:"total"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (ReservationRegisteredV1) IntegrationEventType() string {
 	return "exchange.reservation-registered.v1"
 }
 
-// ReservationStatusChangedV1 is published on each change of status of a reservation: whoever
-// writes to the customer (email verified, cash ready, collected, cancelled, expired) and whoever
-// turns a prospect into a customer when it is collected listen to it.
+// ReservationStatusChangedV1 se publica en cada cambio de estado de una reserva: lo escuchan quien
+// escribe al cliente (correo verificado, efectivo preparado, recogida, cancelada, caducada) y quien
+// convierte un cliente potencial en cliente cuando se recoge.
 type ReservationStatusChangedV1 struct {
 	ReservationID string `json:"reservationId"`
 	Reference     string `json:"reference"`
@@ -38,7 +38,7 @@ type ReservationStatusChangedV1 struct {
 	Total         string `json:"total"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (ReservationStatusChangedV1) IntegrationEventType() string {
 	return "exchange.reservation-status-changed.v1"
 }

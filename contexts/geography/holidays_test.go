@@ -9,8 +9,8 @@ import (
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// holidays keeps the calendar of Spain and of Madrid through HTTP and asks the port about them;
-// the same on every backend.
+// holidays lleva por HTTP el calendario de España y de Madrid y pregunta por ellos al puerto; lo
+// mismo en todos los backends.
 func (e *env) holidays() {
 	t := e.t
 	ctx := context.Background()
@@ -32,11 +32,11 @@ func (e *env) holidays() {
 		return map[string]any{"boundary": boundary, "days": days}
 	}
 
-	// Each thing asks for its permission.
+	// Cada cosa pide su permiso.
 	e.must(e.do("GET", "/api/geography/holidays?boundary="+spain+"&year=2026", e.token, nil, nil), 403, "reading without the permission")
 	e.must(e.do("POST", "/api/geography/holidays", e.reader, declare(spain, day("2026-12-25", "Navidad")), nil), 403, "declaring without the permission")
 
-	// The holidays of the country, sent twice: the second time only what is new is.
+	// Los festivos del país, enviados dos veces: la segunda sólo se declara lo nuevo.
 	var made []gapp.HolidayDTO
 	e.must(e.do("POST", "/api/geography/holidays", e.keeper, declare(spain, day("2026-12-25", "  Natividad   del Señor "), day("2026-10-12", "Fiesta Nacional"),
 		day("2026-12-25", "Navidad otra vez")), &made), 201, "the holidays of Spain")
@@ -47,18 +47,18 @@ func (e *env) holidays() {
 	if len(made) != 1 || made[0].Date != "2026-12-08" {
 		t.Fatalf("only what is new: %+v", made)
 	}
-	// And those of the town.
+	// Y los del pueblo.
 	e.must(e.do("POST", "/api/geography/holidays", e.keeper, declare(madrid, day("2026-11-09", "Nuestra Señora de la Almudena"), day("2026-05-15", "San Isidro")), &made), 201, "Madrid")
 	almudena := made[0].ID
 
-	// What is not a holiday to declare.
+	// Lo que no es un festivo que declarar.
 	e.must(e.do("POST", "/api/geography/holidays", e.keeper, declare(spain), nil), 400, "no days")
 	e.must(e.do("POST", "/api/geography/holidays", e.keeper, declare(spain, day("2026-01-06", " ")), nil), 400, "no name")
 	e.must(e.do("POST", "/api/geography/holidays", e.keeper, declare("nowhere", day("2026-01-06", "Reyes")), nil), 400, "no boundary")
 	e.must(e.do("POST", "/api/geography/holidays", e.keeper, declare(fw.NewUUID().String(), day("2026-01-06", "Reyes")), nil), 404, "a boundary nobody knows")
 	e.must(e.do("GET", "/api/geography/holidays?boundary="+spain, e.keeper, nil, nil), 400, "no year")
 
-	// The calendar of the town: its own days, and with those it inherits, in the order of the year.
+	// El calendario del pueblo: sus propios días, y con los que hereda, en el orden del año.
 	var own, all []gapp.HolidayDTO
 	e.must(e.do("GET", "/api/geography/holidays?boundary="+madrid+"&year=2026", e.keeper, nil, &own), 200, "own")
 	e.must(e.do("GET", "/api/geography/holidays?boundary="+madrid+"&year=2026&inherited=true", e.keeper, nil, &all), 200, "inherited")
@@ -76,7 +76,7 @@ func (e *env) holidays() {
 		t.Fatalf("2027: %+v", next)
 	}
 
-	// What other contexts ask: a day is a holiday where it is declared and in what is inside.
+	// Lo que preguntan otros contextos: un día es festivo donde se declara y en lo que hay dentro.
 	is := func(boundary, date string) bool {
 		t.Helper()
 		ok, err := e.mod.Holidays.IsHoliday(ctx, boundary, date)
@@ -93,7 +93,7 @@ func (e *env) holidays() {
 		t.Fatalf("a day written otherwise: %v", err)
 	}
 
-	// A place by the code the official calendars give it.
+	// Un lugar por el código que le dan los calendarios oficiales.
 	for code, name := range map[string]string{"es": "Spain", "ES-MD": "Comunidad de Madrid", "28": "Madrid", " 28079 ": "Madrid", "ES-CT": "Cataluña"} {
 		if ref, err := e.mod.Holidays.Locate(ctx, code); err != nil || ref.Name != name || ref.ID == "" {
 			t.Fatalf("%q: %+v %v", code, ref, err)
@@ -109,7 +109,7 @@ func (e *env) holidays() {
 		}
 	}
 
-	// Removing one declared by mistake.
+	// Quitar uno declarado por error.
 	e.must(e.do("DELETE", "/api/geography/holidays/"+almudena, e.reader, nil, nil), 403, "removing without the permission")
 	e.must(e.do("DELETE", "/api/geography/holidays/"+almudena, e.keeper, nil, nil), 200, "removing")
 	e.must(e.do("DELETE", "/api/geography/holidays/"+almudena, e.keeper, nil, nil), 404, "removing twice")
@@ -118,7 +118,7 @@ func (e *env) holidays() {
 		t.Fatal("removed")
 	}
 
-	// An island has days of its own: its towns keep them, and those of another island do not.
+	// Una isla tiene días propios: sus pueblos los celebran, y los de otra isla no.
 	var island, towns, others fw.Page[gapp.BoundaryDTO]
 	e.must(e.do("GET", "/api/geography/boundaries?q=la%20palma&level=3", e.token, nil, &island), 200, "an island")
 	if island.Total != 1 || island.Items[0].NUTS != "ES707" {

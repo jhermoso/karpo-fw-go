@@ -6,7 +6,7 @@ import (
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// FacilityRegistered is raised when a facility is registered.
+// FacilityRegistered se lanza cuando se da de alta una instalación.
 type FacilityRegistered struct {
 	fw.EventMeta
 	Organization string `json:"organization"`
@@ -16,50 +16,50 @@ type FacilityRegistered struct {
 	Address      string `json:"address,omitempty"`
 }
 
-// EventType implements domain.Event.
+// EventType implementa domain.Event.
 func (FacilityRegistered) EventType() string { return "facilities.facility_registered" }
 
-// FacilityRenamed is raised when a facility changes its name.
+// FacilityRenamed se lanza cuando una instalación cambia de nombre.
 type FacilityRenamed struct {
 	fw.EventMeta
 	Name string `json:"name"`
 }
 
-// EventType implements domain.Event.
+// EventType implementa domain.Event.
 func (FacilityRenamed) EventType() string { return "facilities.facility_renamed" }
 
-// FacilityRelocated is raised when the location changes.
+// FacilityRelocated se lanza cuando cambia la ubicación.
 type FacilityRelocated struct {
 	fw.EventMeta
 	Address string `json:"address,omitempty"`
 	Phone   string `json:"phone,omitempty"`
 }
 
-// EventType implements domain.Event.
+// EventType implementa domain.Event.
 func (FacilityRelocated) EventType() string { return "facilities.facility_relocated" }
 
-// FacilityMoved is raised when the facility becomes part of another one (or is detached).
+// FacilityMoved se lanza cuando la instalación pasa a formar parte de otra (o se separa).
 type FacilityMoved struct {
 	fw.EventMeta
 	PartOf string `json:"partOf,omitempty"`
 }
 
-// EventType implements domain.Event.
+// EventType implementa domain.Event.
 func (FacilityMoved) EventType() string { return "facilities.facility_moved" }
 
-// FacilityActivationChanged is raised when a facility is activated or deactivated.
+// FacilityActivationChanged se lanza cuando una instalación se activa o se desactiva.
 type FacilityActivationChanged struct {
 	fw.EventMeta
 	Active bool `json:"active"`
 }
 
-// EventType implements domain.Event.
+// EventType implementa domain.Event.
 func (FacilityActivationChanged) EventType() string { return "facilities.facility_activation_changed" }
 
-// Repository stores facilities.
+// Repository guarda las instalaciones.
 type Repository = fw.Repository[FacilityID, *Facility]
 
-// Catalogs reads the facility type catalog.
+// Catalogs lee el catálogo de tipos de instalación.
 type Catalogs interface {
 	FacilityTypes(ctx context.Context) ([]FacilityType, error)
 }

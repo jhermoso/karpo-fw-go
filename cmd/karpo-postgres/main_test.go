@@ -15,9 +15,9 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/log/vanilla"
 )
 
-// TestProgram runs the program against a real PostgreSQL (KARPO_PG_DSN, the one of the integration
-// suite): it refuses to start without its configuration, migrates, serves, answers that it is
-// ready, asks for a session and lets the first administrator in, and stops when told.
+// TestProgram ejecuta el programa contra un PostgreSQL real (KARPO_PG_DSN, el de la batería de
+// integración): se niega a arrancar sin su configuración, migra, sirve, responde que está
+// listo, pide una sesión y deja entrar al primer administrador, y se para cuando se le dice.
 func TestProgram(t *testing.T) {
 	dsn := os.Getenv("KARPO_PG_DSN")
 	if dsn == "" {
@@ -86,7 +86,8 @@ func TestProgram(t *testing.T) {
 	if got := get("/api/financial/accounts"); got != 401 {
 		t.Fatalf("without a session: %d", got)
 	}
-	// A few rounds of delivery and chores on the real database, and it still answers.
+	// Unas cuantas rondas de entrega y de tareas periódicas sobre la base real, y sigue
+	// respondiendo.
 	time.Sleep(time.Second)
 	if got := get("/healthz"); got != 200 {
 		t.Fatalf("after the chores: %d", got)

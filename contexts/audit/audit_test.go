@@ -36,8 +36,9 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/testing/archtest"
 )
 
-// host composes Assets, Modules and Audit: the history of an asset is guarded by the query that
-// loads it; the catalog of Modules has no company, so its history is for global administrators.
+// host compone Assets, Modules y Audit: el historial de un activo lo guarda la consulta que lo
+// carga; el catálogo de Modules no tiene empresa, así que su historial es para administradores
+// globales.
 type host struct {
 	t        *testing.T
 	srv      *httptest.Server
@@ -131,7 +132,7 @@ func (h *host) scenario(tag string) {
 		}
 	}
 
-	// An asset with a life: registered, depreciated a quarter, sold.
+	// Un activo con historia: dado de alta, amortizado un trimestre, vendido.
 	van, err := h.assets.Service.Register.Handle(ctx, sapp.RegisterAsset{Company: acme, Code: "FUR-" + tag, Name: "Furgoneta", Class: "vehicles",
 		Acquired: vocab.MustDate(2026, 1, 10), InService: vocab.MustDate(2026, 1, 16), Cost: "12000", Residual: "2000", LifeMonths: 48})
 	ok(err)
@@ -172,7 +173,7 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("the registration: %+v", trail[0])
 	}
 
-	// A kind of aggregate without a guard: only a global administrator.
+	// Un tipo de agregado sin guarda: sólo un administrador global.
 	feature, err := h.modules.Service.Define.Handle(ctx, mapp.DefineFeature{Kind: "module", Code: "tpv-" + tag, Name: "TPV"})
 	ok(err)
 	fid, _ := mdomain.ParseFeatureID(feature.ID)
@@ -227,6 +228,6 @@ func TestAudit_ReadsTheHistoryOfWhatYouCanSee_MemoryThenSQLite(t *testing.T) {
 }
 
 func TestAudit_LayersRespectTheArchitecture(t *testing.T) {
-	// Audit knows no other context: the host wires them.
+	// Audit no conoce ningún otro contexto: el anfitrión los conecta.
 	archtest.AssertTreeDoesNotImport(t, "application", []string{"/pkg/persistence", "/pkg/distribution", "database/sql", "net/http", "/contexts/"})
 }

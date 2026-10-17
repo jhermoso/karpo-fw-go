@@ -9,8 +9,8 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
 )
 
-// Builder translates specification expressions into SQL for one statement, collecting bind
-// arguments. It is handed to CustomSQL translators.
+// Builder traduce a SQL las expresiones de especificación de una sentencia, y va reuniendo los
+// argumentos enlazados. Se entrega a los traductores CustomSQL.
 type Builder struct {
 	d      Dialect
 	args   []any
@@ -37,16 +37,17 @@ func (b *Builder) newAlias() string {
 	return a
 }
 
-// Dialect returns the target dialect.
+// Dialect devuelve el dialecto de destino.
 func (b *Builder) Dialect() Dialect { return b.d }
 
-// Alias returns the alias of the table in the current scope.
+// Alias devuelve el alias de la tabla del ámbito en curso.
 func (b *Builder) Alias() string { return b.scope.alias }
 
-// Args returns the bind arguments collected so far.
+// Args devuelve los argumentos enlazados reunidos hasta ahora.
 func (b *Builder) Args() []any { return b.args }
 
-// Column returns the qualified, quoted column of a logical field in the current scope.
+// Column devuelve la columna, cualificada y entrecomillada, de un campo lógico en el ámbito en
+// curso.
 func (b *Builder) Column(field string) (string, error) {
 	col, ok := b.scope.tbl.fields[field]
 	if !ok {
@@ -55,7 +56,7 @@ func (b *Builder) Column(field string) (string, error) {
 	return b.scope.alias + "." + b.d.Quote(col), nil
 }
 
-// Arg binds v (converted for the dialect) and returns its placeholder expression.
+// Arg enlaza v (convertido para el dialecto) y devuelve la expresión de su marcador.
 func (b *Builder) Arg(v any) (string, error) {
 	dv, err := toDriver(b.d, v)
 	if err != nil {
@@ -69,7 +70,7 @@ func (b *Builder) Arg(v any) (string, error) {
 	return ph, nil
 }
 
-// Translate converts an expression to a SQL boolean condition in the current scope.
+// Translate convierte una expresión en una condición booleana SQL en el ámbito en curso.
 func (b *Builder) Translate(e spec.Expr) (string, error) {
 	switch n := e.(type) {
 	case nil:

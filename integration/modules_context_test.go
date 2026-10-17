@@ -17,10 +17,10 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 )
 
-// TestModulesContext runs Modules on every engine: the seed catalog added once, the catalog in
-// order and its unique codes, activations with their timestamps round trip, the single sector of
-// a company, retirement, what a scoped caller and a global administrator see, the port other
-// contexts ask and the Published Language in the outbox.
+// TestModulesContext ejecuta Modules en cada motor: el catálogo semilla añadido una sola vez, el
+// catálogo en orden y sus códigos únicos, ida y vuelta de las activaciones con sus marcas de tiempo,
+// el sector único de una empresa, la retirada, lo que ven quien llama con ámbito y un administrador
+// global, el puerto al que preguntan otros contextos y el Published Language en el outbox.
 func TestModulesContext(t *testing.T) {
 	for _, e := range engines {
 		if e.name == "oracle-dotnet-guids" {
@@ -119,7 +119,7 @@ func TestModulesContext(t *testing.T) {
 			if err != nil || !slices.Equal(orgs, want) {
 				t.Fatalf("who has sales: %v %v", orgs, err)
 			}
-			// A caller of Acme and Globex sees the union; a global administrator, what is offered.
+			// Quien llama desde Acme y Globex ve la unión; un administrador global, lo que se ofrece.
 			member, _ := authz.NewContext(authz.Context{Subject: fw.NewUUID(), SubjectName: "member", Kind: authz.Service,
 				Grants: []authz.Grant{{OrganizationID: acme, Level: authz.Full}, {OrganizationID: globex, Level: authz.Full}}})
 			cur, err := svc.Current.Handle(authz.WithContext(ctx, member), mapp.GetCurrent{})
@@ -137,7 +137,7 @@ func TestModulesContext(t *testing.T) {
 			if of, err := mm.Features.Of(ctx, globex.String(), "module"); err != nil || !slices.Equal(of, []string{"crm", "ventas"}) {
 				t.Fatalf("port: %v %v", of, err)
 			}
-			// Seven switched on, plus retail and inventario switched off.
+			// Siete encendidos, más retail e inventario apagados.
 			if n, err := mm.Relay(inprocess.NewBroker()).RelayOnce(ctx); err != nil || n != 9 {
 				t.Fatalf("published: %d %v", n, err)
 			}

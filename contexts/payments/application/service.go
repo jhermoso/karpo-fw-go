@@ -1,6 +1,7 @@
-// Package application holds the Payments use cases (with permissions and company scope), the
-// subscriptions that turn payslips and tax forms into payables and executed transfers into
-// payments, the port Treasury reads and the translation to the Published Language.
+// Package application contiene los casos de uso de Payments (con permisos y ámbito de empresa),
+// las suscripciones que convierten nóminas y modelos fiscales en obligaciones de pago y las
+// transferencias ejecutadas en pagos, el puerto que lee Treasury y la traducción al Published
+// Language.
 package application
 
 import (
@@ -21,8 +22,8 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Permissions (the C# generated 12 Payments.* codes and enforced none). Maintaining what is owed
-// and paying it are separate permissions.
+// Permisos (el C# generaba 12 códigos Payments.* y no hacía cumplir ninguno). Mantener lo que se
+// debe y pagarlo son permisos distintos.
 var (
 	PermPayableRead  = authz.MustPermission("Payments.Payable.Read")
 	PermPayableWrite = authz.MustPermission("Payments.Payable.Update")
@@ -30,7 +31,7 @@ var (
 	PermPaymentWrite = authz.MustPermission("Payments.Payment.Update")
 )
 
-// Deps are the ports the use cases need; Recorder, Audit and NetPay are optional.
+// Deps son los puertos que necesitan los casos de uso; Recorder, Audit y NetPay son opcionales.
 type Deps struct {
 	Payables domain.PayableRepository
 	Payments domain.PaymentRepository
@@ -40,7 +41,7 @@ type Deps struct {
 	Audit    app.AuditLog
 }
 
-// Service exposes the use cases.
+// Service expone los casos de uso.
 type Service struct {
 	SetPayTo       app.CommandHandler[SetPayTo, PayableDTO]
 	CancelPayable  app.CommandHandler[CancelPayable, PayableDTO]
@@ -73,7 +74,7 @@ func scopeOf(ctx context.Context) scope {
 	return s
 }
 
-// check returns a uniform 404 outside the company's scope and 403 when it is read-only.
+// check devuelve un 404 uniforme fuera del ámbito de la empresa y un 403 cuando es de sólo lectura.
 func (s scope) check(kind string, id fmt.Stringer, org domain.OrganizationID, write bool) error {
 	if !s.global && !slices.Contains(s.orgs, org) {
 		return fw.NotFound(kind, id)
@@ -114,7 +115,7 @@ func newService(d Deps) service {
 	}
 }
 
-// NewService wires the use cases.
+// NewService conecta los casos de uso.
 func NewService(d Deps) *Service {
 	s := newService(d)
 	svc := &Service{}
@@ -150,7 +151,7 @@ func retry[In, Out any]() app.Middleware[In, Out] {
 	return pipeline.RetryOnConflict[In, Out](5, 10*time.Millisecond)
 }
 
-// Publications translates the domain events into the Published Language.
+// Publications traduce los eventos de dominio al Published Language.
 func Publications(r *messaging.Recorder) *messaging.Recorder {
 	messaging.On(r, func(_ context.Context, e domain.PaymentAllocated) ([]app.IntegrationEvent, error) {
 		return []app.IntegrationEvent{contracts.PaymentAllocatedV1{PaymentID: e.AggregateID, Company: e.Company, Payee: e.Payee, Method: e.Method,

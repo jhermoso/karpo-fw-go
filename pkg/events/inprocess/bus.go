@@ -1,4 +1,4 @@
-// Package inprocess provides an in-memory implementation of application.Dispatcher.
+// Package inprocess ofrece una implementación en memoria de application.Dispatcher.
 package inprocess
 
 import (
@@ -15,20 +15,20 @@ type subscription struct {
 	handler application.EventHandler
 }
 
-// Bus is a thread-safe in-memory event dispatcher. Handlers run synchronously in the
-// publisher's goroutine; errors from several handlers are joined.
+// Bus es un despachador de eventos en memoria y seguro entre goroutines. Los manejadores se ejecutan
+// de forma síncrona en la goroutine del publicador; los errores de varios manejadores se juntan.
 type Bus struct {
 	mu          sync.RWMutex
 	counter     uint64
 	subscribers map[string][]subscription
 }
 
-// New creates a new Bus.
+// New crea un Bus nuevo.
 func New() *Bus {
 	return &Bus{subscribers: make(map[string][]subscription)}
 }
 
-// Subscribe registers a handler for an event type (or application.WildcardEventType).
+// Subscribe registra un manejador para un tipo de evento (o application.WildcardEventType).
 func (b *Bus) Subscribe(eventType string, handler application.EventHandler) func() {
 	b.mu.Lock()
 	b.counter++
@@ -49,7 +49,7 @@ func (b *Bus) Subscribe(eventType string, handler application.EventHandler) func
 	}
 }
 
-// Publish runs every handler subscribed to evt.EventType() and to the wildcard.
+// Publish ejecuta todos los manejadores suscritos a evt.EventType() y al comodín.
 func (b *Bus) Publish(ctx context.Context, evt domain.Event) error {
 	if evt == nil {
 		return errors.New("inprocess: cannot publish nil event")

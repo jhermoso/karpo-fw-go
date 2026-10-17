@@ -49,7 +49,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/testing/archtest"
 )
 
-// host composes Parties, Facilities, HR, Payroll and Fiscal on one hot-swappable backend.
+// host compone Parties, Facilities, HR, Payroll y Fiscal sobre un único backend intercambiable en caliente.
 type host struct {
 	t        *testing.T
 	srv      *httptest.Server
@@ -160,7 +160,7 @@ func relay(t *testing.T, r interface {
 	}
 }
 
-// payslip drafts, fills and approves the payslip of a month: salary and IRPF at a rate.
+// payslip prepara, rellena y aprueba la nómina de un mes: salario e IRPF a un tipo.
 func (h *host) payslip(person, employer string, month time.Month, salary, rate string) yapp.PayslipDTO {
 	ctx, svc := h.adminCtx, h.payroll.Service
 	start := vocab.MustDate(2026, month, 1)
@@ -181,7 +181,7 @@ func (h *host) scenario(tag string) {
 	ctx := h.adminCtx
 	ps := h.parties.Service
 
-	// Tax catalog: legal data, its own permission; one rate per code at a time.
+	// Catálogo fiscal: datos legales, con su propio permiso; un tipo por código a la vez.
 	var g21 fapp.RateDTO
 	rate := map[string]any{"type": "vat", "territory": "common", "code": "G" + tag, "description": "General", "rate": "21", "surcharge": "5.2", "from": "2012-09-01"}
 	h.must(h.do("POST", "/api/fiscal/tax-rates", "clerk", rate, nil), 403, "the catalog is not the clerk's")
@@ -203,7 +203,7 @@ func (h *host) scenario(tag string) {
 	h.must(h.do("POST", "/api/fiscal/tax-treatments", "legal", map[string]any{"territory": "common", "code": "E" + tag, "description": "Otra",
 		"kind": "exempt"}, nil), 422, "duplicate treatment")
 
-	// Parties, HR and Payroll: Acme employs Ana and Bea.
+	// Parties, HR y Payroll: Acme emplea a Ana y a Bea.
 	org := func(name string) papp.PartyDTO {
 		o, err := ps.RegisterOrganization.Handle(ctx, papp.RegisterOrganization{LegalName: name + " " + tag, Roles: []string{pdomain.RoleInternalOrganization.String()}})
 		h.ok(err)
@@ -250,14 +250,14 @@ func (h *host) scenario(tag string) {
 	h.ok(err)
 	h.payslip(ana.ID, acme.ID, time.February, "2100", "15")
 	h.payslip(bea.ID, acme.ID, time.February, "1500", "10")
-	h.payslip(ana.ID, acme.ID, time.April, "2100", "15") // second quarter
+	h.payslip(ana.ID, acme.ID, time.April, "2100", "15") // segundo trimestre
 
-	// Payroll → Fiscal through the inbox.
+	// Payroll → Fiscal a través del inbox.
 	broker := inprocess.NewBroker()
 	broker.Subscribe("fiscal", h.fiscal.Consumer)
 	relay(t, h.payroll.Relay(broker))
 
-	// Taxpayer profile and obligations.
+	// Perfil del contribuyente y obligaciones.
 	var tp fapp.TaxpayerDTO
 	h.must(h.do("POST", "/api/fiscal/taxpayers", "clerk", map[string]any{"organization": acme.ID, "territory": "common", "fiscalYearStartMonth": 1}, &tp), 201, "taxpayer")
 	h.must(h.do("POST", "/api/fiscal/taxpayers", "clerk", map[string]any{"organization": acme.ID, "territory": "common", "fiscalYearStartMonth": 1}, nil), 422, "one profile")
@@ -271,7 +271,7 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("taxpayer: %+v", tp)
 	}
 
-	// Modelo 111 of the first quarter: by payment date, the cancelled payslip out.
+	// Modelo 111 del primer trimestre: por fecha de pago, sin la nómina anulada.
 	var q1 fapp.FilingDTO
 	h.must(h.do("POST", "/api/fiscal/filings", "clerk", map[string]any{"organization": acme.ID, "form": "111", "year": 2026, "period": "02"}, nil), 422, "the 111 is quarterly")
 	h.must(h.do("POST", "/api/fiscal/filings", "clerk", map[string]any{"organization": acme.ID, "form": "303", "year": 2026, "period": "1T"}, nil), 422, "no 303 obligation")
@@ -284,7 +284,7 @@ func (h *host) scenario(tag string) {
 	h.must(h.do("POST", "/api/fiscal/filings", "clerk", map[string]any{"organization": acme.ID, "form": "111", "year": 2026, "period": "1T"}, nil), 422, "already submitted")
 	h.must(h.do("GET", "/api/fiscal/filings/"+q1.ID, "outsider", nil, nil), 404, "outsider")
 
-	// Modelo 190: Bea has no tax number nor address yet.
+	// Modelo 190: Bea todavía no tiene NIF ni dirección.
 	var y fapp.FilingDTO
 	h.must(h.do("POST", "/api/fiscal/filings", "clerk", map[string]any{"organization": acme.ID, "form": "190", "year": 2026, "period": "0A"}, &y), 201, "190")
 	if len(y.Problems) != 2 || y.Perceptions != "7700.00" || y.Withheld != "1080.00" || len(y.Lines) != 2 {
@@ -307,7 +307,8 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("numbers per form: 111 %d, 190 %d", q1.Number, y.Number)
 	}
 
-	// Revert frees the slot (the C# kept it blocked); the new submission takes the next number.
+	// Revertir libera el hueco (el C# lo dejaba bloqueado); la presentación nueva toma el número
+	// siguiente.
 	h.must(h.do("POST", "/api/fiscal/filings/"+q1.ID+"/revert", "submitter", map[string]any{"reason": "complementaria"}, nil), 200, "revert")
 	var q1b fapp.FilingDTO
 	h.must(h.do("POST", "/api/fiscal/filings", "clerk", map[string]any{"organization": acme.ID, "form": "111", "year": 2026, "period": "1T"}, &q1b), 201, "again")

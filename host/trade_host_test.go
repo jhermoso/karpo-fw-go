@@ -16,8 +16,8 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlite"
 )
 
-// tradeHost is a started host with a global administrator, for the scenarios that build their own
-// companies, people and documents.
+// tradeHost es un anfitrión arrancado con un administrador global, para los escenarios que
+// construyen sus propias empresas, personas y documentos.
 type tradeHost struct {
 	t    *testing.T
 	h    *host.Host

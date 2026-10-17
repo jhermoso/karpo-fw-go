@@ -8,8 +8,8 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
 )
 
-// Repository returns a domain.Repository that always delegates to the repository of the backend
-// currently serving the operation (pinned unit of work, or the current backend).
+// Repository devuelve un domain.Repository que siempre delega en el repositorio del backend
+// que atiende la operación en ese momento (la unidad de trabajo fijada, o el backend actual).
 //
 //	parties := hotswap.Repository(sw, func(b hotswap.Backend) (domain.Repository[PartyID, *Party], error) {
 //		switch db := b.(type) {
@@ -82,7 +82,7 @@ func (r *repository[ID, T]) Delete(ctx context.Context, agg T) error {
 	})
 }
 
-// Outbox returns an application.OutboxStore that follows the Switch.
+// Outbox devuelve un application.OutboxStore que sigue al Switch.
 func Outbox(s *Switch, factory func(Backend) (application.OutboxStore, error)) application.OutboxStore {
 	return &outbox{b: Bind(s, factory)}
 }
@@ -111,7 +111,7 @@ func (o *outbox) MarkFailed(ctx context.Context, id string, cause error) error {
 	return o.b.With(ctx, func(ctx context.Context, x application.OutboxStore) error { return x.MarkFailed(ctx, id, cause) })
 }
 
-// AuditLog returns an application.AuditLog that follows the Switch.
+// AuditLog devuelve un application.AuditLog que sigue al Switch.
 func AuditLog(s *Switch, factory func(Backend) (application.AuditLog, error)) application.AuditLog {
 	return &auditLog{b: Bind(s, factory)}
 }
@@ -132,7 +132,7 @@ func (a *auditLog) Trail(ctx context.Context, aggregateType, aggregateID string)
 	return out, err
 }
 
-// Inbox returns an application.InboxStore that follows the Switch.
+// Inbox devuelve un application.InboxStore que sigue al Switch.
 func Inbox(s *Switch, factory func(Backend) (application.InboxStore, error)) application.InboxStore {
 	return &inbox{b: Bind(s, factory)}
 }

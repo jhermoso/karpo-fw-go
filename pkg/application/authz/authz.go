@@ -1,17 +1,17 @@
-// Package authz holds the authorization contracts of Karpo: the Go port of the C# "contrato de
-// autorización v1" (Fw.Application.Contracts/Authorization).
+// Package authz reúne los contratos de autorización de Karpo: el port a Go del «contrato de
+// autorización v1» de C# (Fw.Application.Contracts/Authorization).
 //
-// A request is authorized in two steps:
-//  1. an Authenticator turns credentials (a bearer token) into a Principal;
-//  2. a Resolver turns the Principal and the requested organization scope into a Resolution:
-//     Allow with a Context, Deny with a reason, or Indeterminate when the security source is
-//     unavailable (fail closed, never an empty "default" context).
+// Una petición se autoriza en dos pasos:
+//  1. un Authenticator convierte las credenciales (un token bearer) en un Principal;
+//  2. un Resolver convierte el Principal y el ámbito de organizaciones pedido en una Resolution:
+//     Allow con un Context, Deny con un motivo, o Indeterminate cuando la fuente de seguridad no
+//     está disponible (falla cerrado, nunca un contexto vacío «por defecto»).
 //
-// The Context travels in context.Context (WithContext / FromContext) instead of a scoped DI
-// accessor, and is consumed by the application layer: pipeline.RequirePermission checks
-// permissions for any entry point (HTTP, jobs, messages), CanWrite enforces organization access
-// levels and ScopeSpec restricts queries to the effective organizations as a specification
-// translated to SQL. There is no "Legacy" mode: without a context, protected operations fail.
+// El Context viaja en context.Context (WithContext / FromContext) en lugar de en un accesor de DI
+// con ámbito, y lo consume la capa de aplicación: pipeline.RequirePermission comprueba los permisos
+// en cualquier punto de entrada (HTTP, trabajos, mensajes), CanWrite hace cumplir los niveles de
+// acceso por organización y ScopeSpec restringe las consultas a las organizaciones efectivas como
+// una especificación traducida a SQL. No hay modo «Legacy»: sin contexto, las operaciones protegidas fallan.
 package authz
 
 import (
@@ -25,27 +25,27 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// ActorKind distinguishes human users, service principals and the system.
+// ActorKind distingue usuarios humanos, principales de servicio y el sistema.
 type ActorKind string
 
-// Actor kinds.
+// Tipos de actor.
 const (
 	Human   ActorKind = "human"
 	Service ActorKind = "service"
 	System  ActorKind = "system"
 )
 
-// Principal is an authenticated caller, as produced by an Authenticator from its credentials.
+// Principal es un llamante autenticado, tal como lo produce un Authenticator a partir de sus credenciales.
 type Principal struct {
-	Subject domain.UUID       // security user or service principal id ("sub")
-	Name    string            // user name ("username")
-	PartyID domain.UUID       // the Party behind a human user ("partyId")
-	Kind    ActorKind         // human or service ("actorKind")
-	Claims  map[string]string // any other claim, for resolvers that need it
+	Subject domain.UUID       // id del usuario de seguridad o del principal de servicio ("sub")
+	Name    string            // nombre de usuario ("username")
+	PartyID domain.UUID       // la Party que hay detrás de un usuario humano ("partyId")
+	Kind    ActorKind         // humano o servicio ("actorKind")
+	Claims  map[string]string // cualquier otro claim, para los resolutores que lo necesiten
 }
 
-// Complete reports whether the principal has the minimum data the contract requires
-// (a missing one resolves to Deny "incomplete-principal" -> 401).
+// Complete dice si el principal tiene los datos mínimos que exige el contrato
+// (si falta alguno, se resuelve en Deny "incomplete-principal" -> 401).
 func (p Principal) Complete() bool {
 	if p.Subject.IsZero() || strings.TrimSpace(p.Name) == "" {
 		return false
@@ -53,55 +53,55 @@ func (p Principal) Complete() bool {
 	return p.Kind == Service || !p.PartyID.IsZero()
 }
 
-// Errors of the authentication step.
+// Errores del paso de autenticación.
 var (
-	// ErrNoCredentials: the request carries no credentials.
+	// ErrNoCredentials: la petición no lleva credenciales.
 	ErrNoCredentials = fmt.Errorf("%w: no credentials", domain.ErrUnauthorized)
-	// ErrInvalidCredentials: the credentials are malformed, expired or not trusted.
+	// ErrInvalidCredentials: las credenciales están mal formadas, han caducado o no son de confianza.
 	ErrInvalidCredentials = fmt.Errorf("%w: invalid credentials", domain.ErrUnauthorized)
 )
 
-// Authenticator validates credentials. It returns an error matching domain.ErrUnauthorized when
-// they are missing or invalid (implementation: distribution/jwtauth).
+// Authenticator valida credenciales. Devuelve un error que coincide con domain.ErrUnauthorized
+// cuando faltan o no son válidas (implementación: distribution/jwtauth).
 type Authenticator interface {
 	Authenticate(ctx context.Context, credentials string) (Principal, error)
 }
 
-// Request is what a Resolver needs besides the principal.
+// Request es lo que necesita un Resolver además del principal.
 type Request struct {
-	// Credentials are the raw credentials, for resolvers that forward them (HTTP mode).
+	// Credentials son las credenciales en bruto, para los resolutores que las reenvían (modo HTTP).
 	Credentials string
-	// RequestedOrganizations is the validated X-Organization-Scope (nil when absent).
+	// RequestedOrganizations es el X-Organization-Scope validado (nil si falta).
 	RequestedOrganizations []domain.UUID
-	// CorrelationID identifies the business flow.
+	// CorrelationID identifica el flujo de negocio.
 	CorrelationID string
 }
 
-// Resolver resolves the authorization context of a principal. It must never return a partial
-// or default context: when the security source fails it returns Indeterminate.
+// Resolver resuelve el contexto de autorización de un principal. Nunca debe devolver un contexto
+// parcial o por defecto: cuando la fuente de seguridad falla, devuelve Indeterminate.
 type Resolver interface {
 	Resolve(ctx context.Context, p Principal, req Request) Resolution
 }
 
-// ResolverFunc adapts a function into a Resolver.
+// ResolverFunc adapta una función a Resolver.
 type ResolverFunc func(ctx context.Context, p Principal, req Request) Resolution
 
-// Resolve calls fn.
+// Resolve llama a fn.
 func (fn ResolverFunc) Resolve(ctx context.Context, p Principal, req Request) Resolution {
 	return fn(ctx, p, req)
 }
 
-// Outcome of a resolution.
+// Outcome es el desenlace de una resolución.
 type Outcome string
 
-// Outcomes.
+// Desenlaces.
 const (
 	Allow         Outcome = "allow"
 	Deny          Outcome = "deny"
 	Indeterminate Outcome = "indeterminate"
 )
 
-// Well-known deny reasons.
+// Motivos de denegación conocidos.
 const (
 	ReasonIncompletePrincipal = "incomplete-principal" // -> 401
 	ReasonUnknownSubject      = "unknown-subject"
@@ -110,14 +110,14 @@ const (
 	ReasonUnknownService      = "unknown-service-principal"
 )
 
-// Resolution is the result of resolving a request. Invariant: Allow <=> Context != nil.
+// Resolution es el resultado de resolver una petición. Invariante: Allow <=> Context != nil.
 type Resolution struct {
 	Outcome Outcome  `json:"outcome"`
 	Context *Context `json:"context,omitempty"`
 	Reason  string   `json:"reason,omitempty"`
 }
 
-// Allowed builds an Allow resolution (c must not be nil).
+// Allowed construye una resolución Allow (c no puede ser nil).
 func Allowed(c *Context) Resolution {
 	if c == nil {
 		panic("authz: Allow requires a context")
@@ -125,17 +125,17 @@ func Allowed(c *Context) Resolution {
 	return Resolution{Outcome: Allow, Context: c}
 }
 
-// Denied builds a Deny resolution.
+// Denied construye una resolución Deny.
 func Denied(reason string) Resolution { return Resolution{Outcome: Deny, Reason: reason} }
 
-// Undetermined builds an Indeterminate resolution (security source unavailable -> 503).
+// Undetermined construye una resolución Indeterminate (fuente de seguridad no disponible -> 503).
 func Undetermined(reason string) Resolution {
 	return Resolution{Outcome: Indeterminate, Reason: reason}
 }
 
-// Err converts a non-Allow resolution into the domain error taxonomy
-// (incomplete principal -> ErrUnauthorized, other denials -> ErrForbidden,
-// indeterminate -> ErrIndeterminate).
+// Err convierte una resolución que no es Allow en la taxonomía de errores del dominio
+// (principal incompleto -> ErrUnauthorized, otras denegaciones -> ErrForbidden,
+// indeterminada -> ErrIndeterminate).
 func (r Resolution) Err() error {
 	switch r.Outcome {
 	case Allow:
@@ -150,23 +150,23 @@ func (r Resolution) Err() error {
 	}
 }
 
-// ErrIndeterminate reports that authorization could not be decided (maps to 503).
+// ErrIndeterminate informa de que no se ha podido decidir la autorización (se traduce a 503).
 var ErrIndeterminate = errors.New("authorization indeterminate")
 
 type ctxKey struct{}
 
-// WithContext stores the authorization context in ctx.
+// WithContext guarda el contexto de autorización en ctx.
 func WithContext(ctx context.Context, c *Context) context.Context {
 	return context.WithValue(ctx, ctxKey{}, c)
 }
 
-// FromContext returns the authorization context of ctx.
+// FromContext devuelve el contexto de autorización de ctx.
 func FromContext(ctx context.Context) (*Context, bool) {
 	c, ok := ctx.Value(ctxKey{}).(*Context)
 	return c, ok && c != nil
 }
 
-// Actor returns the vocab.Actor of an authorization context (the audit identity).
+// Actor devuelve el vocab.Actor de un contexto de autorización (la identidad de auditoría).
 func (c *Context) Actor() vocab.Actor {
 	id := c.ActorPartyID
 	if id.IsZero() {
@@ -177,7 +177,7 @@ func (c *Context) Actor() vocab.Actor {
 
 func containsUUID(xs []domain.UUID, x domain.UUID) bool { return slices.Contains(xs, x) }
 
-// Subject is the security snapshot of a human subject, as stored by the Security bounded context.
+// Subject es la instantánea de seguridad de un sujeto humano, tal como la guarda el contexto delimitado Security.
 type Subject struct {
 	Active      bool
 	Locked      bool
@@ -186,9 +186,9 @@ type Subject struct {
 	Grants      []Grant
 }
 
-// Directory is the port through which the generic resolver reads the security snapshot of a
-// subject (implemented by the Security bounded context over its repositories). It returns
-// found=false for an unknown subject and an error only when the source is unavailable.
+// Directory es el puerto por el que el resolutor genérico lee la instantánea de seguridad de un
+// sujeto (lo implementa el contexto delimitado Security sobre sus repositorios). Devuelve
+// found=false para un sujeto desconocido y un error sólo cuando la fuente no está disponible.
 type Directory interface {
 	Subject(ctx context.Context, id domain.UUID) (s Subject, found bool, err error)
 }

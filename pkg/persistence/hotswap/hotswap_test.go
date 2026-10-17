@@ -24,8 +24,8 @@ import (
 
 type widgetRepo = domain.Repository[rt.WidgetID, *rt.Widget]
 
-// factory builds the Widget repository for whatever backend is current: the same domain
-// repository value works over SQL (any dialect) and memory.
+// factory construye el repositorio de Widget para el backend que esté vigente: el mismo valor de
+// repositorio de dominio funciona sobre SQL (cualquier dialecto) y sobre memoria.
 func factory(b hotswap.Backend) (widgetRepo, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -53,7 +53,7 @@ func openSQLite(t *testing.T, path, name string) *sqlrepo.DB {
 		t.Fatal(err)
 	}
 	raw.SetMaxOpenConns(1)
-	t.Cleanup(func() { _ = raw.Close() }) // Windows cannot delete open database files
+	t.Cleanup(func() { _ = raw.Close() }) // Windows no puede borrar ficheros de base de datos abiertos
 	return sqlite.Open(raw, sqlrepo.WithName(name))
 }
 
@@ -95,7 +95,7 @@ func TestSwap_RoutesNewOperationsAndClosesOldBackend(t *testing.T) {
 		t.Fatal("old backend must be closed after the swap drained")
 	}
 
-	// The data written before the swap is still in A.
+	// Los datos escritos antes del cambio siguen en A.
 	reopened := openSQLite(t, pathA, "A2")
 	defer reopened.Close()
 	if _, err := sqlrepo.MustRepository(reopened, sqlconformance.WidgetMapping()).Get(ctx, onA.ID()); err != nil {
@@ -120,7 +120,7 @@ func TestSwap_InFlightUnitOfWorkStaysOnItsBackend(t *testing.T) {
 				return err
 			}
 			close(inTx)
-			<-release // the swap happens while this transaction is open
+			<-release // el cambio ocurre mientras esta transacción está abierta
 			return repo.Save(ctx, txWidget)
 		})
 	}()
@@ -129,7 +129,7 @@ func TestSwap_InFlightUnitOfWorkStaysOnItsBackend(t *testing.T) {
 	swapDone := make(chan error, 1)
 	go func() { swapDone <- sw.Swap(ctx, dbB) }()
 
-	// New operations are routed to B immediately, while the transaction still runs on A.
+	// Las operaciones nuevas van a B de inmediato, mientras la transacción sigue en A.
 	deadline := time.Now().Add(5 * time.Second)
 	for sw.Name() != "B" && time.Now().Before(deadline) {
 		time.Sleep(time.Millisecond)

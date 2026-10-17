@@ -9,8 +9,8 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// DefaultOutboxTable is the default outbox table name. Each dialect package provides the DDL
-// (OutboxDDL) for its engine.
+// DefaultOutboxTable es el nombre por defecto de la tabla del outbox. Cada paquete de dialecto
+// aporta el DDL (OutboxDDL) de su motor.
 const DefaultOutboxTable = "outbox_messages"
 
 var outboxColumns = []string{
@@ -18,14 +18,14 @@ var outboxColumns = []string{
 	"payload", "occurred_at", "correlation_id", "causation_id", "attempts", "last_error",
 }
 
-// Outbox is the SQL implementation of application.OutboxStore. Append joins the unit of work in
-// ctx, so events commit atomically with the aggregate state.
+// Outbox es la implementación SQL de application.OutboxStore. Append se une a la unidad de
+// trabajo de ctx, así que los eventos hacen commit de forma atómica con el estado del agregado.
 type Outbox struct {
 	db    *DB
 	table string
 }
 
-// NewOutbox creates an outbox on db using table (DefaultOutboxTable when empty).
+// NewOutbox crea un outbox sobre db con la tabla table (DefaultOutboxTable si está vacía).
 func NewOutbox(db *DB, table string) (*Outbox, error) {
 	if table == "" {
 		table = DefaultOutboxTable
@@ -38,7 +38,7 @@ func NewOutbox(db *DB, table string) (*Outbox, error) {
 
 func (o *Outbox) q(s string) string { return o.db.d.Quote(s) }
 
-// Append inserts messages in the current unit of work.
+// Append inserta los mensajes en la unidad de trabajo en curso.
 func (o *Outbox) Append(ctx context.Context, msgs ...application.OutboxMessage) error {
 	if len(msgs) == 0 {
 		return nil
@@ -71,7 +71,8 @@ func (o *Outbox) Append(ctx context.Context, msgs ...application.OutboxMessage) 
 	})
 }
 
-// Pending returns unprocessed messages below maxAttempts, oldest first.
+// Pending devuelve los mensajes sin procesar por debajo de maxAttempts, del más antiguo al más
+// reciente.
 func (o *Outbox) Pending(ctx context.Context, limit, maxAttempts int) ([]application.OutboxMessage, error) {
 	if limit <= 0 {
 		limit = 100
@@ -116,7 +117,7 @@ func (o *Outbox) Pending(ctx context.Context, limit, maxAttempts int) ([]applica
 	return out, nil
 }
 
-// MarkProcessed flags a message as delivered.
+// MarkProcessed marca un mensaje como entregado.
 func (o *Outbox) MarkProcessed(ctx context.Context, id string) error {
 	b := &Builder{d: o.db.d}
 	tsPh, _ := b.Arg(domain.Now())
@@ -126,7 +127,7 @@ func (o *Outbox) MarkProcessed(ctx context.Context, id string) error {
 	return err
 }
 
-// MarkFailed increments the attempt counter and stores the error.
+// MarkFailed incrementa el contador de intentos y guarda el error.
 func (o *Outbox) MarkFailed(ctx context.Context, id string, cause error) error {
 	msg := ""
 	if cause != nil {
