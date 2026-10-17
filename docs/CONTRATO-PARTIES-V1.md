@@ -488,6 +488,27 @@ de la pareja.
 
 Los códigos distintos son la decisión 12 de §7 ter (409 o 422), todavía abierta.
 
+### Lo que hay en Go (2026-10-17)
+
+Hecho, en el anfitrión (`host/pairs.go`), la lectura: `POST /api/customer-relationships/search`,
+`GET /api/customer-relationships/{id}` y lo mismo para `supplier-relationships`. El alta no está
+hecha: hoy una pareja se crea con el alta de la party con su afiliación o con
+`POST /api/party-relationships`, y sus datos en Cobros, Pedidos y Compras con sus rutas.
+
+| Qué | En Go |
+|---|---|
+| Filtro | `text`, `kinds`, `document`, `role` (identificador), `includeEndedRoles`, `includeMergedParties`, `active`, `internalOrganizationIds`, `includeEnded` (relaciones terminadas), `customerNumber`, `blocked`. Uno desconocido, 400 |
+| Orden | `name` (por defecto), `customerNumber`, `creditLimit`, `blocked`, `internalOrganization`, `since`. Otro, 400 que los enumera |
+| Fila común | `id` (la relación), `partyId`, `name`, `kind`, `taxId`, `country`, `active`, `test`, `roles` (nombres de los vigentes), `internalOrganizationId`, `internalOrganizationName`, `since`, `until` |
+| De cliente | `customerNumber` (Parties); `creditLimit` (Cobros; nulo: sin límite); `blockOrders` (bloqueo por crédito de Cobros o de pedidos de Pedidos); `blockDelivery` (Pedidos) |
+| De proveedor | `blockInvoices` (Compras: no se registran facturas nuevas) |
+| Sin datos | `externalCode`, `branch` y `blockReason` no existen en Go |
+| Permisos | Leer relaciones de Parties. Lo que quien llama no puede leer de Cobros, Pedidos o Compras queda sin rellenar, sin error |
+
+Diferencias con el borrador de arriba: el filtro por rol va por identificador y no por código
+todavía; el proveedor lleva `blockInvoices` en lugar de `blockOrders` y `blockReceipts`, que en Go
+no existen.
+
 ### Lo que esto pide a Go
 
 Los datos de la pareja viven en tres contextos: el número de cliente en Parties, el límite y el

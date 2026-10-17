@@ -51,8 +51,9 @@ type Service struct {
 	SearchTerms app.QueryHandler[SearchTerms, []TermsDTO]
 	Preview     app.QueryHandler[PreviewSchedule, []DueDTO]
 
-	SetCredit   app.CommandHandler[SetCredit, CreditDTO]
-	GetExposure app.QueryHandler[GetExposure, contracts.Exposure]
+	SetCredit    app.CommandHandler[SetCredit, CreditDTO]
+	SearchCredit app.QueryHandler[SearchCredit, []CreditDTO]
+	GetExposure  app.QueryHandler[GetExposure, contracts.Exposure]
 
 	GetReceivable     app.QueryHandler[GetReceivable, ReceivableDTO]
 	SearchReceivables app.QueryHandler[SearchReceivables, fw.Page[ReceivableDTO]]

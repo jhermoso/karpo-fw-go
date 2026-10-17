@@ -75,6 +75,7 @@ type Service struct {
 	Get                     app.QueryHandler[GetParty, PartyDTO]
 	Search                  app.QueryHandler[SearchParties, fw.Page[PartyDTO]]
 	Relationships           app.QueryHandler[PartyRelationships, []RelationshipDTO]
+	Pairs                   app.QueryHandler[SearchPairs, []PairDTO]
 	InternalOrganizations   app.QueryHandler[ListInternalOrganizations, []PartyDTO]
 	ListRoleTypes           app.QueryHandler[ListRoleTypes, []RoleTypeDTO]
 	DefineRoleType          app.CommandHandler[DefineRoleType, RoleTypeDTO]
@@ -441,68 +442,19 @@ func NewService(d Deps) *Service {
 		if err != nil {
 			return fw.Page[PartyDTO]{}, err
 		}
-		now := fw.Now()
-		parts := []spec.Specification[*domain.Party]{s.scope(ctx).parties(now)}
-		if t := strings.TrimSpace(q.Text); t != "" {
-			parts = append(parts, domain.NameContains(t))
+		where, err := s.partyFilter(ctx, n, q)
+		if err != nil {
+			return fw.Page[PartyDTO]{}, err
 		}
-		if q.Kind != "" {
-			parts = append(parts, domain.OfKind(domain.Kind(q.Kind)))
-		}
-		if q.ActiveOnly {
-			parts = append(parts, domain.Active())
-		}
-		if q.DocumentIssue {
-			parts = append(parts, domain.FieldDocumentIssue.Eq(true))
-		}
-		if !q.IncludeMergedParties {
-			parts = append(parts, domain.FieldDuplicate.Eq(false))
-		}
-		if q.Role != "" {
-			role, err := parseRoleType(q.Role)
-			if err != nil {
-				return fw.Page[PartyDTO]{}, err
-			}
-			if q.IncludeEndedRoles {
-				parts = append(parts, domain.HasPlayed(n.Roles.Descendants(role)...))
-			} else {
-				parts = append(parts, domain.PlaysAt(now, n.Roles.Descendants(role)...))
-			}
-		}
-		if doc := strings.TrimSpace(q.Document); doc != "" {
-			parts = append(parts, domain.WithDocumentNumber(vocab.NormalizeDocumentNumber(doc)).Or(
-				domain.WithDocumentNumber(strings.ToUpper(strings.Join(strings.Fields(doc), "")))))
-		}
-		if q.Classification != "" {
-			typ, err := domain.ParseClassificationTypeID(q.Classification)
-			if err != nil {
-				var v fw.Validation
-				v.Add("classification", "format", "classification must be a classification id")
-				return fw.Page[PartyDTO]{}, v.Err()
-			}
-			parts = append(parts, domain.ClassifiedAt(now, typ))
-		}
-		if q.Facility != "" {
-			at, err := facilitySpec(q.Facility)
-			if err != nil {
-				return fw.Page[PartyDTO]{}, err
-			}
-			parts = append(parts, at)
-		}
-		if q.Organization != "" {
-			org, err := domain.ParsePartyID(q.Organization)
-			if err != nil {
-				var v fw.Validation
-				v.Add("organization", "format", "organization must be a party id")
-				return fw.Page[PartyDTO]{}, v.Err()
-			}
-			parts = append(parts, domain.AffiliatedAt(now, org))
-		}
-		page, err := d.Parties.FindPage(ctx, spec.And(parts...), fw.NewPageRequest(q.Page, q.Size, domain.FieldName.Asc()))
+		page, err := d.Parties.FindPage(ctx, where, fw.NewPageRequest(q.Page, q.Size, domain.FieldName.Asc()))
 		if err != nil {
 			return fw.Page[PartyDTO]{}, err
 		}
 		return fw.MapPage(page, n.dto), nil
+	})
+
+	svc.Pairs = chain(PermRelationshipRead, func(ctx context.Context, q SearchPairs) ([]PairDTO, error) {
+		return s.pairs(ctx, q)
 	})
 
 	svc.Relationships = chain(PermRelationshipRead, func(ctx context.Context, q PartyRelationships) ([]RelationshipDTO, error) {
@@ -708,4 +660,67 @@ func parseRoleType(s string) (domain.RoleTypeID, error) {
 		return domain.RoleTypeID{}, v.Err()
 	}
 	return id, nil
+}
+
+// partyFilter es el filtro de la búsqueda de parties, dentro del ámbito de quien llama. Lo
+// comparten la búsqueda de parties y la de parejas, que lo aplica al tercero.
+func (s service) partyFilter(ctx context.Context, n Names, q SearchParties) (spec.Spec[*domain.Party], error) {
+	now := fw.Now()
+	parts := []spec.Specification[*domain.Party]{s.scope(ctx).parties(now)}
+	if t := strings.TrimSpace(q.Text); t != "" {
+		parts = append(parts, domain.NameContains(t))
+	}
+	if q.Kind != "" {
+		parts = append(parts, domain.OfKind(domain.Kind(q.Kind)))
+	}
+	if q.ActiveOnly {
+		parts = append(parts, domain.Active())
+	}
+	if q.DocumentIssue {
+		parts = append(parts, domain.FieldDocumentIssue.Eq(true))
+	}
+	if !q.IncludeMergedParties {
+		parts = append(parts, domain.FieldDuplicate.Eq(false))
+	}
+	if q.Role != "" {
+		role, err := parseRoleType(q.Role)
+		if err != nil {
+			return spec.Spec[*domain.Party]{}, err
+		}
+		if q.IncludeEndedRoles {
+			parts = append(parts, domain.HasPlayed(n.Roles.Descendants(role)...))
+		} else {
+			parts = append(parts, domain.PlaysAt(now, n.Roles.Descendants(role)...))
+		}
+	}
+	if doc := strings.TrimSpace(q.Document); doc != "" {
+		parts = append(parts, domain.WithDocumentNumber(vocab.NormalizeDocumentNumber(doc)).Or(
+			domain.WithDocumentNumber(strings.ToUpper(strings.Join(strings.Fields(doc), "")))))
+	}
+	if q.Classification != "" {
+		typ, err := domain.ParseClassificationTypeID(q.Classification)
+		if err != nil {
+			var v fw.Validation
+			v.Add("classification", "format", "classification must be a classification id")
+			return spec.Spec[*domain.Party]{}, v.Err()
+		}
+		parts = append(parts, domain.ClassifiedAt(now, typ))
+	}
+	if q.Facility != "" {
+		at, err := facilitySpec(q.Facility)
+		if err != nil {
+			return spec.Spec[*domain.Party]{}, err
+		}
+		parts = append(parts, at)
+	}
+	if q.Organization != "" {
+		org, err := domain.ParsePartyID(q.Organization)
+		if err != nil {
+			var v fw.Validation
+			v.Add("organization", "format", "organization must be a party id")
+			return spec.Spec[*domain.Party]{}, v.Err()
+		}
+		parts = append(parts, domain.AffiliatedAt(now, org))
+	}
+	return spec.And(parts...), nil
 }

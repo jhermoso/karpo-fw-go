@@ -281,7 +281,7 @@ func (h *Host) Handler() http.Handler {
 	protected := http.NewServeMux()
 	for _, m := range []distribution.EndpointModule{h.Geography.HTTP, h.Geography.HolidaysHTTP, h.Facilities, h.Parties.HTTP, h.Security.HTTP, h.Products, h.Fiscal, h.HR, h.Payroll,
 		h.Receivables, h.Inventory, h.Orders, h.Billing, h.Purchases, h.Payments, h.Treasury, h.Accounting, h.Assets, h.Documents, h.Shipments, h.Work,
-		h.Financial, h.Exchange, h.Modules, h.Exports, h.Audit, h.Deliveries} {
+		h.Financial, h.Exchange, h.Modules, h.Exports, h.Audit, h.Deliveries, h.Pairs()} {
 		m.RegisterRoutes(protected)
 	}
 	mux := http.NewServeMux()
