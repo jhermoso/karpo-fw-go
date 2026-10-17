@@ -94,7 +94,7 @@ func TestAuthenticators_FirstThatRecognizesTheCredentialsWins(t *testing.T) {
 	if _, err := authorization.Authenticators(own, own).Authenticate(ctx, "token"); !errors.Is(err, authz.ErrInvalidCredentials) {
 		t.Fatalf("nobody recognizes the token: %v", err)
 	}
-	// An outage is never reported as a wrong token (401): the caller sees the failure.
+	// Una caída nunca se informa como token erróneo (401): quien llama ve el fallo.
 	_, err = authorization.Authenticators(fixedAuthenticator{err: down}, own).Authenticate(ctx, "token")
 	if !errors.Is(err, down) || errors.Is(err, authz.ErrInvalidCredentials) {
 		t.Fatalf("outage: %v", err)

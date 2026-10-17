@@ -38,10 +38,10 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 )
 
-// TestAssetsContext runs Assets with Purchases, Fiscal, Accounting and Parties on every engine:
-// the purchase of an asset booked as an investment, the register round trip with its charges in
-// order, the depreciation run (charged once), a scrapping and a sale, and the entries Accounting
-// posts for each month and each disposal through its SQL inbox.
+// TestAssetsContext ejecuta Assets con Purchases, Fiscal, Accounting y Parties en cada motor:
+// la compra de un activo registrada como inversión, la ida y vuelta del inventario con sus cargos
+// en orden, la amortización (cargada una sola vez), un desguace y una venta, y los asientos que
+// Accounting contabiliza por cada mes y cada baja a través de su inbox SQL.
 func TestAssetsContext(t *testing.T) {
 	for _, e := range engines {
 		if e.name == "oracle-dotnet-guids" {
@@ -135,7 +135,7 @@ func TestAssetsContext(t *testing.T) {
 				}
 			}
 
-			// The purchase of the van and the computer is an investment.
+			// La compra de la furgoneta y del ordenador es una inversión.
 			_, err = um.Service.RegisterInvoice.Handle(actx, uapp.RegisterInvoice{Company: acme.ID, Supplier: dealer.ID, SupplierNumber: "V-2026-17",
 				Issued: vocab.MustDate(2026, 1, 9), Received: vocab.MustDate(2026, 1, 10), Due: vocab.MustDate(2026, 2, 9), Total: "15972.00",
 				Lines: []uapp.LineInput{{Category: "fixed-asset", Base: "12000", TaxCode: "G21"}, {Category: "fixed-asset", Base: "1200", TaxCode: "G21"}}})

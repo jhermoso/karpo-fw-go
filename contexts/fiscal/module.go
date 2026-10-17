@@ -1,4 +1,4 @@
-// Package fiscal composes the Fiscal bounded context on a hot-swap backend.
+// Package fiscal compone el contexto delimitado Fiscal sobre un backend intercambiable en caliente.
 package fiscal
 
 import (
@@ -21,20 +21,20 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 )
 
-// Module is the composed context.
+// Module es el contexto compuesto.
 type Module struct {
 	Service *fapp.Service
 	Rates   contracts.Rates
-	// TaxEngine calculates indirect taxes with the jurisdiction of the seller (Spain today).
+	// TaxEngine calcula los impuestos indirectos con la jurisdicción del vendedor (hoy, España).
 	TaxEngine         contracts.TaxEngine
 	IntegrationOutbox application.OutboxStore
 	Audit             application.AuditLog
-	// Consumer receives the Payroll and Purchases events that feed the withholding forms:
-	// subscribe it to the transport.
+	// Consumer recibe los eventos de Payroll y Purchases que alimentan los modelos de retenciones:
+	// hay que suscribirlo al transporte.
 	Consumer *messaging.Consumer
 }
 
-// Compose builds the context on sw. Fiscal needs the tax identities of Parties.
+// Compose monta el contexto sobre sw. Fiscal necesita las identidades fiscales de Parties.
 func Compose(sw *hotswap.Switch, identities domain.Identities) *Module {
 	rates := hotswap.Repository(sw, infrastructure.TaxRateRepositoryFactory)
 	withholdings := hotswap.Repository(sw, infrastructure.WithholdingRepositoryFactory)
@@ -56,7 +56,7 @@ func Compose(sw *hotswap.Switch, identities domain.Identities) *Module {
 		IntegrationOutbox: integration, Audit: audit, Consumer: consumer}
 }
 
-// Relay forwards the Published Language to a transport.
+// Relay reenvía el Published Language a un transporte.
 func (m *Module) Relay(sender application.MessageSender, opts ...outbox.RelayOption) *outbox.Relay {
 	return messaging.NewRelay(contracts.Source, m.IntegrationOutbox, sender, opts...)
 }
@@ -76,7 +76,8 @@ func badID(w http.ResponseWriter, r *http.Request) {
 	distribution.WriteError(w, r, fmt.Errorf("%w: invalid id", fw.ErrValidation))
 }
 
-// command handles POST/PUT /{id}/...: it parses the id, decodes the body and lets set place the id.
+// command atiende POST/PUT /{id}/...: interpreta el id, decodifica el cuerpo y deja que set
+// coloque el id.
 func command[ID, In, Out any](parse func(string) (ID, error), set func(*In, ID), run func(context.Context, In) (Out, error)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := parse(r.PathValue("id"))
@@ -109,12 +110,12 @@ func create[In, Out any](run func(context.Context, In) (Out, error)) http.Handle
 	}
 }
 
-// RegisterRoutes implements distribution.EndpointModule.
+// RegisterRoutes implementa distribution.EndpointModule.
 func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	svc := m.Service
 	rate, treat, tp, fil := domain.ParseTaxRateID, domain.ParseTreatmentID, domain.ParseTaxpayerID, domain.ParseFilingID
 
-	// Catalogs.
+	// Catálogos.
 	mux.HandleFunc("POST /api/fiscal/tax-rates", create(svc.CreateRate.Handle))
 	mux.HandleFunc("GET /api/fiscal/tax-rates", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -130,7 +131,7 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	})
 	mux.HandleFunc("POST /api/fiscal/tax-treatments/{id}/retire", command(treat, func(c *fapp.RetireTreatment, id domain.TreatmentID) { c.ID = id }, svc.RetireTreatment.Handle))
 
-	// Taxpayers.
+	// Contribuyentes.
 	mux.HandleFunc("POST /api/fiscal/taxpayers", create(svc.RegisterTaxpayer.Handle))
 	mux.HandleFunc("GET /api/fiscal/taxpayers", func(w http.ResponseWriter, r *http.Request) {
 		out, err := svc.GetTaxpayer.Handle(r.Context(), fapp.GetTaxpayer{Organization: r.URL.Query().Get("organization")})
@@ -151,7 +152,7 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/fiscal/taxpayers/{id}/obligations", command(tp, func(c *fapp.AddObligation, id domain.TaxpayerID) { c.ID = id }, svc.AddObligation.Handle))
 	mux.HandleFunc("POST /api/fiscal/taxpayers/{id}/obligations/end", command(tp, func(c *fapp.EndObligation, id domain.TaxpayerID) { c.ID = id }, svc.EndObligation.Handle))
 
-	// Filings.
+	// Declaraciones.
 	mux.HandleFunc("POST /api/fiscal/filings", create(svc.GenerateFiling.Handle))
 	mux.HandleFunc("GET /api/fiscal/filings", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -184,7 +185,7 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/fiscal/filings/{id}/submit", command(fil, func(c *fapp.SubmitFiling, id domain.FilingID) { c.ID = id }, svc.SubmitFiling.Handle))
 	mux.HandleFunc("POST /api/fiscal/filings/{id}/revert", command(fil, func(c *fapp.RevertFiling, id domain.FilingID) { c.ID = id }, svc.RevertFiling.Handle))
 
-	// Rate lookup for other contexts.
+	// Consulta de tipos para otros contextos.
 	mux.Handle("GET /api/fiscal/rate", distribution.RequirePermission(fapp.PermCatalogRead, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		ref, ok, err := m.Rates.RateOn(r.Context(), q.Get("type"), q.Get("territory"), q.Get("code"), q.Get("on"))

@@ -7,27 +7,27 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// MaxPremisesPiece is the longest a piece of Premises may be.
+// MaxPremisesPiece es la longitud máxima de una pieza de Premises.
 const MaxPremisesPiece = 10
 
-// Premises says where in the street an address is, in the pieces Spanish forms ask for one by
-// one: "Mayor 5 bis, bloque 2, portal A, escalera B, 3.º izquierda". All optional. An address
-// that has them keeps the name of the street alone in its first line.
+// Premises dice en qué punto de la calle está una dirección, en las piezas que los formularios
+// españoles piden una a una: "Mayor 5 bis, bloque 2, portal A, escalera B, 3.º izquierda". Todas
+// opcionales. Una dirección que las tiene deja sólo el nombre de la calle en su primera línea.
 type Premises struct {
-	Number    string // street number: "5", "5-7", "s/n", "km 12,5"
-	Qualifier string // what follows the number: "bis", "duplicado"
+	Number    string // número de la calle: "5", "5-7", "s/n", "km 12,5"
+	Qualifier string // lo que sigue al número: "bis", "duplicado"
 	Block     string
 	Portal    string
 	Staircase string
 	Floor     string
-	Door      string // door or letter: "izquierda", "B"
+	Door      string // puerta o letra: "izquierda", "B"
 }
 
-// IsZero reports whether no piece is given.
+// IsZero dice si no se ha dado ninguna pieza.
 func (p Premises) IsZero() bool { return p == Premises{} }
 
-// Normalized trims the pieces and collapses their spaces. Each piece holds MaxPremisesPiece
-// characters at most; the errors name the field under prefix ("address.floor").
+// Normalized recorta las piezas y colapsa sus espacios. Cada pieza admite como mucho
+// MaxPremisesPiece caracteres; los errores nombran el campo bajo prefix ("address.floor").
 func (p Premises) Normalized(prefix string) (Premises, error) {
 	clean := func(s string) string { return strings.Join(strings.Fields(s), " ") }
 	p = Premises{Number: clean(p.Number), Qualifier: clean(p.Qualifier), Block: clean(p.Block), Portal: clean(p.Portal),
@@ -43,7 +43,7 @@ func (p Premises) Normalized(prefix string) (Premises, error) {
 	return p, v.Err()
 }
 
-// String renders the pieces the Spanish way, to follow the name of the street.
+// String escribe las piezas a la manera española, para ir detrás del nombre de la calle.
 func (p Premises) String() string {
 	out := strings.TrimSpace(p.Number + " " + p.Qualifier)
 	for _, part := range []struct{ label, value string }{{"bloque", p.Block}, {"portal", p.Portal}, {"escalera", p.Staircase},

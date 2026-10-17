@@ -1,5 +1,6 @@
-// Package application holds the Parties use cases: typed commands and queries, their handlers
-// decorated with the framework middleware, and the DTOs exposed to the transport layer.
+// Package application contiene los casos de uso de Parties: comandos y consultas tipados, sus
+// manejadores decorados con el middleware del framework y los DTO expuestos a la capa de
+// transporte.
 package application
 
 import (
@@ -17,14 +18,14 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/trace"
 )
 
-// ContactDTO is the transport representation of a contact.
+// ContactDTO es la representación de transporte de un contacto.
 type ContactDTO struct {
 	Kind    string `json:"kind"`
 	Value   string `json:"value"`
 	Primary bool   `json:"primary"`
 }
 
-// PartyDTO is the transport representation of a party.
+// PartyDTO es la representación de transporte de una party.
 type PartyDTO struct {
 	ID           domain.PartyID `json:"id"`
 	Type         string         `json:"type"`
@@ -38,7 +39,7 @@ type PartyDTO struct {
 	Contacts     []ContactDTO   `json:"contacts"`
 }
 
-// ToDTO maps the aggregate to its DTO.
+// ToDTO convierte el agregado en su DTO.
 func ToDTO(p *domain.Party) PartyDTO {
 	contacts := make([]ContactDTO, 0, len(p.Contacts()))
 	for _, c := range p.Contacts() {
@@ -51,15 +52,15 @@ func ToDTO(p *domain.Party) PartyDTO {
 	}
 }
 
-// RegisterParty registers a new party.
+// RegisterParty da de alta una party nueva.
 type RegisterParty struct {
 	Type      string `json:"type"`
 	LegalName string `json:"legalName"`
 	TaxID     string `json:"taxId"`
-	RequestID string `json:"-"` // Idempotency-Key header
+	RequestID string `json:"-"` // cabecera Idempotency-Key
 }
 
-// Validate implements application.Validatable.
+// Validate implementa application.Validatable.
 func (c RegisterParty) Validate() error {
 	var v fw.Validation
 	v.Require(c.Type == string(domain.Person) || c.Type == string(domain.Organization), "type", "enum", "type must be person or organization")
@@ -70,16 +71,16 @@ func (c RegisterParty) Validate() error {
 	return v.Err()
 }
 
-// IdempotencyKey implements application.IdempotencyKeyed.
+// IdempotencyKey implementa application.IdempotencyKeyed.
 func (c RegisterParty) IdempotencyKey() string { return c.RequestID }
 
-// RenameParty changes the legal name.
+// RenameParty cambia la razón social.
 type RenameParty struct {
 	ID        domain.PartyID `json:"-"`
 	LegalName string         `json:"legalName"`
 }
 
-// AddContact adds a contact mechanism.
+// AddContact añade un medio de contacto.
 type AddContact struct {
 	ID      domain.PartyID `json:"-"`
 	Kind    string         `json:"kind"`
@@ -87,11 +88,11 @@ type AddContact struct {
 	Primary bool           `json:"primary"`
 }
 
-// GetParty loads one party.
+// GetParty carga una party.
 type GetParty struct{ ID domain.PartyID }
 
-// SearchParties searches parties; every criterion becomes part of one specification executed by
-// the store (filtering, ordering and paging in the database).
+// SearchParties busca parties; cada criterio pasa a formar parte de una especificación que
+// ejecuta el almacén (filtrado, orden y paginación en la base de datos).
 type SearchParties struct {
 	Text        string
 	ActiveOnly  bool
@@ -100,7 +101,7 @@ type SearchParties struct {
 	Page, Size  int
 }
 
-// Specification builds the search specification.
+// Specification construye la especificación de búsqueda.
 func (q SearchParties) Specification() spec.Spec[*domain.Party] {
 	parts := []spec.Specification[*domain.Party]{}
 	if q.Text != "" {
@@ -118,7 +119,7 @@ func (q SearchParties) Specification() spec.Spec[*domain.Party] {
 	return spec.And(parts...)
 }
 
-// Service exposes the Parties use cases as decorated, statically typed handlers.
+// Service expone los casos de uso de Parties como manejadores decorados y de tipado estático.
 type Service struct {
 	Register   app.CommandHandler[RegisterParty, PartyDTO]
 	Rename     app.CommandHandler[RenameParty, PartyDTO]
@@ -127,7 +128,7 @@ type Service struct {
 	Search     app.QueryHandler[SearchParties, fw.Page[PartyDTO]]
 }
 
-// NewService wires the use cases. recorder (outbox) and audit are optional.
+// NewService conecta los casos de uso. recorder (outbox) y audit son opcionales.
 func NewService(repo domain.Repository, uow fw.UnitOfWork, recorder app.EventRecorder, idem app.IdempotencyStore, audit app.AuditLog) *Service {
 	var opts []orchestration.Option
 	if recorder != nil {
@@ -207,9 +208,9 @@ func NewService(repo domain.Repository, uow fw.UnitOfWork, recorder app.EventRec
 	}
 }
 
-// Observe adds the use case telemetry (pipeline.Observed) around every handler and returns the
-// service: one span, one duration and, on failure, one line per execution. Call it once from the
-// composition root; any argument may be nil.
+// Observe añade la telemetría de casos de uso (pipeline.Observed) alrededor de cada manejador y
+// devuelve el servicio: un span, una duración y, si falla, una línea por ejecución. Se llama una
+// vez desde la raíz de composición; cualquier argumento puede ser nil.
 func (s *Service) Observe(logger log.Logger, tracer trace.Tracer, meter metrics.Meter) *Service {
 	s.Register = app.Chain(s.Register, pipeline.Observed[RegisterParty, PartyDTO](logger, tracer, meter))
 	s.Rename = app.Chain(s.Rename, pipeline.Observed[RenameParty, PartyDTO](logger, tracer, meter))

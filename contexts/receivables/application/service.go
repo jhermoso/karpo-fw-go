@@ -1,5 +1,5 @@
-// Package application holds the Receivables use cases (with permissions and seller scope), the
-// Billing subscription that opens receivables, the Credit port and the translation to its
+// Package application contiene los casos de uso de Receivables (con permisos y ámbito de vendedor),
+// la suscripción a Billing que abre los cobros pendientes, el puerto Credit y la traducción a su
 // Published Language.
 package application
 
@@ -21,7 +21,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Permissions (the C# payment endpoints required authentication only).
+// Permisos (los endpoints de pagos del C# sólo pedían autenticación).
 var (
 	PermTermsRead       = authz.MustPermission("Receivables.Terms.Read")
 	PermTermsUpdate     = authz.MustPermission("Receivables.Terms.Update")
@@ -32,7 +32,7 @@ var (
 	PermCollectionWrite = authz.MustPermission("Receivables.Collection.Update")
 )
 
-// Deps are the ports the use cases need; Recorder, Audit and Calendar are optional.
+// Deps son los puertos que necesitan los casos de uso; Recorder, Audit y Calendar son opcionales.
 type Deps struct {
 	Terms       domain.TermsRepository
 	Receivables domain.ReceivableRepository
@@ -44,7 +44,7 @@ type Deps struct {
 	Audit       app.AuditLog
 }
 
-// Service exposes the use cases.
+// Service expone los casos de uso.
 type Service struct {
 	CreateTerms app.CommandHandler[CreateTerms, TermsDTO]
 	RetireTerms app.CommandHandler[RetireTerms, TermsDTO]
@@ -85,7 +85,7 @@ func scopeOf(ctx context.Context) scope {
 	return s
 }
 
-// check returns a uniform 404 outside the seller's scope and 403 when it is read-only.
+// check devuelve un 404 uniforme fuera del ámbito del vendedor y 403 cuando es de sólo lectura.
 func (s scope) check(kind string, id fmt.Stringer, org domain.OrganizationID, write bool) error {
 	if !s.global && !slices.Contains(s.orgs, org) {
 		return fw.NotFound(kind, id)
@@ -150,7 +150,7 @@ func newOrchestrators(d Deps) service {
 	}
 }
 
-// NewService wires the use cases.
+// NewService conecta los casos de uso.
 func NewService(d Deps) *Service {
 	s := newOrchestrators(d)
 	svc := &Service{}
@@ -168,7 +168,7 @@ func retry[In, Out any]() app.Middleware[In, Out] {
 	return pipeline.RetryOnConflict[In, Out](5, 10*time.Millisecond)
 }
 
-// Publications translates the domain events into the Published Language.
+// Publications traduce los eventos de dominio al Published Language.
 func Publications(r *messaging.Recorder) *messaging.Recorder {
 	messaging.On(r, func(_ context.Context, e domain.CollectionAllocated) ([]app.IntegrationEvent, error) {
 		return []app.IntegrationEvent{contracts.CollectionAllocatedV1{CollectionID: e.AggregateID, Seller: e.Seller, Payer: e.Payer, Method: e.Method,

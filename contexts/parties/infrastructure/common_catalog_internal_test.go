@@ -13,8 +13,8 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// A database seeded before the common catalog gets the types it lacks and Team among the informal
-// organizations; running the step again changes nothing.
+// Una base sembrada antes del catálogo común recibe los tipos que le faltan y Team entre las
+// organizaciones informales; volver a ejecutar el paso no cambia nada.
 func TestSeedCommonCatalog_CompletesAnEarlierSeed(t *testing.T) {
 	ctx := context.Background()
 	raw, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "catalog.db")+"?_pragma=foreign_keys(1)")
@@ -32,7 +32,7 @@ func TestSeedCommonCatalog_CompletesAnEarlierSeed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// As an earlier seed left it.
+	// Como la dejó una siembra anterior.
 	for _, q := range []string{
 		`DELETE FROM relationship_types WHERE code IN ('subsidiary', 'legal-representation', 'department-assignment', 'collaborator-contact')`,
 		`DELETE FROM role_types WHERE code IN ('club', 'group')`,
@@ -48,7 +48,7 @@ func TestSeedCommonCatalog_CompletesAnEarlierSeed(t *testing.T) {
 		}
 		return n
 	}
-	// A database from before the move: Prospect Relationship at …0016, with a relationship.
+	// Una base de antes del traslado: Prospect Relationship en …0016, con una relación.
 	for _, q := range []string{
 		`DELETE FROM relationship_types WHERE code = 'duplicate-of'`,
 		`UPDATE relationship_types SET id = '` + oldProspect + `' WHERE code = 'prospect'`,
@@ -63,7 +63,8 @@ func TestSeedCommonCatalog_CompletesAnEarlierSeed(t *testing.T) {
 		}
 	}
 
-	// A type somebody added with a code the program needs stops the step, with a message.
+	// Un tipo que alguien añadió con un código que necesita el programa detiene el paso, con un
+	// mensaje.
 	if _, err := raw.Exec(`INSERT INTO role_types (id, name, category, code) VALUES ('0f0f0f0f-0000-0000-0000-000000000001', 'Club', 0, 'club')`); err != nil {
 		t.Fatal(err)
 	}

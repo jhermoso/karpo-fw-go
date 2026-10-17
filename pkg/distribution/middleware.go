@@ -12,10 +12,10 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/log"
 )
 
-// Middleware defines a standard HTTP middleware signature.
+// Middleware define la firma estándar de un middleware HTTP.
 type Middleware func(http.Handler) http.Handler
 
-// Chain wraps a base handler with multiple middlewares executed in the order provided.
+// Chain envuelve un manejador base con varios middlewares, que se ejecutan en el orden dado.
 func Chain(h http.Handler, middlewares ...Middleware) http.Handler {
 	for i := len(middlewares) - 1; i >= 0; i-- {
 		h = middlewares[i](h)
@@ -23,12 +23,12 @@ func Chain(h http.Handler, middlewares ...Middleware) http.Handler {
 	return h
 }
 
-// Recovery catches unhandled panics, logs the error, and returns a JSON 500 error response with
-// the correlation id. http.ErrAbortHandler is not an error to answer: it is re-raised so net/http
-// aborts the response, as it does without Recovery.
+// Recovery captura los panics no gestionados, registra el error en el log y devuelve una respuesta
+// de error JSON 500 con el id de correlación. http.ErrAbortHandler no es un error que haya que
+// responder: se vuelve a lanzar para que net/http aborte la respuesta, como hace sin Recovery.
 //
-// Recovery is usually the outermost middleware, outside Correlation, so its request does not
-// carry the correlation id: it then takes the one Correlation already put in the response header.
+// Recovery suele ser el middleware más externo, fuera de Correlation, así que su petición no lleva
+// el id de correlación: toma entonces el que Correlation ya ha puesto en la cabecera de la respuesta.
 func Recovery(logger log.Logger) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -66,10 +66,10 @@ func Recovery(logger log.Logger) Middleware {
 	}
 }
 
-// RequestLogging logs the incoming HTTP method, path, duration, and status code.
+// RequestLogging registra en el log el método HTTP, la ruta, la duración y el código de estado.
 //
-// Prefer Observe: it logs the route pattern instead of the path, adds the trace and the cause of
-// every 5xx, and measures the request. RequestLogging stays for callers that only want the line.
+// Es preferible Observe: registra el patrón de la ruta en vez de la ruta, añade la traza y la causa
+// de cada 5xx, y mide la petición. RequestLogging se queda para quien sólo quiere la línea.
 func RequestLogging(logger log.Logger) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -95,7 +95,7 @@ func RequestLogging(logger log.Logger) Middleware {
 	}
 }
 
-// Headers read by TenantActorContext.
+// Cabeceras que lee TenantActorContext.
 const (
 	TenantHeader       = "X-Tenant-ID"
 	ActorHeader        = "X-Actor-ID"
@@ -104,14 +104,14 @@ const (
 	ChannelHeader      = "X-Channel"
 )
 
-// TenantActorContext extracts X-Tenant-ID, X-Actor-ID and X-Organization-ID into the request
-// context. When X-Actor-ID is a UUID it also sets the application actor (application.WithActor,
-// named by X-Actor-Name), which the Orchestrator uses to stamp audit data; X-Channel sets the
-// operation channel (web, mobile, device, api).
+// TenantActorContext pasa X-Tenant-ID, X-Actor-ID y X-Organization-ID al contexto de la
+// petición. Cuando X-Actor-ID es un UUID pone además el actor de aplicación (application.WithActor,
+// con el nombre de X-Actor-Name), que el Orchestrator usa para sellar los datos de auditoría;
+// X-Channel pone el canal de la operación (web, mobile, device, api).
 //
-// These headers must come from a trusted gateway that authenticated the caller: this
-// middleware does not authenticate anybody. Authenticated APIs use Authorize instead, which
-// derives the actor from the resolved authorization context and ignores these headers.
+// Estas cabeceras deben venir de una pasarela de confianza que haya autenticado a quien llama:
+// este middleware no autentica a nadie. Las API autenticadas usan en su lugar Authorize, que
+// deduce el actor del contexto de autorización resuelto e ignora estas cabeceras.
 func TenantActorContext() Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -145,13 +145,14 @@ func TenantActorContext() Middleware {
 	}
 }
 
-// CorrelationHeader carries the correlation id of a business flow across services.
+// CorrelationHeader lleva el id de correlación de un flujo de negocio de un servicio a otro.
 const CorrelationHeader = "X-Correlation-ID"
 
-// Correlation propagates X-Correlation-ID (generating one when absent) into the application
-// context, so logs and outbox messages of the whole flow share it, and echoes it in the response.
-// A client value that is not a ValidCorrelationID (too long for the columns that store it, or
-// with characters that could forge log lines) is replaced by a new one and never echoed.
+// Correlation propaga X-Correlation-ID (y genera uno si falta) al contexto de aplicación, para que
+// los logs y los mensajes del outbox de todo el flujo lo compartan, y lo devuelve en la respuesta.
+// Un valor del cliente que no es un ValidCorrelationID (demasiado largo para las columnas que lo
+// guardan, o con caracteres que podrían falsear líneas de log) se sustituye por uno nuevo y nunca
+// se devuelve.
 func Correlation() Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -165,7 +166,7 @@ func Correlation() Middleware {
 	}
 }
 
-// CORS provides standard permissive Cross-Origin Resource Sharing headers for API endpoints.
+// CORS pone las cabeceras estándar y permisivas de Cross-Origin Resource Sharing en los endpoints de la API.
 func CORS() Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

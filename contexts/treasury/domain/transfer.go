@@ -13,35 +13,35 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// TransferOrderKind is the stable aggregate type name.
+// TransferOrderKind es el nombre estable del tipo de agregado.
 const TransferOrderKind = "treasury.transfer_order"
 
-// PayableID identifies a payable of the Payments context.
+// PayableID identifica una obligación de pago del contexto Payments.
 type PayableID struct{ fw.UUID }
 
-// TransferOrderID identifies a transfer order.
+// TransferOrderID identifica una orden de transferencias.
 type TransferOrderID struct{ fw.UUID }
 
-// Transfer is a credit transfer of an order: one account of a payable.
+// Transfer es una transferencia de una orden: una cuenta de una obligación de pago.
 type Transfer struct {
-	EndToEnd  string // the payable and the account line, unique
+	EndToEnd  string // la obligación y la línea de cuenta, único
 	Payable   PayableID
 	Line      int
 	Document  string
-	Payee     string // party id, or the tax authority
+	Payee     string // id de party, o la administración tributaria
 	PayeeName string
 	IBAN      vocab.IBAN
 	Amount    vocab.Decimal
 	Rejected  vocab.Date
-	Reason    string // ISO 20022 reason (AC01, AC04, AM05…)
+	Reason    string // motivo ISO 20022 (AC01, AC04, AM05…)
 }
 
-// TransferOrderState is the persisted state of a transfer order.
+// TransferOrderState es el estado persistido de una orden de transferencias.
 type TransferOrderState struct {
 	Debtor        OrganizationID
 	Account       AccountID
 	ExecutionDate vocab.Date
-	Status        RemittanceStatus // draft, generated, settled or cancelled, as a remittance
+	Status        RemittanceStatus // borrador, generada, liquidada o anulada, como una remesa
 	Transfers     []Transfer
 	GeneratedAt   time.Time
 	DebtorName    string
@@ -51,15 +51,15 @@ type TransferOrderState struct {
 	Audit         traits.AuditStamp
 }
 
-// TransferOrder is a batch of SEPA credit transfers of a company from one of its accounts, paying
-// what Payments owes (nothing of this existed in the C#: no pain.001, no Norma 34).
+// TransferOrder es un lote de transferencias SEPA de una empresa desde una de sus cuentas, que paga
+// lo que debe Payments (nada de esto existía en el C#: ni pain.001 ni Norma 34).
 type TransferOrder struct {
 	fw.BaseAggregateRoot[TransferOrderID]
 	traits.Audited
 	s TransferOrderState
 }
 
-// ReconstituteTransferOrder rebuilds a transfer order.
+// ReconstituteTransferOrder reconstruye una orden de transferencias.
 func ReconstituteTransferOrder(id TransferOrderID, s TransferOrderState) (*TransferOrder, error) {
 	base, err := fw.NewBaseAggregateRoot(TransferOrderKind, id)
 	if err != nil {
@@ -78,19 +78,19 @@ func ReconstituteTransferOrder(id TransferOrderID, s TransferOrderState) (*Trans
 	return &TransferOrder{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// DraftTransferOrder creates a draft.
+// DraftTransferOrder crea un borrador.
 func DraftTransferOrder(id TransferOrderID, debtor OrganizationID, account AccountID, execution vocab.Date) (*TransferOrder, error) {
 	return ReconstituteTransferOrder(id, TransferOrderState{Debtor: debtor, Account: account, ExecutionDate: execution, Status: RemDraft})
 }
 
-// State returns the state (transfers are a copy).
+// State devuelve el estado (las transferencias son una copia).
 func (o *TransferOrder) State() TransferOrderState {
 	s := o.s
 	s.Transfers = slices.Clone(s.Transfers)
 	return s
 }
 
-// Total returns the sum of the transfers (rejected ones included).
+// Total devuelve la suma de las transferencias (rechazadas incluidas).
 func (o *TransferOrder) Total() vocab.Decimal {
 	t := vocab.DecimalFromInt(0)
 	for _, x := range o.s.Transfers {
@@ -106,14 +106,14 @@ func (o *TransferOrder) mustBeDraft() error {
 	return nil
 }
 
-// TransferEndToEnd builds the end-to-end id of a transfer: the payable (32 hex digits) and the
-// account line, 35 characters at most.
+// TransferEndToEnd construye el id end-to-end de una transferencia: la obligación (32 dígitos
+// hexadecimales) y la línea de cuenta, como mucho 35 caracteres.
 func TransferEndToEnd(p PayableID, line int) string {
 	return strings.ReplaceAll(p.String(), "-", "") + "-" + vocab.DecimalFromInt(int64(line)).String()
 }
 
-// Add adds a transfer. Invariants: a positive amount in cents, an IBAN, one transfer per account
-// line of a payable.
+// Add añade una transferencia. Invariantes: un importe positivo en céntimos, un IBAN, una
+// transferencia por línea de cuenta de una obligación.
 func (o *TransferOrder) Add(t Transfer) error {
 	if err := o.mustBeDraft(); err != nil {
 		return err
@@ -133,7 +133,7 @@ func (o *TransferOrder) Add(t Transfer) error {
 	return nil
 }
 
-// Remove removes the transfers of a payable.
+// Remove quita las transferencias de una obligación.
 func (o *TransferOrder) Remove(p PayableID) error {
 	if err := o.mustBeDraft(); err != nil {
 		return err
@@ -146,14 +146,14 @@ func (o *TransferOrder) Remove(p PayableID) error {
 	return nil
 }
 
-// Debtor is what the file needs of the paying company.
+// Debtor es lo que el fichero necesita de la empresa que paga.
 type Debtor struct {
 	Name string
 	IBAN vocab.IBAN
 	BIC  string
 }
 
-// Generate freezes the order with the debtor data.
+// Generate congela la orden con los datos del deudor.
 func (o *TransferOrder) Generate(d Debtor, at time.Time) error {
 	if err := o.mustBeDraft(); err != nil {
 		return err
@@ -170,7 +170,7 @@ func (o *TransferOrder) Generate(d Debtor, at time.Time) error {
 	return nil
 }
 
-// Settle records that the bank executed the order on a date.
+// Settle registra que el banco ejecutó la orden en una fecha.
 func (o *TransferOrder) Settle(on vocab.Date) error {
 	if o.s.Status != RemGenerated {
 		return fw.Violation("treasury.order_not_generated", "only a generated order is settled")
@@ -183,7 +183,8 @@ func (o *TransferOrder) Settle(on vocab.Date) error {
 	return nil
 }
 
-// Reject records a transfer rejected or returned by the payee's bank (after execution).
+// Reject registra una transferencia rechazada o devuelta por el banco del beneficiario (después de
+// la ejecución).
 func (o *TransferOrder) Reject(endToEnd string, on vocab.Date, reason string) error {
 	if o.s.Status != RemSettled {
 		return fw.Violation("treasury.order_not_settled", "only an executed order has rejections")
@@ -205,7 +206,7 @@ func (o *TransferOrder) Reject(endToEnd string, on vocab.Date, reason string) er
 	return nil
 }
 
-// Cancel cancels an order that was not executed.
+// Cancel anula una orden que no se ejecutó.
 func (o *TransferOrder) Cancel() error {
 	if o.s.Status == RemSettled || o.s.Status == RemCancelled {
 		return fw.Violation("treasury.order_closed", "an executed or cancelled order does not change")
@@ -214,12 +215,12 @@ func (o *TransferOrder) Cancel() error {
 	return nil
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (o *TransferOrder) AuditSnapshot() map[string]any {
 	return map[string]any{"status": o.s.Status.String(), "transfers": len(o.s.Transfers), "total": o.Total().String()}
 }
 
-// Transfer order fields.
+// Campos de la orden de transferencias.
 var (
 	TrfFieldDebtor    = spec.Comparable("debtor", func(o *TransferOrder) OrganizationID { return o.s.Debtor })
 	TrfFieldStatus    = spec.Comparable("status", func(o *TransferOrder) int { return int(o.s.Status) })
@@ -228,22 +229,22 @@ var (
 	TransferFieldPay  = spec.Comparable("payable", func(t Transfer) PayableID { return t.Payable })
 )
 
-// Events of transfer orders.
+// Eventos de las órdenes de transferencias.
 type (
-	// TransferOrderGenerated is raised when the file of an order is generated.
+	// TransferOrderGenerated se lanza al generar el fichero de una orden.
 	TransferOrderGenerated struct {
 		fw.EventMeta
 		Transfers int    `json:"transfers"`
 		Total     string `json:"total"`
 	}
-	// TransfersExecuted is raised when the bank executes an order, with its transfers.
+	// TransfersExecuted se lanza cuando el banco ejecuta una orden, con sus transferencias.
 	TransfersExecuted struct {
 		fw.EventMeta
 		Debtor    string     `json:"debtor"`
 		Executed  string     `json:"executed"`
 		Transfers []Transfer `json:"transfers"`
 	}
-	// TransferRejected is raised when a transfer is rejected.
+	// TransferRejected se lanza al rechazarse una transferencia.
 	TransferRejected struct {
 		fw.EventMeta
 		Debtor   string   `json:"debtor"`
@@ -251,15 +252,15 @@ type (
 	}
 )
 
-// EventType implementations.
+// Implementaciones de EventType.
 func (TransferOrderGenerated) EventType() string { return "treasury.transfer_order_generated" }
 func (TransfersExecuted) EventType() string      { return "treasury.transfers_executed" }
 func (TransferRejected) EventType() string       { return "treasury.transfer_rejected" }
 
-// TransferOrderRepository stores transfer orders.
+// TransferOrderRepository guarda órdenes de transferencias.
 type TransferOrderRepository = fw.Repository[TransferOrderID, *TransferOrder]
 
-// PayableDue is a payable Payments has to pay by transfer, with its accounts.
+// PayableDue es una obligación que Payments tiene que pagar por transferencia, con sus cuentas.
 type PayableDue struct {
 	Payable  PayableID
 	Kind     string
@@ -269,29 +270,29 @@ type PayableDue struct {
 	PayTo    []PayableAccount
 }
 
-// PayableAccount is an account a payable is paid to.
+// PayableAccount es una cuenta a la que se paga una obligación.
 type PayableAccount struct {
 	IBAN   vocab.IBAN
 	Amount vocab.Decimal
 }
 
-// Payables is what Treasury needs of Payments (a port it owns; an adapter implements it over the
-// Payments contracts).
+// Payables es lo que Treasury necesita de Payments (un puerto propio; un adaptador lo implementa
+// sobre los contratos de Payments).
 type Payables interface {
 	DueForTransfer(ctx context.Context, debtor OrganizationID, dueTo vocab.Date) (items []PayableDue, withoutAccount int, err error)
 }
 
-// NewTransferOrderID returns a new identity.
+// NewTransferOrderID devuelve una identidad nueva.
 func NewTransferOrderID() TransferOrderID { return TransferOrderID{fw.NewUUID()} }
 
-// ParseTransferOrderID parses a textual identity.
+// ParseTransferOrderID interpreta una identidad en texto.
 func ParseTransferOrderID(s string) (TransferOrderID, error) {
 	u, err := fw.ParseUUID(s)
 	return TransferOrderID{u}, err
 }
 
-// The ISO 20022 customer credit transfer initiation (pain.001.001.03), the file SEPA banks accept
-// for credit transfers. One payment information block per order.
+// La iniciación de transferencias del cliente de ISO 20022 (pain.001.001.03), el fichero que
+// aceptan los bancos SEPA para las transferencias. Un bloque de información de pago por orden.
 
 type trfDocument struct {
 	XMLName xml.Name      `xml:"Document"`
@@ -327,7 +328,7 @@ type trfTransaction struct {
 	Remittance string     `xml:"RmtInf>Ustrd"`
 }
 
-// Pain001 renders the file of a generated order.
+// Pain001 compone el fichero de una orden generada.
 func (o *TransferOrder) Pain001() ([]byte, error) {
 	if o.s.Status == RemDraft || o.s.Status == RemCancelled {
 		return nil, fw.Violation("treasury.order_not_generated", "the file exists once the order is generated")

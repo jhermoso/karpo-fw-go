@@ -1,8 +1,8 @@
-// Package domain is the Shipments model: the physical dispatch of what a delivery note says was
-// delivered (who carries it, how, where to, in how many packages, under which tracking number,
-// when it left and when it arrived) and the carriers of a company. In C# a shipment had no
-// direction, no carrier and no tracking number, its status was a free field disconnected from its
-// history, and packages and route segments were classes without a table.
+// Package domain es el modelo de Shipments: la expedición física de lo que un albarán dice que se
+// entregó (quién lo lleva, cómo, adónde, en cuántos bultos, con qué número de seguimiento, cuándo
+// salió y cuándo llegó) y los transportistas de una empresa. En C# un envío no tenía sentido (de salida o de entrada), ni
+// transportista ni número de seguimiento, su estado era un campo libre desconectado de su historial,
+// y los bultos y los tramos de ruta eran clases sin tabla.
 package domain
 
 import (
@@ -16,62 +16,63 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Aggregate type names.
+// Nombres de los tipos de agregado.
 const (
 	ShipmentKind = "shipments.shipment"
 	CarrierKind  = "shipments.carrier"
 )
 
-// Identities of the context.
+// Identidades del contexto.
 type (
-	// ShipmentID identifies a shipment.
+	// ShipmentID identifica un envío.
 	ShipmentID struct{ fw.UUID }
-	// CarrierID identifies a carrier of a company.
+	// CarrierID identifica un transportista de una empresa.
 	CarrierID struct{ fw.UUID }
-	// OrganizationID is the company that ships, an internal organization of Parties.
+	// OrganizationID es la empresa que envía, una organización interna de Parties.
 	OrganizationID struct{ fw.UUID }
-	// PartyID is the recipient, or the party a carrier is.
+	// PartyID es el destinatario, o la party que es un transportista.
 	PartyID struct{ fw.UUID }
 )
 
-// Method is how a shipment travels (the seeded C# method types, plus the customer collecting it).
+// Method es cómo viaja un envío (los tipos de método sembrados del C#, más la recogida por el
+// cliente).
 type Method string
 
-// Methods.
+// Métodos.
 const (
 	Truck   Method = "truck"
 	Courier Method = "courier"
 	Rail    Method = "rail"
 	Air     Method = "air"
 	Ocean   Method = "ocean"
-	Pickup  Method = "pickup" // the customer collects it: no carrier
+	Pickup  Method = "pickup" // lo recoge el cliente: sin transportista
 )
 
-// Methods lists the valid methods.
+// Methods lista los métodos válidos.
 var Methods = []Method{Truck, Courier, Rail, Air, Ocean, Pickup}
 
-// Status is where a shipment is.
+// Status es dónde está un envío.
 type Status string
 
-// Statuses (the seeded C# status types; "picked" is left to the warehouse).
+// Estados (los tipos de estado sembrados del C#; «picked» se deja al almacén).
 const (
 	Scheduled Status = "scheduled"
 	InTransit Status = "in-transit"
 	Delivered Status = "delivered"
-	Returned  Status = "returned" // it could not be delivered and came back
+	Returned  Status = "returned" // no se pudo entregar y volvió
 	Cancelled Status = "cancelled"
 )
 
-// Statuses lists the valid statuses.
+// Statuses lista los estados válidos.
 var Statuses = []Status{Scheduled, InTransit, Delivered, Returned, Cancelled}
 
-// Step is a change of status.
+// Step es un cambio de estado.
 type Step struct {
 	Status Status
 	On     vocab.Date
 }
 
-// Line is something that travels in the shipment.
+// Line es algo que viaja en el envío.
 type Line struct {
 	No          int
 	SKU         string
@@ -80,29 +81,29 @@ type Line struct {
 	UoM         string
 }
 
-// Source is the document a shipment dispatches (a delivery note of Orders).
+// Source es el documento que expide un envío (un albarán de Orders).
 type Source struct {
 	Type string
 	ID   string
-	Ref  string // its number
+	Ref  string // su número
 }
 
-// Plan is what may be edited while the shipment has not left.
+// Plan es lo que se puede editar mientras el envío no ha salido.
 type Plan struct {
 	Method           Method
 	Carrier          CarrierID
 	Tracking         string
-	Recipient        string // who receives it
-	Destination      string // where: the address as written on the label
+	Recipient        string // quién lo recibe
+	Destination      string // adónde: la dirección tal como se escribe en la etiqueta
 	Packages         int
 	WeightKg         vocab.Decimal
-	Cost             vocab.Decimal // what the carrier charges
+	Cost             vocab.Decimal // lo que cobra el transportista
 	Instructions     string
 	EstimatedShip    vocab.Date
 	EstimatedArrival vocab.Date
 }
 
-// ShipmentState is the persisted state of a shipment.
+// ShipmentState es el estado persistido de un envío.
 type ShipmentState struct {
 	Company  OrganizationID
 	Customer PartyID
@@ -111,14 +112,14 @@ type ShipmentState struct {
 	Lines      []Line
 	Status     Status
 	Dispatched vocab.Date
-	Closed     vocab.Date // delivered, returned or cancelled
+	Closed     vocab.Date // entregado, devuelto o anulado
 	ReceivedBy string
-	Reason     string // of the return or the cancellation
+	Reason     string // de la devolución o la anulación
 	History    []Step
 	Audit      traits.AuditStamp
 }
 
-// Shipment is the dispatch of goods to a customer.
+// Shipment es la expedición de bienes a un cliente.
 type Shipment struct {
 	fw.BaseAggregateRoot[ShipmentID]
 	traits.Audited
@@ -143,7 +144,7 @@ func checkPlan(v *fw.Validation, p *Plan) {
 		"an arrival not before the departure")
 }
 
-// ReconstituteShipment rebuilds a shipment.
+// ReconstituteShipment reconstruye un envío.
 func ReconstituteShipment(id ShipmentID, s ShipmentState) (*Shipment, error) {
 	base, err := fw.NewBaseAggregateRoot(ShipmentKind, id)
 	if err != nil {
@@ -173,7 +174,7 @@ func ReconstituteShipment(id ShipmentID, s ShipmentState) (*Shipment, error) {
 	return &Shipment{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// ScheduleShipment plans the dispatch of some goods to a customer on a day.
+// ScheduleShipment planifica la expedición de unos bienes a un cliente en un día.
 func ScheduleShipment(id ShipmentID, company OrganizationID, customer PartyID, src Source, plan Plan, lines []Line, on vocab.Date) (*Shipment, error) {
 	if on.IsZero() {
 		return nil, fw.Violation("shipments.date", "the day is required")
@@ -191,15 +192,15 @@ func ScheduleShipment(id ShipmentID, company OrganizationID, customer PartyID, s
 	return s, nil
 }
 
-// State returns the state (slices are copies).
+// State devuelve el estado (los slices son copias).
 func (s *Shipment) State() ShipmentState {
 	st := s.s
 	st.Lines, st.History = slices.Clone(st.Lines), slices.Clone(st.History)
 	return st
 }
 
-// Change replaces the plan of a shipment that has not left. Once in transit only the tracking
-// number, the estimated arrival and the cost may still change.
+// Change sustituye el plan de un envío que no ha salido. Una vez en tránsito sólo pueden cambiar
+// todavía el número de seguimiento, la llegada estimada y el coste.
 func (s *Shipment) Change(p Plan) error {
 	var v fw.Validation
 	checkPlan(&v, &p)
@@ -246,9 +247,8 @@ func reason(r string) (string, error) {
 	return r, nil
 }
 
-// Dispatch hands the shipment over: it needs to know how it travels, where to, in how many
-// packages and, unless the customer collects it, who carries it. carrier is the carrier's name,
-// for the event.
+// Dispatch pone en camino el envío: necesita saber cómo viaja, adónde, en cuántos bultos y, salvo que lo
+// recoja el cliente, quién lo lleva. carrier es el nombre del transportista, para el evento.
 func (s *Shipment) Dispatch(on vocab.Date, carrier string) error {
 	p := s.s.Plan
 	if s.s.Status == Scheduled && (p.Method == "" || p.Packages < 1 || (p.Method != Pickup && (p.Carrier.IsZero() || p.Destination == ""))) {
@@ -264,7 +264,7 @@ func (s *Shipment) Dispatch(on vocab.Date, carrier string) error {
 	return nil
 }
 
-// Deliver confirms the shipment reached its recipient.
+// Deliver confirma que el envío llegó a su destinatario.
 func (s *Shipment) Deliver(on vocab.Date, receivedBy string) error {
 	receivedBy = strings.TrimSpace(receivedBy)
 	if utf8.RuneCountInString(receivedBy) > 200 {
@@ -279,7 +279,7 @@ func (s *Shipment) Deliver(on vocab.Date, receivedBy string) error {
 	return nil
 }
 
-// Return records that the shipment could not be delivered and came back.
+// Return anota que el envío no se pudo entregar y volvió.
 func (s *Shipment) Return(on vocab.Date, why string) error {
 	why, err := reason(why)
 	if err != nil {
@@ -294,7 +294,7 @@ func (s *Shipment) Return(on vocab.Date, why string) error {
 	return nil
 }
 
-// Cancel abandons a shipment that has not left.
+// Cancel abandona un envío que no ha salido.
 func (s *Shipment) Cancel(on vocab.Date, why string) error {
 	why, err := reason(why)
 	if err != nil {
@@ -307,12 +307,12 @@ func (s *Shipment) Cancel(on vocab.Date, why string) error {
 	return nil
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (s *Shipment) AuditSnapshot() map[string]any {
 	return map[string]any{"source": s.s.Source.Ref, "status": string(s.s.Status), "tracking": s.s.Tracking, "packages": s.s.Packages}
 }
 
-// Shipment fields.
+// Campos del envío.
 var (
 	ShpFieldCompany  = spec.Comparable("company", func(s *Shipment) OrganizationID { return s.s.Company })
 	ShpFieldCustomer = spec.Comparable("customer", func(s *Shipment) PartyID { return s.s.Customer })
@@ -324,9 +324,9 @@ var (
 	ShpFieldPlanned  = spec.OrderedBy("planned_on", func(s *Shipment) vocab.Date { return s.s.History[0].On }, vocab.CompareDates)
 )
 
-// Events of a shipment.
+// Eventos de un envío.
 type (
-	// ShipmentScheduled is raised when a shipment is planned.
+	// ShipmentScheduled se lanza cuando se planifica un envío.
 	ShipmentScheduled struct {
 		fw.EventMeta
 		Company    string `json:"company"`
@@ -334,7 +334,7 @@ type (
 		SourceType string `json:"sourceType,omitempty"`
 		SourceID   string `json:"sourceId,omitempty"`
 	}
-	// ShipmentDispatched is raised when a shipment leaves.
+	// ShipmentDispatched se lanza cuando sale un envío.
 	ShipmentDispatched struct {
 		fw.EventMeta
 		Company    string `json:"company"`
@@ -348,7 +348,7 @@ type (
 		Packages   int    `json:"packages"`
 		Date       string `json:"date"`
 	}
-	// ShipmentDelivered is raised when a shipment reaches its recipient.
+	// ShipmentDelivered se lanza cuando un envío llega a su destinatario.
 	ShipmentDelivered struct {
 		fw.EventMeta
 		Company    string `json:"company"`
@@ -359,7 +359,7 @@ type (
 		Date       string `json:"date"`
 		ReceivedBy string `json:"receivedBy,omitempty"`
 	}
-	// ShipmentReturned is raised when a shipment comes back undelivered.
+	// ShipmentReturned se lanza cuando un envío vuelve sin entregar.
 	ShipmentReturned struct {
 		fw.EventMeta
 		Company    string `json:"company"`
@@ -372,20 +372,20 @@ type (
 	}
 )
 
-// EventType implementations.
+// Implementaciones de EventType.
 func (ShipmentScheduled) EventType() string  { return "shipments.shipment_scheduled" }
 func (ShipmentDispatched) EventType() string { return "shipments.shipment_dispatched" }
 func (ShipmentDelivered) EventType() string  { return "shipments.shipment_delivered" }
 func (ShipmentReturned) EventType() string   { return "shipments.shipment_returned" }
 
-// NewShipmentID returns a new identity.
+// NewShipmentID devuelve una identidad nueva.
 func NewShipmentID() ShipmentID { return ShipmentID{fw.NewUUID()} }
 
-// ParseShipmentID parses a textual identity.
+// ParseShipmentID analiza una identidad textual.
 func ParseShipmentID(s string) (ShipmentID, error) {
 	u, err := fw.ParseUUID(s)
 	return ShipmentID{u}, err
 }
 
-// ShipmentRepository stores shipments.
+// ShipmentRepository guarda envíos.
 type ShipmentRepository = fw.Repository[ShipmentID, *Shipment]

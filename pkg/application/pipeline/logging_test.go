@@ -16,8 +16,8 @@ import (
 
 type loggedRename struct{}
 
-// Logging writes the correlation id with any log.Logger, not only with those that read the
-// context, and never twice.
+// Logging escribe el id de correlación con cualquier log.Logger, no sólo con los que leen el
+// contexto, y nunca dos veces.
 func TestLogging_CarriesTheCorrelationWithAnyLogger(t *testing.T) {
 	ctx := application.WithCorrelationID(context.Background(), "flow-42")
 	run := func(logger log.Logger) {
@@ -48,8 +48,8 @@ func TestLogging_CarriesTheCorrelationWithAnyLogger(t *testing.T) {
 	}
 }
 
-// log.Default hands the context to slog: a default handler that reads it (log/vanilla) enriches
-// the line.
+// log.Default pasa el contexto a slog: un handler por defecto que lo lee (log/vanilla) enriquece
+// la línea.
 func TestDefault_PassesTheContextToSlog(t *testing.T) {
 	var buf bytes.Buffer
 	prev := slog.Default()

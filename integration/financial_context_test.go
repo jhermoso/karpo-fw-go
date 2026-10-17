@@ -17,18 +17,18 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 )
 
-// anyInstitution plays Parties: here every company is a financial institution.
+// anyInstitution hace de Parties: aquí toda empresa es una entidad financiera.
 type anyInstitution struct{}
 
 func (anyInstitution) IsFinancialInstitution(context.Context, fdomain.OrganizationID) (bool, error) {
 	return true, nil
 }
 
-// TestFinancialContext runs Financial on every engine: an account with its holders, uses, dates
-// and accents as each engine gives them back, the number unique in its company and free in
-// another, the searches through the holders and uses that last (booleans and children on every
-// engine), the statuses, the closing that ends everything, the statistics and the directory other
-// contexts ask.
+// TestFinancialContext ejecuta Financial en cada motor: una cuenta con sus titulares, usos, fechas
+// y acentos tal como los devuelve cada motor, el número único en su empresa y libre en otra, las
+// búsquedas a través de los titulares y de los usos que siguen vigentes (booleanos e hijos en cada
+// motor), los estados, el cierre que lo termina todo, las estadísticas y el directorio al que
+// preguntan otros contextos.
 func TestFinancialContext(t *testing.T) {
 	for _, e := range engines {
 		if e.name == "oracle-dotnet-guids" {
@@ -68,7 +68,7 @@ func TestFinancialContext(t *testing.T) {
 			today := vocab.DateOf(fw.Now())
 			id := func(a fapp.AccountDTO) fdomain.AccountID { x, _ := fdomain.ParseAccountID(a.ID); return x }
 
-			// The product and the agreement an account is opened under, with their dates and accents.
+			// El producto y el contrato con los que se abre una cuenta, con sus fechas y acentos.
 			product, err := svc.DefineProduct.Handle(actx, fapp.DefineProduct{Company: acme, Code: "cta-pago", Name: "Cuenta de pago básica", Family: "payment",
 				Description: "Sin comisión de mantenimiento", RegulatoryCode: "mifid-x1"})
 			must(err)
@@ -121,7 +121,7 @@ func TestFinancialContext(t *testing.T) {
 			_, err = svc.Block.Handle(actx, fapp.ChangeStatus{ID: id(acc), Reason: "Orden judicial nº 123/2026"})
 			must(err)
 
-			// As stored.
+			// Tal como se guardó.
 			got, err := svc.Get.Handle(actx, fapp.GetAccount{Company: acme, Number: "ES91 2100 0418 4502 0005 1332"})
 			must(err)
 			if got.ID != acc.ID || got.Number != "ES9121000418450200051332" || got.BIC != "CAIXESBB" || got.Name != "Cuenta de pago de Íñigo y Ana" ||
@@ -149,7 +149,7 @@ func TestFinancialContext(t *testing.T) {
 			}
 			search(fapp.SearchAccounts{Company: acme}, acc.ID, wallet.ID)
 			search(fapp.SearchAccounts{Company: acme, Party: luis}, acc.ID, wallet.ID)
-			search(fapp.SearchAccounts{Company: acme, Party: ana}) // she left
+			search(fapp.SearchAccounts{Company: acme, Party: ana}) // ella se fue
 			search(fapp.SearchAccounts{Company: acme, Use: "customer-payment"})
 			search(fapp.SearchAccounts{Company: acme, Use: "player"}, acc.ID)
 			search(fapp.SearchAccounts{Company: acme, Demo: "true"}, wallet.ID)
@@ -187,7 +187,7 @@ func TestFinancialContext(t *testing.T) {
 			_, err = svc.Describe.Handle(actx, fapp.DescribeAccount{ID: id(acc), Name: "x"})
 			violates(err, "financial.closed")
 			search(fapp.SearchAccounts{Company: acme, Party: luis}, wallet.ID)
-			// An agreement signed and terminated; three accounts opened; blocked, released and closed.
+			// Un contrato firmado y rescindido; tres cuentas abiertas; bloqueada, liberada y cerrada.
 			if n, err := fm.Relay(inprocess.NewBroker()).RelayOnce(ctx); err != nil || n != 8 {
 				t.Fatalf("published: %d %v", n, err)
 			}

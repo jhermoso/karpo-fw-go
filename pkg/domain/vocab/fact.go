@@ -6,15 +6,15 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// FactReference points to a business fact issued by another bounded context (an invoice, a
-// delivery note...): the fact identity plus its type code. It is the shared-kernel link used by
-// accounting and documents across ErpKernel, ErpDetail and the sector kernels.
+// FactReference apunta a un hecho de negocio emitido por otro contexto delimitado (una factura, un
+// albarán...): la identidad del hecho más su código de tipo. Es el enlace del núcleo compartido que
+// usan la contabilidad y los documentos entre ErpKernel, ErpDetail y los núcleos sectoriales.
 type FactReference struct {
 	FactID   domain.UUID `json:"factId"`
 	TypeCode string      `json:"factTypeCode"`
 }
 
-// NewFactReference validates the reference; the type code is normalized to upper case.
+// NewFactReference valida la referencia; el código de tipo se normaliza a mayúsculas.
 func NewFactReference(factID domain.UUID, typeCode string) (FactReference, error) {
 	code := strings.ToUpper(strings.TrimSpace(typeCode))
 	var v domain.Validation
@@ -27,8 +27,8 @@ func NewFactReference(factID domain.UUID, typeCode string) (FactReference, error
 	return FactReference{FactID: factID, TypeCode: code}, nil
 }
 
-// IsZero reports whether the reference is absent.
+// IsZero dice si falta la referencia.
 func (f FactReference) IsZero() bool { return f.FactID.IsZero() }
 
-// String returns "TYPE:id".
+// String devuelve "TYPE:id".
 func (f FactReference) String() string { return f.TypeCode + ":" + f.FactID.String() }

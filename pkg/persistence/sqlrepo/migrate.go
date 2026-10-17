@@ -14,34 +14,36 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// Default names of the migration history and lock tables.
+// Nombres por defecto de las tablas de historial y de bloqueo de migraciones.
 const (
 	DefaultMigrationsTable = "schema_migrations"
 	DefaultMigrationsLock  = "schema_migrations_lock"
 )
 
-// AnyDialect keys the statements of a migration that are valid on every engine.
+// AnyDialect es la clave de las sentencias de una migración que valen en todos los motores.
 const AnyDialect = "*"
 
-// Migration is one versioned change of a bounded context's schema (or of its reference data).
-// Up holds its statements per dialect name ("sqlite", "postgres", "sqlserver", "oracle",
-// "mysql") or AnyDialect. Statements are executed one by one; Oracle statements must not end
-// with ";". A migration never changes once applied: write a new one instead.
+// Migration es un cambio versionado del esquema de un contexto delimitado (o de sus datos de
+// referencia). Up guarda sus sentencias por nombre de dialecto ("sqlite", "postgres",
+// "sqlserver", "oracle", "mysql") o AnyDialect. Las sentencias se ejecutan una a una; las de
+// Oracle no deben terminar en ";". Una migración nunca cambia una vez aplicada: se escribe otra.
 type Migration struct {
 	Version int64
 	Name    string
 	Up      map[string][]string
-	// Run is optional Go code executed after the statements, in a unit of work of db (data
-	// migrations and seeds that need the dialect's value binding, such as UUIDs on Oracle).
-	// Its code is not part of the checksum: never change an applied Run, add a migration.
+	// Run es código Go opcional que se ejecuta después de las sentencias, en una unidad de
+	// trabajo de db (migraciones de datos y semillas que necesitan el enlace de valores del
+	// dialecto, como los UUID en Oracle). Su código no forma parte del checksum: nunca se cambia
+	// un Run aplicado, se añade una migración.
 	Run func(ctx context.Context, db *DB) error
 }
 
-// Portable builds the statements of a migration valid on every engine.
+// Portable construye las sentencias de una migración válidas en todos los motores.
 func Portable(stmts ...string) map[string][]string { return map[string][]string{AnyDialect: stmts} }
 
-// MigrationSet is the ordered list of migrations owned by a bounded context. Each context keeps
-// its own version sequence, so contexts evolve independently on a shared database.
+// MigrationSet es la lista ordenada de migraciones de un contexto delimitado. Cada contexto lleva su
+// propia secuencia de versiones, así que los contextos evolucionan por separado sobre una base de
+// datos compartida.
 type MigrationSet struct {
 	Context    string
 	Migrations []Migration
@@ -65,12 +67,12 @@ func (s MigrationSet) validate() error {
 	return nil
 }
 
-// Migrator is the SQL application.SchemaMigrator: it records applied migrations in a history
-// table with the checksum of their statements, serializes concurrent instances with a lease
-// lock, and runs each migration in a transaction on engines with transactional DDL (SQLite,
-// PostgreSQL, SQL Server). On Oracle and MySQL, where DDL commits implicitly, a migration is
-// recorded as dirty before it runs and clean after it succeeds; a failure leaves it dirty until
-// someone repairs the database and calls Force.
+// Migrator es el application.SchemaMigrator de SQL: anota las migraciones aplicadas en una tabla
+// de historial con el checksum de sus sentencias, serializa las instancias concurrentes con un
+// bloqueo con plazo (lease) y ejecuta cada migración en una transacción en los motores con DDL
+// transaccional (SQLite, PostgreSQL, SQL Server). En Oracle y MySQL, donde el DDL hace commit
+// implícito, una migración se anota como sucia antes de ejecutarse y como limpia cuando termina
+// bien; un fallo la deja sucia hasta que alguien repara la base de datos y llama a Force.
 type Migrator struct {
 	db        *DB
 	sets      []MigrationSet
@@ -83,21 +85,21 @@ type Migrator struct {
 
 var _ application.SchemaMigrator = (*Migrator)(nil)
 
-// MigratorOption configures a Migrator.
+// MigratorOption configura un Migrator.
 type MigratorOption func(*Migrator)
 
-// WithMigrationTables overrides the history and lock table names.
+// WithMigrationTables sustituye los nombres de las tablas de historial y de bloqueo.
 func WithMigrationTables(history, lock string) MigratorOption {
 	return func(m *Migrator) { m.table, m.lockTable = history, lock }
 }
 
-// WithLockTimeouts sets how long a lock is valid before it can be taken over (lease, default
-// 10 minutes) and how long Migrate waits for it (wait, default 1 minute).
+// WithLockTimeouts fija cuánto vale un bloqueo antes de que otro pueda quedárselo (lease, por
+// defecto 10 minutos) y cuánto lo espera Migrate (wait, por defecto 1 minuto).
 func WithLockTimeouts(lease, wait time.Duration) MigratorOption {
 	return func(m *Migrator) { m.lease, m.wait = lease, wait }
 }
 
-// NewMigrator creates a migrator for the given bounded contexts on db.
+// NewMigrator crea un migrador para los contextos delimitados indicados sobre db.
 func NewMigrator(db *DB, sets []MigrationSet, opts ...MigratorOption) (*Migrator, error) {
 	m := &Migrator{db: db, sets: sets, table: DefaultMigrationsTable, lockTable: DefaultMigrationsLock,
 		lease: 10 * time.Minute, wait: time.Minute, owner: domain.NewUUID().String()}
@@ -122,7 +124,7 @@ func NewMigrator(db *DB, sets []MigrationSet, opts ...MigratorOption) (*Migrator
 
 func (m *Migrator) q(s string) string { return m.db.d.Quote(s) }
 
-// Transactional reports whether DDL on the dialect is transactional.
+// transactionalDDL dice si el DDL del dialecto es transaccional.
 func transactionalDDL(dialect string) bool { return dialect != "oracle" && dialect != "mysql" }
 
 func (m *Migrator) statements(mg Migration) ([]string, error) {
@@ -138,7 +140,7 @@ func (m *Migrator) statements(mg Migration) ([]string, error) {
 	return nil, fmt.Errorf("%w: migration %d %q has no statements for %s", domain.ErrUnsupported, mg.Version, mg.Name, m.db.d.Name())
 }
 
-// checksumOf returns the checksum of a migration on the migrator's dialect.
+// checksumOf devuelve el checksum de una migración en el dialecto del migrador.
 func (m *Migrator) checksumOf(mg Migration) (string, error) {
 	stmts, err := m.statements(mg)
 	if err != nil {
@@ -167,7 +169,7 @@ type historyKey struct {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Tables
+// Tablas
 // ---------------------------------------------------------------------------------------------
 
 func (m *Migrator) ddl() (history, lock string) {
@@ -196,8 +198,8 @@ func (m *Migrator) ddl() (history, lock string) {
 	return "", ""
 }
 
-// ensureTables creates the history and lock tables when missing (outside any transaction: a
-// failed probe would abort a PostgreSQL transaction).
+// ensureTables crea las tablas de historial y de bloqueo si faltan (fuera de toda transacción:
+// una comprobación fallida abortaría una transacción de PostgreSQL).
 func (m *Migrator) ensureTables(ctx context.Context) error {
 	history, lock := m.ddl()
 	if history == "" {
@@ -252,8 +254,8 @@ func (m *Migrator) history(ctx context.Context) (map[historyKey]historyRow, erro
 // Status / Verify / Migrate
 // ---------------------------------------------------------------------------------------------
 
-// Status implements application.SchemaMigrator.
-// It only reads: without a history table every migration is pending.
+// Status implementa application.SchemaMigrator.
+// Sólo lee: sin tabla de historial, todas las migraciones están pendientes.
 func (m *Migrator) Status(ctx context.Context) ([]application.MigrationStatus, error) {
 	h := map[historyKey]historyRow{}
 	if m.exists(ctx, m.table) {
@@ -300,7 +302,7 @@ func (m *Migrator) Status(ctx context.Context) ([]application.MigrationStatus, e
 	return out, nil
 }
 
-// Verify implements application.SchemaMigrator.
+// Verify implementa application.SchemaMigrator.
 func (m *Migrator) Verify(ctx context.Context) error {
 	st, err := m.Status(ctx)
 	if err != nil {
@@ -328,7 +330,7 @@ func verify(st []application.MigrationStatus) error {
 	return fmt.Errorf("%w: %s", sentinel, strings.Join(problems, "; "))
 }
 
-// Migrate implements application.SchemaMigrator.
+// Migrate implementa application.SchemaMigrator.
 func (m *Migrator) Migrate(ctx context.Context) (applied []application.MigrationStatus, err error) {
 	if err := m.ensureTables(ctx); err != nil {
 		return nil, err
@@ -448,8 +450,8 @@ func (m *Migrator) markClean(ctx context.Context, bc string, version int64) erro
 	return err
 }
 
-// Force marks a dirty migration as applied after the database was repaired by hand, updating
-// its checksum to the current statements.
+// Force marca como aplicada una migración sucia después de que la base de datos se haya reparado
+// a mano, y actualiza su checksum al de las sentencias actuales.
 func (m *Migrator) Force(ctx context.Context, bc string, version int64) error {
 	for _, s := range m.sets {
 		if s.Context != bc {
@@ -477,10 +479,11 @@ func (m *Migrator) Force(ctx context.Context, bc string, version int64) error {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Lease lock (one migrator at a time across instances)
+// Bloqueo con plazo (un solo migrador a la vez entre instancias)
 // ---------------------------------------------------------------------------------------------
 
-// ErrMigrationLocked is returned when another instance holds the migration lock too long.
+// ErrMigrationLocked se devuelve cuando otra instancia retiene demasiado tiempo el bloqueo de
+// migración.
 var ErrMigrationLocked = fmt.Errorf("%w: schema migration lock held by another instance", domain.ErrConflict)
 
 func (m *Migrator) lock(ctx context.Context) error {
@@ -513,7 +516,7 @@ func (m *Migrator) lock(ctx context.Context) error {
 	}
 }
 
-// takeOverExpired deletes a lock whose lease expired (its holder crashed).
+// takeOverExpired borra un bloqueo cuyo plazo ha vencido (su titular se cayó).
 func (m *Migrator) takeOverExpired(ctx context.Context) {
 	b := &Builder{d: m.db.d}
 	id, _ := b.Arg(int64(1))

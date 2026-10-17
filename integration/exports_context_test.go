@@ -22,7 +22,7 @@ import (
 
 var permExported = authz.MustPermission("Parties.Customer.Read")
 
-// exportedList plays the list of a context: rows of companies, shown to who can read each.
+// exportedList hace de la lista de un contexto: filas de empresas, enseñadas a quien puede leer cada una.
 type exportedList struct {
 	rows   map[fw.UUID][]string
 	repeat int
@@ -64,10 +64,10 @@ func (l *exportedList) Page(ctx context.Context, filters map[string]string, curs
 	return out, "", nil
 }
 
-// TestExportsContext runs Exports on every engine: a job with its filters, the scope of who
-// asked and its instants as each engine gives them back, the file written as that person by a
-// worker who is somebody else, the limit of jobs at a time, cancellation while writing, the
-// progress noted on a long list, expiry on a clock moved forward and the listings.
+// TestExportsContext ejecuta Exports en cada motor: un trabajo con sus filtros, el ámbito de quien
+// lo pidió y sus instantes tal como los devuelve cada motor, el fichero escrito como esa persona por
+// un worker que es otro, el límite de trabajos a la vez, la cancelación mientras escribe, el
+// progreso anotado en una lista larga, la caducidad con un reloj adelantado y los listados.
 func TestExportsContext(t *testing.T) {
 	for _, e := range engines {
 		if e.name == "oracle-dotnet-guids" {
@@ -124,7 +124,7 @@ func TestExportsContext(t *testing.T) {
 			}
 			ran, err := svc.RunNext.Handle(worker, eapp.RunNext{})
 			must(err)
-			// As stored: who asked, the title, the instants; and the file, with the sight of who asked.
+			// Tal como se guardó: quién lo pidió, el título, los instantes; y el fichero, con la vista de quien lo pidió.
 			got, err := svc.Get.Handle(clerk, eapp.GetJob{ID: id(first)})
 			must(err)
 			requested, _ := time.Parse(time.RFC3339, got.RequestedAt)
@@ -144,7 +144,7 @@ func TestExportsContext(t *testing.T) {
 				t.Fatalf("somebody else: %v", err)
 			}
 
-			// A global administrator sees every company; the scope stored with the job is none.
+			// Un administrador global ve todas las empresas; el ámbito guardado con el trabajo es ninguno.
 			all, err := svc.Start.Handle(admin, eapp.StartExport{Dataset: "customers", Format: "xlsx"})
 			must(err)
 			ran, err = svc.RunNext.Handle(worker, eapp.RunNext{})
@@ -152,7 +152,7 @@ func TestExportsContext(t *testing.T) {
 				t.Fatalf("sheet: %+v %v", ran.Job, err)
 			}
 
-			// Five at a time; the worker takes the one that has waited longest.
+			// Cinco a la vez; el worker coge el que más ha esperado.
 			queue := []eapp.JobDTO{}
 			for range edomain.MaxActiveJobs {
 				j, err := svc.Start.Handle(clerk, eapp.StartExport{Dataset: "customers"})
@@ -170,7 +170,7 @@ func TestExportsContext(t *testing.T) {
 					t.Fatalf("cancel: %+v %v", c, err)
 				}
 			}
-			// A long list: progress is noted on the way, and giving it up stops it without a file.
+			// Una lista larga: el progreso se anota por el camino, y abandonarla la para sin fichero.
 			list.repeat, list.pages = 30*eapp.BatchSize, 0
 			var midway eapp.JobDTO
 			list.onPage = func(page int) {
@@ -189,7 +189,7 @@ func TestExportsContext(t *testing.T) {
 				t.Fatalf("the cancelled ones are passed by: %+v %v", again.Job, err)
 			}
 
-			// A day later the files are gone and the jobs say so.
+			// Un día después los ficheros ya no están y los trabajos lo dicen.
 			func() {
 				defer fw.SetClock(fake.New(fw.Now().Add(25 * time.Hour)))()
 				p, err := svc.Purge.Handle(worker, eapp.Purge{})

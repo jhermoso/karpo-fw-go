@@ -11,8 +11,8 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// ProposeRemittance drafts a remittance with the open installments of the creditor due up to a
-// date whose customers have a usable mandate of the scheme.
+// ProposeRemittance prepara en borrador una remesa con los vencimientos abiertos del acreedor que
+// vencen hasta una fecha y cuyos clientes tienen un mandato utilizable del esquema.
 type ProposeRemittance struct {
 	Creditor       string     `json:"creditor"`
 	Account        string     `json:"account"`
@@ -21,28 +21,28 @@ type ProposeRemittance struct {
 	DueTo          vocab.Date `json:"dueTo"`
 }
 
-// RemoveItem removes an installment from a draft.
+// RemoveItem quita un vencimiento de un borrador.
 type RemoveItem struct {
 	ID          domain.RemittanceID `json:"-"`
 	Invoice     string              `json:"invoice"`
 	Installment int                 `json:"installment"`
 }
 
-// GenerateRemittance freezes a draft and records the use of its mandates.
+// GenerateRemittance congela un borrador y registra el uso de sus mandatos.
 type GenerateRemittance struct {
 	ID domain.RemittanceID `json:"-"`
 }
 
-// GetFile returns the pain.008 file of a generated remittance.
+// GetFile devuelve el fichero pain.008 de una remesa generada.
 type GetFile struct{ ID domain.RemittanceID }
 
-// SettleRemittance records that the bank charged the remittance.
+// SettleRemittance registra que el banco cobró la remesa.
 type SettleRemittance struct {
 	ID domain.RemittanceID `json:"-"`
 	On vocab.Date          `json:"on"`
 }
 
-// ReturnDebit records a returned direct debit.
+// ReturnDebit registra un adeudo devuelto.
 type ReturnDebit struct {
 	ID       domain.RemittanceID `json:"-"`
 	EndToEnd string              `json:"endToEnd"`
@@ -50,21 +50,21 @@ type ReturnDebit struct {
 	Reason   string              `json:"reason"`
 }
 
-// CancelRemittance cancels a remittance not settled.
+// CancelRemittance anula una remesa no liquidada.
 type CancelRemittance struct {
 	ID domain.RemittanceID `json:"-"`
 }
 
-// GetRemittance loads a remittance.
+// GetRemittance carga una remesa.
 type GetRemittance struct{ ID domain.RemittanceID }
 
-// SearchRemittances searches remittances of the caller's scope.
+// SearchRemittances busca remesas del ámbito de quien llama.
 type SearchRemittances struct {
 	Creditor   string
 	Page, Size int
 }
 
-// ItemDTO is a direct debit of a remittance.
+// ItemDTO es un adeudo de una remesa.
 type ItemDTO struct {
 	EndToEnd    string `json:"endToEnd"`
 	Invoice     string `json:"invoice"`
@@ -80,7 +80,7 @@ type ItemDTO struct {
 	Reason      string `json:"reason,omitempty"`
 }
 
-// RemittanceDTO is the transport form of a remittance.
+// RemittanceDTO es la forma de transporte de una remesa.
 type RemittanceDTO struct {
 	ID             string    `json:"id"`
 	Creditor       string    `json:"creditor"`
@@ -92,7 +92,7 @@ type RemittanceDTO struct {
 	CreditorID     string    `json:"creditorId,omitempty"`
 	Settled        string    `json:"settled,omitempty"`
 	Items          []ItemDTO `json:"items"`
-	WithoutMandate int       `json:"withoutMandate,omitempty"` // installments left out of a proposal
+	WithoutMandate int       `json:"withoutMandate,omitempty"` // vencimientos que se quedan fuera de una propuesta
 	Version        int64     `json:"version"`
 }
 
@@ -109,7 +109,7 @@ func remittanceDTO(r *domain.Remittance) RemittanceDTO {
 	return d
 }
 
-// inRemittances returns the installments already in remittances not cancelled (and not returned).
+// inRemittances devuelve los vencimientos que ya están en remesas no anuladas (y no devueltos).
 func (s service) inRemittances(ctx context.Context, creditor domain.OrganizationID) (map[domain.InvoiceID][]int, error) {
 	rs, err := s.Remittances.Find(ctx, spec.And(domain.RemFieldCreditor.Eq(creditor), domain.RemFieldStatus.Ne(int(domain.RemCancelled))))
 	if err != nil {

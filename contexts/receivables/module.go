@@ -1,4 +1,5 @@
-// Package receivables composes the Receivables (Cobros) bounded context on a hot-swap backend.
+// Package receivables compone el contexto delimitado Receivables (Cobros) sobre un backend
+// intercambiable en caliente.
 package receivables
 
 import (
@@ -20,19 +21,19 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 )
 
-// Module is the composed context.
+// Module es el contexto compuesto.
 type Module struct {
 	Service           *rapp.Service
 	Credit            contracts.Credit
 	Collectable       contracts.Collectable
 	IntegrationOutbox application.OutboxStore
 	Audit             application.AuditLog
-	// Consumer receives billing.invoice-issued.v1 and the direct debit events of Treasury: subscribe
-	// it to the transport.
+	// Consumer recibe billing.invoice-issued.v1 y los eventos de adeudo directo de Treasury: hay que
+	// suscribirlo al transporte.
 	Consumer *messaging.Consumer
 }
 
-// Compose builds the context on sw. cal may be nil (no holidays).
+// Compose construye el contexto sobre sw. cal puede ser nil (sin festivos).
 func Compose(sw *hotswap.Switch, cal domain.Calendar) *Module {
 	integration := hotswap.Outbox(sw, infrastructure.IntegrationOutboxFactory)
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
@@ -51,7 +52,7 @@ func Compose(sw *hotswap.Switch, cal domain.Calendar) *Module {
 		IntegrationOutbox: integration, Audit: audit, Consumer: consumer}
 }
 
-// Relay forwards the Published Language to a transport.
+// Relay reenvía el Published Language a un transporte.
 func (m *Module) Relay(sender application.MessageSender, opts ...outbox.RelayOption) *outbox.Relay {
 	return messaging.NewRelay(contracts.Source, m.IntegrationOutbox, sender, opts...)
 }
@@ -103,7 +104,7 @@ func create[In, Out any](status int, run func(context.Context, In) (Out, error))
 	}
 }
 
-// RegisterRoutes implements distribution.EndpointModule.
+// RegisterRoutes implementa distribution.EndpointModule.
 func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	svc := m.Service
 	col := domain.ParseCollectionID

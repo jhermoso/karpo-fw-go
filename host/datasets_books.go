@@ -15,15 +15,15 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
 )
 
-// The lists of the books of a company: its journal, what it owes and its fixed assets. As the
-// others, each is the search of the context that owns it, read as who asked for the file.
+// Las listas de los libros de una empresa: su diario, lo que debe y su inmovilizado. Como las
+// otras, cada una es la búsqueda del contexto dueño, leída como quien pidió el fichero.
 
-// BookLists builds the lists of the books.
+// BookLists construye las listas de los libros.
 func BookLists(p *parties.Module, a *accounting.Module, pay *payments.Module, as *assets.Module) []expapp.Dataset {
 	return []expapp.Dataset{journalList{p: p, a: a}, payableList{p: p, pay: pay}, assetList{as: as}}
 }
 
-// journalList is the journal of a company: a row per line of each entry.
+// journalList es el diario de una empresa: una fila por línea de cada asiento.
 type journalList struct {
 	p *parties.Module
 	a *accounting.Module
@@ -70,8 +70,8 @@ func (l journalList) Page(ctx context.Context, filters map[string]string, cursor
 	return rows, next(found.Number, found.TotalPages), nil
 }
 
-// payableList is the list of what a company owes: to its suppliers, to its people and to the
-// tax authorities.
+// payableList es la lista de lo que debe una empresa: a sus proveedores, a su gente y a las
+// administraciones tributarias.
 type payableList struct {
 	p   *parties.Module
 	pay *payments.Module
@@ -107,7 +107,7 @@ func (l payableList) Page(ctx context.Context, filters map[string]string, cursor
 	for _, it := range found.Items {
 		payee := names[it.Payee]
 		if payee == "" {
-			payee = it.Payee // a tax authority: it is nobody of Parties
+			payee = it.Payee // una administración tributaria: no es nadie de Parties
 		}
 		rows = append(rows, expdomain.Row{"document": it.Document, "kind": it.Kind, "payee": payee, "description": it.Description, "issued": it.Issued,
 			"due": it.Due, "amount": it.Amount, "paid": it.Paid, "open": it.Open, "cancelled": it.Cancelled})
@@ -115,7 +115,7 @@ func (l payableList) Page(ctx context.Context, filters map[string]string, cursor
 	return rows, next(found.Number, found.TotalPages), nil
 }
 
-// assetList is the register of the fixed assets of a company.
+// assetList es el registro del inmovilizado de una empresa.
 type assetList struct{ as *assets.Module }
 
 func (assetList) Key() string                  { return "assets" }

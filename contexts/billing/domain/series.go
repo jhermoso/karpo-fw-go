@@ -1,7 +1,7 @@
-// Package domain is the model of the Billing bounded context: invoices with their lines, the tax
-// breakdown calculated by Fiscal and frozen at issue, corrective invoices and the series that
-// number them without gaps. Customers belong to Parties, taxes to Fiscal, orders and shipments to
-// their contexts: this context references them by identity.
+// Package domain es el modelo del contexto delimitado Billing: las facturas con sus líneas, el
+// desglose de impuestos que calcula Fiscal y que se congela al emitir, las facturas rectificativas
+// y las series que las numeran sin huecos. Los clientes pertenecen a Parties, los impuestos a
+// Fiscal, los pedidos y envíos a sus contextos: este contexto los referencia por identidad.
 package domain
 
 import (
@@ -15,32 +15,32 @@ import (
 )
 
 type (
-	// SeriesID identifies a series.
+	// SeriesID identifica una serie.
 	SeriesID struct{ fw.UUID }
-	// InvoiceID identifies an invoice.
+	// InvoiceID identifica una factura.
 	InvoiceID struct{ fw.UUID }
-	// LineID identifies an invoice line.
+	// LineID identifica una línea de factura.
 	LineID struct{ fw.UUID }
-	// OrganizationID is the seller, an internal organization of the Parties context.
+	// OrganizationID es el vendedor, una organización interna del contexto Parties.
 	OrganizationID struct{ fw.UUID }
-	// PartyID is the customer, a party of the Parties context.
+	// PartyID es el cliente, una party del contexto Parties.
 	PartyID struct{ fw.UUID }
 )
 
-// SeriesKind is the stable aggregate type name.
+// SeriesKind es el nombre estable del tipo de agregado.
 const SeriesKind = "billing.series"
 
-// Series numbers the invoices of a seller for a year, without gaps: a number is taken only in the
-// unit of work that issues the invoice (the C# DocumentSeries of the Documents subdomain, whose
-// issuer did not check the organization of an invoice nor the year). Corrective invoices go in
-// series of their own, as the invoicing regulation requires.
+// Series numera las facturas de un vendedor para un año, sin huecos: un número sólo se toma en la
+// unidad de trabajo que emite la factura (el DocumentSeries del subdominio Documents del C#, cuyo
+// emisor no comprobaba ni la organización de una factura ni el año). Las facturas rectificativas
+// van en series propias, como exige el reglamento de facturación.
 type Series struct {
 	fw.BaseAggregateRoot[SeriesID]
 	traits.Audited
 	s SeriesState
 }
 
-// SeriesState is the persisted state of a series.
+// SeriesState es el estado persistido de una serie.
 type SeriesState struct {
 	Seller     OrganizationID
 	Code       string
@@ -51,7 +51,7 @@ type SeriesState struct {
 	Audit      traits.AuditStamp
 }
 
-// ReconstituteSeries rebuilds a series.
+// ReconstituteSeries reconstruye una serie.
 func ReconstituteSeries(id SeriesID, s SeriesState) (*Series, error) {
 	base, err := fw.NewBaseAggregateRoot(SeriesKind, id)
 	if err != nil {
@@ -70,16 +70,16 @@ func ReconstituteSeries(id SeriesID, s SeriesState) (*Series, error) {
 	return &Series{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// OpenSeries creates an active series.
+// OpenSeries crea una serie activa.
 func OpenSeries(id SeriesID, s SeriesState) (*Series, error) {
 	s.Last, s.Active = 0, true
 	return ReconstituteSeries(id, s)
 }
 
-// State returns the state.
+// State devuelve el estado.
 func (s *Series) State() SeriesState { return s.s }
 
-// Take returns the next number (CODE-YYYY-NNNNNN) for an invoice of a seller, a year and a kind.
+// Take devuelve el número siguiente (CODE-YYYY-NNNNNN) para una factura de un vendedor, un año y un tipo.
 func (s *Series) Take(seller OrganizationID, year int, corrective bool) (string, error) {
 	switch {
 	case !s.s.Active:
@@ -95,15 +95,15 @@ func (s *Series) Take(seller OrganizationID, year int, corrective bool) (string,
 	return fmt.Sprintf("%s-%d-%06d", s.s.Code, s.s.Year, s.s.Last), nil
 }
 
-// Close closes the series.
+// Close cierra la serie.
 func (s *Series) Close() { s.s.Active = false }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (s *Series) AuditSnapshot() map[string]any {
 	return map[string]any{"code": s.s.Code, "year": s.s.Year, "last": s.s.Last, "active": s.s.Active}
 }
 
-// Series fields.
+// Campos de la serie.
 var (
 	SerFieldSeller = spec.Comparable("seller", func(s *Series) OrganizationID { return s.s.Seller })
 	SerFieldCode   = spec.Ordered("code", func(s *Series) string { return s.s.Code })

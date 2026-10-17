@@ -21,7 +21,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/time/fake"
 )
 
-// quotedItems plays Products: what each product is and costs.
+// quotedItems hace de Products: qué es y cuánto cuesta cada producto.
 type quotedItems map[odomain.ProductID]odomain.Item
 
 func (q quotedItems) Price(_ context.Context, _ odomain.OrganizationID, p odomain.ProductID, _ odomain.PriceListID, _ vocab.Decimal, _ vocab.Date) (odomain.Item, bool, error) {
@@ -29,10 +29,11 @@ func (q quotedItems) Price(_ context.Context, _ odomain.OrganizationID, p odomai
 	return it, ok, nil
 }
 
-// TestQuotesContext runs the quotes of Orders on every engine: a quote with its lines, dates and
-// decimals as each engine gives them back, the number taken when it is sent (and not when sending
-// fails), the order an accepted quote becomes, in one unit of work with it, rejection, withdrawal
-// of a draft that never had a number, expiry on a clock moved forward and the searches.
+// TestQuotesContext ejecuta los presupuestos de Orders en cada motor: un presupuesto con sus
+// líneas, fechas y decimales tal como los devuelve cada motor, el número tomado al enviarlo (y no
+// cuando el envío falla), el pedido en que se convierte un presupuesto aceptado, en una misma
+// unidad de trabajo con él, el rechazo, la retirada de un borrador que nunca tuvo número, la
+// caducidad con un reloj adelantado y las búsquedas.
 func TestQuotesContext(t *testing.T) {
 	for _, e := range engines {
 		if e.name == "oracle-dotnet-guids" {
@@ -93,7 +94,7 @@ func TestQuotesContext(t *testing.T) {
 			must(err)
 			q, err = svc.ChangeQuote.Handle(actx, oapp.ChangeQuote{ID: id(q), ValidUntil: today.AddDays(10), Reference: "Obra 12-B", Notes: "Entrega en obra, mañana"})
 			must(err)
-			// 10.1234 − 10 % − 5 % = 8.6555 (four decimals); × 2.5 = 21.64.
+			// 10.1234 − 10 % − 5 % = 8.6555 (cuatro decimales); × 2.5 = 21.64.
 			got, err := svc.GetQuote.Handle(actx, oapp.GetQuote{ID: id(q)})
 			must(err)
 			if got.Status != "draft" || got.Number != "" || got.Date != today.String() || got.ValidUntil != today.AddDays(10).String() || got.CustomerDiscount != "5.00" ||
@@ -112,7 +113,7 @@ func TestQuotesContext(t *testing.T) {
 			_, err = svc.SendQuote.Handle(actx, oapp.SendQuote{ID: id(q)})
 			violates(err, "orders.quote_not_draft")
 
-			// Accepting writes the quote and its order together.
+			// Aceptar escribe juntos el presupuesto y su pedido.
 			acc, err := svc.AcceptQuote.Handle(actx, oapp.AcceptQuote{ID: id(q), Warehouse: warehouse})
 			must(err)
 			oid, _ := odomain.ParseOrderID(acc.Order.ID)
@@ -146,7 +147,7 @@ func TestQuotesContext(t *testing.T) {
 				t.Fatalf("rejected: %+v %v", no, err)
 			}
 
-			// A draft withdrawn never had a number, and is read back as such.
+			// Un borrador retirado nunca tuvo número, y así se relee.
 			gone, err := svc.DraftQuote.Handle(actx, oapp.DraftQuote{Company: acme, Customer: customer})
 			must(err)
 			_, err = svc.SendQuote.Handle(actx, oapp.SendQuote{ID: id(gone)})
@@ -158,7 +159,7 @@ func TestQuotesContext(t *testing.T) {
 				t.Fatalf("withdrawn draft: %+v %v", gone, err)
 			}
 
-			// A day later: what held until yesterday is not accepted nor sent, and the job closes it.
+			// Un día después: lo que valía hasta ayer no se acepta ni se envía, y el trabajo lo cierra.
 			short := send(oapp.DraftQuote{Company: acme, Customer: customer, ValidUntil: today})
 			long := send(oapp.DraftQuote{Company: acme, Customer: customer, ValidUntil: today.AddDays(1)})
 			stale, err := svc.DraftQuote.Handle(actx, oapp.DraftQuote{Company: acme, Customer: customer, ValidUntil: today})
@@ -179,7 +180,7 @@ func TestQuotesContext(t *testing.T) {
 					t.Fatalf("expire again: %+v %v", again, err)
 				}
 			}()
-			// The number the failed sending took went back with it.
+			// El número que tomó el envío fallido se devolvió con él.
 			_, err = svc.ChangeQuote.Handle(actx, oapp.ChangeQuote{ID: id(stale), ValidUntil: today.AddDays(5)})
 			must(err)
 			stale, err = svc.SendQuote.Handle(actx, oapp.SendQuote{ID: id(stale)})
@@ -202,7 +203,7 @@ func TestQuotesContext(t *testing.T) {
 			if p, err := svc.SearchQuotes.Handle(actx, oapp.SearchQuotes{Customer: other}); err != nil || p.Total != 1 || p.Items[0].ID != no.ID {
 				t.Fatalf("by customer: %+v %v", p, err)
 			}
-			// Five sent; accepted, rejected and expired; the order confirmed and its stock asked for.
+			// Cinco enviados; aceptado, rechazado y caducado; el pedido confirmado y su stock pedido.
 			if n, err := om.Relay(inprocess.NewBroker()).RelayOnce(ctx); err != nil || n != 10 {
 				t.Fatalf("published: %d %v", n, err)
 			}

@@ -1,4 +1,5 @@
-// Package treasury composes the Treasury bounded context on a hot-swap backend.
+// Package treasury compone el contexto delimitado Treasury sobre un backend intercambiable en
+// caliente.
 package treasury
 
 import (
@@ -20,15 +21,16 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 )
 
-// Module is the composed context.
+// Module es el contexto compuesto.
 type Module struct {
 	Service           *tapp.Service
 	IntegrationOutbox application.OutboxStore
 	Audit             application.AuditLog
 }
 
-// Compose builds the context on sw. Treasury needs the due items of Receivables, the payables of
-// Payments (nil: no transfer orders) and the identities of Parties: all are ports it owns.
+// Compose construye el contexto sobre sw. Treasury necesita los vencimientos de Receivables, las
+// obligaciones de pago de Payments (nil: sin órdenes de transferencias) y las identidades de
+// Parties: todos son puertos propios.
 func Compose(sw *hotswap.Switch, receivables domain.Receivables, payables domain.Payables, identities domain.Identities) *Module {
 	integration := hotswap.Outbox(sw, infrastructure.IntegrationOutboxFactory)
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
@@ -43,7 +45,7 @@ func Compose(sw *hotswap.Switch, receivables domain.Receivables, payables domain
 	return &Module{Service: svc, IntegrationOutbox: integration, Audit: audit}
 }
 
-// Relay forwards the Published Language to a transport.
+// Relay reenvía el Published Language a un transporte.
 func (m *Module) Relay(sender application.MessageSender, opts ...outbox.RelayOption) *outbox.Relay {
 	return messaging.NewRelay(contracts.Source, m.IntegrationOutbox, sender, opts...)
 }
@@ -95,7 +97,7 @@ func create[In, Out any](run func(context.Context, In) (Out, error)) http.Handle
 	}
 }
 
-// RegisterRoutes implements distribution.EndpointModule.
+// RegisterRoutes implementa distribution.EndpointModule.
 func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	svc := m.Service
 	acc, man, rem := domain.ParseAccountID, domain.ParseMandateID, domain.ParseRemittanceID

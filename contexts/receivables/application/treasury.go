@@ -13,13 +13,13 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// DueItemsPort implements contracts.Collectable (it serves Treasury, not users).
+// DueItemsPort implementa contracts.Collectable (sirve a Treasury, no a usuarios).
 type DueItemsPort struct{ Receivables domain.ReceivableRepository }
 
 var _ contracts.Collectable = DueItemsPort{}
 
-// DueItems implements contracts.Collectable: the open installments (positive, of invoices not
-// settled) due up to a date, oldest first.
+// DueItems implementa contracts.Collectable: los vencimientos abiertos (positivos, de facturas no
+// saldadas) que vencen hasta una fecha, primero los más antiguos.
 func (p DueItemsPort) DueItems(ctx context.Context, seller, dueTo string) ([]contracts.DueItem, error) {
 	var v fw.Validation
 	sid := domain.OrganizationID{UUID: parseID(&v, "seller", seller)}
@@ -45,7 +45,7 @@ func (p DueItemsPort) DueItems(ctx context.Context, seller, dueTo string) ([]con
 	return out, nil
 }
 
-// DirectDebitCollected is the Receivables copy of treasury.direct-debit-collected.v1.
+// DirectDebitCollected es la copia de Receivables de treasury.direct-debit-collected.v1.
 type DirectDebitCollected struct {
 	EndToEnd    string `json:"endToEnd"`
 	Creditor    string `json:"creditor"`
@@ -56,24 +56,24 @@ type DirectDebitCollected struct {
 	CollectedOn string `json:"collectedOn"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (DirectDebitCollected) IntegrationEventType() string {
 	return "treasury.direct-debit-collected.v1"
 }
 
-// DirectDebitReturned is the Receivables copy of treasury.direct-debit-returned.v1.
+// DirectDebitReturned es la copia de Receivables de treasury.direct-debit-returned.v1.
 type DirectDebitReturned struct {
 	EndToEnd string `json:"endToEnd"`
 	Creditor string `json:"creditor"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (DirectDebitReturned) IntegrationEventType() string { return "treasury.direct-debit-returned.v1" }
 
-// SubscribeTreasury registers the reactions to Treasury (approved decision 5 of docs/COBROS.md:
-// Receivables publishes, Treasury executes): a collected direct debit becomes a collection by
-// direct debit allocated to its installment (left unallocated if the installment was collected
-// meanwhile, for a person to decide); a returned one cancels that collection.
+// SubscribeTreasury registra las reacciones a Treasury (decisión aprobada 5 de docs/COBROS.md:
+// Receivables publica, Treasury ejecuta): un adeudo directo cobrado pasa a ser un cobro por adeudo
+// directo aplicado a su vencimiento (sin aplicar si el vencimiento se cobró entretanto, para que
+// decida una persona); uno devuelto anula ese cobro.
 func SubscribeTreasury(c *messaging.Consumer, d Deps) {
 	s := newOrchestrators(d)
 	byReference := func(ctx context.Context, creditor domain.OrganizationID, ref string) ([]*domain.Collection, error) {

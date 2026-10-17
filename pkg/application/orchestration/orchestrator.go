@@ -1,6 +1,6 @@
-// Package orchestration implements the aggregate Orchestrator (the Go counterpart of the C#
-// OrchestratorService): load -> behaviour -> stamp audit -> save with optimistic concurrency ->
-// record events and audit log, all inside one unit of work.
+// Package orchestration implementa el Orchestrator de agregados (la contrapartida en Go del
+// OrchestratorService de C#): cargar -> comportamiento -> sellar auditoría -> guardar con concurrencia
+// optimista -> registrar eventos y log de auditoría, todo dentro de una unidad de trabajo.
 package orchestration
 
 import (
@@ -15,16 +15,16 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// ErrEventsNotPublished reports that the state change was committed but some events could not be
-// published in-process after the commit. The operation itself succeeded; use the outbox when
-// event delivery must be guaranteed.
+// ErrEventsNotPublished informa de que el cambio de estado se confirmó pero algunos eventos no se
+// pudieron publicar en proceso tras el commit. La operación en sí salió bien; cuando la entrega de
+// eventos debe estar garantizada se usa el outbox.
 var ErrEventsNotPublished = errors.New("state committed but events not published")
 
-// Orchestrator coordinates the lifecycle of an aggregate inside a unit of work:
-// load -> execute behaviour -> save with optimistic concurrency -> record events -> commit.
-// It is the Go counterpart of the C# OrchestratorService, fixing two issues of the naive
-// approach: the aggregate is loaded inside the transaction, and events are recorded in the same
-// transaction as the state (outbox) or published only after the commit.
+// Orchestrator coordina el ciclo de vida de un agregado dentro de una unidad de trabajo:
+// cargar -> ejecutar comportamiento -> guardar con concurrencia optimista -> registrar eventos -> commit.
+// Es la contrapartida en Go del OrchestratorService de C# y corrige dos problemas del enfoque
+// ingenuo: el agregado se carga dentro de la transacción, y los eventos se registran en la misma
+// transacción que el estado (outbox) o se publican sólo después del commit.
 type Orchestrator[ID domain.Identifier, T domain.AggregateRoot[ID]] struct {
 	repo      domain.Repository[ID, T]
 	uow       domain.UnitOfWork
@@ -33,7 +33,7 @@ type Orchestrator[ID domain.Identifier, T domain.AggregateRoot[ID]] struct {
 	audit     application.AuditLog
 }
 
-// Option configures an Orchestrator.
+// Option configura un Orchestrator.
 type Option func(*config)
 
 type config struct {
@@ -42,26 +42,26 @@ type config struct {
 	audit     application.AuditLog
 }
 
-// WithAuditLog appends an application.AuditRecord for every create, update and delete, in the
-// same unit of work as the state change: actor, channel and import run from the context, the
-// raised events and, for aggregates implementing traits.Snapshotter, the changed fields.
+// WithAuditLog añade un application.AuditRecord por cada alta, modificación y baja, en la misma
+// unidad de trabajo que el cambio de estado: actor, canal y ejecución de importación tomados del
+// contexto, los eventos lanzados y, para los agregados que implementan traits.Snapshotter, los campos cambiados.
 func WithAuditLog(log application.AuditLog) Option {
 	return func(c *config) { c.audit = log }
 }
 
-// WithOutbox records the aggregate's events through r inside the same unit of work as the state
-// change (at-least-once delivery via an OutboxRelay).
+// WithOutbox registra los eventos del agregado mediante r dentro de la misma unidad de trabajo que
+// el cambio de estado (entrega al menos una vez mediante un OutboxRelay).
 func WithOutbox(r application.EventRecorder) Option {
 	return func(c *config) { c.recorder = r }
 }
 
-// WithPublisher publishes the aggregate's events in-process after a successful commit
-// (best effort: failures return ErrEventsNotPublished but the state stays committed).
+// WithPublisher publica los eventos del agregado en proceso tras un commit correcto
+// (sin garantías: los fallos devuelven ErrEventsNotPublished pero el estado queda confirmado).
 func WithPublisher(p application.Publisher) Option {
 	return func(c *config) { c.publisher = p }
 }
 
-// New creates an Orchestrator.
+// New crea un Orchestrator.
 func New[ID domain.Identifier, T domain.AggregateRoot[ID]](
 	repo domain.Repository[ID, T], uow domain.UnitOfWork, opts ...Option,
 ) *Orchestrator[ID, T] {
@@ -72,11 +72,11 @@ func New[ID domain.Identifier, T domain.AggregateRoot[ID]](
 	return &Orchestrator[ID, T]{repo: repo, uow: uow, recorder: cfg.recorder, publisher: cfg.publisher, audit: cfg.audit}
 }
 
-// Repository exposes the underlying repository (for queries).
+// Repository expone el repositorio subyacente (para consultas).
 func (o *Orchestrator[ID, T]) Repository() domain.Repository[ID, T] { return o.repo }
 
-// Create persists a new aggregate and its events. Aggregates embedding traits.Audited are
-// stamped with the actor of the context (application.ActorFrom) before being saved.
+// Create persiste un agregado nuevo y sus eventos. Los agregados que incrustan traits.Audited se
+// sellan con el actor del contexto (application.ActorFrom) antes de guardarse.
 func (o *Orchestrator[ID, T]) Create(ctx context.Context, agg T) error {
 	var evts []domain.Event
 	err := o.uow.Do(ctx, func(ctx context.Context) error {
@@ -90,14 +90,14 @@ func (o *Orchestrator[ID, T]) Create(ctx context.Context, agg T) error {
 	return o.afterCommit(ctx, agg, evts)
 }
 
-// Update loads the aggregate, applies fn and saves it. It returns the updated aggregate.
+// Update carga el agregado, le aplica fn y lo guarda. Devuelve el agregado actualizado.
 func (o *Orchestrator[ID, T]) Update(ctx context.Context, id ID, fn func(ctx context.Context, agg T) error) (T, error) {
 	return Execute(ctx, o, id, func(ctx context.Context, agg T) (T, error) {
 		return agg, fn(ctx, agg)
 	})
 }
 
-// Delete loads the aggregate, lets fn check rules and raise events (fn may be nil) and deletes it.
+// Delete carga el agregado, deja que fn compruebe reglas y lance eventos (fn puede ser nil) y lo borra.
 func (o *Orchestrator[ID, T]) Delete(ctx context.Context, id ID, fn func(ctx context.Context, agg T) error) error {
 	var (
 		agg  T
@@ -124,9 +124,9 @@ func (o *Orchestrator[ID, T]) Delete(ctx context.Context, id ID, fn func(ctx con
 	return o.afterCommit(ctx, agg, evts)
 }
 
-// Execute loads the aggregate id, runs fn (the business behaviour) and saves the aggregate, all
-// inside one unit of work, returning fn's typed result. It is a function rather than a method
-// because Go methods cannot declare their own type parameters.
+// Execute carga el agregado id, ejecuta fn (el comportamiento de negocio) y guarda el agregado, todo
+// dentro de una unidad de trabajo, y devuelve el resultado tipado de fn. Es una función y no un método
+// porque los métodos de Go no pueden declarar sus propios parámetros de tipo.
 func Execute[ID domain.Identifier, T domain.AggregateRoot[ID], R any](
 	ctx context.Context, o *Orchestrator[ID, T], id ID, fn func(ctx context.Context, agg T) (R, error),
 ) (R, error) {

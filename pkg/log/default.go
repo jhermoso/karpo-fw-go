@@ -5,13 +5,13 @@ import (
 	"log/slog"
 )
 
-// Default returns a Logger over slog.Default(), the logger of the process. Framework pieces
-// that must never be silent (the outbox relay) fall back to it when no logger is given. It hands
-// the context of WithContext to slog, so a default handler that reads it (log/vanilla installed
-// with slog.SetDefault) adds the correlation and the trace; the plain slog handler ignores it.
+// Default devuelve un Logger sobre slog.Default(), el logger del proceso. Las piezas del framework
+// que nunca deben quedar en silencio (el relay del outbox) recurren a él cuando no se les da logger.
+// Pasa a slog el contexto de WithContext, de modo que un handler por defecto que lo lea (log/vanilla
+// instalado con slog.SetDefault) añade la correlación y la traza; el handler simple de slog lo ignora.
 func Default() Logger { return std{ctx: context.Background()} }
 
-// Discard returns a Logger that writes nothing, to silence a piece on purpose.
+// Discard devuelve un Logger que no escribe nada, para silenciar una pieza a propósito.
 func Discard() Logger { return discard{} }
 
 type std struct {

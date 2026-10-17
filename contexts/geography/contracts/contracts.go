@@ -1,11 +1,11 @@
-// Package contracts is what other bounded contexts may depend on: the Open Host Service of the
-// Geography and reference data context. Boundaries, postal codes and countries are referenced by
-// identity (the same GUIDs as Karpo) or by ISO code.
+// Package contracts es aquello de lo que pueden depender otros contextos delimitados: el Open Host
+// Service del contexto de Geografía y datos de referencia. Los límites, los códigos postales y los
+// países se referencian por identidad (los mismos GUID que Karpo) o por código ISO.
 package contracts
 
 import "context"
 
-// BoundaryRef is what other contexts need to show a boundary.
+// BoundaryRef es lo que otros contextos necesitan para mostrar un límite.
 type BoundaryRef struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`
@@ -13,45 +13,46 @@ type BoundaryRef struct {
 	Active bool   `json:"active"`
 }
 
-// MaxBatch is the maximum number of ids per call.
+// MaxBatch es el número máximo de ids por llamada.
 const MaxBatch = 900
 
-// Gazetteer resolves and walks boundaries.
+// Gazetteer resuelve y recorre límites.
 type Gazetteer interface {
-	// Resolve returns the boundaries that exist among ids.
+	// Resolve devuelve los límites que existen entre ids.
 	Resolve(ctx context.Context, ids []string) (map[string]BoundaryRef, error)
-	// Ancestors returns the containing boundaries of id, nearest first (municipality ->
-	// province -> autonomous community -> country -> subcontinent -> continent).
+	// Ancestors devuelve los límites que contienen a id, el más cercano primero (municipio ->
+	// provincia -> comunidad autónoma -> país -> subcontinente -> continente).
 	Ancestors(ctx context.Context, id string) ([]BoundaryRef, error)
-	// Descendants returns ids and every boundary contained in them (a search "in Madrid"
-	// becomes "in any of these municipalities").
+	// Descendants devuelve ids y todos los límites contenidos en ellos (una búsqueda «en Madrid»
+	// se convierte en «en cualquiera de estos municipios»).
 	Descendants(ctx context.Context, ids []string) ([]string, error)
-	// CountryOf returns the ISO 3166 alpha-2 code of the country containing each boundary.
+	// CountryOf devuelve el código ISO 3166 alfa-2 del país que contiene cada límite.
 	CountryOf(ctx context.Context, ids []string) (map[string]string, error)
 }
 
-// PostalAddressQuery is the geographic part of a postal address to check.
+// PostalAddressQuery es la parte geográfica de una dirección postal que comprobar.
 type PostalAddressQuery struct {
-	Country    string // ISO 3166 alpha-2
+	Country    string // ISO 3166 alfa-2
 	PostalCode string
-	Boundary   string // optional: the municipality (or smallest boundary) chosen by the user
+	Boundary   string // opcional: el municipio (o el límite más pequeño) que eligió el usuario
 }
 
-// PostalAddressResult is the checked address: normalized code and its postal code entry.
+// PostalAddressResult es la dirección comprobada: el código normalizado y su entrada de código
+// postal.
 type PostalAddressResult struct {
 	PostalCode   string `json:"postalCode"`
-	PostalCodeID string `json:"postalCodeId,omitempty"` // entry of the code in the boundary, when known
+	PostalCodeID string `json:"postalCodeId,omitempty"` // entrada del código en el límite, cuando se conoce
 	Boundary     string `json:"boundary,omitempty"`
 }
 
-// AddressChecker validates the geographic part of postal addresses (the C#
-// ContactMechanismApplicationService checked that the code belonged to the municipality).
-// Errors match domain.ErrValidation.
+// AddressChecker valida la parte geográfica de las direcciones postales (el
+// ContactMechanismApplicationService del C# comprobaba que el código pertenecía al municipio).
+// Los errores casan con domain.ErrValidation.
 type AddressChecker interface {
 	CheckPostalAddress(ctx context.Context, q PostalAddressQuery) (PostalAddressResult, error)
 }
 
-// CountryInfo is the reference data other contexts use most.
+// CountryInfo son los datos de referencia que más usan otros contextos.
 type CountryInfo struct {
 	Alpha2        string   `json:"alpha2"`
 	Alpha3        string   `json:"alpha3"`
@@ -62,21 +63,21 @@ type CountryInfo struct {
 	EU            bool     `json:"eu"`
 	Eurozone      bool     `json:"eurozone"`
 	SEPA          bool     `json:"sepa"`
-	Currencies    []string `json:"currencies"` // ISO 4217, primary first
-	Languages     []string `json:"languages"`  // ISO 639, default first
-	TimeZones     []string `json:"timeZones"`  // IANA, primary first
+	Currencies    []string `json:"currencies"` // ISO 4217, la principal primero
+	Languages     []string `json:"languages"`  // ISO 639, el predeterminado primero
+	TimeZones     []string `json:"timeZones"`  // IANA, el principal primero
 }
 
-// Calendar tells the holidays of a place: those declared in the boundary and in the ones that
-// contain it (the municipality, its province, its region, its country). Weekends are not
-// holidays: whether they count is for who asks to decide. The day is written YYYY-MM-DD.
+// Calendar dice los festivos de un lugar: los declarados en el límite y en los que lo contienen
+// (el municipio, su provincia, su región, su país). Los fines de semana no son festivos: si
+// cuentan lo decide quien pregunta. El día se escribe YYYY-MM-DD.
 type Calendar interface {
 	IsHoliday(ctx context.Context, boundary, day string) (bool, error)
 }
 
-// Reference answers country questions.
+// Reference responde preguntas sobre países.
 type Reference interface {
 	Country(ctx context.Context, alpha2 string) (CountryInfo, error)
-	// CheckIBAN validates an IBAN (check digits and the country's length and format).
+	// CheckIBAN valida un IBAN (los dígitos de control y la longitud y el formato del país).
 	CheckIBAN(ctx context.Context, iban string) error
 }

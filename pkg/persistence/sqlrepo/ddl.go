@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// Dialects lists the dialect names with DDL support in RenderDDL.
+// Dialects enumera los nombres de dialecto con soporte de DDL en RenderDDL.
 var Dialects = []string{"sqlite", "postgres", "sqlserver", "oracle", "mysql"}
 
 var logicalTypes = map[string]map[string]string{
@@ -24,18 +24,18 @@ var logicalTypes = map[string]map[string]string{
 
 var ddlPlaceholder = regexp.MustCompile(`\{(\w+)(?::([\w ]+))?\}`)
 
-// RenderDDL writes portable DDL for a dialect: {uuid}, {str:N}, {text}, {bool}, {ts}, {date},
-// {int} and {bigint} become the engine's types (the ones the value binding of each dialect
-// expects: RAW(16) on Oracle, UNIQUEIDENTIFIER on SQL Server...), {false} its false literal and
-// {add:column} ... {addEnd} its ALTER TABLE ADD clause. Optional text columns must be nullable:
-// Oracle stores "" as NULL.
+// RenderDDL escribe DDL portable para un dialecto: {uuid}, {str:N}, {text}, {bool}, {ts},
+// {date}, {int} y {bigint} se convierten en los tipos del motor (los que espera el enlace de
+// valores de cada dialecto: RAW(16) en Oracle, UNIQUEIDENTIFIER en SQL Server...), {false} en su
+// literal falso y {add:column} ... {addEnd} en su cláusula ALTER TABLE ADD. Las columnas de texto
+// opcionales deben admitir nulos: Oracle guarda "" como NULL.
 //
-// {str:N} holds N characters, as the domain counts them (runes), on every engine: on Oracle it
-// is VARCHAR2(N CHAR), since a plain VARCHAR2(N) counts bytes and rejects accented text near
-// its limit. Two engine limits remain. An Oracle VARCHAR2 never stores more than 4000 bytes
-// (MAX_STRING_SIZE=STANDARD), so only N <= 1000 is guaranteed for any text: use {text} beyond
-// that. SQL Server's NVARCHAR(N) counts UTF-16 code units, so characters outside the Basic
-// Multilingual Plane (emoji) take two.
+// {str:N} admite N caracteres, contados como los cuenta el dominio (runas), en todos los motores:
+// en Oracle es VARCHAR2(N CHAR), porque un VARCHAR2(N) a secas cuenta bytes y rechaza texto
+// acentuado cerca de su límite. Quedan dos límites del motor. Un VARCHAR2 de Oracle nunca guarda
+// más de 4000 bytes (MAX_STRING_SIZE=STANDARD), así que sólo N <= 1000 está garantizado para
+// cualquier texto: por encima, use {text}. El NVARCHAR(N) de SQL Server cuenta unidades de
+// código UTF-16, así que los caracteres fuera del plano multilingüe básico (emoji) ocupan dos.
 func RenderDDL(dialect, ddl string) string {
 	types := logicalTypes[dialect]
 	return ddlPlaceholder.ReplaceAllStringFunc(ddl, func(m string) string {
@@ -51,7 +51,7 @@ func RenderDDL(dialect, ddl string) string {
 	})
 }
 
-// RenderDDLAll renders statements for every dialect of Dialects (a Migration.Up map).
+// RenderDDLAll genera las sentencias para cada dialecto de Dialects (un mapa de Migration.Up).
 func RenderDDLAll(stmts ...string) map[string][]string {
 	out := make(map[string][]string, len(Dialects))
 	for _, d := range Dialects {

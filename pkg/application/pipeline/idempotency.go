@@ -13,30 +13,30 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// CodeIdempotencyKeyReused is the rule code returned when a caller repeats an idempotency key
-// with a different request.
+// CodeIdempotencyKeyReused es el código de regla que se devuelve cuando quien llama repite una
+// clave de idempotencia con una petición distinta.
 const CodeIdempotencyKeyReused = "idempotency.key_reused"
 
-// idempotentRecord is what the store keeps for a processed request: the fingerprint of the
-// request that produced the result, and the result.
+// idempotentRecord es lo que guarda el almacén de una petición procesada: la huella de la
+// petición que produjo el resultado, y el resultado.
 type idempotentRecord struct {
 	Request string          `json:"request"`
 	Result  json.RawMessage `json:"result"`
 }
 
-// Idempotent returns the stored result for a request whose idempotency key
-// (application.IdempotencyKeyed) was already processed successfully, instead of executing it
-// again (equivalent to the C# IdempotencyCommandHandlerDecorator). Results are stored as JSON
-// for ttl. Requests without a key (or with an empty key) pass through.
+// Idempotent devuelve el resultado guardado de una petición cuya clave de idempotencia
+// (application.IdempotencyKeyed) ya se procesó con éxito, en lugar de ejecutarla otra vez
+// (equivale al IdempotencyCommandHandlerDecorator de C#). Los resultados se guardan como JSON
+// durante ttl. Las peticiones sin clave (o con la clave vacía) pasan sin más.
 //
-// A key belongs to the caller that used it: the same key sent by another caller is a different
-// request, so nobody receives somebody else's result. Repeating a key with a different request
-// is a rule violation (CodeIdempotencyKeyReused) rather than a replay of the first result.
+// Una clave pertenece a quien la usó: la misma clave enviada por otro llamante es otra petición,
+// así que nadie recibe el resultado de otro. Repetir una clave con una petición distinta es una
+// violación de regla (CodeIdempotencyKeyReused) y no una repetición del primer resultado.
 //
-// The result is stored after next returns, so it is not part of the transaction of the use
-// case: a process that stops between the commit and the store executes the request again on
-// retry, and two simultaneous requests with the same key may both execute. Closing that window
-// needs a store that writes in the unit of work (BACKLOG.md, "Idempotencia persistente").
+// El resultado se guarda después de que next vuelva, así que no forma parte de la transacción del
+// caso de uso: un proceso que se detiene entre el commit y el guardado vuelve a ejecutar la petición
+// al reintentar, y dos peticiones simultáneas con la misma clave pueden ejecutarse ambas. Cerrar esa
+// ventana necesita un almacén que escriba en la unidad de trabajo (BACKLOG.md, "Idempotencia persistente").
 func Idempotent[In, Out any](store application.IdempotencyStore, ttl time.Duration) application.Middleware[In, Out] {
 	return func(next application.Handler[In, Out]) application.Handler[In, Out] {
 		return application.HandlerFunc[In, Out](func(ctx context.Context, in In) (Out, error) {
@@ -88,8 +88,8 @@ func Idempotent[In, Out any](store application.IdempotencyStore, ttl time.Durati
 	}
 }
 
-// idempotencyCaller identifies who is making the request: the authenticated subject when there
-// is an authorization context, the actor of the request otherwise.
+// idempotencyCaller identifica quién hace la petición: el sujeto autenticado cuando hay un
+// contexto de autorización y, si no, el actor de la petición.
 func idempotencyCaller(ctx context.Context) string {
 	if c, ok := authz.FromContext(ctx); ok && !c.Subject.IsZero() {
 		return c.TenantID + "/" + c.Subject.String()

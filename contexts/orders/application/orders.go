@@ -9,7 +9,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// SetTerms creates or replaces the sales terms of a customer in a company.
+// SetTerms crea o sustituye las condiciones de venta de un cliente en una empresa.
 type SetTerms struct {
 	Company       string `json:"company"`
 	Customer      string `json:"customer"`
@@ -19,10 +19,10 @@ type SetTerms struct {
 	BlockDelivery bool   `json:"blockDelivery,omitempty"`
 }
 
-// SearchTerms lists the customer terms of a company.
+// SearchTerms enumera las condiciones de cliente de una empresa.
 type SearchTerms struct{ Company string }
 
-// TermsDTO is the transport form of the terms of a customer.
+// TermsDTO es la forma de transporte de las condiciones de un cliente.
 type TermsDTO struct {
 	ID            string `json:"id"`
 	Company       string `json:"company"`
@@ -40,7 +40,8 @@ func termsDTO(t *domain.Terms) TermsDTO {
 		Discount: money(s.Discount), BlockOrders: s.BlockOrders, BlockDelivery: s.BlockDelivery, Version: t.Version()}
 }
 
-// DraftOrder opens a draft order of a customer, with the price list and discount of its terms.
+// DraftOrder abre un pedido en borrador de un cliente, con la tarifa y el descuento de sus
+// condiciones.
 type DraftOrder struct {
 	Company   string     `json:"company"`
 	Customer  string     `json:"customer"`
@@ -50,69 +51,69 @@ type DraftOrder struct {
 	Notes     string     `json:"notes,omitempty"`
 }
 
-// AddLine adds a product to a draft, priced by Products.
+// AddLine añade un producto a un borrador, con el precio de Products.
 type AddLine struct {
 	ID       domain.OrderID `json:"-"`
 	Product  string         `json:"product"`
 	Quantity string         `json:"quantity"`
 }
 
-// RemoveLine removes a line from a draft.
+// RemoveLine quita una línea de un borrador.
 type RemoveLine struct {
 	ID   domain.OrderID `json:"-"`
 	Line int            `json:"line"`
 }
 
-// ConfirmOrder commits a draft: it is numbered and its stock requested.
+// ConfirmOrder confirma un borrador: se numera y se piden sus existencias.
 type ConfirmOrder struct {
 	ID domain.OrderID `json:"-"`
 }
 
-// RequestStock asks Inventory again for what a confirmed order is short of.
+// RequestStock vuelve a pedir a Inventory lo que le falta a un pedido confirmado.
 type RequestStock struct {
 	ID domain.OrderID `json:"-"`
 }
 
-// PickInput is a quantity of a line to deliver.
+// PickInput es una cantidad de una línea que se entrega.
 type PickInput struct {
 	Line     int    `json:"line"`
 	Quantity string `json:"quantity"`
 }
 
-// Deliver serves part of an order with a delivery note. Without lines, everything that can be
-// delivered: what is held of the stocked lines and what is pending of the others.
+// Deliver sirve parte de un pedido con un albarán. Sin líneas, todo lo que se puede entregar: lo
+// retenido de las líneas con existencias y lo pendiente de las demás.
 type Deliver struct {
 	ID    domain.OrderID `json:"-"`
 	Date  vocab.Date     `json:"date,omitzero"`
 	Lines []PickInput    `json:"lines,omitempty"`
 }
 
-// EndOrder cancels or closes an order, with a reason.
+// EndOrder anula o cierra un pedido, con un motivo.
 type EndOrder struct {
 	ID     domain.OrderID `json:"-"`
 	Reason string         `json:"reason"`
 }
 
-// GetOrder loads an order.
+// GetOrder carga un pedido.
 type GetOrder struct{ ID domain.OrderID }
 
-// SearchOrders searches orders of the caller's scope.
+// SearchOrders busca pedidos del ámbito de quien llama.
 type SearchOrders struct {
 	Company, Customer, Status string
 	Page, Size                int
 }
 
-// GetDelivery loads a delivery note.
+// GetDelivery carga un albarán.
 type GetDelivery struct{ ID domain.DeliveryID }
 
-// SearchDeliveries searches delivery notes of the caller's scope.
+// SearchDeliveries busca albaranes del ámbito de quien llama.
 type SearchDeliveries struct {
 	Company, Customer, Order string
-	Uninvoiced               bool // only those no invoice bills yet
+	Uninvoiced               bool // sólo los que aún no están en ninguna factura
 	Page, Size               int
 }
 
-// LineDTO is the transport form of an order line.
+// LineDTO es la forma de transporte de una línea de pedido.
 type LineDTO struct {
 	No          int    `json:"no"`
 	Product     string `json:"product"`
@@ -132,7 +133,7 @@ type LineDTO struct {
 	Short       string `json:"short"`
 }
 
-// OrderDTO is the transport form of an order.
+// OrderDTO es la forma de transporte de un pedido.
 type OrderDTO struct {
 	ID               string    `json:"id"`
 	Company          string    `json:"company"`
@@ -167,7 +168,7 @@ func orderDTO(o *domain.Order) OrderDTO {
 	return d
 }
 
-// DeliveryLineDTO is the transport form of a line of a delivery note.
+// DeliveryLineDTO es la forma de transporte de una línea de un albarán.
 type DeliveryLineDTO struct {
 	Line        int    `json:"line"`
 	Product     string `json:"product"`
@@ -179,19 +180,19 @@ type DeliveryLineDTO struct {
 	Amount      string `json:"amount"`
 }
 
-// DeliveryDTO is the transport form of a delivery note.
+// DeliveryDTO es la forma de transporte de un albarán.
 type DeliveryDTO struct {
 	ID          string            `json:"id"`
 	Company     string            `json:"company"`
 	Customer    string            `json:"customer"`
 	Order       string            `json:"order"`
 	OrderNumber string            `json:"orderNumber"`
-	OrderStatus string            `json:"orderStatus,omitempty"` // of the order after the delivery, when just issued
+	OrderStatus string            `json:"orderStatus,omitempty"` // del pedido tras la entrega, cuando se acaba de emitir
 	Number      string            `json:"number"`
 	Date        string            `json:"date"`
 	Warehouse   string            `json:"warehouse,omitempty"`
 	Total       string            `json:"total"`
-	Invoice     string            `json:"invoice,omitempty"` // the invoice of Billing that bills it
+	Invoice     string            `json:"invoice,omitempty"` // la factura de Billing que lo factura
 	InvoiceNo   string            `json:"invoiceNumber,omitempty"`
 	Lines       []DeliveryLineDTO `json:"lines"`
 }
@@ -353,8 +354,8 @@ func (s service) orderUseCases(svc *Service) {
 			if err := s.notBlocked(ctx, os.Customer); err != nil {
 				return err
 			}
-			// The credit of Receivables counts everything the customer owes, not this order alone
-			// (the C# compared the limit with the amount of the order being confirmed).
+			// El crédito de Receivables cuenta todo lo que debe el cliente, no sólo este pedido
+			// (el C# comparaba el límite con el importe del pedido que se confirmaba).
 			if s.Credit != nil {
 				cr, err := s.Credit.Credit(ctx, os.Company, os.Customer, os.Date)
 				if err != nil {
@@ -409,7 +410,7 @@ func (s service) orderUseCases(svc *Service) {
 			if date.Before(os.Date) {
 				return fw.Violation("orders.delivery_date", "a delivery is not before its order")
 			}
-			picks := picks // a retry starts again from what was asked
+			picks := picks // un reintento vuelve a empezar desde lo que se pidió
 			if len(picks) == 0 {
 				for _, l := range os.Lines {
 					q := l.Pending()

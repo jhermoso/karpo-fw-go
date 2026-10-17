@@ -1,14 +1,15 @@
-// Package contracts is the Published Language of the Parties bounded context: the integration
-// events other contexts may consume. It is versioned and changes only by adding fields or by
-// publishing a new version (v2) alongside the old one; domain events stay internal.
+// Package contracts es el Published Language del contexto delimitado Parties: los eventos de
+// integración que otros contextos pueden consumir. Está versionado y sólo cambia añadiendo
+// campos o publicando una versión nueva (v2) junto a la antigua; los eventos de dominio se
+// quedan dentro.
 package contracts
 
 import "time"
 
-// Source is the name of the publishing bounded context (Envelope.Source).
+// Source es el nombre del contexto delimitado que publica (Envelope.Source).
 const Source = "parties"
 
-// PartyRegisteredV1 is published when a party is registered.
+// PartyRegisteredV1 se publica cuando se da de alta una party.
 type PartyRegisteredV1 struct {
 	PartyID      string    `json:"partyId"`
 	Type         string    `json:"type"` // person | organization
@@ -17,14 +18,14 @@ type PartyRegisteredV1 struct {
 	RegisteredAt time.Time `json:"registeredAt"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (PartyRegisteredV1) IntegrationEventType() string { return "parties.party-registered.v1" }
 
-// PartyRenamedV1 is published when the legal name of a party changes.
+// PartyRenamedV1 se publica cuando cambia la razón social de una party.
 type PartyRenamedV1 struct {
 	PartyID   string `json:"partyId"`
 	LegalName string `json:"legalName"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (PartyRenamedV1) IntegrationEventType() string { return "parties.party-renamed.v1" }

@@ -1,6 +1,7 @@
-// Package infrastructure stores the Human Resources context: SQL mappings, versioned schema of the
-// five engines (with the catalog seed of the C# WellKnownRRHHCatalog), catalogs, hot-swap
-// factories and the adapters to Parties and Facilities.
+// Package infrastructure guarda el contexto de Recursos Humanos: los mapeos SQL, el esquema
+// versionado de los cinco motores (con la semilla de catálogos del WellKnownRRHHCatalog del C#),
+// los catálogos, las factorías para el intercambio en caliente y los adaptadores a Parties y
+// Facilities.
 package infrastructure
 
 import (
@@ -24,10 +25,10 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlserver"
 )
 
-// Context is the name of the bounded context.
+// Context es el nombre del contexto delimitado.
 const Context = "hr"
 
-// Technical tables of the context.
+// Tablas técnicas del contexto.
 const (
 	TableOutbox            = "hr_outbox"
 	TableIntegrationOutbox = "hr_integration_outbox"
@@ -96,8 +97,8 @@ func technicalDDL(d string) []string {
 	return nil
 }
 
-// Migrations is the versioned schema of the context. The catalogs are seeded with the C# GUIDs;
-// positions, employments and work centers are business data.
+// Migrations es el esquema versionado del contexto. Los catálogos se siembran con los GUID del C#;
+// los puestos, las relaciones laborales y los centros de trabajo son datos de negocio.
 func Migrations() sqlrepo.MigrationSet {
 	technical := map[string][]string{}
 	for _, d := range sqlrepo.Dialects {
@@ -148,17 +149,17 @@ func seed(ctx context.Context, db *sqlrepo.DB) error {
 	return nil
 }
 
-// Migrator returns the schema migrator of the context.
+// Migrator devuelve el migrador del esquema del contexto.
 func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 	return sqlrepo.NewMigrator(db, []sqlrepo.MigrationSet{Migrations()})
 }
 
-// Tables lists the tables of the context, children first (drop order).
+// Tables lista las tablas del contexto, las hijas primero (orden de borrado).
 var Tables = []string{"hr_contracts", "hr_employments", "hr_work_centers", "hr_position_reporting", "hr_position_holders", "hr_positions",
 	"hr_agreements", "hr_position_type_classes", "hr_position_types", "hr_position_classes", "hr_position_statuses",
 	TableOutbox, TableIntegrationOutbox, TableAuditLog}
 
-// DropAll removes the tables of the context and its migration history (tests only).
+// DropAll borra las tablas del contexto y su historial de migraciones (sólo pruebas).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
 	for _, t := range Tables {
 		_, _ = db.ExecContext(ctx, "DROP TABLE "+t)
@@ -201,8 +202,8 @@ func optTime(p vocab.ValidPeriod) any {
 	return nil
 }
 
-// byStart orders children by start and then identity, the same on every engine (SQL Server sorts
-// UNIQUEIDENTIFIER by byte groups).
+// byStart ordena las hijas por inicio y después por identidad, igual en todos los motores (SQL
+// Server ordena UNIQUEIDENTIFIER por grupos de bytes).
 func byStart(a, b time.Time, ia, ib []byte) int {
 	if c := a.Compare(b); c != 0 {
 		return c
@@ -210,7 +211,7 @@ func byStart(a, b time.Time, ia, ib []byte) int {
 	return bytes.Compare(ia, ib)
 }
 
-// PositionMapping maps Position to hr_positions and its children.
+// PositionMapping mapea Position a hr_positions y sus hijas.
 func PositionMapping() sqlrepo.Mapping[domain.PositionID, *domain.Position] {
 	return sqlrepo.Mapping[domain.PositionID, *domain.Position]{
 		Table: "hr_positions",
@@ -282,7 +283,7 @@ func PositionMapping() sqlrepo.Mapping[domain.PositionID, *domain.Position] {
 	}
 }
 
-// EmploymentMapping maps Employment to hr_employments and its contracts.
+// EmploymentMapping mapea Employment a hr_employments y sus contratos.
 func EmploymentMapping() sqlrepo.Mapping[domain.EmploymentID, *domain.Employment] {
 	return sqlrepo.Mapping[domain.EmploymentID, *domain.Employment]{
 		Table: "hr_employments",
@@ -334,7 +335,7 @@ func EmploymentMapping() sqlrepo.Mapping[domain.EmploymentID, *domain.Employment
 	}
 }
 
-// WorkCenterMapping maps WorkCenter to hr_work_centers.
+// WorkCenterMapping mapea WorkCenter a hr_work_centers.
 func WorkCenterMapping() sqlrepo.Mapping[domain.WorkCenterID, *domain.WorkCenter] {
 	return sqlrepo.Mapping[domain.WorkCenterID, *domain.WorkCenter]{
 		Table:   "hr_work_centers",
@@ -356,10 +357,10 @@ func WorkCenterMapping() sqlrepo.Mapping[domain.WorkCenterID, *domain.WorkCenter
 	}
 }
 
-// SQLCatalogs reads the catalogs from the database.
+// SQLCatalogs lee los catálogos de la base de datos.
 type SQLCatalogs struct{ db *sqlrepo.DB }
 
-// PositionStatuses implements domain.Catalogs.
+// PositionStatuses implementa domain.Catalogs.
 func (c SQLCatalogs) PositionStatuses(ctx context.Context) ([]domain.PositionStatus, error) {
 	rows, err := c.db.Select(ctx, "hr_position_statuses", []string{"id", "name", "description", "active"}, "id")
 	if err != nil {
@@ -376,7 +377,7 @@ func (c SQLCatalogs) PositionStatuses(ctx context.Context) ([]domain.PositionSta
 	return out, nil
 }
 
-// PositionClasses implements domain.Catalogs.
+// PositionClasses implementa domain.Catalogs.
 func (c SQLCatalogs) PositionClasses(ctx context.Context) ([]domain.PositionClass, error) {
 	rows, err := c.db.Select(ctx, "hr_position_classes", []string{"id", "name", "active"}, "name")
 	if err != nil {
@@ -392,7 +393,7 @@ func (c SQLCatalogs) PositionClasses(ctx context.Context) ([]domain.PositionClas
 	return out, nil
 }
 
-// PositionTypes implements domain.Catalogs.
+// PositionTypes implementa domain.Catalogs.
 func (c SQLCatalogs) PositionTypes(ctx context.Context) ([]domain.PositionType, error) {
 	rows, err := c.db.Select(ctx, "hr_position_types", []string{"id", "title", "description", "active"}, "title")
 	if err != nil {
@@ -425,7 +426,7 @@ func (c SQLCatalogs) PositionTypes(ctx context.Context) ([]domain.PositionType, 
 	return out, nil
 }
 
-// Agreements implements domain.Catalogs.
+// Agreements implementa domain.Catalogs.
 func (c SQLCatalogs) Agreements(ctx context.Context) ([]domain.Agreement, error) {
 	rows, err := c.db.Select(ctx, "hr_agreements", []string{"id", "code", "name", "scope", "organization", "territorial_code", "sectoral_code",
 		"start_date", "end_date", "active"}, "code")
@@ -448,32 +449,32 @@ func (c SQLCatalogs) Agreements(ctx context.Context) ([]domain.Agreement, error)
 	return out, nil
 }
 
-// WellKnownCatalogs serves the seed (in-memory backend).
+// WellKnownCatalogs sirve la semilla (backend en memoria).
 type WellKnownCatalogs struct{}
 
-// PositionStatuses implements domain.Catalogs.
+// PositionStatuses implementa domain.Catalogs.
 func (WellKnownCatalogs) PositionStatuses(context.Context) ([]domain.PositionStatus, error) {
 	return domain.WellKnownPositionStatuses(), nil
 }
 
-// PositionClasses implements domain.Catalogs.
+// PositionClasses implementa domain.Catalogs.
 func (WellKnownCatalogs) PositionClasses(context.Context) ([]domain.PositionClass, error) {
 	return domain.WellKnownPositionClasses(), nil
 }
 
-// PositionTypes implements domain.Catalogs.
+// PositionTypes implementa domain.Catalogs.
 func (WellKnownCatalogs) PositionTypes(context.Context) ([]domain.PositionType, error) {
 	return domain.WellKnownPositionTypes(), nil
 }
 
-// Agreements implements domain.Catalogs.
+// Agreements implementa domain.Catalogs.
 func (WellKnownCatalogs) Agreements(context.Context) ([]domain.Agreement, error) {
 	return domain.WellKnownAgreements(), nil
 }
 
 func unsupported(b hotswap.Backend) error { return fmt.Errorf("hr: unsupported backend %T", b) }
 
-// PositionRepositoryFactory builds the position repository.
+// PositionRepositoryFactory construye el repositorio de puestos.
 func PositionRepositoryFactory(b hotswap.Backend) (domain.PositionRepository, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -484,7 +485,7 @@ func PositionRepositoryFactory(b hotswap.Backend) (domain.PositionRepository, er
 	return nil, unsupported(b)
 }
 
-// EmploymentRepositoryFactory builds the employment repository.
+// EmploymentRepositoryFactory construye el repositorio de relaciones laborales.
 func EmploymentRepositoryFactory(b hotswap.Backend) (domain.EmploymentRepository, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -495,7 +496,7 @@ func EmploymentRepositoryFactory(b hotswap.Backend) (domain.EmploymentRepository
 	return nil, unsupported(b)
 }
 
-// WorkCenterRepositoryFactory builds the work center repository.
+// WorkCenterRepositoryFactory construye el repositorio de centros de trabajo.
 func WorkCenterRepositoryFactory(b hotswap.Backend) (domain.WorkCenterRepository, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -506,7 +507,7 @@ func WorkCenterRepositoryFactory(b hotswap.Backend) (domain.WorkCenterRepository
 	return nil, unsupported(b)
 }
 
-// CatalogsFor returns the catalog reader of a backend.
+// CatalogsFor devuelve el lector de catálogos de un backend.
 func CatalogsFor(b hotswap.Backend) (domain.Catalogs, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -517,10 +518,10 @@ func CatalogsFor(b hotswap.Backend) (domain.Catalogs, error) {
 	return nil, unsupported(b)
 }
 
-// OutboxFactory builds the domain event outbox; IntegrationOutboxFactory, the Published Language one.
+// OutboxFactory construye el outbox de eventos de dominio; IntegrationOutboxFactory, el del Published Language.
 func OutboxFactory(b hotswap.Backend) (application.OutboxStore, error) { return outbox(b, TableOutbox) }
 
-// IntegrationOutboxFactory builds the integration outbox.
+// IntegrationOutboxFactory construye el outbox de integración.
 func IntegrationOutboxFactory(b hotswap.Backend) (application.OutboxStore, error) {
 	return outbox(b, TableIntegrationOutbox)
 }
@@ -535,7 +536,7 @@ func outbox(b hotswap.Backend, table string) (application.OutboxStore, error) {
 	return nil, unsupported(b)
 }
 
-// AuditLogFactory builds the audit log.
+// AuditLogFactory construye el registro de auditoría.
 func AuditLogFactory(b hotswap.Backend) (application.AuditLog, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:

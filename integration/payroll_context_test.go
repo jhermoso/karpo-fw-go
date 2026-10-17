@@ -29,9 +29,9 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 )
 
-// TestPayrollContext runs Payroll with Parties, Facilities and HR on every engine: concept seed,
-// CCC, profile with splits, payslip lines with exact decimals, derived totals, approval, the
-// duplicate check (dates in SQL), remittance and cancellation.
+// TestPayrollContext ejecuta Payroll con Parties, Facilities y HR en cada motor: semilla de
+// conceptos, CCC, perfil con repartos, líneas de nómina con decimales exactos, totales derivados,
+// aprobación, el control de duplicados (fechas en SQL), remesa y cancelación.
 func TestPayrollContext(t *testing.T) {
 	for _, e := range engines {
 		if e.name == "oracle-dotnet-guids" {
@@ -146,7 +146,7 @@ func TestPayrollContext(t *testing.T) {
 			if _, err := svc.Approve.Handle(actx, yapp.ApprovePayslip{ID: slipID}); err != nil {
 				t.Fatal(err)
 			}
-			// 2142.89 + 64.17 = 2207.06; − 103.73 − 342.09 = 1761.24; employer 520.87.
+			// 2142.89 + 64.17 = 2207.06; − 103.73 − 342.09 = 1761.24; empresa 520.87.
 			slip, err = svc.GetPayslip.Handle(actx, yapp.GetPayslip{ID: slipID})
 			if err != nil || slip.Status != "approved" || slip.Totals.Gross != "2207.06" || slip.Totals.Net != "1761.24" ||
 				slip.Totals.EmployerCost != "520.87" || len(slip.Lines) != 6 || slip.Lines[1].Quantity != "3.50" || slip.Lines[1].Amount != "64.17" ||

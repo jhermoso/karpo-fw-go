@@ -8,18 +8,18 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// Permission is a permission code "{Subdomain}.{Resource}.{Action}" (e.g. "Parties.Party.Create").
+// Permission es un código de permiso "{Subdomain}.{Resource}.{Action}" (p. ej. "Parties.Party.Create").
 type Permission string
 
-// Wildcard grants every permission. Service principals never receive it.
+// Wildcard concede todos los permisos. Los principales de servicio nunca lo reciben.
 const Wildcard Permission = "*.*.*"
 
-// PermissionOf builds a permission code.
+// PermissionOf construye un código de permiso.
 func PermissionOf(subdomain, resource, action string) Permission {
 	return Permission(subdomain + "." + resource + "." + action)
 }
 
-// WellFormed reports whether the code has three non-empty segments.
+// WellFormed dice si el código tiene tres segmentos no vacíos.
 func (p Permission) WellFormed() bool {
 	parts := strings.Split(string(p), ".")
 	if len(parts) != 3 {
@@ -33,8 +33,8 @@ func (p Permission) WellFormed() bool {
 	return true
 }
 
-// MustPermission validates a code at composition time (panics when malformed), like the C#
-// RequirePermission refusing malformed policy names.
+// MustPermission valida un código en tiempo de composición (entra en pánico si está mal formado),
+// como el RequirePermission de C# que rechaza los nombres de política mal formados.
 func MustPermission(code string) Permission {
 	p := Permission(code)
 	if !p.WellFormed() {
@@ -43,9 +43,9 @@ func MustPermission(code string) Permission {
 	return p
 }
 
-// Require checks that ctx carries an authorization context granting p. It returns an error
-// matching domain.ErrUnauthorized without a context (no Legacy fallback) and
-// domain.ErrForbidden without the permission.
+// Require comprueba que ctx lleva un contexto de autorización que concede p. Devuelve un error
+// que coincide con domain.ErrUnauthorized si no hay contexto (sin alternativa Legacy) y con
+// domain.ErrForbidden si falta el permiso.
 func Require(ctx context.Context, p Permission) error {
 	c, ok := FromContext(ctx)
 	if !ok {
@@ -57,8 +57,8 @@ func Require(ctx context.Context, p Permission) error {
 	return nil
 }
 
-// RequireWrite checks that the subject in ctx may write data owned by org (Full grant inside the
-// scope, or global admin). The generic message never reveals whether the organization exists.
+// RequireWrite comprueba que el sujeto de ctx puede escribir datos propiedad de org (concesión Full
+// dentro del ámbito, o administrador global). El mensaje genérico nunca revela si la organización existe.
 func RequireWrite(ctx context.Context, org domain.UUID) error {
 	c, ok := FromContext(ctx)
 	if !ok {
@@ -70,15 +70,16 @@ func RequireWrite(ctx context.Context, org domain.UUID) error {
 	return nil
 }
 
-// ServicePrincipal is a configured technical caller and its permissions (contract v1, section 6).
+// ServicePrincipal es un llamante técnico configurado y sus permisos (contrato v1, sección 6).
 type ServicePrincipal struct {
 	Subject     domain.UUID
 	Name        string
 	Permissions []Permission
 }
 
-// ServicePrincipalContext builds the context of a configured service principal: no grants, no
-// organization scope, never global admin, and the wildcard is dropped even if configured.
+// ServicePrincipalContext construye el contexto de un principal de servicio configurado: sin
+// concesiones, sin ámbito de organizaciones, nunca administrador global, y el comodín se descarta
+// aunque esté configurado.
 func ServicePrincipalContext(tenant string, sp ServicePrincipal, req Request) (*Context, error) {
 	perms := make([]Permission, 0, len(sp.Permissions))
 	for _, p := range sp.Permissions {

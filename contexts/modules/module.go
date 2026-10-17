@@ -1,5 +1,5 @@
-// Package modules composes the Modules (Módulos y capacidades: qué tiene activado cada empresa)
-// bounded context on a hot-swap backend.
+// Package modules compone el contexto delimitado de Modules (Módulos y capacidades: qué tiene
+// activado cada empresa) sobre un backend intercambiable en caliente.
 package modules
 
 import (
@@ -20,24 +20,24 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 )
 
-// Module is the composed context.
+// Module es el contexto compuesto.
 type Module struct {
 	Service           *mapp.Service
 	IntegrationOutbox application.OutboxStore
 	Audit             application.AuditLog
-	// Features is the port other contexts ask whether a company has something on.
+	// Features es el puerto al que otros contextos preguntan si una empresa tiene algo encendido.
 	Features contracts.Features
 	deps     mapp.Deps
 }
 
-// Option configures the composition.
+// Option configura la composición.
 type Option func(*mapp.Deps)
 
-// WithDerivation tells which features a company has because of what it is (the financial
-// capability of a financial institution) instead of because somebody switched them on.
+// WithDerivation dice qué funcionalidades tiene una empresa por lo que es (la capacidad
+// financiera de una entidad financiera) en lugar de porque alguien las encendiera.
 func WithDerivation(d mapp.Derivation) Option { return func(deps *mapp.Deps) { deps.Derivation = d } }
 
-// Compose builds the context on sw.
+// Compose construye el contexto sobre sw.
 func Compose(sw *hotswap.Switch, opts ...Option) *Module {
 	integration := hotswap.Outbox(sw, infrastructure.IntegrationOutboxFactory)
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
@@ -54,12 +54,13 @@ func Compose(sw *hotswap.Switch, opts ...Option) *Module {
 		Features: mapp.Features{Activations: d.Activations, Derivation: d.Derivation}, deps: d}
 }
 
-// EnsureCatalog adds to the catalog the seed entries it lacks; the host calls it at start-up.
+// EnsureCatalog añade al catálogo las entradas de la semilla que le faltan; el anfitrión lo llama
+// al arrancar.
 func (m *Module) EnsureCatalog(ctx context.Context) (int, error) {
 	return mapp.EnsureCatalog(ctx, m.deps)
 }
 
-// Relay forwards the Published Language to a transport.
+// Relay reenvía el Published Language a un transporte.
 func (m *Module) Relay(sender application.MessageSender, opts ...outbox.RelayOption) *outbox.Relay {
 	return messaging.NewRelay(contracts.Source, m.IntegrationOutbox, sender, opts...)
 }
@@ -87,7 +88,7 @@ func post[In, Out any](status int, run func(context.Context, In) (Out, error)) h
 	}
 }
 
-// RegisterRoutes implements distribution.EndpointModule.
+// RegisterRoutes implementa distribution.EndpointModule.
 func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	svc := m.Service
 

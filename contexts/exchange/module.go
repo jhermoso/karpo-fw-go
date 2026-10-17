@@ -1,5 +1,5 @@
-// Package exchange composes the Exchange (Cambio de divisas: cotización y reservas) bounded
-// context on a hot-swap backend.
+// Package exchange compone el contexto delimitado Exchange (Cambio de divisas: cotización y
+// reservas) sobre un backend intercambiable en caliente.
 package exchange
 
 import (
@@ -21,15 +21,15 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 )
 
-// Module is the composed context.
+// Module es el contexto compuesto.
 type Module struct {
 	Service           *xapp.Service
 	IntegrationOutbox application.OutboxStore
 	Audit             application.AuditLog
 }
 
-// Compose builds the context on sw. collaborators resolves promotion codes (nil: no code can be
-// validated).
+// Compose construye el contexto sobre sw. collaborators resuelve los códigos de promoción (nil: no
+// se puede validar ningún código).
 func Compose(sw *hotswap.Switch, collaborators domain.Collaborators) *Module {
 	integration := hotswap.Outbox(sw, infrastructure.IntegrationOutboxFactory)
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
@@ -43,7 +43,7 @@ func Compose(sw *hotswap.Switch, collaborators domain.Collaborators) *Module {
 	return &Module{Service: svc, IntegrationOutbox: integration, Audit: audit}
 }
 
-// Relay forwards the Published Language to a transport.
+// Relay reenvía el Published Language a un transporte.
 func (m *Module) Relay(sender application.MessageSender, opts ...outbox.RelayOption) *outbox.Relay {
 	return messaging.NewRelay(contracts.Source, m.IntegrationOutbox, sender, opts...)
 }
@@ -95,7 +95,7 @@ func onReservation[In, Out any](set func(*In, domain.ReservationID), run func(co
 	}
 }
 
-// RegisterRoutes implements distribution.EndpointModule.
+// RegisterRoutes implementa distribution.EndpointModule.
 func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	svc := m.Service
 	query := func(run func(r *http.Request) (any, error)) http.HandlerFunc {

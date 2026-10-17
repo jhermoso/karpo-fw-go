@@ -7,9 +7,9 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
 )
 
-// RequirePermission rejects the request unless the authorization context of ctx grants p
-// (domain.ErrUnauthorized without context, domain.ErrForbidden without permission). Unlike an
-// HTTP policy it protects every entry point of the handler: HTTP, jobs, messages and tests.
+// RequirePermission rechaza la petición salvo que el contexto de autorización de ctx conceda p
+// (domain.ErrUnauthorized sin contexto, domain.ErrForbidden sin permiso). A diferencia de una
+// política HTTP, protege todos los puntos de entrada del manejador: HTTP, trabajos, mensajes y pruebas.
 func RequirePermission[Req, Res any](p authz.Permission) application.Middleware[Req, Res] {
 	p = authz.MustPermission(string(p))
 	return func(next application.Handler[Req, Res]) application.Handler[Req, Res] {

@@ -15,10 +15,10 @@ import (
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// Directory implements authz.Directory over the Security repositories: it is the real source the
-// generic authorization resolver reads on every request (no cache between requests, D7), in
-// place of the in-memory directory. A deactivated user, a revoked role, a deactivated permission
-// or a revoked access take effect on the next request with the same token.
+// Directory implementa authz.Directory sobre los repositorios de Security: es la fuente real que
+// lee el resolvedor de autorización genérico en cada petición (sin caché entre peticiones, D7), en
+// lugar del directorio en memoria. Un usuario desactivado, un rol retirado, un permiso desactivado
+// o un acceso retirado surten efecto en la siguiente petición con el mismo token.
 type Directory struct {
 	Users       domain.UserRepository
 	Roles       domain.RoleRepository
@@ -27,9 +27,9 @@ type Directory struct {
 
 var _ authz.Directory = Directory{}
 
-// Subject implements authz.Directory. A user that must change its password is returned without
-// roles, permissions or accesses: until it does, every protected use case answers 403 and only
-// the change of password, which needs no permission, is open.
+// Subject implementa authz.Directory. Un usuario que tiene que cambiar su contraseña se devuelve sin
+// roles, permisos ni accesos: hasta que lo haga, cada caso de uso protegido responde 403 y sólo
+// queda abierto el cambio de contraseña, que no necesita permiso.
 func (d Directory) Subject(ctx context.Context, id fw.UUID) (authz.Subject, bool, error) {
 	u, err := d.Users.Get(ctx, domain.UserID{UUID: id})
 	if errors.Is(err, fw.ErrNotFound) {
@@ -73,10 +73,10 @@ func (d Directory) Subject(ctx context.Context, id fw.UUID) (authz.Subject, bool
 	return s, true, nil
 }
 
-// Authenticator implements authz.Authenticator for the tokens of an external identity provider
-// (decision 1): the verifier says who the provider asserts the caller is, and Security answers
-// which of its users that identity is linked with. An identity that is not linked does not get
-// in: Security never creates users on its own.
+// Authenticator implementa authz.Authenticator para los tokens de un proveedor de identidad externo
+// (decisión 1): el verificador dice quién afirma el proveedor que es quien llama, y Security
+// dice con cuál de sus usuarios está vinculada esa identidad. Una identidad no vinculada no
+// entra: Security nunca crea usuarios por su cuenta.
 type Authenticator struct {
 	Verifier contracts.TokenVerifier
 	Users    domain.UserRepository
@@ -84,7 +84,7 @@ type Authenticator struct {
 
 var _ authz.Authenticator = Authenticator{}
 
-// Authenticate implements authz.Authenticator. credentials is the raw token or "Bearer <token>".
+// Authenticate implementa authz.Authenticator. credentials es el token en bruto o "Bearer <token>".
 func (a Authenticator) Authenticate(ctx context.Context, credentials string) (authz.Principal, error) {
 	token := strings.TrimSpace(credentials)
 	if len(token) > 7 && strings.EqualFold(token[:7], "bearer ") {
@@ -112,7 +112,7 @@ func (a Authenticator) Authenticate(ctx context.Context, credentials string) (au
 		Claims: map[string]string{"iss": id.Issuer, "sub": id.Subject}}, nil
 }
 
-// Users implements contracts.Users.
+// Users implementa contracts.Users.
 type Users struct{ Repository domain.UserRepository }
 
 var _ contracts.Users = Users{}
@@ -134,7 +134,7 @@ func parseBatch(ids []string) ([]fw.UUID, error) {
 	return out, nil
 }
 
-// Resolve implements contracts.Users.
+// Resolve implementa contracts.Users.
 func (d Users) Resolve(ctx context.Context, userIDs []string) (map[string]contracts.UserRef, error) {
 	ids, err := parseBatch(userIDs)
 	out := map[string]contracts.UserRef{}
@@ -155,7 +155,7 @@ func (d Users) Resolve(ctx context.Context, userIDs []string) (map[string]contra
 	return out, nil
 }
 
-// ByParty implements contracts.Users.
+// ByParty implementa contracts.Users.
 func (d Users) ByParty(ctx context.Context, partyIDs []string) (map[string][]contracts.UserRef, error) {
 	ids, err := parseBatch(partyIDs)
 	out := map[string][]contracts.UserRef{}
@@ -176,8 +176,8 @@ func (d Users) ByParty(ctx context.Context, partyIDs []string) (map[string][]con
 	return out, nil
 }
 
-// Publications translates the domain events into the Published Language. Successful and failed
-// logins stay in the audit log: they are not published.
+// Publications traduce los eventos de dominio al Published Language. Los logins correctos y los
+// fallidos se quedan en el registro de auditoría: no se publican.
 func Publications(r *messaging.Recorder) *messaging.Recorder {
 	one := func(e app.IntegrationEvent) ([]app.IntegrationEvent, error) { return []app.IntegrationEvent{e}, nil }
 	messaging.On(r, func(_ context.Context, e domain.UserRegistered) ([]app.IntegrationEvent, error) {

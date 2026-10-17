@@ -1,11 +1,11 @@
-// Package spec implements the Specification pattern as a typed, translatable expression tree.
+// Package spec implementa el patrón Especificación como un árbol de expresiones tipado y traducible.
 //
-// A specification has two faces that are built together and can never diverge:
-//   - IsSatisfiedBy: evaluation in memory against a candidate (domain rules, the memory adapter);
-//   - Expr: an expression tree that persistence adapters translate to their query language,
-//     so filtering, ordering and paging always run inside the database.
+// Una especificación tiene dos caras que se construyen juntas y nunca pueden divergir:
+//   - IsSatisfiedBy: evaluación en memoria contra un candidato (reglas de dominio, el adaptador en memoria);
+//   - Expr: un árbol de expresiones que los adaptadores de persistencia traducen a su lenguaje de consulta,
+//     de modo que el filtrado, la ordenación y la paginación se ejecutan siempre dentro de la base de datos.
 //
-// Specifications are composed from typed fields declared next to the aggregate:
+// Las especificaciones se componen a partir de campos tipados declarados junto al agregado:
 //
 //	var (
 //		PartyName   = spec.Text[*Party]("legal_name", (*Party).LegalName)
@@ -13,42 +13,42 @@
 //	)
 //	active := PartyActive.Eq(true).And(PartyName.StartsWith("Acme"))
 //
-// Field names are logical: each adapter maps them to physical columns, keeping the domain
-// independent of any storage technology.
+// Los nombres de campo son lógicos: cada adaptador los traduce a columnas físicas, lo que mantiene
+// el dominio independiente de cualquier tecnología de almacenamiento.
 package spec
 
-// Specification is the contract repositories accept. Spec[T] is the standard implementation;
-// custom types may implement it as long as their Expr is translatable.
+// Specification es el contrato que aceptan los repositorios. Spec[T] es la implementación estándar;
+// otros tipos pueden implementarlo siempre que su Expr sea traducible.
 type Specification[T any] interface {
-	// IsSatisfiedBy evaluates the rule in memory.
+	// IsSatisfiedBy evalúa la regla en memoria.
 	IsSatisfiedBy(candidate T) bool
-	// Expr returns the translatable expression tree of the rule.
+	// Expr devuelve el árbol de expresiones traducible de la regla.
 	Expr() Expr
 }
 
-// Spec is an immutable specification over candidates of type T. The zero value matches everything.
+// Spec es una especificación inmutable sobre candidatos de tipo T. El valor cero lo selecciona todo.
 type Spec[T any] struct {
 	expr Expr
 	eval func(T) bool
 }
 
-// New builds a specification from an expression and its in-memory evaluation. Prefer the typed
-// field constructors; New is the extension point for exotic cases.
+// New construye una especificación a partir de una expresión y su evaluación en memoria. Son
+// preferibles los constructores de campos tipados; New es el punto de extensión para casos raros.
 func New[T any](expr Expr, eval func(T) bool) Spec[T] {
 	return Spec[T]{expr: expr, eval: eval}
 }
 
-// All matches every candidate.
+// All selecciona todos los candidatos.
 func All[T any]() Spec[T] {
 	return Spec[T]{expr: Const{Value: true}, eval: func(T) bool { return true }}
 }
 
-// None matches no candidate.
+// None no selecciona ningún candidato.
 func None[T any]() Spec[T] {
 	return Spec[T]{expr: Const{Value: false}, eval: func(T) bool { return false }}
 }
 
-// IsSatisfiedBy evaluates the specification in memory.
+// IsSatisfiedBy evalúa la especificación en memoria.
 func (s Spec[T]) IsSatisfiedBy(candidate T) bool {
 	if s.eval == nil {
 		return true
@@ -56,7 +56,7 @@ func (s Spec[T]) IsSatisfiedBy(candidate T) bool {
 	return s.eval(candidate)
 }
 
-// Expr returns the expression tree (Const{true} for the zero Spec).
+// Expr devuelve el árbol de expresiones (Const{true} para la Spec cero).
 func (s Spec[T]) Expr() Expr {
 	if s.expr == nil {
 		return Const{Value: true}
@@ -64,20 +64,20 @@ func (s Spec[T]) Expr() Expr {
 	return s.expr
 }
 
-// And returns a specification satisfied when s and all others are satisfied.
+// And devuelve una especificación que se cumple cuando se cumplen s y todas las demás.
 func (s Spec[T]) And(others ...Specification[T]) Spec[T] {
 	return And(append([]Specification[T]{s}, others...)...)
 }
 
-// Or returns a specification satisfied when s or any of others is satisfied.
+// Or devuelve una especificación que se cumple cuando se cumple s o cualquiera de las demás.
 func (s Spec[T]) Or(others ...Specification[T]) Spec[T] {
 	return Or(append([]Specification[T]{s}, others...)...)
 }
 
-// Not returns the negation of s.
+// Not devuelve la negación de s.
 func (s Spec[T]) Not() Spec[T] { return Not[T](s) }
 
-// From converts any Specification into a Spec (nil becomes All).
+// From convierte cualquier Specification en una Spec (nil pasa a ser All).
 func From[T any](s Specification[T]) Spec[T] {
 	switch v := s.(type) {
 	case nil:
@@ -89,7 +89,7 @@ func From[T any](s Specification[T]) Spec[T] {
 	}
 }
 
-// And combines specifications with logical AND. Nested ANDs are flattened and TRUE constants dropped.
+// And combina especificaciones con un AND lógico. Los AND anidados se aplanan y las constantes TRUE se descartan.
 func And[T any](specs ...Specification[T]) Spec[T] {
 	parts := make([]Spec[T], 0, len(specs))
 	exprs := make([]Expr, 0, len(specs))
@@ -130,7 +130,7 @@ func And[T any](specs ...Specification[T]) Spec[T] {
 	}
 }
 
-// Or combines specifications with logical OR. Nested ORs are flattened and FALSE constants dropped.
+// Or combina especificaciones con un OR lógico. Los OR anidados se aplanan y las constantes FALSE se descartan.
 func Or[T any](specs ...Specification[T]) Spec[T] {
 	parts := make([]Spec[T], 0, len(specs))
 	exprs := make([]Expr, 0, len(specs))
@@ -171,7 +171,7 @@ func Or[T any](specs ...Specification[T]) Spec[T] {
 	}
 }
 
-// Not negates a specification.
+// Not niega una especificación.
 func Not[T any](s Specification[T]) Spec[T] {
 	inner := From(s)
 	eval := func(c T) bool { return !inner.IsSatisfiedBy(c) }
@@ -181,16 +181,16 @@ func Not[T any](s Specification[T]) Spec[T] {
 			return None[T]()
 		}
 		return All[T]()
-	case NotExpr: // double negation
+	case NotExpr: // doble negación
 		return Spec[T]{expr: e.Expr, eval: eval}
 	}
 	return Spec[T]{expr: NotExpr{Expr: inner.Expr()}, eval: eval}
 }
 
-// Custom declares a named business rule. eval is its in-memory semantics; every persistence
-// adapter that must support the rule registers a translation for name (for SQL adapters see
-// sqlrepo.Mapping.Custom). Adapters without a translation fail with domain.ErrUnsupported
-// instead of loading data to filter it in memory.
+// Custom declara una regla de negocio con nombre. eval es su semántica en memoria; cada adaptador
+// de persistencia que deba admitir la regla registra una traducción para name (para los adaptadores
+// SQL véase sqlrepo.Mapping.Custom). Los adaptadores sin traducción fallan con domain.ErrUnsupported
+// en lugar de cargar datos para filtrarlos en memoria.
 //
 //	func HighCreditRisk(limit int64) spec.Spec[*Party] {
 //		return spec.Custom("parties.high_credit_risk",

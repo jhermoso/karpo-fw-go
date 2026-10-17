@@ -23,8 +23,9 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 )
 
-// TestFacilitiesContext runs Facilities with Parties and Geography on every engine (one database,
-// three migration histories): located office, hierarchy, scope, facility roles in Parties.
+// TestFacilitiesContext ejecuta Facilities con Parties y Geography en cada motor (una base de
+// datos, tres historias de migraciones): oficina localizada, jerarquía, ámbito, roles de
+// instalación en Parties.
 func TestFacilitiesContext(t *testing.T) {
 	for _, e := range engines {
 		if e.name == "oracle-dotnet-guids" {

@@ -1,5 +1,5 @@
-// Package infrastructure stores the Purchases context: SQL mappings, versioned schema of the five
-// engines, hot-swap factories and the adapter to the Fiscal tax engine.
+// Package infrastructure guarda el contexto Purchases: mapeos SQL, esquema versionado de los cinco
+// motores, factorías intercambiables en caliente y el adaptador al motor de impuestos de Fiscal.
 package infrastructure
 
 import (
@@ -22,10 +22,10 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlserver"
 )
 
-// Context is the name of the bounded context.
+// Context es el nombre del contexto delimitado.
 const Context = "purchases"
 
-// Technical tables of the context.
+// Tablas técnicas del contexto.
 const (
 	TableOutbox            = "purchases_outbox"
 	TableIntegrationOutbox = "purchases_integration_outbox"
@@ -75,7 +75,7 @@ func technicalDDL(d string) []string {
 	return nil
 }
 
-// Migrations is the versioned schema of the context.
+// Migrations es el esquema versionado del contexto.
 func Migrations() sqlrepo.MigrationSet {
 	technical := map[string][]string{}
 	for _, d := range sqlrepo.Dialects {
@@ -87,16 +87,16 @@ func Migrations() sqlrepo.MigrationSet {
 	}}
 }
 
-// Migrator returns the schema migrator of the context.
+// Migrator devuelve el migrador del esquema del contexto.
 func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 	return sqlrepo.NewMigrator(db, []sqlrepo.MigrationSet{Migrations()})
 }
 
-// Tables lists the tables of the context, children first (drop order).
+// Tables lista las tablas del contexto, primero las hijas (orden de borrado).
 var Tables = []string{"pur_invoice_accounts", "pur_invoice_taxes", "pur_invoice_lines", "pur_invoices", "pur_suppliers", "pur_counters", TableOutbox,
 	TableIntegrationOutbox, TableAuditLog}
 
-// DropAll removes the tables of the context and its migration history (tests only).
+// DropAll borra las tablas del contexto y su historial de migraciones (sólo pruebas).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
 	for _, t := range Tables {
 		_, _ = db.ExecContext(ctx, "DROP TABLE "+t)
@@ -117,7 +117,7 @@ func byNo(rows []*sqlrepo.Row) []*sqlrepo.Row {
 	return out
 }
 
-// InvoiceMapping maps Invoice to pur_invoices, its lines, tax breakdown and accounts.
+// InvoiceMapping mapea Invoice a pur_invoices, sus líneas, su desglose de impuestos y sus cuentas.
 func InvoiceMapping() sqlrepo.Mapping[domain.InvoiceID, *domain.Invoice] {
 	return sqlrepo.Mapping[domain.InvoiceID, *domain.Invoice]{
 		Table: "pur_invoices",
@@ -205,7 +205,7 @@ func InvoiceMapping() sqlrepo.Mapping[domain.InvoiceID, *domain.Invoice] {
 	}
 }
 
-// SupplierMapping maps SupplierProfile to pur_suppliers.
+// SupplierMapping mapea SupplierProfile a pur_suppliers.
 func SupplierMapping() sqlrepo.Mapping[domain.SupplierID, *domain.SupplierProfile] {
 	return sqlrepo.Mapping[domain.SupplierID, *domain.SupplierProfile]{
 		Table:   "pur_suppliers",
@@ -235,7 +235,7 @@ func SupplierMapping() sqlrepo.Mapping[domain.SupplierID, *domain.SupplierProfil
 	}
 }
 
-// CounterMapping maps Counter to pur_counters.
+// CounterMapping mapea Counter a pur_counters.
 func CounterMapping() sqlrepo.Mapping[domain.CounterID, *domain.Counter] {
 	return sqlrepo.Mapping[domain.CounterID, *domain.Counter]{
 		Table:   "pur_counters",
@@ -266,25 +266,25 @@ func repository[ID fw.Identifier, T fw.AggregateRoot[ID]](b hotswap.Backend, m s
 	return nil, unsupported(b)
 }
 
-// InvoiceRepositoryFactory builds the invoice repository.
+// InvoiceRepositoryFactory construye el repositorio de facturas.
 func InvoiceRepositoryFactory(b hotswap.Backend) (domain.InvoiceRepository, error) {
 	return repository(b, InvoiceMapping())
 }
 
-// SupplierRepositoryFactory builds the supplier profile repository.
+// SupplierRepositoryFactory construye el repositorio de perfiles de proveedor.
 func SupplierRepositoryFactory(b hotswap.Backend) (domain.SupplierRepository, error) {
 	return repository(b, SupplierMapping())
 }
 
-// CounterRepositoryFactory builds the register counter repository.
+// CounterRepositoryFactory construye el repositorio de contadores del registro.
 func CounterRepositoryFactory(b hotswap.Backend) (domain.CounterRepository, error) {
 	return repository(b, CounterMapping())
 }
 
-// OutboxFactory builds the domain event outbox.
+// OutboxFactory construye el outbox de eventos de dominio.
 func OutboxFactory(b hotswap.Backend) (application.OutboxStore, error) { return outbox(b, TableOutbox) }
 
-// IntegrationOutboxFactory builds the integration outbox.
+// IntegrationOutboxFactory construye el outbox de integración.
 func IntegrationOutboxFactory(b hotswap.Backend) (application.OutboxStore, error) {
 	return outbox(b, TableIntegrationOutbox)
 }
@@ -299,7 +299,7 @@ func outbox(b hotswap.Backend, table string) (application.OutboxStore, error) {
 	return nil, unsupported(b)
 }
 
-// AuditLogFactory builds the audit log.
+// AuditLogFactory construye el registro de auditoría.
 func AuditLogFactory(b hotswap.Backend) (application.AuditLog, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -310,13 +310,14 @@ func AuditLogFactory(b hotswap.Backend) (application.AuditLog, error) {
 	return nil, unsupported(b)
 }
 
-// FiscalTaxes adapts the Fiscal TaxEngine to the Purchases Taxes port (ACL). The buying company is
-// the taxpayer whose jurisdiction applies (phase 1: both parties in the same territory).
+// FiscalTaxes adapta el TaxEngine de Fiscal al puerto Taxes de Purchases (ACL). La empresa
+// compradora es el contribuyente cuya jurisdicción se aplica (fase 1: ambas partes en el mismo
+// territorio).
 type FiscalTaxes struct{ Engine fiscal.TaxEngine }
 
 var _ domain.Taxes = FiscalTaxes{}
 
-// Calculate implements domain.Taxes.
+// Calculate implementa domain.Taxes.
 func (f FiscalTaxes) Calculate(ctx context.Context, company domain.OrganizationID, accrual vocab.Date, lines []domain.TaxableLine) (domain.Breakdown, error) {
 	doc := fiscal.TaxableDocument{Seller: company.String(), Date: accrual.String()}
 	for _, l := range lines {

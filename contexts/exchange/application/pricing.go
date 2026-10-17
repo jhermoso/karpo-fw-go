@@ -10,7 +10,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// SetCurrency adds a currency to those a company exchanges, or changes it.
+// SetCurrency añade una moneda a las que cambia una empresa, o la modifica.
 type SetCurrency struct {
 	Company string `json:"company"`
 	Code    string `json:"code"`
@@ -20,35 +20,35 @@ type SetCurrency struct {
 	Blocked bool   `json:"blocked,omitempty"`
 }
 
-// SetRate fixes the reference rate of a currency: euros for one unit.
+// SetRate fija el cambio de referencia de una moneda: euros por una unidad.
 type SetRate struct {
 	Company string     `json:"company"`
 	Code    string     `json:"code"`
 	Rate    string     `json:"rate"`
-	On      vocab.Date `json:"on,omitzero"` // today by default
+	On      vocab.Date `json:"on,omitzero"` // hoy, por omisión
 }
 
-// ListCurrencies lists the currencies of a company.
+// ListCurrencies lista las monedas de una empresa.
 type ListCurrencies struct{ Company string }
 
-// SetMargin sets the margin of a currency for a segment: one value per level of price.
+// SetMargin fija el margen de una moneda para un segmento: un valor por nivel de precio.
 type SetMargin struct {
 	Company  string `json:"company"`
 	Currency string `json:"currency"`
-	Segment  string `json:"segment,omitempty"` // WEB by default
+	Segment  string `json:"segment,omitempty"` // WEB, por omisión
 	Kind     string `json:"kind"`
 	Level1   string `json:"level1"`
 	Level2   string `json:"level2"`
 	Level3   string `json:"level3"`
 }
 
-// ListMargins lists the margins of a company.
+// ListMargins lista los márgenes de una empresa.
 type ListMargins struct{ Company string }
 
-// GetSettings returns the settings of a company.
+// GetSettings devuelve la configuración de una empresa.
 type GetSettings struct{ Company string }
 
-// SetSettings replaces the settings of a company.
+// SetSettings sustituye la configuración de una empresa.
 type SetSettings struct {
 	Company           string `json:"company"`
 	Level             int    `json:"level"`
@@ -58,10 +58,10 @@ type SetSettings struct {
 	CryptoEnabled     bool   `json:"cryptoEnabled,omitempty"`
 }
 
-// GetQuote prices an amount of a currency.
+// GetQuote pone precio a un importe de una moneda.
 type GetQuote struct{ Company, Currency, Segment, Amount string }
 
-// CurrencyDTO is the transport form of a currency.
+// CurrencyDTO es la forma de transporte de una moneda.
 type CurrencyDTO struct {
 	ID      string `json:"id"`
 	Company string `json:"company"`
@@ -85,7 +85,7 @@ func currencyDTO(c *domain.Currency) CurrencyDTO {
 	return d
 }
 
-// MarginDTO is the transport form of a margin.
+// MarginDTO es la forma de transporte de un margen.
 type MarginDTO struct {
 	ID       string `json:"id"`
 	Company  string `json:"company"`
@@ -104,8 +104,8 @@ func marginDTO(m *domain.Margin) MarginDTO {
 		Level1: s.Values[0].String(), Level2: s.Values[1].String(), Level3: s.Values[2].String(), Version: m.Version()}
 }
 
-// SettingsDTO is the transport form of the settings. Defaults is true until the company changes
-// them.
+// SettingsDTO es la forma de transporte de la configuración. Defaults es true hasta que la empresa
+// la cambia.
 type SettingsDTO struct {
 	Company           string `json:"company"`
 	Level             int    `json:"level"`
@@ -126,7 +126,7 @@ func settingsDTO(st domain.SettingsState, own *domain.Settings) SettingsDTO {
 	return d
 }
 
-// QuoteDTO is the transport form of a quotation.
+// QuoteDTO es la forma de transporte de una cotización.
 type QuoteDTO struct {
 	Currency      string `json:"currency"`
 	Segment       string `json:"segment"`

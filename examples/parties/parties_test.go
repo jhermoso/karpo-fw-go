@@ -43,7 +43,7 @@ type env struct {
 	audit  application.AuditLog
 }
 
-// Actors sent by the (trusted) gateway headers.
+// Actores enviados por las cabeceras de la pasarela (de confianza).
 var (
 	anaID  = fw.NewUUID()
 	luisID = fw.NewUUID()
@@ -51,7 +51,7 @@ var (
 	asLuis = map[string]string{distribution.ActorHeader: luisID.String(), distribution.ActorNameHeader: "Luis", distribution.ChannelHeader: "api"}
 )
 
-// compose is the composition root: the only place that knows concrete technologies.
+// compose es la raíz de composición: el único sitio que conoce tecnologías concretas.
 func compose(t *testing.T) *env {
 	sw := hotswap.New(memory.NewStore("memory"))
 	repo := hotswap.Repository(sw, infrastructure.RepositoryFactory)
@@ -59,7 +59,7 @@ func compose(t *testing.T) *env {
 	integ := hotswap.Outbox(sw, infrastructure.IntegrationOutboxFactory)
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
 	recorder := appoutbox.Recorders(
-		appoutbox.NewRecorder(outbox),                                     // domain events, inside Parties
+		appoutbox.NewRecorder(outbox),                                     // eventos de dominio, dentro de Parties
 		papp.Publications(messaging.NewRecorder(contracts.Source, integ)), // Published Language
 	)
 	svc := papp.NewService(repo, sw, recorder, memory.NewIdempotencyStore(), audit)
@@ -127,18 +127,18 @@ func (e *env) scenario(prefix string) {
 	globex := e.register(prefix+" Globex", prefix+"-B87654321")
 	e.register(prefix+" Initech", prefix+"-B11112222")
 
-	// Validation errors come back as RFC 9457 problems with field details.
+	// Los errores de validación vuelven como problemas RFC 9457 con el detalle por campo.
 	status, body := e.do("POST", "/parties", map[string]string{"type": "alien", "legalName": "", "taxId": "1"}, nil)
 	var problem distribution.ProblemDetails
 	_ = json.Unmarshal(body, &problem)
 	if status != http.StatusBadRequest || len(problem.Errors) != 3 {
 		t.Fatalf("expected 400 with 3 field errors, got %d %s", status, body)
 	}
-	// Business rule: tax id is unique.
+	// Regla de negocio: el identificador fiscal es único.
 	if status, body = e.do("POST", "/parties", map[string]string{"type": "organization", "legalName": "Copy", "taxId": prefix + "-B12345678"}, nil); status != http.StatusUnprocessableEntity {
 		t.Fatalf("expected 422 for duplicate tax id, got %d %s", status, body)
 	}
-	// Idempotent replay returns the same party.
+	// La repetición idempotente devuelve la misma party.
 	hdr := map[string]string{"Idempotency-Key": prefix + "-req-1"}
 	_, first := e.do("POST", "/parties", map[string]string{"type": "person", "legalName": prefix + " Jane Roe", "taxId": prefix + "-X0000001"}, hdr)
 	_, second := e.do("POST", "/parties", map[string]string{"type": "person", "legalName": prefix + " Jane Roe", "taxId": prefix + "-X0000001"}, hdr)
@@ -164,8 +164,8 @@ func (e *env) scenario(prefix string) {
 		t.Fatalf("rename must be stamped with the header actor: %d %s", status, body)
 	}
 
-	// The audit log recorded every change of Globex in the same transactions: who, channel,
-	// changed fields and raised events.
+	// El registro de auditoría anotó cada cambio de Globex en las mismas transacciones: quién,
+	// canal, campos cambiados y eventos lanzados.
 	trail, err := e.audit.Trail(context.Background(), domain.Kind, globex.ID.String())
 	if err != nil || len(trail) != 3 {
 		t.Fatalf("audit trail: %d records, %v", len(trail), err)
@@ -184,9 +184,9 @@ func (e *env) scenario(prefix string) {
 		t.Fatalf("get: %d %s", status, body)
 	}
 
-	// Every criterion is part of one specification executed by the store.
-	// Each backend only holds its own scenario, so queries need no prefix. Tax ids are
-	// normalized (upper case, no dashes) by the TaxID value object.
+	// Cada criterio forma parte de una especificación que ejecuta el almacén.
+	// Cada almacén sólo guarda su propio escenario, así que las consultas no necesitan prefijo.
+	// El objeto de valor TaxID normaliza los identificadores fiscales (mayúsculas, sin guiones).
 	taxPrefix := strings.ToUpper(prefix) + "B1"
 	checks := map[string][]string{
 		"q=corp":                    {prefix + " Acme Corporation", prefix + " Globex Corporation"},
@@ -200,7 +200,7 @@ func (e *env) scenario(prefix string) {
 			t.Fatalf("search %q: want %v got %v", q, want, got)
 		}
 	}
-	if got := e.search("size=3&page=2"); len(got) != 1 { // 4 parties, pages of 3
+	if got := e.search("size=3&page=2"); len(got) != 1 { // 4 parties, páginas de 3
 
 		t.Fatalf("paging: %v", got)
 	}
@@ -210,14 +210,15 @@ func TestParties_EndToEnd_WithLiveDatabaseSwap(t *testing.T) {
 	e := compose(t)
 	ctx := context.Background()
 
-	// 1. The service starts on the in-memory backend.
+	// 1. El servicio arranca sobre el almacén en memoria.
 	e.scenario("mem")
 	memoryParty := e.search("q=mem%20acme")
 	if len(memoryParty) != 1 {
 		t.Fatalf("memory data: %v", memoryParty)
 	}
 
-	// 2. A SQL database is prepared and swapped in while the service keeps running.
+	// 2. Se prepara una base de datos SQL y se pone en su lugar mientras el servicio sigue
+	// funcionando.
 	path := filepath.Join(t.TempDir(), "parties.db")
 	raw, err := sql.Open("sqlite", "file:"+path+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)")
 	if err != nil {
@@ -236,14 +237,15 @@ func TestParties_EndToEnd_WithLiveDatabaseSwap(t *testing.T) {
 	if err := infrastructure.Migrate(ctx, db); err != nil {
 		t.Fatal(err)
 	}
-	if err := migrator.Verify(ctx); err != nil { // gate: never swap to an outdated schema
+	if err := migrator.Verify(ctx); err != nil { // barrera: nunca se cambia a un esquema desfasado
 		t.Fatal(err)
 	}
 	if err := e.sw.Swap(ctx, db); err != nil {
 		t.Fatal(err)
 	}
 
-	// 3. Same HTTP API, same use cases, same specifications: now translated to SQL.
+	// 3. La misma API HTTP, los mismos casos de uso, las mismas especificaciones: ahora
+	// traducidas a SQL.
 	e.scenario("sql")
 	if got := e.search("q=mem%20acme"); len(got) != 0 {
 		t.Fatalf("new backend must not see the memory data: %v", got)
@@ -253,7 +255,8 @@ func TestParties_EndToEnd_WithLiveDatabaseSwap(t *testing.T) {
 		t.Fatalf("expected 4 parties stored in SQLite, got %d (%v)", rows, err)
 	}
 
-	// 4. The outbox committed with the state is relayed to subscribers, decoded and typed.
+	// 4. El outbox confirmado junto con el estado se reenvía a los suscriptores, decodificado y
+	// tipado.
 	bus := inprocess.New()
 	reg := events.NewRegistry()
 	events.Register[domain.PartyRegistered](reg)
@@ -271,7 +274,7 @@ func TestParties_EndToEnd_WithLiveDatabaseSwap(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n != 8 || len(registered) != 4 || renamed != 1 { // 4 registered + 3 contacts + 1 rename
+	if n != 8 || len(registered) != 4 || renamed != 1 { // 4 altas + 3 contactos + 1 cambio de nombre
 		t.Fatalf("relayed %d, registered %v, renamed %d", n, registered, renamed)
 	}
 	if left, _ := e.outbox.Pending(ctx, 100, 10); len(left) != 0 {
@@ -315,7 +318,8 @@ func TestParty_Invariants(t *testing.T) {
 	}
 }
 
-// The bounded context's domain depends only on the standard library and the framework domain.
+// El dominio del contexto delimitado sólo depende de la biblioteca estándar y del dominio del
+// framework.
 func TestParties_DomainIsPure(t *testing.T) {
 	archtest.AssertTreeOnlyImports(t, "domain", true, []string{
 		"github.com/jhermoso/karpo-fw-go/pkg/domain",

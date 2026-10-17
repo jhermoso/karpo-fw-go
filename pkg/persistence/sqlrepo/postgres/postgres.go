@@ -1,7 +1,8 @@
-// Package postgres provides the PostgreSQL dialect for sqlrepo. It does not import a driver:
-// register one in the composition root (e.g. github.com/jackc/pgx/v5/stdlib, driver "pgx").
+// Package postgres ofrece el dialecto PostgreSQL para sqlrepo. No importa ningún driver: se
+// registra uno en la raíz de composición (p. ej. github.com/jackc/pgx/v5/stdlib, driver "pgx").
 //
-// Recommended column types: UUID for identities, BOOLEAN, TIMESTAMPTZ, BIGINT for versions.
+// Tipos de columna recomendados: UUID para las identidades, BOOLEAN, TIMESTAMPTZ, BIGINT para las
+// versiones.
 package postgres
 
 import (
@@ -14,13 +15,13 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 )
 
-// Dialect implements sqlrepo.Dialect for PostgreSQL.
+// Dialect implementa sqlrepo.Dialect para PostgreSQL.
 type Dialect struct{}
 
-// New returns the PostgreSQL dialect.
+// New devuelve el dialecto PostgreSQL.
 func New() Dialect { return Dialect{} }
 
-// Open wraps an opened PostgreSQL *sql.DB.
+// Open envuelve un *sql.DB de PostgreSQL ya abierto.
 func Open(db *sql.DB, opts ...sqlrepo.Option) *sqlrepo.DB { return sqlrepo.New(db, New(), opts...) }
 
 func (Dialect) Name() string                         { return "postgres" }
@@ -34,19 +35,19 @@ func (Dialect) UUIDValue(u domain.UUID) any          { return u.String() }
 func (Dialect) TimeValue(t time.Time) any            { return t.UTC() }
 func (Dialect) ParseUUID(v any) (domain.UUID, error) { return sqlrepo.ParseUUIDDefault(v) }
 
-// DateValue binds a civil date as midnight UTC into a DATE column.
+// DateValue enlaza una fecha civil como medianoche UTC en una columna DATE.
 func (Dialect) DateValue(y int, m time.Month, d int) any {
 	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
 }
 
-// DateExpr returns the placeholder unchanged.
+// DateExpr devuelve el placeholder sin cambios.
 func (Dialect) DateExpr(ph string) string { return ph }
 
 func (Dialect) IsUniqueViolation(err error) bool {
 	return sqlrepo.ErrorContains(err, "SQLSTATE 23505", "(23505)", "duplicate key value violates unique constraint")
 }
 
-// OutboxDDL returns the statements creating the outbox table.
+// OutboxDDL devuelve las sentencias que crean la tabla del outbox.
 func OutboxDDL(table string) []string {
 	if table == "" {
 		table = sqlrepo.DefaultOutboxTable
@@ -69,7 +70,7 @@ func OutboxDDL(table string) []string {
 	}
 }
 
-// AuditDDL returns the statements creating the audit log table.
+// AuditDDL devuelve las sentencias que crean la tabla del registro de auditoría.
 func AuditDDL(table string) []string {
 	if table == "" {
 		table = sqlrepo.DefaultAuditTable
@@ -86,7 +87,7 @@ func AuditDDL(table string) []string {
 
 var _ sqlrepo.Dialect = Dialect{}
 
-// InboxDDL returns the statements creating the inbox table (consumer, message id).
+// InboxDDL devuelve las sentencias que crean la tabla del inbox (consumidor, id del mensaje).
 func InboxDDL(table string) []string {
 	if table == "" {
 		table = sqlrepo.DefaultInboxTable

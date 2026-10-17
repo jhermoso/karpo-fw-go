@@ -1,5 +1,5 @@
-// Package infrastructure stores the Shipments context: SQL mappings, versioned schema of the five
-// engines and hot-swap factories.
+// Package infrastructure guarda el contexto Shipments: mapeos SQL, esquema versionado de los cinco
+// motores y factorías intercambiables en caliente.
 package infrastructure
 
 import (
@@ -21,10 +21,10 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlserver"
 )
 
-// Context is the name of the bounded context.
+// Context es el nombre del contexto delimitado.
 const Context = "shipments"
 
-// Technical tables of the context.
+// Tablas técnicas del contexto.
 const (
 	TableOutbox            = "shipments_outbox"
 	TableIntegrationOutbox = "shipments_integration_outbox"
@@ -67,7 +67,7 @@ func technicalDDL(d string) []string {
 	return nil
 }
 
-// Migrations is the versioned schema of the context.
+// Migrations es el esquema versionado del contexto.
 func Migrations() sqlrepo.MigrationSet {
 	technical := map[string][]string{}
 	for _, d := range sqlrepo.Dialects {
@@ -79,16 +79,16 @@ func Migrations() sqlrepo.MigrationSet {
 	}}
 }
 
-// Migrator returns the schema migrator of the context.
+// Migrator devuelve el migrador del esquema del contexto.
 func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 	return sqlrepo.NewMigrator(db, []sqlrepo.MigrationSet{Migrations()})
 }
 
-// Tables lists the tables of the context, children first (drop order).
+// Tables lista las tablas del contexto, primero las hijas (orden de borrado).
 var Tables = []string{"shp_shipment_history", "shp_shipment_lines", "shp_shipments", "shp_carriers", TableOutbox, TableIntegrationOutbox,
 	TableAuditLog, TableInbox}
 
-// DropAll removes the tables of the context and its migration history (tests only).
+// DropAll borra las tablas del contexto y su historial de migraciones (sólo pruebas).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
 	for _, t := range Tables {
 		_, _ = db.ExecContext(ctx, "DROP TABLE "+t)
@@ -117,14 +117,14 @@ func optDate(d vocab.Date) any {
 	return d
 }
 
-// Engines do not agree on the order of the children: they are sorted here.
+// Los motores no coinciden en el orden de los hijos: se ordenan aquí.
 func byNo(rows []*sqlrepo.Row) []*sqlrepo.Row {
 	out := slices.Clone(rows)
 	slices.SortFunc(out, func(a, b *sqlrepo.Row) int { return int(a.Int64("line_no") - b.Int64("line_no")) })
 	return out
 }
 
-// ShipmentMapping maps Shipment to shp_shipments, its lines and its history.
+// ShipmentMapping mapea Shipment a shp_shipments, sus líneas y su historial.
 func ShipmentMapping() sqlrepo.Mapping[domain.ShipmentID, *domain.Shipment] {
 	return sqlrepo.Mapping[domain.ShipmentID, *domain.Shipment]{
 		Table: "shp_shipments",
@@ -193,7 +193,7 @@ func ShipmentMapping() sqlrepo.Mapping[domain.ShipmentID, *domain.Shipment] {
 	}
 }
 
-// CarrierMapping maps Carrier to shp_carriers.
+// CarrierMapping mapea Carrier a shp_carriers.
 func CarrierMapping() sqlrepo.Mapping[domain.CarrierID, *domain.Carrier] {
 	return sqlrepo.Mapping[domain.CarrierID, *domain.Carrier]{
 		Table:   "shp_carriers",
@@ -226,20 +226,20 @@ func repository[ID fw.Identifier, T fw.AggregateRoot[ID]](b hotswap.Backend, m s
 	return nil, unsupported(b)
 }
 
-// ShipmentRepositoryFactory builds the shipment repository.
+// ShipmentRepositoryFactory construye el repositorio de envíos.
 func ShipmentRepositoryFactory(b hotswap.Backend) (domain.ShipmentRepository, error) {
 	return repository(b, ShipmentMapping())
 }
 
-// CarrierRepositoryFactory builds the carrier repository.
+// CarrierRepositoryFactory construye el repositorio de transportistas.
 func CarrierRepositoryFactory(b hotswap.Backend) (domain.CarrierRepository, error) {
 	return repository(b, CarrierMapping())
 }
 
-// OutboxFactory builds the domain event outbox.
+// OutboxFactory construye el outbox de eventos de dominio.
 func OutboxFactory(b hotswap.Backend) (application.OutboxStore, error) { return outbox(b, TableOutbox) }
 
-// IntegrationOutboxFactory builds the integration outbox.
+// IntegrationOutboxFactory construye el outbox de integración.
 func IntegrationOutboxFactory(b hotswap.Backend) (application.OutboxStore, error) {
 	return outbox(b, TableIntegrationOutbox)
 }
@@ -254,7 +254,7 @@ func outbox(b hotswap.Backend, table string) (application.OutboxStore, error) {
 	return nil, unsupported(b)
 }
 
-// AuditLogFactory builds the audit log.
+// AuditLogFactory construye el registro de auditoría.
 func AuditLogFactory(b hotswap.Backend) (application.AuditLog, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -265,7 +265,7 @@ func AuditLogFactory(b hotswap.Backend) (application.AuditLog, error) {
 	return nil, unsupported(b)
 }
 
-// InboxFactory builds the inbox of the events Shipments consumes.
+// InboxFactory construye el inbox de los eventos que consume Shipments.
 func InboxFactory(b hotswap.Backend) (application.InboxStore, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:

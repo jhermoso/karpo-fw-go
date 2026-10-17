@@ -1,8 +1,9 @@
-// Package domain is the model of the Payroll bounded context: payslips with their lines and
-// derived totals, the pay concept catalog, the payroll profile of each employment (contribution
-// group, withholding rate, agreed salary and how the net pay is split across bank accounts) and
-// the employer Social Security accounts (CCC). Employments and contracts belong to HR, people and
-// organizations to Parties, tax forms to Fiscal: this context references them by identity.
+// Package domain es el modelo del contexto delimitado Payroll: las nóminas con sus líneas y
+// totales derivados, el catálogo de conceptos retributivos, el perfil de nómina de cada relación
+// laboral (grupo de cotización, tipo de retención, salario pactado y cómo se reparte el líquido
+// entre cuentas bancarias) y las cuentas de cotización a la Seguridad Social del empleador (CCC).
+// Las relaciones laborales y los contratos son de HR, las personas y organizaciones de Parties,
+// los modelos fiscales de Fiscal: este contexto los referencia por su identidad.
 package domain
 
 import (
@@ -13,50 +14,50 @@ import (
 )
 
 type (
-	// ConceptID identifies a pay concept.
+	// ConceptID identifica un concepto retributivo.
 	ConceptID struct{ fw.UUID }
-	// PayslipID identifies a payslip.
+	// PayslipID identifica una nómina.
 	PayslipID struct{ fw.UUID }
-	// ProfileID identifies a payroll profile.
+	// ProfileID identifica un perfil de nómina.
 	ProfileID struct{ fw.UUID }
-	// EmployerAccountID identifies an employer Social Security account (CCC).
+	// EmployerAccountID identifica una cuenta de cotización a la Seguridad Social del empleador (CCC).
 	EmployerAccountID struct{ fw.UUID }
-	// EmploymentID is an employment of the HR context.
+	// EmploymentID es una relación laboral del contexto HR.
 	EmploymentID struct{ fw.UUID }
-	// PersonID is a person of the Parties context.
+	// PersonID es una persona del contexto Parties.
 	PersonID struct{ fw.UUID }
-	// OrganizationID is an internal organization (employer) of the Parties context.
+	// OrganizationID es una organización interna (empleador) del contexto Parties.
 	OrganizationID struct{ fw.UUID }
-	// AgreementID is a collective agreement of the HR context.
+	// AgreementID es un convenio colectivo del contexto HR.
 	AgreementID struct{ fw.UUID }
-	// WorkCenterID is a work center of the HR context.
+	// WorkCenterID es un centro de trabajo del contexto HR.
 	WorkCenterID struct{ fw.UUID }
 )
 
-// MustConceptID parses a well-known identity.
+// MustConceptID interpreta una identidad conocida.
 func MustConceptID(s string) ConceptID { return ConceptID{fw.MustParseUUID(s)} }
 
-// ConceptKind says how a concept counts in the totals of a payslip.
+// ConceptKind dice cómo cuenta un concepto en los totales de una nómina.
 type ConceptKind int
 
-// Concept kinds. The C# mixed IRPF and Social Security in one "Withholding" line type, and
-// counted Social Security as IRPF withheld in the Modelo 190.
+// Clases de concepto. El C# mezclaba IRPF y Seguridad Social en un solo tipo de línea
+// «Withholding», y contaba la Seguridad Social como IRPF retenido en el Modelo 190.
 const (
-	KindEarning        ConceptKind = iota + 1 // devengo: adds to the gross
-	KindSocialSecurity                        // employee contribution: deducted
-	KindIncomeTax                             // IRPF withholding: deducted
-	KindDeduction                             // other deductions (garnishment, advance): deducted
-	KindEmployerCost                          // employer contribution: company cost, not deducted
-	KindInformation                           // informative, no economic effect
+	KindEarning        ConceptKind = iota + 1 // devengo: suma al bruto
+	KindSocialSecurity                        // cotización del trabajador: se deduce
+	KindIncomeTax                             // retención de IRPF: se deduce
+	KindDeduction                             // otras deducciones (embargo, anticipo): se deducen
+	KindEmployerCost                          // cotización de la empresa: coste de empresa, no se deduce
+	KindInformation                           // informativo, sin efecto económico
 )
 
 var kindNames = map[ConceptKind]string{KindEarning: "earning", KindSocialSecurity: "social-security", KindIncomeTax: "income-tax",
 	KindDeduction: "deduction", KindEmployerCost: "employer-cost", KindInformation: "information"}
 
-// String returns the stable name of the kind.
+// String devuelve el nombre estable de la clase.
 func (k ConceptKind) String() string { return kindNames[k] }
 
-// ParseConceptKind parses a kind name.
+// ParseConceptKind interpreta el nombre de una clase.
 func ParseConceptKind(s string) (ConceptKind, bool) {
 	for k, n := range kindNames {
 		if n == s {
@@ -66,9 +67,10 @@ func ParseConceptKind(s string) (ConceptKind, bool) {
 	return 0, false
 }
 
-// Concept is an entry of the pay concept catalog (it replaces the free-text concept codes and the
-// DeductionType / RateType mix of the C#). Contributable and Taxable say whether an earning counts
-// in the contribution base and in the withholding base; PerceptionKey is the Modelo 190 key.
+// Concept es una entrada del catálogo de conceptos retributivos (sustituye los códigos de concepto
+// de texto libre y la mezcla DeductionType / RateType de C#). Contributable y Taxable dicen si un
+// devengo cuenta en la base de cotización y en la base de retención; PerceptionKey es la clave del
+// Modelo 190.
 type Concept struct {
 	ID            ConceptID
 	Code          string
@@ -80,7 +82,7 @@ type Concept struct {
 	Active        bool
 }
 
-// Validate checks a concept.
+// Validate comprueba un concepto.
 func (c Concept) Validate() error {
 	var v fw.Validation
 	code := strings.TrimSpace(c.Code)

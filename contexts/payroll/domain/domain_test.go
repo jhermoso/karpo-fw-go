@@ -98,7 +98,7 @@ func TestPayslip(t *testing.T) {
 	add("SS_ER_CC", domain.LineInput{Base: dec("2105.25"), Percent: dec("23.60")})
 	info := add("INFO_BASE_CC", domain.LineInput{Amount: dec("2105.25")})
 	tot := p.Totals()
-	// 2105.25 − 98.95 − 32.63 − 315.79 = 1657.88; company cost 2105.25 + 496.84.
+	// 2105.25 − 98.95 − 32.63 − 315.79 = 1657.88; coste de empresa 2105.25 + 496.84.
 	if !tot.Gross.Equal(dec("2105.25")) || !tot.SocialSecurity.Equal(dec("131.58")) || !tot.IncomeTax.Equal(dec("315.79")) ||
 		!tot.Net.Equal(dec("1657.88")) || !tot.EmployerCost.Equal(dec("496.84")) || !tot.CompanyCost.Equal(dec("2602.09")) ||
 		!tot.TaxableBase.Equal(dec("2105.25")) {
@@ -167,7 +167,7 @@ func TestProfileSplits(t *testing.T) {
 	if err != nil || len(pays) != 3 {
 		t.Fatalf("distribute: %+v %v", pays, err)
 	}
-	// Garnishment first (200), then 30 % of the net (497.36), the residual the rest (960.52).
+	// Primero el embargo (200), luego el 30 % del líquido (497.36), y la residual se lleva el resto (960.52).
 	if pays[0].IBAN != g || !pays[0].Amount.Equal(dec("200")) || !pays[1].Amount.Equal(dec("497.36")) || pays[2].IBAN != a ||
 		!pays[2].Amount.Equal(dec("960.52")) {
 		t.Fatalf("payments: %+v", pays)

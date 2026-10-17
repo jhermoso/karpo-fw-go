@@ -11,7 +11,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// PlanInput is the editable plan of a piece of work.
+// PlanInput es el plan editable de un trabajo.
 type PlanInput struct {
 	Name           string     `json:"name"`
 	Description    string     `json:"description,omitempty"`
@@ -31,56 +31,56 @@ func (p PlanInput) plan(v *fw.Validation) domain.Plan {
 		EstimatedHours: parseDecimal(v, "estimatedHours", p.EstimatedHours), Budget: parseDecimal(v, "budget", p.Budget)}
 }
 
-// OpenWork creates a piece of work of a company, optionally as part of another.
+// OpenWork crea un trabajo de una empresa, opcionalmente como parte de otro.
 type OpenWork struct {
 	Company string `json:"company"`
 	Code    string `json:"code"`
 	Kind    string `json:"kind"`
 	Parent  string `json:"parent,omitempty"`
 	PlanInput
-	On vocab.Date `json:"on,omitzero"` // today by default
+	On vocab.Date `json:"on,omitzero"` // hoy por defecto
 }
 
-// ChangeWork replaces the plan of an open piece of work.
+// ChangeWork sustituye el plan de un trabajo abierto.
 type ChangeWork struct {
 	ID domain.WorkID `json:"-"`
 	PlanInput
 }
 
-// AssignPerson puts a person on the work at an hourly rate.
+// AssignPerson pone a una persona en el trabajo con una tarifa por hora.
 type AssignPerson struct {
 	ID     domain.WorkID `json:"-"`
 	Person string        `json:"person"`
 	Role   string        `json:"role,omitempty"`
 	Rate   string        `json:"rate,omitempty"`
-	From   vocab.Date    `json:"from,omitzero"` // today by default
+	From   vocab.Date    `json:"from,omitzero"` // hoy por defecto
 }
 
-// ReleasePerson takes a person off the work after a day.
+// ReleasePerson saca a una persona del trabajo después de un día.
 type ReleasePerson struct {
 	ID     domain.WorkID `json:"-"`
 	Person string        `json:"person"`
-	Until  vocab.Date    `json:"until,omitzero"` // today by default
+	Until  vocab.Date    `json:"until,omitzero"` // hoy por defecto
 }
 
-// ProgressWork moves the status: scheduled, in-progress, on-hold, completed or cancelled.
+// ProgressWork cambia el estado: scheduled, in-progress, on-hold, completed o cancelled.
 type ProgressWork struct {
 	ID     domain.WorkID `json:"-"`
 	To     string        `json:"to"`
-	On     vocab.Date    `json:"on,omitzero"` // today by default
+	On     vocab.Date    `json:"on,omitzero"` // hoy por defecto
 	Reason string        `json:"reason,omitempty"`
 }
 
-// GetWork loads a piece of work with its people, history and hours.
+// GetWork carga un trabajo con sus personas, su historial y sus horas.
 type GetWork struct{ ID domain.WorkID }
 
-// SearchWorks searches the work of the caller's scope.
+// SearchWorks busca los trabajos del ámbito de quien llama.
 type SearchWorks struct {
 	Company, Kind, Status, Parent, Customer string
 	Page, Size                              int
 }
 
-// AssignmentDTO is the transport form of an assignment.
+// AssignmentDTO es la forma de transporte de una asignación.
 type AssignmentDTO struct {
 	Person string `json:"person"`
 	Role   string `json:"role,omitempty"`
@@ -89,14 +89,14 @@ type AssignmentDTO struct {
 	Until  string `json:"until,omitempty"`
 }
 
-// StepDTO is the transport form of a change of status.
+// StepDTO es la forma de transporte de un cambio de estado.
 type StepDTO struct {
 	Status string `json:"status"`
 	On     string `json:"on"`
 }
 
-// WorkDTO is the transport form of a piece of work. Hours and Cost are the approved time recorded
-// against it; PendingHours the time not approved yet.
+// WorkDTO es la forma de transporte de un trabajo. Hours y Cost son el tiempo aprobado anotado en
+// él; PendingHours, el tiempo aún no aprobado.
 type WorkDTO struct {
 	ID             string          `json:"id"`
 	Company        string          `json:"company"`
@@ -145,7 +145,7 @@ func workDTO(w *domain.Work, detail bool) WorkDTO {
 	return d
 }
 
-// recorded adds up the time of a piece of work: approved hours and their cost, and draft hours.
+// recorded suma el tiempo de un trabajo: las horas aprobadas y su coste, y las horas en borrador.
 func (s service) recorded(ctx context.Context, id domain.WorkID) (hours, cost, pending vocab.Decimal, err error) {
 	hours, cost, pending = vocab.DecimalFromInt(0), vocab.DecimalFromInt(0), vocab.DecimalFromInt(0)
 	es, err := s.Times.Find(ctx, domain.TimFieldWork.Eq(id))
@@ -249,8 +249,8 @@ func (s service) wireWorks(svc *Service) {
 		return update(ctx, c.ID, func(_ context.Context, w *domain.Work) error { return w.Release(person, orToday(c.Until)) })
 	})
 
-	// Completing needs everything under the work closed and no time waiting for approval: the hours
-	// and the cost of the work are those of its approved time.
+	// Terminar exige que todo lo que cuelga del trabajo esté cerrado y que no haya tiempo pendiente de
+	// aprobar: las horas y el coste del trabajo son los de su tiempo aprobado.
 	svc.Progress = changing(d.UoW, PermWorkProgress, func(ctx context.Context, c ProgressWork) (WorkDTO, error) {
 		to := domain.Status(strings.TrimSpace(c.To))
 		var v fw.Validation

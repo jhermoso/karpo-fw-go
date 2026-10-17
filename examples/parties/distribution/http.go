@@ -1,4 +1,4 @@
-// Package distribution exposes the Parties use cases over HTTP (REST + RFC 9457 problems).
+// Package distribution expone los casos de uso de Parties por HTTP (REST + problemas RFC 9457).
 package distribution
 
 import (
@@ -13,15 +13,15 @@ import (
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// Module is the Parties HTTP endpoint module.
+// Module es el módulo de endpoints HTTP de Parties.
 type Module struct {
 	svc *papp.Service
 }
 
-// NewModule creates the endpoint module.
+// NewModule crea el módulo de endpoints.
 func NewModule(svc *papp.Service) *Module { return &Module{svc: svc} }
 
-// RegisterRoutes implements distribution.EndpointModule.
+// RegisterRoutes implementa distribution.EndpointModule.
 func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /parties", m.register)
 	mux.HandleFunc("GET /parties", m.search)

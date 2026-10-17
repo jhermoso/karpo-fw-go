@@ -1,6 +1,6 @@
-// Package application holds the Treasury use cases (with permissions and organization scope), the
-// ports Treasury consumes (Receivables due items, Parties identities) and the translation to its
-// Published Language.
+// Package application contiene los casos de uso de Treasury (con permisos y ámbito de
+// organización), los puertos que consume Treasury (vencimientos de Receivables, identidades de
+// Parties) y la traducción a su Published Language.
 package application
 
 import (
@@ -21,8 +21,8 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Permissions (the C# bank endpoints required authentication only). Generating the file and
-// settling are permissions of their own, apart from preparing.
+// Permisos (los endpoints de banco de C# sólo pedían autenticación). Generar el fichero y liquidar
+// son permisos propios, aparte de preparar.
 var (
 	PermAccountRead    = authz.MustPermission("Treasury.Account.Read")
 	PermAccountUpdate  = authz.MustPermission("Treasury.Account.Update")
@@ -34,7 +34,7 @@ var (
 	PermRemittanceBank = authz.MustPermission("Treasury.Remittance.Settle")
 )
 
-// Deps are the ports the use cases need; Recorder and Audit are optional.
+// Deps son los puertos que necesitan los casos de uso; Recorder y Audit son opcionales.
 type Deps struct {
 	Accounts    domain.AccountRepository
 	Mandates    domain.MandateRepository
@@ -42,14 +42,14 @@ type Deps struct {
 	Transfers   domain.TransferOrderRepository
 	Statements  domain.StatementRepository
 	Receivables domain.Receivables
-	Payables    domain.Payables // optional: without it there are no transfer proposals
+	Payables    domain.Payables // opcional: sin él no hay propuestas de transferencias
 	Identities  domain.Identities
 	UoW         fw.UnitOfWork
 	Recorder    app.EventRecorder
 	Audit       app.AuditLog
 }
 
-// Service exposes the use cases.
+// Service expone los casos de uso.
 type Service struct {
 	OpenAccount    app.CommandHandler[OpenAccount, AccountDTO]
 	CloseAccount   app.CommandHandler[CloseAccount, AccountDTO]
@@ -106,7 +106,8 @@ func scopeOf(ctx context.Context) scope {
 	return s
 }
 
-// check returns a uniform 404 outside the organization's scope and 403 when it is read-only.
+// check devuelve un 404 uniforme fuera del ámbito de la organización y un 403 cuando es de sólo
+// lectura.
 func (s scope) check(kind string, id fmt.Stringer, org domain.OrganizationID, write bool) error {
 	if !s.global && !slices.Contains(s.orgs, org) {
 		return fw.NotFound(kind, id)
@@ -155,7 +156,7 @@ func dateText(d vocab.Date) string {
 	return d.String()
 }
 
-// NewService wires the use cases.
+// NewService conecta los casos de uso.
 func NewService(d Deps) *Service {
 	var opts []orchestration.Option
 	if d.Recorder != nil {
@@ -187,7 +188,7 @@ func retry[In, Out any]() app.Middleware[In, Out] {
 	return pipeline.RetryOnConflict[In, Out](5, 10*time.Millisecond)
 }
 
-// OpenAccount registers a bank account of an internal organization.
+// OpenAccount registra una cuenta bancaria de una organización interna.
 type OpenAccount struct {
 	Owner          string     `json:"owner"`
 	IBAN           string     `json:"iban"`
@@ -199,16 +200,16 @@ type OpenAccount struct {
 	Opened         vocab.Date `json:"opened"`
 }
 
-// CloseAccount closes an account.
+// CloseAccount cierra una cuenta.
 type CloseAccount struct {
 	ID domain.AccountID `json:"-"`
 	On vocab.Date       `json:"on"`
 }
 
-// SearchAccounts lists the accounts of an organization.
+// SearchAccounts enumera las cuentas de una organización.
 type SearchAccounts struct{ Owner string }
 
-// AccountDTO is the transport form of an account.
+// AccountDTO es la forma de transporte de una cuenta.
 type AccountDTO struct {
 	ID             string `json:"id"`
 	Owner          string `json:"owner"`
@@ -229,7 +230,7 @@ func accountDTO(a *domain.Account) AccountDTO {
 		Collections: s.Collections, Payments: s.Payments, CreditorSuffix: s.CreditorSuffix, Opened: s.Opened.String(), Closed: dateText(s.Closed)}
 }
 
-// RegisterMandate registers a SEPA mandate signed by a debtor.
+// RegisterMandate registra un mandato SEPA firmado por un deudor.
 type RegisterMandate struct {
 	Creditor  string     `json:"creditor"`
 	Debtor    string     `json:"debtor"`
@@ -239,16 +240,16 @@ type RegisterMandate struct {
 	Signed    vocab.Date `json:"signed"`
 }
 
-// RevokeMandate revokes a mandate.
+// RevokeMandate revoca un mandato.
 type RevokeMandate struct {
 	ID domain.MandateID `json:"-"`
 	On vocab.Date       `json:"on"`
 }
 
-// SearchMandates lists mandates of a creditor, optionally of a debtor.
+// SearchMandates enumera los mandatos de un acreedor, de un solo deudor si se pide.
 type SearchMandates struct{ Creditor, Debtor string }
 
-// MandateDTO is the transport form of a mandate.
+// MandateDTO es la forma de transporte de un mandato.
 type MandateDTO struct {
 	ID        string `json:"id"`
 	Creditor  string `json:"creditor"`
@@ -259,7 +260,7 @@ type MandateDTO struct {
 	Signed    string `json:"signed"`
 	LastUsed  string `json:"lastUsed,omitempty"`
 	Revoked   string `json:"revoked,omitempty"`
-	Next      string `json:"next"` // FRST or RCUR
+	Next      string `json:"next"` // FRST o RCUR
 }
 
 func mandateDTO(m *domain.Mandate) MandateDTO {
@@ -400,8 +401,7 @@ func (s service) accountUseCases(svc *Service) {
 	})
 }
 
-// Publications translates the domain events into the Published Language: one event per direct
-// debit.
+// Publications traduce los eventos de dominio al Published Language: un evento por adeudo.
 func Publications(r *messaging.Recorder) *messaging.Recorder {
 	messaging.On(r, func(_ context.Context, e domain.RemittanceSettled) ([]app.IntegrationEvent, error) {
 		out := make([]app.IntegrationEvent, 0, len(e.Items))

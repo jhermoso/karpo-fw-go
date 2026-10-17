@@ -9,72 +9,72 @@ import (
 )
 
 // ---------------------------------------------------------------------------------------------
-// Integration events (strategic: communication between bounded contexts)
+// Eventos de integración (estratégico: comunicación entre contextos delimitados)
 // ---------------------------------------------------------------------------------------------
 //
-// Domain events stay inside their bounded context. What crosses the boundary is an integration
-// event: an explicit, versioned contract of the upstream context (its Published Language),
-// produced by translating domain events, recorded in an integration outbox in the same unit of
-// work, relayed to a transport and consumed downstream through an inbox that discards
-// duplicates. Renaming a field of a domain event never breaks another context.
+// Los eventos de dominio se quedan dentro de su contexto delimitado. Lo que cruza la frontera es un
+// evento de integración: un contrato explícito y versionado del contexto proveedor (su Published
+// Language), producido traduciendo eventos de dominio, registrado en un outbox de integración en la
+// misma unidad de trabajo, retransmitido a un transporte y consumido aguas abajo mediante un inbox
+// que descarta los duplicados. Renombrar un campo de un evento de dominio nunca rompe otro contexto.
 
-// IntegrationEvent is a fact a bounded context publishes for others. The type name is part of
-// the contract and carries its version, "{context}.{fact}.v{n}" (e.g. "parties.party-registered.v1").
-// Implementations are plain structs with JSON tags, owned by the publishing context.
+// IntegrationEvent es un hecho que un contexto delimitado publica para los demás. El nombre del tipo
+// forma parte del contrato y lleva su versión, "{context}.{fact}.v{n}" (p. ej. "parties.party-registered.v1").
+// Las implementaciones son structs simples con etiquetas JSON, propiedad del contexto que publica.
 type IntegrationEvent interface {
 	IntegrationEventType() string
 }
 
-// Envelope is an integration event on the wire (CloudEvents-like attributes plus the JSON data).
+// Envelope es un evento de integración en el cable (atributos al estilo CloudEvents más los datos JSON).
 type Envelope struct {
-	ID            string          `json:"id"`      // unique message id: the inbox key
+	ID            string          `json:"id"`      // id único del mensaje: la clave del inbox
 	Type          string          `json:"type"`    // IntegrationEventType
-	Source        string          `json:"source"`  // publishing bounded context
-	Subject       string          `json:"subject"` // aggregate id the fact is about (ordering key)
+	Source        string          `json:"source"`  // contexto delimitado que publica
+	Subject       string          `json:"subject"` // id del agregado al que se refiere el hecho (clave de orden)
 	OccurredAt    time.Time       `json:"time"`
 	CorrelationID string          `json:"correlationId,omitempty"`
-	CausationID   string          `json:"causationId,omitempty"` // id of the domain event that caused it
+	CausationID   string          `json:"causationId,omitempty"` // id del evento de dominio que lo causó
 	Data          json.RawMessage `json:"data"`
 }
 
-// Translator maps a domain event of its bounded context to the integration events it publishes
-// (none when the fact is internal). It is the outbound side of the anti-corruption layer.
+// Translator traduce un evento de dominio de su contexto delimitado a los eventos de integración que
+// publica (ninguno cuando el hecho es interno). Es el lado de salida de la capa anticorrupción.
 type Translator interface {
 	Translate(ctx context.Context, evt domain.Event) ([]IntegrationEvent, error)
 }
 
-// TranslatorFunc adapts a function into a Translator.
+// TranslatorFunc adapta una función a Translator.
 type TranslatorFunc func(ctx context.Context, evt domain.Event) ([]IntegrationEvent, error)
 
-// Translate calls fn.
+// Translate llama a fn.
 func (fn TranslatorFunc) Translate(ctx context.Context, evt domain.Event) ([]IntegrationEvent, error) {
 	return fn(ctx, evt)
 }
 
-// MessageSender hands envelopes to a transport (message broker adapter, in-process broker,
-// HTTP webhook...). It returns only when the transport accepted them.
+// MessageSender entrega sobres a un transporte (adaptador de un broker de mensajería, broker en
+// proceso, webhook HTTP...). Sólo vuelve cuando el transporte los ha aceptado.
 type MessageSender interface {
 	Send(ctx context.Context, envelopes ...Envelope) error
 }
 
-// MessageHandler consumes an envelope in a downstream bounded context.
+// MessageHandler consume un sobre en un contexto delimitado aguas abajo.
 type MessageHandler interface {
 	HandleMessage(ctx context.Context, env Envelope) error
 }
 
-// MessageHandlerFunc adapts a function into a MessageHandler.
+// MessageHandlerFunc adapta una función a MessageHandler.
 type MessageHandlerFunc func(ctx context.Context, env Envelope) error
 
-// HandleMessage calls fn.
+// HandleMessage llama a fn.
 func (fn MessageHandlerFunc) HandleMessage(ctx context.Context, env Envelope) error {
 	return fn(ctx, env)
 }
 
-// InboxStore remembers the messages a consumer already processed. Claim must join the unit of
-// work in ctx: the claim commits with the consumer's changes or rolls back with them, which
-// turns at-least-once delivery into an exactly-once effect (implementations:
+// InboxStore recuerda los mensajes que un consumidor ya ha procesado. Claim debe unirse a la unidad
+// de trabajo de ctx: la reclamación se confirma con los cambios del consumidor o se deshace con ellos,
+// lo que convierte la entrega al menos una vez en un efecto exactamente una vez (implementaciones:
 // persistence/memory, persistence/sqlrepo, persistence/hotswap).
 type InboxStore interface {
-	// Claim records (consumer, messageID) and reports whether it is the first time.
+	// Claim registra (consumer, messageID) y dice si es la primera vez.
 	Claim(ctx context.Context, consumer, messageID string) (first bool, err error)
 }

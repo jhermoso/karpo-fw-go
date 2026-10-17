@@ -1,8 +1,9 @@
-// Package securityconformance checks the SQL mappings of the Security context on any engine: every
-// specification the context uses must return in the database exactly what it returns in memory,
-// aggregates must survive a round trip, and the uniqueness the domain relies on must be enforced
-// by the schema. It runs on SQLite with the context tests and on the other four engines in the
-// integration module.
+// Package securityconformance comprueba los mapeos SQL del contexto Security sobre cualquier
+// motor: cada especificación que usa el contexto tiene que devolver en la base de datos
+// exactamente lo que devuelve en memoria, los agregados tienen que sobrevivir a un viaje de ida y
+// vuelta, y el esquema tiene que imponer la unicidad en la que se apoya el dominio. Se ejecuta
+// sobre SQLite con las pruebas del contexto y sobre los otros cuatro motores en el módulo de
+// integración.
 package securityconformance
 
 import (
@@ -35,7 +36,7 @@ func ids[ID fw.Identifier, T fw.AggregateRoot[ID]](t *testing.T, what string, xs
 	return out
 }
 
-// same checks that a specification gives the same aggregates in SQL and in memory.
+// same comprueba que una especificación da los mismos agregados en SQL y en memoria.
 func same[ID fw.Identifier, T fw.AggregateRoot[ID]](t *testing.T, name string, ctx context.Context, sql, mem fw.Repository[ID, T], s spec.Specification[T], want int) {
 	t.Helper()
 	got, err := sql.Find(ctx, s)
@@ -82,7 +83,7 @@ func userState(u *domain.User) string {
 
 func toString(v any) string { return fmt.Sprint(v) }
 
-// Run checks the mappings on db, whose Security schema must be migrated and hold no users yet.
+// Run comprueba los mapeos sobre db, cuyo esquema de Security tiene que estar migrado y sin usuarios aún.
 func Run(t *testing.T, db *sqlrepo.DB) {
 	ctx := context.Background()
 	store := memory.NewStore("conformance")
@@ -96,14 +97,14 @@ func Run(t *testing.T, db *sqlrepo.DB) {
 			t.Fatal(err)
 		}
 	}
-	// both saves one aggregate in the database and a twin in memory.
+	// both guarda un agregado en la base de datos y un gemelo en memoria.
 	both := func(save func(sql bool) error) {
 		t.Helper()
 		must(save(true))
 		must(save(false))
 	}
 
-	// --- The seed of the migration is what the standard rule computes --------------------------
+	// --- La semilla de la migración es lo que calcula la regla estándar -----------------------
 	var own []domain.Permission
 	for _, d := range domain.OwnPermissions() {
 		own = append(own, d.Code)
@@ -122,7 +123,7 @@ func Run(t *testing.T, db *sqlrepo.DB) {
 		}
 	}
 
-	// --- Data --------------------------------------------------------------------------------
+	// --- Datos -------------------------------------------------------------------------------
 	acme, beta := domain.OrganizationID{UUID: fw.NewUUID()}, domain.OrganizationID{UUID: fw.NewUUID()}
 	idp := "https://id.example"
 	now := time.Date(2026, 10, 4, 9, 30, 0, 0, time.UTC)
@@ -222,7 +223,7 @@ func Run(t *testing.T, db *sqlrepo.DB) {
 		})
 	}
 
-	// --- Every specification gives in SQL what it gives in memory ------------------------------
+	// --- Cada especificación da en SQL lo que da en memoria ------------------------------------
 	for name, tc := range map[string]struct {
 		s    spec.Specification[*domain.User]
 		want int
@@ -236,16 +237,16 @@ func Run(t *testing.T, db *sqlrepo.DB) {
 		"visible to acme":                    {domain.VisibleTo(acme), 3},
 		"visible to acme or beta":            {domain.VisibleTo(acme, beta), 4},
 		"visible to nobody":                  {domain.VisibleTo(), 0},
-		"administrable with full on acme":    {domain.AdministrableBy(acme), 2}, // ana and Ed.Ward; bea also works in beta
+		"administrable with full on acme":    {domain.AdministrableBy(acme), 2}, // ana y Ed.Ward; bea también trabaja en beta
 		"administrable with full on both":    {domain.AdministrableBy(acme, beta), 4},
-		"administrable with full on beta":    {domain.AdministrableBy(beta), 1}, // carl; dora has no accesses
+		"administrable with full on beta":    {domain.AdministrableBy(beta), 1}, // carl; dora no tiene accesos
 		"administrable without full access":  {domain.AdministrableBy(), 0},
 		"holding a role":                     {domain.HoldingRole(roleIDs["clerk"]), 2},
 		"holding any of two roles":           {domain.HoldingRole(roleIDs["auditor"], domain.RoleGlobalSuperAdmin), 3},
 		"holding no role":                    {domain.HoldingRole(), 0},
 		"linked identity":                    {domain.WithIdentity(domain.ExternalIdentity{Issuer: idp, Subject: "d"}), 1},
 		"identity of another issuer":         {domain.WithIdentity(domain.ExternalIdentity{Issuer: "https://other.example", Subject: "a"}), 0},
-		"other active global administrators": {domain.GlobalAdministrators(domain.UserID{}), 1}, // carl is inactive
+		"other active global administrators": {domain.GlobalAdministrators(domain.UserID{}), 1}, // carl está inactivo
 		"no other global administrator":      {domain.GlobalAdministrators(userIDs["dora"]), 0},
 		"active and visible":                 {domain.VisibleTo(beta).And(domain.UserFieldActive.Eq(true)), 1},
 		"name taken by another user":         {domain.UserNamed("ANA").And(domain.UserFieldID.Ne(userIDs["ana"])), 0},
@@ -259,9 +260,9 @@ func Run(t *testing.T, db *sqlrepo.DB) {
 		"all roles":              {nil, 7},
 		"by name, ignoring case": {domain.RoleNamed("  CLERK "), 1},
 		"by ids":                 {domain.RolesWithIDs(roleIDs["clerk"], domain.RoleCustomer), 2},
-		"carrying a permission":  {domain.RoleFieldPermissions.Any(domain.RolePermFieldCode.Eq(string(domain.PermUserUpdate))), 2}, // clerk and OrganizationAdmin
+		"carrying a permission":  {domain.RoleFieldPermissions.Any(domain.RolePermFieldCode.Eq(string(domain.PermUserUpdate))), 2}, // clerk y OrganizationAdmin
 		"carrying the wildcard":  {domain.RoleFieldPermissions.Any(domain.RolePermFieldCode.Eq(string(domain.Wildcard))), 1},
-		"without any permission": {domain.RoleFieldPermissions.IsEmpty(), 2}, // Customer, and StandardUser while only Security declares
+		"without any permission": {domain.RoleFieldPermissions.IsEmpty(), 2}, // Customer, y StandardUser mientras sólo declara Security
 		"name taken by another":  {domain.RoleNamed("auditor").And(domain.RoleFieldID.Ne(roleIDs["auditor"])), 0},
 	} {
 		same(t, "roles: "+name, ctx, sqlRoles, memRoles, tc.s, tc.want)
@@ -282,7 +283,7 @@ func Run(t *testing.T, db *sqlrepo.DB) {
 		same(t, "sessions: "+name, ctx, sqlSessions, memSessions, tc.s, tc.want)
 	}
 
-	// --- Round trip: what comes back from SQL is what was saved --------------------------------
+	// --- Ida y vuelta: lo que vuelve de SQL es lo que se guardó --------------------------------
 	for name, id := range userIDs {
 		fromSQL, err := sqlUsers.Get(ctx, id)
 		must(err)
@@ -298,7 +299,7 @@ func Run(t *testing.T, db *sqlrepo.DB) {
 		t.Errorf("session round trip: %+v", rotated)
 	}
 
-	// --- Children are replaced with the aggregate, under optimistic concurrency ----------------
+	// --- Los hijos se sustituyen con el agregado, bajo concurrencia optimista ------------------
 	bea, err := sqlUsers.Get(ctx, userIDs["bea"])
 	must(err)
 	stale, err := sqlUsers.Get(ctx, userIDs["bea"])
@@ -318,7 +319,7 @@ func Run(t *testing.T, db *sqlrepo.DB) {
 		t.Errorf("a stale user must not overwrite: %v", err)
 	}
 
-	// --- The schema enforces the uniqueness the domain relies on --------------------------------
+	// --- El esquema impone la unicidad en la que se apoya el dominio ---------------------------
 	twin, err := domain.RegisterUser(domain.NewUserID(), domain.PartyID{UUID: fw.NewUUID()}, "ANA")
 	must(err)
 	if err := sqlUsers.Save(ctx, twin); err == nil {

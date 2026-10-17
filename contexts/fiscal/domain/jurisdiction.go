@@ -6,29 +6,32 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Indirect taxes are calculated by jurisdiction (approved decision, BACKLOG §6): the core of Fiscal
-// is country-agnostic; each country contributes a Jurisdiction with its taxes, rules, rounding and
-// regimes, and each regime or sector is a strategy inside it. A new country is a new
-// Jurisdiction, registered without touching the core.
+// Los impuestos indirectos se calculan por jurisdicción (decisión aprobada, BACKLOG §6): el núcleo
+// de Fiscal no depende del país; cada país aporta una Jurisdiction con sus impuestos, reglas,
+// redondeo y regímenes, y cada régimen o sector es una estrategia dentro de ella. Un país nuevo es
+// una Jurisdiction nueva, registrada sin tocar el núcleo.
 
-// Assessment is what a jurisdiction needs to calculate the taxes of a document.
+// Assessment es lo que necesita una jurisdicción para calcular los impuestos de un documento.
 type Assessment struct {
-	Taxpayer *Taxpayer // the seller: its territory and regime
+	Taxpayer *Taxpayer // el vendedor: su territorio y su régimen
 	Date     vocab.Date
-	// EquivalenceSurcharge: the customer is in the equivalence surcharge regime (Spanish retail).
+	// EquivalenceSurcharge: el cliente está en el régimen de recargo de equivalencia (comercio
+	// minorista español).
 	EquivalenceSurcharge bool
 	Lines                []TaxableLine
 }
 
-// TaxableLine is a taxable base with its tax code or treatment. Bases arrive rounded to cents.
+// TaxableLine es una base imponible con su código de impuesto o tratamiento. Las bases llegan
+// redondeadas a céntimos.
 type TaxableLine struct {
 	Ref       string
 	Base      vocab.Decimal
-	TaxCode   string // rate code of the catalog (e.g. G21); empty when the treatment is exempt or not subject
-	Treatment string // treatment code of the catalog; empty: subject to the tax
+	TaxCode   string // código de tipo del catálogo (p. ej. G21); vacío cuando el tratamiento es exento o no sujeto
+	Treatment string // código de tratamiento del catálogo; vacío: sujeto al impuesto
 }
 
-// Breakdown is the tax breakdown of a document: one line per tax code and treatment.
+// Breakdown es el desglose de impuestos de un documento: una línea por código de impuesto y
+// tratamiento.
 type Breakdown struct {
 	Lines     []BreakdownLine
 	Net       vocab.Decimal
@@ -36,9 +39,9 @@ type Breakdown struct {
 	Surcharge vocab.Decimal
 }
 
-// BreakdownLine is the base and quota of a rate (or of an exempt or not subject treatment).
+// BreakdownLine es la base y la cuota de un tipo (o de un tratamiento exento o no sujeto).
 type BreakdownLine struct {
-	TaxType         TaxType // zero for exempt and not subject bases
+	TaxType         TaxType // cero para bases exentas y no sujetas
 	TaxCode         string
 	Treatment       string
 	TreatmentKind   TreatmentKind
@@ -49,18 +52,18 @@ type BreakdownLine struct {
 	SurchargeAmount vocab.Decimal
 }
 
-// RateBook gives a jurisdiction the catalog entries in force.
+// RateBook da a una jurisdicción las entradas del catálogo vigentes.
 type RateBook interface {
 	RateOn(ctx context.Context, t TaxType, in Territory, code string, on vocab.Date) (*TaxRate, bool, error)
 	Treatment(ctx context.Context, in Territory, code string) (*Treatment, bool, error)
 }
 
-// Jurisdiction calculates the indirect taxes of a country.
+// Jurisdiction calcula los impuestos indirectos de un país.
 type Jurisdiction interface {
 	Country() string
 	Calculate(ctx context.Context, a Assessment, book RateBook) (Breakdown, error)
 }
 
-// Country of a taxpayer. All the territories modelled today are Spanish; when a second country
-// arrives, the territory moves into its jurisdiction (BACKLOG §6).
+// Country es el país de un contribuyente. Todos los territorios modelados hoy son españoles; cuando llegue un
+// segundo país, el territorio pasa a su jurisdicción (BACKLOG §6).
 func (t *Taxpayer) Country() string { return "ES" }

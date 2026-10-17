@@ -40,11 +40,11 @@ func TestRegistry_ExposesACounterAndAHistogram(t *testing.T) {
 	relayed := reg.Counter(metrics.OutboxRelayed, metrics.UnitNone, "Outbox messages relayed.")
 	relayed.Add(ctx, 1, "event_type", "parties.party-registered.v1", "outcome", "ok")
 	relayed.Add(ctx, 2, "event_type", "parties.party-registered.v1", "outcome", "ok")
-	relayed.Add(ctx, -5, "event_type", "parties.party-registered.v1", "outcome", "ok") // counters never go down
+	relayed.Add(ctx, -5, "event_type", "parties.party-registered.v1", "outcome", "ok") // los contadores nunca bajan
 
 	d := reg.Histogram(metrics.HTTPServerRequestDuration, metrics.UnitSeconds, "Duration of HTTP server requests.", 0.1, 1)
 	d.Record(ctx, 0.05, "method", "GET", "route", "/parties/{id}", "status", "200")
-	d.Record(ctx, 0.1, "method", "GET", "route", "/parties/{id}", "status", "200") // bounds are inclusive
+	d.Record(ctx, 0.1, "method", "GET", "route", "/parties/{id}", "status", "200") // los límites son inclusivos
 	d.Record(ctx, 30, "method", "GET", "route", "/parties/{id}", "status", "200")
 
 	reg.Gauge(metrics.OutboxOldestPendingAge, metrics.UnitSeconds, "Age of the oldest pending message.",
@@ -153,8 +153,9 @@ func TestNoop(t *testing.T) {
 	m.Gauge("c", "", "", func() float64 { return 1 })
 }
 
-// Recording on one instrument does not wait for another: each family has its own lock. Run with
-// -race: concurrent recording, registration and export must stay consistent.
+// Registrar en un instrumento no espera a otro: cada familia tiene su propio lock. Hay que ejecutarla con
+// -race: el registro de valores, el alta de instrumentos y la exportación concurrentes deben seguir
+// siendo coherentes.
 func TestRegistry_ConcurrentRecordingAndExport(t *testing.T) {
 	reg := vanilla.NewRegistry()
 	h := reg.Histogram("karpo.test.duration", "s", "")

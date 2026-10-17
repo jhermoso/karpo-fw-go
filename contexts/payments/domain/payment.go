@@ -11,14 +11,14 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// PaymentKind is the stable aggregate type name.
+// PaymentKind es el nombre estable del tipo de agregado.
 const PaymentKind = "payments.payment"
 
-// Method is how money was paid out (the C# payment_method_type seed plus direct debit, a supplier
-// charging the company's account).
+// Method es cómo se pagó el dinero (la siembra payment_method_type de C# más la domiciliación, un
+// proveedor que carga en la cuenta de la empresa).
 type Method int
 
-// Methods.
+// Formas de pago.
 const (
 	Cash Method = iota + 1
 	Transfer
@@ -29,10 +29,10 @@ const (
 
 var methods = map[Method]string{Cash: "cash", Transfer: "transfer", Card: "card", Check: "check", DirectDebit: "direct-debit"}
 
-// String returns the stable name.
+// String devuelve el nombre estable.
 func (m Method) String() string { return methods[m] }
 
-// ParseMethod parses a method name.
+// ParseMethod interpreta el nombre de una forma de pago.
 func ParseMethod(s string) (Method, bool) {
 	for k, n := range methods {
 		if n == s {
@@ -42,40 +42,40 @@ func ParseMethod(s string) (Method, bool) {
 	return 0, false
 }
 
-// Allocation applies part of a payment to a payable.
+// Allocation aplica parte de un pago a una obligación.
 type Allocation struct {
 	ID      AllocationID
 	Payable PayableID
-	Kind    Kind // of the payable, for the Published Language
+	Kind    Kind // de la obligación, para el Published Language
 	Amount  vocab.Decimal
 	On      vocab.Date
 }
 
-// PaymentState is the persisted state of a payment.
+// PaymentState es el estado persistido de un pago.
 type PaymentState struct {
 	Company     OrganizationID
-	Payee       PartyID // zero for a tax authority
+	Payee       PartyID // cero para una administración tributaria
 	Authority   string
 	Date        vocab.Date
 	Amount      vocab.Decimal
 	Currency    vocab.CurrencyCode
 	Method      Method
-	Reference   string // end-to-end id of a transfer, check number…
+	Reference   string // id end-to-end de una transferencia, número de cheque…
 	Cancelled   bool
 	Allocations []Allocation
 	Audit       traits.AuditStamp
 }
 
-// Payment is money paid out by a company (the C# Payment, whose amount could drop below what was
-// applied and which could be edited or deleted after being issued). It is never deleted: it is
-// cancelled, and its allocations reversed.
+// Payment es dinero que paga una empresa (el Payment de C#, cuyo importe podía bajar de lo
+// aplicado y que se podía editar o borrar después de emitido). No se borra nunca: se anula, y sus
+// aplicaciones se revierten.
 type Payment struct {
 	fw.BaseAggregateRoot[PaymentID]
 	traits.Audited
 	s PaymentState
 }
 
-// ReconstitutePayment rebuilds a payment.
+// ReconstitutePayment reconstruye un pago.
 func ReconstitutePayment(id PaymentID, s PaymentState) (*Payment, error) {
 	base, err := fw.NewBaseAggregateRoot(PaymentKind, id)
 	if err != nil {
@@ -100,7 +100,7 @@ func ReconstitutePayment(id PaymentID, s PaymentState) (*Payment, error) {
 	return &Payment{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// RegisterPayment records money paid out.
+// RegisterPayment registra dinero pagado.
 func RegisterPayment(id PaymentID, s PaymentState) (*Payment, error) {
 	s.Cancelled, s.Allocations = false, nil
 	p, err := ReconstitutePayment(id, s)
@@ -118,14 +118,14 @@ func (p *Payment) payee() string {
 	return p.s.Payee.String()
 }
 
-// State returns the state (allocations are a copy).
+// State devuelve el estado (las aplicaciones son una copia).
 func (p *Payment) State() PaymentState {
 	s := p.s
 	s.Allocations = slices.Clone(s.Allocations)
 	return s
 }
 
-// Allocated returns the sum of the allocations.
+// Allocated devuelve la suma de las aplicaciones.
 func (p *Payment) Allocated() vocab.Decimal {
 	a := vocab.DecimalFromInt(0)
 	for _, x := range p.s.Allocations {
@@ -134,11 +134,11 @@ func (p *Payment) Allocated() vocab.Decimal {
 	return a
 }
 
-// Unallocated returns what remains to allocate.
+// Unallocated devuelve lo que queda por aplicar.
 func (p *Payment) Unallocated() vocab.Decimal { return p.s.Amount.Sub(p.Allocated()) }
 
-// Allocate applies part of the payment to a payable of the same payee (checked by the caller,
-// which also applies it on the payable). The allocations never exceed the amount.
+// Allocate aplica parte del pago a una obligación del mismo beneficiario (lo comprueba quien llama,
+// que también lo aplica en la obligación). Las aplicaciones nunca superan el importe.
 func (p *Payment) Allocate(to PayableID, kind Kind, amount vocab.Decimal, on vocab.Date) (AllocationID, error) {
 	if p.s.Cancelled {
 		return AllocationID{}, fw.Violation("payments.payment_cancelled", "the payment is cancelled")
@@ -153,7 +153,7 @@ func (p *Payment) Allocate(to PayableID, kind Kind, amount vocab.Decimal, on voc
 	return a.ID, nil
 }
 
-// Deallocate reverses an allocation and returns it (the payable is reverted by the caller).
+// Deallocate revierte una aplicación y la devuelve (quien llama revierte la obligación).
 func (p *Payment) Deallocate(id AllocationID) (Allocation, error) {
 	k := slices.IndexFunc(p.s.Allocations, func(a Allocation) bool { return a.ID == id })
 	if k < 0 {
@@ -170,7 +170,7 @@ func (p *Payment) raiseReversed(a Allocation) {
 		Kind: a.Kind.String(), Amount: a.Amount.StringFixed(2)})
 }
 
-// Cancel cancels the payment and returns its allocations for the caller to revert.
+// Cancel anula el pago y devuelve sus aplicaciones para que quien llama las revierta.
 func (p *Payment) Cancel() ([]Allocation, error) {
 	if p.s.Cancelled {
 		return nil, fw.Violation("payments.payment_cancelled", "the payment is already cancelled")
@@ -183,12 +183,12 @@ func (p *Payment) Cancel() ([]Allocation, error) {
 	return out, nil
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (p *Payment) AuditSnapshot() map[string]any {
 	return map[string]any{"amount": p.s.Amount.String(), "allocated": p.Allocated().String(), "cancelled": p.s.Cancelled}
 }
 
-// Payment fields.
+// Campos del pago.
 var (
 	PmtFieldCompany   = spec.Comparable("company", func(p *Payment) OrganizationID { return p.s.Company })
 	PmtFieldPayee     = spec.Comparable("payee", func(p *Payment) PartyID { return p.s.Payee })

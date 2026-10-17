@@ -12,22 +12,23 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
 )
 
-// scope is the organization scope of the caller (decision P1 of the authorization contract):
-//   - a party is visible to the internal organizations of the effective scope when it is one of
-//     them, a shared catalog entry, or affiliated with one of them (an active relationship);
-//   - out of scope, a party does not exist (uniform 404);
-//   - writing needs a Full grant on the party itself, or on an organization it is affiliated with
-//     and that registered it; an organization that only relates to it needs PermPartyUpdateRelated
-//     too, and nobody but its own users writes a party that is an internal organization
-//     (docs/DECISIONES-COMUNES.md, D-65, D-66 and D-74); shared catalog entries are written by
-//     global administrators only.
+// scope es el ámbito de organizaciones del llamante (decisión P1 del contrato de autorización):
+//   - una party es visible para las organizaciones internas del ámbito efectivo cuando es una de
+//     ellas, una entrada compartida del catálogo, o está afiliada a una de ellas (una relación
+//     activa);
+//   - fuera del ámbito, una party no existe (404 uniforme);
+//   - escribir exige un permiso Full sobre la propia party, o sobre una organización a la que
+//     está afiliada y que la dio de alta; una organización que sólo se relaciona con ella necesita
+//     además PermPartyUpdateRelated, y nadie salvo sus propios usuarios escribe una party que es
+//     organización interna (docs/DECISIONES-COMUNES.md, D-65, D-66 y D-74); las entradas
+//     compartidas del catálogo sólo las escriben los administradores globales.
 type scope struct {
 	global  bool
 	ac      *authz.Context
 	orgs    []domain.PartyID
-	related bool // the caller may change the parties its organizations only relate to
-	// registered tells whether the party was registered together with the relationship behind
-	// the affiliation; the audit log answers it (D-74). nil: never.
+	related bool // el llamante puede cambiar las parties con las que sus organizaciones sólo se relacionan
+	// registered dice si la party se dio de alta junto con la relación que hay detrás de la
+	// afiliación; lo responde el registro de auditoría (D-74). nil: nunca.
 	registered func(p *domain.Party, a domain.Affiliation) bool
 }
 
@@ -43,7 +44,7 @@ func scopeOf(ctx context.Context) scope {
 	return s
 }
 
-// parties restricts a party query to the scope.
+// parties limita una consulta de parties al ámbito.
 func (s scope) parties(at time.Time) spec.Spec[*domain.Party] {
 	if s.global {
 		return spec.All[*domain.Party]()
@@ -54,7 +55,7 @@ func (s scope) parties(at time.Time) spec.Spec[*domain.Party] {
 	return domain.VisibleTo(s.orgs, at)
 }
 
-// relationships restricts a relationship query to those owned by the scope.
+// relationships limita una consulta de relaciones a las que son del ámbito.
 func (s scope) relationships() spec.Spec[*domain.Relationship] {
 	if s.global {
 		return spec.All[*domain.Relationship]()
@@ -83,19 +84,19 @@ func (s scope) canWrite(p *domain.Party, at time.Time) bool {
 	if s.canWriteOrg(p.ID()) {
 		return true
 	}
-	// (Internal Organization by its id: a role type added below it would not count. The catalog
-	// refuses nothing there yet; see docs/PARTIES.md §18.)
+	// (Internal Organization por su id: un tipo de rol añadido por debajo no contaría. El catálogo
+	// todavía no rechaza nada ahí; véase docs/PARTIES.md §18.)
 	if slices.ContainsFunc(p.Roles(), func(r domain.PartyRole) bool {
 		return r.RoleType == domain.RoleInternalOrganization && !r.Annulled && r.IsActiveAt(at)
 	}) {
-		return false // an internal organization of others: only its own users write it
+		return false // una organización interna de otros: sólo la escriben sus propios usuarios
 	}
 	return slices.ContainsFunc(p.Affiliations(), func(a domain.Affiliation) bool {
 		return a.Period.IsActiveAt(at) && s.canWriteOrg(a.Organization) && (s.related || (s.registered != nil && s.registered(p, a)))
 	})
 }
 
-// visible returns the party or a uniform not-found error when it is out of scope.
+// visible devuelve la party, o un error uniforme de no encontrada si está fuera del ámbito.
 func (s scope) visible(p *domain.Party, err error) (*domain.Party, error) {
 	if err != nil {
 		return nil, err
@@ -106,7 +107,7 @@ func (s scope) visible(p *domain.Party, err error) (*domain.Party, error) {
 	return p, nil
 }
 
-// writable checks a party the caller is about to change: 404 out of scope, 403 without Full.
+// writable comprueba una party que el llamante va a cambiar: 404 fuera del ámbito, 403 sin Full.
 func (s scope) writable(p *domain.Party) error {
 	now := fw.Now()
 	if !s.sees(p, now) {

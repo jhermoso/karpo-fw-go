@@ -42,7 +42,7 @@ func margin(t *testing.T, cur string, kind domain.MarginKind, v1, v2, v3 string)
 	return m
 }
 
-// The numbers of the C# quote tests: USD at 0.92 with margins of 1.5, 2 and 2.5 %.
+// Los números de las pruebas de cotización del C#: USD a 0.92 con márgenes del 1.5, 2 y 2.5 %.
 func TestQuote_RateMarginAndNotes(t *testing.T) {
 	usd, set := currency(t, "usd", "0.92", "0"), domain.DefaultSettings(company)
 	m := margin(t, "USD", domain.Percent, "1.5", "2", "2.5")
@@ -55,12 +55,12 @@ func TestQuote_RateMarginAndNotes(t *testing.T) {
 	if q, _ := domain.Quote(usd, m, set, "WEB", dec("500")); !q.OfferedRate.Equal(dec("0.943")) || !q.Eur.Equal(dec("471.50")) {
 		t.Fatalf("third level: %+v", q)
 	}
-	// Whole notes of 5: 123 becomes 120, and 120 × 0.9384 = 112.608.
+	// Billetes enteros de 5: 123 se queda en 120, y 120 × 0.9384 = 112.608.
 	set.Level = 2
 	if q, _ := domain.Quote(currency(t, "USD", "0.92", "5"), m, set, "WEB", dec("123")); !q.Delivered.Equal(dec("120")) || !q.Eur.Equal(dec("112.61")) {
 		t.Fatalf("notes: %+v", q)
 	}
-	// Without a margin for the segment the reference rate is offered, and it is said.
+	// Sin margen para el segmento se ofrece el cambio de referencia, y se dice.
 	if q, err := domain.Quote(currency(t, "GBP", "1.17", "5"), nil, set, "WEB", dec("500")); err != nil || !q.OfferedRate.Equal(dec("1.17")) ||
 		!q.Eur.Equal(dec("585.00")) || !q.NoMargin {
 		t.Fatalf("no margin: %+v %v", q, err)
@@ -68,7 +68,7 @@ func TestQuote_RateMarginAndNotes(t *testing.T) {
 	if got := domain.RoundDownToFacial(dec("3"), dec("5")); !got.Equal(dec("3")) {
 		t.Fatalf("under one note: %s", got)
 	}
-	// Absolute and pip margins, and their percentage.
+	// Márgenes absolutos y en pips, y su porcentaje.
 	jpy := currency(t, "JPY", "0.0062", "1000")
 	if q, _ := domain.Quote(jpy, margin(t, "JPY", domain.Pip, "1", "2", "3"), set, "WEB", dec("25500")); !q.OfferedRate.Equal(dec("0.0064")) ||
 		!q.Delivered.Equal(dec("25000")) || !q.Eur.Equal(dec("160.00")) || !q.MarginPercent.Equal(dec("3.225806")) {
@@ -170,7 +170,7 @@ func TestReservation_Lifecycle(t *testing.T) {
 			t.Fatalf("case %d: %v", i, err)
 		}
 	}
-	// The C# example: USD 500 at 0.92 and 300 at 1.00 make 760.00, waiting four hours after pickup.
+	// El ejemplo del C#: 500 USD a 0.92 y 300 a 1.00 hacen 760.00, con espera de cuatro horas tras la recogida.
 	r, err := register(req())
 	if err != nil {
 		t.Fatal(err)

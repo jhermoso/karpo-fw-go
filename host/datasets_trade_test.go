@@ -23,8 +23,8 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 )
 
-// tradeDatasetsScenario makes a company sell and buy through the host, and exports its invoices,
-// its orders, what its customers owe and the invoices of its suppliers.
+// tradeDatasetsScenario hace que una empresa venda y compre a través del anfitrión, y exporta sus
+// facturas, sus pedidos, lo que le deben sus clientes y las facturas de sus proveedores.
 func tradeDatasetsScenario(t *testing.T, sw *hotswap.Switch) {
 	th := newTradeHost(t, sw)
 	h, actx, ctx := th.h, th.actx, context.Background()
@@ -77,7 +77,7 @@ func tradeDatasetsScenario(t *testing.T, sw *hotswap.Switch) {
 		Issued: vocab.MustDate(2026, 9, 1), Received: vocab.MustDate(2026, 9, 2), Due: vocab.MustDate(2026, 10, 1), Total: "121.00",
 		Lines: []purapp.LineInput{{Description: "Papel", Category: "goods", Base: "100", TaxCode: "G21"}}})
 	must(err)
-	if _, err := h.Deliver(ctx); err != nil { // Receivables learns of the invoice
+	if _, err := h.Deliver(ctx); err != nil { // Receivables se entera de la factura
 		t.Fatal(err)
 	}
 
@@ -126,7 +126,7 @@ func tradeDatasetsScenario(t *testing.T, sw *hotswap.Switch) {
 		t.Fatalf("purchase invoices: %v", bought)
 	}
 
-	// Who sees another company gets an empty file; who lacks the permission of a list, none.
+	// Quien ve otra empresa recibe un fichero vacío; a quien le falta el permiso de una lista, ninguno.
 	scoped := func(perms ...authz.Permission) context.Context {
 		ac, err := authz.NewContext(authz.Context{Subject: fw.NewUUID(), SubjectName: "clerk", Kind: authz.Service,
 			Permissions: append([]authz.Permission{expapp.PermJobRead, expapp.PermJobCreate}, perms...),

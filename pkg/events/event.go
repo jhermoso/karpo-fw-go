@@ -1,9 +1,9 @@
-// Package events provides typed subscriptions and the event type Registry used to decode
-// serialized events (outbox relay, message brokers). It implements application.EventDecoder.
+// Package events ofrece suscripciones tipadas y el Registry de tipos de evento que se usa para
+// decodificar eventos serializados (relay del outbox, brokers de mensajería). Implementa application.EventDecoder.
 //
-// Contracts live elsewhere: domain.Event in the domain layer and application.Dispatcher /
-// application.EventHandler in the application contracts. events/inprocess is an in-memory
-// Dispatcher.
+// Los contratos están en otra parte: domain.Event en la capa de dominio y application.Dispatcher /
+// application.EventHandler en los contratos de aplicación. events/inprocess es un Dispatcher en
+// memoria.
 package events
 
 import (
@@ -17,14 +17,14 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// Event aliases domain.Event for convenience.
+// Event es un alias de domain.Event por comodidad.
 type Event = domain.Event
 
-// Wildcard subscribes a handler to every event type (application.WildcardEventType).
+// Wildcard suscribe un manejador a todos los tipos de evento (application.WildcardEventType).
 const Wildcard = application.WildcardEventType
 
-// TypeOf returns the event type name declared by the value type E.
-// Events must be value types whose EventType method works on the zero value.
+// TypeOf devuelve el nombre del tipo de evento que declara el tipo valor E.
+// Los eventos deben ser tipos valor cuyo método EventType funcione con el valor cero.
 func TypeOf[E Event]() string {
 	var zero E
 	if reflect.TypeFor[E]().Kind() == reflect.Pointer {
@@ -33,7 +33,7 @@ func TypeOf[E Event]() string {
 	return zero.EventType()
 }
 
-// Subscribe registers a typed handler: fn only receives events of concrete type E.
+// Subscribe registra un manejador tipado: fn sólo recibe eventos del tipo concreto E.
 //
 //	events.Subscribe(bus, func(ctx context.Context, e parties.PartyRegistered) error { ... })
 func Subscribe[E Event](d application.Dispatcher, fn func(ctx context.Context, evt E) error) (unsubscribe func()) {
@@ -46,18 +46,18 @@ func Subscribe[E Event](d application.Dispatcher, fn func(ctx context.Context, e
 	}))
 }
 
-// Registry maps event type names to concrete Go types so serialized events can be decoded.
+// Registry asocia nombres de tipo de evento a tipos concretos de Go para poder decodificar los eventos serializados.
 type Registry struct {
 	mu       sync.RWMutex
 	decoders map[string]func([]byte) (Event, error)
 }
 
-// NewRegistry creates an empty registry.
+// NewRegistry crea un registro vacío.
 func NewRegistry() *Registry {
 	return &Registry{decoders: make(map[string]func([]byte) (Event, error))}
 }
 
-// Register makes E decodable under its EventType name.
+// Register hace E decodificable bajo su nombre EventType.
 func Register[E Event](r *Registry) {
 	name := TypeOf[E]()
 	r.mu.Lock()
@@ -71,7 +71,7 @@ func Register[E Event](r *Registry) {
 	}
 }
 
-// Decode rebuilds an event from its type name and JSON payload.
+// Decode reconstruye un evento a partir de su nombre de tipo y su carga JSON.
 func (r *Registry) Decode(eventType string, payload []byte) (Event, error) {
 	r.mu.RLock()
 	dec, ok := r.decoders[eventType]
@@ -82,7 +82,7 @@ func (r *Registry) Decode(eventType string, payload []byte) (Event, error) {
 	return dec(payload)
 }
 
-// Encode serializes an event payload as JSON.
+// Encode serializa como JSON la carga de un evento.
 func Encode(evt Event) ([]byte, error) {
 	return json.Marshal(evt)
 }

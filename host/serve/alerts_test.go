@@ -14,7 +14,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/log"
 )
 
-// lines is a logger that keeps what it is told.
+// lines es un logger que guarda lo que se le dice.
 type lines struct{ said *[]string }
 
 func (l lines) Debug(string, ...any) {}
@@ -44,13 +44,13 @@ func TestAlerts(t *testing.T) {
 	}))
 	defer hook.Close()
 
-	// Without a webhook: the log, and nothing leaves.
+	// Sin webhook: el log, y no sale nada.
 	said := []string{}
 	serve.Alerts{Logger: lines{&said}}.DeliveryGivenUp(context.Background(), given)
 	if len(said) != 1 || got != nil {
 		t.Fatalf("only the log: %v %v", said, got)
 	}
-	// With one: who, what and why, in words and as facts; never the message itself.
+	// Con uno: quién, qué y por qué, en palabras y como datos; nunca el mensaje en sí.
 	said = said[:0]
 	serve.Alerts{Webhook: hook.URL, Logger: lines{&said}}.DeliveryGivenUp(context.Background(), given)
 	text, _ := got["text"].(string)
@@ -59,8 +59,8 @@ func TestAlerts(t *testing.T) {
 		!strings.Contains(text, "the database is down") || strings.Contains(raw, "the amount") {
 		t.Fatalf("the alert: %s (log %v)", raw, said)
 	}
-	// A webhook that refuses, or that is not there, is logged and stops nothing; so is a context
-	// that has ended: the alert of a round that is stopping is still sent.
+	// Un webhook que rechaza, o que no está, se anota en el log y no detiene nada; igual un contexto
+	// que ha terminado: la alerta de una ronda que se está parando se envía igualmente.
 	said, status = said[:0], http.StatusInternalServerError
 	serve.Alerts{Webhook: hook.URL, Logger: lines{&said}}.DeliveryGivenUp(context.Background(), given)
 	serve.Alerts{Webhook: "http://127.0.0.1:1/nowhere", Logger: lines{&said}}.DeliveryGivenUp(context.Background(), given)
@@ -74,7 +74,7 @@ func TestAlerts(t *testing.T) {
 	if len(said) != 1 || got == nil {
 		t.Fatalf("sent although the round is stopping: %v %v", said, got)
 	}
-	serve.Alerts{Webhook: hook.URL}.DeliveryGivenUp(context.Background(), given) // without a logger it does not break
+	serve.Alerts{Webhook: hook.URL}.DeliveryGivenUp(context.Background(), given) // sin logger no se rompe
 }
 
 func TestLoad_AlertWebhook(t *testing.T) {

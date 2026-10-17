@@ -41,10 +41,11 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/time/fake"
 )
 
-// TestAccountingContext runs Accounting with Receivables, Billing, Fiscal and Parties on every
-// engine: chart and ledger round trip (roles, tax accounts, closed periods), an invoice and a
-// collection posted through the SQL inbox, the cancelled collection reversed, a payslip posted once
-// despite redeliveries, manual entries, reversal, closed period, trial balance and account ledger.
+// TestAccountingContext ejecuta Accounting con Receivables, Billing, Fiscal y Parties en cada
+// motor: ida y vuelta del plan de cuentas y del libro (roles, cuentas de impuestos, periodos
+// cerrados), una factura y un cobro contabilizados a través del inbox SQL, el cobro cancelado
+// revertido, una nómina contabilizada una sola vez pese a las reentregas, asientos manuales,
+// retrocesión, periodo cerrado, balance de sumas y saldos y mayor de la cuenta.
 func TestAccountingContext(t *testing.T) {
 	for _, e := range engines {
 		if e.name == "oracle-dotnet-guids" {
@@ -135,7 +136,7 @@ func TestAccountingContext(t *testing.T) {
 				t.Fatalf("ledger round trip: %+v %v", led, err)
 			}
 
-			// An invoice of 82.64 + 21% and a partial cash collection, posted from the Published Language.
+			// Una factura de 82.64 + 21 % y un cobro parcial en efectivo, contabilizados desde el Published Language.
 			_, err = fm.Service.CreateRate.Handle(actx, fapp.CreateRate{Type: "vat", Territory: "common", Code: "G21", Description: "General", Rate: "21",
 				From: vocab.MustDate(2012, 9, 1)})
 			must(err)
@@ -176,9 +177,9 @@ func TestAccountingContext(t *testing.T) {
 			}
 			expect(map[string]string{"4300": "49.99", "7000": "-82.64", "4770": "-17.35", "5700": "50.00"})
 
-			// The collection is cancelled: Receivables publishes the reversed allocation.
-			// Accounting dates the reversal on the moment of the cancellation: it runs on a fixed clock,
-			// so that the journal is that of 2026 whatever the day the test runs.
+			// Se cancela el cobro: Receivables publica la aplicación revertida.
+			// Accounting fecha la retrocesión en el momento de la cancelación: corre con un reloj fijo,
+			// para que el diario sea el de 2026 sea cual sea el día en que corre la prueba.
 			cid, _ := rdomain.ParseCollectionID(col.ID)
 			func() {
 				defer fw.SetClock(fake.New(time.Date(2026, 10, 3, 9, 0, 0, 0, time.UTC)))()
@@ -188,7 +189,7 @@ func TestAccountingContext(t *testing.T) {
 			}()
 			expect(map[string]string{"4300": "99.99", "5700": "0.00"})
 
-			// A payslip posted once despite a redelivery and a second message about it.
+			// Una nómina contabilizada una sola vez pese a una reentrega y a un segundo mensaje sobre ella.
 			slip := fw.NewUUID().String()
 			data, _ := json.Marshal(map[string]any{"payslipId": slip, "person": ana.ID, "employer": acme.ID, "periodEnd": "2026-09-30", "gross": "1800.00",
 				"socialSecurity": "114.30", "incomeTax": "216.00", "net": "1469.70", "employerCost": "576.00"})
@@ -198,7 +199,7 @@ func TestAccountingContext(t *testing.T) {
 			}
 			expect(map[string]string{"6400": "1800.00", "6420": "576.00", "4760": "-690.30", "4751": "-216.00", "4650": "-1469.70"})
 
-			// Manual entries: the closed period refuses; a reversal is linked both ways.
+			// Asientos manuales: el periodo cerrado los rechaza; una retrocesión queda enlazada en los dos sentidos.
 			if _, err := svc.PostEntry.Handle(actx, aapp.PostEntry{Company: acme.ID, Date: vocab.MustDate(2026, 7, 15), Description: "Julio",
 				Lines: []aapp.LineInput{{Account: "5700", Debit: "10"}, {Account: "5720", Credit: "10"}}}); !errors.Is(err, fw.ErrRuleViolation) {
 				t.Fatalf("closed period: %v", err)
@@ -219,7 +220,7 @@ func TestAccountingContext(t *testing.T) {
 			}
 			expect(map[string]string{"5700": "0.00", "5720": "0.00"})
 
-			// The account ledger of customers with its running balance; the journal without gaps.
+			// El mayor de la cuenta de clientes con su saldo acumulado; el diario sin huecos.
 			moves, err := svc.AccountLedger.Handle(actx, aapp.AccountLedger{Company: acme.ID, Account: "4300"})
 			if err != nil || len(moves) != 3 || moves[0].Balance != "99.99" || moves[1].Balance != "49.99" || moves[2].Balance != "99.99" || moves[0].Party != ana.ID {
 				t.Fatalf("account ledger: %+v %v", moves, err)

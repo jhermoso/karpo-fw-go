@@ -42,8 +42,8 @@ func TestCSV(t *testing.T) {
 	if err := w.Close(); err != nil {
 		t.Fatal(err)
 	}
-	// The mark, CRLF, quotes only where needed, numbers as they are, and nothing a spreadsheet
-	// would run: what starts like a formula goes after an apostrophe.
+	// La marca, CRLF, comillas sólo donde hacen falta, los números tal cual y nada que una hoja de
+	// cálculo ejecutaría: lo que empieza como una fórmula va tras un apóstrofo.
 	want := string(rune(0xFEFF)) + "Nombre,Saldo,Alta,Activo,'=Notas\r\n" +
 		"\"Acme, S.A.\",-1234.5,2026-10-08,Sí,\"'=HYPERLINK(\"\"http://x\"\")\"\r\n" +
 		"\"Dice \"\"hola\"\"\",12,2026-01-02,No,\"dos\nlíneas\"\r\n" +
@@ -85,13 +85,13 @@ func TestXLSX(t *testing.T) {
 	sheet := parts["xl/worksheets/sheet1.xml"]
 	for _, want := range []string{
 		`<row r="1"><c r="A1" t="inlineStr"><is><t xml:space="preserve">Nombre</t></is></c>`,
-		`<c r="E1" t="inlineStr"><is><t xml:space="preserve">=Notas</t></is></c>`, // a text cell is never a formula
+		`<c r="E1" t="inlineStr"><is><t xml:space="preserve">=Notas</t></is></c>`, // una celda de texto nunca es una fórmula
 		`<c r="B2"><v>-1234.5</v></c>`, `<c r="B3"><v>12</v></c>`,
 		`<c r="C2" t="inlineStr"><is><t xml:space="preserve">2026-10-08</t></is></c>`,
 		`<c r="D2" t="inlineStr"><is><t xml:space="preserve">Sí</t></is></c>`,
 		`=HYPERLINK(&#34;http://x&#34;)`, "dos&#xA;líneas",
-		`<c r="B4" t="inlineStr"><is><t xml:space="preserve">n/d</t></is></c>`,         // not a number: a text
-		`<c r="B5" t="inlineStr"><is><t xml:space="preserve">12345678901234567890</t>`, // too long to be kept exact as a number
+		`<c r="B4" t="inlineStr"><is><t xml:space="preserve">n/d</t></is></c>`,         // no es un número: un texto
+		`<c r="B5" t="inlineStr"><is><t xml:space="preserve">12345678901234567890</t>`, // demasiado largo para guardarse exacto como número
 		`<row r="5"><c r="A5"`, `</sheetData></worksheet>`,
 	} {
 		if !strings.Contains(sheet, want) {
@@ -170,7 +170,7 @@ func TestJob_Lifecycle(t *testing.T) {
 		t.Fatal("expired once")
 	}
 
-	// Cancelled while it was being written: it stays cancelled.
+	// Cancelado mientras se escribía: sigue cancelado.
 	c := request()
 	c.Begin(now)
 	if !c.Cancel(now) || c.Cancel(now) || c.Complete(1, "f", "k", 1, now, time.Hour) || c.State().Status != domain.Cancelled {

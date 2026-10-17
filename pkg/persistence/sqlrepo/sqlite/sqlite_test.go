@@ -12,7 +12,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlite"
 )
 
-// OpenTemp opens a file-backed SQLite database in a temporary directory.
+// openTemp abre una base de datos SQLite respaldada por fichero en un directorio temporal.
 func openTemp(t *testing.T) *sqlrepo.DB {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "karpo.db")
@@ -20,7 +20,7 @@ func openTemp(t *testing.T) *sqlrepo.DB {
 	if err != nil {
 		t.Fatal(err)
 	}
-	raw.SetMaxOpenConns(1) // SQLite has a single writer; one connection avoids lock contention
+	raw.SetMaxOpenConns(1) // SQLite tiene un solo escritor; una sola conexión evita la contención de bloqueos
 	db := sqlite.Open(raw)
 	t.Cleanup(func() { _ = db.Close() })
 	return db

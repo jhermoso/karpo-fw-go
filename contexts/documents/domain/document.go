@@ -1,9 +1,9 @@
-// Package domain is the Documents model: the register of the documents the other contexts issue
-// (invoices, orders, delivery notes, received invoices, payslips, tax filings), each with its
-// number, date, counterparty and the document it comes from, so the trail order → delivery note →
-// invoice → corrective invoice can be followed in one place. In C# Documents numbered every fact
-// from a shared series whose counter was not safe under concurrency; here each context numbers
-// its own documents and Documents only records what was issued.
+// Package domain es el modelo de Documents: el registro de los documentos que emiten los otros
+// contextos (facturas, pedidos, albaranes, facturas recibidas, nóminas, declaraciones), cada uno
+// con su número, fecha, contraparte y el documento del que viene, para poder seguir en un solo
+// sitio la traza pedido → albarán → factura → factura rectificativa. En C#, Documents numeraba cada
+// hecho con una serie compartida cuyo contador no era seguro con concurrencia; aquí cada contexto
+// numera sus propios documentos y Documents sólo registra lo emitido.
 package domain
 
 import (
@@ -17,23 +17,23 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// DocumentKind is the stable aggregate type name.
+// DocumentKind es el nombre estable del tipo de agregado.
 const DocumentKind = "documents.document"
 
-// Identities of the context.
+// Identidades del contexto.
 type (
-	// DocumentID identifies an entry of the register.
+	// DocumentID identifica una anotación del registro.
 	DocumentID struct{ fw.UUID }
-	// OrganizationID is the company the document belongs to, an internal organization of Parties.
+	// OrganizationID es la empresa a la que pertenece el documento, una organización interna de Parties.
 	OrganizationID struct{ fw.UUID }
-	// PartyID is the counterparty: customer, supplier, employee.
+	// PartyID es la contraparte: cliente, proveedor, empleado.
 	PartyID struct{ fw.UUID }
 )
 
-// Type is what a document is (the C# fact types that have an issuing context).
+// Type es qué es un documento (los tipos de hecho del C# que tienen un contexto emisor).
 type Type string
 
-// Types.
+// Tipos.
 const (
 	Invoice         Type = "invoice"
 	CreditNote      Type = "credit-note"
@@ -44,54 +44,54 @@ const (
 	TaxFiling       Type = "tax-filing"
 )
 
-// Types lists the valid types.
+// Types lista los tipos válidos.
 var Types = []Type{Invoice, CreditNote, Order, DeliveryNote, ReceivedInvoice, Payslip, TaxFiling}
 
-// Relations between a document and the one it comes from (of the six seeded in C#, the two that
-// something writes).
+// Relaciones entre un documento y aquél del que viene (de las seis sembradas en C#, las dos que algo
+// escribe).
 const (
 	OriginatesFrom = "originates-from"
 	Rectifies      = "rectifies"
 )
 
-// Ref points at the fact a document stands for: its type and its identity in the issuing context.
+// Ref apunta al hecho al que representa un documento: su tipo y su identidad en el contexto emisor.
 type Ref struct {
 	Type Type
 	ID   string
 }
 
-// IsZero reports whether the reference is empty.
+// IsZero dice si la referencia está vacía.
 func (r Ref) IsZero() bool { return r == Ref{} }
 
 func (r Ref) valid() bool {
 	return slices.Contains(Types, r.Type) && r.ID != "" && len(r.ID) <= 64
 }
 
-// DocumentState is the persisted state of an entry.
+// DocumentState es el estado persistido de una anotación.
 type DocumentState struct {
 	Company      OrganizationID
 	Fact         Ref
-	Number       string // the number the issuing context gave it
-	Reference    string // the number someone else gave it (the supplier's, on a received invoice)
+	Number       string // el número que le dio el contexto emisor
+	Reference    string // el número que le dio otro (el del proveedor, en una factura recibida)
 	Date         vocab.Date
 	Party        PartyID
 	Total        vocab.Decimal
 	HasTotal     bool
-	Origin       Ref // the document it comes from
+	Origin       Ref // el documento del que viene
 	Relation     string
 	Cancelled    bool
 	CancelReason string
 	Audit        traits.AuditStamp
 }
 
-// Document is an entry of the register: a document some context issued.
+// Document es una anotación del registro: un documento que emitió algún contexto.
 type Document struct {
 	fw.BaseAggregateRoot[DocumentID]
 	traits.Audited
 	s DocumentState
 }
 
-// ReconstituteDocument rebuilds an entry.
+// ReconstituteDocument reconstruye una anotación.
 func ReconstituteDocument(id DocumentID, s DocumentState) (*Document, error) {
 	base, err := fw.NewBaseAggregateRoot(DocumentKind, id)
 	if err != nil {
@@ -117,17 +117,17 @@ func ReconstituteDocument(id DocumentID, s DocumentState) (*Document, error) {
 	return &Document{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// RecordDocument enters an issued document in the register.
+// RecordDocument anota en el registro un documento emitido.
 func RecordDocument(id DocumentID, s DocumentState) (*Document, error) {
 	s.Cancelled, s.CancelReason = false, ""
 	return ReconstituteDocument(id, s)
 }
 
-// State returns the state.
+// State devuelve el estado.
 func (d *Document) State() DocumentState { return d.s }
 
-// Cancel marks the document as cancelled by its issuing context. It reports whether anything
-// changed: hearing of a cancellation twice is not an error.
+// Cancel marca el documento como anulado por su contexto emisor. Dice si algo cambió: enterarse dos
+// veces de una anulación no es un error.
 func (d *Document) Cancel(reason string) bool {
 	if d.s.Cancelled {
 		return false
@@ -140,12 +140,12 @@ func (d *Document) Cancel(reason string) bool {
 	return true
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (d *Document) AuditSnapshot() map[string]any {
 	return map[string]any{"type": string(d.s.Fact.Type), "number": d.s.Number, "cancelled": d.s.Cancelled}
 }
 
-// Document fields.
+// Campos del documento.
 var (
 	DocFieldCompany    = spec.Comparable("company", func(d *Document) OrganizationID { return d.s.Company })
 	DocFieldType       = spec.Comparable("doc_type", func(d *Document) string { return string(d.s.Fact.Type) })
@@ -158,24 +158,24 @@ var (
 	DocFieldCancelled  = spec.Comparable("cancelled", func(d *Document) bool { return d.s.Cancelled })
 )
 
-// ByFact selects the entry of a fact.
+// ByFact selecciona la anotación de un hecho.
 func ByFact(r Ref) spec.Spec[*Document] {
 	return DocFieldType.Eq(string(r.Type)).And(DocFieldFact.Eq(r.ID))
 }
 
-// DerivedFrom selects the documents that come from one.
+// DerivedFrom selecciona los documentos que vienen de uno.
 func DerivedFrom(r Ref) spec.Spec[*Document] {
 	return DocFieldOriginType.Eq(string(r.Type)).And(DocFieldOriginID.Eq(r.ID))
 }
 
-// NewDocumentID returns a new identity.
+// NewDocumentID devuelve una identidad nueva.
 func NewDocumentID() DocumentID { return DocumentID{fw.NewUUID()} }
 
-// ParseDocumentID parses a textual identity.
+// ParseDocumentID interpreta una identidad en texto.
 func ParseDocumentID(s string) (DocumentID, error) {
 	u, err := fw.ParseUUID(s)
 	return DocumentID{u}, err
 }
 
-// DocumentRepository stores the register.
+// DocumentRepository guarda el registro.
 type DocumentRepository = fw.Repository[DocumentID, *Document]

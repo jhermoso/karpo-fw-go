@@ -13,13 +13,13 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// The Inventory copies of the Orders events it consumes (only the fields it needs).
+// Las copias en Inventario de los eventos de Orders que consume (sólo los campos que necesita).
 
-// OrderSource is the source type of the reservations and issues of sales orders: the source id is
-// the order and its line, "order|line".
+// OrderSource es el tipo de origen de las reservas y las salidas de los pedidos de venta: el id de
+// origen es el pedido y su línea, «order|line».
 const OrderSource = "orders.sales-order"
 
-// StockRequested is orders.stock-requested.v1: the quantities of an order to hold.
+// StockRequested es orders.stock-requested.v1: las cantidades de un pedido que retener.
 type StockRequested struct {
 	OrderID   string `json:"orderId"`
 	Company   string `json:"company"`
@@ -31,10 +31,10 @@ type StockRequested struct {
 	} `json:"lines"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (StockRequested) IntegrationEventType() string { return "orders.stock-requested.v1" }
 
-// DeliveryIssued is orders.delivery-issued.v1: what left the warehouse for an order.
+// DeliveryIssued es orders.delivery-issued.v1: lo que salió del almacén para un pedido.
 type DeliveryIssued struct {
 	DeliveryID string `json:"deliveryId"`
 	OrderID    string `json:"orderId"`
@@ -50,34 +50,35 @@ type DeliveryIssued struct {
 	} `json:"lines"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (DeliveryIssued) IntegrationEventType() string { return "orders.delivery-issued.v1" }
 
-// OrderClosed is orders.order-closed.v1: an order cancelled or closed, with the lines that may
-// still hold stock.
+// OrderClosed es orders.order-closed.v1: un pedido anulado o cerrado, con las líneas que aún
+// pueden retener existencias.
 type OrderClosed struct {
 	OrderID string `json:"orderId"`
 	Company string `json:"company"`
 	Lines   []int  `json:"lines"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (OrderClosed) IntegrationEventType() string { return "orders.order-closed.v1" }
 
 func orderLine(order string, line int) domain.Source {
 	return domain.Source{Type: OrderSource, ID: fmt.Sprintf("%s|%d", order, line)}
 }
 
-// Subscribe registers the reactions to Orders (approved decisions of docs/PEDIDOS.md: Orders
-// publishes, Inventory moves the stock):
+// Subscribe registra las reacciones a Orders (decisiones aprobadas de docs/PEDIDOS.md: Orders
+// publica, Inventario mueve las existencias):
 //
-//   - stock requested: each line holds what is available of its product in the warehouse, up to
-//     what is asked (nothing when there is none: the order sees the shortage and asks again);
-//   - delivery issued: each stocked line leaves the warehouse against its reservation, at the
-//     average cost;
-//   - order closed: what its lines still hold is released.
+//   - existencias pedidas: cada línea retiene lo disponible de su producto en el almacén, hasta lo
+//     pedido (nada si no hay: el pedido ve la falta y vuelve a pedir);
+//   - entrega emitida: cada línea con existencias sale del almacén contra su reserva, al coste
+//     medio;
+//   - pedido cerrado: se libera lo que aún retienen sus líneas.
 //
-// Redeliveries are harmless: the inbox drops them and an issue is unique by delivery and line.
+// Los mensajes entregados otra vez no hacen daño: el inbox las descarta y una salida es única por entrega y
+// línea.
 func Subscribe(c *messaging.Consumer, d Deps) {
 	s := newService(d)
 	held := func(ctx context.Context, w domain.WarehouseID, src domain.Source) (*domain.Reservation, error) {
@@ -103,7 +104,7 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 			return err
 		}
 		if w.State().Company.UUID != company || !w.State().Active {
-			return nil // nothing to hold in a warehouse that is closed or of another company
+			return nil // nada que retener en un almacén cerrado o de otra empresa
 		}
 		for _, line := range e.Lines {
 			pu, err1 := fw.ParseUUID(line.Product)
@@ -114,7 +115,7 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 			product := domain.ProductID{UUID: pu}
 			if _, err := s.item(ctx, w.State().Company, product, "", false); err != nil {
 				if errors.Is(err, fw.ErrRuleViolation) {
-					continue // not a stocked product of the company: nothing to hold
+					continue // no es un producto con existencias de la empresa: nada que retener
 				}
 				return err
 			}
@@ -188,7 +189,8 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 			if err != nil {
 				return err
 			}
-			// What the order line holds leaves the reserve; anything beyond it, the free stock.
+			// Lo que retiene la línea del pedido sale de la reserva; lo que pase de ahí, de las
+			// existencias libres.
 			fromReserve := vocab.DecimalFromInt(0)
 			if r != nil {
 				fromReserve = q

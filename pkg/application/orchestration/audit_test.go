@@ -17,7 +17,7 @@ import (
 
 type accountID struct{ domain.UUID }
 
-// account composes traits instead of inheriting a BusinessEntity.
+// account se compone de rasgos en lugar de heredar de un BusinessEntity.
 type account struct {
 	domain.BaseAggregateRoot[accountID]
 	traits.Activation

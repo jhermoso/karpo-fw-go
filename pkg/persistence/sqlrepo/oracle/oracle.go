@@ -1,22 +1,25 @@
-// Package oracle provides the Oracle Database (12c+) dialect for sqlrepo. It does not import a
-// driver: register one in the composition root (e.g. github.com/sijms/go-ora/v2, pure Go,
-// driver "oracle", which binds positional arguments as :1..:N).
+// Package oracle ofrece el dialecto Oracle Database (12c+) para sqlrepo. No importa ningún
+// driver: se registra uno en la raíz de composición (p. ej. github.com/sijms/go-ora/v2, Go puro,
+// driver "oracle", que enlaza los argumentos posicionales como :1..:N).
 //
-// Conventions:
-//   - identifiers are quoted in upper case, matching tables created with unquoted names;
-//   - identities are stored as RAW(16); by default in RFC byte order, or in the .NET
-//     Guid.ToByteArray order (WithDotNetGUIDs) to share tables with the C# Karpo services,
-//     which store GUIDs with HEXTORAW / EF Core conventions;
-//   - booleans are stored as NUMBER(1) (0/1), instants as TIMESTAMP WITH TIME ZONE (UTC);
-//   - civil dates (vocab.Date) are bound as TO_DATE('YYYY-MM-DD'), never as instants;
-//   - IN lists are split in chunks of 1000 (ORA-01795).
+// Convenciones:
+//   - los identificadores se entrecomillan en mayúsculas, como las tablas creadas con nombres sin
+//     comillas;
+//   - las identidades se guardan como RAW(16); por defecto en el orden de bytes del RFC, o en el
+//     orden de Guid.ToByteArray de .NET (WithDotNetGUIDs) para compartir tablas con los servicios
+//     de Karpo en C#, que guardan los GUID con las convenciones de HEXTORAW / EF Core;
+//   - los booleanos se guardan como NUMBER(1) (0/1) y los instantes como TIMESTAMP WITH TIME ZONE
+//     (UTC);
+//   - las fechas civiles (vocab.Date) se enlazan como TO_DATE('YYYY-MM-DD'), nunca como instantes;
+//   - las listas IN se parten en trozos de 1000 (ORA-01795).
 //
-// Time zones: go-ora sets the session time zone to the client's. Instants are stored in
-// TIMESTAMP WITH TIME ZONE columns and compare correctly; when sharing tables with the C#
-// services that use DATE/TIMESTAMP columns without zone for instants, set the session time zone
-// to UTC (ALTER SESSION SET TIME_ZONE = 'UTC') or run the process with TZ=UTC.
+// Zonas horarias: go-ora pone como zona horaria de la sesión la del cliente. Los instantes se
+// guardan en columnas TIMESTAMP WITH TIME ZONE y se comparan bien; si se comparten tablas con los
+// servicios en C# que usan columnas DATE/TIMESTAMP sin zona para los instantes, hay que poner la
+// zona horaria de la sesión en UTC (ALTER SESSION SET TIME_ZONE = 'UTC') o ejecutar el proceso con
+// TZ=UTC.
 //
-// Semantics note: Oracle treats the empty string as NULL.
+// Nota de semántica: Oracle trata la cadena vacía como NULL.
 package oracle
 
 import (
@@ -29,18 +32,18 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 )
 
-// Dialect implements sqlrepo.Dialect for Oracle.
+// Dialect implementa sqlrepo.Dialect para Oracle.
 type Dialect struct {
 	dotNetGUIDs bool
 }
 
-// DialectOption configures the Oracle dialect.
+// DialectOption configura el dialecto Oracle.
 type DialectOption func(*Dialect)
 
-// WithDotNetGUIDs stores and reads RAW(16) identities in .NET Guid byte order.
+// WithDotNetGUIDs guarda y lee las identidades RAW(16) en el orden de bytes del Guid de .NET.
 func WithDotNetGUIDs() DialectOption { return func(d *Dialect) { d.dotNetGUIDs = true } }
 
-// New returns the Oracle dialect.
+// New devuelve el dialecto Oracle.
 func New(opts ...DialectOption) Dialect {
 	var d Dialect
 	for _, opt := range opts {
@@ -49,7 +52,7 @@ func New(opts ...DialectOption) Dialect {
 	return d
 }
 
-// Open wraps an opened Oracle *sql.DB.
+// Open envuelve un *sql.DB de Oracle ya abierto.
 func Open(db *sql.DB, d Dialect, opts ...sqlrepo.Option) *sqlrepo.DB {
 	return sqlrepo.New(db, d, opts...)
 }
@@ -94,7 +97,7 @@ func (d Dialect) ParseUUID(v any) (domain.UUID, error) {
 			return domain.UUID(b), nil
 		}
 	case string:
-		if len(x) == 32 { // RAWTOHEX output
+		if len(x) == 32 { // salida de RAWTOHEX
 			u, err := domain.ParseUUID(x)
 			if err == nil && d.dotNetGUIDs {
 				u = domain.UUID(sqlrepo.SwapGUIDBytes([16]byte(u)))
@@ -105,21 +108,23 @@ func (d Dialect) ParseUUID(v any) (domain.UUID, error) {
 	return sqlrepo.ParseUUIDDefault(v)
 }
 
-// DateValue binds a civil date as ISO text; DateExpr converts it with TO_DATE. Binding a
-// time.Time would send a TIMESTAMP WITH TIME ZONE, and comparing it with a DATE column converts
-// the column with the session time zone (which go-ora sets to the client's), shifting the day.
+// DateValue enlaza una fecha civil como texto ISO; DateExpr la convierte con TO_DATE. Enlazar un
+// time.Time enviaría un TIMESTAMP WITH TIME ZONE, y al compararlo con una columna DATE la columna
+// se convierte con la zona horaria de la sesión (que go-ora pone a la del cliente), lo que
+// desplaza el día.
 func (Dialect) DateValue(y int, m time.Month, d int) any {
 	return fmt.Sprintf("%04d-%02d-%02d", y, m, d)
 }
 
-// DateExpr wraps the placeholder in TO_DATE(..., 'YYYY-MM-DD'), independent of NLS settings.
+// DateExpr envuelve el placeholder en TO_DATE(..., 'YYYY-MM-DD'), con independencia de la
+// configuración NLS.
 func (Dialect) DateExpr(ph string) string { return "TO_DATE(" + ph + ", 'YYYY-MM-DD')" }
 
 func (Dialect) IsUniqueViolation(err error) bool {
 	return sqlrepo.ErrorContains(err, "ORA-00001")
 }
 
-// OutboxDDL returns the statements creating the outbox table.
+// OutboxDDL devuelve las sentencias que crean la tabla del outbox.
 func OutboxDDL(table string) []string {
 	if table == "" {
 		table = sqlrepo.DefaultOutboxTable
@@ -142,7 +147,7 @@ func OutboxDDL(table string) []string {
 	}
 }
 
-// AuditDDL returns the statements creating the audit log table.
+// AuditDDL devuelve las sentencias que crean la tabla del registro de auditoría.
 func AuditDDL(table string) []string {
 	if table == "" {
 		table = sqlrepo.DefaultAuditTable
@@ -159,7 +164,7 @@ func AuditDDL(table string) []string {
 
 var _ sqlrepo.Dialect = Dialect{}
 
-// InboxDDL returns the statements creating the inbox table (consumer, message id).
+// InboxDDL devuelve las sentencias que crean la tabla del inbox (consumidor, id del mensaje).
 func InboxDDL(table string) []string {
 	if table == "" {
 		table = sqlrepo.DefaultInboxTable

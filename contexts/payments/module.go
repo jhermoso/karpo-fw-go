@@ -1,4 +1,5 @@
-// Package payments composes the Payments (Pagos) bounded context on a hot-swap backend.
+// Package payments compone el contexto delimitado Payments (Pagos) sobre un backend
+// intercambiable en caliente.
 package payments
 
 import (
@@ -20,18 +21,18 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 )
 
-// Module is the composed context.
+// Module es el contexto compuesto.
 type Module struct {
 	Service           *papp.Service
 	Payable           contracts.Payable
 	IntegrationOutbox application.OutboxStore
 	Audit             application.AuditLog
-	// Consumer receives the received invoices of Purchases, the payslips of Payroll, the tax forms
-	// of Fiscal and the transfers of Treasury: subscribe it to the transport.
+	// Consumer recibe las facturas recibidas de Purchases, las nóminas de Payroll, los modelos
+	// fiscales de Fiscal y las transferencias de Treasury: hay que suscribirlo al transporte.
 	Consumer *messaging.Consumer
 }
 
-// Compose builds the context on sw. netPay may be nil (payroll payables without accounts).
+// Compose construye el contexto sobre sw. netPay puede ser nil (obligaciones de nómina sin cuentas).
 func Compose(sw *hotswap.Switch, netPay domain.NetPaySplits) *Module {
 	integration := hotswap.Outbox(sw, infrastructure.IntegrationOutboxFactory)
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
@@ -47,7 +48,7 @@ func Compose(sw *hotswap.Switch, netPay domain.NetPaySplits) *Module {
 		Consumer: consumer}
 }
 
-// Relay forwards the Published Language to a transport.
+// Relay reenvía el Published Language a un transporte.
 func (m *Module) Relay(sender application.MessageSender, opts ...outbox.RelayOption) *outbox.Relay {
 	return messaging.NewRelay(contracts.Source, m.IntegrationOutbox, sender, opts...)
 }
@@ -99,7 +100,7 @@ func create[In, Out any](status int, run func(context.Context, In) (Out, error))
 	}
 }
 
-// RegisterRoutes implements distribution.EndpointModule.
+// RegisterRoutes implementa distribution.EndpointModule.
 func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	svc := m.Service
 	pay, pmt := domain.ParsePayableID, domain.ParsePaymentID

@@ -2,17 +2,17 @@ package vocab
 
 import "strings"
 
-// CurrencyCode is an active ISO 4217 alphabetic currency code ("EUR", "USD"...).
+// CurrencyCode es un código alfabético de moneda ISO 4217 en vigor ("EUR", "USD"...).
 type CurrencyCode struct{ code string }
 
-// Common currencies.
+// Monedas habituales.
 var (
 	EUR = CurrencyCode{"EUR"}
 	USD = CurrencyCode{"USD"}
 	GBP = CurrencyCode{"GBP"}
 )
 
-// isoCurrencies lists the active ISO 4217 codes (funds and precious metals excluded).
+// isoCurrencies enumera los códigos ISO 4217 en vigor (sin fondos ni metales preciosos).
 const isoCurrencies = "AED AFN ALL AMD ANG AOA ARS AUD AWG AZN BAM BBD BDT BGN BHD BIF BMD BND BOB BRL BSD BTN BWP BYN BZD " +
 	"CAD CDF CHF CLF CLP CNY COP CRC CUP CVE CZK DJF DKK DOP DZD EGP ERN ETB EUR FJD FKP GBP GEL GHS GIP GMD GNF GTQ " +
 	"GYD HKD HNL HTG HUF IDR ILS INR IQD IRR ISK JMD JOD JPY KES KGS KHR KMF KPW KRW KWD KYD KZT LAK LBP LKR LRD LSL " +
@@ -20,7 +20,7 @@ const isoCurrencies = "AED AFN ALL AMD ANG AOA ARS AUD AWG AZN BAM BBD BDT BGN B
 	"PYG QAR RON RSD RUB RWF SAR SBD SCR SDG SEK SGD SHP SLE SOS SRD SSP STN SVC SYP SZL THB TJS TMT TND TOP TRY TTD " +
 	"TWD TZS UAH UGX USD UYU UYW UZS VED VES VND VUV WST XAF XCD XCG XOF XPF YER ZAR ZMW ZWG"
 
-// minorUnits lists the currencies whose minor unit is not 2 decimal places.
+// minorUnits enumera las monedas cuya unidad menor no es de 2 decimales.
 var minorUnits = map[string]int32{
 	"BHD": 3, "IQD": 3, "JOD": 3, "KWD": 3, "LYD": 3, "OMR": 3, "TND": 3,
 	"CLF": 4, "UYW": 4,
@@ -36,7 +36,7 @@ var currencies = func() map[string]bool {
 	return m
 }()
 
-// NewCurrencyCode validates an ISO 4217 code (case-insensitive).
+// NewCurrencyCode valida un código ISO 4217 (sin distinguir mayúsculas).
 func NewCurrencyCode(s string) (CurrencyCode, error) {
 	c := strings.ToUpper(strings.TrimSpace(s))
 	if !currencies[c] {
@@ -45,7 +45,7 @@ func NewCurrencyCode(s string) (CurrencyCode, error) {
 	return CurrencyCode{c}, nil
 }
 
-// MustCurrencyCode is like NewCurrencyCode but panics on error.
+// MustCurrencyCode es como NewCurrencyCode pero entra en pánico si hay error.
 func MustCurrencyCode(s string) CurrencyCode {
 	c, err := NewCurrencyCode(s)
 	if err != nil {
@@ -54,13 +54,13 @@ func MustCurrencyCode(s string) CurrencyCode {
 	return c
 }
 
-// String returns the code.
+// String devuelve el código.
 func (c CurrencyCode) String() string { return c.code }
 
-// IsZero reports whether the code is absent.
+// IsZero dice si falta el código.
 func (c CurrencyCode) IsZero() bool { return c.code == "" }
 
-// MinorUnits returns the number of decimal places of the currency (2 for EUR, 0 for JPY...).
+// MinorUnits devuelve el número de decimales de la moneda (2 para EUR, 0 para JPY...).
 func (c CurrencyCode) MinorUnits() int32 {
 	if n, ok := minorUnits[c.code]; ok {
 		return n
@@ -68,10 +68,10 @@ func (c CurrencyCode) MinorUnits() int32 {
 	return 2
 }
 
-// MarshalText implements encoding.TextMarshaler.
+// MarshalText implementa encoding.TextMarshaler.
 func (c CurrencyCode) MarshalText() ([]byte, error) { return []byte(c.code), nil }
 
-// UnmarshalText implements encoding.TextUnmarshaler.
+// UnmarshalText implementa encoding.TextUnmarshaler.
 func (c *CurrencyCode) UnmarshalText(b []byte) error {
 	if len(b) == 0 {
 		*c = CurrencyCode{}

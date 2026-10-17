@@ -6,16 +6,16 @@ import (
 	"unicode/utf8"
 )
 
-// NameMaxLength is the maximum length of a Name in characters.
+// NameMaxLength es la longitud máxima de un Name en caracteres.
 const NameMaxLength = 200
 
-// Name is a human-readable name (of a catalog entry, a role, a product...). Its identity is its
-// text: casing styles are presentation, not part of the value (the C# NameFormat is gone; see
-// CapitalizeWords for the common presentation rule). Internal whitespace is collapsed.
+// Name es un nombre legible (de una entrada de catálogo, un rol, un producto...). Su identidad es
+// su texto: el uso de mayúsculas es presentación, no parte del valor (el NameFormat de C# ha
+// desaparecido; véase CapitalizeWords para la regla de presentación común). Los espacios internos se colapsan.
 type Name struct{ value string }
 
-// NewName validates and normalizes a name: trimmed, single spaces, 1..NameMaxLength characters,
-// no control characters.
+// NewName valida y normaliza un nombre: recortado, con espacios simples, de 1..NameMaxLength
+// caracteres y sin caracteres de control.
 func NewName(s string) (Name, error) {
 	n := strings.Join(strings.Fields(s), " ")
 	switch {
@@ -29,7 +29,7 @@ func NewName(s string) (Name, error) {
 	return Name{n}, nil
 }
 
-// MustName is like NewName but panics on error.
+// MustName es como NewName pero entra en pánico si hay error.
 func MustName(s string) Name {
 	n, err := NewName(s)
 	if err != nil {
@@ -38,19 +38,19 @@ func MustName(s string) Name {
 	return n
 }
 
-// String returns the name.
+// String devuelve el nombre.
 func (n Name) String() string { return n.value }
 
-// IsZero reports whether the name is absent.
+// IsZero dice si falta el nombre.
 func (n Name) IsZero() bool { return n.value == "" }
 
-// EqualFold compares ignoring case.
+// EqualFold compara sin distinguir mayúsculas.
 func (n Name) EqualFold(o Name) bool { return strings.EqualFold(n.value, o.value) }
 
-// MarshalText implements encoding.TextMarshaler.
+// MarshalText implementa encoding.TextMarshaler.
 func (n Name) MarshalText() ([]byte, error) { return []byte(n.value), nil }
 
-// UnmarshalText implements encoding.TextUnmarshaler.
+// UnmarshalText implementa encoding.TextUnmarshaler.
 func (n *Name) UnmarshalText(b []byte) error {
 	if len(b) == 0 {
 		*n = Name{}
@@ -63,16 +63,16 @@ func (n *Name) UnmarshalText(b []byte) error {
 	return err
 }
 
-// nameParticles stay in lower case inside a capitalized name ("Juan de la Fuente").
+// nameParticles se quedan en minúsculas dentro de un nombre capitalizado ("Juan de la Fuente").
 var nameParticles = map[string]bool{
 	"de": true, "del": true, "la": true, "las": true, "los": true, "y": true, "e": true,
 	"da": true, "das": true, "do": true, "dos": true, "van": true, "von": true, "der": true, "di": true,
 }
 
-// CapitalizeWords capitalizes the first letter of each word, keeps the particles of personal
-// and place names in lower case (except at the start) and preserves the rest of each word as
-// written, so "McDonald" or "O'Neill" are not damaged. Words written entirely in upper or lower
-// case are normalized ("JUAN" -> "Juan").
+// CapitalizeWords pone en mayúscula la primera letra de cada palabra, deja en minúsculas las
+// partículas de los nombres de persona y de lugar (salvo al principio) y conserva el resto de cada
+// palabra tal como está escrito, para no estropear "McDonald" u "O'Neill". Las palabras escritas
+// enteras en mayúsculas o en minúsculas se normalizan ("JUAN" -> "Juan").
 func CapitalizeWords(s string) string {
 	words := strings.Fields(s)
 	for i, w := range words {

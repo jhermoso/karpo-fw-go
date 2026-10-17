@@ -11,7 +11,8 @@ import (
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// Remittance implements contracts.Remittance (one query per batch; it serves Treasury, not users).
+// Remittance implementa contracts.Remittance (una consulta por lote; sirve a Treasury, no a
+// usuarios).
 type Remittance struct {
 	Payslips domain.PayslipRepository
 	Profiles domain.ProfileRepository
@@ -19,8 +20,8 @@ type Remittance struct {
 
 var _ contracts.Remittance = Remittance{}
 
-// NetPayments implements contracts.Remittance: the net pay of each approved payslip split with
-// the profile of its employment in force on the payment date.
+// NetPayments implementa contracts.Remittance: el líquido de cada nómina aprobada repartido con el
+// perfil de su relación laboral vigente en la fecha de pago.
 func (r Remittance) NetPayments(ctx context.Context, payslipIDs []string) (map[string][]contracts.PaymentRef, error) {
 	if len(payslipIDs) > contracts.MaxBatch {
 		return nil, fmt.Errorf("%w: at most %d ids per call", fw.ErrValidation, contracts.MaxBatch)
@@ -70,7 +71,7 @@ func (r Remittance) NetPayments(ctx context.Context, payslipIDs []string) (map[s
 	return out, nil
 }
 
-// Publications translates the domain events into the Published Language.
+// Publications traduce los eventos de dominio al Published Language.
 func Publications(r *messaging.Recorder) *messaging.Recorder {
 	messaging.On(r, func(_ context.Context, e domain.PayslipApproved) ([]app.IntegrationEvent, error) {
 		t := e.Totals

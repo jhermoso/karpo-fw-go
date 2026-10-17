@@ -79,7 +79,7 @@ func TestRecorder_TranslatesInTheUnitOfWork(t *testing.T) {
 		t.Fatalf("envelope: %+v data=%s", env, env.Data)
 	}
 
-	// A translation error or an invalid type name fails the unit of work: nothing is recorded.
+	// Un error de traducción o un nombre de tipo no válido hace fallar la unidad de trabajo: no se registra nada.
 	boom := errors.New("boom")
 	messaging.On(rec, func(context.Context, accountNoted) ([]application.IntegrationEvent, error) { return nil, boom })
 	if err := store.Do(ctx, func(ctx context.Context) error {
@@ -123,7 +123,7 @@ func TestConsumer_InboxMakesRedeliveryHarmless(t *testing.T) {
 	if err := c.HandleMessage(ctx, env); err == nil {
 		t.Fatal("first delivery fails")
 	}
-	for range 3 { // redeliveries
+	for range 3 { // reentregas
 		if err := c.HandleMessage(ctx, env); err != nil {
 			t.Fatal(err)
 		}

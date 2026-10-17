@@ -1,5 +1,5 @@
-// Package infrastructure stores the Exchange context: SQL mappings, versioned schema of the five
-// engines and hot-swap factories.
+// Package infrastructure guarda el contexto Exchange: mapeos SQL, esquema versionado de los cinco
+// motores y factorías intercambiables en caliente.
 package infrastructure
 
 import (
@@ -21,10 +21,10 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlserver"
 )
 
-// Context is the name of the bounded context.
+// Context es el nombre del contexto delimitado.
 const Context = "exchange"
 
-// Technical tables of the context.
+// Tablas técnicas del contexto.
 const (
 	TableOutbox            = "exchange_outbox"
 	TableIntegrationOutbox = "exchange_integration_outbox"
@@ -74,7 +74,7 @@ func technicalDDL(d string) []string {
 	return nil
 }
 
-// Migrations is the versioned schema of the context.
+// Migrations es el esquema versionado del contexto.
 func Migrations() sqlrepo.MigrationSet {
 	technical := map[string][]string{}
 	for _, d := range sqlrepo.Dialects {
@@ -86,16 +86,16 @@ func Migrations() sqlrepo.MigrationSet {
 	}}
 }
 
-// Migrator returns the schema migrator of the context.
+// Migrator devuelve el migrador del esquema del contexto.
 func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 	return sqlrepo.NewMigrator(db, []sqlrepo.MigrationSet{Migrations()})
 }
 
-// Tables lists the tables of the context, children first (drop order).
+// Tables lista las tablas del contexto, las hijas primero (orden de borrado).
 var Tables = []string{"exg_reservation_history", "exg_reservation_lines", "exg_reservations", "exg_settings", "exg_margins", "exg_currencies",
 	TableOutbox, TableIntegrationOutbox, TableAuditLog}
 
-// DropAll removes the tables of the context and its migration history (tests only).
+// DropAll borra las tablas del contexto y su historial de migraciones (sólo para pruebas).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
 	for _, t := range Tables {
 		_, _ = db.ExecContext(ctx, "DROP TABLE "+t)
@@ -124,14 +124,14 @@ func optDate(d vocab.Date) any {
 	return d
 }
 
-// Engines do not agree on the order of the children: they are sorted here.
+// Los motores no coinciden en el orden de las hijas: se ordenan aquí.
 func byNo(rows []*sqlrepo.Row) []*sqlrepo.Row {
 	out := slices.Clone(rows)
 	slices.SortFunc(out, func(a, b *sqlrepo.Row) int { return int(a.Int64("line_no") - b.Int64("line_no")) })
 	return out
 }
 
-// CurrencyMapping maps Currency to exg_currencies.
+// CurrencyMapping mapea Currency a exg_currencies.
 func CurrencyMapping() sqlrepo.Mapping[domain.CurrencyID, *domain.Currency] {
 	return sqlrepo.Mapping[domain.CurrencyID, *domain.Currency]{
 		Table:   "exg_currencies",
@@ -153,7 +153,7 @@ func CurrencyMapping() sqlrepo.Mapping[domain.CurrencyID, *domain.Currency] {
 	}
 }
 
-// MarginMapping maps Margin to exg_margins.
+// MarginMapping mapea Margin a exg_margins.
 func MarginMapping() sqlrepo.Mapping[domain.MarginID, *domain.Margin] {
 	return sqlrepo.Mapping[domain.MarginID, *domain.Margin]{
 		Table:   "exg_margins",
@@ -175,7 +175,7 @@ func MarginMapping() sqlrepo.Mapping[domain.MarginID, *domain.Margin] {
 	}
 }
 
-// SettingsMapping maps Settings to exg_settings.
+// SettingsMapping mapea Settings a exg_settings.
 func SettingsMapping() sqlrepo.Mapping[domain.SettingsID, *domain.Settings] {
 	return sqlrepo.Mapping[domain.SettingsID, *domain.Settings]{
 		Table:   "exg_settings",
@@ -197,7 +197,7 @@ func SettingsMapping() sqlrepo.Mapping[domain.SettingsID, *domain.Settings] {
 	}
 }
 
-// ReservationMapping maps Reservation to exg_reservations, its lines and its history.
+// ReservationMapping mapea Reservation a exg_reservations, sus líneas y su historial.
 func ReservationMapping() sqlrepo.Mapping[domain.ReservationID, *domain.Reservation] {
 	return sqlrepo.Mapping[domain.ReservationID, *domain.Reservation]{
 		Table: "exg_reservations",
@@ -277,30 +277,30 @@ func repository[ID fw.Identifier, T fw.AggregateRoot[ID]](b hotswap.Backend, m s
 	return nil, unsupported(b)
 }
 
-// Repository factories.
+// Factorías de repositorios.
 func CurrencyRepositoryFactory(b hotswap.Backend) (domain.CurrencyRepository, error) {
 	return repository(b, CurrencyMapping())
 }
 
-// MarginRepositoryFactory builds the margin repository.
+// MarginRepositoryFactory construye el repositorio de márgenes.
 func MarginRepositoryFactory(b hotswap.Backend) (domain.MarginRepository, error) {
 	return repository(b, MarginMapping())
 }
 
-// SettingsRepositoryFactory builds the settings repository.
+// SettingsRepositoryFactory construye el repositorio de configuraciones.
 func SettingsRepositoryFactory(b hotswap.Backend) (domain.SettingsRepository, error) {
 	return repository(b, SettingsMapping())
 }
 
-// ReservationRepositoryFactory builds the reservation repository.
+// ReservationRepositoryFactory construye el repositorio de reservas.
 func ReservationRepositoryFactory(b hotswap.Backend) (domain.ReservationRepository, error) {
 	return repository(b, ReservationMapping())
 }
 
-// OutboxFactory builds the domain event outbox.
+// OutboxFactory construye el outbox de eventos de dominio.
 func OutboxFactory(b hotswap.Backend) (application.OutboxStore, error) { return outbox(b, TableOutbox) }
 
-// IntegrationOutboxFactory builds the integration outbox.
+// IntegrationOutboxFactory construye el outbox de integración.
 func IntegrationOutboxFactory(b hotswap.Backend) (application.OutboxStore, error) {
 	return outbox(b, TableIntegrationOutbox)
 }
@@ -315,7 +315,7 @@ func outbox(b hotswap.Backend, table string) (application.OutboxStore, error) {
 	return nil, unsupported(b)
 }
 
-// AuditLogFactory builds the audit log.
+// AuditLogFactory construye el registro de auditoría.
 func AuditLogFactory(b hotswap.Backend) (application.AuditLog, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:

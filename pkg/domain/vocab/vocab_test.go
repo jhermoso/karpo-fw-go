@@ -23,7 +23,7 @@ func TestName(t *testing.T) {
 	if err != nil || n.String() != "Acme Corporation" {
 		t.Fatalf("normalization: %q %v", n, err)
 	}
-	// Identity is the text: no format enum makes equal names different (C# Name bug).
+	// La identidad es el texto: ningún enumerado de formato hace distintos dos nombres iguales (error del Name de C#).
 	if vocab.MustName("Acme") != vocab.MustName(" Acme ") || !vocab.MustName("ACME").EqualFold(vocab.MustName("acme")) {
 		t.Fatal("name equality")
 	}
@@ -32,11 +32,11 @@ func TestName(t *testing.T) {
 		isValidation(t, err)
 	}
 	cases := map[string]string{
-		"juan DE LA fuente": "Juan de la Fuente", // particles stay lower case (C# AllCapitalized rejected them)
-		"McDonald":          "McDonald",          // internal capitals preserved
+		"juan DE LA fuente": "Juan de la Fuente", // las partículas se quedan en minúsculas (AllCapitalized de C# las rechazaba)
+		"McDonald":          "McDonald",          // se conservan las mayúsculas internas
 		"MARÍA JOSÉ":        "María José",
 		"o'neill":           "O'neill",
-		"de la Rosa":        "De la Rosa", // a leading particle is capitalized
+		"de la Rosa":        "De la Rosa", // una partícula inicial se pone en mayúscula
 	}
 	for in, want := range cases {
 		if got := vocab.CapitalizeWords(in); got != want {
@@ -50,7 +50,7 @@ func TestEmail(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// LocalPart/Domain derive from the normalized value (C# kept the original casing).
+	// LocalPart/Domain se derivan del valor normalizado (C# conservaba las mayúsculas originales).
 	if e.String() != "john.doe@example.com" || e.LocalPart() != "john.doe" || e.Domain() != "example.com" {
 		t.Fatalf("normalization: %s %s %s", e, e.LocalPart(), e.Domain())
 	}
@@ -62,7 +62,7 @@ func TestEmail(t *testing.T) {
 
 func TestPhone(t *testing.T) {
 	cases := map[string][2]string{
-		"+34 600 111 222":   {"34", "600111222"}, // C# read calling code 346
+		"+34 600 111 222":   {"34", "600111222"}, // C# leía el prefijo 346
 		"0034600111222":     {"34", "600111222"},
 		"+1 (212) 555-0100": {"1", "2125550100"},
 		"+44 7911 123456":   {"44", "7911123456"},
@@ -158,7 +158,7 @@ func TestPercentage(t *testing.T) {
 	if got := vat.AddTo(vocab.MustMoney("100", "EUR")).Round().String(); got != "121.00 EUR" {
 		t.Fatalf("add to: %s", got)
 	}
-	// Not clamped to 0-100 (C# clipped silently).
+	// No se limita a 0-100 (C# recortaba en silencio).
 	if !vocab.MustPercentage("150").Within(vocab.DecimalFromInt(0), vocab.DecimalFromInt(200)) ||
 		vocab.MustPercentage("150").Within(vocab.DecimalFromInt(0), vocab.DecimalFromInt(100)) {
 		t.Fatal("range checks are explicit")
@@ -202,7 +202,7 @@ func TestValidPeriod(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Half-open [from, to): consecutive periods never overlap.
+	// Semiabierto [from, to): los periodos consecutivos nunca se solapan.
 	if !p.IsActiveAt(jan) || p.IsActiveAt(feb) || !p.HasExpiredAt(feb) {
 		t.Fatal("half-open semantics")
 	}
@@ -213,7 +213,7 @@ func TestValidPeriod(t *testing.T) {
 	if _, err := vocab.NewValidPeriod(feb, &jan); err == nil {
 		t.Fatal("end before start accepted")
 	}
-	// Ending at the instant of the start gives the empty period: never in force, overlapping nothing.
+	// Terminar en el instante del inicio da el periodo vacío: nunca en vigor, no se solapa con nada.
 	empty, err := vocab.NewValidPeriod(jan, &jan)
 	if err != nil || !empty.IsEmpty() || p.IsEmpty() || next.IsEmpty() {
 		t.Fatalf("a period may end at the instant it starts: %v", err)
@@ -283,11 +283,11 @@ func TestIdentification(t *testing.T) {
 		{vocab.TaxID, "A58818501"},
 		{vocab.TaxID, "B12345674"},
 		{vocab.TaxID, "Q2826000H"},
-		{vocab.TaxID, "N0000000J"}, // control 0 -> letter J (C# computed '@')
+		{vocab.TaxID, "N0000000J"}, // control 0 -> letra J (C# calculaba '@')
 		{vocab.TaxID, "B00000000"},
 		{vocab.SocialSecurity, "281234567840"},
 		{vocab.SocialSecurity, "08 01234567 74"},
-		{vocab.Passport, "ab123456"}, // normalized before validating (C# rejected lower case)
+		{vocab.Passport, "ab123456"}, // se normaliza antes de validar (C# rechazaba las minúsculas)
 	}
 	for _, c := range valid {
 		if _, err := vocab.NewIdentification(c.kind, vocab.Spain, c.number); err != nil {
@@ -300,10 +300,10 @@ func TestIdentification(t *testing.T) {
 	}{
 		{vocab.NationalID, "12345678A"},
 		{vocab.TaxID, "B12345675"},
-		{vocab.TaxID, "Q28260008"}, // Q requires a letter
-		{vocab.TaxID, "A5881850A"}, // A requires a digit
+		{vocab.TaxID, "Q28260008"}, // Q exige letra
+		{vocab.TaxID, "A5881850A"}, // A exige dígito
 		{vocab.SocialSecurity, "281234567841"},
-		{vocab.SocialSecurity, "123-45-6789"}, // US format (the C# rule)
+		{vocab.SocialSecurity, "123-45-6789"}, // formato de EE. UU. (la regla de C#)
 	}
 	for _, c := range invalid {
 		_, err := vocab.NewIdentification(c.kind, vocab.Spain, c.number)
@@ -394,7 +394,7 @@ func TestCheckDigits(t *testing.T) {
 		"ES_DNI_MOD23":   {"12345678A"},
 		"PT_NIF_MOD11":   {"123456780"},
 		"IT_CF":          {"RSSMRA85T10A562T"},
-		"DE_IDNR":        {"12345678903"}, // passes ISO 7064 but no digit repeats
+		"DE_IDNR":        {"12345678903"}, // cumple ISO 7064 pero no se repite ningún dígito
 		"NL_BSN_MOD11":   {"111222334"},
 		"BE_NN_MOD97":    {"85073003329"},
 		"EL_AFM_MOD11":   {"090000046"},
@@ -417,7 +417,7 @@ func TestCheckDigits(t *testing.T) {
 	if _, known := vocab.ValidCheckDigit("XX_UNKNOWN", "1"); known {
 		t.Fatal("unknown algorithm")
 	}
-	// FR: the check is the first ten digits mod 511.
+	// FR: el control son los diez primeros dígitos módulo 511.
 	if ok, _ := vocab.ValidCheckDigit("FR_SPI_MOD511", "3023217600"+fmt.Sprintf("%03d", 3023217600%511)); !ok {
 		t.Fatal("FR SPI")
 	}

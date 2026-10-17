@@ -1,19 +1,21 @@
-// Command karpo-postgres runs the whole of Karpo in one process on PostgreSQL, which is also what
-// Supabase is. It is the production program: the same host as cmd/karpo, with another driver.
+// Command karpo-postgres ejecuta Karpo entero en un proceso sobre PostgreSQL, que es también lo
+// que es Supabase. Es el programa de producción: el mismo anfitrión que cmd/karpo, con otro
+// driver.
 //
-//	karpo-postgres migrate   applies the schema of every context
-//	karpo-postgres serve     verifies the schema and serves (the default)
+//	karpo-postgres migrate   aplica el esquema de todos los contextos
+//	karpo-postgres serve     comprueba el esquema y sirve (lo predeterminado)
 //
-// KARPO_DATABASE_URL is the connection string (required), for example
+// KARPO_DATABASE_URL es la cadena de conexión (obligatoria), por ejemplo
 //
 //	postgres://user:password@host:5432/database?sslmode=require
 //
-// KARPO_DB_MAX_CONNS bounds the connections it keeps (10). The rest of the configuration is that
-// of package serve.
+// KARPO_DB_MAX_CONNS limita las conexiones que mantiene (10). El resto de la configuración es la
+// del paquete serve.
 //
-// On Supabase use the direct connection or the session pooler (port 5432). The transaction pooler
-// (port 6543) gives each statement a different connection: the lock that keeps two migrations
-// from running at once and the transactions of the use cases need one that stays.
+// En Supabase se usa la conexión directa o el pooler de sesión (puerto 5432). El pooler de
+// transacción (puerto 6543) da a cada sentencia una conexión distinta: el bloqueo que impide que
+// dos migraciones se ejecuten a la vez y las transacciones de los casos de uso necesitan una que
+// se mantenga.
 package main
 
 import (
@@ -36,7 +38,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/postgres"
 )
 
-// open opens the database of a connection string, with at most conns connections.
+// open abre la base de datos de una cadena de conexión, con como mucho conns conexiones.
 func open(ctx context.Context, url string, conns int) (*sql.DB, error) {
 	raw, err := sql.Open("pgx", url)
 	if err != nil {

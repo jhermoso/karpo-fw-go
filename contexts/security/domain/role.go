@@ -10,21 +10,21 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/traits"
 )
 
-// RoleKind is the stable aggregate type name.
+// RoleKind es el nombre estable del tipo de agregado.
 const RoleKind = "security.role"
 
-// Role is a named set of permissions. One role per installation: the organizations it applies to
-// come from the accesses of each user, not from the role (C# decision Q2).
+// Role es un conjunto de permisos con nombre. Un rol por instalación: las organizaciones a las que
+// se aplica salen de los accesos de cada usuario, no del rol (decisión Q2 de C#).
 type Role struct {
 	fw.BaseAggregateRoot[RoleID]
 	traits.Audited
 	name        string
 	description string
 	system      bool
-	permissions []Permission // sorted, without duplicates
+	permissions []Permission // ordenados, sin duplicados
 }
 
-// RoleState is the persisted state of a role.
+// RoleState es el estado persistido de un rol.
 type RoleState struct {
 	Name        string
 	Description string
@@ -35,7 +35,7 @@ type RoleState struct {
 
 func cleanText(s string) string { return strings.Join(strings.Fields(s), " ") }
 
-// ReconstituteRole rebuilds a role from persisted state.
+// ReconstituteRole reconstruye un rol a partir del estado persistido.
 func ReconstituteRole(id RoleID, s RoleState) (*Role, error) {
 	base, err := fw.NewBaseAggregateRoot(RoleKind, id)
 	if err != nil {
@@ -57,7 +57,7 @@ func ReconstituteRole(id RoleID, s RoleState) (*Role, error) {
 		system: s.System, permissions: perms}, nil
 }
 
-// DefineRole creates a custom role.
+// DefineRole crea un rol propio.
 func DefineRole(id RoleID, name, description string, perms []Permission) (*Role, error) {
 	r, err := ReconstituteRole(id, RoleState{Name: name, Description: description, Permissions: perms})
 	if err != nil {
@@ -67,28 +67,28 @@ func DefineRole(id RoleID, name, description string, perms []Permission) (*Role,
 	return r, nil
 }
 
-// NewSystemRole builds a system role with the permissions the standard rule gives it.
+// NewSystemRole construye un rol del sistema con los permisos que le da la regla estándar.
 func NewSystemRole(seed SystemRole, c Catalog) (*Role, error) {
 	return ReconstituteRole(seed.ID, RoleState{Name: seed.Name, Description: seed.Description, System: true,
 		Permissions: StandardPermissions(seed.ID, c)})
 }
 
-// Name returns the name.
+// Name devuelve el nombre.
 func (r *Role) Name() string { return r.name }
 
-// NameKey returns the name in the form used to keep names unique (case-insensitive).
+// NameKey devuelve el nombre en la forma que se usa para que los nombres sean únicos (sin distinguir mayúsculas).
 func (r *Role) NameKey() string { return strings.ToLower(r.name) }
 
-// Description returns the description.
+// Description devuelve la descripción.
 func (r *Role) Description() string { return r.description }
 
-// IsSystem reports whether the role is one of the seeded system roles.
+// IsSystem dice si el rol es uno de los roles del sistema sembrados.
 func (r *Role) IsSystem() bool { return r.system }
 
-// Permissions returns the permissions the role carries, sorted.
+// Permissions devuelve los permisos que lleva el rol, ordenados.
 func (r *Role) Permissions() []Permission { return slices.Clone(r.permissions) }
 
-// IsGlobalAdmin reports whether the role makes its users global administrators.
+// IsGlobalAdmin dice si el rol hace a sus usuarios administradores globales.
 func (r *Role) IsGlobalAdmin() bool { return slices.Contains(r.permissions, Wildcard) }
 
 func (r *Role) permissionCodes() []string {
@@ -106,7 +106,7 @@ func (r *Role) requireCustom(action string) error {
 	return nil
 }
 
-// Describe changes the name and the description of a custom role.
+// Describe cambia el nombre y la descripción de un rol propio.
 func (r *Role) Describe(name, description string) error {
 	if err := r.requireCustom("edited"); err != nil {
 		return err
@@ -123,8 +123,8 @@ func (r *Role) Describe(name, description string) error {
 	return nil
 }
 
-// SetPermissions replaces the permissions of a custom role. The caller checks them against the
-// catalog; a custom role never carries the wildcard.
+// SetPermissions sustituye los permisos de un rol propio. Quien llama los comprueba contra el
+// catálogo; un rol propio nunca lleva el comodín.
 func (r *Role) SetPermissions(perms []Permission) error {
 	if err := r.requireCustom("edited"); err != nil {
 		return err
@@ -137,8 +137,8 @@ func (r *Role) SetPermissions(perms []Permission) error {
 	return nil
 }
 
-// SyncSystemPermissions gives a system role the permissions the standard rule computes from the
-// catalog. It reports whether they changed.
+// SyncSystemPermissions da a un rol del sistema los permisos que la regla estándar calcula a partir
+// del catálogo. Dice si cambiaron.
 func (r *Role) SyncSystemPermissions(c Catalog) bool {
 	if !r.system {
 		return false
@@ -155,7 +155,7 @@ func (r *Role) replacePermissions(perms []Permission) bool {
 	return true
 }
 
-// Retire marks a custom role for removal (the application deletes it once no user holds it).
+// Retire marca un rol propio para quitarlo (la aplicación lo borra cuando ningún usuario lo tiene).
 func (r *Role) Retire() error {
 	if err := r.requireCustom("retired"); err != nil {
 		return err
@@ -164,12 +164,12 @@ func (r *Role) Retire() error {
 	return nil
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (r *Role) AuditSnapshot() map[string]any {
 	return map[string]any{"name": r.name, "description": r.description, "permissions": strings.Join(r.permissionCodes(), ",")}
 }
 
-// Role fields and specifications.
+// Campos y especificaciones de Role.
 var (
 	RoleFieldID          = spec.Comparable("id", func(r *Role) RoleID { return r.ID() })
 	RoleFieldName        = spec.Text("name", (*Role).Name)
@@ -178,10 +178,10 @@ var (
 	RolePermFieldCode    = spec.Comparable("code", func(p Permission) string { return string(p) })
 )
 
-// RolesWithIDs matches the given roles.
+// RolesWithIDs selecciona los roles dados.
 func RolesWithIDs(ids ...RoleID) spec.Spec[*Role] { return RoleFieldID.In(ids...) }
 
-// RoleNamed matches the role with that name, ignoring case.
+// RoleNamed selecciona el rol con ese nombre, sin distinguir mayúsculas.
 func RoleNamed(name string) spec.Spec[*Role] {
 	return RoleFieldNameKey.Eq(strings.ToLower(cleanText(name)))
 }

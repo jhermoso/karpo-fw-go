@@ -37,7 +37,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/testing/archtest"
 )
 
-// collector keeps the kinds of the stock movements published.
+// collector guarda las clases de los movimientos de existencias publicados.
 type collector struct{ kinds []string }
 
 func (c *collector) HandleMessage(_ context.Context, env application.Envelope) error {
@@ -51,7 +51,7 @@ func (c *collector) HandleMessage(_ context.Context, env application.Envelope) e
 	return nil
 }
 
-// host composes Parties, Products and Inventory on one hot-swappable backend.
+// host compone Parties, Products e Inventory sobre un backend intercambiable en caliente.
 type host struct {
 	t        *testing.T
 	srv      *httptest.Server
@@ -167,7 +167,7 @@ func (h *host) scenario(tag string) {
 	broker := inprocess.NewBroker()
 	broker.Subscribe("collector", &events, "inventory.stock-moved.v1")
 
-	// Warehouses.
+	// Almacenes.
 	var al1, al2 iapp.WarehouseDTO
 	h.must(h.do("POST", "/api/inventory/warehouses", "storekeeper", map[string]any{"company": acme.ID, "code": "al1", "name": "Central"}, nil), 403,
 		"moving stock is not opening warehouses")
@@ -176,7 +176,7 @@ func (h *host) scenario(tag string) {
 	h.must(h.do("POST", "/api/inventory/warehouses", "manager", map[string]any{"company": acme.ID, "code": "AL1", "name": "Otro"}, nil), 422, "code once")
 	h.must(h.do("POST", "/api/inventory/warehouses", "manager", map[string]any{"company": acme.ID, "code": "AL2", "name": "Tienda"}, &al2), 201, "second warehouse")
 
-	// Receipts: weighted average cost, one movement per source, only stocked products, lots.
+	// Entradas: coste medio ponderado, un movimiento por origen, sólo productos con existencias, lotes.
 	receipt := func(p, qty, cost, lot, source string) map[string]any {
 		m := map[string]any{"warehouse": al1.ID, "product": p, "quantity": qty, "unitCost": cost, "date": "2026-10-01", "lot": lot}
 		if source != "" {
@@ -199,7 +199,7 @@ func (h *host) scenario(tag string) {
 	h.must(h.do("POST", "/api/inventory/receipts", "storekeeper", receipt(pintura.ID, "10", "12.50", "", ""), nil), 422, "a tracked product needs its lot")
 	h.must(h.do("POST", "/api/inventory/receipts", "storekeeper", receipt(pintura.ID, "10", "12.50", "L-2026-10", ""), nil), 201, "receipt with lot")
 
-	// Issues never take more than what is available, at the average cost (2.75).
+	// Las salidas nunca toman más de lo disponible, al coste medio (2.75).
 	var out iapp.MovementDTO
 	issue := map[string]any{"warehouse": al1.ID, "product": tornillo.ID, "quantity": "150", "date": "2026-10-02", "note": "Albarán de salida 7"}
 	h.must(h.do("POST", "/api/inventory/issues", "storekeeper", issue, &out), 201, "issue")
@@ -209,7 +209,7 @@ func (h *host) scenario(tag string) {
 	issue["quantity"] = "300"
 	h.must(h.do("POST", "/api/inventory/issues", "storekeeper", issue, nil), 422, "more than there is")
 
-	// Reservations hold stock for a source until it is issued or released.
+	// Las reservas retienen existencias para un origen hasta que se sacan o se liberan.
 	var res iapp.ReservationDTO
 	reserve := map[string]any{"warehouse": al1.ID, "product": tornillo.ID, "quantity": "200", "sourceType": "orders.sales-order", "sourceId": "SO-1"}
 	h.must(h.do("POST", "/api/inventory/reservations", "storekeeper", reserve, &res), 201, "reserve")
@@ -231,7 +231,7 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("released: %+v", res)
 	}
 
-	// A transfer carries the cost to the other warehouse.
+	// Un traspaso lleva el coste al otro almacén.
 	var moves []iapp.MovementDTO
 	h.must(h.do("POST", "/api/inventory/transfers", "storekeeper", map[string]any{"from": al1.ID, "to": al1.ID, "product": tornillo.ID, "quantity": "30"}, nil),
 		400, "to itself")
@@ -242,7 +242,7 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("transfer: %+v", moves)
 	}
 
-	// A count is another permission and leaves its movement with the reason.
+	// Un recuento es otro permiso y deja su movimiento con el motivo.
 	var lvl iapp.LevelDTO
 	count := map[string]any{"warehouse": al1.ID, "product": tornillo.ID, "counted": "98", "date": "2026-10-04", "reason": "Recuento anual"}
 	h.must(h.do("POST", "/api/inventory/counts", "storekeeper", count, nil), 403, "moving is not counting")
@@ -253,7 +253,7 @@ func (h *host) scenario(tag string) {
 	}
 	h.must(h.do("POST", "/api/inventory/counts", "counter", count, &lvl), 200, "the same count moves nothing")
 
-	// The stock card of the product in the warehouse, in posting order.
+	// La ficha de existencias del producto en el almacén, en orden de asiento.
 	var card fw.Page[iapp.MovementDTO]
 	h.must(h.do("GET", "/api/inventory/movements?company="+acme.ID+"&warehouse="+al1.ID+"&product="+tornillo.ID, "counter", nil, &card), 200, "stock card")
 	kinds := ""
@@ -265,7 +265,7 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("stock card: %s %+v", kinds, card.Items)
 	}
 
-	// Reorder points, stock, valuation and the availability other contexts read.
+	// Puntos de pedido, existencias, valoración y la disponibilidad que leen otros contextos.
 	h.must(h.do("PUT", "/api/inventory/reorder-points", "storekeeper", map[string]any{"warehouse": al2.ID, "product": tornillo.ID, "point": "50"}, nil), 403,
 		"reorder points are the manager's")
 	h.must(h.do("PUT", "/api/inventory/reorder-points", "manager", map[string]any{"warehouse": al2.ID, "product": tornillo.ID, "point": "50"}, &lvl), 200, "reorder point")
@@ -280,7 +280,7 @@ func (h *host) scenario(tag string) {
 	}
 	var val iapp.ValuationDTO
 	h.must(h.do("GET", "/api/inventory/valuation?company="+acme.ID, "manager", nil, &val), 200, "valuation")
-	// Screws: (98 + 30) × 2.75 = 352.00; paint: 10 × 12.50 = 125.00.
+	// Tornillos: (98 + 30) × 2.75 = 352.00; pintura: 10 × 12.50 = 125.00.
 	if val.Total != "477.00" || len(val.Lines) != 2 || val.Lines[1].OnHand != "128" || val.Lines[1].Value != "352.00" {
 		t.Fatalf("valuation: %+v", val)
 	}
@@ -291,7 +291,7 @@ func (h *host) scenario(tag string) {
 	}
 	h.must(h.do("POST", "/api/inventory/warehouses/"+al2.ID+"/close", "manager", nil, nil), 422, "a warehouse with stock is not closed")
 
-	// Every movement of the ledger is published.
+	// Se publica cada movimiento del libro.
 	for {
 		n, err := h.inv.Relay(broker).RelayOnce(context.Background())
 		h.ok(err)

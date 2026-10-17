@@ -10,45 +10,45 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// PayToInput is a bank account and how much of the payable is paid to it.
+// PayToInput es una cuenta bancaria y cuánto de la obligación se le paga.
 type PayToInput struct {
 	IBAN   string `json:"iban"`
 	Amount string `json:"amount"`
 }
 
-// SetPayTo replaces the accounts a payable is paid to.
+// SetPayTo sustituye las cuentas a las que se paga una obligación.
 type SetPayTo struct {
 	ID    domain.PayableID `json:"-"`
 	PayTo []PayToInput     `json:"payTo"`
 }
 
-// CancelPayable withdraws an unpaid payable.
+// CancelPayable retira una obligación sin pagar.
 type CancelPayable struct {
 	ID     domain.PayableID `json:"-"`
 	Reason string           `json:"reason"`
 }
 
-// GetPayable loads a payable.
+// GetPayable carga una obligación.
 type GetPayable struct{ ID domain.PayableID }
 
-// SearchPayables searches payables of the caller's scope.
+// SearchPayables busca obligaciones del ámbito de quien llama.
 type SearchPayables struct {
 	Company, Payee, Kind, DueTo string
 	OpenOnly                    bool
 	Page, Size                  int
 }
 
-// PayToDTO is the transport form of an account.
+// PayToDTO es la forma de transporte de una cuenta.
 type PayToDTO struct {
 	IBAN   string `json:"iban"`
 	Amount string `json:"amount"`
 }
 
-// PayableDTO is the transport form of a payable.
+// PayableDTO es la forma de transporte de una obligación.
 type PayableDTO struct {
 	ID          string     `json:"id"`
 	Company     string     `json:"company"`
-	Payee       string     `json:"payee"` // party id or tax authority
+	Payee       string     `json:"payee"` // id de party o administración tributaria
 	Kind        string     `json:"kind"`
 	Source      string     `json:"source"`
 	SourceID    string     `json:"sourceId"`

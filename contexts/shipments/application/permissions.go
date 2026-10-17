@@ -2,8 +2,8 @@ package application
 
 import "github.com/jhermoso/karpo-fw-go/pkg/application/authz"
 
-// Permissions (the C# declared Shipments.* resources no endpoint enforced). Preparing a shipment
-// and moving it (dispatch, delivery, return, cancellation) are separate.
+// Permisos (el C# declaraba recursos Shipments.* que ningún endpoint exigía). Preparar un envío y
+// moverlo (salida, entrega, devolución, anulación) son permisos distintos.
 var (
 	PermShipmentRead     = authz.MustPermission("Shipments.Shipment.Read")
 	PermShipmentUpdate   = authz.MustPermission("Shipments.Shipment.Update")
@@ -12,7 +12,7 @@ var (
 	PermCarrierUpdate    = authz.MustPermission("Shipments.Carrier.Update")
 )
 
-// Permissions returns the permissions this context declares to the Security catalog.
+// Permissions devuelve los permisos que este contexto declara al catálogo de Security.
 func Permissions() []authz.Permission {
 	return []authz.Permission{PermShipmentRead, PermShipmentUpdate, PermShipmentDispatch, PermCarrierRead, PermCarrierUpdate}
 }

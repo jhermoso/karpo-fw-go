@@ -1,23 +1,23 @@
-// Code generated from the C# WellKnownCatalog (RoleTypes, RelationshipTypes). The GUIDs are
-// the same as in the C# catalog, so data migrated from Karpo keeps its references. Differences
-// with the C# catalog (see docs/PARTIES.md):
-//   - order roles (…0001-0000000000C0..C8) are not party roles: they belong to Orders;
-//   - Salesperson and Collaborator, used by relationship types but absent from the C#
-//     hierarchy, hang from Person and from the root;
-//   - DepartmentAssignment (…0002-000000000012) is declared in C# without a catalog row.
-//   - Organization Rollup relates any organization unit to any organization and is hierarchical
-//     (one parent, no cycles). The C# row said Department -> Division, yet the C#
-//     IOrganizationHierarchy walked rollups down from the legal organizations.
-//   - Prospect Relationship (…0002-000000000017) and the codes of the relationship types do not
-//     exist in C#, where "potential" is a status of the customer relationship (docs/PARTIES-UDM.md,
-//     decision PU-5). It was …0016 until Javier gave that id back to Trench's Duplicate Of
+// Código generado a partir del WellKnownCatalog de C# (RoleTypes, RelationshipTypes). Los GUID son
+// los mismos que en el catálogo de C#, así que los datos migrados de Karpo conservan sus
+// referencias. Diferencias con el catálogo de C# (ver docs/PARTIES.md):
+//   - los roles de pedido (…0001-0000000000C0..C8) no son roles de party: pertenecen a Orders;
+//   - Salesperson y Collaborator, que usan los tipos de relación pero faltan en la jerarquía de
+//     C#, cuelgan de Person y de la raíz;
+//   - DepartmentAssignment (…0002-000000000012) está declarado en C# sin fila en el catálogo.
+//   - Organization Rollup relaciona cualquier unidad organizativa con cualquier organización y es
+//     jerárquico (un padre, sin ciclos). La fila de C# decía Department -> Division, pero el
+//     IOrganizationHierarchy de C# recorría los rollups hacia abajo desde las organizaciones legales.
+//   - Prospect Relationship (…0002-000000000017) y los códigos de los tipos de relación no
+//     existen en C#, donde «potencial» es un estado de la relación de cliente (docs/PARTIES-UDM.md,
+//     decisión PU-5). Era …0016 hasta que Javier devolvió ese id al Duplicate Of de Trench
 //     (docs/DECISIONES-COMUNES.md, D-62).
 
 package domain
 
 import "github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 
-// Well-known role types.
+// Tipos de rol conocidos.
 var (
 	RolePartyRoot                   = MustRoleTypeID("10000000-0000-0000-0001-000000000100")
 	RolePersonCategory              = MustRoleTypeID("10000000-0000-0000-0001-000000000101")
@@ -60,7 +60,7 @@ var (
 	RoleSalesperson                 = MustRoleTypeID("10000000-0000-0000-0001-0000000000C3")
 )
 
-// Well-known relationship types.
+// Tipos de relación conocidos.
 var (
 	RelEmployment              = MustRelationshipTypeID("10000000-0000-0000-0002-000000000001")
 	RelCustomer                = MustRelationshipTypeID("10000000-0000-0000-0002-000000000002")
@@ -81,7 +81,7 @@ var (
 	RelProspect                = MustRelationshipTypeID("10000000-0000-0000-0002-000000000017")
 )
 
-// Codes of the relationship types whose relationships carry details of their own.
+// Códigos de los tipos de relación cuyas relaciones llevan detalles propios.
 const (
 	CodeProspect     = "prospect"
 	CodeOwnership    = "ownership"
@@ -91,8 +91,8 @@ const (
 
 func parent(id RoleTypeID) *RoleTypeID { return &id }
 
-// WellKnownRoleTypes returns the seed of the role type catalog. The code of each one is its
-// name in lower case and hyphens ("internal-organization").
+// WellKnownRoleTypes devuelve la semilla del catálogo de tipos de rol. El código de cada uno es su
+// nombre en minúsculas y con guiones ("internal-organization").
 func WellKnownRoleTypes() []RoleType {
 	types := wellKnownRoleTypes()
 	for i := range types {
@@ -101,8 +101,8 @@ func WellKnownRoleTypes() []RoleType {
 	return types
 }
 
-// IsWellKnownRoleType reports whether a role type comes with the program (and has rules of the
-// code hanging from it) rather than having been added to the catalog.
+// IsWellKnownRoleType dice si un tipo de rol viene con el programa (y de él cuelgan reglas del
+// código) en lugar de haberse añadido al catálogo.
 func IsWellKnownRoleType(id RoleTypeID) bool {
 	for _, t := range wellKnownRoleTypes() {
 		if t.ID == id {
@@ -156,7 +156,7 @@ func wellKnownRoleTypes() []RoleType {
 	}
 }
 
-// WellKnownRoleCatalog builds the catalog of the seed.
+// WellKnownRoleCatalog construye el catálogo de la semilla.
 func WellKnownRoleCatalog() *Catalog {
 	c, err := NewRoleCatalog(WellKnownRoleTypes(), RolePersonCategory, RoleOrganizationCategory)
 	if err != nil {
@@ -165,8 +165,8 @@ func WellKnownRoleCatalog() *Catalog {
 	return c
 }
 
-// IsWellKnownRelationshipType reports whether a relationship type comes with the program rather
-// than having been added to the catalog.
+// IsWellKnownRelationshipType dice si un tipo de relación viene con el programa en lugar de
+// haberse añadido al catálogo.
 func IsWellKnownRelationshipType(id RelationshipTypeID) bool {
 	for _, t := range WellKnownRelationshipTypes() {
 		if t.ID == id {
@@ -176,7 +176,7 @@ func IsWellKnownRelationshipType(id RelationshipTypeID) bool {
 	return false
 }
 
-// WellKnownRelationshipTypes returns the seed of the relationship type catalog.
+// WellKnownRelationshipTypes devuelve la semilla del catálogo de tipos de relación.
 func WellKnownRelationshipTypes() []RelationshipType {
 	return []RelationshipType{
 		{ID: RelEmployment, Code: "employment", Name: vocab.MustName("Employment"), Description: "Employee works for an internal organization", FromRole: RoleEmployee, ToRole: RoleInternalOrganization},
@@ -191,7 +191,7 @@ func WellKnownRelationshipTypes() []RelationshipType {
 		{ID: RelContact, Code: "contact", Name: vocab.MustName("Contact Relationship"), Description: "Contact person for a customer", FromRole: RoleContact, ToRole: RoleCustomer},
 		{ID: RelCollaborator, Code: "collaborator", Name: vocab.MustName("Collaborator Relationship"), Description: "Collaborator refers business for an internal organization", FromRole: RoleCollaborator, ToRole: RoleInternalOrganization},
 		{ID: RelCollaboratorOrigination, Code: "collaborator-origination", Name: vocab.MustName("Collaborator Origination"), Description: "Salesperson who originated the collaborator", FromRole: RoleSalesperson, ToRole: RoleCollaborator},
-		// The four that the seed of Trench has and this catalog lacked (docs/DECISIONES-COMUNES.md, D-62).
+		// Los cuatro que tiene la semilla de Trench y que le faltaban a este catálogo (docs/DECISIONES-COMUNES.md, D-62).
 		{ID: RelSubsidiary, Code: "subsidiary", Name: vocab.MustName("Subsidiary"), Description: "Internal organization owns a subsidiary", FromRole: RoleInternalOrganization, ToRole: RoleSubsidiary},
 		{ID: RelLegalRepresentation, Code: "legal-representation", Name: vocab.MustName("Legal Representation"), Description: "Authorized representative acts for an internal organization",
 			FromRole: RoleAuthorizedRepresentative, ToRole: RoleInternalOrganization},

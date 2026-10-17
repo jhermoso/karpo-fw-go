@@ -15,7 +15,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/memory"
 )
 
-// banks plays Parties: the companies that are financial institutions have the financial capability.
+// banks hace de Parties: las empresas que son entidades financieras tienen la capacidad financiera.
 type banks map[fw.UUID]bool
 
 var financial = mapp.FeatureRef{Kind: domain.Capability, Code: "financial"}
@@ -39,8 +39,8 @@ func (b banks) Holders(_ context.Context, f mapp.FeatureRef) ([]fw.UUID, error) 
 	return out, nil
 }
 
-// A capability a company has because of what it is: nobody switches it, and everybody is told the
-// same, whoever asks and however.
+// Una capacidad que una empresa tiene por lo que es: nadie la enciende ni la apaga, y a todos se
+// les dice lo mismo, pregunte quien pregunte y como pregunte.
 func TestModules_DerivedCapability(t *testing.T) {
 	ctx := context.Background()
 	sw := hotswap.New(memory.NewStore("memory"))
@@ -66,14 +66,14 @@ func TestModules_DerivedCapability(t *testing.T) {
 		}
 	}
 
-	// It is not switched by hand, on or off, for the one that has it or the one that does not.
+	// No se enciende ni se apaga a mano, ni para la que la tiene ni para la que no.
 	for _, org := range []fw.UUID{bank, shop} {
 		_, err := svc.Activate.Handle(user, mapp.SwitchFeature{Organization: org.String(), Kind: "capability", Code: "Financial"})
 		violates(err)
 		_, err = svc.Deactivate.Handle(user, mapp.SwitchFeature{Organization: org.String(), Kind: "capability", Code: "financial"})
 		violates(err)
 	}
-	// The rest go on as always.
+	// Las demás siguen como siempre.
 	if _, err := svc.Activate.Handle(user, mapp.SwitchFeature{Organization: bank.String(), Kind: "module", Code: "ventas"}); err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +99,7 @@ func TestModules_DerivedCapability(t *testing.T) {
 		t.Fatalf("capabilities of the shop: %v %v", of, err)
 	}
 
-	// What the interface asks: the union over the companies of who calls.
+	// Lo que pregunta la interfaz: la unión de las empresas del que llama.
 	cur, err := svc.Current.Handle(user, mapp.GetCurrent{})
 	if err != nil || !slices.Equal(cur.Capabilities, []string{"financial", "logistics"}) || !slices.Equal(cur.Modules, []string{"ventas"}) {
 		t.Fatalf("current: %+v %v", cur, err)
@@ -110,7 +110,7 @@ func TestModules_DerivedCapability(t *testing.T) {
 		t.Fatalf("current of the shop: %+v %v", cur, err)
 	}
 
-	// The list of a company says which it has by being what it is; and which companies have it.
+	// La lista de una empresa dice cuáles tiene por ser lo que es; y qué empresas la tienen.
 	list, err := svc.Of.Handle(user, mapp.ListActivations{Organization: bank.String()})
 	if err != nil || len(list) != 2 || list[0].Code != "financial" || !list[0].Derived || !list[0].Active || list[1].Code != "ventas" || list[1].Derived {
 		t.Fatalf("activations of the bank: %+v %v", list, err)
@@ -123,7 +123,7 @@ func TestModules_DerivedCapability(t *testing.T) {
 		t.Fatalf("outside one's companies: %v %v", none, err)
 	}
 
-	// The day the shop becomes a financial institution it has it, with nothing else to do.
+	// El día en que la tienda pasa a ser entidad financiera la tiene, sin hacer nada más.
 	is[shop] = true
 	if !has(shop) {
 		t.Fatal("the shop is a financial institution now")

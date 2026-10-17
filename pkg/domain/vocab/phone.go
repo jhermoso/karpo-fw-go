@@ -4,15 +4,15 @@ import (
 	"strings"
 )
 
-// Phone is a telephone number in E.164 form ("+34600111222"). The country calling code is
-// identified with the ITU-T E.164 assignment table, which is prefix-free, so it is never guessed
-// greedily (the C# Telephone read "+34 600 111 222" as country 346).
+// Phone es un número de teléfono en forma E.164 ("+34600111222"). El prefijo telefónico de país
+// se identifica con la tabla de asignaciones E.164 de la UIT-T, que está libre de prefijos, así que
+// nunca se adivina de forma voraz (el Telephone de C# leía "+34 600 111 222" como país 346).
 type Phone struct {
 	callingCode string
 	national    string
 }
 
-// callingCodes are the assigned ITU-T E.164 country calling codes (the set is prefix-free).
+// callingCodes son los prefijos telefónicos de país asignados por la UIT-T E.164 (el conjunto está libre de prefijos).
 const callingCodes = "1 7 20 27 30 31 32 33 34 36 39 40 41 43 44 45 46 47 48 49 51 52 53 54 55 56 57 58 60 61 62 63 64 65 " +
 	"66 81 82 84 86 90 91 92 93 94 95 98 211 212 213 216 218 220 221 222 223 224 225 226 227 228 229 230 231 232 " +
 	"233 234 235 236 237 238 239 240 241 242 243 244 245 246 247 248 249 250 251 252 253 254 255 256 257 258 260 " +
@@ -30,12 +30,12 @@ var phoneCodes = func() map[string]bool {
 	return m
 }()
 
-// NewPhone parses an international number: "+" or "00" followed by the calling code and the
-// national number; spaces, dots, dashes and parentheses are ignored.
+// NewPhone analiza un número internacional: "+" o "00" seguido del prefijo de país y del número
+// nacional; los espacios, puntos, guiones y paréntesis se ignoran.
 func NewPhone(s string) (Phone, error) { return parsePhone(s, "") }
 
-// NewPhoneWithDefault parses a number that may omit the international prefix, in which case
-// defaultCallingCode (e.g. "34") is assumed.
+// NewPhoneWithDefault analiza un número que puede omitir el prefijo internacional, en cuyo caso
+// se supone defaultCallingCode (p. ej. "34").
 func NewPhoneWithDefault(s, defaultCallingCode string) (Phone, error) {
 	if !phoneCodes[defaultCallingCode] {
 		return Phone{}, invalid("phone", "calling_code", "unknown calling code "+quote(defaultCallingCode))
@@ -43,7 +43,7 @@ func NewPhoneWithDefault(s, defaultCallingCode string) (Phone, error) {
 	return parsePhone(s, defaultCallingCode)
 }
 
-// MustPhone is like NewPhone but panics on error.
+// MustPhone es como NewPhone pero entra en pánico si hay error.
 func MustPhone(s string) Phone {
 	p, err := NewPhone(s)
 	if err != nil {
@@ -100,16 +100,16 @@ func parsePhone(raw, def string) (Phone, error) {
 	return Phone{callingCode: cc, national: d}, nil
 }
 
-// CallingCode returns the country calling code ("34").
+// CallingCode devuelve el prefijo telefónico de país ("34").
 func (p Phone) CallingCode() string { return p.callingCode }
 
-// NationalNumber returns the national significant number ("600111222").
+// NationalNumber devuelve el número nacional significativo ("600111222").
 func (p Phone) NationalNumber() string { return p.national }
 
-// IsZero reports whether the number is absent.
+// IsZero dice si falta el número.
 func (p Phone) IsZero() bool { return p.national == "" }
 
-// String returns the E.164 form ("+34600111222").
+// String devuelve la forma E.164 ("+34600111222").
 func (p Phone) String() string {
 	if p.IsZero() {
 		return ""
@@ -117,7 +117,7 @@ func (p Phone) String() string {
 	return "+" + p.callingCode + p.national
 }
 
-// Formatted returns "+34 600111222".
+// Formatted devuelve "+34 600111222".
 func (p Phone) Formatted() string {
 	if p.IsZero() {
 		return ""
@@ -125,10 +125,10 @@ func (p Phone) Formatted() string {
 	return "+" + p.callingCode + " " + p.national
 }
 
-// MarshalText renders the E.164 form.
+// MarshalText escribe la forma E.164.
 func (p Phone) MarshalText() ([]byte, error) { return []byte(p.String()), nil }
 
-// UnmarshalText parses an international number.
+// UnmarshalText analiza un número internacional.
 func (p *Phone) UnmarshalText(b []byte) error {
 	if len(b) == 0 {
 		*p = Phone{}

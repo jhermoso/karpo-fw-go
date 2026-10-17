@@ -12,14 +12,14 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// ProfileKind is the stable aggregate type name.
+// ProfileKind es el nombre estable del tipo de agregado.
 const ProfileKind = "payroll.profile"
 
-// Periodicity of the agreed salary (the C# BaseSalary had none, and the SAGE import stored the
-// monthly gross in it).
+// Periodicity es la periodicidad del salario pactado (el BaseSalary de C# no tenía, y la
+// importación de SAGE guardaba en él el bruto mensual).
 type Periodicity int
 
-// Periodicities.
+// Periodicidades.
 const (
 	Monthly Periodicity = iota + 1
 	Annual
@@ -27,10 +27,10 @@ const (
 
 var periodicities = map[Periodicity]string{Monthly: "monthly", Annual: "annual"}
 
-// String returns the stable name.
+// String devuelve el nombre estable.
 func (p Periodicity) String() string { return periodicities[p] }
 
-// ParsePeriodicity parses a periodicity name.
+// ParsePeriodicity interpreta el nombre de una periodicidad.
 func ParsePeriodicity(s string) (Periodicity, bool) {
 	for k, n := range periodicities {
 		if n == s {
@@ -40,17 +40,17 @@ func ParsePeriodicity(s string) (Periodicity, bool) {
 	return 0, false
 }
 
-// Salary is the agreed salary: an amount, its periodicity and the payments per year (12, 14 or 15).
+// Salary es el salario pactado: un importe, su periodicidad y las pagas al año (12, 14 o 15).
 type Salary struct {
 	Amount          vocab.Decimal
 	Periodicity     Periodicity
 	PaymentsPerYear int
 }
 
-// IsZero reports whether no salary was agreed.
+// IsZero dice si no se pactó ningún salario.
 func (s Salary) IsZero() bool { return s.Amount.IsZero() && s.Periodicity == 0 }
 
-// Annual returns the agreed annual amount.
+// Annual devuelve el importe anual pactado.
 func (s Salary) Annual() vocab.Decimal {
 	if s.Periodicity == Monthly {
 		return s.Amount.Mul(vocab.DecimalFromInt(int64(s.PaymentsPerYear)))
@@ -58,11 +58,11 @@ func (s Salary) Annual() vocab.Decimal {
 	return s.Amount
 }
 
-// SplitID identifies a payment split.
+// SplitID identifica un reparto del pago.
 type SplitID struct{ fw.UUID }
 
-// Split sends part of the net pay to a bank account: a percentage, a fixed amount or the residual
-// (what is left). Garnishments go first, then by priority.
+// Split envía parte del líquido a una cuenta bancaria: un porcentaje, un importe fijo o el residual
+// (lo que queda). Primero van los embargos, luego por prioridad.
 type Split struct {
 	ID          SplitID
 	IBAN        vocab.IBAN
@@ -72,7 +72,7 @@ type Split struct {
 	Priority    int
 	Garnishment bool
 	From        vocab.Date
-	Until       vocab.Date // zero: open
+	Until       vocab.Date // cero: abierto
 }
 
 func (s Split) activeOn(d vocab.Date) bool {
@@ -83,16 +83,17 @@ func (s Split) overlaps(o Split) bool {
 	return (s.Until.IsZero() || !o.From.After(s.Until)) && (o.Until.IsZero() || !s.From.After(o.Until))
 }
 
-// Payment is a transfer of part of the net pay.
+// Payment es una transferencia de parte del líquido.
 type Payment struct {
 	IBAN        vocab.IBAN
 	Amount      vocab.Decimal
 	Garnishment bool
 }
 
-// Profile is the payroll data of an employment (the pay part of the C# EmployeeProfile and the
-// EmployeePayrollAccount rows): contribution group, withholding rate, agreed salary, employer
-// Social Security account and payment splits. One profile per employment.
+// Profile son los datos de nómina de una relación laboral (la parte retributiva del EmployeeProfile
+// de C# y las filas de EmployeePayrollAccount): grupo de cotización, tipo de retención, salario
+// pactado, cuenta de cotización a la Seguridad Social del empleador y repartos del pago. Un perfil
+// por relación laboral.
 type Profile struct {
 	fw.BaseAggregateRoot[ProfileID]
 	traits.Audited
@@ -106,7 +107,7 @@ type Profile struct {
 	splits            []Split
 }
 
-// ProfileState is the persisted state of a profile.
+// ProfileState es el estado persistido de un perfil.
 type ProfileState struct {
 	Employment        EmploymentID
 	Person            PersonID
@@ -119,7 +120,7 @@ type ProfileState struct {
 	Audit             traits.AuditStamp
 }
 
-// Terms are the editable terms of a profile.
+// Terms son las condiciones editables de un perfil.
 type Terms struct {
 	ContributionGroup int
 	IncomeTaxRate     vocab.Decimal
@@ -139,7 +140,7 @@ func (t Terms) validate(v *fw.Validation) {
 	}
 }
 
-// ReconstituteProfile rebuilds a profile.
+// ReconstituteProfile reconstruye un perfil.
 func ReconstituteProfile(id ProfileID, s ProfileState) (*Profile, error) {
 	base, err := fw.NewBaseAggregateRoot(ProfileKind, id)
 	if err != nil {
@@ -156,7 +157,7 @@ func ReconstituteProfile(id ProfileID, s ProfileState) (*Profile, error) {
 		splits: slices.Clone(s.Splits)}, nil
 }
 
-// OpenProfile creates the profile of an employment.
+// OpenProfile crea el perfil de una relación laboral.
 func OpenProfile(id ProfileID, s ProfileState) (*Profile, error) {
 	s.Splits = nil
 	p, err := ReconstituteProfile(id, s)
@@ -167,24 +168,25 @@ func OpenProfile(id ProfileID, s ProfileState) (*Profile, error) {
 	return p, nil
 }
 
-// Employment returns the HR employment.
+// Employment devuelve la relación laboral de HR.
 func (p *Profile) Employment() EmploymentID { return p.employment }
 
-// Person returns the employee.
+// Person devuelve el empleado.
 func (p *Profile) Person() PersonID { return p.person }
 
-// Employer returns the employer.
+// Employer devuelve el empleador.
 func (p *Profile) Employer() OrganizationID { return p.employer }
 
-// Terms returns the editable terms.
+// Terms devuelve las condiciones editables.
 func (p *Profile) Terms() Terms {
 	return Terms{ContributionGroup: p.contributionGroup, IncomeTaxRate: p.incomeTaxRate, Salary: p.salary, Account: p.account}
 }
 
-// Splits returns a copy of the payment splits.
+// Splits devuelve una copia de los repartos del pago.
 func (p *Profile) Splits() []Split { return slices.Clone(p.splits) }
 
-// SetTerms replaces the terms. The application checks the employer account belongs to the employer.
+// SetTerms sustituye las condiciones. La aplicación comprueba que la cuenta de cotización es del
+// empleador.
 func (p *Profile) SetTerms(t Terms) error {
 	var v fw.Validation
 	t.validate(&v)
@@ -196,9 +198,9 @@ func (p *Profile) SetTerms(t Terms) error {
 	return nil
 }
 
-// AddSplit adds a payment split. Invariants (the C# checked them only in an application validator
-// and ignored the validity dates): exactly one of percentage, amount or residual; at most one
-// residual at a time; the percentages in force at a time add up to at most 100.
+// AddSplit añade un reparto del pago. Invariantes (el C# sólo las comprobaba en un validador de
+// aplicación e ignoraba las fechas de vigencia): exactamente uno de porcentaje, importe o residual;
+// como mucho un residual a la vez; los porcentajes vigentes a la vez suman como mucho 100.
 func (p *Profile) AddSplit(s Split) (SplitID, error) {
 	var v fw.Validation
 	v.Require(!s.IBAN.IsZero(), "iban", "required", "the bank account is required")
@@ -224,7 +226,7 @@ func (p *Profile) AddSplit(s Split) (SplitID, error) {
 		}
 	}
 	if !s.Percent.IsZero() {
-		// The sum is checked at each start inside the new split (where it can grow).
+		// La suma se comprueba en cada inicio dentro del reparto nuevo (donde puede crecer).
 		for _, at := range p.startsWithin(s) {
 			total := s.Percent
 			for _, o := range p.splits {
@@ -252,7 +254,7 @@ func (p *Profile) startsWithin(s Split) []vocab.Date {
 	return out
 }
 
-// EndSplit ends a split on a date.
+// EndSplit termina un reparto en una fecha.
 func (p *Profile) EndSplit(id SplitID, on vocab.Date) error {
 	i := slices.IndexFunc(p.splits, func(s Split) bool { return s.ID == id })
 	if i < 0 {
@@ -266,10 +268,10 @@ func (p *Profile) EndSplit(id SplitID, on vocab.Date) error {
 	return nil
 }
 
-// Distribute splits a net pay across the accounts in force on a date: garnishments first, then by
-// priority; fixed amounts and percentages (rounded to cents) never exceed what is left, and the
-// residual account takes the rest. Without splits there is nothing to distribute; with splits and
-// money left, a residual account is required.
+// Distribute reparte un líquido entre las cuentas vigentes en una fecha: primero los embargos,
+// luego por prioridad; los importes fijos y los porcentajes (redondeados a céntimos) nunca superan
+// lo que queda, y la cuenta residual se lleva el resto. Sin repartos no hay nada que repartir; con
+// repartos y dinero sobrante, hace falta una cuenta residual.
 func (p *Profile) Distribute(net vocab.Decimal, on vocab.Date) ([]Payment, error) {
 	var active []Split
 	for _, s := range p.splits {
@@ -319,13 +321,13 @@ func (p *Profile) Distribute(net vocab.Decimal, on vocab.Date) ([]Payment, error
 	return out, nil
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (p *Profile) AuditSnapshot() map[string]any {
 	return map[string]any{"contributionGroup": p.contributionGroup, "incomeTaxRate": p.incomeTaxRate.String(),
 		"salary": p.salary.Amount.String(), "splits": len(p.splits)}
 }
 
-// Profile fields.
+// Campos del perfil.
 var (
 	ProfFieldID         = spec.Comparable("id", func(p *Profile) ProfileID { return p.ID() })
 	ProfFieldEmployment = spec.Comparable("employment", (*Profile).Employment)
@@ -333,7 +335,7 @@ var (
 	ProfFieldEmployer   = spec.Comparable("employer", (*Profile).Employer)
 )
 
-// checkText trims and bounds a short text.
+// checkText recorta y limita un texto corto.
 func checkText(v *fw.Validation, field, s string, max int) string {
 	s = strings.TrimSpace(s)
 	v.Require(utf8.RuneCountInString(s) <= max, field, "length", "too long")

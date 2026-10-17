@@ -12,7 +12,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// LineInput is a line of a manual entry.
+// LineInput es una línea de un asiento manual.
 type LineInput struct {
 	Account     string `json:"account"`
 	Party       string `json:"party,omitempty"`
@@ -21,7 +21,7 @@ type LineInput struct {
 	Description string `json:"description,omitempty"`
 }
 
-// PostEntry posts a manual entry.
+// PostEntry contabiliza un asiento manual.
 type PostEntry struct {
 	Company     string      `json:"company"`
 	Date        vocab.Date  `json:"date"`
@@ -29,30 +29,30 @@ type PostEntry struct {
 	Lines       []LineInput `json:"lines"`
 }
 
-// ReverseEntry reverses an entry on a date (today by default).
+// ReverseEntry revierte un asiento en una fecha (hoy, por omisión).
 type ReverseEntry struct {
 	ID   domain.EntryID `json:"-"`
 	Date vocab.Date     `json:"date,omitzero"`
 }
 
-// GetEntry loads an entry.
+// GetEntry carga un asiento.
 type GetEntry struct{ ID domain.EntryID }
 
-// SearchEntries searches the journal of a company.
+// SearchEntries busca en el diario de una empresa.
 type SearchEntries struct {
 	Company, From, To string
 	Page, Size        int
 }
 
-// TrialBalance returns the debits, credits and balance of each account with movements in a date
-// range (sumas y saldos).
+// TrialBalance devuelve el debe, el haber y el saldo de cada cuenta con movimientos en un rango de
+// fechas (sumas y saldos).
 type TrialBalance struct{ Company, From, To string }
 
-// AccountLedger returns the movements of an account in a date range with the running balance
+// AccountLedger devuelve los movimientos de una cuenta en un rango de fechas con el saldo acumulado
 // (libro mayor).
 type AccountLedger struct{ Company, Account, From, To string }
 
-// LineDTO is the transport form of a line.
+// LineDTO es la forma de transporte de una línea.
 type LineDTO struct {
 	Account     string `json:"account"`
 	Party       string `json:"party,omitempty"`
@@ -61,7 +61,7 @@ type LineDTO struct {
 	Description string `json:"description,omitempty"`
 }
 
-// EntryDTO is the transport form of an entry.
+// EntryDTO es la forma de transporte de un asiento.
 type EntryDTO struct {
 	ID          string    `json:"id"`
 	Company     string    `json:"company"`
@@ -78,16 +78,16 @@ type EntryDTO struct {
 	ReversedBy  string    `json:"reversedBy,omitempty"`
 }
 
-// BalanceRow is a row of the trial balance.
+// BalanceRow es una fila del balance de sumas y saldos.
 type BalanceRow struct {
 	Account string `json:"account"`
 	Name    string `json:"name"`
 	Debit   string `json:"debit"`
 	Credit  string `json:"credit"`
-	Balance string `json:"balance"` // debit − credit
+	Balance string `json:"balance"` // debe − haber
 }
 
-// Movement is a line of the ledger of an account.
+// Movement es una línea del mayor de una cuenta.
 type Movement struct {
 	Date        string `json:"date"`
 	Entry       int64  `json:"entry"`
@@ -124,7 +124,7 @@ func entryDTO(e *domain.Entry) EntryDTO {
 	return d
 }
 
-// rangeOf parses an optional date range.
+// rangeOf interpreta un rango de fechas opcional.
 func rangeOf(v *fw.Validation, from, to string) (vocab.Date, vocab.Date) {
 	var f, t vocab.Date
 	if from != "" {

@@ -88,7 +88,7 @@ func TestEntry(t *testing.T) {
 	if err != nil || len(e.State().Lines) != 3 || !e.Total().Equal(dec("121")) || e.State().Number != 7 || e.State().Month != 9 {
 		t.Fatalf("zero lines dropped: %v %+v", err, e)
 	}
-	// A corrective invoice: signed amounts turn into the opposite side.
+	// Una factura rectificativa: los importes con signo pasan al lado contrario.
 	neg := domain.Normalize([]domain.Line{{Account: "43000000", Debit: dec("-36.30")}, {Account: "70000000", Credit: dec("-30")}})
 	if !neg[0].Credit.Equal(dec("36.30")) || !neg[0].Debit.IsZero() || !neg[1].Debit.Equal(dec("30")) {
 		t.Fatalf("normalize: %+v", neg)

@@ -19,10 +19,11 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 )
 
-// TestAccountingParking runs on every engine what Accounting does with the facts of a company
-// that has no books yet: the consumer's own unit of work is undone when a rule refuses the fact
-// (its inbox does not remember it), the fact is kept as it came (a long JSON with accents, its
-// instants), those behind it wait in order, and all are posted once the books are open.
+// TestAccountingParking ejecuta en cada motor lo que hace Accounting con los hechos de una empresa
+// que aún no tiene libros: la unidad de trabajo propia del consumidor se deshace cuando una regla
+// rechaza el hecho (su inbox no lo recuerda), el hecho se guarda tal como llegó (un JSON largo con
+// acentos, sus instantes), los que vienen detrás esperan en orden, y todos se contabilizan en
+// cuanto se abren los libros.
 func TestAccountingParking(t *testing.T) {
 	for _, e := range engines {
 		if e.name == "oracle-dotnet-guids" {
@@ -66,7 +67,7 @@ func TestAccountingParking(t *testing.T) {
 			if err := am.Consumer.HandleMessage(ctx, first); !errors.As(err, &rv) || rv.Code != "accounting.no_ledger" {
 				t.Fatalf("the consumer alone refuses it: %v", err)
 			}
-			// The second arrives first: they are still posted in the order they happened.
+			// El segundo llega primero: aun así se contabilizan en el orden en que ocurrieron.
 			must(am.Parking.HandleMessage(ctx, second))
 			must(am.Parking.HandleMessage(ctx, first))
 			must(am.Parking.HandleMessage(ctx, first))
@@ -111,7 +112,7 @@ func TestAccountingParking(t *testing.T) {
 			if err != nil || posted.Total != 2 || posted.Items[0].Attempts != 2 || posted.Items[0].ResolvedAt == "" || posted.Items[0].Code != "" {
 				t.Fatalf("posted: %+v %v", posted.Items, err)
 			}
-			// Sent again after all that: nothing is posted twice, nothing is kept again.
+			// Enviados otra vez después de todo eso: nada se contabiliza dos veces, nada se vuelve a guardar.
 			must(am.Parking.HandleMessage(ctx, first))
 			must(am.Consumer.HandleMessage(ctx, second))
 			if again, _ := svc.SearchEntries.Handle(actx, aapp.SearchEntries{Company: shop}); again.Total != 2 {

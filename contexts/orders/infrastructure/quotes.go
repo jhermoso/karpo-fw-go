@@ -18,7 +18,7 @@ var quotesDDL = []string{
 	PRIMARY KEY (quote_id, line_no), FOREIGN KEY (quote_id) REFERENCES ord_quotes (id))`,
 }
 
-// QuoteMapping maps Quote to ord_quotes and its lines.
+// QuoteMapping mapea Quote a ord_quotes y sus líneas.
 func QuoteMapping() sqlrepo.Mapping[domain.QuoteID, *domain.Quote] {
 	return sqlrepo.Mapping[domain.QuoteID, *domain.Quote]{
 		Table: "ord_quotes",
@@ -68,7 +68,7 @@ func QuoteMapping() sqlrepo.Mapping[domain.QuoteID, *domain.Quote] {
 	}
 }
 
-// QuoteRepositoryFactory builds the quote repository.
+// QuoteRepositoryFactory construye el repositorio de presupuestos.
 func QuoteRepositoryFactory(b hotswap.Backend) (domain.QuoteRepository, error) {
 	return repository(b, QuoteMapping())
 }

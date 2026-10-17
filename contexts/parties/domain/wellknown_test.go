@@ -6,7 +6,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/contexts/parties/domain"
 )
 
-// The role type 0037 is "Team", code "team", in every project (docs/DECISIONES-COMUNES.md, D-54).
+// El tipo de rol 0037 es "Team", código "team", en todos los proyectos (docs/DECISIONES-COMUNES.md, D-54).
 func TestTeamRoleTypeHasTheCommonNameAndCode(t *testing.T) {
 	team, ok := domain.WellKnownRoleCatalog().ByCode("team")
 	if !ok {
@@ -20,7 +20,7 @@ func TestTeamRoleTypeHasTheCommonNameAndCode(t *testing.T) {
 	}
 }
 
-// Every project seeds the same types, with the same ids and codes (docs/DECISIONES-COMUNES.md, D-62).
+// Todos los proyectos siembran los mismos tipos, con los mismos ids y códigos (docs/DECISIONES-COMUNES.md, D-62).
 func TestTheCatalogHasTheCommonTypes(t *testing.T) {
 	cat := domain.WellKnownRoleCatalog()
 	for code, id := range map[string]string{

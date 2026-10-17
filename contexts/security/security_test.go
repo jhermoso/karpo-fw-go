@@ -67,7 +67,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/testing/archtest"
 )
 
-// provider stands for an external identity provider: its tokens are "ext:<issuer>|<subject>".
+// provider hace de proveedor de identidad externo: sus tokens son "ext:<issuer>|<subject>".
 type provider struct{}
 
 func (provider) Verify(_ context.Context, token string) (contracts.ExternalIdentity, error) {
@@ -79,8 +79,8 @@ func (provider) Verify(_ context.Context, token string) (contracts.ExternalIdent
 	return contracts.ExternalIdentity{Issuer: issuer, Subject: subject}, nil
 }
 
-// host is a modular monolith with Security and Parties on one hot-swappable backend. There is no
-// in-memory security directory: the authorization resolver reads the Security module.
+// host es un monolito modular con Security y Parties sobre un backend intercambiable en caliente.
+// No hay directorio de seguridad en memoria: el resolvedor de autorización lee el módulo Security.
 type host struct {
 	t       *testing.T
 	srv     *httptest.Server
@@ -101,11 +101,11 @@ func compose(t *testing.T) *host {
 	pm := parties.Compose(sw, nil)
 	sec := security.Compose(sw,
 		security.WithTokenIssuer(sdist.HS256Issuer{JWT: jwt}),
-		security.WithPasswordHasher(sinfra.NewPBKDF2(1000)), // the real cost would only slow the test down
+		security.WithPasswordHasher(sinfra.NewPBKDF2(1000)), // el coste real sólo haría más lenta la prueba
 		security.WithParties(sinfra.PartiesDirectory{Directory: pm.Directory, Organizations: pm.Organizations}),
 		security.WithLockout(sdomain.LockoutPolicy{MaxAttempts: 3, Duration: 15 * time.Minute}))
 
-	// Two ways of authenticating, one resolver: the own token and the external provider.
+	// Dos formas de autenticarse, un resolvedor: el token propio y el proveedor externo.
 	authn := authorization.Authenticators(jwt, sec.Authenticator(provider{}))
 	resolver := authorization.NewResolver(sec.Directory, authorization.Options{})
 
@@ -121,8 +121,8 @@ func compose(t *testing.T) *host {
 	return &host{t: t, srv: srv, sw: sw, sec: sec, parties: pm}
 }
 
-// start is what a host does on start, after migrating: declare the permissions of its contexts
-// and create the bootstrap administrator.
+// start es lo que hace un anfitrión al arrancar, tras migrar: declarar los permisos de sus
+// contextos y crear el administrador de arranque.
 func (h *host) start(wantAdded int) {
 	h.t.Helper()
 	ctx := context.Background()
@@ -188,7 +188,7 @@ func (h *host) login(user, password string) (sapp.Tokens, int) {
 	return tok, status
 }
 
-// signIn logs in a user whose password was set by an administrator, and changes it as required.
+// signIn inicia la sesión de un usuario cuya contraseña fijó un administrador, y la cambia como se exige.
 func (h *host) signIn(user, initial, password string) sapp.Tokens {
 	h.t.Helper()
 	tok, status := h.login(user, initial)
@@ -217,13 +217,13 @@ func (h *host) scenario(tag string) {
 	t := h.t
 	ctx := context.Background()
 
-	// --- Bootstrap: the first administrator can only change its password ---------------------
-	boot, status := h.login("ROOT", bootPassword) // user names ignore case
+	// --- Arranque: el primer administrador sólo puede cambiar su contraseña -------------------
+	boot, status := h.login("ROOT", bootPassword) // los nombres de usuario no distinguen mayúsculas
 	h.must(status, 200, "bootstrap login")
 	if !boot.MustChangePassword || boot.RefreshToken == "" {
 		t.Fatalf("bootstrap tokens: %+v", boot)
 	}
-	// The access token says who the user is, never what it may do (C# packed up to 272 codes).
+	// El token de acceso dice quién es el usuario, nunca qué puede hacer (C# metía hasta 272 códigos).
 	payload, _ := base64.RawURLEncoding.DecodeString(strings.Split(boot.AccessToken, ".")[1])
 	var claims map[string]any
 	_ = json.Unmarshal(payload, &claims)
@@ -250,7 +250,7 @@ func (h *host) scenario(tag string) {
 	}
 	h.must(h.do("GET", users(""), "", nil, nil), 401, "no token")
 
-	// --- Parties works on the real directory, untouched --------------------------------------
+	// --- Parties funciona sobre el directorio real, sin tocarlo -----------------------------
 	var acme, beta, martaP, carlosP, pedroP, annaP papp.PartyDTO
 	internal := []string{pdomain.RoleInternalOrganization.String()}
 	h.must(h.do("POST", "/api/organizations", root, map[string]any{"legalName": "Acme " + tag, "roles": internal}, &acme), 201, "acme")
@@ -259,7 +259,7 @@ func (h *host) scenario(tag string) {
 		h.must(h.do("POST", "/api/persons", root, map[string]any{"givenName": name, "firstSurname": "Test " + tag}, p), 201, name)
 	}
 
-	// --- Registering users --------------------------------------------------------------------
+	// --- Alta de usuarios ---------------------------------------------------------------------
 	var marta, carlos, pedro, anna sapp.UserDTO
 	newUser := func(name, party, org, level string) map[string]any {
 		u := map[string]any{"username": name, "party": party, "password": name + "-initial-pass"}
@@ -286,7 +286,7 @@ func (h *host) scenario(tag string) {
 	h.must(h.do("POST", users(""), root, newUser("pedro", pedroP.ID, beta.ID, "Full"), &pedro), 201, "pedro")
 	h.must(h.do("PUT", users("/"+pedro.ID+"/roles/"+sdomain.RoleStandardUser.String()), root, nil, nil), 200, "pedro is a standard user")
 
-	// --- Delegated administration: Marta administers Acme -------------------------------------
+	// --- Administración delegada: Marta administra Acme --------------------------------------
 	martaTok := h.signIn("marta", "marta-initial-pass", "marta-password-01")
 	m := bearer(martaTok)
 	mc := h.context(m)
@@ -307,8 +307,8 @@ func (h *host) scenario(tag string) {
 	h.must(h.do("POST", users("/"+marta.ID+"/deactivate"), m, nil, nil), 403, "nor deactivates themselves")
 	h.must(h.do("POST", "/api/security/roles", m, map[string]any{"name": "Mine", "permissions": []string{}}, nil), 403, "roles belong to the global administrator")
 
-	// Pedro works in Beta: he does not exist for Marta until she gives him access to Acme, and
-	// even then she cannot administer him (in C# she could then edit or delete him).
+	// Pedro trabaja en Beta: no existe para Marta hasta que ella le da acceso a Acme, y aun
+	// entonces no puede administrarlo (en C# entonces podía editarlo o borrarlo).
 	h.must(h.do("GET", users("/"+pedro.ID), m, nil, nil), 404, "out of sight")
 	h.must(h.do("POST", users("/"+pedro.ID+"/deactivate"), m, nil, nil), 404, "out of sight, uniform 404")
 	h.must(h.do("PUT", users("/"+pedro.ID+"/organizations/"+beta.ID), m, map[string]any{"level": "ReadOnly"}, nil), 403, "beta is not hers to grant")
@@ -332,7 +332,7 @@ func (h *host) scenario(tag string) {
 	h.must(h.do("DELETE", users("/"+pedro.ID+"/organizations/"+acme.ID), m, nil, nil), 200, "she takes acme back")
 	h.must(h.do("GET", users("/"+pedro.ID), m, nil, nil), 404, "and he is out of sight again")
 
-	// --- Revocation takes effect on the next request with the same token (D7) ----------------
+	// --- La retirada surte efecto en la siguiente petición con el mismo token (D7) ----------
 	carlosTok := h.signIn("carlos", "carlos-initial-pass", "carlos-password-01")
 	c := bearer(carlosTok)
 	before := h.context(c).PolicyVersion
@@ -354,7 +354,7 @@ func (h *host) scenario(tag string) {
 	}
 	h.must(h.do("POST", users("/"+carlos.ID+"/activate"), root, nil, nil), 200, "reactivate")
 
-	// --- Lockout -------------------------------------------------------------------------------
+	// --- Bloqueo -------------------------------------------------------------------------------
 	for range 3 {
 		if _, status := h.login("carlos", "wrong-password-000"); status != 401 {
 			t.Fatalf("wrong password: %d", status)
@@ -375,7 +375,7 @@ func (h *host) scenario(tag string) {
 		t.Fatal("unlocked")
 	}
 
-	// --- Sessions: rotation, reuse detection, logout -------------------------------------------
+	// --- Sesiones: rotación, detección de reutilización, logout -------------------------------
 	first, status := h.login("carlos", "carlos-password-01")
 	h.must(status, 200, "login after unlock")
 	var second sapp.Tokens
@@ -394,7 +394,7 @@ func (h *host) scenario(tag string) {
 	h.must(h.do("POST", "/api/auth/refresh", "", map[string]any{"refreshToken": fourth.RefreshToken}, nil), 401, "a reset ends the sessions")
 	h.signIn("carlos", "carlos-reset-pass-1", "carlos-password-02")
 
-	// --- External identity: issuer + subject linked with a user (decision 1) ------------------
+	// --- Identidad externa: emisor + sujeto vinculados con un usuario (decisión 1) -----------
 	ext := "Bearer ext:" + idp + "|sub-anna"
 	h.must(h.do("GET", "/api/auth/context", ext, nil, nil), 401, "a valid token of an identity nobody linked does not get in")
 	h.must(h.do("POST", users(""), root, map[string]any{"username": "anna", "party": annaP.ID,
@@ -418,7 +418,7 @@ func (h *host) scenario(tag string) {
 	h.must(h.do("DELETE", users("/"+anna.ID+"/identities"), root, map[string]any{"issuer": idp, "subject": "sub-anna"}, nil), 200, "unlink")
 	h.must(h.do("GET", "/api/auth/context", ext, nil, nil), 401, "unlinked")
 
-	// --- Roles and the catalog -----------------------------------------------------------------
+	// --- Los roles y el catálogo ---------------------------------------------------------------
 	var catalog []sapp.PermissionDTO
 	h.must(h.do("GET", "/api/security/permissions", root, nil, &catalog), 200, "catalog")
 	if len(catalog) != len(sdomain.OwnPermissions())+len(papp.Permissions()) {
@@ -435,8 +435,8 @@ func (h *host) scenario(tag string) {
 	h.must(h.do("PUT", users("/"+carlos.ID+"/roles/"+clerk.ID), m, nil, nil), 200, "marta assigns a custom role within her permissions")
 	h.must(h.do("DELETE", "/api/security/roles/"+clerk.ID, root, nil, nil), 422, "a role in use is not retired")
 
-	// A context that stops declaring its permissions: they stop granting at once (fail closed),
-	// the system roles follow the rule and the custom role is left as the administrator made it.
+	// Un contexto que deja de declarar sus permisos: dejan de conceder en el acto (falla cerrado),
+	// los roles del sistema siguen la regla y el rol propio se queda como lo hizo el administrador.
 	if report, err := h.sec.SyncCatalog(ctx); err != nil || report.Deactivated != len(papp.Permissions()) || report.RolesUpdated == 0 {
 		t.Fatalf("sync without parties: %+v %v", report, err)
 	}
@@ -457,11 +457,11 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("the five system roles remain: %+v", roles)
 	}
 
-	// --- An active global administrator always remains -----------------------------------------
+	// --- Siempre queda un administrador global activo -----------------------------------------
 	h.must(h.do("POST", users("/"+rootTok.UserID+"/deactivate"), root, nil, nil), 403, "root does not deactivate itself")
 	h.must(h.do("PUT", users("/"+rootTok.UserID+"/organizations/"+acme.ID), root, map[string]any{"level": "Full"}, nil), 403, "nor grants itself organizations")
-	// Give the only global administrator an access to Acme through a second, temporary one, so
-	// Marta encompasses it: she may deactivate users of Acme, but not the last global administrator.
+	// Se da al único administrador global un acceso a Acme mediante un segundo, temporal, para que
+	// Marta lo abarque: puede desactivar usuarios de Acme, pero no al último administrador global.
 	var root2 sapp.UserDTO
 	h.must(h.do("POST", users(""), root, map[string]any{"username": "root2", "party": martaP.ID, "password": "root2-initial-pass"}, &root2), 201, "second administrator")
 	h.must(h.do("PUT", users("/"+root2.ID+"/roles/"+sdomain.RoleGlobalSuperAdmin.String()), root, nil, nil), 200, "global")
@@ -472,13 +472,13 @@ func (h *host) scenario(tag string) {
 	h.must(h.do("DELETE", users("/"+rootTok.UserID+"/roles/"+sdomain.RoleGlobalSuperAdmin.String()), m, nil, nil), 403, "and its role is out of marta's reach")
 	h.must(h.do("DELETE", users("/"+rootTok.UserID+"/organizations/"+acme.ID), m, nil, nil), 200, "marta takes acme back from root")
 
-	// --- Directory for other contexts, audit and Published Language ---------------------------
+	// --- Directorio para otros contextos, auditoría y Published Language ---------------------
 	refs, err := h.sec.Users.Resolve(ctx, []string{marta.ID, fw.NewUUID().String(), "not-an-id"})
 	if err != nil || len(refs) != 1 || refs[marta.ID].Username != "marta" || refs[marta.ID].PartyID != martaP.ID {
 		t.Fatalf("resolve: %+v %v", refs, err)
 	}
 	byParty, err := h.sec.Users.ByParty(ctx, []string{martaP.ID})
-	if err != nil || len(byParty[martaP.ID]) != 2 { // marta and root2 are the same person
+	if err != nil || len(byParty[martaP.ID]) != 2 { // marta y root2 son la misma persona
 		t.Fatalf("by party: %+v %v", byParty, err)
 	}
 	trail, err := h.sec.Audit.Trail(ctx, sdomain.UserKind, carlos.ID)
@@ -541,8 +541,9 @@ func (h *host) scenario(tag string) {
 			break
 		}
 	}
-	// Six users registered; a password set by an administrator counts as a reset: four on
-	// registration (anna has none, root set its own) plus the reset of carlos.
+	// Seis usuarios dados de alta; una contraseña fijada por un administrador cuenta como
+	// restablecimiento: cuatro en el alta (anna no tiene, root fijó la suya) más el restablecimiento
+	// de carlos.
 	want := map[string]int{"registered": 6, "locked": 1, "deactivated": 2, "reset": 5, "granted": 6, "revoked": 2, "linked": 1, "retired": 1}
 	for name, n := range want {
 		if published[name] != n {
@@ -561,7 +562,7 @@ func userNames(p fw.Page[sapp.UserDTO]) []string {
 
 func TestSecurity_WithParties_MemoryThenSQLite(t *testing.T) {
 	h := compose(t)
-	// In memory nothing is seeded: the first synchronization declares everything.
+	// En memoria no se siembra nada: la primera sincronización lo declara todo.
 	h.start(len(sdomain.OwnPermissions()) + len(papp.Permissions()))
 	h.scenario("mem")
 
@@ -586,7 +587,7 @@ func TestSecurity_WithParties_MemoryThenSQLite(t *testing.T) {
 	if err := h.sw.Swap(ctx, db); err != nil {
 		t.Fatal(err)
 	}
-	// The migration seeded the own permissions and the system roles: only Parties is new.
+	// La migración sembró los permisos propios y los roles del sistema: sólo Parties es nuevo.
 	h.start(len(papp.Permissions()))
 	h.scenario("sql")
 }
@@ -649,7 +650,7 @@ func TestPasswordHasher(t *testing.T) {
 	if ok, _ := h.Verify("correct horse batterx", hash); ok {
 		t.Fatal("a wrong password does not verify")
 	}
-	// Raising the cost needs no migration: old hashes verify and are reported as stale.
+	// Subir el coste no necesita migración: los hashes antiguos se verifican y se informan como desfasados.
 	if ok, stale := sinfra.NewPBKDF2(4000).Verify("correct horse battery", hash); !ok || !stale {
 		t.Fatalf("stale: %v %v", ok, stale)
 	}
@@ -661,9 +662,9 @@ func TestPasswordHasher(t *testing.T) {
 	if sinfra.DefaultIterations != 600_000 {
 		t.Fatal("the default cost is the OWASP figure for PBKDF2-HMAC-SHA256")
 	}
-	// A C# row (PBKDF2_SHA256, 10 000 iterations, base64 hash, raw salt) keeps its password.
+	// Una fila de C# (PBKDF2_SHA256, 10 000 iteraciones, hash en base64, sal en bruto) conserva su contraseña.
 	salt := []byte("0123456789abcdef")
-	key, err := pbkdf2.Key(sha256.New, "legacy password 1", salt, 10_000, 32) // what Pbkdf2PasswordHasher.cs computes
+	key, err := pbkdf2.Key(sha256.New, "legacy password 1", salt, 10_000, 32) // lo que calcula Pbkdf2PasswordHasher.cs
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -679,8 +680,8 @@ func TestPasswordHasher(t *testing.T) {
 	}
 }
 
-// Every bounded context declares its permissions and the host passes them to the catalog: the 151
-// codes the twenty-five business contexts check, plus the eight of Security and the wildcard.
+// Cada contexto delimitado declara sus permisos y el anfitrión los pasa al catálogo: los 151
+// códigos que comprueban los veinticinco contextos de negocio, más los ocho de Security y el comodín.
 func TestCatalog_EveryContextDeclaresItsPermissions(t *testing.T) {
 	declared := map[string][]authz.Permission{
 		"Accounting": accapp.Permissions(), "Assets": astapp.Permissions(), "Billing": bilapp.Permissions(), "Facilities": facapp.Permissions(),
@@ -707,7 +708,7 @@ func TestCatalog_EveryContextDeclaresItsPermissions(t *testing.T) {
 	t.Cleanup(func() { _ = sw.Close(ctx) })
 	sec := security.Compose(sw, security.WithPasswordHasher(sinfra.NewPBKDF2(1000)))
 	report, err := sec.SyncCatalog(ctx, all...)
-	if err != nil || report.Added != len(all)+1 { // plus the wildcard
+	if err != nil || report.Added != len(all)+1 { // más el comodín
 		t.Fatalf("sync: %+v %v", report, err)
 	}
 	ac, _ := authz.NewContext(authz.Context{Subject: fw.NewUUID(), SubjectName: "setup", Kind: authz.Service})
@@ -720,9 +721,9 @@ func TestCatalog_EveryContextDeclaresItsPermissions(t *testing.T) {
 	for _, r := range roles {
 		granted[r.Name] = r.Permissions
 	}
-	// The standard rule over the real catalog: actions beyond Read, Create and Update (issuing an
-	// invoice, approving a payslip, submitting a tax filing, settling a remittance...) reach the
-	// organization administrator or a custom role, never the standard user.
+	// La regla estándar sobre el catálogo real: las acciones más allá de Read, Create y Update
+	// (emitir una factura, aprobar una nómina, presentar una declaración, liquidar una remesa...)
+	// llegan al administrador de la organización o a un rol propio, nunca al usuario estándar.
 	std := granted["StandardUser"]
 	for _, special := range []string{"Billing.Invoice.Issue", "Payroll.Payslip.Approve", "Fiscal.Filing.Submit", "Treasury.Remittance.Settle",
 		"Accounting.Entry.Reverse", "Parties.PartyRole.Assign", "Parties.Relationship.SetTrial", "Purchases.Invoice.Register", "Orders.Order.Confirm",
@@ -745,7 +746,7 @@ func TestSecurity_LayersRespectTheArchitecture(t *testing.T) {
 	archtest.AssertOnlyImports(t, "domain", false, archtest.Std, m+"/pkg/domain/...", m+"/contexts/security/domain")
 	archtest.AssertOnlyImports(t, "contracts", false, archtest.Std)
 	archtest.AssertTreeDoesNotImport(t, "application", []string{"/pkg/persistence", "/pkg/distribution", "database/sql", "net/http"})
-	// Security is not tied to the shared-secret JWT: only the HTTP adapter knows it.
+	// Security no está atado al JWT de secreto compartido: sólo lo conoce el adaptador HTTP.
 	for _, layer := range []string{"domain", "contracts", "application", "infrastructure"} {
 		archtest.AssertTreeDoesNotImport(t, layer, []string{"/pkg/distribution/jwtauth"})
 	}

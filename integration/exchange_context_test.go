@@ -21,7 +21,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/time/fake"
 )
 
-// promoCodes plays Parties: the promotion codes of the collaborators.
+// promoCodes hace de Parties: los códigos promocionales de los colaboradores.
 type promoCodes map[string]xdomain.PartyID
 
 func (c promoCodes) ByPromotionCode(_ context.Context, _ xdomain.OrganizationID, code string) (xdomain.PartyID, bool, error) {
@@ -29,11 +29,11 @@ func (c promoCodes) ByPromotionCode(_ context.Context, _ xdomain.OrganizationID,
 	return p, ok, nil
 }
 
-// TestExchangeContext runs Exchange on every engine: currencies, rates, margins and settings round
-// trip (upserts by natural key), the quote with the numbers of the C# tests, a reservation priced
-// by the server with its lines, history and instants as each engine gives them back, the
-// lifecycle, cancellation, expiry on a clock moved forward, the searches (by a currency of the
-// lines, by days) and the dashboard.
+// TestExchangeContext ejecuta Exchange en cada motor: ida y vuelta de divisas, tipos, márgenes y
+// ajustes (upserts por clave natural), la cotización con los números de las pruebas de C#, una
+// reserva tarificada por el servidor con sus líneas, historia e instantes tal como los devuelve
+// cada motor, el ciclo de vida, la cancelación, la caducidad con un reloj adelantado, las
+// búsquedas (por una divisa de las líneas, por días) y el cuadro de mando.
 func TestExchangeContext(t *testing.T) {
 	for _, e := range engines {
 		if e.name == "oracle-dotnet-guids" {
@@ -186,7 +186,7 @@ func TestExchangeContext(t *testing.T) {
 				len(dash.ByCurrency) != 2 || dash.ByCurrency[0].Currency != "USD" || dash.ByCurrency[0].Amount != "500.00" || dash.ByFacility[0].Facility != office {
 				t.Fatalf("dashboard: %+v %v", dash, err)
 			}
-			// Three registrations, three steps, a cancellation and an expiry.
+			// Tres altas, tres pasos, una cancelación y una caducidad.
 			if n, err := xm.Relay(inprocess.NewBroker()).RelayOnce(ctx); err != nil || n != 8 {
 				t.Fatalf("published: %d %v", n, err)
 			}

@@ -39,7 +39,7 @@ type env struct {
 	sw           *hotswap.Switch
 	mod          *geography.Module
 	token, other string
-	// reader reads boundaries and nothing of the calendar; keeper keeps the calendar.
+	// reader lee límites y nada del calendario; keeper lleva el calendario.
 	reader, keeper string
 }
 
@@ -99,7 +99,7 @@ func (e *env) must(got, want int, what string) {
 	}
 }
 
-// scenario exercises the context through HTTP and its ports; the same on every backend.
+// scenario ejercita el contexto por HTTP y por sus puertos; lo mismo en todos los backends.
 func (e *env) scenario() {
 	t := e.t
 	ctx := context.Background()
@@ -126,7 +126,7 @@ func (e *env) scenario() {
 		t.Fatalf("ancestors of Madrid: %v", names)
 	}
 
-	// The ladder of levels: what Spain calls each rung, and its boundaries by rung.
+	// La escalera de niveles: cómo llama España a cada peldaño, y sus límites por peldaño.
 	var levels []gapp.BoundaryLevelDTO
 	e.must(e.do("GET", "/api/reference/boundary-levels?country=ES", e.token, nil, &levels), 200, "levels of Spain")
 	principal := ""
@@ -200,9 +200,9 @@ func (e *env) scenario() {
 		t.Fatalf("EU members: %d", members.Total)
 	}
 
-	// Ports for other contexts.
+	// Puertos para otros contextos.
 	p := e.mod.Ports
-	desc, err := p.Descendants(ctx, []string{detail.Ancestors[0].ID}) // the province
+	desc, err := p.Descendants(ctx, []string{detail.Ancestors[0].ID}) // la provincia
 	if err != nil || len(desc) < 150 {
 		t.Fatalf("municipalities of the province: %d %v", len(desc), err)
 	}
@@ -222,7 +222,7 @@ func (e *env) scenario() {
 	}
 }
 
-// detailGrouping returns the European Union: the grouping Spain is a member of.
+// detailGrouping devuelve la Unión Europea: la agrupación de la que España es miembro.
 func detailGrouping(t *testing.T, e *env, spain string) string {
 	var d gapp.BoundaryDetailDTO
 	e.must(e.do("GET", "/api/geography/boundaries/"+spain, e.token, nil, &d), 200, "spain")

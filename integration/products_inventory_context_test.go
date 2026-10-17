@@ -24,11 +24,12 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 )
 
-// TestProductsAndInventoryContexts runs Products and Inventory with Parties on every engine.
-// Products: categories, a product with barcodes, components and suppliers round trip, search by
-// barcode (EXISTS on the child table) and by name, unique SKU, price list with tiers and the
-// quote. Inventory: receipts with weighted average cost, idempotent by source, issue, reservation
-// and its issue, transfer, count, the stock card in posting order, valuation and availability.
+// TestProductsAndInventoryContexts ejecuta Products e Inventory con Parties en cada motor.
+// Products: categorías, ida y vuelta de un producto con códigos de barras, componentes y
+// proveedores, búsqueda por código de barras (EXISTS sobre la tabla hija) y por nombre, SKU único,
+// tarifa con tramos y la cotización. Inventory: entradas con coste medio ponderado, idempotentes por
+// origen, salida, reserva y su salida, traspaso, recuento, la ficha de stock en orden de registro,
+// valoración y disponibilidad.
 func TestProductsAndInventoryContexts(t *testing.T) {
 	for _, e := range engines {
 		if e.name == "oracle-dotnet-guids" {

@@ -1,6 +1,6 @@
-// Package application holds the Accounting use cases (with permissions and company scope), the
-// poster that turns drafts into numbered entries, the subscriptions that post what the other
-// contexts publish, and the trial balance and ledger queries.
+// Package application contiene los casos de uso de Accounting (con permisos y ámbito de empresa), el
+// contabilizador que convierte borradores en asientos numerados, las suscripciones que contabilizan
+// lo que publican los otros contextos, y las consultas de sumas y saldos y de mayor.
 package application
 
 import (
@@ -19,7 +19,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Permissions (the C# defined 28 Accounting.* codes and enforced none).
+// Permisos (el C# definía 28 códigos Accounting.* y no exigía ninguno).
 var (
 	PermAccountRead  = authz.MustPermission("Accounting.Account.Read")
 	PermAccountWrite = authz.MustPermission("Accounting.Account.Update")
@@ -30,20 +30,20 @@ var (
 	PermEntryReverse = authz.MustPermission("Accounting.Entry.Reverse")
 )
 
-// Deps are the ports the use cases need; Parked, Parking, Recorder and Audit are optional.
+// Deps son los puertos que necesitan los casos de uso; Parked, Parking, Recorder y Audit son opcionales.
 type Deps struct {
 	Accounts domain.AccountRepository
 	Ledgers  domain.LedgerRepository
 	Entries  domain.EntryRepository
 	Counters domain.CounterRepository
 	Parked   domain.ParkedRepository
-	Parking  *Parking // what stands before the consumer and keeps what cannot be posted yet
+	Parking  *Parking // lo que está delante del consumidor y guarda lo que aún no puede contabilizarse
 	UoW      fw.UnitOfWork
 	Recorder app.EventRecorder
 	Audit    app.AuditLog
 }
 
-// Service exposes the use cases.
+// Service expone los casos de uso.
 type Service struct {
 	CreateAccount     app.CommandHandler[CreateAccount, AccountDTO]
 	RenameAccount     app.CommandHandler[RenameAccount, AccountDTO]
@@ -86,7 +86,7 @@ func scopeOf(ctx context.Context) scope {
 	return s
 }
 
-// check returns a uniform 404 outside the company's scope and 403 when it is read-only.
+// check devuelve un 404 uniforme fuera del ámbito de la empresa y un 403 cuando es de sólo lectura.
 func (s scope) check(kind string, id fmt.Stringer, org domain.OrganizationID, write bool) error {
 	if !s.global && !slices.Contains(s.orgs, org) {
 		return fw.NotFound(kind, id)
@@ -136,7 +136,7 @@ func parseDecimal(v *fw.Validation, field, s string) vocab.Decimal {
 
 func money(d vocab.Decimal) string { return d.StringFixed(2) }
 
-// NewService wires the use cases.
+// NewService conecta los casos de uso.
 func NewService(d Deps) *Service {
 	s := newService(d)
 	svc := &Service{}
@@ -154,7 +154,7 @@ func retry[In, Out any]() app.Middleware[In, Out] {
 	return pipeline.RetryOnConflict[In, Out](5, 10*time.Millisecond)
 }
 
-// ledgerOf returns the ledger of a company.
+// ledgerOf devuelve la contabilidad de una empresa.
 func (s service) ledgerOf(ctx context.Context, company domain.OrganizationID) (*domain.Ledger, error) {
 	ls, err := s.Ledgers.Find(ctx, domain.LedFieldCompany.Eq(company))
 	if err != nil {
@@ -166,9 +166,10 @@ func (s service) ledgerOf(ctx context.Context, company domain.OrganizationID) (*
 	return ls[0], nil
 }
 
-// post turns a draft into a numbered entry: the ledger decides the period (open), every account
-// exists in the company chart as an active detail account, the number is taken in the same unit
-// of work. A draft with a source already posted returns that entry (idempotency).
+// post convierte un borrador en un asiento numerado: la contabilidad decide el periodo (abierto),
+// cada cuenta existe en el plan de la empresa como cuenta de detalle activa, el número se toma en la
+// misma unidad de trabajo. Un borrador con un origen ya contabilizado devuelve ese asiento
+// (idempotencia).
 func (s service) post(ctx context.Context, d domain.Draft) (*domain.Entry, error) {
 	if d.Source.ID != "" {
 		found, err := s.Entries.Find(ctx, spec.And(domain.EntFieldCompany.Eq(d.Company), domain.EntFieldSrcType.Eq(d.Source.Type),
@@ -231,7 +232,7 @@ func (s service) post(ctx context.Context, d domain.Draft) (*domain.Entry, error
 	return e, nil
 }
 
-// reverse posts the reversal of an entry and links both.
+// reverse contabiliza la anulación de un asiento y enlaza los dos.
 func (s service) reverse(ctx context.Context, id domain.EntryID, on vocab.Date, src domain.Source) (*domain.Entry, error) {
 	e, err := s.Entries.Get(ctx, id)
 	if err != nil {

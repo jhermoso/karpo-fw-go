@@ -37,10 +37,10 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 )
 
-// TestTreasuryContext runs Treasury with Receivables, Billing, Fiscal and Parties on every engine:
-// account and mandates, a remittance proposed from the due items, generated (mandate use,
-// sequence types, creditor identifier), its pain.008 file, settled (collection in Receivables
-// through the SQL inbox) and returned (collection cancelled).
+// TestTreasuryContext ejecuta Treasury con Receivables, Billing, Fiscal y Parties en cada motor:
+// cuenta y mandatos, una remesa propuesta a partir de los vencimientos, generada (uso del mandato,
+// tipos de secuencia, identificador de acreedor), su fichero pain.008, liquidada (cobro en
+// Receivables a través del inbox SQL) y devuelta (cobro cancelado).
 func TestTreasuryContext(t *testing.T) {
 	for _, e := range engines {
 		if e.name == "oracle-dotnet-guids" {
@@ -142,7 +142,7 @@ func TestTreasuryContext(t *testing.T) {
 			}
 			rid, _ := tdomain.ParseRemittanceID(r.ID)
 			r, err = svc.Generate.Handle(actx, tapp.GenerateRemittance{ID: rid})
-			// The creditor suffix 001 does not change the check digits of A58818501.
+			// El sufijo de acreedor 001 no cambia los dígitos de control de A58818501.
 			if err != nil || r.CreditorID != "ES30001A58818501" || r.Items[0].Sequence != "FRST" || r.Items[0].EndToEnd != "FA-2026-000001-1" {
 				t.Fatalf("generate round trip: %+v %v", r, err)
 			}

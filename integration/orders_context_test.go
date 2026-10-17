@@ -31,11 +31,11 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 )
 
-// TestOrdersContext runs Orders with Inventory, Products, Receivables and Parties on every
-// engine: customer terms round trip, an order priced by Products, the credit check of
-// Receivables, confirmation with its number, the stock held, issued and released by Inventory
-// through the SQL inboxes, two delivery notes, the order and delivery round trips and a
-// cancellation.
+// TestOrdersContext ejecuta Orders con Inventory, Products, Receivables y Parties en cada motor:
+// ida y vuelta de las condiciones del cliente, un pedido tarificado por Products, el control de
+// crédito de Receivables, la confirmación con su número, el stock retenido, servido y liberado por
+// Inventory a través de los inbox SQL, dos albaranes, la ida y vuelta del pedido y de la entrega y
+// una cancelación.
 func TestOrdersContext(t *testing.T) {
 	for _, e := range engines {
 		if e.name == "oracle-dotnet-guids" {
@@ -161,7 +161,7 @@ func TestOrdersContext(t *testing.T) {
 			deliver()
 			did, _ := odomain.ParseDeliveryID(note.ID)
 			note, err = svc.GetDelivery.Handle(actx, oapp.GetDelivery{ID: did})
-			// 600 × 0.0684 = 41.04, plus 78.75.
+			// 600 × 0.0684 = 41.04, más 78.75.
 			if err != nil || note.Number != "ALB-2026-000001" || note.OrderNumber != "PED-2026-000001" || note.Date != "2026-10-05" || len(note.Lines) != 2 ||
 				note.Lines[0].Quantity != "600" || note.Lines[0].Amount != "41.04" || note.Lines[1].Quantity != "2.5" || note.Total != "119.79" {
 				t.Fatalf("delivery round trip: %+v %v", note, err)

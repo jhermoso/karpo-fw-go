@@ -6,23 +6,23 @@ import (
 	"unicode/utf8"
 )
 
-// DescriptionMaxLength keeps descriptions compatible with the C# schema (200 characters).
+// DescriptionMaxLength mantiene las descripciones compatibles con el esquema de C# (200 caracteres).
 const DescriptionMaxLength = 200
 
-// RemarkMaxLength is the maximum length of a remark.
+// RemarkMaxLength es la longitud máxima de una observación.
 const RemarkMaxLength = 1000
 
-// Description is a short descriptive text (1..200 characters, single spaces, no control
-// characters). Unlike the C# value there is no arbitrary 3-character minimum.
+// Description es un texto descriptivo corto (1..200 caracteres, espacios simples, sin caracteres
+// de control). A diferencia del valor de C#, no hay un mínimo arbitrario de 3 caracteres.
 type Description struct{ value string }
 
-// NewDescription validates and normalizes a description.
+// NewDescription valida y normaliza una descripción.
 func NewDescription(s string) (Description, error) {
 	v, err := freeText(s, "description", DescriptionMaxLength)
 	return Description{v}, err
 }
 
-// MustDescription is like NewDescription but panics on error.
+// MustDescription es como NewDescription pero entra en pánico si hay error.
 func MustDescription(s string) Description {
 	d, err := NewDescription(s)
 	if err != nil {
@@ -31,16 +31,16 @@ func MustDescription(s string) Description {
 	return d
 }
 
-// String returns the text.
+// String devuelve el texto.
 func (d Description) String() string { return d.value }
 
-// IsZero reports whether the description is absent.
+// IsZero dice si falta la descripción.
 func (d Description) IsZero() bool { return d.value == "" }
 
-// MarshalText implements encoding.TextMarshaler.
+// MarshalText implementa encoding.TextMarshaler.
 func (d Description) MarshalText() ([]byte, error) { return []byte(d.value), nil }
 
-// UnmarshalText implements encoding.TextUnmarshaler (empty means absent).
+// UnmarshalText implementa encoding.TextUnmarshaler (vacío significa ausente).
 func (d *Description) UnmarshalText(b []byte) error {
 	if len(b) == 0 {
 		*d = Description{}
@@ -53,26 +53,26 @@ func (d *Description) UnmarshalText(b []byte) error {
 	return err
 }
 
-// Remark is a free comment (1..1000 characters). Absent is the zero value: there is no default
-// text (the C# Remark defaulted to "Party role", leaking a Parties concept into the framework).
+// Remark es un comentario libre (1..1000 caracteres). Ausente es el valor cero: no hay texto por
+// defecto (el Remark de C# tenía por defecto "Party role", lo que filtraba un concepto de Parties al framework).
 type Remark struct{ value string }
 
-// NewRemark validates and normalizes a remark.
+// NewRemark valida y normaliza una observación.
 func NewRemark(s string) (Remark, error) {
 	v, err := freeText(s, "remark", RemarkMaxLength)
 	return Remark{v}, err
 }
 
-// String returns the text.
+// String devuelve el texto.
 func (r Remark) String() string { return r.value }
 
-// IsZero reports whether the remark is absent.
+// IsZero dice si falta la observación.
 func (r Remark) IsZero() bool { return r.value == "" }
 
-// MarshalText implements encoding.TextMarshaler.
+// MarshalText implementa encoding.TextMarshaler.
 func (r Remark) MarshalText() ([]byte, error) { return []byte(r.value), nil }
 
-// UnmarshalText implements encoding.TextUnmarshaler (empty means absent).
+// UnmarshalText implementa encoding.TextUnmarshaler (vacío significa ausente).
 func (r *Remark) UnmarshalText(b []byte) error {
 	if len(b) == 0 {
 		*r = Remark{}

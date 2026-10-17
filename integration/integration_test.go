@@ -1,15 +1,16 @@
-// Package integration runs the repository conformance suite and the Parties bounded context
-// against real database servers. It is a separate module so the framework itself never depends
-// on database drivers.
+// Package integration ejecuta la batería de conformidad de los repositorios y el contexto delimitado
+// Parties contra servidores de bases de datos reales. Es un módulo aparte para que el framework
+// nunca dependa de drivers de bases de datos.
 //
-// Start the servers with `docker compose up -d` (see docker-compose.yml) and export the DSNs:
+// Los servidores se arrancan con `docker compose up -d` (véase docker-compose.yml) y se exportan
+// los DSN:
 //
 //	KARPO_PG_DSN      postgres://karpo:karpo@localhost:55433/karpo?sslmode=disable
 //	KARPO_MSSQL_DSN   sqlserver://sa:Karpo_2026!@localhost:51433?database=master
 //	KARPO_ORACLE_DSN  oracle://karpo:karpo@localhost:51521/FREEPDB1
 //	KARPO_MYSQL_DSN   karpo:karpo@tcp(localhost:53306)/karpo?parseTime=true&loc=UTC
 //
-// Engines without a DSN are skipped.
+// Los motores sin DSN se saltan.
 package integration
 
 import (
@@ -52,7 +53,7 @@ var engines = []engine{
 	{"postgres", "KARPO_PG_DSN", "pgx", postgres.New()},
 	{"sqlserver", "KARPO_MSSQL_DSN", "sqlserver", sqlserver.New()},
 	{"oracle", "KARPO_ORACLE_DSN", "oracle", oracle.New()},
-	// RAW(16) in .NET Guid byte order, to share tables with the C# Karpo services.
+	// RAW(16) en el orden de bytes del Guid de .NET, para compartir tablas con los servicios de Karpo C#.
 	{"oracle-dotnet-guids", "KARPO_ORACLE_DSN", "oracle", oracle.New(oracle.WithDotNetGUIDs())},
 	{"mysql", "KARPO_MYSQL_DSN", "mysql", mysql.New()},
 }
@@ -76,8 +77,8 @@ func open(t *testing.T, e engine) *sqlrepo.DB {
 	return sqlrepo.New(raw, e.dialect)
 }
 
-// TestConformance proves that every engine honours the domain.Repository contract, including
-// the equivalence between each specification executed in SQL and its in-memory evaluation.
+// TestConformance demuestra que cada motor cumple el contrato domain.Repository, incluida la
+// equivalencia entre cada especificación ejecutada en SQL y su evaluación en memoria.
 func TestConformance(t *testing.T) {
 	for _, e := range engines {
 		t.Run(e.name, func(t *testing.T) {
@@ -86,7 +87,7 @@ func TestConformance(t *testing.T) {
 	}
 }
 
-// TestAuditLog checks the SQL audit log on every engine.
+// TestAuditLog comprueba el registro de auditoría SQL en cada motor.
 func TestAuditLog(t *testing.T) {
 	for _, e := range engines {
 		if e.name == "oracle-dotnet-guids" {
@@ -96,7 +97,7 @@ func TestAuditLog(t *testing.T) {
 	}
 }
 
-// TestMigrations checks the schema migrator on every engine.
+// TestMigrations comprueba el migrador de esquema en cada motor.
 func TestMigrations(t *testing.T) {
 	for _, e := range engines {
 		if e.name == "oracle-dotnet-guids" {
@@ -106,7 +107,7 @@ func TestMigrations(t *testing.T) {
 	}
 }
 
-// TestStrings checks on every engine that a {str:N} column holds N non-ASCII characters.
+// TestStrings comprueba en cada motor que una columna {str:N} admite N caracteres no ASCII.
 func TestStrings(t *testing.T) {
 	for _, e := range engines {
 		if e.name == "oracle-dotnet-guids" {
@@ -116,7 +117,7 @@ func TestStrings(t *testing.T) {
 	}
 }
 
-// TestInbox checks the SQL inbox on every engine.
+// TestInbox comprueba el inbox SQL en cada motor.
 func TestInbox(t *testing.T) {
 	for _, e := range engines {
 		if e.name == "oracle-dotnet-guids" {
@@ -126,7 +127,7 @@ func TestInbox(t *testing.T) {
 	}
 }
 
-// TestParties runs the Parties mapping (child table, custom COUNT specification) on every engine.
+// TestParties ejecuta el mapeo de Parties (tabla hija, especificación COUNT propia) en cada motor.
 func TestParties(t *testing.T) {
 	for _, e := range engines {
 		t.Run(e.name, func(t *testing.T) {
@@ -177,11 +178,11 @@ func TestParties(t *testing.T) {
 	}
 }
 
-// TestHotSwapAcrossEngines keeps one domain repository alive while the backend is swapped
-// PostgreSQL -> SQL Server -> Oracle -> MySQL, with a unit of work in flight on each switch.
+// TestHotSwapAcrossEngines mantiene vivo un repositorio de dominio mientras se cambia el backend
+// PostgreSQL -> SQL Server -> Oracle -> MySQL, con una unidad de trabajo en curso en cada cambio.
 func TestHotSwapAcrossEngines(t *testing.T) {
 	ctx := context.Background()
-	var dbs, checks []*sqlrepo.DB // switch backends (closed when retired) and inspection pools
+	var dbs, checks []*sqlrepo.DB // backends del cambio (cerrados al retirarlos) y pools de inspección
 	for _, e := range engines {
 		if e.name == "oracle-dotnet-guids" {
 			continue
@@ -201,7 +202,7 @@ func TestHotSwapAcrossEngines(t *testing.T) {
 		p, _ := parties.Register(parties.NewPartyID(), parties.Organization, "Party on "+name, tax)
 
 		if i+1 < len(dbs) {
-			// Open a unit of work on the current engine and swap while it is still running.
+			// Abre una unidad de trabajo en el motor actual y cambia mientras sigue en curso.
 			started, release, done := make(chan struct{}), make(chan struct{}), make(chan error, 1)
 			go func() {
 				done <- sw.Do(ctx, func(ctx context.Context) error {
@@ -227,7 +228,7 @@ func TestHotSwapAcrossEngines(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		// The aggregate landed on the engine that was current when its unit of work began.
+		// El agregado acabó en el motor que era el actual cuando empezó su unidad de trabajo.
 		direct := sqlrepo.MustRepository(checks[i], infrastructure.PartyMapping())
 		got, err := direct.Get(ctx, p.ID())
 		if err != nil || got.LegalName() != "Party on "+name {
@@ -258,8 +259,8 @@ func resetParties(t *testing.T, db *sqlrepo.DB) {
 	}
 }
 
-// dropPartiesTables removes the tables of both the framework example and the Parties context
-// (they share names on the integration databases), children first.
+// dropPartiesTables borra las tablas tanto del ejemplo del framework como del contexto Parties
+// (comparten nombres en las bases de datos de integración), primero las hijas.
 func dropPartiesTables(ctx context.Context, db *sqlrepo.DB) {
 	for _, t := range []string{"party_relationships", "party_roles", "party_contacts", "party_identifications", "party_affiliations", "party_facility_roles", "facility_role_types", "parties_inbox",
 		"party_classifications", "parties", "relationship_types", "role_types", "country_document_rules", "document_types",

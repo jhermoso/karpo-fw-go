@@ -77,7 +77,7 @@ func TestLevel_WeightedAverageCost(t *testing.T) {
 	if err != nil || !cost.Equal(dec("2.75")) || seq != 3 || !l.State().OnHand.Equal(dec("250")) {
 		t.Fatalf("issue: %s %d %v", cost, seq, err)
 	}
-	// An issue does not change the average; the next receipt does: (250×2.75 + 250×3.25) / 500 = 3.
+	// Una salida no cambia la media; la siguiente entrada sí: (250×2.75 + 250×3.25) / 500 = 3.
 	if _, err := l.Receive(dec("250"), dec("3.25")); err != nil || !l.State().AverageCost.Equal(dec("3")) {
 		t.Fatalf("second average: %s %v", l.State().AverageCost, err)
 	}

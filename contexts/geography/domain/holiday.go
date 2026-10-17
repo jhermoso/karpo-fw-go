@@ -10,37 +10,37 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// HolidayKind is the aggregate type name of a holiday.
+// HolidayKind es el nombre de tipo de agregado de un festivo.
 const HolidayKind = "geography.holiday"
 
-// HolidayID identifies a holiday.
+// HolidayID identifica un festivo.
 type HolidayID struct{ fw.UUID }
 
-// NewHolidayID returns a fresh identity.
+// NewHolidayID devuelve una identidad nueva.
 func NewHolidayID() HolidayID { return HolidayID{fw.NewUUID()} }
 
-// ParseHolidayID parses a textual identity.
+// ParseHolidayID interpreta una identidad en texto.
 func ParseHolidayID(s string) (HolidayID, error) { u, err := fw.ParseUUID(s); return HolidayID{u}, err }
 
-// HolidayState is the persisted state of a holiday.
+// HolidayState es el estado persistido de un festivo.
 type HolidayState struct {
-	Boundary BoundaryID // where it is kept: a country, a region, a municipality...
+	Boundary BoundaryID // dónde se celebra: un país, una región, un municipio...
 	Date     vocab.Date
 	Name     string
 	Audit    traits.AuditStamp
 }
 
-// Holiday is a day nobody works in a place: a day of a year, in a boundary. It holds for the
-// boundary and everything inside it, so a national holiday is declared once, on the country. It
-// is the one thing of this context that is kept by hand: holidays are published every year, and
-// the local ones town by town. (The C# had no calendar.)
+// Holiday es un día en que nadie trabaja en un lugar: un día de un año, en un límite territorial.
+// Vale para el límite y todo lo que hay dentro, así que un festivo nacional se declara una vez, en
+// el país. Es lo único de este contexto que se mantiene a mano: los festivos se publican cada año,
+// y los locales pueblo a pueblo. (El C# no tenía calendario.)
 type Holiday struct {
 	fw.BaseAggregateRoot[HolidayID]
 	traits.Audited
 	s HolidayState
 }
 
-// ReconstituteHoliday rebuilds a holiday.
+// ReconstituteHoliday reconstruye un festivo.
 func ReconstituteHoliday(id HolidayID, s HolidayState) (*Holiday, error) {
 	base, err := fw.NewBaseAggregateRoot(HolidayKind, id)
 	if err != nil {
@@ -57,19 +57,19 @@ func ReconstituteHoliday(id HolidayID, s HolidayState) (*Holiday, error) {
 	return &Holiday{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// State returns the state.
+// State devuelve el estado.
 func (h *Holiday) State() HolidayState { return h.s }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (h *Holiday) AuditSnapshot() map[string]any {
 	return map[string]any{"boundary": h.s.Boundary.String(), "date": h.s.Date.String(), "name": h.s.Name}
 }
 
-// Holiday fields.
+// Campos de los festivos.
 var (
 	HolidayFieldBoundary = spec.Comparable("boundary", func(h *Holiday) BoundaryID { return h.s.Boundary })
 	HolidayFieldDate     = spec.OrderedBy("holiday_date", func(h *Holiday) vocab.Date { return h.s.Date }, vocab.CompareDates)
 )
 
-// HolidayRepository stores holidays.
+// HolidayRepository guarda los festivos.
 type HolidayRepository = fw.Repository[HolidayID, *Holiday]

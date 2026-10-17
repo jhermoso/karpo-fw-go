@@ -12,7 +12,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
 )
 
-// Repository is the generic SQL implementation of domain.Repository.
+// Repository es la implementación SQL genérica de domain.Repository.
 type Repository[ID domain.Identifier, T domain.AggregateRoot[ID]] struct {
 	db   *DB
 	m    Mapping[ID, T]
@@ -22,7 +22,7 @@ type Repository[ID domain.Identifier, T domain.AggregateRoot[ID]] struct {
 
 var _ domain.Repository[domain.UUID, domain.AggregateRoot[domain.UUID]] = (*Repository[domain.UUID, domain.AggregateRoot[domain.UUID]])(nil)
 
-// NewRepository validates the mapping and creates a repository bound to db.
+// NewRepository valida el mapeo y crea un repositorio ligado a db.
 func NewRepository[ID domain.Identifier, T domain.AggregateRoot[ID]](db *DB, m Mapping[ID, T]) (*Repository[ID, T], error) {
 	root, err := m.normalize()
 	if err != nil {
@@ -31,7 +31,8 @@ func NewRepository[ID domain.Identifier, T domain.AggregateRoot[ID]](db *DB, m M
 	return &Repository[ID, T]{db: db, m: m, root: root, kind: strings.TrimPrefix(reflect.TypeFor[T]().String(), "*")}, nil
 }
 
-// MustRepository is like NewRepository but panics on an invalid mapping (composition roots).
+// MustRepository es como NewRepository pero hace panic ante un mapeo no válido (raíces de
+// composición).
 func MustRepository[ID domain.Identifier, T domain.AggregateRoot[ID]](db *DB, m Mapping[ID, T]) *Repository[ID, T] {
 	r, err := NewRepository(db, m)
 	if err != nil {
@@ -69,7 +70,7 @@ func orderItems[T any](orders []spec.Order[T]) []orderItem {
 	return items
 }
 
-// Get loads an aggregate by identity.
+// Get carga un agregado por su identidad.
 func (r *Repository[ID, T]) Get(ctx context.Context, id ID) (T, error) {
 	var zero T
 	b := newBuilder(r.db.d, r.root, r.m.Custom)
@@ -89,7 +90,7 @@ func (r *Repository[ID, T]) Get(ctx context.Context, id ID) (T, error) {
 	return aggs[0], nil
 }
 
-// Find returns the aggregates satisfying s, ordered by order then identity.
+// Find devuelve los agregados que cumplen s, ordenados por order y después por identidad.
 func (r *Repository[ID, T]) Find(ctx context.Context, s spec.Specification[T], order ...spec.Order[T]) ([]T, error) {
 	query, args, err := r.selectQuery(s, order, -1, 0)
 	if err != nil {
@@ -98,7 +99,8 @@ func (r *Repository[ID, T]) Find(ctx context.Context, s spec.Specification[T], o
 	return r.load(ctx, query, args)
 }
 
-// FindPage returns one page of matches plus the total count, both computed by the database.
+// FindPage devuelve una página de coincidencias y el recuento total, ambos calculados por la base
+// de datos.
 func (r *Repository[ID, T]) FindPage(ctx context.Context, s spec.Specification[T], page domain.PageRequest[T]) (domain.Page[T], error) {
 	page = page.Normalize()
 	total, err := r.Count(ctx, s)
@@ -118,8 +120,8 @@ func (r *Repository[ID, T]) FindPage(ctx context.Context, s spec.Specification[T
 	return domain.NewPage(items, total, page.Number, page.Size), nil
 }
 
-// Explain returns the SQL and bind arguments FindPage would execute for s and page, without
-// touching the database. Useful for diagnostics, logging and dialect tests.
+// Explain devuelve el SQL y los argumentos enlazados que FindPage ejecutaría para s y page, sin
+// tocar la base de datos. Sirve para diagnóstico, trazas y pruebas de dialecto.
 func (r *Repository[ID, T]) Explain(s spec.Specification[T], page domain.PageRequest[T]) (string, []any, error) {
 	page = page.Normalize()
 	return r.selectQuery(s, page.Sort, page.Size, page.Offset())
@@ -143,7 +145,7 @@ func (r *Repository[ID, T]) selectQuery(s spec.Specification[T], order []spec.Or
 	return query, b.args, nil
 }
 
-// Count returns how many aggregates satisfy s.
+// Count devuelve cuántos agregados cumplen s.
 func (r *Repository[ID, T]) Count(ctx context.Context, s spec.Specification[T]) (int64, error) {
 	b := newBuilder(r.db.d, r.root, r.m.Custom)
 	where, err := r.where(b, s)
@@ -158,7 +160,7 @@ func (r *Repository[ID, T]) Count(ctx context.Context, s spec.Specification[T]) 
 	return toInt64(raw)
 }
 
-// Exists reports whether at least one aggregate satisfies s.
+// Exists dice si al menos un agregado cumple s.
 func (r *Repository[ID, T]) Exists(ctx context.Context, s spec.Specification[T]) (bool, error) {
 	b := newBuilder(r.db.d, r.root, r.m.Custom)
 	where, err := r.where(b, s)
@@ -235,8 +237,8 @@ func (r *Repository[ID, T]) load(ctx context.Context, query string, args []any) 
 	return aggs, nil
 }
 
-// keyArg normalizes a scanned identity/foreign-key value into a grouping key and a bind argument
-// that is valid for the dialect, according to the kind of the aggregate identifier.
+// keyArg normaliza un valor leído de identidad o de clave ajena en una clave de agrupación y un
+// argumento enlazado válido para el dialecto, según el tipo del identificador del agregado.
 func (r *Repository[ID, T]) keyArg(raw any) (string, any, error) {
 	var zero ID
 	switch any(zero).(type) {
@@ -259,8 +261,8 @@ func (r *Repository[ID, T]) keyArg(raw any) (string, any, error) {
 	return fmt.Sprint(raw), raw, nil
 }
 
-// loadChildren loads the child rows of all scanned roots in batches (one query per child
-// collection and IN-list chunk) and groups them by root key.
+// loadChildren carga por lotes las filas hijas de todas las raíces leídas (una consulta por
+// colección hija y por trozo de lista IN) y las agrupa por clave de la raíz.
 func (r *Repository[ID, T]) loadChildren(ctx context.Context, roots []*Row) (map[string]ChildRows, error) {
 	out := make(map[string]ChildRows, len(roots))
 	if len(roots) == 0 || len(r.m.Children) == 0 {
@@ -354,8 +356,8 @@ func contains(xs []string, s string) bool {
 	return false
 }
 
-// Save inserts (version 0) or updates (optimistic concurrency) the aggregate and replaces its
-// children, atomically.
+// Save inserta (versión 0) o actualiza (concurrencia optimista) el agregado y reemplaza sus
+// hijos, de forma atómica.
 func (r *Repository[ID, T]) Save(ctx context.Context, agg T) error {
 	vals, err := r.m.Dehydrate(agg)
 	if err != nil {
@@ -489,7 +491,7 @@ func (r *Repository[ID, T]) replaceChildren(ctx context.Context, ex executor, ag
 	return nil
 }
 
-// Delete removes the aggregate and its children with the optimistic concurrency check.
+// Delete borra el agregado y sus hijos con la comprobación de concurrencia optimista.
 func (r *Repository[ID, T]) Delete(ctx context.Context, agg T) error {
 	id, v := agg.ID(), agg.Version()
 	return r.db.Do(ctx, func(ctx context.Context) error {

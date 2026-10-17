@@ -18,7 +18,7 @@ const (
 	importKey
 )
 
-// Operation channels (C# OperationChannel).
+// Canales de operación (OperationChannel de C#).
 const (
 	ChannelWeb    = "web"
 	ChannelMobile = "mobile"
@@ -26,7 +26,7 @@ const (
 	ChannelAPI    = "api"
 )
 
-// WithChannel stores the channel the operation came from; unknown values are ignored.
+// WithChannel guarda el canal del que vino la operación; los valores desconocidos se ignoran.
 func WithChannel(ctx context.Context, channel string) context.Context {
 	switch c := strings.ToLower(strings.TrimSpace(channel)); c {
 	case ChannelWeb, ChannelMobile, ChannelDevice, ChannelAPI:
@@ -35,21 +35,21 @@ func WithChannel(ctx context.Context, channel string) context.Context {
 	return ctx
 }
 
-// Channel returns the channel stored in ctx, or "".
+// Channel devuelve el canal guardado en ctx, o "".
 func Channel(ctx context.Context) string {
 	c, _ := ctx.Value(channelKey).(string)
 	return c
 }
 
-// ImportProvenance identifies a data import run (C# ImportProvenance): every change made while
-// it is in the context is attributed to that run in the audit log.
+// ImportProvenance identifica una ejecución de importación de datos (ImportProvenance de C#): todo
+// cambio hecho mientras está en el contexto se atribuye a esa ejecución en el log de auditoría.
 type ImportProvenance struct {
 	SourceKey  string      `json:"sourceKey"`
 	RunID      domain.UUID `json:"runId"`
 	SourceFile string      `json:"sourceFile,omitempty"`
 }
 
-// WithImportProvenance marks ctx as part of an import run (C# ImportContext.BeginRun).
+// WithImportProvenance marca ctx como parte de una ejecución de importación (ImportContext.BeginRun de C#).
 func WithImportProvenance(ctx context.Context, p ImportProvenance) context.Context {
 	if p.RunID.IsZero() {
 		p.RunID = domain.NewUUID()
@@ -57,20 +57,20 @@ func WithImportProvenance(ctx context.Context, p ImportProvenance) context.Conte
 	return context.WithValue(ctx, importKey, p)
 }
 
-// ImportProvenanceFrom returns the import run in ctx, if any.
+// ImportProvenanceFrom devuelve la ejecución de importación de ctx, si la hay.
 func ImportProvenanceFrom(ctx context.Context) (ImportProvenance, bool) {
 	p, ok := ctx.Value(importKey).(ImportProvenance)
 	return p, ok
 }
 
-// WithActor stores the actor performing the current request (the Go counterpart of the C#
-// ActorContext.Begin, which used ambient AsyncLocal state).
+// WithActor guarda el actor que hace la petición en curso (la contrapartida en Go del
+// ActorContext.Begin de C#, que usaba estado ambiente AsyncLocal).
 func WithActor(ctx context.Context, a vocab.Actor) context.Context {
 	return context.WithValue(ctx, actorKey, a)
 }
 
-// ActorFrom returns the actor stored in ctx, or vocab.SystemActor when there is none
-// (the C# idiom "ActorContext.Current ?? Actor.System").
+// ActorFrom devuelve el actor guardado en ctx, o vocab.SystemActor si no hay ninguno
+// (el modismo de C# "ActorContext.Current ?? Actor.System").
 func ActorFrom(ctx context.Context) vocab.Actor {
 	if a, ok := ctx.Value(actorKey).(vocab.Actor); ok && !a.IsZero() {
 		return a
@@ -78,25 +78,25 @@ func ActorFrom(ctx context.Context) vocab.Actor {
 	return vocab.SystemActor
 }
 
-// WithCorrelationID stores the correlation id of the current business flow in ctx.
-// The distribution layer sets it from the X-Correlation-ID header; the outbox persists it.
+// WithCorrelationID guarda en ctx el id de correlación del flujo de negocio en curso.
+// La capa de distribución lo fija a partir de la cabecera X-Correlation-ID; el outbox lo persiste.
 func WithCorrelationID(ctx context.Context, id string) context.Context {
 	return context.WithValue(ctx, correlationKey, id)
 }
 
-// CorrelationID returns the correlation id stored in ctx, or "".
+// CorrelationID devuelve el id de correlación guardado en ctx, o "".
 func CorrelationID(ctx context.Context) string {
 	id, _ := ctx.Value(correlationKey).(string)
 	return id
 }
 
-// WithCausationID stores the id of the message that caused the current processing
-// (e.g. the event being handled by a subscriber).
+// WithCausationID guarda el id del mensaje que causó el procesamiento en curso
+// (p. ej. el evento que está manejando un suscriptor).
 func WithCausationID(ctx context.Context, id string) context.Context {
 	return context.WithValue(ctx, causationKey, id)
 }
 
-// CausationID returns the causation id stored in ctx, or "".
+// CausationID devuelve el id de causalidad guardado en ctx, o "".
 func CausationID(ctx context.Context) string {
 	id, _ := ctx.Value(causationKey).(string)
 	return id

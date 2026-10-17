@@ -19,7 +19,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlserver"
 )
 
-// AuditDDL returns the audit log DDL of a dialect name.
+// AuditDDL devuelve el DDL del registro de auditoría para un nombre de dialecto.
 func AuditDDL(dialect string) []string {
 	switch dialect {
 	case "sqlite":
@@ -36,8 +36,8 @@ func AuditDDL(dialect string) []string {
 	return nil
 }
 
-// RunAuditLog checks the SQL audit log on db: round trip of every field, ordering, and
-// rollback together with the unit of work.
+// RunAuditLog comprueba el registro de auditoría SQL sobre db: ida y vuelta de cada campo, orden,
+// y rollback junto con la unidad de trabajo.
 func RunAuditLog(t *testing.T, db *sqlrepo.DB) {
 	ctx := context.Background()
 	_, _ = db.ExecContext(ctx, "DROP TABLE "+sqlrepo.DefaultAuditTable)

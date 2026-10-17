@@ -15,30 +15,30 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Login signs in with a user name and a password (one way of authenticating among several).
+// Login inicia sesión con un nombre de usuario y una contraseña (una forma de autenticarse entre varias).
 type Login struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 }
 
-// Refresh exchanges a refresh token for a new pair of tokens.
+// Refresh cambia un token de refresco por un par de tokens nuevo.
 type Refresh struct {
 	RefreshToken string `json:"refreshToken"`
 }
 
-// Logout ends the session of a refresh token.
+// Logout termina la sesión de un token de refresco.
 type Logout struct {
 	RefreshToken string `json:"refreshToken"`
 }
 
-// ChangePassword changes the password of the caller.
+// ChangePassword cambia la contraseña de quien llama.
 type ChangePassword struct {
 	CurrentPassword string `json:"currentPassword"`
 	NewPassword     string `json:"newPassword"`
 }
 
-// Tokens is the result of signing in. The access token only says who the caller is: permissions
-// and organization accesses are resolved on every request and read with GET /api/auth/context.
+// Tokens es el resultado de iniciar sesión. El token de acceso sólo dice quién llama: los permisos
+// y los accesos a organizaciones se resuelven en cada petición y se leen con GET /api/auth/context.
 type Tokens struct {
 	AccessToken        string    `json:"accessToken"`
 	RefreshToken       string    `json:"refreshToken"`
@@ -48,11 +48,12 @@ type Tokens struct {
 	MustChangePassword bool      `json:"mustChangePassword"`
 }
 
-// Done is the result of commands that return nothing.
+// Done es el resultado de los comandos que no devuelven nada.
 type Done struct{}
 
-// errSignIn is the single answer to every failed sign-in: an unknown user, a wrong password, an
-// inactive or locked user and a user without password are indistinguishable from outside.
+// errSignIn es la única respuesta a todo inicio de sesión fallido: un usuario desconocido, una
+// contraseña equivocada, un usuario inactivo o bloqueado y un usuario sin contraseña no se
+// distinguen desde fuera.
 var errSignIn = authz.ErrInvalidCredentials
 
 func actorOf(u *domain.User) vocab.Actor {
@@ -67,7 +68,7 @@ func newRefreshToken() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
-// endSessions ends the live sessions matching s.
+// endSessions termina las sesiones vivas que cumplen s.
 func (s *service) endSessions(ctx context.Context, sp spec.Specification[*domain.Session], reason string, at time.Time) error {
 	live, err := s.Sessions.Find(ctx, sp)
 	if err != nil {
@@ -83,7 +84,7 @@ func (s *service) endSessions(ctx context.Context, sp spec.Specification[*domain
 	return nil
 }
 
-// openSession opens a session of the family and issues the pair of tokens.
+// openSession abre una sesión de la familia y emite el par de tokens.
 func (s *service) openSession(ctx context.Context, u *domain.User, family fw.UUID, at time.Time) (Tokens, error) {
 	refresh, err := newRefreshToken()
 	if err != nil {
@@ -105,7 +106,7 @@ func (s *service) openSession(ctx context.Context, u *domain.User, family fw.UUI
 		Username: u.Username(), MustChangePassword: u.MustChangePassword()}, nil
 }
 
-// failedLogin counts a failed password check; a user that becomes locked loses its sessions.
+// failedLogin cuenta una comprobación de contraseña fallida; un usuario que queda bloqueado pierde sus sesiones.
 func (s *service) failedLogin(ctx context.Context, id domain.UserID, at time.Time) error {
 	_, err := s.users.Update(ctx, id, func(ctx context.Context, u *domain.User) error {
 		if u.RecordFailedLogin(s.Lockout, at) {
@@ -123,7 +124,7 @@ func (s *service) login(ctx context.Context, c Login) (Tokens, error) {
 		return Tokens{}, err
 	}
 	if !found || !u.HasPassword() || !u.CanSignInAt(now) {
-		s.Hasher.Verify(c.Password, s.dummyHash) // the same work whatever the reason
+		s.Hasher.Verify(c.Password, s.dummyHash) // el mismo trabajo sea cual sea el motivo
 		return Tokens{}, errSignIn
 	}
 	ok, stale := s.Hasher.Verify(c.Password, u.PasswordHash())
@@ -169,7 +170,7 @@ func (s *service) refresh(ctx context.Context, c Refresh) (Tokens, error) {
 		return Tokens{}, errSignIn
 	}
 	if !sess.UsableAt(now) {
-		if sess.WasRotated() { // a token that was already exchanged: the family is compromised
+		if sess.WasRotated() { // un token que ya se cambió: la familia está comprometida
 			err := s.UoW.Do(ctx, func(ctx context.Context) error {
 				return s.endSessions(ctx, domain.LiveSessionsOfFamily(sess.Family()), domain.EndedReuse, now)
 			})
@@ -201,7 +202,7 @@ func (s *service) refresh(ctx context.Context, c Refresh) (Tokens, error) {
 		return err
 	})
 	switch {
-	case errors.Is(err, fw.ErrConflict): // the same token exchanged twice at once: one wins
+	case errors.Is(err, fw.ErrConflict): // el mismo token cambiado dos veces a la vez: gana uno
 		return Tokens{}, errSignIn
 	case err != nil:
 		return Tokens{}, err

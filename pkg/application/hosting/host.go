@@ -1,4 +1,4 @@
-// Package hosting runs bounded-context modules (application.Module) in dependency order.
+// Package hosting ejecuta los módulos de los contextos delimitados (application.Module) en orden de dependencias.
 package hosting
 
 import (
@@ -10,14 +10,14 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/application"
 )
 
-// Host validates module dependencies and runs their lifecycle in dependency order.
+// Host valida las dependencias de los módulos y ejecuta su ciclo de vida en orden de dependencias.
 type Host struct {
 	ordered []application.Module
 	started int
 }
 
-// NewHost orders modules so every module comes after its dependencies. It fails on duplicate
-// names, unknown dependencies and cycles.
+// NewHost ordena los módulos para que cada uno vaya después de sus dependencias. Falla ante
+// nombres duplicados, dependencias desconocidas y ciclos.
 func NewHost(modules ...application.Module) (*Host, error) {
 	byName := make(map[string]application.Module, len(modules))
 	for _, m := range modules {
@@ -38,7 +38,7 @@ func NewHost(modules ...application.Module) (*Host, error) {
 	for n := range byName {
 		names = append(names, n)
 	}
-	sort.Strings(names) // deterministic order among independent modules
+	sort.Strings(names) // orden determinista entre módulos independientes
 
 	const (
 		unvisited = iota
@@ -75,10 +75,10 @@ func NewHost(modules ...application.Module) (*Host, error) {
 	return &Host{ordered: ordered}, nil
 }
 
-// Modules returns the modules in dependency order.
+// Modules devuelve los módulos en orden de dependencias.
 func (h *Host) Modules() []application.Module { return append([]application.Module(nil), h.ordered...) }
 
-// Start starts modules in dependency order. On failure, already started modules are stopped.
+// Start arranca los módulos en orden de dependencias. Si falla, se paran los módulos ya arrancados.
 func (h *Host) Start(ctx context.Context) error {
 	for i, m := range h.ordered {
 		if s, ok := m.(application.Starter); ok {
@@ -92,7 +92,7 @@ func (h *Host) Start(ctx context.Context) error {
 	return nil
 }
 
-// Stop stops started modules in reverse dependency order.
+// Stop para los módulos arrancados en orden inverso de dependencias.
 func (h *Host) Stop(ctx context.Context) error {
 	var errs []error
 	for i := h.started - 1; i >= 0; i-- {

@@ -13,8 +13,9 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 )
 
-// calendarScenario gives two companies the same payment terms, one of them an address in Madrid,
-// and looks at where the due dates of Receivables fall around a weekend and two holidays.
+// calendarScenario da a dos empresas las mismas condiciones de pago, a una de ellas una dirección
+// en Madrid, y mira dónde caen los vencimientos de Receivables alrededor de un fin de semana y dos
+// festivos.
 func calendarScenario(t *testing.T, sw *hotswap.Switch) {
 	th := newTradeHost(t, sw)
 	h, actx := th.h, th.actx
@@ -47,13 +48,13 @@ func calendarScenario(t *testing.T, sw *hotswap.Switch) {
 	_, err = h.Parties.Service.AddContact.Handle(actx, parapp.AddContact{PartyID: pid, Kind: "postal", Purposes: []string{"default"},
 		Address: &parapp.AddressDTO{Line1: "Mayor 1", PostalCode: "28013", Locality: "Madrid", Country: "ES", GeoBoundary: madrid}})
 	must(err)
-	// The Monday is a holiday of the town and the Tuesday one of the country.
+	// El lunes es festivo del municipio y el martes, del país.
 	_, err = h.Geography.Holidays.Declare(actx, geoapp.DeclareHolidays{Boundary: madrid, Days: []geoapp.DayInput{{Date: vocab.MustDate(2026, 12, 7), Name: "Fiesta local"}}})
 	must(err)
 	_, err = h.Geography.Holidays.Declare(actx, geoapp.DeclareHolidays{Boundary: es.Boundary, Days: []geoapp.DayInput{{Date: vocab.MustDate(2026, 12, 8), Name: "Inmaculada Concepción"}}})
 	must(err)
 
-	// Thirty days from Friday 6 November is Sunday 6 December.
+	// Treinta días desde el viernes 6 de noviembre es el domingo 6 de diciembre.
 	due := func(seller string, backward int, controlled bool) string {
 		t.Helper()
 		code := "D" + string(rune('A'+backward))

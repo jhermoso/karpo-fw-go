@@ -1,5 +1,6 @@
-// Package infrastructure stores the Facilities context: SQL mapping, versioned schema of the five
-// engines (with the facility type seed), catalogs, hot-swap factories and the Geography adapter.
+// Package infrastructure persiste el contexto Facilities: mapeo SQL, esquema versionado de los
+// cinco motores (con la semilla de tipos de instalación), catálogos, factorías intercambiables en caliente y el
+// adaptador de Geography.
 package infrastructure
 
 import (
@@ -22,10 +23,10 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlserver"
 )
 
-// Context is the name of the bounded context.
+// Context es el nombre del contexto delimitado.
 const Context = "facilities"
 
-// Technical tables of the context.
+// Tablas técnicas del contexto.
 const (
 	TableOutbox            = "facilities_outbox"
 	TableIntegrationOutbox = "facilities_integration_outbox"
@@ -61,8 +62,8 @@ func technicalDDL(d string) []string {
 	return nil
 }
 
-// Migrations is the versioned schema of the context. The facilities of each client are
-// business data (imported), not seed; only the type catalog is seeded.
+// Migrations es el esquema versionado del contexto. Las instalaciones de cada cliente son datos de
+// negocio (importados), no semilla; sólo se siembra el catálogo de tipos.
 func Migrations() sqlrepo.MigrationSet {
 	technical := map[string][]string{}
 	for _, d := range sqlrepo.Dialects {
@@ -78,7 +79,8 @@ func Migrations() sqlrepo.MigrationSet {
 			}
 			return db.InsertMany(ctx, "fac_facility_types", []string{"id", "name", "description", "requires_contact", "active"}, rows)
 		}},
-		// Where in the street the address is, piece by piece (vocab.Premises), as in Parties.
+		// En qué punto de la calle está la dirección, pieza a pieza (vocab.Premises), como en
+		// Parties.
 		{Version: 4, Name: "address: number, block, portal, staircase, floor and door", Up: sqlrepo.RenderDDLAll(
 			`ALTER TABLE fac_facilities {add:addr_number} {str:10}{addEnd}`,
 			`ALTER TABLE fac_facilities {add:addr_qualifier} {str:10}{addEnd}`,
@@ -90,12 +92,12 @@ func Migrations() sqlrepo.MigrationSet {
 	}}
 }
 
-// Migrator returns the schema migrator of the context.
+// Migrator devuelve el migrador del esquema del contexto.
 func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 	return sqlrepo.NewMigrator(db, []sqlrepo.MigrationSet{Migrations()})
 }
 
-// DropAll removes the tables of the context and its migration history (tests only).
+// DropAll quita las tablas del contexto y su historial de migraciones (sólo pruebas).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
 	for _, t := range []string{"fac_facilities", "fac_facility_types", TableOutbox, TableIntegrationOutbox, TableAuditLog} {
 		_, _ = db.ExecContext(ctx, "DROP TABLE "+t)
@@ -117,7 +119,7 @@ func optUUID(u fw.UUID) any {
 	return u
 }
 
-// FacilityMapping maps Facility to fac_facilities.
+// FacilityMapping mapea Facility a fac_facilities.
 func FacilityMapping() sqlrepo.Mapping[domain.FacilityID, *domain.Facility] {
 	return sqlrepo.Mapping[domain.FacilityID, *domain.Facility]{
 		Table: "fac_facilities",
@@ -195,10 +197,10 @@ func FacilityMapping() sqlrepo.Mapping[domain.FacilityID, *domain.Facility] {
 	}
 }
 
-// SQLCatalogs reads the facility types from the database.
+// SQLCatalogs lee los tipos de instalación de la base de datos.
 type SQLCatalogs struct{ db *sqlrepo.DB }
 
-// FacilityTypes implements domain.Catalogs.
+// FacilityTypes implementa domain.Catalogs.
 func (c SQLCatalogs) FacilityTypes(ctx context.Context) ([]domain.FacilityType, error) {
 	rows, err := c.db.Select(ctx, "fac_facility_types", []string{"id", "name", "description", "requires_contact", "active"}, "name")
 	if err != nil {
@@ -215,17 +217,17 @@ func (c SQLCatalogs) FacilityTypes(ctx context.Context) ([]domain.FacilityType, 
 	return out, nil
 }
 
-// WellKnownCatalogs serves the seed (in-memory backend).
+// WellKnownCatalogs sirve la semilla (backend en memoria).
 type WellKnownCatalogs struct{}
 
-// FacilityTypes implements domain.Catalogs.
+// FacilityTypes implementa domain.Catalogs.
 func (WellKnownCatalogs) FacilityTypes(context.Context) ([]domain.FacilityType, error) {
 	return domain.WellKnownFacilityTypes(), nil
 }
 
 func unsupported(b hotswap.Backend) error { return fmt.Errorf("facilities: unsupported backend %T", b) }
 
-// RepositoryFactory builds the facility repository.
+// RepositoryFactory construye el repositorio de instalaciones.
 func RepositoryFactory(b hotswap.Backend) (domain.Repository, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -236,7 +238,7 @@ func RepositoryFactory(b hotswap.Backend) (domain.Repository, error) {
 	return nil, unsupported(b)
 }
 
-// CatalogsFor returns the catalog reader of a backend.
+// CatalogsFor devuelve el lector de catálogos de un backend.
 func CatalogsFor(b hotswap.Backend) (domain.Catalogs, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -247,10 +249,11 @@ func CatalogsFor(b hotswap.Backend) (domain.Catalogs, error) {
 	return nil, unsupported(b)
 }
 
-// OutboxFactory builds the domain event outbox; IntegrationOutboxFactory, the Published Language one.
+// OutboxFactory construye el outbox de eventos de dominio; IntegrationOutboxFactory, el del
+// Published Language.
 func OutboxFactory(b hotswap.Backend) (application.OutboxStore, error) { return outbox(b, TableOutbox) }
 
-// IntegrationOutboxFactory builds the integration outbox.
+// IntegrationOutboxFactory construye el outbox de integración.
 func IntegrationOutboxFactory(b hotswap.Backend) (application.OutboxStore, error) {
 	return outbox(b, TableIntegrationOutbox)
 }
@@ -265,7 +268,7 @@ func outbox(b hotswap.Backend, table string) (application.OutboxStore, error) {
 	return nil, unsupported(b)
 }
 
-// AuditLogFactory builds the audit log.
+// AuditLogFactory construye el registro de auditoría.
 func AuditLogFactory(b hotswap.Backend) (application.AuditLog, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -276,11 +279,11 @@ func AuditLogFactory(b hotswap.Backend) (application.AuditLog, error) {
 	return nil, unsupported(b)
 }
 
-// GeographyAddresses adapts the Geography AddressChecker to the Facilities port (ACL).
+// GeographyAddresses adapta el AddressChecker de Geography al puerto de Facilities (ACL).
 type GeographyAddresses struct{ Checker geo.AddressChecker }
 
-// CheckAddress validates the postal code for the country and its municipality, completing the
-// Geography references.
+// CheckAddress valida el código postal para el país y su municipio, y completa las referencias a
+// Geography.
 func (g GeographyAddresses) CheckAddress(ctx context.Context, a domain.Address) (domain.Address, error) {
 	q := geo.PostalAddressQuery{Country: a.Country.String(), PostalCode: a.PostalCode}
 	if !a.Geo.Boundary.IsZero() {

@@ -10,14 +10,14 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// SalaryDTO is the transport form of the agreed salary.
+// SalaryDTO es la forma de transporte del salario pactado.
 type SalaryDTO struct {
 	Amount          string `json:"amount"`
 	Periodicity     string `json:"periodicity"` // monthly | annual
 	PaymentsPerYear int    `json:"paymentsPerYear"`
 }
 
-// TermsInput are the editable terms of a profile.
+// TermsInput son las condiciones editables de un perfil.
 type TermsInput struct {
 	ContributionGroup int        `json:"contributionGroup"`
 	IncomeTaxRate     string     `json:"incomeTaxRate,omitempty"`
@@ -25,20 +25,21 @@ type TermsInput struct {
 	EmployerAccount   string     `json:"employerAccount,omitempty"`
 }
 
-// OpenProfile opens the payroll profile of the current employment of a person with an employer.
+// OpenProfile abre el perfil de nómina de la relación laboral en curso de una persona con un
+// empleador.
 type OpenProfile struct {
 	Person   string `json:"person"`
 	Employer string `json:"employer"`
 	TermsInput
 }
 
-// SetTerms replaces the terms of a profile.
+// SetTerms sustituye las condiciones de un perfil.
 type SetTerms struct {
 	ID domain.ProfileID `json:"-"`
 	TermsInput
 }
 
-// AddSplit adds a payment split.
+// AddSplit añade un reparto del pago.
 type AddSplit struct {
 	ID          domain.ProfileID `json:"-"`
 	IBAN        string           `json:"iban"`
@@ -51,23 +52,23 @@ type AddSplit struct {
 	Until       vocab.Date       `json:"until,omitzero"`
 }
 
-// EndSplit ends a payment split.
+// EndSplit termina un reparto del pago.
 type EndSplit struct {
 	ID    domain.ProfileID `json:"-"`
 	Split string           `json:"split"`
 	On    vocab.Date       `json:"on"`
 }
 
-// GetProfile loads a profile.
+// GetProfile carga un perfil.
 type GetProfile struct{ ID domain.ProfileID }
 
-// SearchProfiles searches profiles of the caller's scope.
+// SearchProfiles busca perfiles del ámbito de quien llama.
 type SearchProfiles struct {
 	Employer, Person string
 	Page, Size       int
 }
 
-// SplitDTO is the transport form of a split.
+// SplitDTO es la forma de transporte de un reparto.
 type SplitDTO struct {
 	ID          string `json:"id"`
 	IBAN        string `json:"iban"`
@@ -80,7 +81,7 @@ type SplitDTO struct {
 	Until       string `json:"until,omitempty"`
 }
 
-// ProfileDTO is the transport form of a profile.
+// ProfileDTO es la forma de transporte de un perfil.
 type ProfileDTO struct {
 	ID                string     `json:"id"`
 	Employment        string     `json:"employment"`
@@ -111,7 +112,8 @@ func profileDTO(p *domain.Profile) ProfileDTO {
 	return d
 }
 
-// terms parses the terms and checks the employer account belongs to the employer and is active.
+// terms interpreta las condiciones y comprueba que la cuenta de cotización es del empleador y
+// está activa.
 func (s service) terms(ctx context.Context, in TermsInput, employer domain.OrganizationID) (domain.Terms, error) {
 	var v fw.Validation
 	t := domain.Terms{ContributionGroup: in.ContributionGroup, IncomeTaxRate: parseDecimal(&v, "incomeTaxRate", in.IncomeTaxRate)}

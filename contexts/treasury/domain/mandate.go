@@ -10,10 +10,10 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Scheme is the SEPA direct debit scheme.
+// Scheme es el esquema de adeudo directo SEPA.
 type Scheme int
 
-// Schemes.
+// Esquemas.
 const (
 	Core Scheme = iota + 1
 	B2B
@@ -21,10 +21,10 @@ const (
 
 var schemes = map[Scheme]string{Core: "CORE", B2B: "B2B"}
 
-// String returns the scheme code of the pain.008 file.
+// String devuelve el código de esquema del fichero pain.008.
 func (s Scheme) String() string { return schemes[s] }
 
-// ParseScheme parses a scheme code.
+// ParseScheme interpreta un código de esquema.
 func ParseScheme(s string) (Scheme, bool) {
 	for k, n := range schemes {
 		if n == strings.ToUpper(s) {
@@ -34,13 +34,13 @@ func ParseScheme(s string) (Scheme, bool) {
 	return 0, false
 }
 
-// MandateKind is the stable aggregate type name.
+// MandateKind es el nombre estable del tipo de agregado.
 const MandateKind = "treasury.mandate"
 
-// MandateExpiry is how long a mandate lives without being used (36 months, SEPA rulebook).
+// MandateExpiry es cuánto dura un mandato sin usarse (36 meses, reglamento SEPA).
 const MandateExpiry = 36
 
-// MandateState is the persisted state of a mandate.
+// MandateState es el estado persistido de un mandato.
 type MandateState struct {
 	Creditor  OrganizationID
 	Debtor    PartyID
@@ -48,20 +48,20 @@ type MandateState struct {
 	Reference string
 	Scheme    Scheme
 	Signed    vocab.Date
-	LastUsed  vocab.Date // zero: never used (the next collection is FRST)
+	LastUsed  vocab.Date // cero: nunca usado (el próximo cobro es FRST)
 	Revoked   vocab.Date
 	Audit     traits.AuditStamp
 }
 
-// Mandate is the authorization of a debtor to collect from its account by direct debit (the C#
-// only had a free MandateReference on the commercial profile, overwritten by the import).
+// Mandate es la autorización de un deudor para cobrar de su cuenta por adeudo directo (el C# sólo
+// tenía un MandateReference libre en el perfil comercial, que la importación sobrescribía).
 type Mandate struct {
 	fw.BaseAggregateRoot[MandateID]
 	traits.Audited
 	s MandateState
 }
 
-// ReconstituteMandate rebuilds a mandate.
+// ReconstituteMandate reconstruye un mandato.
 func ReconstituteMandate(id MandateID, s MandateState) (*Mandate, error) {
 	base, err := fw.NewBaseAggregateRoot(MandateKind, id)
 	if err != nil {
@@ -82,11 +82,11 @@ func ReconstituteMandate(id MandateID, s MandateState) (*Mandate, error) {
 	return &Mandate{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// State returns the state.
+// State devuelve el estado.
 func (m *Mandate) State() MandateState { return m.s }
 
-// UsableOn reports whether the mandate can be used on a date: signed, not revoked, and used (or
-// signed) within the last 36 months.
+// UsableOn dice si el mandato se puede usar en una fecha: firmado, no revocado, y usado (o
+// firmado) en los últimos 36 meses.
 func (m *Mandate) UsableOn(d vocab.Date) bool {
 	if d.Before(m.s.Signed) || (!m.s.Revoked.IsZero() && !d.Before(m.s.Revoked)) {
 		return false
@@ -98,7 +98,7 @@ func (m *Mandate) UsableOn(d vocab.Date) bool {
 	return d.Before(last.AddMonths(MandateExpiry))
 }
 
-// Sequence returns the sequence type of the next collection: FRST for the first, RCUR after.
+// Sequence devuelve el tipo de secuencia del próximo cobro: FRST para el primero, RCUR después.
 func (m *Mandate) Sequence() string {
 	if m.s.LastUsed.IsZero() {
 		return "FRST"
@@ -106,7 +106,7 @@ func (m *Mandate) Sequence() string {
 	return "RCUR"
 }
 
-// Use records a collection on a date.
+// Use registra un cobro en una fecha.
 func (m *Mandate) Use(on vocab.Date) error {
 	if !m.UsableOn(on) {
 		return fw.Violation("treasury.mandate_unusable", "the mandate is revoked, expired or not yet signed")
@@ -117,7 +117,7 @@ func (m *Mandate) Use(on vocab.Date) error {
 	return nil
 }
 
-// Revoke revokes the mandate from a date.
+// Revoke revoca el mandato desde una fecha.
 func (m *Mandate) Revoke(on vocab.Date) error {
 	if on.Before(m.s.Signed) {
 		return fw.Violation("treasury.revoke_before_signature", "a mandate cannot be revoked before it is signed")
@@ -126,12 +126,12 @@ func (m *Mandate) Revoke(on vocab.Date) error {
 	return nil
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (m *Mandate) AuditSnapshot() map[string]any {
 	return map[string]any{"reference": m.s.Reference, "lastUsed": m.s.LastUsed.String(), "revoked": m.s.Revoked.String()}
 }
 
-// sepaText reports whether a text uses only the SEPA basic Latin character set.
+// sepaText dice si un texto usa sólo el juego de caracteres latino básico de SEPA.
 func sepaText(s string) bool {
 	for _, r := range s {
 		ok := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || strings.ContainsRune("/-?:().,'+ ", r)
@@ -142,7 +142,7 @@ func sepaText(s string) bool {
 	return true
 }
 
-// Mandate fields.
+// Campos del mandato.
 var (
 	ManFieldCreditor  = spec.Comparable("creditor", func(m *Mandate) OrganizationID { return m.s.Creditor })
 	ManFieldDebtor    = spec.Comparable("debtor", func(m *Mandate) PartyID { return m.s.Debtor })

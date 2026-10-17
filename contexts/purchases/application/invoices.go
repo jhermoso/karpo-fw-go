@@ -11,7 +11,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// LineInput is a line of a received invoice. Category defaults to the supplier's.
+// LineInput es una línea de una factura recibida. Category toma por defecto la del proveedor.
 type LineInput struct {
 	Description string `json:"description,omitempty"`
 	Category    string `json:"category,omitempty"`
@@ -20,14 +20,15 @@ type LineInput struct {
 	Treatment   string `json:"treatment,omitempty"`
 }
 
-// PayToInput is an account the invoice is paid to.
+// PayToInput es una cuenta a la que se paga la factura.
 type PayToInput struct {
 	IBAN   string `json:"iban"`
 	Amount string `json:"amount"`
 }
 
-// RegisterInvoice books an invoice received from a supplier as printed. The due date, the
-// withholding rate, the categories and the account default to the supplier profile.
+// RegisterInvoice registra una factura recibida de un proveedor tal como viene impresa. El
+// vencimiento, el tipo de retención, las categorías y la cuenta toman por defecto los del perfil
+// del proveedor.
 type RegisterInvoice struct {
 	Company         string       `json:"company"`
 	Supplier        string       `json:"supplier"`
@@ -43,22 +44,22 @@ type RegisterInvoice struct {
 	Corrects        string       `json:"corrects,omitempty"`
 }
 
-// CancelInvoice annuls a received invoice booked by mistake.
+// CancelInvoice anula una factura recibida registrada por error.
 type CancelInvoice struct {
 	ID     domain.InvoiceID `json:"-"`
 	Reason string           `json:"reason"`
 }
 
-// GetInvoice loads a received invoice.
+// GetInvoice carga una factura recibida.
 type GetInvoice struct{ ID domain.InvoiceID }
 
-// SearchInvoices searches the register of the caller's scope.
+// SearchInvoices busca en el registro del ámbito de quien llama.
 type SearchInvoices struct {
 	Company, Supplier, From, To string
 	Page, Size                  int
 }
 
-// LineDTO is the transport form of a line.
+// LineDTO es la forma de transporte de una línea.
 type LineDTO struct {
 	No          int    `json:"no"`
 	Description string `json:"description,omitempty"`
@@ -68,7 +69,7 @@ type LineDTO struct {
 	Treatment   string `json:"treatment,omitempty"`
 }
 
-// TaxDTO is the transport form of a line of the breakdown.
+// TaxDTO es la forma de transporte de una línea del desglose.
 type TaxDTO struct {
 	TaxCode   string `json:"taxCode,omitempty"`
 	Treatment string `json:"treatment,omitempty"`
@@ -77,7 +78,7 @@ type TaxDTO struct {
 	Amount    string `json:"amount"`
 }
 
-// InvoiceDTO is the transport form of a received invoice.
+// InvoiceDTO es la forma de transporte de una factura recibida.
 type InvoiceDTO struct {
 	ID              string       `json:"id"`
 	Company         string       `json:"company"`
@@ -126,7 +127,7 @@ func invoiceDTO(i *domain.Invoice) InvoiceDTO {
 	return d
 }
 
-// counter takes the next number of the register of a company and year (same unit of work).
+// counter toma el siguiente número del registro de una empresa y año (en la misma unidad de trabajo).
 func (s service) counter(ctx context.Context, company domain.OrganizationID, year int) (int64, error) {
 	cs, err := s.Counters.Find(ctx, spec.And(domain.CntFieldCompany.Eq(company), domain.CntFieldYear.Eq(year)))
 	if err != nil {
@@ -221,7 +222,7 @@ func (s service) invoiceUseCases(svc *Service) {
 				return InvoiceDTO{}, err
 			}
 		}
-		// The supplier's account takes what is paid when none is given.
+		// La cuenta del proveedor recibe lo que se paga cuando no se da ninguna.
 		if len(d.PayTo) == 0 && !profile.IBAN.IsZero() {
 			withholding := b.Net.Mul(d.WithholdingRate).Div(vocab.DecimalFromInt(100)).Round(2)
 			if payable := b.Net.Add(b.Tax).Sub(withholding); payable.IsPositive() {

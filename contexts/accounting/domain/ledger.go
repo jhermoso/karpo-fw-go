@@ -12,15 +12,15 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Role is a function of an account in automatic entries.
+// Role es una función de una cuenta en los asientos automáticos.
 type Role string
 
-// Roles of the posting profile (PGC accounts they usually point to).
+// Papeles del perfil de contabilización (cuentas del PGC a las que suelen apuntar).
 const (
 	RoleRevenue             Role = "revenue"                  // 700/705
 	RoleCustomers           Role = "customers"                // 430
 	RoleOutputTax           Role = "output-tax"               // 477
-	RoleSurcharge           Role = "surcharge"                // 477 (equivalence surcharge)
+	RoleSurcharge           Role = "surcharge"                // 477 (recargo de equivalencia)
 	RoleCash                Role = "cash"                     // 570
 	RoleBank                Role = "bank"                     // 572
 	RoleDirectDebitClearing Role = "direct-debit-clearing"    // 4312
@@ -32,7 +32,7 @@ const (
 	RoleNetPay              Role = "net-pay-payable"          // 465
 	RoleSuppliers           Role = "suppliers"                // 400/410
 	RoleInputTax            Role = "input-tax"                // 472
-	RolePurchases           Role = "purchases"                // 600 (goods)
+	RolePurchases           Role = "purchases"                // 600 (mercaderías)
 	RoleRent                Role = "rent"                     // 621
 	RoleRepairs             Role = "repairs"                  // 622
 	RoleProfessional        Role = "professional-services"    // 623
@@ -49,41 +49,41 @@ const (
 	RoleAssetGain           Role = "asset-disposal-gain"      // 771
 )
 
-// Roles lists the roles a posting profile may define.
+// Roles lista los papeles que puede definir un perfil de contabilización.
 var Roles = []Role{RoleRevenue, RoleCustomers, RoleOutputTax, RoleSurcharge, RoleCash, RoleBank, RoleDirectDebitClearing, RoleWages,
 	RoleEmployerSS, RoleSSPayable, RoleWithholding, RoleOtherDeductions, RoleNetPay, RoleSuppliers,
 	RoleInputTax, RolePurchases, RoleRent, RoleRepairs, RoleProfessional, RoleTransport, RoleInsurance, RoleAdvertising, RoleSupplies, RoleOtherServices,
 	RoleFixedAssets, RoleAccumulatedDepr, RoleDepreciation, RoleAssetReceivable, RoleAssetLoss, RoleAssetGain}
 
-// LedgerKind is the stable aggregate type name.
+// LedgerKind es el nombre estable del tipo de agregado.
 const LedgerKind = "accounting.ledger"
 
-// Period is a month of a fiscal year (1–12, counted from the start month).
+// Period es un mes de un ejercicio (1–12, contado desde el mes de inicio).
 type Period struct {
-	Year  int // fiscal year, named by the calendar year it starts in
-	Month int // 1–12 within the fiscal year
+	Year  int // ejercicio, nombrado por el año natural en que empieza
+	Month int // 1–12 dentro del ejercicio
 }
 
-// LedgerState is the persisted state of a ledger.
+// LedgerState es el estado persistido de una contabilidad.
 type LedgerState struct {
 	Company    OrganizationID
-	StartMonth int               // month the fiscal year starts (the C# FiscalYearStartMonth)
-	Accounts   map[Role]string   // posting profile: account code per role
-	TaxCodes   map[string]string // output tax account per tax code (overrides the output-tax role)
+	StartMonth int               // mes en que empieza el ejercicio (el FiscalYearStartMonth del C#)
+	Accounts   map[Role]string   // perfil de contabilización: código de cuenta por papel
+	TaxCodes   map[string]string // cuenta de impuesto repercutido por código de impuesto (prevalece sobre el papel output-tax)
 	Closed     []Period
 	Audit      traits.AuditStamp
 }
 
-// Ledger is the accounting setup of a company: fiscal year, closed periods and posting profile
-// (the C# AccountingPeriod had neither dates nor status, and nothing decided the accounts of an
-// entry).
+// Ledger es la configuración contable de una empresa: ejercicio, periodos cerrados y perfil de
+// contabilización (el AccountingPeriod del C# no tenía ni fechas ni estado, y nada decidía las
+// cuentas de un asiento).
 type Ledger struct {
 	fw.BaseAggregateRoot[LedgerID]
 	traits.Audited
 	s LedgerState
 }
 
-// ReconstituteLedger rebuilds a ledger.
+// ReconstituteLedger reconstruye una contabilidad.
 func ReconstituteLedger(id LedgerID, s LedgerState) (*Ledger, error) {
 	base, err := fw.NewBaseAggregateRoot(LedgerKind, id)
 	if err != nil {
@@ -117,14 +117,14 @@ func checkProfile(v *fw.Validation, accounts map[Role]string, taxes map[string]s
 	}
 }
 
-// State returns the state (maps and slices are copies).
+// State devuelve el estado (los mapas y slices son copias).
 func (l *Ledger) State() LedgerState {
 	s := l.s
 	s.Accounts, s.TaxCodes, s.Closed = maps.Clone(s.Accounts), maps.Clone(s.TaxCodes), slices.Clone(s.Closed)
 	return s
 }
 
-// PeriodOf returns the fiscal period of a date.
+// PeriodOf devuelve el periodo fiscal de una fecha.
 func (l *Ledger) PeriodOf(d vocab.Date) Period {
 	m := int(d.Month())
 	year := d.Year()
@@ -134,16 +134,16 @@ func (l *Ledger) PeriodOf(d vocab.Date) Period {
 	return Period{Year: year, Month: (m-l.s.StartMonth+12)%12 + 1}
 }
 
-// Bounds returns the first and last day of a fiscal year.
+// Bounds devuelve el primer y el último día de un ejercicio.
 func (l *Ledger) Bounds(year int) (vocab.Date, vocab.Date) {
 	start := vocab.MustDate(year, time.Month(l.s.StartMonth), 1)
 	return start, start.AddMonths(12).AddDays(-1)
 }
 
-// IsClosed reports whether a period is closed.
+// IsClosed dice si un periodo está cerrado.
 func (l *Ledger) IsClosed(p Period) bool { return slices.Contains(l.s.Closed, p) }
 
-// Close closes a period (entries dated in it are refused).
+// Close cierra un periodo (se rechazan los asientos fechados en él).
 func (l *Ledger) Close(p Period) error {
 	if p.Month < 1 || p.Month > 12 {
 		return fw.Violation("accounting.period_invalid", "a period from 1 to 12")
@@ -154,12 +154,12 @@ func (l *Ledger) Close(p Period) error {
 	return nil
 }
 
-// Reopen reopens a period.
+// Reopen reabre un periodo.
 func (l *Ledger) Reopen(p Period) {
 	l.s.Closed = slices.DeleteFunc(slices.Clone(l.s.Closed), func(x Period) bool { return x == p })
 }
 
-// SetProfile replaces the posting profile.
+// SetProfile sustituye el perfil de contabilización.
 func (l *Ledger) SetProfile(accounts map[Role]string, taxes map[string]string) error {
 	var v fw.Validation
 	checkProfile(&v, accounts, taxes)
@@ -170,7 +170,7 @@ func (l *Ledger) SetProfile(accounts map[Role]string, taxes map[string]string) e
 	return nil
 }
 
-// AccountFor returns the account of a role.
+// AccountFor devuelve la cuenta de un papel.
 func (l *Ledger) AccountFor(r Role) (string, error) {
 	c, ok := l.s.Accounts[r]
 	if !ok {
@@ -179,7 +179,8 @@ func (l *Ledger) AccountFor(r Role) (string, error) {
 	return c, nil
 }
 
-// TaxAccount returns the output tax account of a tax code (its override, else the role).
+// TaxAccount devuelve la cuenta de impuesto repercutido de un código de impuesto (la suya propia
+// si la tiene; si no, la del papel).
 func (l *Ledger) TaxAccount(taxCode string) (string, error) {
 	if c, ok := l.s.TaxCodes[strings.ToUpper(taxCode)]; ok {
 		return c, nil
@@ -187,10 +188,10 @@ func (l *Ledger) TaxAccount(taxCode string) (string, error) {
 	return l.AccountFor(RoleOutputTax)
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (l *Ledger) AuditSnapshot() map[string]any {
 	return map[string]any{"startMonth": l.s.StartMonth, "roles": len(l.s.Accounts), "closed": len(l.s.Closed)}
 }
 
-// Ledger fields.
+// Campos de la contabilidad.
 var LedFieldCompany = spec.Comparable("company", func(l *Ledger) OrganizationID { return l.s.Company })

@@ -8,12 +8,12 @@ import (
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// GeographyAddresses adapts the Geography context's AddressChecker to the Parties port: it is
-// the anti-corruption layer between the two contexts (Parties keeps only ids of Geography).
+// GeographyAddresses adapta el AddressChecker del contexto Geography al puerto de Parties: es la
+// capa anticorrupción entre los dos contextos (Parties sólo guarda ids de Geography).
 type GeographyAddresses struct{ Checker contracts.AddressChecker }
 
-// CheckAddress validates the postal code for the country and, when the address names a
-// municipality, that the code belongs to it; it completes the postal code reference.
+// CheckAddress valida el código postal para el país y, cuando la dirección indica un municipio,
+// que el código pertenece a él; completa la referencia al código postal.
 func (g GeographyAddresses) CheckAddress(ctx context.Context, a domain.PostalAddress) (domain.PostalAddress, error) {
 	q := contracts.PostalAddressQuery{Country: a.Country.String(), PostalCode: a.PostalCode}
 	if !a.Geo.Boundary.IsZero() {

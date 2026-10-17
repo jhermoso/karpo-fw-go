@@ -40,7 +40,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/testing/archtest"
 )
 
-// host composes Parties, Fiscal and Billing on one hot-swappable backend.
+// host compone Parties, Fiscal y Billing sobre un único backend intercambiable en caliente.
 type host struct {
 	t        *testing.T
 	srv      *httptest.Server
@@ -132,7 +132,7 @@ func (h *host) scenario(tag string) {
 	ctx := h.adminCtx
 	ps := h.parties.Service
 
-	// Parties: the seller with its CIF, two customers with their DNI.
+	// Parties: el vendedor con su CIF, dos clientes con su DNI.
 	acme, err := ps.RegisterOrganization.Handle(ctx, papp.RegisterOrganization{LegalName: "Acme " + tag, Roles: []string{pdomain.RoleInternalOrganization.String()}})
 	h.ok(err)
 	globex, err := ps.RegisterOrganization.Handle(ctx, papp.RegisterOrganization{LegalName: "Globex " + tag, Roles: []string{pdomain.RoleInternalOrganization.String()}})
@@ -154,7 +154,7 @@ func (h *host) scenario(tag string) {
 	}
 	ana, bea := person("Ana", "12345678Z"), person("Bea", "00000000T")
 
-	// Fiscal: rates of the common territory and the seller's fiscal profile.
+	// Fiscal: tipos del territorio común y el perfil fiscal del vendedor.
 	fs := h.fiscal.Service
 	for _, r := range []fapp.CreateRate{
 		{Type: "vat", Territory: "common", Code: "G21", Description: "General", Rate: "21", Surcharge: "5.2", From: vocab.MustDate(2012, 9, 1)},
@@ -168,14 +168,14 @@ func (h *host) scenario(tag string) {
 	_, err = fs.RegisterTaxpayer.Handle(ctx, fapp.RegisterTaxpayer{Organization: acme.ID, TermsInput: fapp.TermsInput{Territory: "common", FiscalYearStartMonth: 1}})
 	h.ok(err)
 
-	// Series: ordinary and corrective, one per code and year.
+	// Series: ordinaria y rectificativa, una por código y año.
 	var fa, rs bapp.SeriesDTO
 	h.must(h.do("POST", "/api/billing/series", "clerk", map[string]any{"seller": acme.ID, "code": "fa", "year": 2026}, &fa), 201, "series")
 	h.must(h.do("POST", "/api/billing/series", "clerk", map[string]any{"seller": acme.ID, "code": "FA", "year": 2026}, nil), 422, "duplicate series")
 	h.must(h.do("POST", "/api/billing/series", "clerk", map[string]any{"seller": acme.ID, "code": "R", "year": 2026, "corrective": true}, &rs), 201, "corrective series")
 	h.must(h.do("POST", "/api/billing/series", "outsider", map[string]any{"seller": acme.ID, "code": "X", "year": 2026}, nil), 404, "outsider")
 
-	// The duplicate of another party is not invoiced (D-70): neither drafted nor issued.
+	// Al duplicado de otra party no se le factura (D-70): ni se prepara borrador ni se emite.
 	carla := person("Carla", "11111111H")
 	var pending bapp.InvoiceDTO
 	h.must(h.do("POST", "/api/billing/invoices", "clerk", map[string]any{"seller": acme.ID, "customer": carla.ID, "dueDate": "2026-10-28"}, &pending), 201, "draft for carla")
@@ -185,7 +185,7 @@ func (h *host) scenario(tag string) {
 	h.must(h.do("POST", "/api/billing/invoices/"+pending.ID+"/issue", "issuer", map[string]any{"series": fa.ID, "date": "2026-09-28"}, nil), 422, "carla turned out a duplicate")
 	h.must(h.do("POST", "/api/billing/invoices", "clerk", map[string]any{"seller": acme.ID, "customer": carla.ID, "dueDate": "2026-10-28"}, nil), 422, "nor a new draft for her")
 
-	// An invoice with three rates: taxes on the aggregated base per rate.
+	// Una factura con tres tipos: impuestos sobre la base agregada por tipo.
 	var inv bapp.InvoiceDTO
 	h.must(h.do("POST", "/api/billing/invoices", "clerk", map[string]any{"seller": acme.ID, "customer": ana.ID, "dueDate": "2026-10-28"}, &inv), 201, "draft")
 	for _, l := range []map[string]any{
@@ -200,7 +200,7 @@ func (h *host) scenario(tag string) {
 	h.must(h.do("POST", "/api/billing/invoices/"+inv.ID+"/lines", "clerk", map[string]any{"description": "X", "quantity": "1", "unitPrice": "1"}, nil), 400, "no tax code")
 	var preview bapp.BreakdownDTO
 	h.must(h.do("GET", "/api/billing/invoices/"+inv.ID+"/taxes?on=2026-09-28", "clerk", nil, &preview), 200, "preview")
-	// 30.09 × 21 % = 6.32 (line by line 6.33); 90 × 10 % = 9.00; 50 exempt.
+	// 30.09 × 21 % = 6.32 (línea a línea, 6.33); 90 × 10 % = 9.00; 50 exentos.
 	if preview.Net != "170.09" || preview.Tax != "15.32" || preview.Total != "185.41" || len(preview.Lines) != 3 {
 		t.Fatalf("preview: %+v", preview)
 	}
@@ -217,7 +217,7 @@ func (h *host) scenario(tag string) {
 	h.must(h.do("DELETE", "/api/billing/invoices/"+inv.ID, "clerk", nil, nil), 422, "an issued invoice is never deleted")
 	h.must(h.do("GET", "/api/billing/invoices/"+inv.ID, "outsider", nil, nil), 404, "outsider")
 
-	// A retailer in the equivalence surcharge regime.
+	// Un minorista en el régimen de recargo de equivalencia.
 	var retail bapp.InvoiceDTO
 	h.must(h.do("POST", "/api/billing/invoices", "clerk", map[string]any{"seller": acme.ID, "customer": bea.ID, "equivalenceSurcharge": true}, &retail), 201, "retail")
 	h.must(h.do("POST", "/api/billing/invoices/"+retail.ID+"/lines", "clerk", map[string]any{"description": "Mercancía", "quantity": "4", "unitPrice": "25", "taxCode": "G21"}, nil), 200, "line")
@@ -226,7 +226,7 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("retail: %+v", retail.Taxes)
 	}
 
-	// A refused issue consumes no number (gap-free).
+	// Una emisión rechazada no consume número (sin huecos).
 	var late bapp.InvoiceDTO
 	h.must(h.do("POST", "/api/billing/invoices", "clerk", map[string]any{"seller": acme.ID, "customer": ana.ID}, &late), 201, "draft")
 	h.must(h.do("POST", "/api/billing/invoices/"+late.ID+"/lines", "clerk", map[string]any{"description": "X", "quantity": "1", "unitPrice": "1", "taxCode": "G21"}, nil), 200, "line")
@@ -238,7 +238,7 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("no gaps: %+v", series)
 	}
 
-	// Corrective invoice (by differences) of the first one.
+	// Factura rectificativa (por diferencias) de la primera.
 	var fix bapp.InvoiceDTO
 	h.must(h.do("POST", "/api/billing/invoices", "clerk", map[string]any{"seller": acme.ID, "corrects": inv.ID, "reason": "r1"}, &fix), 201, "corrective draft")
 	h.must(h.do("POST", "/api/billing/invoices", "clerk", map[string]any{"seller": acme.ID, "corrects": fix.ID, "reason": "R1"}, nil), 422, "a draft is not corrected")

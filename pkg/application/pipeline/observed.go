@@ -11,22 +11,22 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/trace"
 )
 
-// Span attributes and log fields of a use case.
+// Atributos de span y campos de log de un caso de uso.
 const (
 	FieldRequest = "request"
 	FieldOutcome = "outcome"
 )
 
-// Observed is the telemetry of a use case. For every execution it leaves:
+// Observed es la telemetría de un caso de uso. De cada ejecución deja:
 //
-//   - a span named after the request type, child of the span in the context (the HTTP request);
-//   - one observation of karpo.usecase.duration (seconds) by request type and outcome, where the
-//     outcome follows the domain error taxonomy (application.Outcome);
-//   - a log line only when it fails: Error for an unexpected failure, Debug for a rejection the
-//     taxonomy explains (validation, rule, not found...), which the request line already reports.
+//   - un span con el nombre del tipo de la petición, hijo del span del contexto (la petición HTTP);
+//   - una observación de karpo.usecase.duration (segundos) por tipo de petición y desenlace, donde el
+//     desenlace sigue la taxonomía de errores del dominio (application.Outcome);
+//   - una línea de log sólo cuando falla: Error para un fallo inesperado, Debug para un rechazo que la
+//     taxonomía explica (validación, regla, no encontrado...), del que ya informa la línea de la petición.
 //
-// Neither the request nor its fields are recorded: only its type. Place it first (outermost) so
-// retries and the transaction are inside the span. Any of logger, tracer and meter may be nil.
+// No se registran ni la petición ni sus campos: sólo su tipo. Se coloca el primero (el más exterior)
+// para que los reintentos y la transacción queden dentro del span. Cualquiera de logger, tracer y meter puede ser nil.
 func Observed[In, Out any](logger log.Logger, tracer trace.Tracer, meter metrics.Meter) application.Middleware[In, Out] {
 	tracer = trace.OrNoop(tracer)
 	duration := metrics.OrNoop(meter).Histogram(metrics.UseCaseDuration, metrics.UnitSeconds,

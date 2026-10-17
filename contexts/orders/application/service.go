@@ -1,5 +1,5 @@
-// Package application holds the Orders use cases (with permissions and company scope), the
-// subscription to the stock Inventory holds and the translation to the Published Language.
+// Package application contiene los casos de uso de Orders (con permisos y ámbito de empresa), la
+// suscripción a las existencias que retiene Inventory y la traducción al Published Language.
 package application
 
 import (
@@ -23,8 +23,8 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Permissions (the C# order, shipment and invoice endpoints required authentication only).
-// Taking an order, committing it, serving it and withdrawing it are separate.
+// Permisos (los endpoints de pedido, envío y factura de C# sólo pedían autenticación). Tomar un
+// pedido, comprometerlo, servirlo y retirarlo van por separado.
 var (
 	PermOrderRead    = authz.MustPermission("Orders.Order.Read")
 	PermOrderUpdate  = authz.MustPermission("Orders.Order.Update")
@@ -35,7 +35,8 @@ var (
 	PermTermsUpdate  = authz.MustPermission("Orders.Terms.Update")
 )
 
-// Deps are the ports the use cases need; Credit, Blocks, Recorder and Audit are optional.
+// Deps son los puertos que necesitan los casos de uso; Credit, Blocks, Recorder y Audit son
+// opcionales.
 type Deps struct {
 	Orders     domain.OrderRepository
 	Deliveries domain.DeliveryRepository
@@ -50,7 +51,7 @@ type Deps struct {
 	Audit      app.AuditLog
 }
 
-// Service exposes the use cases.
+// Service expone los casos de uso.
 type Service struct {
 	SetTerms    app.CommandHandler[SetTerms, TermsDTO]
 	SearchTerms app.QueryHandler[SearchTerms, []TermsDTO]
@@ -100,7 +101,7 @@ func scopeOf(ctx context.Context) scope {
 	return s
 }
 
-// check returns a uniform 404 outside the company's scope and 403 when it is read-only.
+// check devuelve un 404 uniforme fuera del ámbito de la empresa y un 403 cuando es de sólo lectura.
 func (s scope) check(kind string, id fmt.Stringer, org domain.OrganizationID, write bool) error {
 	if !s.global && !slices.Contains(s.orgs, org) {
 		return fw.NotFound(kind, id)
@@ -145,7 +146,7 @@ func newService(d Deps) service {
 	}
 }
 
-// NewService wires the use cases.
+// NewService conecta los casos de uso.
 func NewService(d Deps) *Service {
 	s := newService(d)
 	svc := &Service{}
@@ -183,13 +184,13 @@ func guard[In, Out any](p authz.Permission, fn func(context.Context, In) (Out, e
 	return app.Chain[In, Out](app.HandlerFunc[In, Out](fn), append([]app.Middleware[In, Out]{pipeline.RequirePermission[In, Out](p)}, mw...)...)
 }
 
-// changing wraps a use case that changes aggregates: retried on a version conflict, in one unit of
-// work.
+// changing envuelve un caso de uso que cambia agregados: se reintenta ante un conflicto de versión,
+// en una unidad de trabajo.
 func changing[In, Out any](s service, p authz.Permission, fn func(context.Context, In) (Out, error)) app.Handler[In, Out] {
 	return guard(p, fn, pipeline.RetryOnConflict[In, Out](5, 10*time.Millisecond), pipeline.Transactional[In, Out](s.UoW))
 }
 
-// number takes the next number of a series of a company and year (same unit of work).
+// number toma el número siguiente de una serie de una empresa y año (en la misma unidad de trabajo).
 func (s service) number(ctx context.Context, company domain.OrganizationID, series string, year int) (string, error) {
 	cs, err := s.Counters.Find(ctx, spec.And(domain.CntFieldCompany.Eq(company), domain.CntFieldSeries.Eq(series), domain.CntFieldYear.Eq(year)))
 	if err != nil {
@@ -205,8 +206,8 @@ func (s service) number(ctx context.Context, company domain.OrganizationID, seri
 	return n, s.Counters.Save(ctx, c)
 }
 
-// termsOf returns the terms of a customer (the zero terms when it has none).
-// notBlocked refuses a customer that takes part in nothing but queries.
+// termsOf devuelve las condiciones de un cliente (las condiciones cero cuando no tiene).
+// notBlocked rechaza a un cliente que no participa más que en consultas.
 func (s service) notBlocked(ctx context.Context, customer domain.PartyID) error {
 	if s.Blocks == nil {
 		return nil
@@ -229,7 +230,7 @@ func (s service) termsOf(ctx context.Context, company domain.OrganizationID, cus
 	return ts[0].State(), nil
 }
 
-// Publications translates the domain events into the Published Language.
+// Publications traduce los eventos de dominio al Published Language.
 func Publications(r *messaging.Recorder) *messaging.Recorder {
 	messaging.On(r, func(_ context.Context, e domain.OrderConfirmed) ([]app.IntegrationEvent, error) {
 		return []app.IntegrationEvent{contracts.OrderConfirmedV1{OrderID: e.AggregateID, Company: e.Company, Customer: e.Customer, Number: e.Number,
@@ -270,24 +271,24 @@ func Publications(r *messaging.Recorder) *messaging.Recorder {
 	return r
 }
 
-// OrderSource is the source type Inventory uses for the stock of sales orders; the source id is
-// "order|line".
+// OrderSource es el tipo de origen que usa Inventory para las existencias de los pedidos de venta;
+// el id de origen es "order|line".
 const OrderSource = "orders.sales-order"
 
-// StockReserved is the Orders copy of inventory.stock-reserved.v1.
+// StockReserved es la copia de Orders de inventory.stock-reserved.v1.
 type StockReserved struct {
 	SourceType string `json:"sourceType"`
 	SourceID   string `json:"sourceId"`
 	Added      string `json:"added"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (StockReserved) IntegrationEventType() string { return "inventory.stock-reserved.v1" }
 
-// DeliverySource is the source type Billing gives the invoices drafted from delivery notes.
+// DeliverySource es el tipo de origen que Billing da a las facturas preparadas a partir de albaranes.
 const DeliverySource = "orders.delivery"
 
-// InvoiceIssued is the Orders copy of billing.invoice-issued.v1.
+// InvoiceIssued es la copia de Orders de billing.invoice-issued.v1.
 type InvoiceIssued struct {
 	InvoiceID  string `json:"invoiceId"`
 	Number     string `json:"number"`
@@ -295,13 +296,13 @@ type InvoiceIssued struct {
 	SourceID   string `json:"sourceId"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (InvoiceIssued) IntegrationEventType() string { return "billing.invoice-issued.v1" }
 
-// Subscribe records on each order line the stock Inventory holds for it (reservations of other
-// sources are ignored). A line of an order that no longer waits ignores it too: its closure
-// already asked Inventory to release what it holds. It also records on each delivery note the
-// invoice Billing issued for it.
+// Subscribe registra en cada línea de pedido las existencias que Inventory retiene para ella (las
+// reservas de otros orígenes se ignoran). Una línea de un pedido que ya no espera también las
+// ignora: su cierre ya pidió a Inventory que liberara lo que retiene. También registra en cada
+// albarán la factura que Billing emitió para él.
 func Subscribe(c *messaging.Consumer, d Deps) {
 	s := newService(d)
 	messaging.Handle(c, func(ctx context.Context, e InvoiceIssued, _ app.Envelope) error {

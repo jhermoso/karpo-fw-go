@@ -32,9 +32,10 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 )
 
-// TestReceivablesContext runs Receivables fed by Billing on every engine: terms with fixed days,
-// receivables opened through the SQL inbox, installments and allocations (children), both-side
-// caps, offset of a credit, reversal and exposure (settled flag and dates in SQL).
+// TestReceivablesContext ejecuta Receivables alimentado por Billing en cada motor: condiciones con
+// días fijos, cuentas por cobrar abiertas a través del inbox SQL, vencimientos y aplicaciones
+// (hijos), topes por ambos lados, compensación de un abono, retrocesión y riesgo (marca de
+// liquidado y fechas en SQL).
 func TestReceivablesContext(t *testing.T) {
 	for _, e := range engines {
 		if e.name == "oracle-dotnet-guids" {
@@ -128,7 +129,7 @@ func TestReceivablesContext(t *testing.T) {
 			}
 			rid, _ := rdomain.ParseReceivableID(inv.ID)
 			r, err := rsvc.GetReceivable.Handle(actx, rapp.GetReceivable{ID: rid})
-			// 121.00 in three installments: 40.33, 40.33, 40.34 (the December ones move to 5 January).
+			// 121.00 en tres vencimientos: 40.33, 40.33, 40.34 (los de diciembre pasan al 5 de enero).
 			if err != nil || len(r.Installments) != 3 || r.Installments[1].Due != "2027-01-05" || r.Installments[2].Amount != "40.34" || r.Settled {
 				t.Fatalf("receivable round trip: %+v %v", r, err)
 			}
@@ -147,7 +148,7 @@ func TestReceivablesContext(t *testing.T) {
 				Date: vocab.MustDate(2026, 11, 5)})
 			must(err)
 			exp, err := rm.Credit.Exposure(ctx, acme.ID, ana.ID, "2027-01-06")
-			// 121.00 − 50.00 − 12.10 (credit netted, credit settled) = 58.90, all of it due on 5 January.
+			// 121.00 − 50.00 − 12.10 (abono compensado, abono liquidado) = 58.90, todo con vencimiento el 5 de enero.
 			if err != nil || exp.Open != "58.90" || exp.Overdue != "58.90" || exp.Available != "941.10" {
 				t.Fatalf("exposure: %+v %v", exp, err)
 			}

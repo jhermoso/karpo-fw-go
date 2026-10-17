@@ -12,7 +12,8 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// PayslipApproved is the Fiscal copy of payroll.payslip-approved.v1: only the fields it needs.
+// PayslipApproved es la copia de Fiscal de payroll.payslip-approved.v1: sólo los campos que
+// necesita.
 type PayslipApproved struct {
 	PayslipID     string `json:"payslipId"`
 	Person        string `json:"person"`
@@ -23,24 +24,24 @@ type PayslipApproved struct {
 	IncomeTax     string `json:"incomeTax"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (PayslipApproved) IntegrationEventType() string { return "payroll.payslip-approved.v1" }
 
-// PayslipCancelled is the Fiscal copy of payroll.payslip-cancelled.v1.
+// PayslipCancelled es la copia de Fiscal de payroll.payslip-cancelled.v1.
 type PayslipCancelled struct {
 	PayslipID string `json:"payslipId"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (PayslipCancelled) IntegrationEventType() string { return "payroll.payslip-cancelled.v1" }
 
-// employmentIncome is the Modelo 190 key of employees' income: payslips without a key (a concept
-// catalog without keys) are employment income.
+// employmentIncome es la clave del Modelo 190 de los rendimientos de los empleados: las nóminas sin
+// clave (un catálogo de conceptos sin claves) son rendimientos del trabajo.
 const employmentIncome = "A"
 
-// Subscribe registers the reactions of Fiscal on c (approved decision 2 of docs/NOMINAS.md): each
-// approved payslip becomes a withholding record identified by the payslip; a cancelled payslip
-// cancels it. Redeliveries are harmless.
+// Subscribe registra las reacciones de Fiscal en c (decisión aprobada 2 de docs/NOMINAS.md): cada
+// nómina aprobada se convierte en un registro de retención identificado por la nómina; una nómina
+// anulada lo anula. Las reentregas no hacen daño.
 func Subscribe(c *messaging.Consumer, withholdings domain.WithholdingRepository) {
 	messaging.Handle(c, func(ctx context.Context, e PayslipApproved, _ app.Envelope) error {
 		id, err1 := fw.ParseUUID(e.PayslipID)
@@ -87,7 +88,7 @@ func Subscribe(c *messaging.Consumer, withholdings domain.WithholdingRepository)
 	})
 }
 
-// InvoiceRegistered is the Fiscal copy of purchases.invoice-registered.v1.
+// InvoiceRegistered es la copia de Fiscal de purchases.invoice-registered.v1.
 type InvoiceRegistered struct {
 	InvoiceID      string `json:"invoiceId"`
 	Company        string `json:"company"`
@@ -98,20 +99,21 @@ type InvoiceRegistered struct {
 	WithholdingKey string `json:"withholdingKey"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (InvoiceRegistered) IntegrationEventType() string { return "purchases.invoice-registered.v1" }
 
-// InvoiceCancelled is the Fiscal copy of purchases.invoice-cancelled.v1.
+// InvoiceCancelled es la copia de Fiscal de purchases.invoice-cancelled.v1.
 type InvoiceCancelled struct {
 	InvoiceID string `json:"invoiceId"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (InvoiceCancelled) IntegrationEventType() string { return "purchases.invoice-cancelled.v1" }
 
-// SubscribePurchases records the withholdings of received invoices (professionals, key G of
-// Modelo 190) next to the payroll ones, so Modelo 111 and 190 include them (approved decision of
-// docs/COMPRAS.md). The withholding accrues on the invoice date; a cancelled invoice cancels it.
+// SubscribePurchases registra las retenciones de las facturas recibidas (profesionales, clave G del
+// Modelo 190) junto a las de nómina, para que los Modelos 111 y 190 las incluyan (decisión aprobada
+// de docs/COMPRAS.md). La retención se devenga en la fecha de la factura; una factura anulada la
+// anula.
 func SubscribePurchases(c *messaging.Consumer, withholdings domain.WithholdingRepository) {
 	messaging.Handle(c, func(ctx context.Context, e InvoiceRegistered, _ app.Envelope) error {
 		if e.Withholding == "" || e.WithholdingKey == "" {
@@ -160,7 +162,7 @@ func SubscribePurchases(c *messaging.Consumer, withholdings domain.WithholdingRe
 	})
 }
 
-// Publications translates the domain events into the Published Language.
+// Publications traduce los eventos de dominio al Published Language.
 func Publications(r *messaging.Recorder) *messaging.Recorder {
 	messaging.On(r, func(_ context.Context, e domain.FilingSubmitted) ([]app.IntegrationEvent, error) {
 		return []app.IntegrationEvent{contracts.FilingSubmittedV1{FilingID: e.AggregateID, Declarant: e.Declarant, Form: e.Form, Year: e.Year,

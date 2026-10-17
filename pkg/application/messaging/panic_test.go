@@ -13,8 +13,8 @@ import (
 	tracevanilla "github.com/jhermoso/karpo-fw-go/pkg/trace/vanilla"
 )
 
-// A panicking handler and an envelope without id leave their span and their count: neither is a
-// silent drop.
+// Un manejador que entra en pánico y un sobre sin id dejan su span y su cuenta: ninguno es un
+// descarte silencioso.
 func TestConsumer_PanicsAndEnvelopesWithoutIdAreCounted(t *testing.T) {
 	store := memory.NewStore("s")
 	spans := tracevanilla.NewRecorder(0)

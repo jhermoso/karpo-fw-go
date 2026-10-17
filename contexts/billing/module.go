@@ -1,4 +1,4 @@
-// Package billing composes the Billing bounded context on a hot-swap backend.
+// Package billing compone el contexto delimitado Billing sobre un backend intercambiable en caliente.
 package billing
 
 import (
@@ -20,17 +20,17 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 )
 
-// Module is the composed context.
+// Module es el contexto compuesto.
 type Module struct {
 	Service           *bapp.Service
 	IntegrationOutbox application.OutboxStore
 	Audit             application.AuditLog
-	// Consumer receives the delivery notes of Orders to invoice: subscribe it to the transport.
+	// Consumer recibe los albaranes de Orders que hay que facturar: hay que suscribirlo al transporte.
 	Consumer *messaging.Consumer
 }
 
-// Compose builds the context on sw. Billing needs the tax engine of Fiscal and the identities of
-// Parties: both are ports it owns.
+// Compose construye el contexto sobre sw. Billing necesita el motor de impuestos de Fiscal y las
+// identidades de Parties: los dos son puertos propios.
 func Compose(sw *hotswap.Switch, taxes domain.Taxes, identities domain.Identities) *Module {
 	integration := hotswap.Outbox(sw, infrastructure.IntegrationOutboxFactory)
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
@@ -40,7 +40,7 @@ func Compose(sw *hotswap.Switch, taxes domain.Taxes, identities domain.Identitie
 		Recorder: outbox.Recorders(outbox.NewRecorder(hotswap.Outbox(sw, infrastructure.OutboxFactory)),
 			bapp.Publications(messaging.NewRecorder(contracts.Source, integration))),
 	}
-	if b, ok := identities.(domain.Blocks); ok { // Parties answers both
+	if b, ok := identities.(domain.Blocks); ok { // Parties responde a los dos
 		d.Blocks = b
 	}
 	consumer := messaging.NewConsumer(contracts.Source, hotswap.Inbox(sw, infrastructure.InboxFactory), sw)
@@ -48,7 +48,7 @@ func Compose(sw *hotswap.Switch, taxes domain.Taxes, identities domain.Identitie
 	return &Module{Service: bapp.NewService(d), IntegrationOutbox: integration, Audit: audit, Consumer: consumer}
 }
 
-// Relay forwards the Published Language to a transport.
+// Relay reenvía el Published Language a un transporte.
 func (m *Module) Relay(sender application.MessageSender, opts ...outbox.RelayOption) *outbox.Relay {
 	return messaging.NewRelay(contracts.Source, m.IntegrationOutbox, sender, opts...)
 }
@@ -100,7 +100,7 @@ func create[In, Out any](run func(context.Context, In) (Out, error)) http.Handle
 	}
 }
 
-// RegisterRoutes implements distribution.EndpointModule.
+// RegisterRoutes implementa distribution.EndpointModule.
 func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	svc := m.Service
 	ser, inv := domain.ParseSeriesID, domain.ParseInvoiceID

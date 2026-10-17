@@ -26,8 +26,8 @@ func date(s string) vocab.Date {
 
 var company = domain.OrganizationID{UUID: fw.NewUUID()}
 
-// A van of 12,000 with 2,000 of residual value over 48 months, in service on 16 January 2026:
-// 208.33 a month, 107.53 the first one (16 of 31 days).
+// Una furgoneta de 12000 con 2000 de valor residual a 48 meses, en servicio el 16 de enero de
+// 2026: 208.33 al mes, 107.53 el primero (16 de 31 días).
 func van() domain.AssetState {
 	return domain.AssetState{Company: company, Code: " fur-01 ", Class: domain.Vehicles, Details: domain.Details{Name: "Furgoneta", Serial: "1234-ABC"},
 		Acquired: date("2026-01-10"), InService: date("2026-01-16"), Cost: dec("12000"), Residual: dec("2000"), LifeMonths: 48}
@@ -86,13 +86,13 @@ func TestAsset_StraightLine(t *testing.T) {
 	if !a.Accumulated().Equal(dec("524.19")) || !a.NetBookValue().Equal(dec("11475.81")) || a.Status() != "in-service" {
 		t.Fatalf("after the quarter: %s %s", a.Accumulated(), a.NetBookValue())
 	}
-	// To the end of its life and beyond: exactly the depreciable amount, the last charge takes the rest.
+	// Hasta el final de su vida y más allá: exactamente el importe amortizable, el último cargo se lleva el resto.
 	c, err = a.DepreciateThrough(domain.Period{Year: 2031, Month: 12})
 	if err != nil || !a.Accumulated().Equal(dec("10000")) || !a.NetBookValue().Equal(dec("2000")) || a.Status() != "depreciated" {
 		t.Fatalf("whole life: %s %v", a.Accumulated(), err)
 	}
 	last := c[len(c)-1]
-	// 107.53 + 47 × 208.33 = 9899.04; the 49th month charges the 100.96 left.
+	// 107.53 + 47 × 208.33 = 9899.04; el mes 49 carga los 100.96 que quedan.
 	if last.Period.String() != "2030-01" || !last.Amount.Equal(dec("100.96")) || len(a.State().Charges) != 49 {
 		t.Fatalf("last charge: %+v of %d", last, len(a.State().Charges))
 	}
@@ -118,8 +118,8 @@ func TestAsset_Disposal(t *testing.T) {
 	if err := a.Dispose(date("2026-07-10"), domain.Sale, dec("0")); !isViolation(err, "assets.proceeds") {
 		t.Fatalf("sale without proceeds: %v", err)
 	}
-	// Sold on 10 July for 11,000: depreciated through June (107.53 + 5 × 208.33 = 1149.18),
-	// net book value 10,850.82, a gain of 149.18.
+	// Vendida el 10 de julio por 11000: amortizada hasta junio (107.53 + 5 × 208.33 = 1149.18),
+	// valor neto contable 10850.82, un beneficio de 149.18.
 	if err := a.Dispose(date("2026-07-10"), domain.Sale, dec("11000")); err != nil {
 		t.Fatal(err)
 	}

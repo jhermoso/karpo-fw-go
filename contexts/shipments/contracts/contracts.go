@@ -1,12 +1,12 @@
-// Package contracts is what other bounded contexts may depend on: the Published Language of
-// Shipments.
+// Package contracts es aquello de lo que pueden depender otros contextos delimitados: el Published
+// Language de Shipments.
 package contracts
 
-// Source is the name of the publishing bounded context.
+// Source es el nombre del contexto delimitado que publica.
 const Source = "shipments"
 
-// ShipmentDispatchedV1 is published when a shipment leaves. SourceType/SourceID point at the
-// document it dispatches (orders.delivery and the delivery note), SourceRef is its number.
+// ShipmentDispatchedV1 se publica cuando sale un envío. SourceType/SourceID apuntan al documento
+// que expide (orders.delivery y el albarán); SourceRef es su número.
 type ShipmentDispatchedV1 struct {
 	ShipmentID string `json:"shipmentId"`
 	Company    string `json:"company"`
@@ -21,10 +21,10 @@ type ShipmentDispatchedV1 struct {
 	Date       string `json:"date"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (ShipmentDispatchedV1) IntegrationEventType() string { return "shipments.shipment-dispatched.v1" }
 
-// ShipmentDeliveredV1 is published when a shipment reaches its recipient.
+// ShipmentDeliveredV1 se publica cuando un envío llega a su destinatario.
 type ShipmentDeliveredV1 struct {
 	ShipmentID string `json:"shipmentId"`
 	Company    string `json:"company"`
@@ -36,10 +36,10 @@ type ShipmentDeliveredV1 struct {
 	ReceivedBy string `json:"receivedBy,omitempty"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (ShipmentDeliveredV1) IntegrationEventType() string { return "shipments.shipment-delivered.v1" }
 
-// ShipmentReturnedV1 is published when a shipment comes back undelivered.
+// ShipmentReturnedV1 se publica cuando un envío vuelve sin entregar.
 type ShipmentReturnedV1 struct {
 	ShipmentID string `json:"shipmentId"`
 	Company    string `json:"company"`
@@ -51,5 +51,5 @@ type ShipmentReturnedV1 struct {
 	Reason     string `json:"reason"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (ShipmentReturnedV1) IntegrationEventType() string { return "shipments.shipment-returned.v1" }

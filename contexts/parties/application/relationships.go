@@ -13,31 +13,32 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
 )
 
-// MaxHierarchyDepth bounds every walk of an organization hierarchy (the C# 10 levels).
+// MaxHierarchyDepth limita todo recorrido de una jerarquía de organizaciones (los 10 niveles de C#).
 const MaxHierarchyDepth = 10
 
-// NewAffiliation relates a party being registered to an internal organization, so it is born
-// inside the caller's scope (the C# quick-create customer did the same with the customer
-// relationship). The party gets the role its side of the relationship type requires.
+// NewAffiliation relaciona una party que se está dando de alta con una organización interna, para
+// que nazca dentro del ámbito del llamante (el alta rápida de cliente de C# hacía lo mismo con la
+// relación de cliente). La party recibe el rol que exige su lado del tipo de relación.
 type NewAffiliation struct {
 	Organization     string `json:"organization"`
 	RelationshipType string `json:"relationshipType"`
 	RelationshipDetailsInput
 }
 
-// canRelate: global administrators relate anything; otherwise one side must be an organization
-// the caller can write, or the caller must be able to write both parties.
+// canRelate: los administradores globales relacionan cualquier cosa; si no, un lado tiene que ser
+// una organización en la que el llamante pueda escribir, o el llamante tiene que poder escribir
+// en las dos parties.
 func (s scope) canRelate(from, to *domain.Party) bool {
 	now := fw.Now()
 	return s.global || s.canWriteOrg(from.ID()) || s.canWriteOrg(to.ID()) || (s.canWrite(from, now) && s.canWrite(to, now))
 }
 
-// register creates a party, gives it its roles and, when requested, its first relationship. A
-// caller who is not a global administrator must register the party inside its scope.
+// register crea una party, le da sus roles y, si se pide, su primera relación. Un llamante que no
+// es administrador global tiene que dar de alta la party dentro de su ámbito.
 func (s service) register(ctx context.Context, build func(domain.PartyID) (*domain.Party, error), roles []string, aff *NewAffiliation) (PartyDTO, error) {
-	// The party and its first relationship are one operation in the audit log: that is how it is
-	// known later that the organization registered it (D-74). A call without a correlation of
-	// its own gets one.
+	// La party y su primera relación son una sola operación en el registro de auditoría: así se
+	// sabe después que la organización la dio de alta (D-74). Una llamada sin correlación propia
+	// recibe una.
 	if app.CorrelationID(ctx) == "" {
 		ctx = app.WithCorrelationID(ctx, fw.NewUUID().String())
 	}
@@ -100,7 +101,7 @@ func (s service) register(ctx context.Context, build func(domain.PartyID) (*doma
 			v.Add("affiliation.relationshipType", "not_an_affiliation", "this relationship type does not affiliate a party with an organization")
 			return PartyDTO{}, v.Err()
 		}
-		// The organization takes the side it plays; the new party the other one.
+		// La organización ocupa el lado que desempeña; la party nueva, el otro.
 		switch {
 		case org.Meets(n.Roles, rt.ToRole, now):
 			partyIsFrom = true
@@ -137,10 +138,10 @@ func (s service) register(ctx context.Context, build func(domain.PartyID) (*doma
 	return n.dto(p), nil
 }
 
-// establish creates a relationship and projects it into the parties: a side that lacks the role
-// of the type is given it, and a party related to an internal organization becomes affiliated
-// with it (visibility, membership). Hierarchical types keep one parent per child and no cycles.
-// Everything happens in the caller's unit of work.
+// establish crea una relación y la proyecta en las parties: al lado al que le falta el rol del
+// tipo se le da, y una party relacionada con una organización interna queda afiliada a ella
+// (visibilidad, pertenencia). Los tipos jerárquicos mantienen un padre por hijo y ningún ciclo.
+// Todo ocurre en la unidad de trabajo del llamante.
 func (s service) establish(ctx context.Context, rt domain.RelationshipType, from, to *domain.Party, since time.Time, remark string,
 	details RelationshipDetailsInput) (*domain.Relationship, error) {
 	cat, err := s.roleCatalog(ctx)
@@ -177,7 +178,7 @@ func (s service) establish(ctx context.Context, rt domain.RelationshipType, from
 	if err != nil {
 		return nil, err
 	}
-	// A trial that comes with the relationship is still a trial being granted.
+	// Una prueba que llega con la relación sigue siendo una prueba que se concede.
 	if details.Prospect != nil && details.Prospect.TrialUntil != nil {
 		if err := authz.Require(ctx, PermRelationshipSetTrial); err != nil {
 			return nil, err
@@ -189,13 +190,13 @@ func (s service) establish(ctx context.Context, rt domain.RelationshipType, from
 	if err := s.relationships.Create(ctx, r); err != nil {
 		return nil, err
 	}
-	if rt.ID == domain.RelDuplicateOf { // the duplicate is marked, and affiliated with nobody
+	if rt.ID == domain.RelDuplicateOf { // el duplicado se marca, y no se afilia a nadie
 		if _, err := s.parties.Update(ctx, from.ID(), func(_ context.Context, p *domain.Party) error { return p.MarkDuplicate() }); err != nil {
 			return nil, err
 		}
 		return r, nil
 	}
-	if rt.ID == domain.RelFamily { // not a relationship of business: it shows nobody (D-67)
+	if rt.ID == domain.RelFamily { // no es una relación de negocio: no se la enseña a nadie (D-67)
 		return r, nil
 	}
 	for _, side := range [][2]*domain.Party{{from, to}, {to, from}} {
@@ -212,11 +213,11 @@ func (s service) establish(ctx context.Context, rt domain.RelationshipType, from
 	return r, nil
 }
 
-// playing returns the party playing the role a relationship asks of it, giving it the role when
-// it lacks it (docs/DECISIONES-COMUNES.md, D-49). The relationship is refused as before when the
-// role is not one to give this way: a category, which nobody is assigned; Internal Organization
-// or a role below it, which decides who sees and writes what and is only given on purpose; and
-// any role of a party the caller could not give it to by hand (a shared party, one it only reads).
+// playing devuelve la party que desempeña el rol que una relación le pide, y le da el rol si le
+// falta (docs/DECISIONES-COMUNES.md, D-49). La relación se rechaza como antes cuando el rol no es
+// de los que se dan así: una categoría, que no se asigna a nadie; Internal Organization o un rol
+// por debajo, que decide quién ve y escribe qué y sólo se da a propósito; y cualquier rol de una
+// party a la que el llamante no podría dárselo a mano (una party compartida, una que sólo lee).
 func (s service) playing(ctx context.Context, cat *domain.Catalog, p *domain.Party, role domain.RoleTypeID, since time.Time) (*domain.Party, error) {
 	if p.Meets(cat, role, since) || cat.IsA(role, domain.RoleInternalOrganization) {
 		return p, nil
@@ -233,8 +234,8 @@ func (s service) playing(ctx context.Context, cat *domain.Catalog, p *domain.Par
 	})
 }
 
-// checkHierarchy refuses a second current parent and cycles (the parent's ancestors must not
-// include the child).
+// checkHierarchy rechaza un segundo padre vigente y los ciclos (entre los antepasados del padre no
+// puede estar el hijo).
 func (s service) checkHierarchy(ctx context.Context, rt domain.RelationshipType, child, parent domain.PartyID, since time.Time) error {
 	current := domain.RelFieldType.Eq(rt.ID).And(domain.RelFieldUntil.IsNull().Or(domain.RelFieldUntil.After(since)))
 	seen := []domain.PartyID{parent}
@@ -254,7 +255,7 @@ func (s service) checkHierarchy(ctx context.Context, rt domain.RelationshipType,
 		}
 		node = ups[0].To()
 		if slices.Contains(seen, node) {
-			break // an existing cycle is not this change's fault; stop walking
+			break // un ciclo que ya existe no es culpa de este cambio; se deja de recorrer
 		}
 		seen = append(seen, node)
 	}
@@ -266,8 +267,8 @@ func (s service) checkHierarchy(ctx context.Context, rt domain.RelationshipType,
 	return nil
 }
 
-// writableRelationship loads a relationship the caller is about to change, with its parties: 404
-// when it is out of scope, 403 when the caller may not relate its parties.
+// writableRelationship carga una relación que el llamante va a cambiar, con sus parties: 404 si
+// está fuera del ámbito, 403 si el llamante no puede relacionar sus parties.
 func (s service) writableRelationship(ctx context.Context, id domain.RelationshipID) (r *domain.Relationship, from, to *domain.Party, err error) {
 	sc := s.scope(ctx)
 	if r, err = s.Relationships.Get(ctx, id); err != nil {
@@ -279,7 +280,7 @@ func (s service) writableRelationship(ctx context.Context, id domain.Relationshi
 	if to, err = s.Parties.Get(ctx, r.To()); err != nil {
 		return nil, nil, nil, err
 	}
-	if r.Type() == domain.RelDuplicateOf { // whoever can write the duplicate reaches its mark
+	if r.Type() == domain.RelDuplicateOf { // quien puede escribir el duplicado llega a su marca
 		if !sc.sees(from, fw.Now()) {
 			return nil, nil, nil, fw.NotFound(domain.RelationshipKind, id)
 		}
@@ -297,9 +298,9 @@ func (s service) writableRelationship(ctx context.Context, id domain.Relationshi
 	return r, from, to, nil
 }
 
-// operable refuses any change to a party marked as the duplicate of another: it is found and
-// read, and nothing else (docs/DECISIONES-COMUNES.md, D-64). Ending its relationships is still
-// allowed, the Duplicate Of one included, which is how the mark is undone.
+// operable rechaza cualquier cambio a una party marcada como duplicado de otra: se encuentra y se
+// lee, y nada más (docs/DECISIONES-COMUNES.md, D-64). Terminar sus relaciones sigue permitido,
+// incluida la Duplicate Of, que es como se deshace la marca.
 func operable(p *domain.Party) error {
 	if p.IsDuplicate() {
 		return fw.Violation("parties.duplicate", "the party is the duplicate of another: it takes part in nothing but queries")
@@ -307,9 +308,9 @@ func operable(p *domain.Party) error {
 	return nil
 }
 
-// canMarkDuplicate tells whether the caller may mark a party as a duplicate, or take the mark
-// away: blocking a party is changing it, so it needs to be able to write it; and an internal
-// organization is blocked by the global administrator only.
+// canMarkDuplicate dice si el llamante puede marcar una party como duplicado, o quitarle la
+// marca: bloquear una party es cambiarla, así que necesita poder escribirla; y una organización
+// interna sólo la bloquea el administrador global.
 func canMarkDuplicate(sc scope, p *domain.Party) error {
 	if sc.global {
 		return nil
@@ -323,8 +324,8 @@ func canMarkDuplicate(sc scope, p *domain.Party) error {
 	return nil
 }
 
-// operableRelationship is writableRelationship for a change to the relationship itself (its
-// details): neither of its parties may be a duplicate.
+// operableRelationship es writableRelationship para un cambio en la propia relación (sus datos):
+// ninguna de sus parties puede ser un duplicado.
 func (s service) operableRelationship(ctx context.Context, id domain.RelationshipID) (*domain.Relationship, *domain.Party, *domain.Party, error) {
 	r, from, to, err := s.writableRelationship(ctx, id)
 	if err != nil {
@@ -338,8 +339,8 @@ func (s service) operableRelationship(ctx context.Context, id domain.Relationshi
 	return r, from, to, nil
 }
 
-// terminate ends a relationship and the affiliations it produced. The caller needs to see the
-// relationship and be allowed to relate its parties.
+// terminate termina una relación y las afiliaciones que produjo. El llamante necesita ver la
+// relación y tener permiso para relacionar sus parties.
 func (s service) terminate(ctx context.Context, id domain.RelationshipID, at time.Time) (*domain.Relationship, error) {
 	_, from, to, err := s.writableRelationship(ctx, id)
 	if err != nil {
@@ -349,14 +350,14 @@ func (s service) terminate(ctx context.Context, id domain.RelationshipID, at tim
 	if err != nil {
 		return nil, err
 	}
-	if r.Type() == domain.RelDuplicateOf { // undoing the mark is ending the relationship
+	if r.Type() == domain.RelDuplicateOf { // deshacer la marca es terminar la relación
 		if _, err := s.parties.Update(ctx, r.From(), func(_ context.Context, p *domain.Party) error { p.ClearDuplicate(); return nil }); err != nil {
 			return nil, err
 		}
 	}
 	for _, p := range []*domain.Party{from, to} {
 		if !slices.ContainsFunc(p.Affiliations(), func(a domain.Affiliation) bool { return a.Relationship == id }) {
-			continue // nothing to end: do not bump the version of a party that did not change
+			continue // nada que terminar: no se sube la versión de una party que no cambió
 		}
 		if _, err := s.parties.Update(ctx, p.ID(), func(_ context.Context, p *domain.Party) error { return p.EndAffiliation(id, at) }); err != nil {
 			return nil, err

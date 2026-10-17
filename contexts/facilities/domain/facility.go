@@ -1,8 +1,9 @@
-// Package domain is the model of the Facilities bounded context: the places an organization owns
-// or operates (warehouses, plants, buildings, offices, floors, rooms...), their hierarchy and
-// their location. It was split out of Parties (context map approved on 2026-09-27): the facility
-// has its own location instead of borrowing Party contact mechanisms; the roles parties play at a
-// facility (headquarters, work center...) stay in Parties.
+// Package domain es el modelo del contexto delimitado Facilities: los lugares que una organización
+// posee o explota (almacenes, fábricas, edificios, oficinas, plantas, salas...), su
+// jerarquía y su ubicación. Se separó de Parties (mapa de contextos aprobado el 2026-09-27): la
+// instalación tiene su propia ubicación en vez de tomar prestados los mecanismos de contacto de
+// Party; los papeles que las parties desempeñan en una instalación (sede, centro de trabajo...) se
+// quedan en Parties.
 package domain
 
 import (
@@ -16,32 +17,33 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// FacilityKind is the stable aggregate type name.
+// FacilityKind es el nombre estable del tipo de agregado.
 const FacilityKind = "facilities.facility"
 
-// FacilityID identifies a facility (same GUIDs as the C# IdFacility).
+// FacilityID identifica una instalación (los mismos GUID que IdFacility en el C#).
 type FacilityID struct{ fw.UUID }
 
-// NewFacilityID returns a new identity.
+// NewFacilityID devuelve una identidad nueva.
 func NewFacilityID() FacilityID { return FacilityID{fw.NewUUID()} }
 
-// ParseFacilityID parses a textual identity.
+// ParseFacilityID interpreta una identidad en texto.
 func ParseFacilityID(s string) (FacilityID, error) {
 	u, err := fw.ParseUUID(s)
 	return FacilityID{u}, err
 }
 
-// OrganizationID is the internal organization (a Parties party) that owns the facility.
+// OrganizationID es la organización interna (una party de Parties) dueña de la instalación.
 type OrganizationID struct{ fw.UUID }
 
-// FacilityTypeID identifies a facility type.
+// FacilityTypeID identifica un tipo de instalación.
 type FacilityTypeID struct{ fw.UUID }
 
-// MustFacilityTypeID parses a well-known identity.
+// MustFacilityTypeID interpreta una identidad conocida.
 func MustFacilityTypeID(s string) FacilityTypeID { return FacilityTypeID{fw.MustParseUUID(s)} }
 
-// FacilityType is an entry of the facility type catalog. Types that receive the public (offices,
-// currency exchange offices) require a complete location: address and phone.
+// FacilityType es una entrada del catálogo de tipos de instalación. Los tipos que atienden al
+// público (oficinas, oficinas de cambio de divisa) exigen una ubicación completa: dirección y
+// teléfono.
 type FacilityType struct {
 	ID              FacilityTypeID
 	Name            string
@@ -50,17 +52,17 @@ type FacilityType struct {
 	Active          bool
 }
 
-// GeoRef references the Geography context by identity.
+// GeoRef referencia el contexto Geography por identidad.
 type GeoRef struct {
 	PostalCode fw.UUID
 	Boundary   fw.UUID
 }
 
-// Address is the postal address of a facility.
+// Address es la dirección postal de una instalación.
 type Address struct {
 	StreetType string
 	Line1      string
-	Premises   vocab.Premises // where in the street, piece by piece; optional
+	Premises   vocab.Premises // en qué punto de la calle, pieza a pieza; opcional
 	Line2      string
 	PostalCode string
 	Locality   string
@@ -69,17 +71,17 @@ type Address struct {
 	Geo        GeoRef
 }
 
-// IsZero reports whether the address is absent.
+// IsZero dice si falta la dirección.
 func (a Address) IsZero() bool { return a.Line1 == "" && a.Country.IsZero() }
 
-// String renders the address in one line.
+// String presenta la dirección en una línea.
 func (a Address) String() string {
 	parts := []string{strings.TrimSpace(a.StreetType + " " + a.Line1 + " " + a.Premises.String()), a.Line2, strings.TrimSpace(a.PostalCode + " " + a.Locality), a.Region, a.Country.String()}
 	return strings.Join(slices.DeleteFunc(parts, func(s string) bool { return s == "" }), ", ")
 }
 
-// Location is where a facility is and how to reach it (value object). It replaces the C#
-// FacilityContactMechanism, which borrowed Party contact mechanisms.
+// Location es dónde está una instalación y cómo llegar a ella (objeto de valor). Sustituye al
+// FacilityContactMechanism del C#, que tomaba prestados los mecanismos de contacto de Party.
 type Location struct {
 	Address Address
 	Phone   vocab.Phone
@@ -107,7 +109,7 @@ func (l Location) normalized() (Location, error) {
 	return l, v.Err()
 }
 
-// Facility is a place owned or operated by an internal organization.
+// Facility es un lugar que posee o explota una organización interna.
 type Facility struct {
 	fw.BaseAggregateRoot[FacilityID]
 	traits.Activation
@@ -117,11 +119,11 @@ type Facility struct {
 	name        string
 	description string
 	partOf      *FacilityID
-	area        vocab.Decimal // square meters; zero when unknown
+	area        vocab.Decimal // metros cuadrados; cero si no se conoce
 	location    Location
 }
 
-// FacilityState is the persisted state of a facility.
+// FacilityState es el estado persistido de una instalación.
 type FacilityState struct {
 	Owner       OrganizationID
 	Type        FacilityTypeID
@@ -134,7 +136,7 @@ type FacilityState struct {
 	Audit       traits.AuditStamp
 }
 
-// Reconstitute rebuilds a facility from persisted state.
+// Reconstitute reconstruye una instalación a partir del estado persistido.
 func Reconstitute(id FacilityID, s FacilityState) (*Facility, error) {
 	base, err := fw.NewBaseAggregateRoot(FacilityKind, id)
 	if err != nil {
@@ -160,7 +162,7 @@ func Reconstitute(id FacilityID, s FacilityState) (*Facility, error) {
 	return f, nil
 }
 
-// Register creates a facility. Types that require contact need an address and a phone.
+// Register crea una instalación. Los tipos que exigen contacto necesitan dirección y teléfono.
 func Register(id FacilityID, t FacilityType, s FacilityState) (*Facility, error) {
 	if !t.Active {
 		var v fw.Validation
@@ -209,19 +211,19 @@ func optID(id *FacilityID) string {
 	return id.String()
 }
 
-// Owner returns the owning organization.
+// Owner devuelve la organización dueña.
 func (f *Facility) Owner() OrganizationID { return f.owner }
 
-// Type returns the facility type.
+// Type devuelve el tipo de instalación.
 func (f *Facility) Type() FacilityTypeID { return f.typ }
 
-// Name returns the name.
+// Name devuelve el nombre.
 func (f *Facility) Name() string { return f.name }
 
-// Description returns the description.
+// Description devuelve la descripción.
 func (f *Facility) Description() string { return f.description }
 
-// PartOf returns the facility this one is part of, if any.
+// PartOf devuelve la instalación de la que ésta forma parte, si la hay.
 func (f *Facility) PartOf() *FacilityID {
 	if f.partOf == nil {
 		return nil
@@ -230,10 +232,10 @@ func (f *Facility) PartOf() *FacilityID {
 	return &p
 }
 
-// Area returns the area in square meters (zero when unknown).
+// Area devuelve la superficie en metros cuadrados (cero si no se conoce).
 func (f *Facility) Area() vocab.Decimal { return f.area }
 
-// Location returns the location.
+// Location devuelve la ubicación.
 func (f *Facility) Location() Location { return f.location }
 
 func (f *Facility) requireActive(action string) error {
@@ -243,7 +245,7 @@ func (f *Facility) requireActive(action string) error {
 	return nil
 }
 
-// Rename changes the name.
+// Rename cambia el nombre.
 func (f *Facility) Rename(name string) error {
 	if err := f.requireActive("be renamed"); err != nil {
 		return err
@@ -262,7 +264,7 @@ func (f *Facility) Rename(name string) error {
 	return nil
 }
 
-// Relocate replaces the location, keeping the contact requirements of the type.
+// Relocate sustituye la ubicación, manteniendo los requisitos de contacto del tipo.
 func (f *Facility) Relocate(t FacilityType, l Location) error {
 	if err := f.requireActive("be relocated"); err != nil {
 		return err
@@ -282,8 +284,9 @@ func (f *Facility) Relocate(t FacilityType, l Location) error {
 	return nil
 }
 
-// MoveUnder makes the facility part of parent (nil detaches it). The parent belongs to the same
-// organization; the application checks there is no cycle (it needs the parent's ancestors).
+// MoveUnder hace que la instalación forme parte de parent (nil la separa). El padre pertenece a la
+// misma organización; la aplicación comprueba que no haya ciclos (necesita los antepasados del
+// padre).
 func (f *Facility) MoveUnder(parent *Facility) error {
 	if err := f.requireActive("be moved"); err != nil {
 		return err
@@ -310,7 +313,7 @@ func (f *Facility) MoveUnder(parent *Facility) error {
 	return nil
 }
 
-// SetArea records the area in square meters.
+// SetArea registra la superficie en metros cuadrados.
 func (f *Facility) SetArea(m2 vocab.Decimal) error {
 	if m2.Sign() < 0 {
 		var v fw.Validation
@@ -321,28 +324,28 @@ func (f *Facility) SetArea(m2 vocab.Decimal) error {
 	return nil
 }
 
-// Activate reactivates the facility.
+// Activate reactiva la instalación.
 func (f *Facility) Activate() {
 	if f.Activation.Activate() {
 		f.Raise(FacilityActivationChanged{EventMeta: f.NewEventMeta(), Active: true})
 	}
 }
 
-// Deactivate deactivates the facility.
+// Deactivate desactiva la instalación.
 func (f *Facility) Deactivate() {
 	if f.Activation.Deactivate() {
 		f.Raise(FacilityActivationChanged{EventMeta: f.NewEventMeta(), Active: false})
 	}
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (f *Facility) AuditSnapshot() map[string]any {
 	return map[string]any{"name": f.name, "type": f.typ.String(), "description": f.description, "partOf": optID(f.partOf),
 		"area": f.area.String(), "address": f.location.Address.String(), "phone": f.location.Phone.String(),
 		"email": f.location.Email.String(), "active": f.IsActive()}
 }
 
-// Facility fields and specifications.
+// Campos y especificaciones de Facility.
 var (
 	FieldID     = spec.Comparable("id", func(f *Facility) FacilityID { return f.ID() })
 	FieldOwner  = spec.Comparable("organization", (*Facility).Owner)
@@ -352,11 +355,11 @@ var (
 	FieldPartOf = spec.Optional("part_of", (*Facility).PartOf)
 )
 
-// OwnedBy matches the facilities of the organizations.
+// OwnedBy selecciona las instalaciones de las organizaciones.
 func OwnedBy(orgs ...OrganizationID) spec.Spec[*Facility] { return FieldOwner.In(orgs...) }
 
-// WithIDs matches the given facilities.
+// WithIDs selecciona las instalaciones dadas.
 func WithIDs(ids ...FacilityID) spec.Spec[*Facility] { return FieldID.In(ids...) }
 
-// PartsOf matches the facilities directly inside any of the parents.
+// PartsOf selecciona las instalaciones que están directamente dentro de cualquiera de los padres.
 func PartsOf(parents ...FacilityID) spec.Spec[*Facility] { return FieldPartOf.In(parents...) }

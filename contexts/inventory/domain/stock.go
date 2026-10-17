@@ -1,9 +1,9 @@
-// Package domain is the Inventory model: the warehouses of a company, the stock level of each
-// product in each warehouse (on hand, reserved, weighted average cost), the ledger of movements
-// that explains it and the reservations that hold part of it. The C# kept one mutable row per
-// product and facility with no ledger and no valuation: quantities were clamped at zero instead of
-// refused, adjustments left no trace, reservations were never released and neither issuances nor
-// receipts touched the stock.
+// Package domain es el modelo de Inventario: los almacenes de una empresa, el nivel de existencias
+// de cada producto en cada almacén (disponibles en mano, reservadas, coste medio ponderado), el
+// libro de movimientos que lo explica y las reservas que retienen parte de él. El C# tenía una
+// fila mutable por producto e instalación, sin libro y sin valoración: las cantidades se recortaban
+// a cero en lugar de rechazarse, los ajustes no dejaban rastro, las reservas nunca se liberaban y
+// ni las salidas ni las entradas tocaban las existencias.
 package domain
 
 import (
@@ -17,7 +17,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Aggregate type names.
+// Nombres de tipo de agregado.
 const (
 	WarehouseKind   = "inventory.warehouse"
 	LevelKind       = "inventory.stock_level"
@@ -25,48 +25,48 @@ const (
 	ReservationKind = "inventory.reservation"
 )
 
-// Identities of the context.
+// Identidades del contexto.
 type (
-	// WarehouseID identifies a warehouse.
+	// WarehouseID identifica un almacén.
 	WarehouseID struct{ fw.UUID }
-	// LevelID identifies a stock level.
+	// LevelID identifica un nivel de existencias.
 	LevelID struct{ fw.UUID }
-	// MovementID identifies a movement.
+	// MovementID identifica un movimiento.
 	MovementID struct{ fw.UUID }
-	// ReservationID identifies a reservation.
+	// ReservationID identifica una reserva.
 	ReservationID struct{ fw.UUID }
-	// OrganizationID is the company, an internal organization of the Parties context.
+	// OrganizationID es la empresa, una organización interna del contexto Parties.
 	OrganizationID struct{ fw.UUID }
-	// ProductID is a product of the Products context.
+	// ProductID es un producto del contexto Products.
 	ProductID struct{ fw.UUID }
-	// FacilityID is a facility of the Facilities context.
+	// FacilityID es una instalación del contexto Facilities.
 	FacilityID struct{ fw.UUID }
 )
 
 func zero() vocab.Decimal { return vocab.DecimalFromInt(0) }
 
-// quantity reports whether q is a positive quantity of up to 4 decimals.
+// quantity dice si q es una cantidad positiva de hasta 4 decimales.
 func quantity(q vocab.Decimal) bool { return q.IsPositive() && q.Equal(q.Round(4)) }
 
-// WarehouseState is the persisted state of a warehouse.
+// WarehouseState es el estado persistido de un almacén.
 type WarehouseState struct {
 	Company  OrganizationID
 	Code     string
 	Name     string
-	Facility FacilityID // where it is, when the Facilities context knows it
+	Facility FacilityID // dónde está, cuando el contexto Facilities lo conoce
 	Active   bool
 	Audit    traits.AuditStamp
 }
 
-// Warehouse is a place where a company keeps stock (in the C# a warehouse was just a Facility
-// referenced by a bare id).
+// Warehouse es un lugar donde una empresa guarda existencias (en el C# un almacén era sólo una
+// Facility referenciada por un id suelto).
 type Warehouse struct {
 	fw.BaseAggregateRoot[WarehouseID]
 	traits.Audited
 	s WarehouseState
 }
 
-// ReconstituteWarehouse rebuilds a warehouse.
+// ReconstituteWarehouse reconstruye un almacén.
 func ReconstituteWarehouse(id WarehouseID, s WarehouseState) (*Warehouse, error) {
 	base, err := fw.NewBaseAggregateRoot(WarehouseKind, id)
 	if err != nil {
@@ -83,10 +83,10 @@ func ReconstituteWarehouse(id WarehouseID, s WarehouseState) (*Warehouse, error)
 	return &Warehouse{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// State returns the state.
+// State devuelve el estado.
 func (w *Warehouse) State() WarehouseState { return w.s }
 
-// Close retires the warehouse: it takes no more movements (the caller checks it is empty).
+// Close retira el almacén: no admite más movimientos (el que llama comprueba que está vacío).
 func (w *Warehouse) Close() error {
 	if !w.s.Active {
 		return fw.Violation("inventory.warehouse_closed", "the warehouse is already closed")
@@ -95,37 +95,37 @@ func (w *Warehouse) Close() error {
 	return nil
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (w *Warehouse) AuditSnapshot() map[string]any {
 	return map[string]any{"code": w.s.Code, "active": w.s.Active}
 }
 
-// Warehouse fields.
+// Campos de los almacenes.
 var (
 	WhFieldCompany = spec.Comparable("company", func(w *Warehouse) OrganizationID { return w.s.Company })
 	WhFieldCode    = spec.Ordered("code", func(w *Warehouse) string { return w.s.Code })
 )
 
-// LevelState is the persisted state of a stock level.
+// LevelState es el estado persistido de un nivel de existencias.
 type LevelState struct {
 	Company      OrganizationID
 	Warehouse    WarehouseID
 	Product      ProductID
 	OnHand       vocab.Decimal
 	Reserved     vocab.Decimal
-	AverageCost  vocab.Decimal // weighted average unit cost, 4 decimals
+	AverageCost  vocab.Decimal // coste unitario medio ponderado, 4 decimales
 	ReorderPoint vocab.Decimal
-	Moves        int64 // movements posted: the sequence of the ledger of this level
+	Moves        int64 // movimientos asentados: la secuencia del libro de este nivel
 }
 
-// Level is the stock of a product in a warehouse. Its quantities change only through its methods,
-// each of which is explained by a movement of the ledger.
+// Level son las existencias de un producto en un almacén. Sus cantidades sólo cambian mediante sus
+// métodos, y a cada uno lo explica un movimiento del libro.
 type Level struct {
 	fw.BaseAggregateRoot[LevelID]
 	s LevelState
 }
 
-// ReconstituteLevel rebuilds a stock level.
+// ReconstituteLevel reconstruye un nivel de existencias.
 func ReconstituteLevel(id LevelID, s LevelState) (*Level, error) {
 	base, err := fw.NewBaseAggregateRoot(LevelKind, id)
 	if err != nil {
@@ -142,30 +142,30 @@ func ReconstituteLevel(id LevelID, s LevelState) (*Level, error) {
 	return &Level{BaseAggregateRoot: base, s: s}, nil
 }
 
-// OpenLevel creates the empty level of a product in a warehouse.
+// OpenLevel crea el nivel vacío de un producto en un almacén.
 func OpenLevel(id LevelID, company OrganizationID, warehouse WarehouseID, product ProductID) (*Level, error) {
 	return ReconstituteLevel(id, LevelState{Company: company, Warehouse: warehouse, Product: product, OnHand: zero(), Reserved: zero(), AverageCost: zero(),
 		ReorderPoint: zero()})
 }
 
-// State returns the state.
+// State devuelve el estado.
 func (l *Level) State() LevelState { return l.s }
 
-// Available returns what can still be promised: on hand minus reserved.
+// Available devuelve lo que aún se puede prometer: lo que hay en mano menos lo reservado.
 func (l *Level) Available() vocab.Decimal { return l.s.OnHand.Sub(l.s.Reserved) }
 
-// Value returns the stock at its average cost, in cents.
+// Value devuelve las existencias a su coste medio, al céntimo.
 func (l *Level) Value() vocab.Decimal { return l.s.OnHand.Mul(l.s.AverageCost).Round(2) }
 
-// BelowReorder reports whether the available stock is at or under the reorder point.
+// BelowReorder dice si las existencias disponibles están en el punto de pedido o por debajo.
 func (l *Level) BelowReorder() bool {
 	return l.s.ReorderPoint.IsPositive() && !l.Available().GreaterThan(l.s.ReorderPoint)
 }
 
 func (l *Level) next() int64 { l.s.Moves++; return l.s.Moves }
 
-// Receive adds stock at a unit cost and recomputes the weighted average cost. It returns the
-// sequence of the movement.
+// Receive añade existencias a un coste unitario y vuelve a calcular el coste medio ponderado.
+// Devuelve la secuencia del movimiento.
 func (l *Level) Receive(q, unitCost vocab.Decimal) (int64, error) {
 	if !quantity(q) || unitCost.IsNegative() || !unitCost.Equal(unitCost.Round(4)) {
 		return 0, fw.Violation("inventory.quantity", "a positive quantity and a non-negative cost, of up to 4 decimals")
@@ -176,8 +176,8 @@ func (l *Level) Receive(q, unitCost vocab.Decimal) (int64, error) {
 	return l.next(), nil
 }
 
-// Issue takes stock out at the average cost, which it returns with the sequence. Stock never goes
-// negative, and what is reserved for others is not taken (the C# clamped both at zero).
+// Issue saca existencias al coste medio, que devuelve con la secuencia. Las existencias nunca
+// quedan en negativo, y lo reservado para otros no se toma (el C# recortaba ambas cosas a cero).
 func (l *Level) Issue(q vocab.Decimal) (vocab.Decimal, int64, error) {
 	if !quantity(q) {
 		return vocab.Decimal{}, 0, fw.Violation("inventory.quantity", "a positive quantity of up to 4 decimals")
@@ -189,7 +189,8 @@ func (l *Level) Issue(q vocab.Decimal) (vocab.Decimal, int64, error) {
 	return l.s.AverageCost, l.next(), nil
 }
 
-// IssueReserved takes out stock that was reserved: it leaves both the reserve and the stock.
+// IssueReserved saca existencias que estaban reservadas: salen a la vez de la reserva y de las
+// existencias.
 func (l *Level) IssueReserved(q vocab.Decimal) (vocab.Decimal, int64, error) {
 	if !quantity(q) || q.GreaterThan(l.s.Reserved) {
 		return vocab.Decimal{}, 0, fw.Violation("inventory.reservation_exceeded", "more than what is reserved")
@@ -198,7 +199,7 @@ func (l *Level) IssueReserved(q vocab.Decimal) (vocab.Decimal, int64, error) {
 	return l.s.AverageCost, l.next(), nil
 }
 
-// Reserve holds available stock.
+// Reserve retiene existencias disponibles.
 func (l *Level) Reserve(q vocab.Decimal) error {
 	if !quantity(q) {
 		return fw.Violation("inventory.quantity", "a positive quantity of up to 4 decimals")
@@ -210,7 +211,7 @@ func (l *Level) Reserve(q vocab.Decimal) error {
 	return nil
 }
 
-// Release frees reserved stock.
+// Release libera existencias reservadas.
 func (l *Level) Release(q vocab.Decimal) error {
 	if !quantity(q) || q.GreaterThan(l.s.Reserved) {
 		return fw.Violation("inventory.reservation_exceeded", "more than what is reserved")
@@ -219,9 +220,9 @@ func (l *Level) Release(q vocab.Decimal) error {
 	return nil
 }
 
-// CountTo sets the stock to what was counted and returns the difference and the sequence (zero
-// difference: no movement). A count cannot go under what is reserved. A surplus enters at the
-// average cost, so the count does not change it.
+// CountTo fija las existencias en lo contado y devuelve la diferencia y la secuencia (diferencia
+// cero: ningún movimiento). Un recuento no puede quedar por debajo de lo reservado. Un sobrante
+// entra al coste medio, así que el recuento no cambia el coste medio.
 func (l *Level) CountTo(counted vocab.Decimal) (vocab.Decimal, int64, error) {
 	if counted.IsNegative() || !counted.Equal(counted.Round(4)) {
 		return vocab.Decimal{}, 0, fw.Violation("inventory.quantity", "a non-negative count of up to 4 decimals")
@@ -237,7 +238,8 @@ func (l *Level) CountTo(counted vocab.Decimal) (vocab.Decimal, int64, error) {
 	return diff, l.next(), nil
 }
 
-// SetReorderPoint sets the available quantity under which the product is to be reordered.
+// SetReorderPoint fija la cantidad disponible por debajo de la cual hay que volver a pedir el
+// producto.
 func (l *Level) SetReorderPoint(p vocab.Decimal) error {
 	if p.IsNegative() || !p.Equal(p.Round(4)) {
 		return fw.Violation("inventory.quantity", "a non-negative reorder point of up to 4 decimals")
@@ -246,7 +248,7 @@ func (l *Level) SetReorderPoint(p vocab.Decimal) error {
 	return nil
 }
 
-// Level fields.
+// Campos de los niveles.
 var (
 	LvlFieldCompany   = spec.Comparable("company", func(l *Level) OrganizationID { return l.s.Company })
 	LvlFieldWarehouse = spec.Comparable("warehouse_id", func(l *Level) WarehouseID { return l.s.Warehouse })
@@ -254,10 +256,10 @@ var (
 	LvlFieldEmpty     = spec.Comparable("is_empty", func(l *Level) bool { return l.s.OnHand.IsZero() })
 )
 
-// MoveKind is the kind of a movement.
+// MoveKind es la clase de un movimiento.
 type MoveKind int
 
-// Movement kinds.
+// Clases de movimiento.
 const (
 	Receipt MoveKind = iota + 1
 	Issue
@@ -268,42 +270,43 @@ const (
 
 var moveKinds = map[MoveKind]string{Receipt: "receipt", Issue: "issue", Adjustment: "adjustment", TransferOut: "transfer-out", TransferIn: "transfer-in"}
 
-// String returns the stable name.
+// String devuelve el nombre estable.
 func (k MoveKind) String() string { return moveKinds[k] }
 
-// Source is the fact a movement comes from (a receipt of Purchases, a delivery of Orders…).
+// Source es el hecho del que viene un movimiento (una recepción de Purchases, una entrega de
+// Orders…).
 type Source struct {
 	Type string
 	ID   string
 }
 
-// MovementState is the persisted state of a movement.
+// MovementState es el estado persistido de un movimiento.
 type MovementState struct {
 	Company   OrganizationID
 	Warehouse WarehouseID
 	Product   ProductID
-	Seq       int64 // order within its stock level
+	Seq       int64 // orden dentro de su nivel de existencias
 	Kind      MoveKind
 	Date      vocab.Date
-	Quantity  vocab.Decimal // signed: positive in, negative out
+	Quantity  vocab.Decimal // con signo: positiva si entra, negativa si sale
 	UnitCost  vocab.Decimal
-	Value     vocab.Decimal // quantity × unit cost, in cents, signed
-	Balance   vocab.Decimal // on hand after the movement
-	Lot       string        // lot or serial of a tracked product
+	Value     vocab.Decimal // cantidad × coste unitario, al céntimo, con signo
+	Balance   vocab.Decimal // lo que hay en mano después del movimiento
+	Lot       string        // lote o número de serie de un producto con trazabilidad
 	Note      string
 	Source    Source
 	Audit     traits.AuditStamp
 }
 
-// Movement is a line of the stock ledger. It never changes: a mistake is corrected with another
-// movement.
+// Movement es una línea del libro de existencias. Nunca cambia: un error se corrige con otro
+// movimiento.
 type Movement struct {
 	fw.BaseAggregateRoot[MovementID]
 	traits.Audited
 	s MovementState
 }
 
-// ReconstituteMovement rebuilds a movement.
+// ReconstituteMovement reconstruye un movimiento.
 func ReconstituteMovement(id MovementID, s MovementState) (*Movement, error) {
 	base, err := fw.NewBaseAggregateRoot(MovementKind, id)
 	if err != nil {
@@ -324,7 +327,7 @@ func ReconstituteMovement(id MovementID, s MovementState) (*Movement, error) {
 	return &Movement{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// Post records a movement of a level (after the level changed) and raises it.
+// Post registra un movimiento de un nivel (después de que el nivel cambiara) y lo lanza.
 func Post(id MovementID, l *Level, seq int64, kind MoveKind, date vocab.Date, q, unitCost vocab.Decimal, lot, note string, src Source) (*Movement, error) {
 	ls := l.State()
 	m, err := ReconstituteMovement(id, MovementState{Company: ls.Company, Warehouse: ls.Warehouse, Product: ls.Product, Seq: seq, Kind: kind, Date: date,
@@ -336,15 +339,15 @@ func Post(id MovementID, l *Level, seq int64, kind MoveKind, date vocab.Date, q,
 	return m, nil
 }
 
-// State returns the state.
+// State devuelve el estado.
 func (m *Movement) State() MovementState { return m.s }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (m *Movement) AuditSnapshot() map[string]any {
 	return map[string]any{"kind": m.s.Kind.String(), "quantity": m.s.Quantity.String(), "balance": m.s.Balance.String()}
 }
 
-// Movement fields.
+// Campos de los movimientos.
 var (
 	MovFieldCompany   = spec.Comparable("company", func(m *Movement) OrganizationID { return m.s.Company })
 	MovFieldWarehouse = spec.Comparable("warehouse_id", func(m *Movement) WarehouseID { return m.s.Warehouse })
@@ -356,26 +359,26 @@ var (
 	MovFieldSrcID     = spec.Comparable("source_id", func(m *Movement) string { return m.s.Source.ID })
 )
 
-// ReservationState is the persisted state of a reservation.
+// ReservationState es el estado persistido de una reserva.
 type ReservationState struct {
 	Company   OrganizationID
 	Warehouse WarehouseID
 	Product   ProductID
-	Source    Source        // who holds the stock (an order line)
-	Quantity  vocab.Decimal // reserved in total
-	Open      vocab.Decimal // still held: neither issued nor released
+	Source    Source        // quién retiene las existencias (una línea de pedido)
+	Quantity  vocab.Decimal // reservado en total
+	Open      vocab.Decimal // aún retenido: ni sacado ni liberado
 	Audit     traits.AuditStamp
 }
 
-// Reservation holds stock of a product in a warehouse for a source until it is issued or
-// released (in the C# nothing ever released or consumed a reservation).
+// Reservation retiene existencias de un producto en un almacén para un origen hasta que se sacan
+// o se liberan (en el C# nada liberaba ni consumía nunca una reserva).
 type Reservation struct {
 	fw.BaseAggregateRoot[ReservationID]
 	traits.Audited
 	s ReservationState
 }
 
-// ReconstituteReservation rebuilds a reservation.
+// ReconstituteReservation reconstruye una reserva.
 func ReconstituteReservation(id ReservationID, s ReservationState) (*Reservation, error) {
 	base, err := fw.NewBaseAggregateRoot(ReservationKind, id)
 	if err != nil {
@@ -391,10 +394,10 @@ func ReconstituteReservation(id ReservationID, s ReservationState) (*Reservation
 	return &Reservation{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// State returns the state.
+// State devuelve el estado.
 func (r *Reservation) State() ReservationState { return r.s }
 
-// Hold creates the reservation of a source and raises it.
+// Hold crea la reserva de un origen y la lanza.
 func Hold(id ReservationID, s ReservationState) (*Reservation, error) {
 	s.Open = s.Quantity
 	r, err := ReconstituteReservation(id, s)
@@ -406,7 +409,7 @@ func Hold(id ReservationID, s ReservationState) (*Reservation, error) {
 	return r, nil
 }
 
-// Add holds more stock for the same source (a shortage covered later).
+// Add retiene más existencias para el mismo origen (una falta que se cubre más tarde).
 func (r *Reservation) Add(q vocab.Decimal) error {
 	if !quantity(q) {
 		return fw.Violation("inventory.quantity", "a positive quantity of up to 4 decimals")
@@ -417,7 +420,7 @@ func (r *Reservation) Add(q vocab.Decimal) error {
 	return nil
 }
 
-// Consume lowers what is held by an issued quantity.
+// Consume rebaja lo retenido en una cantidad sacada.
 func (r *Reservation) Consume(q vocab.Decimal) error {
 	if !quantity(q) || q.GreaterThan(r.s.Open) {
 		return fw.Violation("inventory.reservation_exceeded", "the reservation holds only "+r.s.Open.String())
@@ -426,7 +429,7 @@ func (r *Reservation) Consume(q vocab.Decimal) error {
 	return nil
 }
 
-// Release frees what is still held and returns it.
+// Release libera lo que aún está retenido y lo devuelve.
 func (r *Reservation) Release() (vocab.Decimal, error) {
 	if r.s.Open.IsZero() {
 		return vocab.Decimal{}, fw.Violation("inventory.reservation_closed", "the reservation holds nothing")
@@ -436,12 +439,12 @@ func (r *Reservation) Release() (vocab.Decimal, error) {
 	return q, nil
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (r *Reservation) AuditSnapshot() map[string]any {
 	return map[string]any{"quantity": r.s.Quantity.String(), "open": r.s.Open.String()}
 }
 
-// Reservation fields.
+// Campos de las reservas.
 var (
 	ResFieldCompany   = spec.Comparable("company", func(r *Reservation) OrganizationID { return r.s.Company })
 	ResFieldWarehouse = spec.Comparable("warehouse_id", func(r *Reservation) WarehouseID { return r.s.Warehouse })
@@ -451,16 +454,17 @@ var (
 	ResFieldClosed    = spec.Comparable("closed", func(r *Reservation) bool { return r.s.Open.IsZero() })
 )
 
-// StockMoved is raised by each movement of the ledger.
+// StockMoved lo lanza cada movimiento del libro.
 type StockMoved struct {
 	fw.EventMeta
 	Snapshot MovementState `json:"snapshot"`
 }
 
-// EventType implements fw.Event.
+// EventType implementa fw.Event.
 func (StockMoved) EventType() string { return "inventory.stock_moved" }
 
-// StockReserved is raised when stock is held for a source: Added now, Held in total.
+// StockReserved se lanza cuando se retienen existencias para un origen: Added ahora, Held en
+// total.
 type StockReserved struct {
 	fw.EventMeta
 	Company    string `json:"company"`
@@ -472,28 +476,28 @@ type StockReserved struct {
 	Held       string `json:"held"`
 }
 
-// EventType implements fw.Event.
+// EventType implementa fw.Event.
 func (StockReserved) EventType() string { return "inventory.stock_reserved" }
 
-// New identities and parsing.
+// Identidades nuevas e interpretación.
 func NewWarehouseID() WarehouseID     { return WarehouseID{fw.NewUUID()} }
 func NewLevelID() LevelID             { return LevelID{fw.NewUUID()} }
 func NewMovementID() MovementID       { return MovementID{fw.NewUUID()} }
 func NewReservationID() ReservationID { return ReservationID{fw.NewUUID()} }
 
-// ParseWarehouseID parses a textual identity.
+// ParseWarehouseID interpreta una identidad en texto.
 func ParseWarehouseID(s string) (WarehouseID, error) {
 	u, err := fw.ParseUUID(s)
 	return WarehouseID{u}, err
 }
 
-// ParseReservationID parses a textual identity.
+// ParseReservationID interpreta una identidad en texto.
 func ParseReservationID(s string) (ReservationID, error) {
 	u, err := fw.ParseUUID(s)
 	return ReservationID{u}, err
 }
 
-// Repositories of the context.
+// Repositorios del contexto.
 type (
 	WarehouseRepository   = fw.Repository[WarehouseID, *Warehouse]
 	LevelRepository       = fw.Repository[LevelID, *Level]
@@ -501,17 +505,17 @@ type (
 	ReservationRepository = fw.Repository[ReservationID, *Reservation]
 )
 
-// Item is what Inventory needs to know of a product.
+// Item es lo que Inventario necesita saber de un producto.
 type Item struct {
 	Company      OrganizationID
 	SKU          string
 	Name         string
 	Stocked      bool
-	Tracked      bool // by lot or serial: its movements carry one
+	Tracked      bool // por lote o número de serie: sus movimientos llevan uno
 	Discontinued vocab.Date
 }
 
-// Catalog resolves products (a port Inventory owns over the Products Catalog contract).
+// Catalog resuelve productos (un puerto de Inventario sobre el contrato Catalog de Products).
 type Catalog interface {
 	Items(ctx context.Context, products []ProductID) (map[ProductID]Item, error)
 }

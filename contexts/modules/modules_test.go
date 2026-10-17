@@ -177,7 +177,7 @@ func (h *host) scenario() {
 		}
 	}
 
-	// The catalog the product starts with, added once.
+	// El catálogo con el que empieza el producto, añadido una sola vez.
 	if n, err := h.mod.EnsureCatalog(context.Background()); err != nil || n != len(domain.Seed) {
 		t.Fatalf("seed: %d %v", n, err)
 	}
@@ -191,7 +191,7 @@ func (h *host) scenario() {
 	if len(catalog) != 12 || catalog[0].Kind != "capability" || catalog[0].Code != "consulting" || catalog[4].Code != "compras" {
 		t.Fatalf("catalog: %+v", catalog)
 	}
-	// Only a global administrator changes it.
+	// Sólo lo cambia un administrador global.
 	tpvBody := map[string]any{"kind": "module", "code": "TPV", "name": "Punto de venta"}
 	h.must(h.do("POST", "/api/modules/catalog", "viewer", tpvBody, nil), 403, "viewer")
 	h.must(h.do("POST", "/api/modules/catalog", "editor", tpvBody, nil), 403, "the catalog is not of a company")
@@ -208,7 +208,7 @@ func (h *host) scenario() {
 		ok(err)
 	}
 
-	// What Acme has on.
+	// Lo que Acme tiene encendido.
 	on := func(kind, code, notes string) map[string]any {
 		return map[string]any{"organization": acme, "kind": kind, "code": code, "notes": notes}
 	}
@@ -231,7 +231,7 @@ func (h *host) scenario() {
 	}
 	h.must(h.do("POST", "/api/modules/activate", "manager", on("capability", "logistics", ""), nil), 200, "logistics")
 	h.must(h.do("POST", "/api/modules/activate", "manager", on("module", "inventario", ""), nil), 200, "inventory")
-	// One sector: the new one replaces the old one.
+	// Un solo sector: el nuevo sustituye al viejo.
 	h.must(h.do("POST", "/api/modules/activate", "manager", on("sector", "retail", ""), nil), 200, "retail")
 	h.must(h.do("POST", "/api/modules/activate", "manager", on("sector", "hospitality", ""), nil), 200, "hospitality")
 
@@ -250,7 +250,8 @@ func (h *host) scenario() {
 		t.Fatalf("a global administrator sees everything offered: %+v %v", all, err)
 	}
 
-	// Off, and on again; a retired feature stays where it is on but is not switched on anew.
+	// Apagar, y volver a encender; una funcionalidad retirada sigue donde está encendida pero no se
+	// enciende de nuevo.
 	h.must(h.do("POST", "/api/modules/deactivate", "viewer", on("module", "ventas", ""), nil), 403, "viewer")
 	h.must(h.do("POST", "/api/modules/deactivate", "manager", on("module", "crm", ""), nil), 422, "never had it")
 	h.must(h.do("POST", "/api/modules/deactivate", "manager", on("module", "ventas", ""), &act), 200, "off")
@@ -307,7 +308,7 @@ func (h *host) scenario() {
 		t.Fatalf("outsider: %v", orgs)
 	}
 
-	// The port other contexts ask.
+	// El puerto al que preguntan otros contextos.
 	if has, err := h.mod.Features.Has(context.Background(), acme, "module", "VENTAS"); err != nil || !has {
 		t.Fatalf("port: %v %v", has, err)
 	}
@@ -320,8 +321,8 @@ func (h *host) scenario() {
 	if of, err := h.mod.Features.Of(context.Background(), acme, "sector"); err != nil || !slices.Equal(of, []string{"hospitality"}) {
 		t.Fatalf("port: %v %v", of, err)
 	}
-	// ventas on, logistics on, inventario on, retail on, hospitality on + retail off, ventas off,
-	// ventas on, inventario off.
+	// ventas encendida, logistics encendida, inventario encendido, retail encendido, hospitality
+	// encendido + retail apagado, ventas apagada, ventas encendida, inventario apagado.
 	if n, err := h.mod.Relay(inprocess.NewBroker()).RelayOnce(context.Background()); err != nil || n != 9 {
 		t.Fatalf("published: %d %v", n, err)
 	}

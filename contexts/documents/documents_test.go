@@ -67,8 +67,8 @@ func TestDocument_Rules(t *testing.T) {
 	}
 }
 
-// host composes Documents on a hot-swappable backend; the test plays the issuing contexts by
-// sending their facts to the broker.
+// host compone Documents sobre un backend intercambiable en caliente; la prueba hace de los
+// contextos emisores enviando sus hechos al broker.
 type host struct {
 	t      *testing.T
 	srv    *httptest.Server
@@ -135,7 +135,7 @@ func (h *host) must(got, want int, what string) {
 	}
 }
 
-// send plays an issuing context: one of its facts reaches the broker.
+// send hace de un contexto emisor: uno de sus hechos llega al broker.
 func (h *host) send(id, typ string, at time.Time, data map[string]any) error {
 	raw, _ := json.Marshal(data)
 	return h.broker.Send(context.Background(), application.Envelope{ID: id, Type: typ, Source: "test", OccurredAt: at, Data: raw})
@@ -157,7 +157,7 @@ func (h *host) scenario(tag string) {
 		}
 	}
 
-	// The sale: order, delivery note, invoice from the delivery note, corrective invoice.
+	// La venta: pedido, albarán, factura a partir del albarán, factura rectificativa.
 	ok(h.send(tag+"-1", "orders.order-confirmed.v1", day(5, 4), map[string]any{"orderId": order, "company": acme, "customer": customer,
 		"number": "PED-2026-000001", "total": "242.00"}))
 	ok(h.send(tag+"-2", "orders.delivery-issued.v1", day(5, 6), map[string]any{"deliveryId": delivery, "orderId": order, "company": acme,
@@ -165,11 +165,11 @@ func (h *host) scenario(tag string) {
 	issued := map[string]any{"invoiceId": invoice, "number": "A-2026-000001", "kind": "ordinary", "sourceType": "orders.delivery", "sourceId": delivery,
 		"seller": acme, "customer": customer, "issueDate": "2026-05-08", "total": "242.00"}
 	ok(h.send(tag+"-3", "billing.invoice-issued.v1", day(5, 8), issued))
-	ok(h.send(tag+"-3", "billing.invoice-issued.v1", day(5, 8), issued))  // the same message again
-	ok(h.send(tag+"-3b", "billing.invoice-issued.v1", day(5, 8), issued)) // the same fact in another message
+	ok(h.send(tag+"-3", "billing.invoice-issued.v1", day(5, 8), issued))  // el mismo mensaje otra vez
+	ok(h.send(tag+"-3b", "billing.invoice-issued.v1", day(5, 8), issued)) // el mismo hecho en otro mensaje
 	ok(h.send(tag+"-4", "billing.invoice-issued.v1", day(5, 20), map[string]any{"invoiceId": credit, "number": "R-2026-000001", "kind": "corrective",
 		"corrects": invoice, "seller": acme, "customer": customer, "issueDate": "2026-05-20", "total": "-24.20"}))
-	// A purchase booked by mistake, a payslip, and a tax filing reverted.
+	// Una compra registrada por error, una nómina, y una declaración revertida.
 	ok(h.send(tag+"-5", "purchases.invoice-registered.v1", day(5, 10), map[string]any{"invoiceId": received, "company": acme, "supplier": supplier,
 		"supplierNumber": "2026/0042", "register": "FR-2026-000001", "received": "2026-05-10", "total": "1210.00"}))
 	ok(h.send(tag+"-6", "purchases.invoice-cancelled.v1", day(5, 11), map[string]any{"invoiceId": received, "reason": "duplicada"}))
@@ -179,13 +179,13 @@ func (h *host) scenario(tag string) {
 	ok(h.send(tag+"-8", "fiscal.filing-submitted.v1", day(7, 15), map[string]any{"filingId": filing, "declarant": acme, "form": "111", "year": 2026,
 		"period": "2T", "withheld": "300.00"}))
 	ok(h.send(tag+"-9", "fiscal.filing-reverted.v1", day(7, 16), map[string]any{"filingId": filing, "reason": "error en las bases"}))
-	// A cancellation of something the register never heard of changes nothing; a broken fact is refused.
+	// La anulación de algo de lo que el registro nunca oyó hablar no cambia nada; un hecho roto se rechaza.
 	ok(h.send(tag+"-10", "payroll.payslip-cancelled.v1", day(7, 16), map[string]any{"payslipId": id(), "reason": "x"}))
 	if err := h.send(tag+"-11", "orders.delivery-issued.v1", day(5, 6), map[string]any{"deliveryId": id(), "orderId": order, "company": acme,
 		"customer": customer, "number": "ALB-2026-000002", "date": "6 de mayo", "total": "1.00"}); err == nil {
 		t.Fatal("a fact without a date is refused")
 	}
-	// Another company's order.
+	// El pedido de otra empresa.
 	ok(h.send(tag+"-12", "orders.order-confirmed.v1", day(5, 4), map[string]any{"orderId": id(), "company": globex, "customer": customer,
 		"number": "PED-2026-000001", "total": "10.00"}))
 
@@ -242,7 +242,7 @@ func (h *host) scenario(tag string) {
 	h.must(h.get("/api/documents/"+crd.ID, "outsider", nil), 404, "outsider")
 	h.must(h.get("/api/documents/"+crd.ID, "viewer", &doc), 200, "get")
 
-	// The trail is the same from either end.
+	// La traza es la misma desde cualquiera de los dos extremos.
 	for _, from := range []string{crd.ID, page0(t, h, acme)} {
 		var trail []dapp.DocumentDTO
 		h.must(h.get("/api/documents/"+from+"/trail", "viewer", &trail), 200, "trail")
@@ -253,7 +253,7 @@ func (h *host) scenario(tag string) {
 	}
 	h.must(h.get("/api/documents/"+crd.ID+"/trail", "outsider", nil), 404, "outsider's trail")
 
-	// The port other contexts use.
+	// El puerto que usan otros contextos.
 	got, found, err := h.docs.Register.ByFact(context.Background(), "invoice", invoice)
 	if err != nil || !found || got.Number != "A-2026-000001" || got.Date != "2026-05-08" || got.Cancelled {
 		t.Fatalf("port: %+v %v %v", got, found, err)
@@ -263,7 +263,7 @@ func (h *host) scenario(tag string) {
 	}
 }
 
-// page0 returns the id of the first document of a company: its order.
+// page0 devuelve el id del primer documento de una empresa: su pedido.
 func page0(t *testing.T, h *host, company string) string {
 	t.Helper()
 	var p fw.Page[dapp.DocumentDTO]

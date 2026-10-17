@@ -1,4 +1,4 @@
-// Package real provides an implementation of Clock using the standard operating system clock.
+// Package real ofrece una implementación de Clock con el reloj estándar del sistema operativo.
 package real
 
 import (
@@ -7,25 +7,25 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/time"
 )
 
-// RealClock delegates directly to the standard library time functions.
+// RealClock delega directamente en las funciones de tiempo de la biblioteca estándar.
 type RealClock struct{}
 
-// New creates a new RealClock.
+// New crea un RealClock nuevo.
 func New() time.Clock {
 	return &RealClock{}
 }
 
-// Now returns the current local time from the OS.
+// Now devuelve la hora local actual del sistema operativo.
 func (c *RealClock) Now() stdtime.Time {
 	return stdtime.Now()
 }
 
-// Since returns the elapsed time since t.
+// Since devuelve el tiempo transcurrido desde t.
 func (c *RealClock) Since(t stdtime.Time) stdtime.Duration {
 	return stdtime.Since(t)
 }
 
-// Sleep pauses the current goroutine for at least duration d.
+// Sleep detiene la goroutine en curso durante al menos d.
 func (c *RealClock) Sleep(d stdtime.Duration) {
 	stdtime.Sleep(d)
 }

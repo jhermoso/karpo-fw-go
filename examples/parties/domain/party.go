@@ -1,7 +1,8 @@
-// Package domain is the Parties bounded context domain model (UDM Vol. 1 "Party"), written only
-// against the framework's pure domain packages. It shows the Go translation of the Karpo C#
-// tactical patterns: typed identity, value objects with validating constructors, an aggregate
-// root with child entities, invariants, domain events and specifications.
+// Package domain es el modelo de dominio del contexto delimitado Parties (UDM Vol. 1 «Party»),
+// escrito sólo contra los paquetes de dominio puros del framework. Muestra la traducción a Go de
+// los patrones tácticos de Karpo C#: identidad tipada, objetos de valor con constructores que
+// validan, una raíz de agregado con entidades hijas, invariantes, eventos de dominio y
+// especificaciones.
 package domain
 
 import (
@@ -13,34 +14,34 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/traits"
 )
 
-// Kind is the stable aggregate type name.
+// Kind es el nombre estable del tipo de agregado.
 const Kind = "parties.party"
 
-// PartyID identifies a Party.
+// PartyID identifica una Party.
 type PartyID struct{ fw.UUID }
 
-// NewPartyID returns a new identity.
+// NewPartyID devuelve una identidad nueva.
 func NewPartyID() PartyID { return PartyID{fw.NewUUID()} }
 
-// ParsePartyID parses a textual identity.
+// ParsePartyID analiza una identidad en texto.
 func ParsePartyID(s string) (PartyID, error) {
 	u, err := fw.ParseUUID(s)
 	return PartyID{u}, err
 }
 
-// PartyType distinguishes people from organizations.
+// PartyType distingue personas de organizaciones.
 type PartyType string
 
-// Party types.
+// Tipos de party.
 const (
 	Person       PartyType = "person"
 	Organization PartyType = "organization"
 )
 
-// TaxID is a normalized tax identifier (value object).
+// TaxID es un identificador fiscal normalizado (objeto de valor).
 type TaxID struct{ value string }
 
-// NewTaxID validates and normalizes a tax identifier.
+// NewTaxID valida y normaliza un identificador fiscal.
 func NewTaxID(s string) (TaxID, error) {
 	n := strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(s), "-", ""))
 	var v fw.Validation
@@ -53,24 +54,25 @@ func NewTaxID(s string) (TaxID, error) {
 
 func (t TaxID) String() string { return t.value }
 
-// ContactKind is the channel of a contact mechanism.
+// ContactKind es el canal de un medio de contacto.
 type ContactKind string
 
-// Contact kinds.
+// Tipos de contacto.
 const (
 	Email ContactKind = "email"
 	Phone ContactKind = "phone"
 )
 
-// Contact is a child value of the Party aggregate.
+// Contact es un valor hijo del agregado Party.
 type Contact struct {
 	Kind    ContactKind
 	Value   string
 	Primary bool
 }
 
-// Party is the aggregate root. Cross-cutting traits are composed, not inherited: activation
-// (on/off) and the audit stamp (created/modified by, stamped by the application layer).
+// Party es la raíz del agregado. Los rasgos transversales se componen, no se heredan: la
+// activación (activa/inactiva) y el sello de auditoría (creado/modificado por, que pone la capa
+// de aplicación).
 type Party struct {
 	fw.BaseAggregateRoot[PartyID]
 	traits.Activation
@@ -82,7 +84,7 @@ type Party struct {
 	contacts     []Contact
 }
 
-// Register creates a new active party and raises PartyRegistered.
+// Register crea una party activa nueva y lanza PartyRegistered.
 func Register(id PartyID, t PartyType, legalName string, taxID TaxID) (*Party, error) {
 	p, err := Reconstitute(id, t, legalName, taxID, true, fw.Now(), traits.AuditStamp{}, nil)
 	if err != nil {
@@ -92,7 +94,8 @@ func Register(id PartyID, t PartyType, legalName string, taxID TaxID) (*Party, e
 	return p, nil
 }
 
-// Reconstitute rebuilds a party from persisted state (no events, invariants re-checked).
+// Reconstitute reconstruye una party a partir del estado persistido (sin eventos, con las
+// invariantes comprobadas de nuevo).
 func Reconstitute(id PartyID, t PartyType, legalName string, taxID TaxID, active bool, registeredAt time.Time,
 	audit traits.AuditStamp, contacts []Contact) (*Party, error) {
 	base, err := fw.NewBaseAggregateRoot(Kind, id)
@@ -113,22 +116,22 @@ func Reconstitute(id PartyID, t PartyType, legalName string, taxID TaxID, active
 	}, nil
 }
 
-// Type returns the party type.
+// Type devuelve el tipo de party.
 func (p *Party) Type() PartyType { return p.partyType }
 
-// LegalName returns the legal name.
+// LegalName devuelve la razón social.
 func (p *Party) LegalName() string { return p.legalName }
 
-// TaxID returns the tax identifier.
+// TaxID devuelve el identificador fiscal.
 func (p *Party) TaxID() TaxID { return p.taxID }
 
-// RegisteredAt returns the registration instant.
+// RegisteredAt devuelve el instante del alta.
 func (p *Party) RegisteredAt() time.Time { return p.registeredAt }
 
-// Contacts returns a copy of the contacts.
+// Contacts devuelve una copia de los contactos.
 func (p *Party) Contacts() []Contact { return slices.Clone(p.contacts) }
 
-// Rename changes the legal name.
+// Rename cambia la razón social.
 func (p *Party) Rename(name string) error {
 	name = strings.TrimSpace(name)
 	if name == "" {
@@ -148,7 +151,8 @@ func (p *Party) Rename(name string) error {
 	return nil
 }
 
-// AddContact adds a contact. Invariants: no duplicates, at most one primary contact per kind.
+// AddContact añade un contacto. Invariantes: sin duplicados, como mucho un contacto principal
+// por tipo.
 func (p *Party) AddContact(c Contact) error {
 	var v fw.Validation
 	v.Require(c.Kind == Email || c.Kind == Phone, "kind", "enum", "kind must be email or phone")
@@ -176,14 +180,14 @@ func (p *Party) AddContact(c Contact) error {
 	return nil
 }
 
-// Deactivate marks the party inactive.
+// Deactivate marca la party como inactiva.
 func (p *Party) Deactivate() {
 	if p.Activation.Deactivate() {
 		p.Raise(PartyDeactivated{EventMeta: p.NewEventMeta()})
 	}
 }
 
-// AuditSnapshot implements traits.Snapshotter: the fields whose changes are audited.
+// AuditSnapshot implementa traits.Snapshotter: los campos cuyos cambios se auditan.
 func (p *Party) AuditSnapshot() map[string]any {
 	contacts := make([]string, len(p.contacts))
 	for i, c := range p.contacts {

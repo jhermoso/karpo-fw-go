@@ -44,7 +44,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/testing/archtest"
 )
 
-// host composes Parties, Fiscal, Billing and Receivables on one hot-swappable backend.
+// host compone Parties, Fiscal, Billing y Receivables sobre un único backend intercambiable en caliente.
 type host struct {
 	t        *testing.T
 	srv      *httptest.Server
@@ -148,7 +148,7 @@ func relay(t *testing.T, r interface {
 	}
 }
 
-// invoice drafts and issues an invoice of one G21 line.
+// invoice redacta y emite una factura de una línea G21.
 func (h *host) invoice(seller, customer, series, amount string, qty string, due vocab.Date, corrects string) bapp.InvoiceDTO {
 	svc := h.billing.Service
 	d := bapp.DraftInvoice{Seller: seller, Customer: customer, DetailsInput: bapp.DetailsInput{DueDate: due}}
@@ -198,7 +198,7 @@ func (h *host) scenario(tag string) {
 	rs, err := h.billing.Service.OpenSeries.Handle(ctx, bapp.OpenSeries{Seller: acme.ID, Code: "R", Year: 2026, Corrective: true})
 	h.ok(err)
 
-	// Payment terms: two installments at 30 and 60 days, paid on the 10th.
+	// Condiciones de pago: dos vencimientos a 30 y 60 días, pagados el día 10.
 	var terms rapp.TermsDTO
 	h.must(h.do("POST", "/api/receivables/terms", "clerk", map[string]any{"seller": acme.ID, "code": "30-60", "description": "30 y 60 días, día 10",
 		"installments": 2, "daysToFirst": 30, "daysBetween": 30, "fixedDays": []int{10}}, &terms), 201, "terms")
@@ -214,10 +214,10 @@ func (h *host) scenario(tag string) {
 	limit := "200"
 	h.must(h.do("PUT", "/api/receivables/credit", "clerk", map[string]any{"seller": acme.ID, "customer": ana.ID, "terms": terms.ID, "limit": limit}, nil), 200, "credit")
 
-	// Billing issues; Receivables opens the receivables from the Published Language.
-	inv1 := h.invoice(acme.ID, ana.ID, fa.ID, "100", "1", vocab.Date{}, "")                // 121.00 by the customer's terms
-	inv2 := h.invoice(acme.ID, ana.ID, fa.ID, "50", "1", vocab.MustDate(2026, 10, 15), "") // 60.50 on its due date
-	credit := h.invoice(acme.ID, "", rs.ID, "30", "-1", vocab.Date{}, inv1.ID)             // -36.30 at once
+	// Billing emite; Receivables abre los cobros pendientes a partir del Published Language.
+	inv1 := h.invoice(acme.ID, ana.ID, fa.ID, "100", "1", vocab.Date{}, "")                // 121.00 según las condiciones del cliente
+	inv2 := h.invoice(acme.ID, ana.ID, fa.ID, "50", "1", vocab.MustDate(2026, 10, 15), "") // 60.50 en su vencimiento
+	credit := h.invoice(acme.ID, "", rs.ID, "30", "-1", vocab.Date{}, inv1.ID)             // -36.30 en el acto
 	broker := inprocess.NewBroker()
 	broker.Subscribe("receivables", h.rec.Consumer)
 	relay(t, h.billing.Relay(broker))
@@ -229,12 +229,13 @@ func (h *host) scenario(tag string) {
 	h.must(h.do("GET", "/api/receivables/invoices/"+inv1.ID, "outsider", nil, nil), 404, "outsider")
 	var exp contracts.Exposure
 	h.must(h.do("GET", "/api/receivables/credit/exposure?seller="+acme.ID+"&customer="+ana.ID+"&on=2026-10-20", "clerk", nil, &exp), 200, "exposure")
-	// 121.00 + 60.50 − 36.30 = 145.20 open; overdue: 60.50 (due 15 Oct) − 36.30 (the credit) = 24.20.
+	// 121.00 + 60.50 − 36.30 = 145.20 abierto; vencido: 60.50 (vence el 15 de octubre) − 36.30 (el
+	// abono) = 24.20.
 	if exp.Open != "145.20" || exp.Overdue != "24.20" || !exp.Limited || exp.Available != "54.80" || exp.Blocked {
 		t.Fatalf("exposure: %+v", exp)
 	}
 
-	// A collection allocated to both invoices: capped on both sides.
+	// Un cobro aplicado a las dos facturas: con tope por los dos lados.
 	var col rapp.CollectionDTO
 	h.must(h.do("POST", "/api/receivables/collections", "clerk", map[string]any{"seller": acme.ID, "payer": ana.ID, "date": "2026-10-16",
 		"amount": "100", "method": "transfer", "reference": "TRF-1", "allocations": []map[string]any{
@@ -254,7 +255,7 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("receivable 2 settled: %+v", r2)
 	}
 
-	// The credit nets against the second installment of invoice 1.
+	// El abono se compensa con el segundo vencimiento de la factura 1.
 	h.must(h.do("POST", "/api/receivables/offsets", "clerk", map[string]any{"seller": acme.ID, "credit": credit.ID, "invoice": inv1.ID, "installment": 1,
 		"amount": "36.30", "date": "2026-10-20"}, nil), 422, "only 21.00 open in the first installment")
 	var off rapp.CollectionDTO
@@ -265,7 +266,7 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("exposure after collection and offset: %+v", exp)
 	}
 
-	// Reversals: an allocation, then the whole collection.
+	// Reversiones: una aplicación y después el cobro entero.
 	h.must(h.do("POST", "/api/receivables/collections/"+col.ID+"/allocations/reverse", "clerk", map[string]any{"allocation": col.Allocations[1].ID}, &col),
 		200, "reverse")
 	h.must(h.do("POST", "/api/receivables/collections/"+col.ID+"/cancel", "clerk", nil, &col), 200, "cancel")
@@ -301,7 +302,7 @@ func (h *host) scenario(tag string) {
 	out := inprocess.NewBroker()
 	out.Subscribe("accounting", acc)
 	relay(t, h.rec.Relay(out))
-	// 2 allocations + 2 of the offset; 2 reversals; invoice 2 and the credit settled.
+	// 2 aplicaciones + 2 de la compensación; 2 reversiones; la factura 2 y el abono saldados.
 	if allocated != 4 || reversed != 2 || settled != 2 {
 		t.Fatalf("published: %d allocated, %d reversed, %d settled", allocated, reversed, settled)
 	}

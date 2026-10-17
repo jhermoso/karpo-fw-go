@@ -1,6 +1,6 @@
-// Package infrastructure adapts the Parties context to storage: SQL mappings of its aggregates,
-// the versioned schema (migrations for the five engines, with the well-known catalogs as seed),
-// the catalog reader and the hot-swap factories.
+// Package infrastructure adapta el contexto Parties al almacenamiento: mapeos SQL de sus
+// agregados, el esquema versionado (migraciones para los cinco motores, con los catálogos
+// conocidos como siembra), el lector de catálogos y las factorías intercambiables en caliente.
 package infrastructure
 
 import (
@@ -17,11 +17,11 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlserver"
 )
 
-// Context is the name of the bounded context (migration history, integration source).
+// Context es el nombre del contexto delimitado (historial de migraciones, origen de integración).
 const Context = "parties"
 
-// Tables owned by the context. The technical tables carry the context prefix so several
-// contexts can share a database.
+// Tablas propias del contexto. Las tablas técnicas llevan el prefijo del contexto para que varios
+// contextos puedan compartir una base de datos.
 const (
 	TablePartiesOutbox     = "parties_outbox"
 	TableIntegrationOutbox = "parties_integration_outbox"
@@ -29,7 +29,7 @@ const (
 	TableInbox             = "parties_inbox"
 )
 
-// Dialects the context supports.
+// Dialects son los dialectos que admite el contexto.
 var Dialects = sqlrepo.Dialects
 
 func render(dialect, ddl string) string { return sqlrepo.RenderDDL(dialect, ddl) }
@@ -89,8 +89,8 @@ var phase2DDL = []string{
 	`CREATE INDEX ix_party_classifications_type ON party_classifications (class_type)`,
 }
 
-// phase3DDL adds legal forms, shared catalog entries, affiliations (visibility, decision P1)
-// and hierarchical relationship types. {add:x} renders the dialect's ADD COLUMN clause.
+// phase3DDL añade formas jurídicas, entradas de catálogo compartidas, afiliaciones (visibilidad,
+// decisión P1) y tipos de relación jerárquicos. {add:x} genera la cláusula ADD COLUMN del dialecto.
 var phase3DDL = []string{
 	`ALTER TABLE parties {add:legal_form} {str:30}{addEnd}`,
 	`ALTER TABLE parties {add:shared} {bool} DEFAULT {false} NOT NULL{addEnd}`,
@@ -101,7 +101,7 @@ var phase3DDL = []string{
 	`CREATE INDEX ix_party_affiliations_org ON party_affiliations (organization)`,
 }
 
-// technicalDDL returns the outboxes and audit log of the context for a dialect.
+// technicalDDL devuelve los outboxes y el registro de auditoría del contexto para un dialecto.
 func technicalDDL(dialect string) []string {
 	switch dialect {
 	case "sqlite":
@@ -118,7 +118,8 @@ func technicalDDL(dialect string) []string {
 	return nil
 }
 
-// inboxDDL returns the inbox of the context (the integration events it consumes) for a dialect.
+// inboxDDL devuelve el inbox del contexto (los eventos de integración que consume) para un
+// dialecto.
 func inboxDDL(dialect string) []string {
 	switch dialect {
 	case "sqlite":
@@ -135,7 +136,7 @@ func inboxDDL(dialect string) []string {
 	return nil
 }
 
-// Migrations is the versioned schema of the Parties context.
+// Migrations es el esquema versionado del contexto Parties.
 func Migrations() sqlrepo.MigrationSet {
 	initial := map[string][]string{}
 	technical := map[string][]string{}
@@ -179,8 +180,8 @@ func Migrations() sqlrepo.MigrationSet {
 		{Version: 10, Name: "inbox (integration events consumed from HR)", Up: inbox},
 		{Version: 11, Name: "relationship type codes and the prospect relationship type", Up: sqlrepo.RenderDDLAll(
 			`ALTER TABLE relationship_types {add:code} {str:40}{addEnd}`), Run: seedRelationshipCodes},
-		// Details by relationship type are nullable columns of party_relationships, as the details
-		// of persons and organizations are columns of parties.
+		// Los detalles por tipo de relación son columnas anulables de party_relationships, como los
+		// detalles de personas y organizaciones son columnas de parties.
 		{Version: 12, Name: "prospect relationship details: trial", Up: sqlrepo.RenderDDLAll(
 			`ALTER TABLE party_relationships {add:trial_until} {ts}{addEnd}`)},
 		{Version: 13, Name: "ownership relationship details: share", Up: sqlrepo.RenderDDLAll(
@@ -188,7 +189,7 @@ func Migrations() sqlrepo.MigrationSet {
 		{Version: 14, Name: "collaborator relationship details: promotion code", Up: sqlrepo.RenderDDLAll(
 			`ALTER TABLE party_relationships {add:promotion_code} {str:15}{addEnd}`,
 			`CREATE INDEX ix_party_rel_promotion ON party_relationships (promotion_code)`)},
-		// Where in the street an address is, piece by piece (docs/GEOGRAFIA-NUTS.md, N-5).
+		// Dónde está una dirección dentro de la calle, pieza a pieza (docs/GEOGRAFIA-NUTS.md, N-5).
 		{Version: 15, Name: "postal address: number, block, portal, staircase, floor and door", Up: sqlrepo.RenderDDLAll(
 			`ALTER TABLE party_contacts {add:addr_number} {str:10}{addEnd}`,
 			`ALTER TABLE party_contacts {add:addr_qualifier} {str:10}{addEnd}`,
@@ -197,42 +198,46 @@ func Migrations() sqlrepo.MigrationSet {
 			`ALTER TABLE party_contacts {add:addr_staircase} {str:10}{addEnd}`,
 			`ALTER TABLE party_contacts {add:addr_floor} {str:10}{addEnd}`,
 			`ALTER TABLE party_contacts {add:addr_door} {str:10}{addEnd}`)},
-		// A stable code for the role types, as the relationship types have (docs/EXTENSIBILIDAD.md, X-3).
+		// Un código estable para los tipos de rol, como el que tienen los tipos de relación
+		// (docs/EXTENSIBILIDAD.md, X-3).
 		{Version: 16, Name: "role type codes", Up: sqlrepo.RenderDDLAll(
 			`ALTER TABLE role_types {add:code} {str:40}{addEnd}`), Run: seedRoleCodes},
-		// The number an organization knows its customer by belongs to the pair (docs/PARTIES-MODELO-COMUN.md, D-10).
+		// El número con el que una organización conoce a su cliente pertenece a la pareja
+		// (docs/PARTIES-MODELO-COMUN.md, D-10).
 		{Version: 17, Name: "customer relationship details: customer number", Up: sqlrepo.RenderDDLAll(
 			`ALTER TABLE party_relationships {add:customer_number} {str:20}{addEnd}`,
 			`CREATE INDEX ix_party_rel_customer_no ON party_relationships (to_party, customer_number)`)},
-		// The mark of a party whose identity document was refused (docs/PARTIES-MODELO-COMUN.md, D-9).
+		// La marca de una party cuyo documento de identidad fue rechazado
+		// (docs/PARTIES-MODELO-COMUN.md, D-9).
 		{Version: 18, Name: "mark of a refused identity document", Up: sqlrepo.RenderDDLAll(
 			`ALTER TABLE parties {add:doc_issue} {bool} DEFAULT {false} NOT NULL{addEnd}`,
 			`ALTER TABLE parties {add:doc_issue_number} {str:60}{addEnd}`,
 			`ALTER TABLE parties {add:doc_issue_reason} {str:200}{addEnd}`)},
-		// The role type that was "Other Organization Unit" is called "Team" in every project
+		// El tipo de rol que era «Other Organization Unit» se llama «Team» en todos los proyectos
 		// (docs/DECISIONES-COMUNES.md, D-54).
 		{Version: 19, Name: "role type Team", Run: renameTeamRole},
-		// A person may be a supplier, and an internal organization too: the two role types leave
-		// the branch of the organizations (docs/DECISIONES-COMUNES.md, D-53).
+		// Una persona puede ser proveedor, y también organización interna: los dos tipos de rol
+		// salen de la rama de las organizaciones (docs/DECISIONES-COMUNES.md, D-53).
 		{Version: 20, Name: "supplier and internal organization are roles of any party", Run: moveRolesOfAnyParty},
-		// Every project seeds the same types: the ones this catalog lacked, and Team among the
-		// informal organizations (docs/DECISIONES-COMUNES.md, D-62).
+		// Todos los proyectos siembran los mismos tipos: los que le faltaban a este catálogo, y
+		// Team entre las organizaciones informales (docs/DECISIONES-COMUNES.md, D-62).
 		{Version: 21, Name: "the common catalog of role and relationship types", Run: seedCommonCatalog},
-		// The mark of a role given by mistake that could not be removed (docs/DECISIONES-COMUNES.md, D-8).
+		// La marca de un rol dado por error que no se ha podido quitar
+		// (docs/DECISIONES-COMUNES.md, D-8).
 		{Version: 22, Name: "annulled roles", Up: sqlrepo.RenderDDLAll(
 			`ALTER TABLE party_roles {add:annulled} {bool} DEFAULT {false} NOT NULL{addEnd}`)},
-		// Prospect Relationship leaves …0016 to Trench's Duplicate Of, which every project seeds
-		// (docs/DECISIONES-COMUNES.md, D-62). Migration 21 does the same on a database it meets
-		// first; here it reaches the ones that had already passed it.
+		// Prospect Relationship deja …0016 al Duplicate Of de Trench, que siembran todos los
+		// proyectos (docs/DECISIONES-COMUNES.md, D-62). La migración 21 hace lo mismo en una base
+		// que encuentra por primera vez; aquí llega a las que ya la habían pasado.
 		{Version: 23, Name: "prospect relationship moves to …0017; duplicate of", Run: seedCommonCatalog},
-		// The mark of a party that is the duplicate of another (docs/DECISIONES-COMUNES.md, D-64).
+		// La marca de una party que es el duplicado de otra (docs/DECISIONES-COMUNES.md, D-64).
 		{Version: 24, Name: "mark of a duplicate party", Up: sqlrepo.RenderDDLAll(
 			`ALTER TABLE parties {add:duplicate} {bool} DEFAULT {false} NOT NULL{addEnd}`)},
 	}}
 }
 
-// seedCommonCatalog adds the well-known types a database seeded earlier does not have, and hangs
-// Team from where the seed says now. A database seeded with this version already has them all.
+// seedCommonCatalog añade los tipos conocidos que no tiene una base sembrada antes, y cuelga Team
+// de donde dice ahora la siembra. Una base sembrada con esta versión ya los tiene todos.
 func seedCommonCatalog(ctx context.Context, db *sqlrepo.DB) error {
 	if err := moveProspect(ctx, db); err != nil {
 		return err
@@ -252,7 +257,7 @@ func seedCommonCatalog(ctx context.Context, db *sqlrepo.DB) error {
 	if err != nil {
 		return err
 	}
-	for _, t := range domain.WellKnownRoleTypes() { // parents go first
+	for _, t := range domain.WellKnownRoleTypes() { // los padres van primero
 		switch {
 		case t.ID == domain.RoleTeam:
 			if _, err := db.Update(ctx, "role_types", sqlrepo.Values{"parent_id": *t.Parent}, sqlrepo.Values{"id": t.ID}); err != nil {
@@ -291,12 +296,12 @@ func seedCommonCatalog(ctx context.Context, db *sqlrepo.DB) error {
 	return nil
 }
 
-// oldProspect is where Prospect Relationship was until Duplicate Of took its id.
+// oldProspect es donde estaba Prospect Relationship hasta que Duplicate Of tomó su id.
 const oldProspect = "10000000-0000-0000-0002-000000000016"
 
-// moveProspect gives Prospect Relationship its new id where a database still has it at the old
-// one: the type is copied, its relationships follow it, and the old row goes. Nothing happens
-// where the old id holds another type (a database seeded with Duplicate Of there).
+// moveProspect da a Prospect Relationship su id nuevo donde una base aún lo tiene en el antiguo:
+// se copia el tipo, sus relaciones lo siguen y la fila antigua se va. No pasa nada donde el id
+// antiguo tiene otro tipo (una base sembrada con Duplicate Of ahí).
 func moveProspect(ctx context.Context, db *sqlrepo.DB) error {
 	rows, err := db.Select(ctx, "relationship_types", []string{"id", "name", "description", "from_role", "to_role", "hierarchical", "code"})
 	if err != nil {
@@ -325,7 +330,7 @@ func moveProspect(ctx context.Context, db *sqlrepo.DB) error {
 	return nil
 }
 
-// moveRolesOfAnyParty hangs Supplier and Internal Organization from where the seed says now.
+// moveRolesOfAnyParty cuelga Supplier e Internal Organization de donde dice ahora la siembra.
 func moveRolesOfAnyParty(ctx context.Context, db *sqlrepo.DB) error {
 	for _, t := range domain.WellKnownRoleTypes() {
 		if t.ID != domain.RoleSupplier && t.ID != domain.RoleInternalOrganization {
@@ -339,8 +344,8 @@ func moveRolesOfAnyParty(ctx context.Context, db *sqlrepo.DB) error {
 	return nil
 }
 
-// codeTaken refuses to give a well-known type a code that a type added to the catalog already
-// has: two types with one code would leave the catalog unreadable, and the context with it.
+// codeTaken se niega a dar a un tipo conocido un código que ya tiene un tipo añadido al catálogo:
+// dos tipos con un mismo código dejarían el catálogo ilegible, y el contexto con él.
 func codeTaken(ctx context.Context, db *sqlrepo.DB, table, code, id string) error {
 	rows, err := db.Select(ctx, table, []string{"id", "code"})
 	if err != nil {
@@ -355,7 +360,8 @@ func codeTaken(ctx context.Context, db *sqlrepo.DB, table, code, id string) erro
 	return nil
 }
 
-// renameTeamRole gives the role type its common name and code where an earlier seed left the old ones.
+// renameTeamRole da al tipo de rol su nombre y su código comunes donde una siembra anterior dejó
+// los antiguos.
 func renameTeamRole(ctx context.Context, db *sqlrepo.DB) error {
 	for _, t := range domain.WellKnownRoleTypes() {
 		if t.ID != domain.RoleTeam {
@@ -371,7 +377,7 @@ func renameTeamRole(ctx context.Context, db *sqlrepo.DB) error {
 	return nil
 }
 
-// seedRoleCodes gives the well-known role types their code.
+// seedRoleCodes da su código a los tipos de rol conocidos.
 func seedRoleCodes(ctx context.Context, db *sqlrepo.DB) error {
 	for _, t := range domain.WellKnownRoleTypes() {
 		if _, err := db.Update(ctx, "role_types", sqlrepo.Values{"code": t.Code}, sqlrepo.Values{"id": t.ID}); err != nil {
@@ -381,10 +387,10 @@ func seedRoleCodes(ctx context.Context, db *sqlrepo.DB) error {
 	return nil
 }
 
-// seedRelationshipCodes gives the well-known relationship types their code and adds the prospect
-// relationship type (docs/PARTIES-UDM.md). The code is unique among the types that have one; the
-// catalog checks it when it is loaded, because a unique index over a nullable column does not
-// behave the same on every engine.
+// seedRelationshipCodes da su código a los tipos de relación conocidos y añade el tipo de relación
+// de prospect (docs/PARTIES-UDM.md). El código es único entre los tipos que tienen uno; el
+// catálogo lo comprueba al cargarse, porque un índice único sobre una columna anulable no se
+// comporta igual en todos los motores.
 func seedRelationshipCodes(ctx context.Context, db *sqlrepo.DB) error {
 	for _, t := range domain.WellKnownRelationshipTypes() {
 		if t.ID == domain.RelProspect {
@@ -402,8 +408,8 @@ func seedRelationshipCodes(ctx context.Context, db *sqlrepo.DB) error {
 	return nil
 }
 
-// seedCatalogs inserts the well-known catalogs with the same GUIDs as the C# WellKnownCatalog.
-// Parents go first: the order of WellKnownRoleTypes already respects the hierarchy.
+// seedCatalogs inserta los catálogos conocidos con los mismos GUID que el WellKnownCatalog de C#.
+// Los padres van primero: el orden de WellKnownRoleTypes ya respeta la jerarquía.
 func seedCatalogs(ctx context.Context, db *sqlrepo.DB) error {
 	for _, t := range domain.WellKnownRoleTypes() {
 		var parent any
@@ -416,10 +422,10 @@ func seedCatalogs(ctx context.Context, db *sqlrepo.DB) error {
 		}
 	}
 	for _, t := range domain.WellKnownRelationshipTypes() {
-		if t.ID == domain.RelProspect { // added by migration 11, with the codes
+		if t.ID == domain.RelProspect { // lo añade la migración 11, con los códigos
 			continue
 		}
-		if t.ID == domain.RelOrganizationRollup { // seeded as in C#; migration 7 generalizes it
+		if t.ID == domain.RelOrganizationRollup { // se siembra como en C#; la migración 7 lo generaliza
 			t.FromRole, t.ToRole, t.Description = domain.RoleDepartment, domain.RoleDivision, "Department belongs to a division"
 		}
 		if err := db.Insert(ctx, "relationship_types", sqlrepo.Values{"id": t.ID, "name": t.Name.String(),
@@ -430,7 +436,8 @@ func seedCatalogs(ctx context.Context, db *sqlrepo.DB) error {
 	return nil
 }
 
-// seedPhase2 inserts the document and classification catalogs (C# GUIDs). Families go first.
+// seedPhase2 inserta los catálogos de documentos y de clasificaciones (GUID de C#). Las familias
+// van primero.
 func seedPhase2(ctx context.Context, db *sqlrepo.DB) error {
 	optBool := func(b *bool) any {
 		if b == nil {
@@ -474,7 +481,8 @@ func seedPhase2(ctx context.Context, db *sqlrepo.DB) error {
 	return nil
 }
 
-// generalizeRollup updates the seeded Organization Rollup type (see domain.WellKnownRelationshipTypes).
+// generalizeRollup actualiza el tipo Organization Rollup sembrado (ver
+// domain.WellKnownRelationshipTypes).
 func generalizeRollup(ctx context.Context, db *sqlrepo.DB) error {
 	for _, t := range domain.WellKnownRelationshipTypes() {
 		if t.ID != domain.RelOrganizationRollup {
@@ -487,12 +495,12 @@ func generalizeRollup(ctx context.Context, db *sqlrepo.DB) error {
 	return nil
 }
 
-// Migrator returns the schema migrator of Parties on db.
+// Migrator devuelve el migrador del esquema de Parties sobre db.
 func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 	return sqlrepo.NewMigrator(db, []sqlrepo.MigrationSet{Migrations()})
 }
 
-// DropAll removes every table of the context (tests only).
+// DropAll elimina todas las tablas del contexto (sólo para pruebas).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
 	for _, t := range []string{"party_relationships", "party_roles", "party_identifications", "party_contacts", "party_affiliations",
 		"party_facility_roles", "facility_role_types",

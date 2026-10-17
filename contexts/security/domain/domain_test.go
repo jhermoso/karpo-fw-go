@@ -52,7 +52,7 @@ func TestUsername(t *testing.T) {
 			t.Errorf("%q should be rejected: %v", bad, err)
 		}
 	}
-	// C# kept "Admin" and "admin" as two users; here the lookup key ignores case.
+	// C# guardaba "Admin" y "admin" como dos usuarios; aquí la clave de búsqueda no distingue mayúsculas.
 	if domain.UsernameKey(" Admin ") != domain.UsernameKey("admin") {
 		t.Fatal("user names are unique ignoring case")
 	}
@@ -85,8 +85,8 @@ func TestLockout(t *testing.T) {
 	if u.IsLockedAt(now.Add(15 * time.Minute)) {
 		t.Fatal("the lock ends after its duration")
 	}
-	// An expired lock starts a new count: in C# the counter stayed at the limit and the next
-	// failure locked again at once.
+	// Un bloqueo vencido empieza una cuenta nueva: en C# el contador se quedaba en el límite y el
+	// siguiente fallo volvía a bloquear en el acto.
 	later := now.Add(16 * time.Minute)
 	if u.RecordFailedLogin(policy, later) || u.FailedAttempts() != 1 {
 		t.Fatalf("after the lock expires the count restarts: %d", u.FailedAttempts())
@@ -175,7 +175,7 @@ func TestAccessesAndIdentitiesAreUnique(t *testing.T) {
 	if got := eventTypes(u.PendingEvents()); got != "user_registered,access_granted,access_changed,access_revoked,identity_linked,identity_unlinked" {
 		t.Fatalf("events: %s", got)
 	}
-	// Duplicates cannot come from storage either.
+	// Tampoco pueden venir duplicados del almacenamiento.
 	_, err := domain.ReconstituteUser(u.ID(), domain.UserState{Party: u.Party(), Username: "ana", Active: true,
 		Accesses: []domain.OrganizationAccess{full(acme), full(acme)}})
 	if !errors.Is(err, fw.ErrValidation) {
@@ -189,10 +189,10 @@ func TestCatalogAndSystemRoles(t *testing.T) {
 	c := domain.NewCatalog(codes...)
 	want := map[domain.RoleID][]domain.Permission{
 		domain.RoleGlobalSuperAdmin: {domain.Wildcard},
-		// Everything but the wildcard and what is reserved to the global administrator.
+		// Todo menos el comodín y lo reservado al administrador global.
 		domain.RoleOrganizationAdmin: {"Parties.Party.Create", "Parties.Party.Read", "Parties.Party.Update", "Parties.PartyRole.Assign",
 			"Payroll.Payslip.Approve", domain.PermRoleRead, domain.PermUserRead, domain.PermUserUpdate},
-		// Read, Create and Update outside Security: approving a payslip or assigning a party role is not ordinary work.
+		// Read, Create y Update fuera de Security: aprobar una nómina o asignar un rol de party no es trabajo corriente.
 		domain.RoleStandardUser: {"Parties.Party.Create", "Parties.Party.Read", "Parties.Party.Update"},
 		domain.RoleReadOnlyUser: {"Parties.Party.Read", domain.PermRoleRead, domain.PermUserRead},
 		domain.RoleCustomer:     nil,
@@ -228,7 +228,7 @@ func TestCatalogAndSystemRoles(t *testing.T) {
 	if err := c.Check([]domain.Permission{"Parties.Party.Read", "Orders.Order.Read"}); !errors.Is(err, fw.ErrValidation) {
 		t.Fatalf("unknown permission: %v", err)
 	}
-	// The identity of a permission is its code: the derived storage id is stable.
+	// La identidad de un permiso es su código: el id de almacenamiento derivado es estable.
 	if domain.PermissionIDOf("Parties.Party.Read") != domain.PermissionIDOf("Parties.Party.Read") ||
 		domain.PermissionIDOf("Parties.Party.Read") == domain.PermissionIDOf("Parties.Party.Create") {
 		t.Fatal("permission ids derive from the code")
@@ -253,8 +253,8 @@ func TestCustomRole(t *testing.T) {
 		[]domain.Permission{"Purchases.Invoice.Read", "Purchases.Invoice.Register"}) {
 		t.Fatalf("normalized: %q %v", r.Name(), r.Permissions())
 	}
-	// Only the GlobalSuperAdmin system role carries the wildcard: a custom role with it was the
-	// way around the C# check by role name.
+	// Sólo el rol del sistema GlobalSuperAdmin lleva el comodín: un rol propio con él era la forma
+	// de saltarse la comprobación de C# por nombre de rol.
 	if err := r.SetPermissions([]domain.Permission{domain.Wildcard}); !errors.Is(err, fw.ErrValidation) {
 		t.Fatalf("wildcard: %v", err)
 	}
@@ -279,8 +279,8 @@ func TestCustomRole(t *testing.T) {
 	}
 }
 
-// The three rules of delegated administration (decision 5), with the example of the document:
-// Marta administers Acme; Pedro works in Beta.
+// Las tres reglas de la administración delegada (decisión 5), con el ejemplo del documento:
+// Marta administra Acme; Pedro trabaja en Beta.
 func TestDelegatedAdministration(t *testing.T) {
 	acme, beta := org(), org()
 	clerkRole, _ := domain.DefineRole(domain.NewRoleID(), "Clerk", "", []domain.Permission{"Parties.Party.Read"})
@@ -292,7 +292,7 @@ func TestDelegatedAdministration(t *testing.T) {
 		Organizations: []domain.OrganizationID{acme}, Full: []domain.OrganizationID{acme}}
 	global := domain.Administrator{User: domain.NewUserID(), Global: true}
 
-	// Rule 1: nobody grants what they do not have.
+	// Regla 1: nadie concede lo que no tiene.
 	if marta.CanAssign(clerkRole) != nil {
 		t.Fatal("Marta holds every permission of Clerk")
 	}
@@ -312,7 +312,7 @@ func TestDelegatedAdministration(t *testing.T) {
 		t.Fatal("a read-only access does not grant")
 	}
 
-	// Rule 2: you administer whom you fully encompass.
+	// Regla 2: cada uno administra a quien abarca por completo.
 	colleague := newUser(t, "carlos", full(acme))
 	pedro := newUser(t, "pedro", full(beta))
 	nobody := newUser(t, "nuevo")
@@ -322,13 +322,13 @@ func TestDelegatedAdministration(t *testing.T) {
 	if marta.Sees(pedro) || marta.Sees(nobody) {
 		t.Fatal("Marta does not see users without an access to Acme")
 	}
-	// Marta may give Pedro access to Acme (and take it back)...
+	// Marta puede dar a Pedro acceso a Acme (y quitárselo)...
 	if err := marta.CanChangeAccess(pedro, acme); err != nil {
 		t.Fatal(err)
 	}
 	_ = pedro.GrantAccess(domain.OrganizationAccess{Organization: acme, Level: domain.ReadOnly})
-	// ...and now she sees him, but still cannot administer him: she does not encompass Beta.
-	// In C#, after that grant she could edit him, strip his roles or delete him.
+	// ...y ahora lo ve, pero sigue sin poder administrarlo: no abarca Beta.
+	// En C#, tras esa concesión podía editarlo, quitarle los roles o borrarlo.
 	if !marta.Sees(pedro) || !errors.Is(marta.CanAdminister(pedro), fw.ErrForbidden) {
 		t.Fatal("sharing one organization is not enough to administer a user")
 	}
@@ -342,7 +342,7 @@ func TestDelegatedAdministration(t *testing.T) {
 		t.Fatal("without organizations nothing is administrable nor visible (fail closed)")
 	}
 
-	// Rule 3: nobody administers themselves, the global administrator included.
+	// Regla 3: nadie se administra a sí mismo, tampoco el administrador global.
 	if !errors.Is(marta.CanAdminister(martaUser), fw.ErrForbidden) || !errors.Is(marta.CanChangeAccess(martaUser, acme), fw.ErrForbidden) {
 		t.Fatal("Marta cannot administer her own user nor grant herself organizations")
 	}
@@ -351,7 +351,7 @@ func TestDelegatedAdministration(t *testing.T) {
 		t.Fatal("a global administrator does not administer itself either")
 	}
 
-	// ...and one global administrator always remains: the specification finds the others.
+	// ...y siempre queda un administrador global: la especificación encuentra a los otros.
 	_ = self.AssignRole(superRole)
 	other := newUser(t, "root2")
 	_ = other.AssignRole(superRole)

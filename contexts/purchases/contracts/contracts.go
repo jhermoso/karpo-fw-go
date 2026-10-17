@@ -1,19 +1,20 @@
-// Package contracts is what other bounded contexts may depend on: the Published Language of
-// Purchases (Payments owes what is paid to the supplier, Accounting posts the expense, the input
-// tax and the withholding, Fiscal counts the professional withholdings of Modelo 111 and 190).
+// Package contracts es aquello de lo que pueden depender otros contextos delimitados: el Published
+// Language de Purchases (Payments debe lo que se paga al proveedor, Accounting contabiliza el gasto,
+// el impuesto soportado y la retención, Fiscal cuenta las retenciones profesionales de los Modelos
+// 111 y 190).
 package contracts
 
-// Source is the name of the publishing bounded context.
+// Source es el nombre del contexto delimitado que publica.
 const Source = "purchases"
 
-// Expense is the cost of an expense category of an invoice (its bases plus, when the tax is not
-// deductible, its share of the tax).
+// Expense es el coste de una categoría de gasto de una factura (sus bases más, cuando el impuesto
+// no es deducible, su parte del impuesto).
 type Expense struct {
 	Category string `json:"category"` // goods | rent | repairs | professional-services | transport | insurance | advertising | supplies | other-services | fixed-asset
 	Amount   string `json:"amount"`
 }
 
-// Tax is a line of the tax breakdown of an invoice.
+// Tax es una línea del desglose de impuestos de una factura.
 type Tax struct {
 	TaxCode       string `json:"taxCode,omitempty"`
 	Treatment     string `json:"treatment,omitempty"`
@@ -23,15 +24,15 @@ type Tax struct {
 	Amount        string `json:"amount"`
 }
 
-// PayTo is an account the invoice is paid to.
+// PayTo es una cuenta a la que se paga la factura.
 type PayTo struct {
 	IBAN   string `json:"iban"`
 	Amount string `json:"amount"`
 }
 
-// InvoiceRegisteredV1 is published when a received invoice is booked. Amounts are decimal strings
-// in euros with two decimals (negative on a corrective invoice); Total = Net + Tax and
-// Payable = Total - Withholding; the expenses plus DeductibleTax add up to Total.
+// InvoiceRegisteredV1 se publica cuando se registra una factura recibida. Los importes son cadenas
+// decimales en euros con dos decimales (negativos en una factura rectificativa); Total = Net + Tax y
+// Payable = Total - Withholding; los gastos más DeductibleTax suman Total.
 type InvoiceRegisteredV1 struct {
 	InvoiceID       string    `json:"invoiceId"`
 	Company         string    `json:"company"`
@@ -48,18 +49,18 @@ type InvoiceRegisteredV1 struct {
 	Total           string    `json:"total"`
 	WithholdingRate string    `json:"withholdingRate"`
 	Withholding     string    `json:"withholding"`
-	WithholdingKey  string    `json:"withholdingKey,omitempty"` // Modelo 190 perception key (G: professional activities)
+	WithholdingKey  string    `json:"withholdingKey,omitempty"` // clave de percepción del Modelo 190 (G: actividades profesionales)
 	Payable         string    `json:"payable"`
 	Expenses        []Expense `json:"expenses"`
 	Taxes           []Tax     `json:"taxes"`
 	PayTo           []PayTo   `json:"payTo,omitempty"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (InvoiceRegisteredV1) IntegrationEventType() string { return "purchases.invoice-registered.v1" }
 
-// InvoiceCancelledV1 is published when a received invoice booked by mistake is annulled:
-// consumers reverse what they did with its registration.
+// InvoiceCancelledV1 se publica cuando se anula una factura recibida registrada por error: los
+// consumidores deshacen lo que hicieron con su registro.
 type InvoiceCancelledV1 struct {
 	InvoiceID string `json:"invoiceId"`
 	Company   string `json:"company"`
@@ -67,5 +68,5 @@ type InvoiceCancelledV1 struct {
 	Reason    string `json:"reason"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (InvoiceCancelledV1) IntegrationEventType() string { return "purchases.invoice-cancelled.v1" }

@@ -11,9 +11,9 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
 )
 
-// Organizations implements the organization ports other contexts use (membership, hierarchy,
-// internal organization catalog). Like Directory, it serves contexts, not users: the caller's
-// own use case is what is authorized.
+// Organizations implementa los puertos de organización que usan otros contextos (pertenencia,
+// jerarquía, catálogo de organizaciones internas). Como Directory, sirve a contextos, no a
+// usuarios: lo que se autoriza es el caso de uso del llamante.
 type Organizations struct {
 	Parties       domain.PartyRepository
 	Relationships domain.RelationshipRepository
@@ -44,8 +44,8 @@ func idsOf(ids []domain.PartyID) []string {
 	return out
 }
 
-// InternalOrganizations implements contracts.Membership from the affiliations of the parties
-// (one query per batch).
+// InternalOrganizations implementa contracts.Membership a partir de las afiliaciones de las
+// parties (una consulta por lote).
 func (o Organizations) InternalOrganizations(ctx context.Context, partyIDs []string) (map[string][]string, error) {
 	out := make(map[string][]string, len(partyIDs))
 	for _, s := range partyIDs {
@@ -84,8 +84,8 @@ func (o Organizations) hierarchicalTypes(ctx context.Context) ([]domain.Relation
 	return out, nil
 }
 
-// Descendants implements contracts.OrganizationHierarchy: one query per level, at most
-// MaxHierarchyDepth levels, a visited node is never walked twice.
+// Descendants implementa contracts.OrganizationHierarchy: una consulta por nivel, como mucho
+// MaxHierarchyDepth niveles, y un nodo visitado nunca se recorre dos veces.
 func (o Organizations) Descendants(ctx context.Context, organizationIDs []string) ([]string, error) {
 	seeds := parseIDs(organizationIDs)
 	types, err := o.hierarchicalTypes(ctx)
@@ -111,8 +111,8 @@ func (o Organizations) Descendants(ctx context.Context, organizationIDs []string
 	return idsOf(owned), nil
 }
 
-// InternalOrganizationOf implements contracts.OrganizationHierarchy: it walks up the rollups,
-// one level per query, until a party playing Internal Organization.
+// InternalOrganizationOf implementa contracts.OrganizationHierarchy: sube por los
+// agrupamientos, un nivel por consulta, hasta una party que desempeñe Internal Organization.
 func (o Organizations) InternalOrganizationOf(ctx context.Context, unitIDs []string) (map[string]contracts.PartyRef, error) {
 	out := map[string]contracts.PartyRef{}
 	units := parseIDs(unitIDs)
@@ -129,7 +129,7 @@ func (o Organizations) InternalOrganizationOf(ctx context.Context, unitIDs []str
 		return nil, err
 	}
 	now := fw.Now()
-	current := map[domain.PartyID]domain.PartyID{} // unit -> node being examined
+	current := map[domain.PartyID]domain.PartyID{} // unidad -> nodo que se examina
 	for _, u := range units {
 		current[u] = u
 	}
@@ -174,8 +174,8 @@ func (o Organizations) InternalOrganizationOf(ctx context.Context, unitIDs []str
 	return out, nil
 }
 
-// All implements contracts.InternalOrganizationCatalog: every party playing Internal
-// Organization now.
+// All implementa contracts.InternalOrganizationCatalog: toda party que desempeña Internal
+// Organization ahora.
 func (o Organizations) All(ctx context.Context) ([]contracts.PartyRef, error) {
 	ps, err := o.Parties.Find(ctx, domain.PlaysAt(fw.Now(), domain.RoleInternalOrganization), domain.FieldName.Asc())
 	if err != nil {
@@ -188,13 +188,14 @@ func (o Organizations) All(ctx context.Context) ([]contracts.PartyRef, error) {
 	return out, nil
 }
 
-// TaxIdentities implements contracts.TaxIdentities over the identifications and postal contacts
-// of the parties (one query per batch; it serves contexts, not users).
+// TaxIdentities implementa contracts.TaxIdentities sobre las identificaciones y los contactos
+// postales de las parties (una consulta por lote; sirve a contextos, no a usuarios).
 type TaxIdentities struct{ Parties domain.PartyRepository }
 
 var _ contracts.TaxIdentities = TaxIdentities{}
 
-// taxDocuments are the documents that identify a party for tax purposes, most specific first.
+// taxDocuments son los documentos que identifican a una party a efectos fiscales, el más
+// específico primero.
 var taxDocuments = []struct {
 	id   domain.DocumentTypeID
 	code string
@@ -204,9 +205,9 @@ var taxDocuments = []struct {
 	{domain.MustDocumentTypeID("c0000000-0004-0000-0000-000000000006"), "ARNU"},
 }
 
-// TaxIdentities implements contracts.TaxIdentities: the primary tax document if there is one,
-// otherwise TXID, then NIDN, then ARNU; the province of the current Spanish postal contact,
-// billing first.
+// TaxIdentities implementa contracts.TaxIdentities: el documento fiscal principal si lo hay; si
+// no, TXID, luego NIDN, luego ARNU; la provincia del contacto postal español vigente, primero el
+// de facturación.
 func (t TaxIdentities) TaxIdentities(ctx context.Context, partyIDs []string) (map[string]contracts.TaxIdentity, error) {
 	if len(partyIDs) > contracts.MaxDirectoryBatch {
 		return nil, fmt.Errorf("%w: at most %d ids per call", fw.ErrValidation, contracts.MaxDirectoryBatch)

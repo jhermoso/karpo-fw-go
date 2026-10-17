@@ -1,5 +1,5 @@
-// Package application holds the Financial use cases (with permissions and company scope) and the
-// translation to the Published Language.
+// Package application reúne los casos de uso de Financial (con permisos y alcance por empresa) y la
+// traducción al Published Language.
 package application
 
 import (
@@ -22,8 +22,8 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Permissions (the C# asked only for a session, and anyone could delete an account). Opening an
-// account, keeping its details, stopping it and closing it are separate.
+// Permisos (el C# sólo pedía una sesión, y cualquiera podía borrar una cuenta). Abrir una cuenta,
+// mantener sus datos, pararla y cerrarla van por separado.
 var (
 	PermAccountRead   = authz.MustPermission("Financial.Account.Read")
 	PermAccountCreate = authz.MustPermission("Financial.Account.Create")
@@ -32,14 +32,14 @@ var (
 	PermAccountClose  = authz.MustPermission("Financial.Account.Close")
 )
 
-// Permissions returns the permissions this context declares to the Security catalog.
+// Permissions devuelve los permisos que este contexto declara al catálogo de Security.
 func Permissions() []authz.Permission {
 	return []authz.Permission{PermAccountRead, PermAccountCreate, PermAccountUpdate, PermAccountBlock, PermAccountClose,
 		PermProductRead, PermProductUpdate, PermAgreementRead, PermAgreementUpdate}
 }
 
-// Deps are the ports the use cases need; Recorder and Audit are optional. Without Institutions no
-// company is a financial institution, and nothing can be created.
+// Deps son los puertos que necesitan los casos de uso; Recorder y Audit son opcionales. Sin
+// Institutions ninguna empresa es entidad financiera, y no se puede crear nada.
 type Deps struct {
 	Accounts     domain.AccountRepository
 	Products     domain.ProductRepository
@@ -50,15 +50,15 @@ type Deps struct {
 	Audit        app.AuditLog
 }
 
-// Commands and queries.
+// Comandos y consultas.
 type (
-	// OpenAccount opens an account for a customer.
+	// OpenAccount abre una cuenta a un cliente.
 	OpenAccount struct {
 		Company   string     `json:"company"`
 		Number    string     `json:"number"`
 		Virtual   bool       `json:"virtual,omitempty"`
 		BIC       string     `json:"bic,omitempty"`
-		Currency  string     `json:"currency,omitempty"` // EUR when empty
+		Currency  string     `json:"currency,omitempty"` // EUR si está vacío
 		Name      string     `json:"name,omitempty"`
 		Product   string     `json:"product,omitempty"`
 		Agreement string     `json:"agreement,omitempty"`
@@ -67,7 +67,7 @@ type (
 		Holder    string     `json:"holder"`
 		Uses      []string   `json:"uses,omitempty"`
 	}
-	// DescribeAccount replaces the name, the BIC, the product and the agreement of an account.
+	// DescribeAccount sustituye el nombre, el BIC, el producto y el acuerdo de una cuenta.
 	DescribeAccount struct {
 		ID        domain.AccountID `json:"-"`
 		Name      string           `json:"name,omitempty"`
@@ -75,7 +75,7 @@ type (
 		Product   string           `json:"product,omitempty"`
 		Agreement string           `json:"agreement,omitempty"`
 	}
-	// RelateParty gives a party a role on an account.
+	// RelateParty da a una party un papel en una cuenta.
 	RelateParty struct {
 		ID      domain.AccountID `json:"-"`
 		Party   string           `json:"party"`
@@ -83,42 +83,42 @@ type (
 		From    vocab.Date       `json:"from,omitzero"`
 		Primary bool             `json:"primary,omitempty"`
 	}
-	// UnrelateParty ends the role of a party on an account.
+	// UnrelateParty termina el papel de una party en una cuenta.
 	UnrelateParty struct {
 		ID    domain.AccountID `json:"-"`
 		Party string           `json:"party"`
 		Role  string           `json:"role"`
 		On    vocab.Date       `json:"on,omitzero"`
 	}
-	// FileUnder files an account under another of its holders.
+	// FileUnder archiva una cuenta a nombre de otro de sus titulares.
 	FileUnder struct {
 		ID    domain.AccountID `json:"-"`
 		Party string           `json:"party"`
 	}
-	// ChangeUse gives an account a use or ends it.
+	// ChangeUse da un uso a una cuenta o lo termina.
 	ChangeUse struct {
 		ID  domain.AccountID `json:"-"`
 		Use string           `json:"use"`
 		On  vocab.Date       `json:"on,omitzero"`
 	}
-	// ChangeStatus blocks, sets apart, releases or closes an account.
+	// ChangeStatus bloquea, aparta, libera o cierra una cuenta.
 	ChangeStatus struct {
 		ID     domain.AccountID `json:"-"`
 		Reason string           `json:"reason,omitempty"`
-		On     vocab.Date       `json:"on,omitzero"` // of the closing
+		On     vocab.Date       `json:"on,omitzero"` // del cierre
 	}
-	// GetAccount reads an account by its identity, or by its number in a company.
+	// GetAccount lee una cuenta por su identidad, o por su número en una empresa.
 	GetAccount struct {
 		ID      domain.AccountID
 		Company string
 		Number  string
 	}
-	// SearchAccounts searches the accounts of the caller's scope, by number.
+	// SearchAccounts busca las cuentas del alcance del llamante, por número.
 	SearchAccounts struct {
 		Company, Status, Party, Use, Currency, Name, Demo, Product, Agreement string
 		Page, Size                                                            int
 	}
-	// GetStats counts the accounts of a company.
+	// GetStats cuenta las cuentas de una empresa.
 	GetStats struct{ Company string }
 )
 
@@ -151,13 +151,13 @@ type (
 		Opened    string      `json:"opened"`
 		Closed    string      `json:"closed,omitempty"`
 		Reason    string      `json:"reason,omitempty"`
-		Holder    string      `json:"holder,omitempty"` // who it is filed under
+		Holder    string      `json:"holder,omitempty"` // a nombre de quién está archivada
 		Holders   []HolderDTO `json:"holders"`
 		Uses      []UseDTO    `json:"uses"`
 		Version   int64       `json:"version"`
 	}
-	// StatsDTO counts the accounts of a company: all of them, and by status, currency and current
-	// use. Demo accounts are counted apart.
+	// StatsDTO cuenta las cuentas de una empresa: todas, y por estado, moneda y uso actual. Las
+	// cuentas de demostración se cuentan aparte.
 	StatsDTO struct {
 		Total      int            `json:"total"`
 		Demo       int            `json:"demo"`
@@ -167,7 +167,7 @@ type (
 	}
 )
 
-// Service exposes the use cases.
+// Service expone los casos de uso.
 type Service struct {
 	Open      app.CommandHandler[OpenAccount, AccountDTO]
 	Describe  app.CommandHandler[DescribeAccount, AccountDTO]
@@ -215,7 +215,7 @@ func scopeOf(ctx context.Context) scope {
 	return s
 }
 
-// check returns a uniform 404 outside the company's scope and 403 when it is read-only.
+// check devuelve un 404 uniforme fuera del alcance de la empresa y un 403 cuando es de sólo lectura.
 func (s scope) check(kind string, id fmt.Stringer, org domain.OrganizationID, write bool) error {
 	if !s.global && !slices.Contains(s.orgs, org) {
 		return fw.NotFound(kind, id)
@@ -312,7 +312,7 @@ func newService(d Deps) service {
 		agreements: orchestration.New[domain.AgreementID, *domain.Agreement](d.Agreements, d.UoW, opts...)}
 }
 
-// update changes an account of a company the caller may write in.
+// update cambia una cuenta de una empresa en la que el llamante puede escribir.
 func (s service) update(ctx context.Context, id domain.AccountID, fn func(*domain.Account) error) (AccountDTO, error) {
 	sc := scopeOf(ctx)
 	a, err := s.accounts.Update(ctx, id, func(_ context.Context, a *domain.Account) error {
@@ -327,7 +327,7 @@ func (s service) update(ctx context.Context, id domain.AccountID, fn func(*domai
 	return accountDTO(a), nil
 }
 
-// NewService wires the use cases.
+// NewService conecta los casos de uso.
 func NewService(d Deps) *Service {
 	s := newService(d)
 	svc := &Service{}
@@ -505,7 +505,7 @@ func NewService(d Deps) *Service {
 			v.Require(slices.Contains(domain.Statuses, domain.Status(q.Status)), "status", "enum", "a status")
 			parts = append(parts, domain.AccFieldStatus.Eq(q.Status))
 		}
-		if q.Party != "" { // whoever has a role on it now
+		if q.Party != "" { // quien tenga ahora un papel en ella
 			party := domain.PartyID{UUID: parseID(&v, "party", q.Party)}
 			parts = append(parts, domain.AccFieldHolders.Any(spec.And(domain.HolFieldParty.Eq(party), domain.HolFieldCurrent.Eq(true))))
 		}
@@ -539,7 +539,7 @@ func NewService(d Deps) *Service {
 		return fw.MapPage(page, accountDTO), nil
 	})
 
-	// The C# statistics ignored the scope of the caller and were cached for everybody.
+	// Las estadísticas del C# ignoraban el alcance del llamante y se cacheaban para todos.
 	svc.Stats = guard(PermAccountRead, func(ctx context.Context, q GetStats) (StatsDTO, error) {
 		var v fw.Validation
 		company := domain.OrganizationID{UUID: parseID(&v, "company", q.Company)}
@@ -574,13 +574,13 @@ func NewService(d Deps) *Service {
 	return svc
 }
 
-// Directory answers other contexts which accounts a party has (contracts.Accounts).
+// Directory responde a otros contextos qué cuentas tiene una party (contracts.Accounts).
 type Directory struct{ accounts domain.AccountRepository }
 
-// NewDirectory builds the directory over the accounts.
+// NewDirectory construye el directorio sobre las cuentas.
 func NewDirectory(accounts domain.AccountRepository) Directory { return Directory{accounts: accounts} }
 
-// OfParty implements contracts.Accounts.
+// OfParty implementa contracts.Accounts.
 func (d Directory) OfParty(ctx context.Context, company, party string) ([]contracts.AccountRef, error) {
 	c, err1 := fw.ParseUUID(company)
 	p, err2 := fw.ParseUUID(party)
@@ -609,7 +609,7 @@ func (d Directory) OfParty(ctx context.Context, company, party string) ([]contra
 
 var _ contracts.Accounts = Directory{}
 
-// Publications translates the domain events into the Published Language.
+// Publications traduce los eventos de dominio al Published Language.
 func Publications(r *messaging.Recorder) *messaging.Recorder {
 	messaging.On(r, func(_ context.Context, e domain.AccountOpened) ([]app.IntegrationEvent, error) {
 		return []app.IntegrationEvent{contracts.AccountOpenedV1{AccountID: e.AggregateID, Company: e.Company, Number: e.Number, Currency: e.Currency,

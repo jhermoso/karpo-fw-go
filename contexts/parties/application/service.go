@@ -19,7 +19,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Deps are the ports the use cases need; Recorder, Audit and Idempotency are optional.
+// Deps son los puertos que necesitan los casos de uso; Recorder, Audit e Idempotency son opcionales.
 type Deps struct {
 	Parties       domain.PartyRepository
 	Relationships domain.RelationshipRepository
@@ -28,21 +28,21 @@ type Deps struct {
 	Recorder      app.EventRecorder
 	Audit         app.AuditLog
 	Idempotency   app.IdempotencyStore
-	// Addresses validates postal addresses against the Geography context (optional).
+	// Addresses valida las direcciones postales contra el contexto Geography (opcional).
 	Addresses AddressChecker
-	// FacilityDirectory resolves facilities of the Facilities context (optional).
+	// FacilityDirectory resuelve instalaciones del contexto Facilities (opcional).
 	FacilityDirectory FacilityDirectory
 }
 
-// AddressChecker validates the geographic part of a postal address and completes its Geography
-// references (the port Parties owns; an adapter implements it over the Geography contracts).
+// AddressChecker valida la parte geográfica de una dirección postal y completa sus referencias a
+// Geography (el puerto es de Parties; un adaptador lo implementa sobre los contratos de Geography).
 type AddressChecker interface {
 	CheckAddress(ctx context.Context, a domain.PostalAddress) (domain.PostalAddress, error)
 }
 
-// Service exposes the Parties use cases as decorated, statically typed handlers. Every handler
-// requires its permission in the authorization context of ctx, whatever the entry point, and
-// works inside the caller's organization scope (see scope).
+// Service expone los casos de uso de Parties como manejadores decorados y de tipo estático. Cada
+// manejador exige su permiso en el contexto de autorización de ctx, sea cual sea la entrada, y
+// trabaja dentro del ámbito de organizaciones del llamante (véase scope).
 type Service struct {
 	RegisterPerson        app.CommandHandler[RegisterPerson, PartyDTO]
 	RegisterOrganization  app.CommandHandler[RegisterOrganization, PartyDTO]
@@ -105,15 +105,16 @@ func (s service) roleCatalog(ctx context.Context) (*domain.Catalog, error) {
 	return domain.NewRoleCatalog(types, domain.RolePersonCategory, domain.RoleOrganizationCategory)
 }
 
-// catalogMu lets one addition to a catalog in at a time. That a name and a code are free is
-// read before writing, and a catalog with a code twice cannot be loaded: two additions at once
-// with the same code would both fit and leave every use case of the context failing. It holds
-// while there is one process (docs/ANFITRION.md); several need a unique index (BACKLOG.md).
+// catalogMu deja pasar una sola alta en un catálogo cada vez. Que un nombre y un código estén
+// libres se lee antes de escribir, y un catálogo con un código repetido no se puede cargar: dos
+// altas a la vez con el mismo código cabrían las dos y dejarían fallando todos los casos de uso
+// del contexto. Vale mientras haya un solo proceso (docs/ANFITRION.md); con varios hace falta un
+// índice único (BACKLOG.md).
 var catalogMu sync.Mutex
 
-// catalogAdded leaves in the audit log, in the unit of work of ctx, that somebody added an entry
-// to a catalog: who, when and what it says. A catalog entry is not an aggregate, so nobody else
-// writes this record.
+// catalogAdded deja en el registro de auditoría, en la unidad de trabajo de ctx, que alguien
+// añadió una entrada a un catálogo: quién, cuándo y qué dice. Una entrada de catálogo no es un
+// agregado, así que nadie más escribe este registro.
 func (s service) catalogAdded(ctx context.Context, kind, id string, fields map[string]any) error {
 	if s.Audit == nil {
 		return nil
@@ -131,14 +132,15 @@ func (s service) relationshipTypes(ctx context.Context) (map[domain.Relationship
 	return domain.IndexRelationshipTypes(types)
 }
 
-// updateParty loads a party in scope, checks the caller may write it, applies fn and saves.
+// updateParty carga una party del ámbito, comprueba que el llamante puede escribirla, le aplica fn
+// y la guarda.
 func (s service) updateParty(ctx context.Context, id domain.PartyID, fn func(*domain.Party, *domain.Catalog) error) (PartyDTO, error) {
 	n, err := s.names(ctx)
 	if err != nil {
 		return PartyDTO{}, err
 	}
 	p, err := s.parties.Update(ctx, id, func(ctx context.Context, p *domain.Party) error {
-		// The scope reads the audit log inside the unit of work it is in (D-74).
+		// El ámbito lee el registro de auditoría dentro de la unidad de trabajo en la que está (D-74).
 		if err := s.scope(ctx).writable(p); err != nil {
 			return err
 		}
@@ -153,21 +155,23 @@ func (s service) updateParty(ctx context.Context, id domain.PartyID, fn func(*do
 	return n.dto(p), nil
 }
 
-// scope is the scope of the caller, able to tell from the audit log which parties an
-// organization registered.
+// scope es el ámbito del llamante, capaz de saber por el registro de auditoría qué parties dio de
+// alta una organización.
 func (s service) scope(ctx context.Context) scope {
 	sc := scopeOf(ctx)
 	sc.registered = func(p *domain.Party, a domain.Affiliation) bool { return s.registeredWith(ctx, p, a) }
 	return sc
 }
 
-// registeredWith reports whether the party was registered together with the relationship behind
-// the affiliation: the first audit record of each, in one operation (the same correlation). It
-// is how "the organization registered it" is known without keeping it anywhere else
-// (docs/DECISIONES-COMUNES.md, D-74). Without an audit log, or when in doubt, it says no.
+// registeredWith dice si la party se dio de alta junto con la relación que hay detrás de la
+// afiliación: el primer registro de auditoría de cada una, en una sola operación (la misma
+// correlación). Así se sabe que «la organización la dio de alta» sin guardarlo en ningún otro
+// sitio (docs/DECISIONES-COMUNES.md, D-74). Sin registro de auditoría, o en caso de duda, dice que
+// no.
 //
-// A party registered before the rule existed does not count, even when the audit log could tell
-// (D-77): it stays read-only to the standard users of the organization.
+// Una party dada de alta antes de que existiera la regla no cuenta, aunque el registro de
+// auditoría pudiera decirlo (D-77): sigue siendo de sólo lectura para los usuarios estándar de la
+// organización.
 func (s service) registeredWith(ctx context.Context, p *domain.Party, a domain.Affiliation) bool {
 	if s.Audit == nil {
 		return false
@@ -187,12 +191,13 @@ func (s service) registeredWith(ctx context.Context, p *domain.Party, a domain.A
 	return ok && rel.CorrelationID == party.CorrelationID
 }
 
-// RegistrationRuleSince is when "the organization that registered a party changes it" came into
-// force (docs/DECISIONES-COMUNES.md, D-65 and D-77): parties registered earlier are only related.
+// RegistrationRuleSince es el momento en que entró en vigor «la organización que dio de alta una party la
+// cambia» (docs/DECISIONES-COMUNES.md, D-65 y D-77): las parties dadas de alta antes sólo están
+// relacionadas.
 var RegistrationRuleSince = time.Date(2026, 10, 15, 0, 0, 0, 0, time.UTC)
 
-// mayGive refuses to give a role only the global administrator gives: Internal Organization, or a
-// role below it, makes a party a company of the group (docs/DECISIONES-COMUNES.md, D-78).
+// mayGive se niega a dar un rol que sólo da el administrador global: Internal Organization, o un
+// rol por debajo, hace de una party una empresa del grupo (docs/DECISIONES-COMUNES.md, D-78).
 func mayGive(sc scope, cat *domain.Catalog, role domain.RoleTypeID) error {
 	if !sc.global && cat.IsA(role, domain.RoleInternalOrganization) {
 		return fmt.Errorf("%w: only the global administrator makes a party an internal organization", fw.ErrForbidden)
@@ -200,7 +205,7 @@ func mayGive(sc scope, cat *domain.Catalog, role domain.RoleTypeID) error {
 	return nil
 }
 
-// NewService wires the use cases.
+// NewService conecta los casos de uso.
 func NewService(d Deps) *Service {
 	var opts []orchestration.Option
 	if d.Recorder != nil {
@@ -274,14 +279,14 @@ func NewService(d Deps) *Service {
 	}, pipeline.RetryOnConflict[UpdatePerson, PartyDTO](retry, backoff))
 
 	svc.SetActive = chain(PermPartyUpdate, func(ctx context.Context, c SetPartyActive) (PartyDTO, error) {
-		// A party something in force depends on is not deactivated: its relationships are ended
-		// first (docs/DECISIONES-COMUNES.md, D-4). The command asks before it does anything.
+		// Una party de la que depende algo en vigor no se desactiva: antes se terminan sus
+		// relaciones (docs/DECISIONES-COMUNES.md, D-4). La orden pregunta antes de hacer nada.
 		if !c.Active {
 			p, err := d.Parties.Get(ctx, c.ID)
 			if err != nil {
 				return PartyDTO{}, err
 			}
-			if err := s.scope(ctx).writable(p); err != nil { // before telling anything about its relationships
+			if err := s.scope(ctx).writable(p); err != nil { // antes de contar nada de sus relaciones
 				return PartyDTO{}, err
 			}
 			related, err := d.Relationships.Exists(ctx, spec.And(domain.Involving(c.ID), domain.NotEndedAt(fw.Now())))
@@ -318,11 +323,11 @@ func NewService(d Deps) *Service {
 		return s.updateParty(ctx, c.ID, func(p *domain.Party, _ *domain.Catalog) error { p.ClearDocumentIssue(); return nil })
 	}, pipeline.RetryOnConflict[ClearDocumentIssue, PartyDTO](retry, backoff))
 
-	// Only global administrators decide which parties every organization sees.
+	// Sólo los administradores globales deciden qué parties ven todas las organizaciones.
 	svc.SetShared = chain(PermPartyUpdate, func(ctx context.Context, c SetShared) (PartyDTO, error) {
 		if sc := s.scope(ctx); !sc.global {
 			if _, err := sc.visible(d.Parties.Get(ctx, c.ID)); err != nil {
-				return PartyDTO{}, err // out of scope: uniform 404
+				return PartyDTO{}, err // fuera del ámbito: 404 uniforme
 			}
 			return PartyDTO{}, fw.ErrForbidden
 		}
@@ -350,8 +355,8 @@ func NewService(d Deps) *Service {
 	}, pipeline.RetryOnConflict[EndRole, PartyDTO](retry, backoff))
 
 	svc.AnnulRole = chain(PermRoleAnnul, func(ctx context.Context, c AnnulRole) (PartyDTO, error) {
-		// What depends on a role are the relationships the party has, or had, in it. The command
-		// looks before it does anything (D-8): with none, the role is removed; with any, annulled.
+		// Lo que depende de un rol son las relaciones que la party tiene, o tuvo, con él. La orden
+		// mira antes de hacer nada (D-8): si no hay ninguna, el rol se borra; si hay alguna, se anula.
 		rels, err := d.Relationships.Find(ctx, domain.Involving(c.PartyID))
 		if err != nil {
 			return PartyDTO{}, err
@@ -362,8 +367,8 @@ func NewService(d Deps) *Service {
 				return fw.NotFound("parties.party_role", c.RoleID)
 			}
 			role := p.Roles()[i].RoleType
-			// Internal Organization is never removed: grants and affiliations may point at the
-			// company, and that it once was one is worth keeping.
+			// Internal Organization nunca se borra: permisos y afiliaciones pueden apuntar a la
+			// empresa, y merece la pena conservar que alguna vez lo fue.
 			depended := cat.IsA(role, domain.RoleInternalOrganization) || slices.ContainsFunc(rels, func(r *domain.Relationship) bool {
 				return (r.From() == p.ID() && cat.IsA(role, r.FromRole())) || (r.To() == p.ID() && cat.IsA(role, r.ToRole()))
 			})
@@ -401,8 +406,8 @@ func NewService(d Deps) *Service {
 		if err != nil {
 			return RelationshipDTO{}, err
 		}
-		// A Duplicate Of asks to be able to change the duplicate only (establish checks it); the
-		// survivor is just pointed at.
+		// Una Duplicate Of sólo pide poder cambiar el duplicado (lo comprueba establish); al
+		// superviviente sólo se le apunta.
 		if rt.ID != domain.RelDuplicateOf && !sc.canRelate(from, to) {
 			return RelationshipDTO{}, fw.ErrForbidden
 		}
@@ -614,7 +619,7 @@ func NewService(d Deps) *Service {
 	return svc
 }
 
-// names loads the catalogs that name the parts of a party in its DTO.
+// names carga los catálogos que nombran las partes de una party en su DTO.
 func (s service) names(ctx context.Context) (Names, error) {
 	cat, err := s.roleCatalog(ctx)
 	if err != nil {
@@ -633,7 +638,7 @@ func (s service) names(ctx context.Context) (Names, error) {
 
 func (n Names) dto(p *domain.Party) PartyDTO { return ToDTO(p, n) }
 
-// chain decorates a handler: permission first, then the given middleware.
+// chain decora un manejador: primero el permiso, después el middleware que se le da.
 func chain[In, Out any](p authz.Permission, fn func(context.Context, In) (Out, error), mw ...app.Middleware[In, Out]) app.Handler[In, Out] {
 	all := append([]app.Middleware[In, Out]{pipeline.RequirePermission[In, Out](p)}, mw...)
 	var nonNil []app.Middleware[In, Out]

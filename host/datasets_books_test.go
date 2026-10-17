@@ -22,8 +22,8 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 )
 
-// bookDatasetsScenario gives a company a ledger, an entry, a debt and an asset through the host,
-// and exports its journal, what it owes and its fixed assets.
+// bookDatasetsScenario da a una empresa un libro, un asiento, una deuda y un activo a través del
+// anfitrión, y exporta su diario, lo que debe y su inmovilizado.
 func bookDatasetsScenario(t *testing.T, sw *hotswap.Switch) {
 	th := newTradeHost(t, sw)
 	h, actx, ctx := th.h, th.actx, context.Background()
@@ -48,7 +48,7 @@ func bookDatasetsScenario(t *testing.T, sw *hotswap.Switch) {
 	supplier := organization("Proveedor Dos SL", "B58378431", []string{pardomain.RoleSupplier.String()},
 		&parapp.NewAffiliation{Organization: acme, RelationshipType: pardomain.RelSupplier.String()})
 
-	// A ledger and an entry by hand.
+	// Un libro y un asiento a mano.
 	for code, name := range map[string]string{"4300": "Clientes", "7000": "Ventas", "5700": "Caja", "5720": "Bancos", "6400": "Sueldos", "6420": "SS empresa",
 		"4760": "SS acreedora", "4751": "Retenciones", "4650": "Remuneraciones", "4000": "Proveedores"} {
 		_, err := h.Accounting.Service.CreateAccount.Handle(actx, accapp.CreateAccount{Company: acme, Code: code, Name: name, Postable: true})
@@ -61,7 +61,7 @@ func bookDatasetsScenario(t *testing.T, sw *hotswap.Switch) {
 	entry, err := h.Accounting.Service.PostEntry.Handle(actx, accapp.PostEntry{Company: acme, Date: vocab.MustDate(2026, 9, 30), Description: "Pago a cuenta",
 		Lines: []accapp.LineInput{{Account: "4000", Party: supplier, Debit: "50", Description: "Anticipo, proveedor"}, {Account: "5720", Credit: "50"}}})
 	must(err)
-	// A debt: the invoice of a supplier, which Payments learns of.
+	// Una deuda: la factura de un proveedor, de la que se entera Payments.
 	_, err = h.Fiscal.Service.CreateRate.Handle(actx, fisapp.CreateRate{Type: "vat", Territory: "common", Code: "G21", Description: "General", Rate: "21",
 		From: vocab.MustDate(2012, 9, 1)})
 	must(err)
@@ -71,7 +71,7 @@ func bookDatasetsScenario(t *testing.T, sw *hotswap.Switch) {
 		Issued: vocab.MustDate(2026, 9, 1), Received: vocab.MustDate(2026, 9, 2), Due: vocab.MustDate(2026, 10, 1), Total: "121.00",
 		Lines: []purapp.LineInput{{Description: "Papel", Category: "goods", Base: "100", TaxCode: "G21"}}})
 	must(err)
-	// An asset.
+	// Un activo.
 	_, err = h.Assets.Service.Register.Handle(actx, astapp.RegisterAsset{Company: acme, Code: "fur-01", Name: "Furgoneta", Class: "vehicles", Serial: "1234-ABC",
 		Acquired: vocab.MustDate(2026, 1, 10), InService: vocab.MustDate(2026, 1, 16), Cost: "12000", Residual: "2000", LifeMonths: 48})
 	must(err)

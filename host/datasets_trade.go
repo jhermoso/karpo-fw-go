@@ -18,16 +18,16 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
 )
 
-// The lists of what a company sells and buys: invoices, orders, what customers owe and the
-// invoices of suppliers. The C# exported none of them; each is the search of the context that
-// owns it, read as who asked for the file, with the names Parties gives the parties.
+// Las listas de lo que una empresa vende y compra: facturas, pedidos, lo que deben los clientes y
+// las facturas de proveedores. El C# no exportaba ninguna; cada una es la búsqueda del contexto
+// dueño, leída como quien pidió el fichero, con los nombres que Parties da a las parties.
 
-// TradeLists builds the lists of sales and purchases.
+// TradeLists construye las listas de ventas y compras.
 func TradeLists(p *parties.Module, b *billing.Module, o *orders.Module, r *receivables.Module, pu *purchases.Module) []expapp.Dataset {
 	return []expapp.Dataset{invoiceList{p: p, b: b}, orderList{p: p, o: o}, receivableList{p: p, r: r}, purchaseInvoiceList{p: p, pu: pu}}
 }
 
-// partyNames returns the names of the parties of a page.
+// partyNames devuelve los nombres de las parties de una página.
 func partyNames(ctx context.Context, p *parties.Module, ids []string) (map[string]string, error) {
 	names, seen, unique := map[string]string{}, map[string]bool{}, []string{}
 	for _, id := range ids {
@@ -59,7 +59,7 @@ func spanish(words map[string]string, s string) string {
 	return s
 }
 
-// invoiceList is the list of the invoices a company issues.
+// invoiceList es la lista de las facturas que emite una empresa.
 type invoiceList struct {
 	p *parties.Module
 	b *billing.Module
@@ -84,7 +84,7 @@ func (l invoiceList) Page(ctx context.Context, filters map[string]string, cursor
 	}
 	ids := []string{}
 	for _, it := range found.Items {
-		if it.CustomerName == "" { // a draft: the name is frozen when it is issued
+		if it.CustomerName == "" { // un borrador: el nombre se congela al emitirse
 			ids = append(ids, it.Customer)
 		}
 	}
@@ -107,7 +107,7 @@ func (l invoiceList) Page(ctx context.Context, filters map[string]string, cursor
 	return rows, next(found.Number, found.TotalPages), nil
 }
 
-// orderList is the list of the orders of the customers of a company.
+// orderList es la lista de los pedidos de los clientes de una empresa.
 type orderList struct {
 	p *parties.Module
 	o *orders.Module
@@ -145,7 +145,7 @@ func (l orderList) Page(ctx context.Context, filters map[string]string, cursor s
 	return rows, next(found.Number, found.TotalPages), nil
 }
 
-// receivableList is the list of what customers owe: a row per installment of each invoice.
+// receivableList es la lista de lo que deben los clientes: una fila por plazo de cada factura.
 type receivableList struct {
 	p *parties.Module
 	r *receivables.Module
@@ -186,7 +186,7 @@ func (l receivableList) Page(ctx context.Context, filters map[string]string, cur
 	return rows, next(found.Number, found.TotalPages), nil
 }
 
-// purchaseInvoiceList is the list of the invoices a company receives from its suppliers.
+// purchaseInvoiceList es la lista de las facturas que una empresa recibe de sus proveedores.
 type purchaseInvoiceList struct {
 	p  *parties.Module
 	pu *purchases.Module

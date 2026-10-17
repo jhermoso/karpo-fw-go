@@ -11,34 +11,34 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// EmploymentKind is the stable aggregate type name.
+// EmploymentKind es el nombre estable de tipo de agregado.
 const EmploymentKind = "hr.employment"
 
-// Contract is a labor contract of an employment (child entity; the C# LaborContract lived in
-// Parties). Dates are civil dates.
+// Contract es un contrato de trabajo de una relación laboral (entidad hija; el LaborContract del C#
+// vivía en Parties). Las fechas son fechas civiles.
 type Contract struct {
 	ID                ContractID
-	TypeCode          string // official contract type (e.g. 100 indefinido, 401 obra)
+	TypeCode          string // tipo oficial de contrato (p. ej. 100 indefinido, 401 obra)
 	Number            string
 	Start             vocab.Date
-	End               vocab.Date // zero while open
+	End               vocab.Date // cero mientras está abierto
 	Agreement         AgreementID
 	WorkCenter        WorkCenterID
-	WeeklyHours       vocab.Decimal // zero: full time of the agreement
+	WeeklyHours       vocab.Decimal // cero: la jornada completa del convenio
 	Bonified          bool
 	Primary           bool
 	TerminationReason string
 }
 
-// Open reports whether the contract is in force on a date.
+// OpenOn dice si el contrato está en vigor en una fecha.
 func (c Contract) OpenOn(d vocab.Date) bool {
 	return !d.Before(c.Start) && (c.End.IsZero() || !d.After(c.End))
 }
 
-// Employment is the hiring of a person by an internal organization, with its labor contracts. It
-// absorbs the HR data of the C# Employee party role (number, hire and termination dates, job
-// category, wage group); Parties keeps the person, the Employee role and the Employment
-// relationship that makes the person visible to the employer.
+// Employment es la contratación de una persona por una organización interna, con sus contratos de
+// trabajo. Absorbe los datos de RRHH del rol de party Employee del C# (número, fechas de alta y de
+// baja, categoría profesional, grupo salarial); Parties conserva la persona, el rol Employee y la
+// relación Employment que hace visible a la persona para el empleador.
 type Employment struct {
 	fw.BaseAggregateRoot[EmploymentID]
 	traits.Audited
@@ -53,7 +53,7 @@ type Employment struct {
 	contracts   []Contract
 }
 
-// EmploymentState is the persisted state of an employment.
+// EmploymentState es el estado persistido de una relación laboral.
 type EmploymentState struct {
 	Person      PersonID
 	Employer    OrganizationID
@@ -73,7 +73,7 @@ func shortCode(v *fw.Validation, field, s string, max int) string {
 	return s
 }
 
-// ReconstituteEmployment rebuilds an employment.
+// ReconstituteEmployment reconstruye una relación laboral.
 func ReconstituteEmployment(id EmploymentID, s EmploymentState) (*Employment, error) {
 	base, err := fw.NewBaseAggregateRoot(EmploymentKind, id)
 	if err != nil {
@@ -94,7 +94,8 @@ func ReconstituteEmployment(id EmploymentID, s EmploymentState) (*Employment, er
 	return e, nil
 }
 
-// Hire creates an employment. The C# checked the hire date was at most a year ahead: kept.
+// Hire crea una relación laboral. El C# comprobaba que la fecha de alta estuviera como mucho a un
+// año vista: se conserva.
 func Hire(id EmploymentID, s EmploymentState, today vocab.Date) (*Employment, error) {
 	if s.Hired.After(today.AddDays(366)) {
 		var v fw.Validation
@@ -111,39 +112,39 @@ func Hire(id EmploymentID, s EmploymentState, today vocab.Date) (*Employment, er
 	return e, nil
 }
 
-// Person returns the employee.
+// Person devuelve el empleado.
 func (e *Employment) Person() PersonID { return e.person }
 
-// Employer returns the employing internal organization.
+// Employer devuelve la organización interna que emplea.
 func (e *Employment) Employer() OrganizationID { return e.employer }
 
-// Number returns the employee number.
+// Number devuelve el número de empleado.
 func (e *Employment) Number() string { return e.number }
 
-// Hired returns the hire date.
+// Hired devuelve la fecha de alta.
 func (e *Employment) Hired() vocab.Date { return e.hired }
 
-// Terminated returns the termination date (zero while employed).
+// Terminated devuelve la fecha de baja (cero mientras sigue empleado).
 func (e *Employment) Terminated() vocab.Date { return e.terminated }
 
-// TerminationReason returns the termination reason code.
+// TerminationReason devuelve el código del motivo de baja.
 func (e *Employment) TerminationReason() string { return e.reason }
 
-// JobCategory returns the job category code.
+// JobCategory devuelve el código de la categoría profesional.
 func (e *Employment) JobCategory() string { return e.jobCategory }
 
-// WageGroup returns the wage group code.
+// WageGroup devuelve el código del grupo salarial.
 func (e *Employment) WageGroup() string { return e.wageGroup }
 
-// Contracts returns a copy of the contracts.
+// Contracts devuelve una copia de los contratos.
 func (e *Employment) Contracts() []Contract { return slices.Clone(e.contracts) }
 
-// ActiveOn reports whether the person is employed on a date.
+// ActiveOn dice si la persona está empleada en una fecha.
 func (e *Employment) ActiveOn(d vocab.Date) bool {
 	return !d.Before(e.hired) && (e.terminated.IsZero() || !d.After(e.terminated))
 }
 
-// PrimaryContractOn returns the primary contract in force on a date (what Payroll needs).
+// PrimaryContractOn devuelve el contrato principal en vigor en una fecha (lo que necesita Payroll).
 func (e *Employment) PrimaryContractOn(d vocab.Date) (Contract, bool) {
 	for _, c := range e.contracts {
 		if c.Primary && c.OpenOn(d) {
@@ -153,7 +154,7 @@ func (e *Employment) PrimaryContractOn(d vocab.Date) (Contract, bool) {
 	return Contract{}, false
 }
 
-// SetClassification changes the job category and wage group.
+// SetClassification cambia la categoría profesional y el grupo salarial.
 func (e *Employment) SetClassification(jobCategory, wageGroup string) error {
 	var v fw.Validation
 	jc, wg := shortCode(&v, "jobCategory", jobCategory, 20), shortCode(&v, "wageGroup", wageGroup, 20)
@@ -164,9 +165,10 @@ func (e *Employment) SetClassification(jobCategory, wageGroup string) error {
 	return nil
 }
 
-// AddContract adds a labor contract. Invariants: inside the employment; a valid type code; one
-// primary contract in force at a time (a new primary makes the overlapping one secondary). The
-// application checks the agreement is in force and the work center belongs to the employer.
+// AddContract añade un contrato de trabajo. Invariantes: dentro de la relación laboral; un código
+// de tipo válido; un solo contrato principal en vigor a la vez (un principal nuevo hace secundario
+// al que se solapa). La aplicación comprueba que el convenio está en vigor y que el centro de
+// trabajo pertenece al empleador.
 func (e *Employment) AddContract(c Contract) (ContractID, error) {
 	var v fw.Validation
 	c.TypeCode = shortCode(&v, "typeCode", c.TypeCode, 20)
@@ -197,7 +199,7 @@ func (e *Employment) AddContract(c Contract) (ContractID, error) {
 	return c.ID, nil
 }
 
-// EndContract ends a contract on a date (not before it started).
+// EndContract termina un contrato en una fecha (no antes de que empezara).
 func (e *Employment) EndContract(id ContractID, end vocab.Date, reason string) error {
 	i := slices.IndexFunc(e.contracts, func(c Contract) bool { return c.ID == id })
 	if i < 0 {
@@ -221,8 +223,9 @@ func (e *Employment) EndContract(id ContractID, end vocab.Date, reason string) e
 	return nil
 }
 
-// Terminate ends the employment on a date and every contract still open (the C# Terminate only
-// set a date). The application vacates the positions the person holds.
+// Terminate termina la relación laboral en una fecha y todos los contratos aún abiertos (el
+// Terminate del C# sólo fijaba una fecha). La aplicación deja vacantes los puestos que ocupa la
+// persona.
 func (e *Employment) Terminate(on vocab.Date, reason string) error {
 	if !e.terminated.IsZero() {
 		return fw.Violation("hr.already_terminated", "the employment is already terminated")
@@ -248,7 +251,7 @@ func (e *Employment) Terminate(on vocab.Date, reason string) error {
 	return nil
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (e *Employment) AuditSnapshot() map[string]any {
 	return map[string]any{"number": e.number, "hired": e.hired.String(), "terminated": e.terminated.String(),
 		"jobCategory": e.jobCategory, "wageGroup": e.wageGroup, "contracts": len(e.contracts)}
@@ -258,7 +261,7 @@ func datesOverlap(aStart, aEnd, bStart, bEnd vocab.Date) bool {
 	return (aEnd.IsZero() || !bStart.After(aEnd)) && (bEnd.IsZero() || !aStart.After(bEnd))
 }
 
-// Employment fields and specifications.
+// Campos y especificaciones de las relaciones laborales.
 var (
 	EmpFieldPerson          = spec.Comparable("person", (*Employment).Person)
 	EmpFieldEmployer        = spec.Comparable("employer", (*Employment).Employer)
@@ -269,7 +272,7 @@ var (
 	EmpFieldID              = spec.Comparable("id", func(e *Employment) EmploymentID { return e.ID() })
 )
 
-// CurrentEmploymentsOf matches the open employments of a person.
+// CurrentEmploymentsOf selecciona las relaciones laborales abiertas de una persona.
 func CurrentEmploymentsOf(p PersonID) spec.Spec[*Employment] {
 	return EmpFieldPerson.Eq(p).And(EmpFieldEnded.Eq(false))
 }

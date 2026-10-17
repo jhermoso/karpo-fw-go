@@ -28,7 +28,7 @@ func failingRelay(t *testing.T, opts ...outbox.RelayOption) *outbox.Relay {
 	}, opts...)
 }
 
-// captureDefault redirects the logger of the process for the duration of the test.
+// captureDefault redirige el logger del proceso mientras dura la prueba.
 func captureDefault(t *testing.T) *bytes.Buffer {
 	t.Helper()
 	var buf bytes.Buffer

@@ -12,8 +12,8 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/trace"
 )
 
-// DB binds a *sql.DB to a Dialect and provides the unit of work shared by every repository and
-// outbox created on it. It satisfies domain.UnitOfWork and hotswap.Backend.
+// DB une un *sql.DB a un Dialect y aporta la unidad de trabajo que comparten todos los
+// repositorios y outboxes creados sobre él. Cumple domain.UnitOfWork y hotswap.Backend.
 type DB struct {
 	sqlDB  *sql.DB
 	d      Dialect
@@ -22,16 +22,18 @@ type DB struct {
 	tel    *telemetry
 }
 
-// Option configures a DB.
+// Option configura un DB.
 type Option func(*DB)
 
-// WithName sets the backend name reported to diagnostics and hot-swap (default: dialect name).
+// WithName fija el nombre del backend que se comunica al diagnóstico y al cambio en caliente (por defecto,
+// el nombre del dialecto).
 func WithName(name string) Option { return func(db *DB) { db.name = name } }
 
-// WithTxOptions sets the isolation level / read-only flag used by units of work.
+// WithTxOptions fija el nivel de aislamiento y la marca de sólo lectura que usan las unidades de
+// trabajo.
 func WithTxOptions(opts *sql.TxOptions) Option { return func(db *DB) { db.txOpts = opts } }
 
-// New wraps an opened *sql.DB. The driver must match the dialect.
+// New envuelve un *sql.DB ya abierto. El driver debe corresponder al dialecto.
 func New(sqlDB *sql.DB, d Dialect, opts ...Option) *DB {
 	db := &DB{sqlDB: sqlDB, d: d, name: d.Name()}
 	for _, opt := range opts {
@@ -43,19 +45,19 @@ func New(sqlDB *sql.DB, d Dialect, opts ...Option) *DB {
 	return db
 }
 
-// Name identifies the backend.
+// Name identifica el backend.
 func (db *DB) Name() string { return db.name }
 
-// Dialect returns the SQL dialect.
+// Dialect devuelve el dialecto SQL.
 func (db *DB) Dialect() Dialect { return db.d }
 
-// SQL exposes the underlying *sql.DB (pool tuning, migrations).
+// SQL expone el *sql.DB subyacente (ajuste del pool, migraciones).
 func (db *DB) SQL() *sql.DB { return db.sqlDB }
 
-// Ping checks connectivity (readiness probes).
+// Ping comprueba la conectividad (sondas de disponibilidad).
 func (db *DB) Ping(ctx context.Context) error { return db.sqlDB.PingContext(ctx) }
 
-// Close closes the connection pool and removes its gauges.
+// Close cierra el pool de conexiones y retira sus indicadores.
 func (db *DB) Close() error {
 	db.unregisterPool()
 	return db.sqlDB.Close()
@@ -75,15 +77,15 @@ func (t *sqlTx) rollbackHooks() {
 	t.onRollback = nil
 }
 
-// Do runs fn in a database transaction bound to the context passed to fn. Repositories and
-// outboxes of this DB called with that context join the transaction. Nested calls join the
-// outer transaction. The transaction commits if fn returns nil and rolls back otherwise
-// (including panics).
+// Do ejecuta fn en una transacción de base de datos ligada al contexto que recibe fn. Los
+// repositorios y outboxes de este DB llamados con ese contexto se unen a la transacción. Las
+// llamadas anidadas se unen a la transacción exterior. La transacción hace commit si fn devuelve
+// nil y rollback en otro caso (también ante un panic).
 func (db *DB) Do(ctx context.Context, fn func(ctx context.Context) error) (err error) {
 	if db.tx(ctx) != nil {
 		return fn(ctx)
 	}
-	outcome := "rolled_back" // also what a panic leaves
+	outcome := "rolled_back" // también lo que deja un panic
 	if db.tel != nil {
 		start := time.Now()
 		var span trace.Span
@@ -107,8 +109,8 @@ func (db *DB) Do(ctx context.Context, fn func(ctx context.Context) error) (err e
 		if r := recover(); r != nil {
 			_ = tx.Rollback()
 			st.rollbackHooks()
-			// The telemetry defer runs after this one: it must see the panic as a failure, not
-			// measure a rolled back transaction as ok.
+			// El defer de la telemetría se ejecuta después de éste: debe ver el panic como un
+			// fallo, no medir como correcta una transacción deshecha.
 			err = panicError(r)
 			panic(r)
 		}
@@ -129,7 +131,7 @@ func (db *DB) Do(ctx context.Context, fn func(ctx context.Context) error) (err e
 	return nil
 }
 
-// panicError turns a recovered value into the error a panic left.
+// panicError convierte un valor recuperado en el error que dejó un panic.
 func panicError(r any) error {
 	if err, ok := r.(error); ok {
 		return fmt.Errorf("panic: %w", err)
@@ -142,7 +144,7 @@ func (db *DB) tx(ctx context.Context) *sqlTx {
 	return st
 }
 
-// InTx reports whether ctx carries a unit of work of this DB.
+// InTx dice si ctx lleva una unidad de trabajo de este DB.
 func (db *DB) InTx(ctx context.Context) bool { return db.tx(ctx) != nil }
 
 func (db *DB) onRollback(ctx context.Context, fn func()) {
@@ -168,21 +170,22 @@ func (db *DB) executor(ctx context.Context) executor {
 	return ex
 }
 
-// ExecContext executes a statement, joining the unit of work in ctx if any.
-// Useful for read-model projections and migrations that must share the transaction.
+// ExecContext ejecuta una sentencia, uniéndose a la unidad de trabajo de ctx si la hay.
+// Sirve para las proyecciones de modelos de lectura y las migraciones que deben compartir la
+// transacción.
 func (db *DB) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
 	return db.executor(ctx).ExecContext(ctx, query, args...)
 }
 
-// QueryContext runs a query, joining the unit of work in ctx if any
-// (read models / query handlers that bypass aggregates).
+// QueryContext ejecuta una consulta, uniéndose a la unidad de trabajo de ctx si la hay
+// (modelos de lectura y manejadores de consultas que no pasan por los agregados).
 func (db *DB) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
 	return db.executor(ctx).QueryContext(ctx, query, args...)
 }
 
-// Insert inserts one row into table with the dialect's value binding (UUIDs, booleans, dates,
-// decimals...), joining the unit of work in ctx. Meant for seeds and data migrations
-// (Migration.Run); aggregates are saved through repositories.
+// Insert inserta una fila en table con el enlace de valores del dialecto (UUID, booleanos,
+// fechas, decimales...), uniéndose a la unidad de trabajo de ctx. Pensado para semillas y
+// migraciones de datos (Migration.Run); los agregados se guardan con los repositorios.
 func (db *DB) Insert(ctx context.Context, table string, v Values) error {
 	if err := checkIdent("table", table); err != nil {
 		return err
@@ -211,9 +214,9 @@ func (db *DB) Insert(ctx context.Context, table string, v Values) error {
 	return err
 }
 
-// Select reads whole tables such as small catalogs: SELECT columns FROM table ORDER BY orderBy,
-// returned as typed rows. It joins the unit of work in ctx. Queries over aggregates go through
-// repositories and specifications.
+// Select lee tablas enteras, como los catálogos pequeños: SELECT columns FROM table ORDER BY
+// orderBy, devuelto como filas tipadas. Se une a la unidad de trabajo de ctx. Las consultas sobre
+// agregados pasan por los repositorios y las especificaciones.
 func (db *DB) Select(ctx context.Context, table string, columns []string, orderBy ...string) ([]*Row, error) {
 	if err := checkIdent("table", table); err != nil {
 		return nil, err
@@ -247,9 +250,10 @@ func (db *DB) Select(ctx context.Context, table string, columns []string, orderB
 	return scanAll(db.d, rows, columns)
 }
 
-// Update sets columns of the rows of table matching every where column (equality), with the
-// dialect's value binding, joining the unit of work in ctx. It returns the rows affected.
-// Meant for data migrations; aggregates are saved through repositories.
+// Update fija columnas de las filas de table que cumplen todas las columnas de where (igualdad),
+// con el enlace de valores del dialecto, uniéndose a la unidad de trabajo de ctx. Devuelve las
+// filas afectadas. Pensado para migraciones de datos; los agregados se guardan con los
+// repositorios.
 func (db *DB) Update(ctx context.Context, table string, set, where Values) (int64, error) {
 	if err := checkIdent("table", table); err != nil {
 		return 0, err
@@ -292,9 +296,9 @@ func (db *DB) Update(ctx context.Context, table string, set, where Values) (int6
 	return res.RowsAffected()
 }
 
-// Delete removes the rows of table matching every column of where, joining the unit of work in
-// ctx, and returns how many it removed. Meant for data migrations; aggregates are removed through
-// their repository.
+// Delete borra las filas de table que cumplen todas las columnas de where, uniéndose a la unidad
+// de trabajo de ctx, y devuelve cuántas ha borrado. Pensado para migraciones de datos; los
+// agregados se borran con su repositorio.
 func (db *DB) Delete(ctx context.Context, table string, where Values) (int64, error) {
 	if err := checkIdent("table", table); err != nil {
 		return 0, err
@@ -326,12 +330,13 @@ func (db *DB) Delete(ctx context.Context, table string, where Values) (int64, er
 	return res.RowsAffected()
 }
 
-// maxBatchParams keeps every batch under the smallest parameter limit (SQL Server: 2100).
+// maxBatchParams mantiene cada lote por debajo del límite de parámetros más bajo (SQL Server:
+// 2100).
 const maxBatchParams = 2000
 
-// InsertMany inserts rows (values in columns order) in batches with the dialect's value binding,
-// joining the unit of work in ctx: multi-row VALUES, or INSERT ALL on Oracle (valid before 23ai).
-// Meant for seeds and data migrations of reference data.
+// InsertMany inserta rows (valores en el orden de columns) por lotes con el enlace de valores del
+// dialecto, uniéndose a la unidad de trabajo de ctx: VALUES de varias filas, o INSERT ALL en
+// Oracle (válido antes de 23ai). Pensado para semillas y migraciones de datos de referencia.
 func (db *DB) InsertMany(ctx context.Context, table string, columns []string, rows [][]any) error {
 	if err := checkIdent("table", table); err != nil {
 		return err

@@ -6,36 +6,36 @@ import (
 	"strings"
 )
 
-// Sentinel errors classify failures independently of the layer that produced them.
-// Always test with errors.Is; concrete error types below wrap these sentinels.
-// The distribution layer maps them to HTTP status codes (404, 409, 400, 422, ...).
+// Los errores centinela clasifican los fallos con independencia de la capa que los produce.
+// Se comprueban siempre con errors.Is; los tipos de error concretos de abajo envuelven estos centinelas.
+// La capa de distribución los traduce a códigos de estado HTTP (404, 409, 400, 422, ...).
 var (
-	// ErrNotFound: the requested aggregate or resource does not exist.
+	// ErrNotFound: el agregado o recurso pedido no existe.
 	ErrNotFound = errors.New("not found")
-	// ErrConflict: optimistic concurrency failure or duplicate identity.
+	// ErrConflict: fallo de concurrencia optimista o identidad duplicada.
 	ErrConflict = errors.New("conflict")
-	// ErrValidation: input data does not satisfy field-level rules.
+	// ErrValidation: los datos de entrada no cumplen las reglas de campo.
 	ErrValidation = errors.New("validation failed")
-	// ErrRuleViolation: a business invariant would be broken by the requested operation.
+	// ErrRuleViolation: la operación pedida rompería un invariante de negocio.
 	ErrRuleViolation = errors.New("business rule violated")
-	// ErrUnauthorized: the caller is not authenticated.
+	// ErrUnauthorized: quien llama no está autenticado.
 	ErrUnauthorized = errors.New("unauthorized")
-	// ErrForbidden: the caller is authenticated but not allowed to perform the operation.
+	// ErrForbidden: quien llama está autenticado pero no puede hacer la operación.
 	ErrForbidden = errors.New("forbidden")
-	// ErrInvalidIdentity: an identifier is zero or malformed.
+	// ErrInvalidIdentity: un identificador es nulo o está mal formado.
 	ErrInvalidIdentity = errors.New("invalid identity")
-	// ErrUnsupported: an adapter cannot honour the request (e.g. a specification it cannot translate).
-	// Adapters must return this instead of silently degrading (for example, filtering in memory).
+	// ErrUnsupported: un adaptador no puede atender la petición (p. ej. una especificación que no sabe traducir).
+	// Los adaptadores deben devolverlo en lugar de degradarse en silencio (por ejemplo, filtrando en memoria).
 	ErrUnsupported = errors.New("unsupported")
 )
 
-// NotFoundError reports a missing aggregate. It matches ErrNotFound.
+// NotFoundError informa de un agregado que no existe. Coincide con ErrNotFound.
 type NotFoundError struct {
 	Kind string
 	ID   string
 }
 
-// NotFound builds a NotFoundError for the aggregate kind and identifier.
+// NotFound construye un NotFoundError para el tipo de agregado y el identificador.
 func NotFound(kind string, id fmt.Stringer) error {
 	return &NotFoundError{Kind: kind, ID: id.String()}
 }
@@ -43,7 +43,7 @@ func NotFound(kind string, id fmt.Stringer) error {
 func (e *NotFoundError) Error() string        { return fmt.Sprintf("%s %q not found", e.Kind, e.ID) }
 func (e *NotFoundError) Is(target error) bool { return target == ErrNotFound }
 
-// ConflictError reports an optimistic concurrency failure or a duplicate identity. It matches ErrConflict.
+// ConflictError informa de un fallo de concurrencia optimista o de una identidad duplicada. Coincide con ErrConflict.
 type ConflictError struct {
 	Kind            string
 	ID              string
@@ -51,7 +51,7 @@ type ConflictError struct {
 	Reason          string
 }
 
-// Conflict builds a ConflictError.
+// Conflict construye un ConflictError.
 func Conflict(kind string, id fmt.Stringer, expectedVersion int64, reason string) error {
 	return &ConflictError{Kind: kind, ID: id.String(), ExpectedVersion: expectedVersion, Reason: reason}
 }
@@ -61,14 +61,14 @@ func (e *ConflictError) Error() string {
 }
 func (e *ConflictError) Is(target error) bool { return target == ErrConflict }
 
-// FieldError describes a single field-level validation failure.
+// FieldError describe un único fallo de validación de un campo.
 type FieldError struct {
 	Field   string `json:"field"`
 	Code    string `json:"code"`
 	Message string `json:"message"`
 }
 
-// ValidationError aggregates field errors (notification pattern). It matches ErrValidation.
+// ValidationError agrupa errores de campo (patrón notificación). Coincide con ErrValidation.
 type ValidationError struct {
 	Errors []FieldError
 }
@@ -82,13 +82,13 @@ func (e *ValidationError) Error() string {
 }
 func (e *ValidationError) Is(target error) bool { return target == ErrValidation }
 
-// RuleViolationError reports a broken business invariant. It matches ErrRuleViolation.
+// RuleViolationError informa de un invariante de negocio roto. Coincide con ErrRuleViolation.
 type RuleViolationError struct {
 	Code    string
 	Message string
 }
 
-// Violation builds a RuleViolationError.
+// Violation construye un RuleViolationError.
 func Violation(code, message string) error {
 	return &RuleViolationError{Code: code, Message: message}
 }
@@ -96,7 +96,7 @@ func Violation(code, message string) error {
 func (e *RuleViolationError) Error() string        { return fmt.Sprintf("%s: %s", e.Code, e.Message) }
 func (e *RuleViolationError) Is(target error) bool { return target == ErrRuleViolation }
 
-// Validation accumulates field errors so constructors can report every problem at once.
+// Validation acumula errores de campo para que los constructores informen de todos los problemas a la vez.
 //
 //	var v domain.Validation
 //	v.Require(name != "", "name", "required", "name is required")
@@ -105,12 +105,12 @@ type Validation struct {
 	errs []FieldError
 }
 
-// Add records a field error.
+// Add registra un error de campo.
 func (v *Validation) Add(field, code, message string) {
 	v.errs = append(v.errs, FieldError{Field: field, Code: code, Message: message})
 }
 
-// Require records a field error when ok is false. It returns ok for chaining in conditions.
+// Require registra un error de campo cuando ok es false. Devuelve ok para encadenarlo en condiciones.
 func (v *Validation) Require(ok bool, field, code, message string) bool {
 	if !ok {
 		v.Add(field, code, message)
@@ -118,8 +118,8 @@ func (v *Validation) Require(ok bool, field, code, message string) bool {
 	return ok
 }
 
-// Merge absorbs err: nested ValidationErrors are flattened (fields prefixed with prefix),
-// any other non-nil error is recorded under prefix with code "invalid".
+// Merge absorbe err: los ValidationError anidados se aplanan (con los campos precedidos de prefix);
+// cualquier otro error no nulo se registra bajo prefix con el código "invalid".
 func (v *Validation) Merge(prefix string, err error) {
 	if err == nil {
 		return
@@ -137,10 +137,10 @@ func (v *Validation) Merge(prefix string, err error) {
 	v.Add(prefix, "invalid", err.Error())
 }
 
-// HasErrors reports whether any error was recorded.
+// HasErrors dice si se ha registrado algún error.
 func (v *Validation) HasErrors() bool { return len(v.errs) > 0 }
 
-// Err returns a *ValidationError with the accumulated errors, or nil when there are none.
+// Err devuelve un *ValidationError con los errores acumulados, o nil si no hay ninguno.
 func (v *Validation) Err() error {
 	if len(v.errs) == 0 {
 		return nil

@@ -1,5 +1,5 @@
-// Package application holds the Products use cases (with permissions and company scope), the
-// Catalog and Pricing ports other contexts read, and the translation to the Published Language.
+// Package application contiene los casos de uso de Products (con permisos y ámbito de empresa), los
+// puertos Catalog y Pricing que leen otros contextos y la traducción al Published Language.
 package application
 
 import (
@@ -20,8 +20,8 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Permissions (the C# product, price and stock endpoints required authentication only). The
-// catalog and the prices are maintained by different people.
+// Permisos (los endpoints de producto, precio y stock del C# sólo pedían autenticación). El
+// catálogo y los precios los mantienen personas distintas.
 var (
 	PermProductRead    = authz.MustPermission("Products.Product.Read")
 	PermProductUpdate  = authz.MustPermission("Products.Product.Update")
@@ -29,7 +29,7 @@ var (
 	PermPriceListWrite = authz.MustPermission("Products.PriceList.Update")
 )
 
-// Deps are the ports the use cases need; Recorder and Audit are optional.
+// Deps son los puertos que necesitan los casos de uso; Recorder y Audit son opcionales.
 type Deps struct {
 	Products   domain.ProductRepository
 	Categories domain.CategoryRepository
@@ -39,7 +39,7 @@ type Deps struct {
 	Audit      app.AuditLog
 }
 
-// Service exposes the use cases.
+// Service expone los casos de uso.
 type Service struct {
 	RegisterProduct    app.CommandHandler[RegisterProduct, ProductDTO]
 	ChangeProduct      app.CommandHandler[ChangeProduct, ProductDTO]
@@ -78,7 +78,7 @@ func scopeOf(ctx context.Context) scope {
 	return s
 }
 
-// check returns a uniform 404 outside the company's scope and 403 when it is read-only.
+// check devuelve un 404 uniforme fuera del ámbito de la empresa y 403 cuando es de sólo lectura.
 func (s scope) check(kind string, id fmt.Stringer, org domain.OrganizationID, write bool) error {
 	if !s.global && !slices.Contains(s.orgs, org) {
 		return fw.NotFound(kind, id)
@@ -106,7 +106,7 @@ type service struct {
 	priceLists *orchestration.Orchestrator[domain.PriceListID, *domain.PriceList]
 }
 
-// NewService wires the use cases.
+// NewService conecta los casos de uso.
 func NewService(d Deps) *Service {
 	var opts []orchestration.Option
 	if d.Recorder != nil {
@@ -156,7 +156,7 @@ func retry[In, Out any]() app.Middleware[In, Out] {
 	return pipeline.RetryOnConflict[In, Out](5, 10*time.Millisecond)
 }
 
-// Publications translates the domain events into the Published Language.
+// Publications traduce los eventos de dominio al Published Language.
 func Publications(r *messaging.Recorder) *messaging.Recorder {
 	messaging.On(r, func(_ context.Context, e domain.ProductRegistered) ([]app.IntegrationEvent, error) {
 		return []app.IntegrationEvent{contracts.ProductRegisteredV1{ProductID: e.AggregateID, Company: e.Company, SKU: e.SKU, Name: e.Name, Kind: e.Kind}}, nil
@@ -175,12 +175,12 @@ func productRef(p *domain.Product) contracts.ProductRef {
 		StandardCost: s.StandardCost.StringFixed(4)}
 }
 
-// CatalogPort implements contracts.Catalog (it serves other contexts, not users).
+// CatalogPort implementa contracts.Catalog (sirve a otros contextos, no a usuarios).
 type CatalogPort struct{ Repo domain.ProductRepository }
 
 var _ contracts.Catalog = CatalogPort{}
 
-// Products implements contracts.Catalog.
+// Products implementa contracts.Catalog.
 func (c CatalogPort) Products(ctx context.Context, ids []string) (map[string]contracts.ProductRef, error) {
 	if len(ids) > contracts.MaxBatch {
 		return nil, fmt.Errorf("%w: at most %d ids per call", fw.ErrValidation, contracts.MaxBatch)
@@ -205,7 +205,7 @@ func (c CatalogPort) Products(ctx context.Context, ids []string) (map[string]con
 	return out, nil
 }
 
-// PricingPort implements contracts.Pricing (it serves other contexts, not users).
+// PricingPort implementa contracts.Pricing (sirve a otros contextos, no a usuarios).
 type PricingPort struct {
 	Products   domain.ProductRepository
 	PriceLists domain.PriceListRepository
@@ -213,7 +213,7 @@ type PricingPort struct {
 
 var _ contracts.Pricing = PricingPort{}
 
-// Quote implements contracts.Pricing.
+// Quote implementa contracts.Pricing.
 func (p PricingPort) Quote(ctx context.Context, company, product, priceList, quantity, on string) (contracts.Quote, error) {
 	var v fw.Validation
 	cid := domain.OrganizationID{UUID: parseID(&v, "company", company)}

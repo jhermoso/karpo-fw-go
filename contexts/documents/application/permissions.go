@@ -2,9 +2,9 @@ package application
 
 import "github.com/jhermoso/karpo-fw-go/pkg/application/authz"
 
-// PermDocumentRead reads the register (the C# document endpoints required authentication only).
-// Nothing writes it by hand: entries come from the events of the issuing contexts.
+// PermDocumentRead lee el registro (los endpoints de documentos del C# sólo exigían autenticación).
+// Nada lo escribe a mano: las anotaciones vienen de los eventos de los contextos emisores.
 var PermDocumentRead = authz.MustPermission("Documents.Document.Read")
 
-// Permissions returns the permissions this context declares to the Security catalog.
+// Permissions devuelve los permisos que este contexto declara al catálogo de Security.
 func Permissions() []authz.Permission { return []authz.Permission{PermDocumentRead} }

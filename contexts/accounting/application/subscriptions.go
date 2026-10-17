@@ -13,9 +13,9 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// The Accounting copies of the events it posts (only the fields it needs).
+// Las copias en Accounting de los eventos que contabiliza (sólo los campos que necesita).
 
-// InvoiceIssued is billing.invoice-issued.v1.
+// InvoiceIssued es billing.invoice-issued.v1.
 type InvoiceIssued struct {
 	InvoiceID string `json:"invoiceId"`
 	Number    string `json:"number"`
@@ -31,10 +31,10 @@ type InvoiceIssued struct {
 	} `json:"taxes"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (InvoiceIssued) IntegrationEventType() string { return "billing.invoice-issued.v1" }
 
-// CollectionAllocated is receivables.collection-allocated.v1.
+// CollectionAllocated es receivables.collection-allocated.v1.
 type CollectionAllocated struct {
 	CollectionID string `json:"collectionId"`
 	Seller       string `json:"seller"`
@@ -46,12 +46,12 @@ type CollectionAllocated struct {
 	On           string `json:"on"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (CollectionAllocated) IntegrationEventType() string {
 	return "receivables.collection-allocated.v1"
 }
 
-// AllocationReversed is receivables.allocation-reversed.v1.
+// AllocationReversed es receivables.allocation-reversed.v1.
 type AllocationReversed struct {
 	CollectionID string `json:"collectionId"`
 	Seller       string `json:"seller"`
@@ -59,10 +59,10 @@ type AllocationReversed struct {
 	Installment  int    `json:"installment"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (AllocationReversed) IntegrationEventType() string { return "receivables.allocation-reversed.v1" }
 
-// DirectDebitCollected is treasury.direct-debit-collected.v1.
+// DirectDebitCollected es treasury.direct-debit-collected.v1.
 type DirectDebitCollected struct {
 	RemittanceID string `json:"remittanceId"`
 	EndToEnd     string `json:"endToEnd"`
@@ -71,12 +71,12 @@ type DirectDebitCollected struct {
 	CollectedOn  string `json:"collectedOn"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (DirectDebitCollected) IntegrationEventType() string {
 	return "treasury.direct-debit-collected.v1"
 }
 
-// DirectDebitReturned is treasury.direct-debit-returned.v1.
+// DirectDebitReturned es treasury.direct-debit-returned.v1.
 type DirectDebitReturned struct {
 	RemittanceID string `json:"remittanceId"`
 	EndToEnd     string `json:"endToEnd"`
@@ -85,10 +85,10 @@ type DirectDebitReturned struct {
 	ReturnedOn   string `json:"returnedOn"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (DirectDebitReturned) IntegrationEventType() string { return "treasury.direct-debit-returned.v1" }
 
-// PayslipApproved is payroll.payslip-approved.v1.
+// PayslipApproved es payroll.payslip-approved.v1.
 type PayslipApproved struct {
 	PayslipID       string `json:"payslipId"`
 	Person          string `json:"person"`
@@ -102,18 +102,18 @@ type PayslipApproved struct {
 	EmployerCost    string `json:"employerCost"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (PayslipApproved) IntegrationEventType() string { return "payroll.payslip-approved.v1" }
 
-// PayslipCancelled is payroll.payslip-cancelled.v1.
+// PayslipCancelled es payroll.payslip-cancelled.v1.
 type PayslipCancelled struct {
 	PayslipID string `json:"payslipId"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (PayslipCancelled) IntegrationEventType() string { return "payroll.payslip-cancelled.v1" }
 
-// PaymentAllocated is payments.payment-allocated.v1.
+// PaymentAllocated es payments.payment-allocated.v1.
 type PaymentAllocated struct {
 	PaymentID string `json:"paymentId"`
 	Company   string `json:"company"`
@@ -125,22 +125,22 @@ type PaymentAllocated struct {
 	On        string `json:"on"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (PaymentAllocated) IntegrationEventType() string { return "payments.payment-allocated.v1" }
 
-// PaymentAllocationReversed is payments.allocation-reversed.v1.
+// PaymentAllocationReversed es payments.allocation-reversed.v1.
 type PaymentAllocationReversed struct {
 	PaymentID string `json:"paymentId"`
 	Company   string `json:"company"`
 	PayableID string `json:"payableId"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (PaymentAllocationReversed) IntegrationEventType() string {
 	return "payments.allocation-reversed.v1"
 }
 
-// PurchaseRegistered is purchases.invoice-registered.v1.
+// PurchaseRegistered es purchases.invoice-registered.v1.
 type PurchaseRegistered struct {
 	InvoiceID      string `json:"invoiceId"`
 	Company        string `json:"company"`
@@ -157,19 +157,19 @@ type PurchaseRegistered struct {
 	} `json:"expenses"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (PurchaseRegistered) IntegrationEventType() string { return "purchases.invoice-registered.v1" }
 
-// PurchaseCancelled is purchases.invoice-cancelled.v1.
+// PurchaseCancelled es purchases.invoice-cancelled.v1.
 type PurchaseCancelled struct {
 	InvoiceID string `json:"invoiceId"`
 	Company   string `json:"company"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (PurchaseCancelled) IntegrationEventType() string { return "purchases.invoice-cancelled.v1" }
 
-// DepreciationCharged is assets.depreciation-charged.v1.
+// DepreciationCharged es assets.depreciation-charged.v1.
 type DepreciationCharged struct {
 	AssetID string `json:"assetId"`
 	Company string `json:"company"`
@@ -179,10 +179,10 @@ type DepreciationCharged struct {
 	Amount  string `json:"amount"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (DepreciationCharged) IntegrationEventType() string { return "assets.depreciation-charged.v1" }
 
-// AssetDisposed is assets.asset-disposed.v1.
+// AssetDisposed es assets.asset-disposed.v1.
 type AssetDisposed struct {
 	AssetID     string `json:"assetId"`
 	Company     string `json:"company"`
@@ -195,7 +195,7 @@ type AssetDisposed struct {
 	Result      string `json:"result"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (AssetDisposed) IntegrationEventType() string { return "assets.asset-disposed.v1" }
 
 type parser struct{ err error }
@@ -228,9 +228,10 @@ func (p *parser) check(event string) error {
 	return nil
 }
 
-// Subscribe posts the facts of the other contexts (approved decision 5 of docs/COBROS.md and
-// docs/TESORERIA.md: each context publishes, Accounting posts). The posting profile of the
-// company's ledger decides the accounts; each event posts once (source id).
+// Subscribe contabiliza los hechos de los otros contextos (decisión aprobada 5 de docs/COBROS.md y
+// docs/TESORERIA.md: cada contexto publica, Accounting contabiliza). El perfil de contabilización
+// de la contabilidad de la empresa decide las cuentas; cada evento se contabiliza una vez (id de
+// origen).
 func Subscribe(c *messaging.Consumer, d Deps) {
 	s := newService(d)
 	role := func(l *domain.Ledger, r domain.Role, err *error) string {
@@ -250,8 +251,8 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 		_, err = s.post(ctx, draft)
 		return err
 	}
-	// reverseSource reverses the latest entry of a source key that is not reversed yet, on the date
-	// of the fact or on the date of the entry when the fact arrives dated earlier.
+	// reverseSource revierte el último asiento de una clave de origen que aún no está revertido, en
+	// la fecha del hecho o en la del asiento cuando el hecho llega con fecha anterior.
 	reverseSource := func(ctx context.Context, company domain.OrganizationID, srcType, key string, on vocab.Date, src domain.Source) error {
 		found, err := s.Entries.Find(ctx, spec.And(domain.EntFieldCompany.Eq(company), domain.EntFieldSrcType.Eq(srcType),
 			domain.EntFieldSrcKey.Eq(key), domain.EntFieldReversed.Eq(false)), domain.EntFieldNumber.Desc())
@@ -263,13 +264,13 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 			return err
 		}
 		if orig := found[0].State().Date; on.Before(orig) {
-			on = orig // a reversal never precedes what it reverses
+			on = orig // una anulación nunca precede a lo que anula
 		}
 		_, err = s.reverse(ctx, found[0].ID(), on, src)
 		return err
 	}
 
-	// Sales invoice: customers (total) against revenue (net), output tax and surcharge.
+	// Factura de venta: clientes (total) contra ventas (base), impuesto repercutido y recargo.
 	messaging.Handle(c, func(ctx context.Context, e InvoiceIssued, _ app.Envelope) error {
 		var p parser
 		company, customer, on := p.id(e.Seller), p.id(e.Customer), p.date(e.IssueDate)
@@ -302,8 +303,8 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 		})
 	})
 
-	// Collection allocated: the account of the method against customers. Offsets net two
-	// invoices of the same customer: nothing to post.
+	// Cobro aplicado: la cuenta del medio contra clientes. Las compensaciones netean dos facturas
+	// del mismo cliente: nada que contabilizar.
 	methodRole := map[string]domain.Role{"cash": domain.RoleCash, "transfer": domain.RoleBank, "card": domain.RoleBank, "check": domain.RoleBank,
 		"direct-debit": domain.RoleDirectDebitClearing}
 	messaging.Handle(c, func(ctx context.Context, e CollectionAllocated, env app.Envelope) error {
@@ -336,7 +337,7 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 			domain.Source{Type: "receivables.allocation-reversed.v1", ID: env.ID, Key: key})
 	})
 
-	// Direct debits: the bank against the clearing account of direct debits (4312), and back.
+	// Adeudos domiciliados: el banco contra la cuenta puente de adeudos (4312), y vuelta.
 	messaging.Handle(c, func(ctx context.Context, e DirectDebitCollected, _ app.Envelope) error {
 		var p parser
 		company, on, amount := p.id(e.Creditor), p.date(e.CollectedOn), p.amount(e.Amount)
@@ -364,9 +365,9 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 		})
 	})
 
-	// Received invoice: each expense category (with the non-deductible tax) and the input tax
-	// against the supplier (what is paid) and the withholding payable. Booked on the reception date;
-	// a corrective invoice posts negative amounts, which change sides.
+	// Factura recibida: cada categoría de gasto (con el impuesto no deducible) y el impuesto
+	// soportado contra el proveedor (lo que se paga) y la retención a pagar. Se registra en la fecha
+	// de recepción; una factura rectificativa contabiliza importes negativos, que cambian de lado.
 	categoryRole := map[string]domain.Role{"goods": domain.RolePurchases, "rent": domain.RoleRent, "repairs": domain.RoleRepairs,
 		"professional-services": domain.RoleProfessional, "transport": domain.RoleTransport, "insurance": domain.RoleInsurance,
 		"advertising": domain.RoleAdvertising, "supplies": domain.RoleSupplies, "other-services": domain.RoleOtherServices,
@@ -413,8 +414,8 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 			domain.Source{Type: "purchases.invoice-cancelled.v1", ID: e.InvoiceID, Key: e.InvoiceID})
 	})
 
-	// Payment allocated: the account of what was owed (suppliers, net pay, withholdings) against the
-	// bank or cash. The party is the payee when it is a party (not the tax authority).
+	// Pago aplicado: la cuenta de lo que se debía (proveedores, líquido de nómina, retenciones)
+	// contra el banco o la caja. La party es el beneficiario cuando es una party (no la Hacienda).
 	kindRole := map[string]domain.Role{"supplier-invoice": domain.RoleSuppliers, "payroll": domain.RoleNetPay, "tax": domain.RoleWithholding}
 	messaging.Handle(c, func(ctx context.Context, e PaymentAllocated, env app.Envelope) error {
 		owed, ok := kindRole[e.Kind]
@@ -453,8 +454,8 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 			domain.Source{Type: "payments.allocation-reversed.v1", ID: env.ID, Key: key})
 	})
 
-	// Depreciation of a month: the expense against the accumulated depreciation, on the last day of
-	// the month. Each month of each asset posts once.
+	// Amortización de un mes: el gasto contra la amortización acumulada, el último día del mes.
+	// Cada mes de cada activo se contabiliza una vez.
 	messaging.Handle(c, func(ctx context.Context, e DepreciationCharged, _ app.Envelope) error {
 		var p parser
 		company, on, amount := p.id(e.Company), p.date(e.Date), p.amount(e.Amount)
@@ -471,8 +472,8 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 		})
 	})
 
-	// Disposal: the asset leaves at its cost with its accumulated depreciation; what the sale brought
-	// is owed by the buyer, and the difference with the net book value is the loss or the gain.
+	// Baja: el activo sale por su coste con su amortización acumulada; lo que dio la venta lo debe
+	// el comprador, y la diferencia con el valor neto contable es la pérdida o el beneficio.
 	messaging.Handle(c, func(ctx context.Context, e AssetDisposed, _ app.Envelope) error {
 		var p parser
 		company, on := p.id(e.Company), p.date(e.Date)
@@ -501,7 +502,7 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 		})
 	})
 
-	// Payslip: wages and employer social security against their payables and the net pay.
+	// Nómina: sueldos y Seguridad Social a cargo de la empresa contra sus deudas y el líquido a pagar.
 	messaging.Handle(c, func(ctx context.Context, e PayslipApproved, _ app.Envelope) error {
 		var p parser
 		company, person, on := p.id(e.Employer), p.id(e.Person), p.date(e.PeriodEnd)

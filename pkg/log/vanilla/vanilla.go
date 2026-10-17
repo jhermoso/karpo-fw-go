@@ -1,9 +1,9 @@
-// Package vanilla provides an implementation of log.Logger using the Go standard library log/slog.
+// Package vanilla ofrece una implementación de log.Logger con log/slog de la biblioteca estándar de Go.
 //
-// Every line is enriched from the context given to WithContext: the correlation and causation
-// ids of the business flow (application.WithCorrelationID / WithCausationID), the current span
-// (trace.FromContext) and the id of the actor (application.WithActor). Callers do not pass them
-// by hand; an attribute passed explicitly with the same key wins.
+// Cada línea se enriquece a partir del contexto dado a WithContext: los ids de correlación y de
+// causalidad del flujo de negocio (application.WithCorrelationID / WithCausationID), el span en curso
+// (trace.FromContext) y el id del actor (application.WithActor). Quien llama no los pasa a mano; un
+// atributo pasado explícitamente con la misma clave gana.
 package vanilla
 
 import (
@@ -17,20 +17,20 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/trace"
 )
 
-// Attribute keys added from the context.
+// Claves de los atributos que se añaden a partir del contexto.
 const (
 	CorrelationIDKey = "correlation_id"
 	CausationIDKey   = "causation_id"
 	ActorKey         = "actor"
 )
 
-// VanillaLogger wraps slog.Logger to satisfy log.Logger contract.
+// VanillaLogger envuelve slog.Logger para cumplir el contrato log.Logger.
 type VanillaLogger struct {
 	logger *slog.Logger
 	ctx    context.Context
 }
 
-// NewJSON creates a VanillaLogger writing JSON structured logs to w.
+// NewJSON crea un VanillaLogger que escribe en w logs estructurados en JSON.
 func NewJSON(w io.Writer, minLevel log.Level) *VanillaLogger {
 	opts := &slog.HandlerOptions{
 		Level: slog.Level(minLevel),
@@ -38,7 +38,7 @@ func NewJSON(w io.Writer, minLevel log.Level) *VanillaLogger {
 	return New(slog.NewJSONHandler(w, opts))
 }
 
-// NewText creates a VanillaLogger writing human-readable text logs to w.
+// NewText crea un VanillaLogger que escribe en w logs de texto legibles.
 func NewText(w io.Writer, minLevel log.Level) *VanillaLogger {
 	opts := &slog.HandlerOptions{
 		Level: slog.Level(minLevel),
@@ -46,7 +46,7 @@ func NewText(w io.Writer, minLevel log.Level) *VanillaLogger {
 	return New(slog.NewTextHandler(w, opts))
 }
 
-// New creates a VanillaLogger over any slog.Handler, adding the context enrichment.
+// New crea un VanillaLogger sobre cualquier slog.Handler y le añade el enriquecimiento desde el contexto.
 func New(handler slog.Handler) *VanillaLogger {
 	return &VanillaLogger{
 		logger: slog.New(contextHandler{handler}),
@@ -54,14 +54,14 @@ func New(handler slog.Handler) *VanillaLogger {
 	}
 }
 
-// Default creates a VanillaLogger writing text to stdout with Info level.
+// Default crea un VanillaLogger que escribe texto en stdout con nivel Info.
 func Default() *VanillaLogger {
 	return NewText(os.Stdout, log.LevelInfo)
 }
 
-// ForService creates the logger of a deployed process: JSON on stdout (what a container runtime
-// collects), Info level, with the fixed attributes "service", "version" and "env" on every line.
-// Empty version or env are omitted.
+// ForService crea el logger de un proceso desplegado: JSON en stdout (lo que recoge un entorno de
+// contenedores), nivel Info, con los atributos fijos "service", "version" y "env" en cada línea.
+// version o env vacíos se omiten.
 func ForService(service, version, env string) log.Logger {
 	args := []any{"service", service}
 	if version != "" {
@@ -73,8 +73,8 @@ func ForService(service, version, env string) log.Logger {
 	return NewJSON(os.Stdout, log.LevelInfo).With(args...)
 }
 
-// Slog exposes the underlying slog.Logger (e.g. for slog.SetDefault, so that log.Default writes
-// to the same destination).
+// Slog expone el slog.Logger subyacente (p. ej. para slog.SetDefault, de modo que log.Default
+// escriba en el mismo destino).
 func (l *VanillaLogger) Slog() *slog.Logger { return l.logger }
 
 func (l *VanillaLogger) Debug(msg string, args ...any) {
@@ -112,8 +112,8 @@ func (l *VanillaLogger) WithContext(ctx context.Context) log.Logger {
 
 var _ log.Logger = (*VanillaLogger)(nil)
 
-// contextHandler adds the context attributes to every record. Only the actor id is written:
-// names are personal data.
+// contextHandler añade los atributos del contexto a cada registro. Sólo se escribe el id del actor:
+// los nombres son datos personales.
 type contextHandler struct{ slog.Handler }
 
 func (h contextHandler) Handle(ctx context.Context, r slog.Record) error {

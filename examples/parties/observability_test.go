@@ -35,7 +35,8 @@ import (
 	tracevanilla "github.com/jhermoso/karpo-fw-go/pkg/trace/vanilla"
 )
 
-// observedEnv is Parties on SQLite with the whole telemetry on, as a service would compose it.
+// observedEnv es Parties sobre SQLite con toda la telemetría encendida, como lo compondría un
+// servicio.
 type observedEnv struct {
 	t       *testing.T
 	handler http.Handler
@@ -87,7 +88,7 @@ func composeObserved(t *testing.T) *observedEnv {
 		distribution.Observe(e.logger, e.tracer, e.reg, distribution.ObserveRoutes(mux)),
 		distribution.TenantActorContext(),
 	)
-	e.reset() // forget what the migration left
+	e.reset() // olvida lo que dejó la migración
 	return e
 }
 
@@ -126,7 +127,7 @@ func (e *observedEnv) register(name, taxID, correlation string) papp.PartyDTO {
 	return dto
 }
 
-// lines returns the log lines with the given message.
+// lines devuelve las líneas del log con el mensaje dado.
 func (e *observedEnv) lines(msg string) []map[string]any {
 	e.t.Helper()
 	var out []map[string]any
@@ -153,14 +154,14 @@ func one(t *testing.T, spans []tracevanilla.FinishedSpan, what string) tracevani
 	return spans[0]
 }
 
-// One request leaves one JSON line, one observation per layer and one trace that links
-// HTTP -> use case -> transaction -> INSERT, all found by the same correlation id.
+// Una petición deja una línea JSON, una observación por capa y una traza que enlaza
+// HTTP -> caso de uso -> transacción -> INSERT, todo localizable por el mismo id de correlación.
 func TestObservability_ARequestLeavesLineMetricAndTrace(t *testing.T) {
 	e := composeObserved(t)
 
 	acme := e.register("Acme Observed", "B12345674", "flow-register-1")
 
-	// The line.
+	// La línea.
 	lines := e.lines(distribution.RequestLogMessage)
 	if len(lines) != 1 || len(strings.Split(strings.TrimSpace(e.logs.String()), "\n")) != 1 {
 		t.Fatalf("a request must leave exactly one line:\n%s", e.logs.String())
@@ -181,7 +182,7 @@ func TestObservability_ARequestLeavesLineMetricAndTrace(t *testing.T) {
 		}
 	}
 
-	// The trace.
+	// La traza.
 	server := one(t, e.spans.Named("POST /parties"), "server")
 	useCase := one(t, e.spans.Named("application.RegisterParty"), "use case")
 	tx := one(t, e.spans.Named("db transaction"), "transaction")
@@ -213,19 +214,19 @@ func TestObservability_ARequestLeavesLineMetricAndTrace(t *testing.T) {
 		t.Fatalf("unexpected outcomes: %v / %v", tx.Attributes, useCase.Attributes)
 	}
 
-	// The metrics.
+	// Las métricas.
 	if n := e.reg.HistogramCount(metrics.HTTPServerRequestDuration, "method", "POST", "route", "/parties", "status", "201"); n != 1 {
 		t.Fatalf("expected one HTTP observation: %v", e.reg.SeriesLabels(metrics.HTTPServerRequestDuration))
 	}
 	if n := e.reg.HistogramCount(metrics.UseCaseDuration, "request", "application.RegisterParty", "outcome", "ok"); n != 1 {
 		t.Fatalf("expected one use case observation: %v", e.reg.SeriesLabels(metrics.UseCaseDuration))
 	}
-	// The migration that prepared the database is measured too, hence "at least".
+	// También se mide la migración que preparó la base de datos; de ahí «al menos».
 	if n := e.reg.HistogramCount(metrics.DBOperationDuration, "engine", "sqlite", "operation", "INSERT", "outcome", "ok"); int(n) < len(inserts) {
 		t.Fatalf("expected at least %d INSERT observations, got %d", len(inserts), n)
 	}
 
-	// A second request continues the trace of its caller, and its route is the pattern.
+	// Una segunda petición continúa la traza de quien la llama, y su ruta es el patrón.
 	e.reset()
 	res := e.do("GET", "/parties/"+acme.ID.String(), nil,
 		distribution.CorrelationHeader, "flow-get-1", trace.TraceParentHeader, "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
@@ -243,7 +244,7 @@ func TestObservability_ARequestLeavesLineMetricAndTrace(t *testing.T) {
 		t.Fatalf("the metric must use the pattern: %v", e.reg.SeriesLabels(metrics.HTTPServerRequestDuration))
 	}
 
-	// The exposition a collector scrapes.
+	// La exposición que recoge un colector.
 	var text bytes.Buffer
 	if err := e.reg.WriteText(&text); err != nil {
 		t.Fatal(err)
@@ -259,12 +260,12 @@ func TestObservability_ARequestLeavesLineMetricAndTrace(t *testing.T) {
 	}
 }
 
-// A 500 leaves its cause with the correlation the caller received, and the caller never sees it.
+// Un 500 deja su causa con la correlación que recibió quien llama, y quien llama nunca la ve.
 func TestObservability_A500LeavesItsCause(t *testing.T) {
 	e := composeObserved(t)
 	acme := e.register("Acme Observed", "B12345674", "flow-ok")
 	e.reset()
-	_ = e.raw.Close() // the database goes away
+	_ = e.raw.Close() // la base de datos desaparece
 
 	res := e.do("GET", "/parties/"+acme.ID.String(), nil, distribution.CorrelationHeader, "flow-500")
 	if res.Code != http.StatusInternalServerError {
@@ -293,7 +294,7 @@ func TestObservability_A500LeavesItsCause(t *testing.T) {
 		t.Fatalf("the 500 line must carry the error type and the trace: %v", l)
 	}
 
-	// The use case says the same, with the same correlation and trace.
+	// El caso de uso dice lo mismo, con la misma correlación y la misma traza.
 	failed := e.lines("use case failed")
 	if len(failed) != 1 || failed[0]["correlation_id"] != "flow-500" || failed[0]["trace_id"] != l["trace_id"] || failed[0]["outcome"] != "error" {
 		t.Fatalf("unexpected use case line: %v", failed)
@@ -309,7 +310,7 @@ func TestObservability_A500LeavesItsCause(t *testing.T) {
 		t.Fatalf("the failing statement must be measured: %v", e.reg.SeriesLabels(metrics.DBOperationDuration))
 	}
 
-	// An expected rejection is not an error: Info line, no cause.
+	// Un rechazo esperado no es un error: línea Info, sin causa.
 	e.reset()
 	if res := e.do("GET", "/parties/not-an-id", nil); res.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d", res.Code)
@@ -319,7 +320,8 @@ func TestObservability_A500LeavesItsCause(t *testing.T) {
 	}
 }
 
-// A correlation header longer than the columns that store it must not break the write.
+// Una cabecera de correlación más larga que las columnas que la guardan no debe romper la
+// escritura.
 func TestObservability_AnOversizedCorrelationDoesNotBreakTheWrite(t *testing.T) {
 	e := composeObserved(t)
 	long := strings.Repeat("x", 200)
@@ -347,8 +349,8 @@ func TestObservability_AnOversizedCorrelationDoesNotBreakTheWrite(t *testing.T) 
 	}
 }
 
-// The outbox is watched: deliveries, failures with their correlation, and the age of the oldest
-// pending message, which grows while nobody relays and returns to zero once delivered.
+// El outbox se vigila: entregas, fallos con su correlación y la edad del mensaje pendiente más
+// antiguo, que crece mientras nadie reenvía y vuelve a cero una vez entregado.
 func TestObservability_OutboxRelayAndConsumers(t *testing.T) {
 	ctx := context.Background()
 	e := composeObserved(t)
@@ -357,8 +359,8 @@ func TestObservability_OutboxRelayAndConsumers(t *testing.T) {
 	e.reset()
 	const registered = "parties.party-registered.v1"
 
-	// Billing fails the first time it sees Acme; the CRM always succeeds, so the redelivery
-	// reaches it as a duplicate.
+	// Facturación falla la primera vez que ve Acme; el CRM nunca falla, así que el reenvío
+	// le llega como duplicado.
 	billingStore := memory.NewStore("billing")
 	billing := messaging.NewConsumer("billing", memory.NewInbox(billingStore), billingStore).WithTelemetry(e.logger, e.tracer, e.reg)
 	failures := 0
@@ -379,7 +381,7 @@ func TestObservability_OutboxRelayAndConsumers(t *testing.T) {
 	relay := messaging.NewRelay(contracts.Source, e.integ, broker,
 		appoutbox.WithRelayLogger(e.logger), appoutbox.WithRelayTelemetry(e.tracer, e.reg))
 
-	// Nobody relays: the age of the oldest pending message grows.
+	// Nadie reenvía: la edad del mensaje pendiente más antiguo crece.
 	age := func() float64 {
 		v, ok := e.reg.GaugeValue(metrics.OutboxOldestPendingAge, "outbox", contracts.Source)
 		if !ok {
@@ -393,7 +395,7 @@ func TestObservability_OutboxRelayAndConsumers(t *testing.T) {
 		t.Fatalf("the age must grow while the relay does not run: %v then %v", first, second)
 	}
 
-	// First pass: Globex is delivered, Acme fails in billing and stays pending.
+	// Primera pasada: Globex se entrega, Acme falla en facturación y sigue pendiente.
 	if n, err := relay.RelayOnce(ctx); err != nil || n != 1 {
 		t.Fatalf("first pass: %d, %v", n, err)
 	}
@@ -413,7 +415,7 @@ func TestObservability_OutboxRelayAndConsumers(t *testing.T) {
 		t.Fatal("a message is still pending: its age must be positive")
 	}
 
-	// The failure left its lines, with the correlation of the request that caused it.
+	// El fallo dejó sus líneas, con la correlación de la petición que lo causó.
 	for _, msg := range []string{"integration message failed", "outbox delivery failed"} {
 		lines := e.lines(msg)
 		if len(lines) != 1 {
@@ -428,7 +430,7 @@ func TestObservability_OutboxRelayAndConsumers(t *testing.T) {
 		t.Fatalf("unexpected relay line: %v", l)
 	}
 
-	// Second pass: Acme is delivered; the CRM skips it as a duplicate.
+	// Segunda pasada: Acme se entrega; el CRM lo salta por duplicado.
 	if n, err := relay.RelayOnce(ctx); err != nil || n != 1 {
 		t.Fatalf("second pass: %d, %v", n, err)
 	}
@@ -445,7 +447,8 @@ func TestObservability_OutboxRelayAndConsumers(t *testing.T) {
 		t.Fatalf("the outbox is empty: the age must be zero, got %v", got)
 	}
 
-	// Relay and consumer spans carry the correlation of the flow, in traces of their own.
+	// Los spans del relay y de los consumidores llevan la correlación del flujo, en trazas
+	// propias.
 	deliveries := e.spans.Named("outbox relay " + registered)
 	consumed := e.spans.Named("consume " + registered)
 	if len(deliveries) != 3 || len(consumed) != 6 {

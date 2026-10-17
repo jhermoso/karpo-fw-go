@@ -15,7 +15,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 )
 
-// Context is the name of the bounded context (migration history).
+// Context es el nombre del contexto delimitado (historial de migraciones).
 const Context = "geography"
 
 var schemaDDL = []string{
@@ -55,11 +55,11 @@ var schemaDDL = []string{
 	PRIMARY KEY (country_id, id), FOREIGN KEY (country_id) REFERENCES geo_countries (id), FOREIGN KEY (time_zone) REFERENCES geo_time_zones (id))`,
 }
 
-// Tables of the context, children first (DropAll).
+// Tablas del contexto, las hijas primero (DropAll).
 var tables = []string{"geo_country_levels", "geo_holidays", "geo_country_time_zones", "geo_country_languages", "geo_country_currencies", "geo_countries", "geo_postal_codes",
 	"geo_boundary_links", "geo_boundaries", "geo_boundary_types", "geo_street_types", "geo_time_zones", "geo_languages", "geo_currencies"}
 
-// Migrations is the versioned schema of the context: the tables, then the Karpo seed.
+// Migrations es el esquema versionado del contexto: las tablas y después la semilla de Karpo.
 func Migrations() sqlrepo.MigrationSet {
 	return sqlrepo.MigrationSet{Context: Context, Migrations: []sqlrepo.Migration{
 		{Version: 1, Name: "boundaries, postal codes and reference data", Up: sqlrepo.RenderDDLAll(schemaDDL...)},
@@ -72,12 +72,13 @@ func Migrations() sqlrepo.MigrationSet {
 	}}
 }
 
-// Migrator returns the schema migrator of the context on db.
+// Migrator devuelve el migrador del esquema del contexto sobre db.
 func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 	return sqlrepo.NewMigrator(db, []sqlrepo.MigrationSet{Migrations()})
 }
 
-// DropAll removes every table of the context (tests only; the migration history is shared).
+// DropAll borra todas las tablas del contexto (sólo pruebas; el historial de migraciones es
+// compartido).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
 	for _, t := range tables {
 		_, _ = db.ExecContext(ctx, "DROP TABLE "+t)
@@ -98,7 +99,8 @@ func optInt(n int) any {
 	return int64(n)
 }
 
-// seedDatabase loads the embedded seed with batched inserts (parents before children).
+// seedDatabase carga la semilla embebida con inserciones por lotes (los padres antes que los
+// hijos).
 func seedDatabase(ctx context.Context, db *sqlrepo.DB) error {
 	s, err := LoadSeed()
 	if err != nil {
@@ -196,13 +198,13 @@ func seedDatabase(ctx context.Context, db *sqlrepo.DB) error {
 	return insert("geo_country_time_zones", []string{"country_id", "id", "time_zone", "is_primary"}, zones)
 }
 
-// boundaryNameFixes are the names the seed carried with a broken encoding (UTF-8 read as Latin-1
-// and encoded again): the province of geo code 15 was "CoruÃ±a, A".
+// boundaryNameFixes son los nombres que la semilla traía con la codificación rota (UTF-8 leído
+// como Latin-1 y vuelto a codificar): la provincia de código geo 15 era «CoruÃ±a, A».
 var boundaryNameFixes = []struct{ id, name string }{
 	{"b3100000-0003-0000-0003-00000000000f", "Coruña, A"},
 }
 
-// levelDDL places a boundary on the ladder of levels (docs/GEOGRAFIA-NUTS.md).
+// levelDDL sitúa un límite en la escalera de niveles (docs/GEOGRAFIA-NUTS.md).
 var levelDDL = []string{
 	`ALTER TABLE geo_boundaries {add:country} {str:2}{addEnd}`,
 	`ALTER TABLE geo_boundaries {add:boundary_level} {str:10}{addEnd}`,
@@ -211,16 +213,17 @@ var levelDDL = []string{
 	administrative {bool} NOT NULL, principal {bool} NOT NULL, PRIMARY KEY (country, boundary_level))`,
 }
 
-// seedLevels brings a database to the seed that carries levels. The boundaries were inserted by
-// migration 2 before the columns existed, so every database, old or new, gets its countries and
-// levels here. A database seeded before the seed changed also gets what changed in it: the
-// island type and the ten islands, the autonomous communities with their own type and the three
-// insular provinces without a NUTS 3 code (it belongs to their islands). Running it again
-// changes nothing.
+// seedLevels lleva una base de datos a la semilla que trae niveles. Los límites los insertó la
+// migración 2 antes de que existieran las columnas, así que toda base, vieja o nueva, recibe aquí
+// sus países y niveles. Una base sembrada antes de que cambiara la semilla recibe también lo que
+// cambió en ella: el tipo isla y las diez islas, las comunidades autónomas con su propio tipo y
+// las tres provincias insulares sin código NUTS 3 (pertenece a sus islas). Ejecutarla otra vez no
+// cambia nada.
 //
-// It follows the embedded seed, so it only adds boundaries and sets these four columns of the
-// ones that exist: a later change of the seed in anything else (a name, a link) needs its own
-// migration. A new boundary is linked as it is added, so its parent must come before it.
+// Sigue a la semilla embebida, así que sólo añade límites y fija estas cuatro columnas de los que
+// existen: un cambio posterior de la semilla en cualquier otra cosa (un nombre, un vínculo)
+// necesita su propia migración. Un límite nuevo se vincula al añadirlo, así que su padre debe ir
+// antes que él.
 func seedLevels(ctx context.Context, db *sqlrepo.DB) error {
 	s, err := LoadSeed()
 	if err != nil {
@@ -264,7 +267,7 @@ func seedLevels(ctx context.Context, db *sqlrepo.DB) error {
 		}
 	}
 
-	// The municipalities are nine tenths of the rows and all alike: one statement.
+	// Los municipios son nueve décimas partes de las filas y todos iguales: una sentencia.
 	if _, err := db.Update(ctx, "geo_boundaries", sqlrepo.Values{"country": "ES", "boundary_level": string(domain.LevelLocal)},
 		sqlrepo.Values{"boundary_type": municipality}); err != nil {
 		return fmt.Errorf("placing the municipalities: %w", err)
@@ -318,9 +321,8 @@ func seedLevels(ctx context.Context, db *sqlrepo.DB) error {
 	return nil
 }
 
-// islandMunicipalities moves every municipality of an island from its province to its island
-// (the official LAU - NUTS 3 table of Eurostat, seed/official). A database seeded with the islands
-// already has them there.
+// islandMunicipalities pasa cada municipio de una isla de su provincia a su isla (la tabla oficial
+// LAU - NUTS 3 de Eurostat, seed/official). Una base sembrada con las islas ya los tiene ahí.
 func islandMunicipalities(ctx context.Context, db *sqlrepo.DB) error {
 	s, err := LoadSeed()
 	if err != nil {
@@ -345,8 +347,8 @@ func islandMunicipalities(ctx context.Context, db *sqlrepo.DB) error {
 	return nil
 }
 
-// fixBoundaryNames renames the boundaries of a database seeded before the seed was corrected; one
-// seeded afterwards already holds these names.
+// fixBoundaryNames renombra los límites de una base sembrada antes de que se corrigiera la
+// semilla; una sembrada después ya tiene estos nombres.
 func fixBoundaryNames(ctx context.Context, db *sqlrepo.DB) error {
 	for _, f := range boundaryNameFixes {
 		id := domain.BoundaryID{UUID: fw.MustParseUUID(f.id)}
@@ -361,14 +363,14 @@ var countryColumns = []string{"id", "version", "boundary", "alpha2", "alpha3", "
 	"eu", "eea", "eurozone", "sepa", "iban_length", "iban_regex", "bban_format", "postal_regex", "postal_required", "requires_subdivision", "active"}
 
 // ---------------------------------------------------------------------------------------------
-// Mappings (read-only: the data changes through migrations)
+// Mapeos (de sólo lectura: los datos cambian mediante migraciones)
 // ---------------------------------------------------------------------------------------------
 
 func readOnly(kind string) error {
 	return fmt.Errorf("%w: %s is reference data, maintained by migrations", fw.ErrUnsupported, kind)
 }
 
-// BoundaryMapping maps Boundary to geo_boundaries + geo_boundary_links.
+// BoundaryMapping mapea Boundary a geo_boundaries + geo_boundary_links.
 func BoundaryMapping() sqlrepo.Mapping[domain.BoundaryID, *domain.Boundary] {
 	return sqlrepo.Mapping[domain.BoundaryID, *domain.Boundary]{
 		Table:   "geo_boundaries",
@@ -398,7 +400,7 @@ func BoundaryMapping() sqlrepo.Mapping[domain.BoundaryID, *domain.Boundary] {
 	}
 }
 
-// PostalCodeMapping maps PostalCode to geo_postal_codes.
+// PostalCodeMapping mapea PostalCode a geo_postal_codes.
 func PostalCodeMapping() sqlrepo.Mapping[domain.PostalCodeID, *domain.PostalCode] {
 	return sqlrepo.Mapping[domain.PostalCodeID, *domain.PostalCode]{
 		Table:     "geo_postal_codes",
@@ -411,7 +413,7 @@ func PostalCodeMapping() sqlrepo.Mapping[domain.PostalCodeID, *domain.PostalCode
 	}
 }
 
-// CountryMapping maps Country to geo_countries and its three child tables.
+// CountryMapping mapea Country a geo_countries y sus tres tablas hijas.
 func CountryMapping() sqlrepo.Mapping[domain.CountryID, *domain.Country] {
 	child := func(name, table string, cols ...string) sqlrepo.Child[*domain.Country] {
 		return sqlrepo.Child[*domain.Country]{Name: name, Table: table, ForeignKey: "country_id", Columns: append([]string{"id"}, cols...),
@@ -457,15 +459,15 @@ func CountryMapping() sqlrepo.Mapping[domain.CountryID, *domain.Country] {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Catalogs
+// Catálogos
 // ---------------------------------------------------------------------------------------------
 
-// SQLCatalogs reads the reference catalogs from the database.
+// SQLCatalogs lee los catálogos de referencia de la base de datos.
 type SQLCatalogs struct{ db *sqlrepo.DB }
 
 var _ domain.Catalogs = SQLCatalogs{}
 
-// BoundaryTypes implements domain.Catalogs.
+// BoundaryTypes implementa domain.Catalogs.
 func (c SQLCatalogs) BoundaryTypes(ctx context.Context) ([]domain.BoundaryType, error) {
 	rows, err := c.db.Select(ctx, "geo_boundary_types", []string{"id", "name", "description", "active"}, "name")
 	return mapRows(rows, err, func(r *sqlrepo.Row) domain.BoundaryType {
@@ -473,7 +475,7 @@ func (c SQLCatalogs) BoundaryTypes(ctx context.Context) ([]domain.BoundaryType, 
 	})
 }
 
-// CountryLevels implements domain.Catalogs.
+// CountryLevels implementa domain.Catalogs.
 func (c SQLCatalogs) CountryLevels(ctx context.Context) ([]domain.CountryLevel, error) {
 	rows, err := c.db.Select(ctx, "geo_country_levels", []string{"country", "boundary_level", "name", "administrative", "principal"},
 		"country", "boundary_level")
@@ -484,7 +486,7 @@ func (c SQLCatalogs) CountryLevels(ctx context.Context) ([]domain.CountryLevel, 
 	})
 }
 
-// Currencies implements domain.Catalogs.
+// Currencies implementa domain.Catalogs.
 func (c SQLCatalogs) Currencies(ctx context.Context) ([]domain.Currency, error) {
 	rows, err := c.db.Select(ctx, "geo_currencies", []string{"id", "code", "name", "symbol", "minor_units", "crypto", "active"}, "code")
 	return mapRows(rows, err, func(r *sqlrepo.Row) domain.Currency {
@@ -493,7 +495,7 @@ func (c SQLCatalogs) Currencies(ctx context.Context) ([]domain.Currency, error) 
 	})
 }
 
-// Languages implements domain.Catalogs.
+// Languages implementa domain.Catalogs.
 func (c SQLCatalogs) Languages(ctx context.Context) ([]domain.Language, error) {
 	rows, err := c.db.Select(ctx, "geo_languages", []string{"id", "code", "name", "native_name", "active"}, "code")
 	return mapRows(rows, err, func(r *sqlrepo.Row) domain.Language {
@@ -501,7 +503,7 @@ func (c SQLCatalogs) Languages(ctx context.Context) ([]domain.Language, error) {
 	})
 }
 
-// TimeZones implements domain.Catalogs.
+// TimeZones implementa domain.Catalogs.
 func (c SQLCatalogs) TimeZones(ctx context.Context) ([]domain.TimeZone, error) {
 	rows, err := c.db.Select(ctx, "geo_time_zones", []string{"id", "code", "name", "utc_offset_minutes", "observes_dst", "active"}, "code")
 	return mapRows(rows, err, func(r *sqlrepo.Row) domain.TimeZone {
@@ -510,7 +512,7 @@ func (c SQLCatalogs) TimeZones(ctx context.Context) ([]domain.TimeZone, error) {
 	})
 }
 
-// StreetTypes implements domain.Catalogs.
+// StreetTypes implementa domain.Catalogs.
 func (c SQLCatalogs) StreetTypes(ctx context.Context) ([]domain.StreetType, error) {
 	rows, err := c.db.Select(ctx, "geo_street_types", []string{"id", "country", "code", "name", "abbreviation", "active"}, "country", "code")
 	return mapRows(rows, err, func(r *sqlrepo.Row) domain.StreetType {
@@ -535,23 +537,23 @@ func mapRows[T any](rows []*sqlrepo.Row, err error, fn func(*sqlrepo.Row) T) ([]
 	return out, nil
 }
 
-// SeedCatalogs serves the catalogs of the embedded seed (in-memory backend).
+// SeedCatalogs sirve los catálogos de la semilla embebida (backend en memoria).
 type SeedCatalogs struct{}
 
 func seed() *Seed {
 	s, err := LoadSeed()
 	if err != nil {
-		panic(err) // the embedded seed is validated by the tests
+		panic(err) // la semilla embebida la validan las pruebas
 	}
 	return s
 }
 
-// BoundaryTypes implements domain.Catalogs.
+// BoundaryTypes implementa domain.Catalogs.
 func (SeedCatalogs) BoundaryTypes(context.Context) ([]domain.BoundaryType, error) {
 	return slices.Clone(seed().BoundaryTypes), nil
 }
 
-// CountryLevels implements domain.Catalogs.
+// CountryLevels implementa domain.Catalogs.
 func (SeedCatalogs) CountryLevels(context.Context) ([]domain.CountryLevel, error) {
 	out := slices.Clone(seed().CountryLevels)
 	slices.SortFunc(out, func(a, b domain.CountryLevel) int {
@@ -560,35 +562,36 @@ func (SeedCatalogs) CountryLevels(context.Context) ([]domain.CountryLevel, error
 	return out, nil
 }
 
-// Currencies implements domain.Catalogs.
+// Currencies implementa domain.Catalogs.
 func (SeedCatalogs) Currencies(context.Context) ([]domain.Currency, error) {
 	out := slices.Clone(seed().Currencies)
 	slices.SortFunc(out, func(a, b domain.Currency) int { return strings.Compare(a.Code, b.Code) })
 	return out, nil
 }
 
-// Languages implements domain.Catalogs.
+// Languages implementa domain.Catalogs.
 func (SeedCatalogs) Languages(context.Context) ([]domain.Language, error) {
 	return slices.Clone(seed().Languages), nil
 }
 
-// TimeZones implements domain.Catalogs.
+// TimeZones implementa domain.Catalogs.
 func (SeedCatalogs) TimeZones(context.Context) ([]domain.TimeZone, error) {
 	return slices.Clone(seed().TimeZones), nil
 }
 
-// StreetTypes implements domain.Catalogs.
+// StreetTypes implementa domain.Catalogs.
 func (SeedCatalogs) StreetTypes(context.Context) ([]domain.StreetType, error) {
 	return slices.Clone(seed().StreetTypes), nil
 }
 
 // ---------------------------------------------------------------------------------------------
-// Hot-swap factories
+// Factorías para el intercambio en caliente
 // ---------------------------------------------------------------------------------------------
 
 func unsupported(b hotswap.Backend) error { return fmt.Errorf("geography: unsupported backend %T", b) }
 
-// LoadMemory fills an in-memory store with the seed (the SQL backends get it from migration 2).
+// LoadMemory llena un almacén en memoria con la semilla (los backends SQL la reciben de la
+// migración 2).
 func LoadMemory(ctx context.Context, store *memory.Store) error {
 	s, err := LoadSeed()
 	if err != nil {
@@ -597,8 +600,9 @@ func LoadMemory(ctx context.Context, store *memory.Store) error {
 	boundaries := memoryRepos.boundaries(store)
 	postal := memoryRepos.postal(store)
 	countries := memoryRepos.countries(store)
-	// The decoded seed is shared by every store of the process, and saving marks the saved
-	// instance as persisted: each store saves its own copies, so the seed can be loaded again.
+	// La semilla decodificada la comparten todos los almacenes del proceso, y guardar marca la
+	// instancia guardada como persistida: cada almacén guarda sus propias copias, así que la
+	// semilla se puede volver a cargar.
 	return store.Do(ctx, func(ctx context.Context) error {
 		for _, b := range s.Boundaries {
 			c := *b
@@ -622,7 +626,8 @@ func LoadMemory(ctx context.Context, store *memory.Store) error {
 	})
 }
 
-// memoryRepos keeps one repository per store, so the loaded seed and the queries share it.
+// memoryRepos guarda un repositorio por almacén, para que la semilla cargada y las consultas lo
+// compartan.
 var memoryRepos = struct {
 	boundaries func(*memory.Store) *memory.Repository[domain.BoundaryID, *domain.Boundary]
 	postal     func(*memory.Store) *memory.Repository[domain.PostalCodeID, *domain.PostalCode]
@@ -647,7 +652,7 @@ var holidayDDL = []string{
 	`CREATE INDEX ix_geo_holidays_date ON geo_holidays (holiday_date)`,
 }
 
-// HolidayMapping maps Holiday to geo_holidays: the one table of the context that is written to.
+// HolidayMapping mapea Holiday a geo_holidays: la única tabla del contexto en la que se escribe.
 func HolidayMapping() sqlrepo.Mapping[domain.HolidayID, *domain.Holiday] {
 	return sqlrepo.Mapping[domain.HolidayID, *domain.Holiday]{
 		Table:   "geo_holidays",
@@ -667,7 +672,7 @@ func HolidayMapping() sqlrepo.Mapping[domain.HolidayID, *domain.Holiday] {
 	}
 }
 
-// HolidayRepositoryFactory builds the repository of the holidays.
+// HolidayRepositoryFactory construye el repositorio de los festivos.
 func HolidayRepositoryFactory(b hotswap.Backend) (domain.HolidayRepository, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -678,7 +683,7 @@ func HolidayRepositoryFactory(b hotswap.Backend) (domain.HolidayRepository, erro
 	return nil, unsupported(b)
 }
 
-// BoundaryRepositoryFactory builds the boundary repository.
+// BoundaryRepositoryFactory construye el repositorio de límites.
 func BoundaryRepositoryFactory(b hotswap.Backend) (domain.BoundaryRepository, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -689,7 +694,7 @@ func BoundaryRepositoryFactory(b hotswap.Backend) (domain.BoundaryRepository, er
 	return nil, unsupported(b)
 }
 
-// PostalCodeRepositoryFactory builds the postal code repository.
+// PostalCodeRepositoryFactory construye el repositorio de códigos postales.
 func PostalCodeRepositoryFactory(b hotswap.Backend) (domain.PostalCodeRepository, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -700,7 +705,7 @@ func PostalCodeRepositoryFactory(b hotswap.Backend) (domain.PostalCodeRepository
 	return nil, unsupported(b)
 }
 
-// CountryRepositoryFactory builds the country repository.
+// CountryRepositoryFactory construye el repositorio de países.
 func CountryRepositoryFactory(b hotswap.Backend) (domain.CountryRepository, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -711,7 +716,7 @@ func CountryRepositoryFactory(b hotswap.Backend) (domain.CountryRepository, erro
 	return nil, unsupported(b)
 }
 
-// CatalogsFor returns the catalog reader of a backend.
+// CatalogsFor devuelve el lector de catálogos de un backend.
 func CatalogsFor(b hotswap.Backend) (domain.Catalogs, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -722,7 +727,8 @@ func CatalogsFor(b hotswap.Backend) (domain.Catalogs, error) {
 	return nil, unsupported(b)
 }
 
-// perStore memoizes one value per in-memory store (memory repositories keep their rows).
+// perStore memoriza un valor por almacén en memoria (los repositorios en memoria conservan sus
+// filas).
 func perStore[T any](build func(*memory.Store) T) func(*memory.Store) T {
 	var mu sync.Mutex
 	cache := map[*memory.Store]T{}

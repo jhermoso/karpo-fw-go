@@ -1,8 +1,8 @@
-// Package inprocess is an in-memory message transport: an application.MessageSender that fans
-// every envelope out to the subscribed consumers of the same process. It serves the modular
-// monolith (bounded contexts deployed together but coupled only through integration events)
-// and tests; a broker adapter (NATS, RabbitMQ, Kafka...) replaces it without touching the
-// publishing or consuming code.
+// Package inprocess es un transporte de mensajes en memoria: un application.MessageSender que
+// reparte cada sobre entre los consumidores suscritos del mismo proceso. Sirve al monolito modular
+// (contextos delimitados desplegados juntos pero acoplados sólo mediante eventos de integración) y
+// a las pruebas; un adaptador de broker (NATS, RabbitMQ, Kafka...) lo sustituye sin tocar el código
+// que publica ni el que consume.
 package inprocess
 
 import (
@@ -15,9 +15,9 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/application"
 )
 
-// Broker delivers synchronously to every subscription whose types include the envelope type.
-// Send fails when any consumer fails, so the relay retries the message; consumers that already
-// processed it discard the duplicate through their inbox.
+// Broker entrega de forma síncrona a cada suscripción cuyos tipos incluyen el tipo del sobre.
+// Send falla cuando falla cualquier consumidor, para que el relay reintente el mensaje; los
+// consumidores que ya lo procesaron descartan el duplicado mediante su inbox.
 type Broker struct {
 	mu   sync.RWMutex
 	subs []subscription
@@ -25,17 +25,17 @@ type Broker struct {
 
 type subscription struct {
 	consumer string
-	types    []string // empty: every type
+	types    []string // vacío: todos los tipos
 	handler  application.MessageHandler
 }
 
 var _ application.MessageSender = (*Broker)(nil)
 
-// NewBroker creates an empty broker.
+// NewBroker crea un broker vacío.
 func NewBroker() *Broker { return &Broker{} }
 
-// Subscribe registers a consumer for the given types (all types when none) and returns an
-// unsubscribe function.
+// Subscribe registra un consumidor para los tipos dados (todos si no se da ninguno) y devuelve una
+// función para darse de baja.
 func (b *Broker) Subscribe(consumer string, h application.MessageHandler, types ...string) (unsubscribe func()) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -47,7 +47,7 @@ func (b *Broker) Subscribe(consumer string, h application.MessageHandler, types 
 	}
 }
 
-// Send implements application.MessageSender.
+// Send implementa application.MessageSender.
 func (b *Broker) Send(ctx context.Context, envelopes ...application.Envelope) error {
 	b.mu.RLock()
 	subs := slices.Clone(b.subs)

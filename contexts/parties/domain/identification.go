@@ -11,43 +11,45 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// DocumentTypeID identifies an identity document type (same GUIDs as the C# catalog).
+// DocumentTypeID identifica un tipo de documento de identidad (los mismos GUID que el catálogo de C#).
 type DocumentTypeID struct{ fw.UUID }
 
-// ParseDocumentTypeID parses a textual identity.
+// ParseDocumentTypeID interpreta una identidad en texto.
 func ParseDocumentTypeID(s string) (DocumentTypeID, error) {
 	u, err := fw.ParseUUID(s)
 	return DocumentTypeID{u}, err
 }
 
-// MustDocumentTypeID parses a well-known identity.
+// MustDocumentTypeID interpreta una identidad conocida.
 func MustDocumentTypeID(s string) DocumentTypeID { return DocumentTypeID{fw.MustParseUUID(s)} }
 
-// IdentificationID identifies an identification of a party (child entity).
+// IdentificationID identifica una identificación de una party (entidad hija).
 type IdentificationID struct{ fw.UUID }
 
-// NewIdentificationID returns a new identity.
+// NewIdentificationID devuelve una identidad nueva.
 func NewIdentificationID() IdentificationID { return IdentificationID{fw.NewUUID()} }
 
-// ParseIdentificationID parses a textual identity.
+// ParseIdentificationID interpreta una identidad en texto.
 func ParseIdentificationID(s string) (IdentificationID, error) {
 	u, err := fw.ParseUUID(s)
 	return IdentificationID{u}, err
 }
 
-// DocumentType is an entry of the identity document catalog (passport, national id, tax id...).
+// DocumentType es una entrada del catálogo de documentos de identidad (pasaporte, documento
+// nacional, identificación fiscal...).
 type DocumentType struct {
 	ID                       DocumentTypeID
-	Code                     string // ISO 20022 style: CCPT, NIDN, TXID, DRLC, SOSE, ARNU, OTHR
+	Code                     string // al estilo ISO 20022: CCPT, NIDN, TXID, DRLC, SOSE, ARNU, OTHR
 	Name                     vocab.Name
-	DefaultPattern           string // used when no country rule applies
+	DefaultPattern           string // se usa cuando no se aplica ninguna regla de país
 	RequiresExpiry           bool
 	RequiresIssuingAuthority bool
 	Active                   bool
 }
 
-// CountryDocumentRule adapts a document type to a country: availability, format and check digit
-// (the C# country_document_rule). Nil requirement flags inherit the document type.
+// CountryDocumentRule adapta un tipo de documento a un país: disponibilidad, formato y dígito de
+// control (el country_document_rule de C#). Los indicadores de requisito nil heredan los del tipo
+// de documento.
 type CountryDocumentRule struct {
 	ID                       string
 	Country                  vocab.CountryCode
@@ -57,14 +59,15 @@ type CountryDocumentRule struct {
 	DisplayOrder             int
 	Pattern                  string
 	MinLength, MaxLength     int
-	CheckDigit               string // vocab.ValidCheckDigit key
+	CheckDigit               string // clave de vocab.ValidCheckDigit
 	RequiresExpiry           *bool
 	RequiresIssuingAuthority *bool
 	Active                   bool
 }
 
-// DocumentPolicy validates identification numbers with the document catalog and the country
-// rules. The C# only flagged a "format status" after saving; here an invalid number is refused.
+// DocumentPolicy valida los números de identificación con el catálogo de documentos y las reglas
+// de país. C# sólo marcaba un «estado de formato» después de guardar; aquí un número no válido se
+// rechaza.
 type DocumentPolicy struct {
 	types    map[DocumentTypeID]DocumentType
 	rules    map[string]CountryDocumentRule
@@ -73,8 +76,9 @@ type DocumentPolicy struct {
 
 func ruleKey(c vocab.CountryCode, t DocumentTypeID) string { return c.String() + "/" + t.String() }
 
-// NewDocumentPolicy builds the policy, compiling every pattern and checking every check-digit
-// key up front: a misconfigured catalog fails at load time, not on the first customer.
+// NewDocumentPolicy construye la política, compilando de antemano cada patrón y comprobando cada
+// clave de dígito de control: un catálogo mal configurado falla al cargarse, no con el primer
+// cliente.
 func NewDocumentPolicy(types []DocumentType, rules []CountryDocumentRule) (*DocumentPolicy, error) {
 	p := &DocumentPolicy{types: map[DocumentTypeID]DocumentType{}, rules: map[string]CountryDocumentRule{}, patterns: map[string]*regexp.Regexp{}}
 	compile := func(pattern string) error {
@@ -113,14 +117,14 @@ func NewDocumentPolicy(types []DocumentType, rules []CountryDocumentRule) (*Docu
 	return p, nil
 }
 
-// DocumentType returns a document type.
+// DocumentType devuelve un tipo de documento.
 func (p *DocumentPolicy) DocumentType(id DocumentTypeID) (DocumentType, bool) {
 	t, ok := p.types[id]
 	return t, ok
 }
 
-// Options returns the document types available in a country, in display order (the C# country
-// reference query used by the forms).
+// Options devuelve los tipos de documento disponibles en un país, en el orden de presentación (la
+// consulta de referencia por país de C# que usaban los formularios).
 func (p *DocumentPolicy) Options(country vocab.CountryCode) []CountryDocumentRule {
 	var out []CountryDocumentRule
 	for _, r := range p.rules {
@@ -132,18 +136,18 @@ func (p *DocumentPolicy) Options(country vocab.CountryCode) []CountryDocumentRul
 	return out
 }
 
-// IdentificationData is what a user provides for an identification.
+// IdentificationData es lo que un usuario aporta para una identificación.
 type IdentificationData struct {
 	Type             DocumentTypeID
 	Country          vocab.CountryCode
 	Number           string
 	IssuingAuthority string
-	IssuedOn         vocab.Date // optional
-	ExpiresOn        vocab.Date // required when the rule or type says so
+	IssuedOn         vocab.Date // opcional
+	ExpiresOn        vocab.Date // obligatoria cuando lo dice la regla o el tipo
 }
 
-// Validate checks an identification and returns its canonical number (upper case, without
-// spaces, and without separators unless the country format needs them).
+// Validate comprueba una identificación y devuelve su número canónico (en mayúsculas, sin
+// espacios y sin separadores, salvo que el formato del país los necesite).
 func (p *DocumentPolicy) Validate(d IdentificationData) (string, error) {
 	var v fw.Validation
 	t, ok := p.types[d.Type]
@@ -176,8 +180,8 @@ func (p *DocumentPolicy) Validate(d IdentificationData) (string, error) {
 			requiresAuthority = *rule.RequiresIssuingAuthority
 		}
 	}
-	// The canonical number drops separators (12345678-Z is 12345678Z) unless the format needs
-	// them (the Finnish century sign, the optional Swedish dash): the first form that fits wins.
+	// El número canónico quita los separadores (12345678-Z es 12345678Z) salvo que el formato los
+	// necesite (el signo de siglo finlandés, el guion opcional sueco): gana la primera forma que encaja.
 	fits := func(n string) []string {
 		var problems []string
 		l := utf8.RuneCountInString(n)
@@ -212,7 +216,7 @@ func (p *DocumentPolicy) Validate(d IdentificationData) (string, error) {
 	return number, v.Err()
 }
 
-// Identification is an identity document of a party (child entity of Party).
+// Identification es un documento de identidad de una party (entidad hija de Party).
 type Identification struct {
 	ID               IdentificationID
 	Type             DocumentTypeID
@@ -224,14 +228,14 @@ type Identification struct {
 	Primary          bool
 }
 
-// Matches reports whether the identification is the same document (type, country, number).
+// Matches dice si la identificación es el mismo documento (tipo, país, número).
 func (i Identification) Matches(t DocumentTypeID, c vocab.CountryCode, number string) bool {
 	return i.Type == t && i.Country == c && i.Number == number
 }
 
-// AddIdentification validates and adds an identity document. Invariants: a valid number for the
-// type and country, not registered twice in the party, one primary identification (the first
-// one is primary; a new primary demotes the previous one).
+// AddIdentification valida y añade un documento de identidad. Invariantes: un número válido para
+// el tipo y el país, no registrado dos veces en la party, y una sola identificación principal (la
+// primera es la principal; una nueva principal degrada a la anterior).
 func (p *Party) AddIdentification(policy *DocumentPolicy, d IdentificationData, primary bool) (IdentificationID, error) {
 	if err := p.requireActive("get identifications"); err != nil {
 		return IdentificationID{}, err
@@ -256,9 +260,9 @@ func (p *Party) AddIdentification(policy *DocumentPolicy, d IdentificationData, 
 	}
 	p.identifications = append(ids, id)
 	if d.Type == DocNationalID || d.Type == DocTaxID || d.Type == DocAlienRegistation {
-		// A national, tax or foreigner's document that passed its checks answers the mark of a
-		// refused one. A passport, a licence or an "other document" answers nothing: it is not
-		// the document that was wrong.
+		// Un documento nacional, fiscal o de extranjero que ha pasado sus comprobaciones responde a
+		// la marca de uno rechazado. Un pasaporte, un permiso o un «otro documento» no responde a
+		// nada: no es el documento que estaba mal.
 		p.documentIssue = DocumentIssue{}
 	}
 	p.Raise(IdentificationAdded{EventMeta: p.NewEventMeta(), IdentificationID: id.ID.String(), DocumentType: d.Type.String(),
@@ -266,7 +270,7 @@ func (p *Party) AddIdentification(policy *DocumentPolicy, d IdentificationData, 
 	return id.ID, nil
 }
 
-// RemoveIdentification removes an identity document.
+// RemoveIdentification quita un documento de identidad.
 func (p *Party) RemoveIdentification(id IdentificationID) error {
 	k := slices.IndexFunc(p.identifications, func(i Identification) bool { return i.ID == id })
 	if k < 0 {
@@ -279,10 +283,10 @@ func (p *Party) RemoveIdentification(id IdentificationID) error {
 	return nil
 }
 
-// Identifications returns a copy of the identity documents.
+// Identifications devuelve una copia de los documentos de identidad.
 func (p *Party) Identifications() []Identification { return slices.Clone(p.identifications) }
 
-// PrimaryIdentification returns the primary document, if any.
+// PrimaryIdentification devuelve el documento principal, si lo hay.
 func (p *Party) PrimaryIdentification() (Identification, bool) {
 	for _, i := range p.identifications {
 		if i.Primary {

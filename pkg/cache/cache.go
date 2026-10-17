@@ -1,4 +1,4 @@
-// Package cache defines generic caching contracts for Karpo services.
+// Package cache define contratos genéricos de caché para los servicios de Karpo.
 package cache
 
 import (
@@ -6,17 +6,17 @@ import (
 	"time"
 )
 
-// Cache is a generic, thread-safe cache contract for keys of type K and values of type V.
+// Cache es un contrato de caché genérico y seguro entre goroutines para claves de tipo K y valores de tipo V.
 type Cache[K comparable, V any] interface {
-	// Get retrieves an item by key. Returns the value and true if found and not expired.
+	// Get recupera un elemento por su clave. Devuelve el valor y true si lo encuentra y no ha caducado.
 	Get(ctx context.Context, key K) (V, bool)
 
-	// Set stores an item with an optional TTL (time to live). If ttl <= 0, the item does not expire.
+	// Set guarda un elemento con un TTL (tiempo de vida) opcional. Si ttl <= 0, el elemento no caduca.
 	Set(ctx context.Context, key K, value V, ttl time.Duration) error
 
-	// Delete removes an item by key.
+	// Delete quita un elemento por su clave.
 	Delete(ctx context.Context, key K) error
 
-	// Clear flushes all entries in the cache.
+	// Clear vacía todas las entradas de la caché.
 	Clear(ctx context.Context) error
 }

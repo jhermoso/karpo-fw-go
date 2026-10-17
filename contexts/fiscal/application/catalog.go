@@ -11,7 +11,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// CreateRate adds a tax rate.
+// CreateRate añade un tipo impositivo.
 type CreateRate struct {
 	Type        string     `json:"type"`
 	Territory   string     `json:"territory"`
@@ -23,16 +23,16 @@ type CreateRate struct {
 	Until       vocab.Date `json:"until,omitzero"`
 }
 
-// EndRate closes the validity of a rate.
+// EndRate cierra la vigencia de un tipo.
 type EndRate struct {
 	ID domain.TaxRateID `json:"-"`
 	On vocab.Date       `json:"on"`
 }
 
-// SearchRates lists rates, optionally of a type and territory and in force on a date.
+// SearchRates lista tipos, opcionalmente de un impuesto y un territorio y vigentes en una fecha.
 type SearchRates struct{ Type, Territory, On string }
 
-// RateDTO is the transport form of a rate.
+// RateDTO es la forma de transporte de un tipo.
 type RateDTO struct {
 	ID          string `json:"id"`
 	Type        string `json:"type"`
@@ -51,7 +51,7 @@ func rateDTO(r *domain.TaxRate) RateDTO {
 		Rate: s.Rate.StringFixed(2), Surcharge: decimalText(s.Surcharge), From: s.From.String(), Until: dateText(s.Until)}
 }
 
-// CreateTreatment adds a tax treatment.
+// CreateTreatment añade un tratamiento fiscal.
 type CreateTreatment struct {
 	Territory   string `json:"territory"`
 	Code        string `json:"code"`
@@ -59,18 +59,18 @@ type CreateTreatment struct {
 	Kind        string `json:"kind"` // subject | exempt | not-subject
 }
 
-// RetireTreatment deactivates a treatment.
+// RetireTreatment desactiva un tratamiento.
 type RetireTreatment struct {
 	ID domain.TreatmentID `json:"-"`
 }
 
-// SearchTreatments lists the treatments of a territory.
+// SearchTreatments lista los tratamientos de un territorio.
 type SearchTreatments struct {
 	Territory  string
 	ActiveOnly bool
 }
 
-// TreatmentDTO is the transport form of a treatment.
+// TreatmentDTO es la forma de transporte de un tratamiento.
 type TreatmentDTO struct {
 	ID          string `json:"id"`
 	Territory   string `json:"territory"`
@@ -221,12 +221,12 @@ func (s service) catalogUseCases(svc *Service) {
 	})
 }
 
-// RateLookup implements contracts.Rates.
+// RateLookup implementa contracts.Rates.
 type RateLookup struct{ Rates domain.TaxRateRepository }
 
 var _ contracts.Rates = RateLookup{}
 
-// RateOn implements contracts.Rates.
+// RateOn implementa contracts.Rates.
 func (l RateLookup) RateOn(ctx context.Context, taxType, territory, code, date string) (contracts.RateRef, bool, error) {
 	typ, ok1 := domain.ParseTaxType(taxType)
 	terr, ok2 := domain.ParseTerritory(territory)

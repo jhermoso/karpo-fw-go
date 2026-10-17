@@ -1,5 +1,5 @@
-// Package application holds the Facilities use cases (with permissions and organization scope),
-// the translation to its Published Language and its directory.
+// Package application reúne los casos de uso de Facilities (con permisos y alcance por
+// organización), la traducción a su Published Language y su directorio.
 package application
 
 import (
@@ -21,23 +21,24 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Permissions (the C# resource Parties/Facility).
+// Permisos (el recurso Parties/Facility del C#).
 var (
 	PermRead   = authz.MustPermission("Facilities.Facility.Read")
 	PermCreate = authz.MustPermission("Facilities.Facility.Create")
 	PermUpdate = authz.MustPermission("Facilities.Facility.Update")
 )
 
-// MaxDepth bounds the facility hierarchy (room in floor in building in site...).
+// MaxDepth limita la jerarquía de instalaciones (sala en planta en edificio en recinto...).
 const MaxDepth = 10
 
-// AddressChecker validates the geographic part of an address and completes its Geography
-// references (the port Facilities owns; an adapter implements it over the Geography contracts).
+// AddressChecker valida la parte geográfica de una dirección y completa sus referencias a
+// Geography (el puerto es de Facilities; un adaptador lo implementa sobre los contratos de
+// Geography).
 type AddressChecker interface {
 	CheckAddress(ctx context.Context, a domain.Address) (domain.Address, error)
 }
 
-// Deps are the ports the use cases need; Recorder, Audit and Addresses are optional.
+// Deps son los puertos que necesitan los casos de uso; Recorder, Audit y Addresses son opcionales.
 type Deps struct {
 	Facilities domain.Repository
 	Catalogs   domain.Catalogs
@@ -47,11 +48,12 @@ type Deps struct {
 	Addresses  AddressChecker
 }
 
-// LocationDTO is the transport form of a location.
+// LocationDTO es la forma de transporte de una ubicación.
 type LocationDTO struct {
 	StreetType string `json:"streetType,omitempty"`
 	Line1      string `json:"line1,omitempty"`
-	// Where in the street, piece by piece (Spanish forms ask for them one by one). All optional.
+	// En qué punto de la calle, pieza a pieza (los formularios españoles las piden una a una).
+	// Todas opcionales.
 	Number          string `json:"number,omitempty"`
 	NumberQualifier string `json:"numberQualifier,omitempty"` // bis, duplicado
 	Block           string `json:"block,omitempty"`
@@ -70,7 +72,7 @@ type LocationDTO struct {
 	Email           string `json:"email,omitempty"`
 }
 
-// RegisterFacility registers a facility of an internal organization.
+// RegisterFacility da de alta una instalación de una organización interna.
 type RegisterFacility struct {
 	Organization string       `json:"organization"`
 	Type         string       `json:"type"`
@@ -81,44 +83,44 @@ type RegisterFacility struct {
 	Location     *LocationDTO `json:"location,omitempty"`
 }
 
-// RenameFacility changes the name.
+// RenameFacility cambia el nombre.
 type RenameFacility struct {
 	ID   domain.FacilityID `json:"-"`
 	Name string            `json:"name"`
 }
 
-// RelocateFacility replaces the location.
+// RelocateFacility sustituye la ubicación.
 type RelocateFacility struct {
 	ID       domain.FacilityID `json:"-"`
 	Location LocationDTO       `json:"location"`
 }
 
-// MoveFacility makes a facility part of another one (empty PartOf detaches it).
+// MoveFacility hace que una instalación forme parte de otra (PartOf vacío la separa).
 type MoveFacility struct {
 	ID     domain.FacilityID `json:"-"`
 	PartOf string            `json:"partOf"`
 }
 
-// SetFacilityActive activates or deactivates a facility.
+// SetFacilityActive activa o desactiva una instalación.
 type SetFacilityActive struct {
 	ID     domain.FacilityID `json:"-"`
 	Active bool              `json:"active"`
 }
 
-// GetFacility loads a facility.
+// GetFacility carga una instalación.
 type GetFacility struct{ ID domain.FacilityID }
 
-// SearchFacilities searches facilities of the caller's scope.
+// SearchFacilities busca instalaciones del alcance del llamante.
 type SearchFacilities struct {
 	Text, Type, Organization, PartOf string
 	ActiveOnly                       bool
 	Page, Size                       int
 }
 
-// ListFacilityTypes lists the facility type catalog.
+// ListFacilityTypes lista el catálogo de tipos de instalación.
 type ListFacilityTypes struct{}
 
-// FacilityDTO is the transport form of a facility.
+// FacilityDTO es la forma de transporte de una instalación.
 type FacilityDTO struct {
 	ID           string      `json:"id"`
 	Organization string      `json:"organization"`
@@ -134,7 +136,7 @@ type FacilityDTO struct {
 	ModifiedBy   string      `json:"modifiedBy,omitempty"`
 }
 
-// Service exposes the use cases.
+// Service expone los casos de uso.
 type Service struct {
 	Register  app.CommandHandler[RegisterFacility, FacilityDTO]
 	Rename    app.CommandHandler[RenameFacility, FacilityDTO]
@@ -146,8 +148,8 @@ type Service struct {
 	Types     app.QueryHandler[ListFacilityTypes, []domain.FacilityType]
 }
 
-// scope: a facility belongs to its organization; it is visible inside that organization's scope
-// (uniform 404 elsewhere) and writable with a Full grant on it.
+// scope: una instalación pertenece a su organización; es visible dentro del alcance de esa
+// organización (404 uniforme fuera de él) y se puede escribir con un permiso Full sobre ella.
 type scope struct {
 	global bool
 	ac     *authz.Context
@@ -281,7 +283,7 @@ func toDTO(f *domain.Facility, types map[domain.FacilityTypeID]domain.FacilityTy
 	return d
 }
 
-// parent loads the facility that will contain child, checking scope, ownership and cycles.
+// parent carga la instalación que contendrá a child y comprueba alcance, propiedad y ciclos.
 func (s service) parent(ctx context.Context, sc scope, child domain.FacilityID, owner domain.OrganizationID, id string) (*domain.Facility, error) {
 	if id == "" {
 		return nil, nil
@@ -320,7 +322,7 @@ func (s service) parent(ctx context.Context, sc scope, child domain.FacilityID, 
 	return p, nil
 }
 
-// NewService wires the use cases.
+// NewService conecta los casos de uso.
 func NewService(d Deps) *Service {
 	var opts []orchestration.Option
 	if d.Recorder != nil {
@@ -506,12 +508,13 @@ func guard[In, Out any](p authz.Permission, fn func(context.Context, In) (Out, e
 	return app.Chain[In, Out](app.HandlerFunc[In, Out](fn), append([]app.Middleware[In, Out]{pipeline.RequirePermission[In, Out](p)}, mw...)...)
 }
 
-// Directory implements contracts.Directory (one query per batch; it serves contexts, not users).
+// Directory implementa contracts.Directory (una consulta por lote; sirve a contextos, no a
+// usuarios).
 type Directory struct{ Facilities domain.Repository }
 
 var _ contracts.Directory = Directory{}
 
-// Resolve implements contracts.Directory.
+// Resolve implementa contracts.Directory.
 func (d Directory) Resolve(ctx context.Context, ids []string) (map[string]contracts.FacilityRef, error) {
 	if len(ids) > contracts.MaxBatch {
 		return nil, fmt.Errorf("%w: at most %d ids per call", fw.ErrValidation, contracts.MaxBatch)
@@ -537,7 +540,7 @@ func (d Directory) Resolve(ctx context.Context, ids []string) (map[string]contra
 	return out, nil
 }
 
-// Publications translates the domain events into the Published Language.
+// Publications traduce los eventos de dominio al Published Language.
 func Publications(r *messaging.Recorder) *messaging.Recorder {
 	one := func(e app.IntegrationEvent) ([]app.IntegrationEvent, error) { return []app.IntegrationEvent{e}, nil }
 	messaging.On(r, func(_ context.Context, e domain.FacilityRegistered) ([]app.IntegrationEvent, error) {

@@ -1,44 +1,46 @@
-// Package contracts is what other bounded contexts may depend on: the port to ask whether a
-// company has a feature on, and the Published Language of Modules.
+// Package contracts es aquello de lo que pueden depender otros contextos delimitados: el puerto
+// para preguntar si una empresa tiene encendida una funcionalidad, y el Published Language de
+// Modules.
 package contracts
 
 import "context"
 
-// Source is the name of the publishing bounded context.
+// Source es el nombre del contexto delimitado que publica.
 const Source = "modules"
 
-// Kinds of feature.
+// Clases de funcionalidad.
 const (
 	Module     = "module"
 	Capability = "capability"
 	Sector     = "sector"
 )
 
-// Features answers what a company has switched on (the C# IModuleActivationProvider,
-// ICapabilityProvider and ISectorProfileProvider in one).
+// Features responde qué tiene encendido una empresa (IModuleActivationProvider,
+// ICapabilityProvider e ISectorProfileProvider del C# en uno).
 type Features interface {
-	// Has reports whether the company has the feature on.
+	// Has dice si la empresa tiene la funcionalidad encendida.
 	Has(ctx context.Context, organization, kind, code string) (bool, error)
-	// Of lists the codes of the features of a kind the company has on, in order.
+	// Of lista, en orden, los códigos de las funcionalidades de una clase que la empresa tiene
+	// encendidas.
 	Of(ctx context.Context, organization, kind string) ([]string, error)
 }
 
-// FeatureActivatedV1 is published when a company switches a feature on.
+// FeatureActivatedV1 se publica cuando una empresa enciende una funcionalidad.
 type FeatureActivatedV1 struct {
 	Organization string `json:"organization"`
 	Kind         string `json:"kind"` // module | capability | sector
 	Code         string `json:"code"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (FeatureActivatedV1) IntegrationEventType() string { return "modules.feature-activated.v1" }
 
-// FeatureDeactivatedV1 is published when a company switches a feature off.
+// FeatureDeactivatedV1 se publica cuando una empresa apaga una funcionalidad.
 type FeatureDeactivatedV1 struct {
 	Organization string `json:"organization"`
 	Kind         string `json:"kind"`
 	Code         string `json:"code"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (FeatureDeactivatedV1) IntegrationEventType() string { return "modules.feature-deactivated.v1" }

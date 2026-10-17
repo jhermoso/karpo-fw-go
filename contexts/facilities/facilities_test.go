@@ -41,8 +41,9 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/testing/archtest"
 )
 
-// host composes three contexts on one hot-swappable backend, as a modular monolith would:
-// Parties (organizations, people, facility roles), Geography (address checks) and Facilities.
+// host compone tres contextos sobre un único backend intercambiable en caliente, como haría un monolito modular:
+// Parties (organizaciones, personas, papeles en instalaciones), Geography (comprobación de
+// direcciones) y Facilities.
 type host struct {
 	t        *testing.T
 	srv      *httptest.Server
@@ -136,7 +137,7 @@ func (h *host) must(got, want int, what string) {
 func (h *host) scenario(tag string) {
 	t := h.t
 	ctx := h.adminCtx
-	// Setup in Parties: two internal organizations and an employee of Acme.
+	// Preparación en Parties: dos organizaciones internas y un empleado de Acme.
 	acme, err := h.parties.Service.RegisterOrganization.Handle(ctx, papp.RegisterOrganization{LegalName: "Acme " + tag,
 		Roles: []string{pdomain.RoleInternalOrganization.String()}})
 	if err != nil {
@@ -179,7 +180,7 @@ func (h *host) scenario(tag string) {
 	h.must(h.do("POST", "/api/facilities", "clerk", map[string]any{"organization": globex.ID, "type": fdomain.TypeWarehouse.String(), "name": "X"}, nil),
 		404, "globex is out of the clerk's scope")
 
-	// Hierarchy: room in floor in building, same organization, no cycles.
+	// Jerarquía: sala en planta en edificio, misma organización, sin ciclos.
 	var building, floor, room fapp.FacilityDTO
 	h.must(h.do("POST", "/api/facilities", "clerk", map[string]any{"organization": acme.ID, "type": fdomain.TypeBuilding.String(), "name": "Torre " + tag, "areaM2": "12000.5"}, &building), 201, "building")
 	h.must(h.do("POST", "/api/facilities", "clerk", map[string]any{"organization": acme.ID, "type": fdomain.TypeFloor.String(), "name": "Planta 3", "partOf": building.ID}, &floor), 201, "floor")
@@ -194,7 +195,7 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("parts: %+v", parts)
 	}
 
-	// Scope: the outsider sees nothing of Acme.
+	// Alcance: el ajeno no ve nada de Acme.
 	h.must(h.do("GET", "/api/facilities/"+sol.ID, "outsider", nil, nil), 404, "outsider")
 	var mine fw.Page[fapp.FacilityDTO]
 	h.must(h.do("GET", "/api/facilities?q="+tag, "outsider", nil, &mine), 200, "outsider search")
@@ -202,7 +203,7 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("outsider sees %d facilities", mine.Total)
 	}
 
-	// Parties: Ana's work center is the office (PartyFacility stays in Parties).
+	// Parties: el centro de trabajo de Ana es la oficina (PartyFacility se queda en Parties).
 	var got papp.PartyDTO
 	h.must(h.do("POST", "/api/parties/"+ana.ID+"/facility-roles", "clerk", map[string]any{"facility": sol.ID,
 		"roleType": pdomain.FacilityWorkCenter.String()}, &got), 200, "work center")
@@ -220,7 +221,8 @@ func (h *host) scenario(tag string) {
 	h.must(h.do("POST", "/api/parties/"+ana.ID+"/facility-roles", "clerk", map[string]any{"facility": room.ID,
 		"roleType": pdomain.FacilityWorkCenter.String()}, nil), 422, "inactive facility")
 
-	// Published Language: other contexts keep their name caches with facility events.
+	// Published Language: otros contextos mantienen sus cachés de nombres con los eventos de
+	// instalaciones.
 	h.must(h.do("PUT", "/api/facilities/"+sol.ID+"/name", "clerk", map[string]any{"name": "Oficina Puerta del Sol " + tag}, nil), 200, "rename")
 	broker := inprocess.NewBroker()
 	store := memory.NewStore("stock")

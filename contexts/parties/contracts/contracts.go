@@ -1,6 +1,7 @@
-// Package contracts is what other bounded contexts may depend on: the Published Language of
-// Parties (versioned integration events) and its Open Host Service (the party directory).
-// It changes only by adding fields or publishing a new version next to the old one.
+// Package contracts es aquello de lo que pueden depender los demás contextos delimitados: el
+// Published Language de Parties (eventos de integración versionados) y su Open Host Service (el
+// directorio de parties). Sólo cambia añadiendo campos o publicando una versión nueva junto a la
+// antigua.
 package contracts
 
 import (
@@ -8,10 +9,10 @@ import (
 	"time"
 )
 
-// Source is the name of the publishing bounded context (Envelope.Source).
+// Source es el nombre del contexto delimitado que publica (Envelope.Source).
 const Source = "parties"
 
-// PartyRegisteredV1 is published when a person or an organization is registered.
+// PartyRegisteredV1 se publica cuando se da de alta una persona o una organización.
 type PartyRegisteredV1 struct {
 	PartyID      string    `json:"partyId"`
 	Kind         string    `json:"kind"` // person | organization
@@ -19,41 +20,41 @@ type PartyRegisteredV1 struct {
 	RegisteredAt time.Time `json:"registeredAt"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (PartyRegisteredV1) IntegrationEventType() string { return "parties.party-registered.v1" }
 
-// PartyRenamedV1 is published when the display name of a party changes.
+// PartyRenamedV1 se publica cuando cambia el nombre visible de una party.
 type PartyRenamedV1 struct {
 	PartyID string `json:"partyId"`
 	Name    string `json:"name"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (PartyRenamedV1) IntegrationEventType() string { return "parties.party-renamed.v1" }
 
-// PartyActivationChangedV1 is published when a party is activated or deactivated.
+// PartyActivationChangedV1 se publica cuando una party se activa o se desactiva.
 type PartyActivationChangedV1 struct {
 	PartyID string `json:"partyId"`
 	Active  bool   `json:"active"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (PartyActivationChangedV1) IntegrationEventType() string {
 	return "parties.party-activation-changed.v1"
 }
 
-// PartyRoleAssignedV1 is published when a party starts playing a role.
+// PartyRoleAssignedV1 se publica cuando una party empieza a desempeñar un rol.
 type PartyRoleAssignedV1 struct {
 	PartyID  string    `json:"partyId"`
 	RoleID   string    `json:"roleId"`
-	RoleType string    `json:"roleType"` // same GUIDs as the C# WellKnownCatalog
+	RoleType string    `json:"roleType"` // los mismos GUID que el WellKnownCatalog de C#
 	From     time.Time `json:"from"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (PartyRoleAssignedV1) IntegrationEventType() string { return "parties.party-role-assigned.v1" }
 
-// PartyRoleEndedV1 is published when a party stops playing a role.
+// PartyRoleEndedV1 se publica cuando una party deja de desempeñar un rol.
 type PartyRoleEndedV1 struct {
 	PartyID  string    `json:"partyId"`
 	RoleID   string    `json:"roleId"`
@@ -61,10 +62,10 @@ type PartyRoleEndedV1 struct {
 	At       time.Time `json:"at"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (PartyRoleEndedV1) IntegrationEventType() string { return "parties.party-role-ended.v1" }
 
-// RelationshipEstablishedV1 is published when two parties become related.
+// RelationshipEstablishedV1 se publica cuando dos parties pasan a estar relacionadas.
 type RelationshipEstablishedV1 struct {
 	RelationshipID string    `json:"relationshipId"`
 	Type           string    `json:"type"`
@@ -75,43 +76,45 @@ type RelationshipEstablishedV1 struct {
 	Since          time.Time `json:"since"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (RelationshipEstablishedV1) IntegrationEventType() string {
 	return "parties.relationship-established.v1"
 }
 
-// RelationshipTerminatedV1 is published when a relationship ends.
+// RelationshipTerminatedV1 se publica cuando termina una relación.
 type RelationshipTerminatedV1 struct {
 	RelationshipID string    `json:"relationshipId"`
 	At             time.Time `json:"at"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (RelationshipTerminatedV1) IntegrationEventType() string {
 	return "parties.relationship-terminated.v1"
 }
 
-// PartyRef is what other contexts need to show a party: identity, name and whether it is active.
+// PartyRef es lo que necesitan los demás contextos para mostrar una party: identidad, nombre y si
+// está activa.
 type PartyRef struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`
 	Active bool   `json:"active"`
 }
 
-// MaxDirectoryBatch is the maximum number of ids per Resolve call (the C# 900).
+// MaxDirectoryBatch es el número máximo de ids por llamada a Resolve (el 900 de C#).
 const MaxDirectoryBatch = 900
 
-// Directory is the Open Host Service of Parties (the C# IPartyDirectory): resolve names in
-// batches, never one by one (a JOIN turned into N network calls is the anti-pattern it avoids).
-// A party that does not exist is simply absent from the result; a failure is an error, never an
-// empty result.
+// Directory es el Open Host Service de Parties (el IPartyDirectory de C#): resuelve nombres por
+// lotes, nunca de uno en uno (un JOIN convertido en N llamadas de red es el antipatrón que evita).
+// Una party que no existe simplemente no aparece en el resultado; un fallo es un error, nunca un
+// resultado vacío.
 type Directory interface {
 	Resolve(ctx context.Context, ids []string) (map[string]PartyRef, error)
 	SearchIDsByName(ctx context.Context, text string, limit int) ([]string, error)
 }
 
-// PartyIdentificationAddedV1 is published when a party gets an identity document (Invoicing
-// needs tax ids; the number is personal data: consumers must protect it).
+// PartyIdentificationAddedV1 se publica cuando una party recibe un documento de identidad
+// (Facturación necesita los identificadores fiscales; el número es un dato personal: los
+// consumidores deben protegerlo).
 type PartyIdentificationAddedV1 struct {
 	PartyID          string `json:"partyId"`
 	IdentificationID string `json:"identificationId"`
@@ -121,59 +124,59 @@ type PartyIdentificationAddedV1 struct {
 	Primary          bool   `json:"primary"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (PartyIdentificationAddedV1) IntegrationEventType() string {
 	return "parties.party-identification-added.v1"
 }
 
-// PartyIdentificationRemovedV1 is published when an identity document is removed.
+// PartyIdentificationRemovedV1 se publica cuando se quita un documento de identidad.
 type PartyIdentificationRemovedV1 struct {
 	PartyID          string `json:"partyId"`
 	IdentificationID string `json:"identificationId"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (PartyIdentificationRemovedV1) IntegrationEventType() string {
 	return "parties.party-identification-removed.v1"
 }
 
-// PartyContactAddedV1 is published when a party gets a contact.
+// PartyContactAddedV1 se publica cuando una party recibe un contacto.
 type PartyContactAddedV1 struct {
 	PartyID   string    `json:"partyId"`
 	ContactID string    `json:"contactId"`
 	Kind      string    `json:"kind"` // email | phone | fax | web | postal
 	Value     string    `json:"value,omitempty"`
-	Address   string    `json:"address,omitempty"` // one-line rendering
+	Address   string    `json:"address,omitempty"` // representación en una línea
 	Purposes  []string  `json:"purposes"`
 	From      time.Time `json:"from"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (PartyContactAddedV1) IntegrationEventType() string { return "parties.party-contact-added.v1" }
 
-// PartyContactPurposesChangedV1 is published when the purposes of a contact change.
+// PartyContactPurposesChangedV1 se publica cuando cambian los usos de un contacto.
 type PartyContactPurposesChangedV1 struct {
 	PartyID   string   `json:"partyId"`
 	ContactID string   `json:"contactId"`
 	Purposes  []string `json:"purposes"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (PartyContactPurposesChangedV1) IntegrationEventType() string {
 	return "parties.party-contact-purposes-changed.v1"
 }
 
-// PartyContactEndedV1 is published when a contact stops being used.
+// PartyContactEndedV1 se publica cuando un contacto deja de usarse.
 type PartyContactEndedV1 struct {
 	PartyID   string    `json:"partyId"`
 	ContactID string    `json:"contactId"`
 	At        time.Time `json:"at"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (PartyContactEndedV1) IntegrationEventType() string { return "parties.party-contact-ended.v1" }
 
-// PartyClassifiedV1 is published when a party gets a classification.
+// PartyClassifiedV1 se publica cuando una party recibe una clasificación.
 type PartyClassifiedV1 struct {
 	PartyID          string    `json:"partyId"`
 	ClassificationID string    `json:"classificationId"`
@@ -181,10 +184,10 @@ type PartyClassifiedV1 struct {
 	From             time.Time `json:"from"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (PartyClassifiedV1) IntegrationEventType() string { return "parties.party-classified.v1" }
 
-// PartyClassificationEndedV1 is published when a classification ends.
+// PartyClassificationEndedV1 se publica cuando termina una clasificación.
 type PartyClassificationEndedV1 struct {
 	PartyID          string    `json:"partyId"`
 	ClassificationID string    `json:"classificationId"`
@@ -192,7 +195,7 @@ type PartyClassificationEndedV1 struct {
 	At               time.Time `json:"at"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (PartyClassificationEndedV1) IntegrationEventType() string {
 	return "parties.party-classification-ended.v1"
 }

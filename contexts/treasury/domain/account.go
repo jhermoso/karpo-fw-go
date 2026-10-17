@@ -1,8 +1,8 @@
-// Package domain is the model of the Treasury bounded context: the bank accounts of each internal
-// organization, the SEPA direct debit mandates of its customers and the remittances that collect
-// the installments Receivables has open (with the ISO 20022 pain.008 file for the bank). Invoices
-// belong to Billing, installments and collections to Receivables, parties to Parties: this context
-// references them by identity.
+// Package domain es el modelo del contexto delimitado Treasury: las cuentas bancarias de cada
+// organización interna, los mandatos de adeudo directo SEPA de sus clientes y las remesas que
+// cobran los vencimientos que Receivables tiene abiertos (con el fichero ISO 20022 pain.008 para
+// el banco). Las facturas son de Billing, los vencimientos y cobros de Receivables, las parties de
+// Parties: este contexto los referencia por su identidad.
 package domain
 
 import (
@@ -17,22 +17,22 @@ import (
 )
 
 type (
-	// AccountID identifies a bank account.
+	// AccountID identifica una cuenta bancaria.
 	AccountID struct{ fw.UUID }
-	// MandateID identifies a mandate.
+	// MandateID identifica un mandato.
 	MandateID struct{ fw.UUID }
-	// RemittanceID identifies a remittance.
+	// RemittanceID identifica una remesa.
 	RemittanceID struct{ fw.UUID }
-	// OrganizationID is an internal organization of the Parties context.
+	// OrganizationID es una organización interna del contexto Parties.
 	OrganizationID struct{ fw.UUID }
-	// PartyID is a party (the debtor) of the Parties context.
+	// PartyID es una party (el deudor) del contexto Parties.
 	PartyID struct{ fw.UUID }
-	// InvoiceID is an invoice of Billing (and its receivable in Receivables).
+	// InvoiceID es una factura de Billing (y su cuenta por cobrar en Receivables).
 	InvoiceID struct{ fw.UUID }
 )
 
-// ValidBIC checks a BIC: 8 or 11 characters, bank (4 letters), country (2 letters), location and
-// branch alphanumeric.
+// ValidBIC comprueba un BIC: 8 u 11 caracteres, banco (4 letras), país (2 letras), localidad y
+// sucursal alfanuméricas.
 func ValidBIC(b string) bool {
 	if len(b) != 8 && len(b) != 11 {
 		return false
@@ -47,9 +47,9 @@ func ValidBIC(b string) bool {
 	return true
 }
 
-// CreditorID builds the SEPA creditor identifier (AT-02): country, check digits, business code and
-// national identifier; the check digits are ISO 7064 MOD 97-10 over the national identifier and the
-// country followed by 00 (the business code does not count).
+// CreditorID construye el identificador de acreedor SEPA (AT-02): país, dígitos de control, sufijo
+// y identificador nacional; los dígitos de control son ISO 7064 MOD 97-10 sobre el identificador
+// nacional y el país seguido de 00 (el sufijo no cuenta).
 func CreditorID(country, business, national string) (string, bool) {
 	country, business = strings.ToUpper(country), strings.ToUpper(business)
 	national = vocab.NormalizeDocumentNumber(national)
@@ -81,19 +81,19 @@ func twoDigits(n int) string {
 	return strconv.Itoa(n)
 }
 
-// AccountKind is the stable aggregate type name.
+// AccountKind es el nombre estable del tipo de agregado.
 const AccountKind = "treasury.bank_account"
 
-// AccountState is the persisted state of a bank account.
+// AccountState es el estado persistido de una cuenta bancaria.
 type AccountState struct {
 	Owner          OrganizationID
 	IBAN           vocab.IBAN
 	BIC            string
 	Alias          string
 	Currency       vocab.CurrencyCode
-	Collections    bool   // used to collect (direct debits)
-	Payments       bool   // used to pay
-	CreditorSuffix string // SEPA creditor business code (3 characters, 000 by default)
+	Collections    bool   // se usa para cobrar (adeudos)
+	Payments       bool   // se usa para pagar
+	CreditorSuffix string // sufijo de acreedor SEPA (3 caracteres, 000 por defecto)
 	Opened         vocab.Date
 	Closed         vocab.Date
 	Audit          traits.AuditStamp
@@ -115,15 +115,16 @@ func (s *AccountState) check(v *fw.Validation) {
 	v.Require(!s.Opened.IsZero() && (s.Closed.IsZero() || !s.Closed.Before(s.Opened)), "opened", "order", "an opening date not after the closing")
 }
 
-// Account is a bank account of an internal organization (the C# BankAccount of FinancialKernel,
-// duplicated by OwnBankAccount of Parties; the IBAN now always passes the MOD-97 check).
+// Account es una cuenta bancaria de una organización interna (el BankAccount de FinancialKernel de
+// C#, duplicado por el OwnBankAccount de Parties; el IBAN ahora pasa siempre la comprobación
+// MOD-97).
 type Account struct {
 	fw.BaseAggregateRoot[AccountID]
 	traits.Audited
 	s AccountState
 }
 
-// ReconstituteAccount rebuilds an account.
+// ReconstituteAccount reconstruye una cuenta.
 func ReconstituteAccount(id AccountID, s AccountState) (*Account, error) {
 	base, err := fw.NewBaseAggregateRoot(AccountKind, id)
 	if err != nil {
@@ -137,15 +138,15 @@ func ReconstituteAccount(id AccountID, s AccountState) (*Account, error) {
 	return &Account{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// State returns the state.
+// State devuelve el estado.
 func (a *Account) State() AccountState { return a.s }
 
-// OpenOn reports whether the account is open on a date.
+// OpenOn dice si la cuenta está abierta en una fecha.
 func (a *Account) OpenOn(d vocab.Date) bool {
 	return !d.Before(a.s.Opened) && (a.s.Closed.IsZero() || !d.After(a.s.Closed))
 }
 
-// Close closes the account on a date.
+// Close cierra la cuenta en una fecha.
 func (a *Account) Close(on vocab.Date) error {
 	if on.Before(a.s.Opened) {
 		return fw.Violation("treasury.close_before_open", "an account cannot close before it opens")
@@ -154,12 +155,12 @@ func (a *Account) Close(on vocab.Date) error {
 	return nil
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (a *Account) AuditSnapshot() map[string]any {
 	return map[string]any{"iban": a.s.IBAN.String(), "alias": a.s.Alias, "closed": a.s.Closed.String()}
 }
 
-// Account fields.
+// Campos de la cuenta.
 var (
 	AccFieldOwner = spec.Comparable("owner", func(a *Account) OrganizationID { return a.s.Owner })
 	AccFieldIBAN  = spec.Comparable("iban", func(a *Account) string { return a.s.IBAN.String() })

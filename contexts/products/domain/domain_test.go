@@ -45,13 +45,13 @@ func TestProduct_Rules(t *testing.T) {
 		func(d *domain.Details) { d.UoM = "docena" },
 		func(d *domain.Details) { d.BasePrice = dec("-1") },
 		func(d *domain.Details) { d.BasePrice = dec("1.00001") },
-		func(d *domain.Details) { d.Kind = domain.Service },                                 // a stocked service
-		func(d *domain.Details) { d.Stocked, d.Tracking = false, domain.TrackLot },          // tracked without stock
-		func(d *domain.Details) { d.Barcodes[0].Value = "8412345678906" },                   // check digit
-		func(d *domain.Details) { d.Barcodes = append(d.Barcodes, d.Barcodes[0]) },          // twice
-		func(d *domain.Details) { d.Barcodes = []domain.Barcode{{Type: "qr", Value: "x"}} }, // unknown type
-		func(d *domain.Details) { d.Components = []domain.Component{{Quantity: dec("1")}} }, // no product
-		func(d *domain.Details) { d.Suppliers = []domain.SupplierItem{{LeadDays: 3}} },      // no supplier
+		func(d *domain.Details) { d.Kind = domain.Service },                                 // un servicio con stock
+		func(d *domain.Details) { d.Stocked, d.Tracking = false, domain.TrackLot },          // con trazabilidad sin stock
+		func(d *domain.Details) { d.Barcodes[0].Value = "8412345678906" },                   // dígito de control
+		func(d *domain.Details) { d.Barcodes = append(d.Barcodes, d.Barcodes[0]) },          // dos veces
+		func(d *domain.Details) { d.Barcodes = []domain.Barcode{{Type: "qr", Value: "x"}} }, // tipo desconocido
+		func(d *domain.Details) { d.Components = []domain.Component{{Quantity: dec("1")}} }, // sin producto
+		func(d *domain.Details) { d.Suppliers = []domain.SupplierItem{{LeadDays: 3}} },      // sin proveedor
 	}
 	for i, f := range bad {
 		d := good()

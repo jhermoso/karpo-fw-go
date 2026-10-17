@@ -43,8 +43,8 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/testing/archtest"
 )
 
-// host composes Parties, Fiscal, Purchases, Assets and Accounting on one hot-swappable backend,
-// with one in-process broker carrying the Published Language to Accounting.
+// host compone Parties, Fiscal, Purchases, Assets y Accounting sobre un único backend intercambiable
+// en caliente, con un broker en proceso que lleva el Published Language a Accounting.
 type host struct {
 	t        *testing.T
 	srv      *httptest.Server
@@ -143,7 +143,7 @@ func (h *host) ok(err error) {
 	}
 }
 
-// deliver relays the Published Language of Purchases and Assets until quiet.
+// deliver retransmite el Published Language de Purchases y Assets hasta que no queda nada.
 func (h *host) deliver() {
 	for moved := true; moved; {
 		moved = false
@@ -197,7 +197,7 @@ func (h *host) scenario(tag string) {
 	}
 	h.grant("outsider", globex.ID)
 
-	// Fiscal: the rate and the taxpayer. Accounting: the chart and the posting profile.
+	// Fiscal: el tipo y el contribuyente. Accounting: el plan de cuentas y el perfil de contabilización.
 	fs := h.fiscal.Service
 	_, err = fs.CreateRate.Handle(ctx, fapp.CreateRate{Type: "vat", Territory: "common", Code: "G21", Description: "G21", Rate: "21", From: vocab.MustDate(2012, 9, 1)})
 	h.ok(err)
@@ -214,7 +214,7 @@ func (h *host) scenario(tag string) {
 		"asset-sale-receivable": "5430", "asset-disposal-loss": "6710", "asset-disposal-gain": "7710"}})
 	h.ok(err)
 
-	// The invoice of a van and a computer is an investment, not an expense.
+	// La factura de una furgoneta y un ordenador es una inversión, no un gasto.
 	_, err = h.pur.Service.RegisterInvoice.Handle(ctx, uapp.RegisterInvoice{Company: acme.ID, Supplier: dealer.ID, SupplierNumber: "V-2026-17",
 		Issued: vocab.MustDate(2026, 1, 9), Received: vocab.MustDate(2026, 1, 10), Due: vocab.MustDate(2026, 2, 9), Total: "15972.00",
 		Lines: []uapp.LineInput{{Description: "Furgoneta", Category: "fixed-asset", Base: "12000", TaxCode: "G21"},
@@ -223,7 +223,7 @@ func (h *host) scenario(tag string) {
 	h.deliver()
 	h.expect(acme.ID, map[string]string{"2180": "13200.00", "4720": "2772.00", "4000": "-15972.00"})
 
-	// The register: the van (residual value, 48 months), the computer (24 months) and a plot of land.
+	// El registro: la furgoneta (valor residual, 48 meses), el ordenador (24 meses) y un solar.
 	van := map[string]any{"company": acme.ID, "code": "fur-01", "name": "Furgoneta", "class": "vehicles", "serial": "1234-ABC", "supplier": dealer.ID,
 		"document": "V-2026-17", "acquired": "2026-01-10", "inService": "2026-01-16", "cost": "12000", "residual": "2000", "lifeMonths": 48}
 	var a1, a2, land sapp.AssetDTO
@@ -242,7 +242,7 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("register: %+v / %+v / %+v", a1, a2, land)
 	}
 
-	// The depreciation of the first quarter: the van from 16 January, the computer from February.
+	// La amortización del primer trimestre: la furgoneta desde el 16 de enero, el ordenador desde febrero.
 	march := map[string]any{"company": acme.ID, "year": 2026, "month": 3}
 	var run sapp.RunDTO
 	h.must(h.do("POST", "/api/assets/depreciation", "keeper", march, nil), 403, "keeping the register is not depreciating")
@@ -263,7 +263,7 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("book: %+v", book)
 	}
 
-	// The computer breaks in April and is scrapped: its net book value is a loss.
+	// El ordenador se estropea en abril y se desecha: su valor neto contable es una pérdida.
 	scrap := map[string]any{"date": "2026-04-15", "kind": "scrap"}
 	h.must(h.do("POST", "/api/assets/"+a2.ID+"/dispose", "keeper", scrap, nil), 403, "keeping the register is not disposing")
 	h.must(h.do("POST", "/api/assets/"+a2.ID+"/dispose", "accountant", map[string]any{"date": "2026-03-15", "kind": "scrap"}, nil), 422, "month already depreciated")
@@ -271,7 +271,7 @@ func (h *host) scenario(tag string) {
 	if a2.Status != "disposed" || a2.Accumulated != "100.00" || a2.Result != "-1100.00" {
 		t.Fatalf("scrapped: %+v", a2)
 	}
-	// The van is sold in July for 11,000: depreciated through June first, a gain of 149.18.
+	// La furgoneta se vende en julio por 11.000: antes se amortiza hasta junio, un beneficio de 149,18.
 	h.must(h.do("POST", "/api/assets/"+a1.ID+"/dispose", "accountant", map[string]any{"date": "2026-07-10", "kind": "sale", "proceeds": "11000"}, &a1), 200, "sale")
 	if a1.Accumulated != "1149.18" || a1.Result != "149.18" || len(a1.Charges) != 6 || a1.Disposed != "2026-07-10" || a1.Proceeds != "11000.00" {
 		t.Fatalf("sold: %+v", a1)
@@ -280,7 +280,7 @@ func (h *host) scenario(tag string) {
 	h.deliver()
 	h.expect(acme.ID, map[string]string{"2180": "0.00", "2810": "0.00", "6810": "1249.18", "5430": "11000.00", "6710": "1100.00", "7710": "-149.18"})
 
-	// Nothing is left to depreciate: land does not, and the others are gone.
+	// No queda nada que amortizar: el solar no se amortiza, y los demás ya no están.
 	h.must(h.do("POST", "/api/assets/depreciation", "accountant", map[string]any{"company": acme.ID, "year": 2026, "month": 12}, &run), 200, "year end")
 	if run.Assets != 0 || run.Total != "0.00" {
 		t.Fatalf("year end: %+v", run)

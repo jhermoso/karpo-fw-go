@@ -2,12 +2,12 @@ package vocab
 
 import "strings"
 
-// IBAN is an International Bank Account Number (ISO 13616): country code, two check digits and
-// up to 30 letters or digits, verified with ISO 7064 MOD 97-10. The length and format of each
-// country belong to reference data (the Geography context's country profile), not to the value.
+// IBAN es un número de cuenta bancaria internacional (ISO 13616): código de país, dos dígitos de
+// control y hasta 30 letras o dígitos, verificado con ISO 7064 MOD 97-10. La longitud y el formato
+// de cada país pertenecen a los datos de referencia (el perfil de país del contexto Geography), no al valor.
 type IBAN struct{ value string }
 
-// NewIBAN normalizes (upper case, no spaces) and validates an IBAN.
+// NewIBAN normaliza (mayúsculas, sin espacios) y valida un IBAN.
 func NewIBAN(s string) (IBAN, error) {
 	v := strings.ToUpper(strings.Join(strings.Fields(s), ""))
 	if len(v) < 15 || len(v) > 34 || !letters(v[:2]) || !digits(v[2:4]) || !alnum(v[4:]) {
@@ -19,13 +19,13 @@ func NewIBAN(s string) (IBAN, error) {
 	return IBAN{v}, nil
 }
 
-// String returns the electronic form (no spaces).
+// String devuelve la forma electrónica (sin espacios).
 func (i IBAN) String() string { return i.value }
 
-// IsZero reports whether the IBAN is absent.
+// IsZero dice si falta el IBAN.
 func (i IBAN) IsZero() bool { return i.value == "" }
 
-// Country returns the ISO 3166 alpha-2 code of the IBAN.
+// Country devuelve el código ISO 3166 alfa-2 del IBAN.
 func (i IBAN) Country() string {
 	if i.value == "" {
 		return ""
@@ -33,7 +33,7 @@ func (i IBAN) Country() string {
 	return i.value[:2]
 }
 
-// Formatted returns the paper form, in groups of four characters.
+// Formatted devuelve la forma en papel, en grupos de cuatro caracteres.
 func (i IBAN) Formatted() string {
 	var b strings.Builder
 	for k, r := range i.value {
@@ -45,10 +45,10 @@ func (i IBAN) Formatted() string {
 	return b.String()
 }
 
-// MarshalText implements encoding.TextMarshaler.
+// MarshalText implementa encoding.TextMarshaler.
 func (i IBAN) MarshalText() ([]byte, error) { return []byte(i.value), nil }
 
-// UnmarshalText implements encoding.TextUnmarshaler.
+// UnmarshalText implementa encoding.TextUnmarshaler.
 func (i *IBAN) UnmarshalText(b []byte) error {
 	if len(b) == 0 {
 		*i = IBAN{}
@@ -71,7 +71,7 @@ func letters(s string) bool {
 	return s != ""
 }
 
-// ibanMod97 computes the value mod 97, letters counting as 10..35, digit by digit.
+// ibanMod97 calcula el valor módulo 97, dígito a dígito, contando las letras como 10..35.
 func ibanMod97(s string) int {
 	m := 0
 	for _, r := range s {

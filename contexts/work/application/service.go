@@ -1,5 +1,5 @@
-// Package application holds the Work use cases (with permissions and company scope) and the
-// translation to the Published Language.
+// Package application contiene los casos de uso de Work (con permisos y ámbito de empresa) y la
+// traducción al Published Language.
 package application
 
 import (
@@ -20,7 +20,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Deps are the ports the use cases need; Recorder and Audit are optional.
+// Deps son los puertos que necesitan los casos de uso; Recorder y Audit son opcionales.
 type Deps struct {
 	Works    domain.WorkRepository
 	Times    domain.TimeEntryRepository
@@ -29,7 +29,7 @@ type Deps struct {
 	Audit    app.AuditLog
 }
 
-// Service exposes the use cases.
+// Service expone los casos de uso.
 type Service struct {
 	Open        app.CommandHandler[OpenWork, WorkDTO]
 	Change      app.CommandHandler[ChangeWork, WorkDTO]
@@ -71,7 +71,7 @@ func scopeOf(ctx context.Context) scope {
 	return s
 }
 
-// check returns a uniform 404 outside the company's scope and 403 when it is read-only.
+// check devuelve un 404 uniforme fuera del ámbito de la empresa y 403 cuando es de sólo lectura.
 func (s scope) check(kind string, id fmt.Stringer, org domain.OrganizationID, write bool) error {
 	if !s.global && !slices.Contains(s.orgs, org) {
 		return fw.NotFound(kind, id)
@@ -145,7 +145,7 @@ func changing[In, Out any](uow fw.UnitOfWork, p authz.Permission, fn func(contex
 	return guard(p, fn, pipeline.RetryOnConflict[In, Out](5, 10*time.Millisecond), pipeline.Transactional[In, Out](uow))
 }
 
-// NewService wires the use cases.
+// NewService conecta los casos de uso.
 func NewService(d Deps) *Service {
 	var opts []orchestration.Option
 	if d.Recorder != nil {
@@ -162,7 +162,7 @@ func NewService(d Deps) *Service {
 	return svc
 }
 
-// Publications translates the domain events into the Published Language.
+// Publications traduce los eventos de dominio al Published Language.
 func Publications(r *messaging.Recorder) *messaging.Recorder {
 	messaging.On(r, func(_ context.Context, e domain.WorkCompleted) ([]app.IntegrationEvent, error) {
 		return []app.IntegrationEvent{contracts.WorkCompletedV1{WorkID: e.AggregateID, Company: e.Company, Code: e.Code, Kind: e.Kind, Customer: e.Customer,

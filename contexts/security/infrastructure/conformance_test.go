@@ -13,7 +13,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlite"
 )
 
-// The same battery runs on PostgreSQL, SQL Server, Oracle and MySQL in the integration module.
+// La misma batería se ejecuta sobre PostgreSQL, SQL Server, Oracle y MySQL en el módulo de integración.
 func TestSecurityConformance_SQLite(t *testing.T) {
 	ctx := context.Background()
 	raw, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "security.db")+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)")

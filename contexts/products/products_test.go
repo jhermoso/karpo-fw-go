@@ -33,7 +33,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/testing/archtest"
 )
 
-// host composes Parties and Products on one hot-swappable backend.
+// host compone Parties y Products sobre un único backend intercambiable en caliente.
 type host struct {
 	t        *testing.T
 	srv      *httptest.Server
@@ -150,7 +150,7 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("units: %+v", units)
 	}
 
-	// Categories: a tree with unique codes per company.
+	// Categorías: un árbol con códigos únicos por empresa.
 	var ferr, torn dapp.CategoryDTO
 	h.must(h.do("POST", "/api/products/categories", "cataloguer", map[string]any{"company": acme.ID, "code": "ferr", "name": "Ferretería"}, &ferr), 201, "category")
 	h.must(h.do("POST", "/api/products/categories", "cataloguer", map[string]any{"company": acme.ID, "code": "FERR", "name": "Otra"}, nil), 422, "category code once")
@@ -158,7 +158,7 @@ func (h *host) scenario(tag string) {
 		&torn), 201, "child category")
 	h.must(h.do("POST", "/api/products/categories", "outsider", map[string]any{"company": acme.ID, "code": "X", "name": "X"}, nil), 404, "outsider")
 
-	// Products: SKU and barcodes unique in the company, check digits, goods and services.
+	// Productos: SKU y códigos de barras únicos en la empresa, dígitos de control, bienes y servicios.
 	screw := map[string]any{"company": acme.ID, "sku": "tor-m8", "name": "Tornillo M8", "kind": "good", "uom": "ea", "category": torn.ID, "taxCode": "G21",
 		"expenseCategory": "goods", "basePrice": "0.125", "standardCost": "0.04", "forSale": true, "forPurchase": true, "stocked": true,
 		"barcodes":  []map[string]any{{"type": "ean-13", "value": "8412345678905"}},
@@ -184,7 +184,7 @@ func (h *host) scenario(tag string) {
 	h.must(h.do("POST", "/api/products/products", "cataloguer", map[string]any{"company": acme.ID, "sku": "MONT", "name": "Montaje", "kind": "service", "uom": "h",
 		"taxCode": "G21", "basePrice": "35", "forSale": true}, &montaje), 201, "service")
 
-	// A kit of ten screws and ten nuts; a component cannot contain its kit.
+	// Un kit de diez tornillos y diez tuercas; un componente no puede contener su kit.
 	h.must(h.do("POST", "/api/products/products", "cataloguer", map[string]any{"company": acme.ID, "sku": "KIT-M8", "name": "Kit M8 x10", "kind": "good",
 		"uom": "caja", "basePrice": "1.50", "forSale": true, "stocked": true, "components": []map[string]any{{"product": tornillo.ID, "quantity": "10"},
 			{"product": tuerca.ID, "quantity": "10"}}}, &kit), 201, "kit")
@@ -199,7 +199,7 @@ func (h *host) scenario(tag string) {
 	if tornillo.Tracking != "lot" || tornillo.Name != "Tornillo M8 zincado" || tornillo.Version != 2 {
 		t.Fatalf("changed: %+v", tornillo)
 	}
-	// Globex has its own catalog: the same SKU and barcode are free there.
+	// Globex tiene su propio catálogo: allí el mismo SKU y el mismo código de barras están libres.
 	_, err := h.prod.Service.RegisterProduct.Handle(ctx, dapp.RegisterProduct{Company: globex.ID, SKU: "TOR-M8", DetailsInput: dapp.DetailsInput{
 		Name: "Tornillo", Kind: "good", UoM: "ea", Barcodes: []dapp.BarcodeInput{{Type: "ean-13", Value: "8412345678905"}}}})
 	h.ok(err)
@@ -229,7 +229,7 @@ func (h *host) scenario(tag string) {
 	}
 	h.must(h.do("GET", "/api/products/products/"+tornillo.ID, "outsider", nil, nil), 404, "outsider")
 
-	// Prices: a list with volume tiers and validity; without a line, the base price.
+	// Precios: una lista con tramos por volumen y vigencia; sin línea, el precio base.
 	var list dapp.PriceListDTO
 	h.must(h.do("POST", "/api/products/price-lists", "cataloguer", map[string]any{"company": acme.ID, "code": "mayor", "name": "Mayoristas"}, nil), 403,
 		"cataloguing is not pricing")
@@ -272,7 +272,7 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("after removal: %+v", list.Lines)
 	}
 
-	// A product is discontinued, never deleted; other contexts see it through the Catalog port.
+	// Un producto se retira, nunca se borra; los demás contextos lo ven a través del puerto Catalog.
 	h.must(h.do("POST", "/api/products/products/"+tuerca.ID+"/discontinue", "cataloguer", map[string]any{"on": "2026-11-01"}, &tuerca), 200, "discontinue")
 	h.must(h.do("POST", "/api/products/products/"+tuerca.ID+"/discontinue", "cataloguer", nil, nil), 422, "discontinued once")
 	refs, err := h.prod.Catalog.Products(context.Background(), []string{tornillo.ID, tuerca.ID, fw.NewUUID().String(), "x"})

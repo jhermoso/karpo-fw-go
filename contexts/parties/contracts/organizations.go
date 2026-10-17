@@ -5,8 +5,8 @@ import (
 	"time"
 )
 
-// PartyAffiliatedV1 is published when a party becomes affiliated with an internal organization
-// (an active relationship with it): the membership other contexts scope their data by.
+// PartyAffiliatedV1 se publica cuando una party queda afiliada a una organización interna (una
+// relación activa con ella): la pertenencia por la que los demás contextos acotan sus datos.
 type PartyAffiliatedV1 struct {
 	PartyID        string    `json:"partyId"`
 	Organization   string    `json:"organization"`
@@ -14,10 +14,10 @@ type PartyAffiliatedV1 struct {
 	From           time.Time `json:"from"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (PartyAffiliatedV1) IntegrationEventType() string { return "parties.party-affiliated.v1" }
 
-// PartyAffiliationEndedV1 is published when an affiliation ends.
+// PartyAffiliationEndedV1 se publica cuando termina una afiliación.
 type PartyAffiliationEndedV1 struct {
 	PartyID        string    `json:"partyId"`
 	Organization   string    `json:"organization"`
@@ -25,34 +25,35 @@ type PartyAffiliationEndedV1 struct {
 	At             time.Time `json:"at"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (PartyAffiliationEndedV1) IntegrationEventType() string {
 	return "parties.party-affiliation-ended.v1"
 }
 
-// Membership answers which internal organizations each party belongs to (the C#
-// IPartyOrganizationMembership): every requested id is a key, with an empty list when the party
-// belongs to none.
+// Membership responde a qué organizaciones internas pertenece cada party (el
+// IPartyOrganizationMembership de C#): cada id pedido es una clave, con una lista vacía cuando la
+// party no pertenece a ninguna.
 type Membership interface {
 	InternalOrganizations(ctx context.Context, partyIDs []string) (map[string][]string, error)
 }
 
-// OrganizationHierarchy walks organization rollups (the C# IOrganizationHierarchy).
+// OrganizationHierarchy recorre la jerarquía de organizaciones (el IOrganizationHierarchy de C#).
 type OrganizationHierarchy interface {
-	// Descendants returns the organizations and every unit below them.
+	// Descendants devuelve las organizaciones y todas las unidades que cuelgan de ellas.
 	Descendants(ctx context.Context, organizationIDs []string) ([]string, error)
-	// InternalOrganizationOf returns, for each unit, the nearest ancestor (or itself) that is an
-	// internal organization; units without one are absent.
+	// InternalOrganizationOf devuelve, para cada unidad, el antecesor más cercano (o ella misma)
+	// que es una organización interna; las unidades sin ninguno no aparecen.
 	InternalOrganizationOf(ctx context.Context, unitIDs []string) (map[string]PartyRef, error)
 }
 
-// InternalOrganizationCatalog lists the internal organizations (the C# IInternalOrganizationCatalog).
+// InternalOrganizationCatalog lista las organizaciones internas (el IInternalOrganizationCatalog
+// de C#).
 type InternalOrganizationCatalog interface {
 	All(ctx context.Context) ([]PartyRef, error)
 }
 
-// PartyFacilityRoleAssignedV1 is published when a party starts playing a role at a facility
-// (RRHH: the work center of an employee).
+// PartyFacilityRoleAssignedV1 se publica cuando una party empieza a desempeñar un rol en una
+// instalación (RRHH: el centro de trabajo de un empleado).
 type PartyFacilityRoleAssignedV1 struct {
 	PartyID  string    `json:"partyId"`
 	RoleID   string    `json:"roleId"`
@@ -61,12 +62,12 @@ type PartyFacilityRoleAssignedV1 struct {
 	From     time.Time `json:"from"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (PartyFacilityRoleAssignedV1) IntegrationEventType() string {
 	return "parties.party-facility-role-assigned.v1"
 }
 
-// PartyFacilityRoleEndedV1 is published when a facility role ends.
+// PartyFacilityRoleEndedV1 se publica cuando termina un rol en una instalación.
 type PartyFacilityRoleEndedV1 struct {
 	PartyID  string    `json:"partyId"`
 	RoleID   string    `json:"roleId"`
@@ -74,14 +75,14 @@ type PartyFacilityRoleEndedV1 struct {
 	At       time.Time `json:"at"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (PartyFacilityRoleEndedV1) IntegrationEventType() string {
 	return "parties.party-facility-role-ended.v1"
 }
 
-// TaxIdentity is the fiscal identification of a party: its tax number (NIF, or the national or
-// foreigner identity number of a person) and the province of its fiscal address (the first two
-// digits of the Spanish postal code), as the tax forms need them.
+// TaxIdentity es la identificación fiscal de una party: su número fiscal (NIF, o el número de
+// identidad nacional o de extranjero de una persona) y la provincia de su domicilio fiscal (las
+// dos primeras cifras del código postal español), tal como los necesitan los modelos tributarios.
 type TaxIdentity struct {
 	PartyID      string `json:"partyId"`
 	Name         string `json:"name"`
@@ -89,13 +90,13 @@ type TaxIdentity struct {
 	Number       string `json:"number,omitempty"`
 	DocumentType string `json:"documentType,omitempty"` // TXID | NIDN | ARNU
 	Province     string `json:"province,omitempty"`
-	// Blocked tells a party that takes part in nothing but queries: the duplicate of another
-	// (docs/DECISIONES-COMUNES.md, D-64 and D-70). It is not invoiced nor sold to.
+	// Blocked señala una party que no interviene más que en consultas: el duplicado de otra
+	// (docs/DECISIONES-COMUNES.md, D-64 y D-70). No se le factura ni se le vende.
 	Blocked bool `json:"blocked,omitempty"`
 }
 
-// TaxIdentities resolves tax identities in batches (at most MaxDirectoryBatch ids). Missing
-// parties are absent; a party without a tax document has an empty Number.
+// TaxIdentities resuelve identidades fiscales por lotes (como mucho MaxDirectoryBatch ids). Las
+// parties que no existen no aparecen; una party sin documento fiscal tiene Number vacío.
 type TaxIdentities interface {
 	TaxIdentities(ctx context.Context, partyIDs []string) (map[string]TaxIdentity, error)
 }

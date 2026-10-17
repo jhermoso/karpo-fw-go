@@ -1,4 +1,5 @@
-// Package inventory composes the Inventory (Inventario) bounded context on a hot-swap backend.
+// Package inventory compone el contexto delimitado de Inventario sobre un backend intercambiable
+// en caliente.
 package inventory
 
 import (
@@ -20,18 +21,19 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 )
 
-// Module is the composed context.
+// Module es el contexto compuesto.
 type Module struct {
 	Service           *iapp.Service
 	Availability      contracts.Availability
 	IntegrationOutbox application.OutboxStore
 	Audit             application.AuditLog
-	// Consumer receives the stock requests, deliveries and closures of Orders: subscribe it to the
-	// transport.
+	// Consumer recibe las peticiones de existencias, las entregas y los cierres de Orders: hay que
+	// suscribirlo al transporte.
 	Consumer *messaging.Consumer
 }
 
-// Compose builds the context on sw. Inventory needs the catalog of Products, a port it owns.
+// Compose construye el contexto sobre sw. Inventario necesita el catálogo de Products, un puerto
+// que es suyo.
 func Compose(sw *hotswap.Switch, catalog domain.Catalog) *Module {
 	integration := hotswap.Outbox(sw, infrastructure.IntegrationOutboxFactory)
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
@@ -49,7 +51,7 @@ func Compose(sw *hotswap.Switch, catalog domain.Catalog) *Module {
 		Consumer: consumer}
 }
 
-// Relay forwards the Published Language to a transport.
+// Relay reenvía el Published Language a un transporte.
 func (m *Module) Relay(sender application.MessageSender, opts ...outbox.RelayOption) *outbox.Relay {
 	return messaging.NewRelay(contracts.Source, m.IntegrationOutbox, sender, opts...)
 }
@@ -101,7 +103,7 @@ func create[In, Out any](status int, run func(context.Context, In) (Out, error))
 	}
 }
 
-// RegisterRoutes implements distribution.EndpointModule.
+// RegisterRoutes implementa distribution.EndpointModule.
 func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	svc := m.Service
 	wh, res := domain.ParseWarehouseID, domain.ParseReservationID

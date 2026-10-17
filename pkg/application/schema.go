@@ -7,27 +7,27 @@ import (
 )
 
 // ---------------------------------------------------------------------------------------------
-// Schema management
+// Gestión del esquema
 // ---------------------------------------------------------------------------------------------
 
-// Migration states reported by a SchemaMigrator.
+// Estados de migración de los que informa un SchemaMigrator.
 const (
-	MigrationPending  = "pending"  // declared by the code, not applied
-	MigrationApplied  = "applied"  // applied with the same checksum
-	MigrationDirty    = "dirty"    // started but not finished (engine without transactional DDL)
-	MigrationModified = "modified" // applied, but its statements changed afterwards
-	MigrationUnknown  = "unknown"  // applied in the database, unknown to this code (newer code ran)
+	MigrationPending  = "pending"  // declarada por el código, no aplicada
+	MigrationApplied  = "applied"  // aplicada con el mismo checksum
+	MigrationDirty    = "dirty"    // empezada pero no terminada (motor sin DDL transaccional)
+	MigrationModified = "modified" // aplicada, pero sus sentencias cambiaron después
+	MigrationUnknown  = "unknown"  // aplicada en la base de datos, desconocida para este código (se ejecutó código más nuevo)
 )
 
-// Schema errors.
+// Errores de esquema.
 var (
-	// ErrSchemaOutdated: the database schema does not match the migrations of the code.
+	// ErrSchemaOutdated: el esquema de la base de datos no coincide con las migraciones del código.
 	ErrSchemaOutdated = errors.New("schema outdated")
-	// ErrSchemaDirty: a migration failed half way and must be repaired by hand, then forced.
+	// ErrSchemaDirty: una migración falló a medias y hay que repararla a mano y después forzarla.
 	ErrSchemaDirty = errors.New("schema dirty")
 )
 
-// MigrationStatus is the state of one migration of one bounded context.
+// MigrationStatus es el estado de una migración de un contexto delimitado.
 type MigrationStatus struct {
 	Context   string     `json:"context"`
 	Version   int64      `json:"version"`
@@ -36,16 +36,16 @@ type MigrationStatus struct {
 	AppliedAt *time.Time `json:"appliedAt,omitempty"`
 }
 
-// SchemaMigrator manages the versioned schema of the bounded contexts hosted on a database
-// (the Go counterpart of IDatabaseSchemaManager, with migrations instead of EnsureCreated).
-// Implementation: persistence/sqlrepo.Migrator.
+// SchemaMigrator gestiona el esquema versionado de los contextos delimitados alojados en una base
+// de datos (la contrapartida en Go de IDatabaseSchemaManager, con migraciones en lugar de EnsureCreated).
+// Implementación: persistence/sqlrepo.Migrator.
 type SchemaMigrator interface {
-	// Status reports every migration: declared by the code and recorded in the database.
+	// Status informa de todas las migraciones: las declaradas por el código y las registradas en la base de datos.
 	Status(ctx context.Context) ([]MigrationStatus, error)
-	// Migrate applies the pending migrations in order and returns the ones it applied. It refuses
-	// to run on a dirty, modified or unknown history.
+	// Migrate aplica en orden las migraciones pendientes y devuelve las que ha aplicado. Se niega
+	// a ejecutarse sobre un historial sucio, modificado o desconocido.
 	Migrate(ctx context.Context) ([]MigrationStatus, error)
-	// Verify fails with ErrSchemaOutdated (or ErrSchemaDirty) unless every migration is applied:
-	// run it at startup and before a hot swap so the service never runs on an outdated schema.
+	// Verify falla con ErrSchemaOutdated (o ErrSchemaDirty) salvo que estén aplicadas todas las migraciones:
+	// debe ejecutarse al arrancar y antes de un cambio en caliente para que el servicio nunca funcione con un esquema desfasado.
 	Verify(ctx context.Context) error
 }

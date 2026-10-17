@@ -13,7 +13,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
 )
 
-// Publications registers the translation of the domain events into the Published Language.
+// Publications registra la traducción de los eventos de dominio al Published Language.
 func Publications(r *messaging.Recorder) *messaging.Recorder {
 	one := func(e app.IntegrationEvent) ([]app.IntegrationEvent, error) { return []app.IntegrationEvent{e}, nil }
 	messaging.On(r, func(_ context.Context, e domain.PartyRegistered) ([]app.IntegrationEvent, error) {
@@ -31,7 +31,7 @@ func Publications(r *messaging.Recorder) *messaging.Recorder {
 	messaging.On(r, func(_ context.Context, e domain.PartyRoleAssigned) ([]app.IntegrationEvent, error) {
 		return one(contracts.PartyRoleAssignedV1{PartyID: e.AggregateID, RoleID: e.RoleID, RoleType: e.RoleType, From: e.From})
 	})
-	// Who heard that the role was given hears that it is no longer played, removed or not.
+	// Quien oyó que se dio el rol oye que ya no se desempeña, se haya borrado o no.
 	messaging.On(r, func(_ context.Context, e domain.PartyRoleAnnulled) ([]app.IntegrationEvent, error) {
 		return one(contracts.PartyRoleEndedV1{PartyID: e.AggregateID, RoleID: e.RoleID, RoleType: e.RoleType, At: e.At})
 	})
@@ -91,15 +91,15 @@ func Publications(r *messaging.Recorder) *messaging.Recorder {
 	return r
 }
 
-// Directory is the in-process implementation of contracts.Directory (the C# EfPartyDirectory):
-// one query per batch, whatever the number of ids. Remote contexts use an HTTP adapter over
-// the same contract. It serves other contexts, so it does not require a Parties permission:
-// the caller's own use case is what is authorized.
+// Directory es la implementación dentro del proceso de contracts.Directory (el EfPartyDirectory
+// de C#): una consulta por lote, sea cual sea el número de ids. Los contextos remotos usan un
+// adaptador HTTP sobre el mismo contrato. Sirve a otros contextos, así que no exige un permiso de
+// Parties: lo que se autoriza es el caso de uso del llamante.
 type Directory struct{ Parties domain.PartyRepository }
 
 var _ contracts.Directory = Directory{}
 
-// Resolve implements contracts.Directory.
+// Resolve implementa contracts.Directory.
 func (d Directory) Resolve(ctx context.Context, ids []string) (map[string]contracts.PartyRef, error) {
 	if len(ids) > contracts.MaxDirectoryBatch {
 		return nil, fmt.Errorf("%w: at most %d ids per call", fw.ErrValidation, contracts.MaxDirectoryBatch)
@@ -124,8 +124,8 @@ func (d Directory) Resolve(ctx context.Context, ids []string) (map[string]contra
 	return out, nil
 }
 
-// SearchIDsByName implements contracts.Directory: an empty fragment is an empty result, not
-// "everyone".
+// SearchIDsByName implementa contracts.Directory: un fragmento vacío da un resultado vacío, no
+// «todos».
 func (d Directory) SearchIDsByName(ctx context.Context, text string, limit int) ([]string, error) {
 	text = strings.TrimSpace(text)
 	if text == "" {

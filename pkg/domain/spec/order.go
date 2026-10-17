@@ -1,17 +1,17 @@
 package spec
 
-// Order is a typed sort criterion created from an ordered field (Field.Asc / Field.Desc).
-// Being typed by T, an ordering for one aggregate cannot be passed to another's repository.
+// Order es un criterio de ordenación tipado que se crea a partir de un campo ordenado (Field.Asc / Field.Desc).
+// Al estar tipado por T, una ordenación de un agregado no puede pasarse al repositorio de otro.
 type Order[T any] struct {
-	// Field is the logical field name adapters map to storage.
+	// Field es el nombre lógico del campo que los adaptadores traducen al almacenamiento.
 	Field string
-	// Desc selects descending order.
+	// Desc elige el orden descendente.
 	Desc bool
 
 	compare func(a, b T) int
 }
 
-// Compare compares a and b according to this criterion (in-memory adapters).
+// Compare compara a y b según este criterio (adaptadores en memoria).
 func (o Order[T]) Compare(a, b T) int {
 	if o.compare == nil {
 		return 0
@@ -23,7 +23,7 @@ func (o Order[T]) Compare(a, b T) int {
 	return r
 }
 
-// CompareAll applies orders in sequence until one differentiates a and b.
+// CompareAll aplica los órdenes en secuencia hasta que uno distingue a de b.
 func CompareAll[T any](orders []Order[T], a, b T) int {
 	for _, o := range orders {
 		if r := o.Compare(a, b); r != 0 {

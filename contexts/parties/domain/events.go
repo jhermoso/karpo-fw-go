@@ -6,39 +6,39 @@ import (
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// PartyRegistered is raised when a person or an organization is registered.
+// PartyRegistered se lanza cuando se da de alta una persona o una organización.
 type PartyRegistered struct {
 	fw.EventMeta
 	Kind string `json:"kind"`
 	Name string `json:"name"`
 }
 
-// EventType implements domain.Event.
+// EventType implementa domain.Event.
 func (PartyRegistered) EventType() string { return "parties.party_registered" }
 
-// PartyRenamed is raised when the display name of a party changes.
+// PartyRenamed se lanza cuando cambia el nombre visible de una party.
 type PartyRenamed struct {
 	fw.EventMeta
 	From string `json:"from"`
 	To   string `json:"to"`
 }
 
-// EventType implements domain.Event.
+// EventType implementa domain.Event.
 func (PartyRenamed) EventType() string { return "parties.party_renamed" }
 
-// PartyActivated is raised when a party is reactivated.
+// PartyActivated se lanza cuando se reactiva una party.
 type PartyActivated struct{ fw.EventMeta }
 
-// EventType implements domain.Event.
+// EventType implementa domain.Event.
 func (PartyActivated) EventType() string { return "parties.party_activated" }
 
-// PartyDeactivated is raised when a party is deactivated.
+// PartyDeactivated se lanza cuando se desactiva una party.
 type PartyDeactivated struct{ fw.EventMeta }
 
-// EventType implements domain.Event.
+// EventType implementa domain.Event.
 func (PartyDeactivated) EventType() string { return "parties.party_deactivated" }
 
-// PartyRoleAssigned is raised when a party starts playing a role.
+// PartyRoleAssigned se lanza cuando una party empieza a desempeñar un rol.
 type PartyRoleAssigned struct {
 	fw.EventMeta
 	RoleID   string    `json:"roleId"`
@@ -46,23 +46,23 @@ type PartyRoleAssigned struct {
 	From     time.Time `json:"from"`
 }
 
-// EventType implements domain.Event.
+// EventType implementa domain.Event.
 func (PartyRoleAssigned) EventType() string { return "parties.party_role_assigned" }
 
-// PartyMarkedDuplicate is raised when a party is marked as the duplicate of another.
+// PartyMarkedDuplicate se lanza cuando una party se marca como duplicado de otra.
 type PartyMarkedDuplicate struct{ fw.EventMeta }
 
-// EventType implements domain.Event.
+// EventType implementa domain.Event.
 func (PartyMarkedDuplicate) EventType() string { return "parties.party_marked_duplicate" }
 
-// PartyDuplicateCleared is raised when a party stops being a duplicate.
+// PartyDuplicateCleared se lanza cuando una party deja de ser un duplicado.
 type PartyDuplicateCleared struct{ fw.EventMeta }
 
-// EventType implements domain.Event.
+// EventType implementa domain.Event.
 func (PartyDuplicateCleared) EventType() string { return "parties.party_duplicate_cleared" }
 
-// PartyRoleAnnulled is raised when a role given by mistake is taken back: removed, or ended and
-// marked when something depended on it.
+// PartyRoleAnnulled se lanza cuando se retira un rol dado por error: se quita, o se termina y se
+// marca si algo dependía de él.
 type PartyRoleAnnulled struct {
 	fw.EventMeta
 	RoleID   string    `json:"roleId"`
@@ -71,10 +71,10 @@ type PartyRoleAnnulled struct {
 	Removed  bool      `json:"removed"`
 }
 
-// EventType implements domain.Event.
+// EventType implementa domain.Event.
 func (PartyRoleAnnulled) EventType() string { return "parties.party_role_annulled" }
 
-// PartyRoleEnded is raised when a party stops playing a role.
+// PartyRoleEnded se lanza cuando una party deja de desempeñar un rol.
 type PartyRoleEnded struct {
 	fw.EventMeta
 	RoleID   string    `json:"roleId"`
@@ -82,10 +82,10 @@ type PartyRoleEnded struct {
 	At       time.Time `json:"at"`
 }
 
-// EventType implements domain.Event.
+// EventType implementa domain.Event.
 func (PartyRoleEnded) EventType() string { return "parties.party_role_ended" }
 
-// RelationshipEstablished is raised when two parties become related.
+// RelationshipEstablished se lanza cuando dos parties pasan a estar relacionadas.
 type RelationshipEstablished struct {
 	fw.EventMeta
 	Type     string    `json:"type"`
@@ -96,20 +96,20 @@ type RelationshipEstablished struct {
 	Since    time.Time `json:"since"`
 }
 
-// EventType implements domain.Event.
+// EventType implementa domain.Event.
 func (RelationshipEstablished) EventType() string { return "parties.relationship_established" }
 
-// RelationshipTerminated is raised when a relationship ends.
+// RelationshipTerminated se lanza cuando termina una relación.
 type RelationshipTerminated struct {
 	fw.EventMeta
 	At time.Time `json:"at"`
 }
 
-// EventType implements domain.Event.
+// EventType implementa domain.Event.
 func (RelationshipTerminated) EventType() string { return "parties.relationship_terminated" }
 
-// ProspectTrialChanged is raised when the trial of a prospect relationship is granted, extended,
-// shortened or withdrawn (TrialUntil nil).
+// ProspectTrialChanged se lanza cuando la prueba de una relación de prospect se concede, se
+// amplía, se acorta o se retira (TrialUntil nil).
 type ProspectTrialChanged struct {
 	fw.EventMeta
 	Prospect     string     `json:"prospect"`
@@ -117,11 +117,11 @@ type ProspectTrialChanged struct {
 	TrialUntil   *time.Time `json:"trialUntil,omitempty"`
 }
 
-// EventType implements domain.Event.
+// EventType implementa domain.Event.
 func (ProspectTrialChanged) EventType() string { return "parties.prospect_trial_changed" }
 
-// OwnershipShareChanged is raised when the stake of a shareholder is recorded, corrected or
-// cleared (Share empty). Share is in points with two decimals ("30.00").
+// OwnershipShareChanged se lanza cuando la participación de un accionista se registra, se corrige
+// o se borra (Share vacío). Share va en puntos con dos decimales ("30.00").
 type OwnershipShareChanged struct {
 	fw.EventMeta
 	Shareholder  string `json:"shareholder"`
@@ -129,10 +129,10 @@ type OwnershipShareChanged struct {
 	Share        string `json:"share,omitempty"`
 }
 
-// EventType implements domain.Event.
+// EventType implementa domain.Event.
 func (OwnershipShareChanged) EventType() string { return "parties.ownership_share_changed" }
 
-// PartyAffiliated is raised when a party becomes affiliated with an internal organization.
+// PartyAffiliated se lanza cuando una party queda afiliada a una organización interna.
 type PartyAffiliated struct {
 	fw.EventMeta
 	Organization string    `json:"organization"`
@@ -140,10 +140,10 @@ type PartyAffiliated struct {
 	From         time.Time `json:"from"`
 }
 
-// EventType implements domain.Event.
+// EventType implementa domain.Event.
 func (PartyAffiliated) EventType() string { return "parties.party_affiliated" }
 
-// PartyAffiliationEnded is raised when an affiliation ends.
+// PartyAffiliationEnded se lanza cuando termina una afiliación.
 type PartyAffiliationEnded struct {
 	fw.EventMeta
 	Organization string    `json:"organization"`
@@ -151,19 +151,19 @@ type PartyAffiliationEnded struct {
 	At           time.Time `json:"at"`
 }
 
-// EventType implements domain.Event.
+// EventType implementa domain.Event.
 func (PartyAffiliationEnded) EventType() string { return "parties.party_affiliation_ended" }
 
-// PartySharingChanged is raised when a party becomes, or stops being, a shared catalog entry.
+// PartySharingChanged se lanza cuando una party pasa a ser, o deja de ser, una entrada del catálogo compartido.
 type PartySharingChanged struct {
 	fw.EventMeta
 	Shared bool `json:"shared"`
 }
 
-// EventType implements domain.Event.
+// EventType implementa domain.Event.
 func (PartySharingChanged) EventType() string { return "parties.party_sharing_changed" }
 
-// IdentificationAdded is raised when a party gets an identity document.
+// IdentificationAdded se lanza cuando una party recibe un documento de identidad.
 type IdentificationAdded struct {
 	fw.EventMeta
 	IdentificationID string `json:"identificationId"`
@@ -173,10 +173,10 @@ type IdentificationAdded struct {
 	Primary          bool   `json:"primary"`
 }
 
-// EventType implements domain.Event.
+// EventType implementa domain.Event.
 func (IdentificationAdded) EventType() string { return "parties.identification_added" }
 
-// IdentificationRemoved is raised when an identity document is removed.
+// IdentificationRemoved se lanza cuando se quita un documento de identidad.
 type IdentificationRemoved struct {
 	fw.EventMeta
 	IdentificationID string `json:"identificationId"`
@@ -185,10 +185,10 @@ type IdentificationRemoved struct {
 	Number           string `json:"number"`
 }
 
-// EventType implements domain.Event.
+// EventType implementa domain.Event.
 func (IdentificationRemoved) EventType() string { return "parties.identification_removed" }
 
-// ContactAdded is raised when a party gets a contact.
+// ContactAdded se lanza cuando una party recibe un contacto.
 type ContactAdded struct {
 	fw.EventMeta
 	ContactID string    `json:"contactId"`
@@ -199,30 +199,30 @@ type ContactAdded struct {
 	From      time.Time `json:"from"`
 }
 
-// EventType implements domain.Event.
+// EventType implementa domain.Event.
 func (ContactAdded) EventType() string { return "parties.contact_added" }
 
-// ContactPurposesChanged is raised when the purposes of a contact change.
+// ContactPurposesChanged se lanza cuando cambian los propósitos de un contacto.
 type ContactPurposesChanged struct {
 	fw.EventMeta
 	ContactID string   `json:"contactId"`
 	Purposes  []string `json:"purposes"`
 }
 
-// EventType implements domain.Event.
+// EventType implementa domain.Event.
 func (ContactPurposesChanged) EventType() string { return "parties.contact_purposes_changed" }
 
-// ContactEnded is raised when a contact stops being used.
+// ContactEnded se lanza cuando se deja de usar un contacto.
 type ContactEnded struct {
 	fw.EventMeta
 	ContactID string    `json:"contactId"`
 	At        time.Time `json:"at"`
 }
 
-// EventType implements domain.Event.
+// EventType implementa domain.Event.
 func (ContactEnded) EventType() string { return "parties.contact_ended" }
 
-// PartyClassified is raised when a party gets a classification.
+// PartyClassified se lanza cuando una party recibe una clasificación.
 type PartyClassified struct {
 	fw.EventMeta
 	ClassificationID string    `json:"classificationId"`
@@ -230,10 +230,10 @@ type PartyClassified struct {
 	From             time.Time `json:"from"`
 }
 
-// EventType implements domain.Event.
+// EventType implementa domain.Event.
 func (PartyClassified) EventType() string { return "parties.party_classified" }
 
-// PartyClassificationEnded is raised when a classification ends.
+// PartyClassificationEnded se lanza cuando termina una clasificación.
 type PartyClassificationEnded struct {
 	fw.EventMeta
 	ClassificationID string    `json:"classificationId"`
@@ -241,5 +241,5 @@ type PartyClassificationEnded struct {
 	At               time.Time `json:"at"`
 }
 
-// EventType implements domain.Event.
+// EventType implementa domain.Event.
 func (PartyClassificationEnded) EventType() string { return "parties.party_classification_ended" }

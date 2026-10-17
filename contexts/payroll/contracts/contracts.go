@@ -1,19 +1,19 @@
-// Package contracts is what other bounded contexts may depend on: the Published Language of
-// Payroll and its query port. Fiscal (Modelo 111/190), Accounting (salary journal entries) and
-// Treasury (SEPA transfers) consume approved payslips instead of reading payroll tables, as the
-// C# tax-form generators did.
+// Package contracts es aquello de lo que pueden depender los demás contextos delimitados: el
+// Published Language de Payroll y su puerto de consulta. Fiscal (Modelo 111/190), Accounting
+// (asientos de salarios) y Treasury (transferencias SEPA) consumen las nóminas aprobadas en vez de
+// leer las tablas de nóminas, como hacían los generadores de modelos fiscales de C#.
 package contracts
 
 import "context"
 
-// Source is the name of the publishing bounded context.
+// Source es el nombre del contexto delimitado que publica.
 const Source = "payroll"
 
-// MaxBatch is the maximum number of ids per call.
+// MaxBatch es el número máximo de ids por llamada.
 const MaxBatch = 900
 
-// PayslipApprovedV1 is published when a payslip is approved. Amounts are decimal strings in euros
-// with two decimals; dates are civil dates.
+// PayslipApprovedV1 se publica al aprobar una nómina. Los importes son cadenas decimales en euros
+// con dos decimales; las fechas son fechas civiles.
 type PayslipApprovedV1 struct {
 	PayslipID        string `json:"payslipId"`
 	Employment       string `json:"employment"`
@@ -24,7 +24,7 @@ type PayslipApprovedV1 struct {
 	PeriodEnd        string `json:"periodEnd"`
 	PaymentDate      string `json:"paymentDate"`
 	EmployerAccount  string `json:"employerAccount,omitempty"`
-	PerceptionKey    string `json:"perceptionKey,omitempty"` // Modelo 190 key (A: employment income)
+	PerceptionKey    string `json:"perceptionKey,omitempty"` // clave del Modelo 190 (A: rendimientos del trabajo)
 	Gross            string `json:"gross"`
 	ContributionBase string `json:"contributionBase"`
 	TaxableBase      string `json:"taxableBase"`
@@ -35,29 +35,29 @@ type PayslipApprovedV1 struct {
 	EmployerCost     string `json:"employerCost"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (PayslipApprovedV1) IntegrationEventType() string { return "payroll.payslip-approved.v1" }
 
-// PayslipCancelledV1 is published when an approved payslip is cancelled: consumers reverse what
-// they did with its approval.
+// PayslipCancelledV1 se publica al anular una nómina aprobada: los consumidores deshacen lo que
+// hicieron con su aprobación.
 type PayslipCancelledV1 struct {
 	PayslipID string `json:"payslipId"`
 	Reason    string `json:"reason"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (PayslipCancelledV1) IntegrationEventType() string { return "payroll.payslip-cancelled.v1" }
 
-// PaymentRef is a transfer of part of a net pay.
+// PaymentRef es una transferencia de parte de un líquido.
 type PaymentRef struct {
 	IBAN        string `json:"iban"`
 	Amount      string `json:"amount"`
 	Garnishment bool   `json:"garnishment,omitempty"`
 }
 
-// Remittance answers how the net pay of approved payslips is split across bank accounts (the C#
-// stored the splits and never applied them). Payslips that are not approved, or whose employment
-// has no splits, are absent.
+// Remittance responde cómo se reparte el líquido de las nóminas aprobadas entre cuentas bancarias
+// (el C# guardaba los repartos y no los aplicaba nunca). Las nóminas no aprobadas, o cuya relación
+// laboral no tiene repartos, no aparecen.
 type Remittance interface {
 	NetPayments(ctx context.Context, payslipIDs []string) (map[string][]PaymentRef, error)
 }

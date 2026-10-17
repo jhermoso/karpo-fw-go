@@ -16,7 +16,7 @@ type entry[T any] struct {
 	version int64
 }
 
-// Repository is a thread-safe in-memory implementation of domain.Repository.
+// Repository es una implementación en memoria de domain.Repository, segura entre goroutines.
 type Repository[ID domain.Identifier, T domain.AggregateRoot[ID]] struct {
 	store *Store
 	kind  string
@@ -26,21 +26,22 @@ type Repository[ID domain.Identifier, T domain.AggregateRoot[ID]] struct {
 	rows map[ID]entry[T]
 }
 
-// RepoOption configures a memory Repository.
+// RepoOption configura un Repository en memoria.
 type RepoOption[T any] func(*repoOptions[T])
 
 type repoOptions[T any] struct {
 	clone func(T) T
 }
 
-// WithClone sets the function used to isolate stored aggregates from callers; it must return a
-// deep copy. By default the repository makes a shallow copy of the aggregate struct, which is
-// enough when aggregates replace (rather than mutate in place) their slices, maps and pointers.
+// WithClone fija la función que aísla los agregados guardados de quienes llaman al repositorio; debe devolver
+// una copia profunda. Por defecto el repositorio hace una copia superficial del struct del
+// agregado, que basta cuando los agregados sustituyen (en vez de modificar en el sitio) sus
+// slices, mapas y punteros.
 func WithClone[T any](fn func(T) T) RepoOption[T] {
 	return func(o *repoOptions[T]) { o.clone = fn }
 }
 
-// NewRepository creates a repository on store.
+// NewRepository crea un repositorio sobre store.
 func NewRepository[ID domain.Identifier, T domain.AggregateRoot[ID]](store *Store, opts ...RepoOption[T]) *Repository[ID, T] {
 	var o repoOptions[T]
 	for _, opt := range opts {
@@ -57,8 +58,8 @@ func NewRepository[ID domain.Identifier, T domain.AggregateRoot[ID]](store *Stor
 	}
 }
 
-// shallowClone copies the struct pointed to by an aggregate pointer (including unexported
-// fields); non-pointer aggregates are returned as is.
+// shallowClone copia el struct al que apunta un puntero a agregado (incluidos los campos no
+// exportados); los agregados que no son punteros se devuelven tal cual.
 func shallowClone[T any](t T) T {
 	v := reflect.ValueOf(t)
 	if v.Kind() != reflect.Pointer || v.IsNil() || v.Elem().Kind() != reflect.Struct {
@@ -76,7 +77,7 @@ func (r *Repository[ID, T]) check(ctx context.Context) error {
 	return ctx.Err()
 }
 
-// Get loads an aggregate by identity.
+// Get carga un agregado por su identidad.
 func (r *Repository[ID, T]) Get(ctx context.Context, id ID) (T, error) {
 	var zero T
 	if err := r.check(ctx); err != nil {
@@ -93,7 +94,7 @@ func (r *Repository[ID, T]) Get(ctx context.Context, id ID) (T, error) {
 	return out, nil
 }
 
-// Save inserts or updates agg with optimistic concurrency.
+// Save inserta o actualiza agg con concurrencia optimista.
 func (r *Repository[ID, T]) Save(ctx context.Context, agg T) error {
 	if err := r.check(ctx); err != nil {
 		return err
@@ -115,7 +116,7 @@ func (r *Repository[ID, T]) Save(ctx context.Context, agg T) error {
 	}
 	domain.MarkPersisted(agg, v+1)
 	stored := r.clone(agg)
-	stored.ClearEvents() // pending events belong to the caller's instance, never to the store
+	stored.ClearEvents() // los eventos pendientes son de la instancia de quien llama, nunca del almacén
 	r.rows[id] = entry[T]{agg: stored, version: v + 1}
 	r.mu.Unlock()
 
@@ -132,7 +133,7 @@ func (r *Repository[ID, T]) Save(ctx context.Context, agg T) error {
 	return nil
 }
 
-// Delete removes agg with optimistic concurrency.
+// Delete elimina agg con concurrencia optimista.
 func (r *Repository[ID, T]) Delete(ctx context.Context, agg T) error {
 	if err := r.check(ctx); err != nil {
 		return err
@@ -180,7 +181,7 @@ func (r *Repository[ID, T]) matching(s spec.Specification[T], order []spec.Order
 	return out
 }
 
-// Find returns the aggregates satisfying s, sorted by order then identity.
+// Find devuelve los agregados que cumplen s, ordenados por order y después por identidad.
 func (r *Repository[ID, T]) Find(ctx context.Context, s spec.Specification[T], order ...spec.Order[T]) ([]T, error) {
 	if err := r.check(ctx); err != nil {
 		return nil, err
@@ -188,7 +189,7 @@ func (r *Repository[ID, T]) Find(ctx context.Context, s spec.Specification[T], o
 	return r.matching(s, order), nil
 }
 
-// FindPage returns one page of matches.
+// FindPage devuelve una página de coincidencias.
 func (r *Repository[ID, T]) FindPage(ctx context.Context, s spec.Specification[T], page domain.PageRequest[T]) (domain.Page[T], error) {
 	if err := r.check(ctx); err != nil {
 		return domain.Page[T]{}, err
@@ -200,7 +201,7 @@ func (r *Repository[ID, T]) FindPage(ctx context.Context, s spec.Specification[T
 	return domain.NewPage(all[start:end], int64(len(all)), page.Number, page.Size), nil
 }
 
-// Count returns the number of matches.
+// Count devuelve el número de coincidencias.
 func (r *Repository[ID, T]) Count(ctx context.Context, s spec.Specification[T]) (int64, error) {
 	if err := r.check(ctx); err != nil {
 		return 0, err
@@ -216,7 +217,7 @@ func (r *Repository[ID, T]) Count(ctx context.Context, s spec.Specification[T]) 
 	return n, nil
 }
 
-// Exists reports whether any aggregate matches.
+// Exists dice si algún agregado coincide.
 func (r *Repository[ID, T]) Exists(ctx context.Context, s spec.Specification[T]) (bool, error) {
 	if err := r.check(ctx); err != nil {
 		return false, err

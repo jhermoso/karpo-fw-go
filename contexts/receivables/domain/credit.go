@@ -7,23 +7,23 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// CreditProfileKind is the stable aggregate type name.
+// CreditProfileKind es el nombre estable del tipo de agregado.
 const CreditProfileKind = "receivables.credit_profile"
 
-// CreditProfileState is the persisted state of a credit profile.
+// CreditProfileState es el estado persistido de un perfil de crédito.
 type CreditProfileState struct {
 	Seller   OrganizationID
 	Customer PartyID
-	Terms    TermsID       // default payment terms; zero: due on the invoice date
-	Limit    vocab.Decimal // risk limit; meaningful only when Limited
-	Limited  bool          // false: no limit (the C# read MaxRisk = 0 as "no limit" in one place and "limit 0" in another)
-	Blocked  bool          // orders are refused
+	Terms    TermsID       // condiciones de pago por defecto; cero: vence en la fecha de la factura
+	Limit    vocab.Decimal // límite de riesgo; sólo tiene sentido cuando Limited
+	Limited  bool          // false: sin límite (el C# leía MaxRisk = 0 como «sin límite» en un sitio y como «límite 0» en otro)
+	Blocked  bool          // se rechazan los pedidos
 	Audit    traits.AuditStamp
 }
 
-// CreditProfile is the credit relationship of a seller with a customer: default terms, risk limit
-// and block (the MaxRisk, BlockOrders and DefaultPaymentCondition of the C# customer commercial
-// profile).
+// CreditProfile es la relación de crédito de un vendedor con un cliente: condiciones por defecto,
+// límite de riesgo y bloqueo (el MaxRisk, BlockOrders y DefaultPaymentCondition del perfil comercial
+// de cliente del C#).
 type CreditProfile struct {
 	fw.BaseAggregateRoot[CreditProfileID]
 	traits.Audited
@@ -36,7 +36,7 @@ func (s CreditProfileState) check(v *fw.Validation) {
 	v.Require(s.Limited || s.Limit.IsZero(), "limit", "unlimited", "an unlimited profile has no limit amount")
 }
 
-// ReconstituteCreditProfile rebuilds a credit profile.
+// ReconstituteCreditProfile reconstruye un perfil de crédito.
 func ReconstituteCreditProfile(id CreditProfileID, s CreditProfileState) (*CreditProfile, error) {
 	base, err := fw.NewBaseAggregateRoot(CreditProfileKind, id)
 	if err != nil {
@@ -50,10 +50,10 @@ func ReconstituteCreditProfile(id CreditProfileID, s CreditProfileState) (*Credi
 	return &CreditProfile{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// State returns the state.
+// State devuelve el estado.
 func (p *CreditProfile) State() CreditProfileState { return p.s }
 
-// Set replaces the terms, the limit and the block.
+// Set sustituye las condiciones, el límite y el bloqueo.
 func (p *CreditProfile) Set(terms TermsID, limited bool, limit vocab.Decimal, blocked bool) error {
 	s := p.s
 	s.Terms, s.Limited, s.Limit, s.Blocked = terms, limited, limit, blocked
@@ -66,7 +66,8 @@ func (p *CreditProfile) Set(terms TermsID, limited bool, limit vocab.Decimal, bl
 	return nil
 }
 
-// Available returns what can still be sold on credit given the open exposure (ok false: no limit).
+// Available devuelve lo que aún se puede vender a crédito dada la exposición abierta (ok false: sin
+// límite).
 func (p *CreditProfile) Available(exposure vocab.Decimal) (vocab.Decimal, bool) {
 	if !p.s.Limited {
 		return vocab.Decimal{}, false
@@ -74,40 +75,40 @@ func (p *CreditProfile) Available(exposure vocab.Decimal) (vocab.Decimal, bool) 
 	return p.s.Limit.Sub(exposure), true
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (p *CreditProfile) AuditSnapshot() map[string]any {
 	return map[string]any{"terms": p.s.Terms.String(), "limited": p.s.Limited, "limit": p.s.Limit.String(), "blocked": p.s.Blocked}
 }
 
-// Credit profile fields.
+// Campos del perfil de crédito.
 var (
 	CredFieldSeller   = spec.Comparable("seller", func(p *CreditProfile) OrganizationID { return p.s.Seller })
 	CredFieldCustomer = spec.Comparable("customer", func(p *CreditProfile) PartyID { return p.s.Customer })
 )
 
-// Events of the context (the C# raised a generic FactIssued for payments that nobody consumed).
+// Eventos del contexto (el C# lanzaba un FactIssued genérico para los pagos que nadie consumía).
 type (
-	// ReceivableOpened is raised when an issued invoice becomes a receivable.
+	// ReceivableOpened se lanza cuando una factura emitida pasa a ser un cobro pendiente.
 	ReceivableOpened struct {
 		fw.EventMeta
 		Customer string `json:"customer"`
 		Number   string `json:"number"`
 		Total    string `json:"total"`
 	}
-	// ReceivableSettled is raised when nothing remains to collect.
+	// ReceivableSettled se lanza cuando no queda nada por cobrar.
 	ReceivableSettled struct {
 		fw.EventMeta
 		Customer string `json:"customer"`
 		Number   string `json:"number"`
 	}
-	// CollectionRegistered is raised when money is received.
+	// CollectionRegistered se lanza cuando se recibe dinero.
 	CollectionRegistered struct {
 		fw.EventMeta
 		Payer  string `json:"payer"`
 		Amount string `json:"amount"`
 		Method string `json:"method"`
 	}
-	// CollectionAllocated is raised when part of a collection is applied to an installment.
+	// CollectionAllocated se lanza cuando parte de un cobro se aplica a un vencimiento.
 	CollectionAllocated struct {
 		fw.EventMeta
 		Seller      string `json:"seller"`
@@ -118,7 +119,7 @@ type (
 		Amount      string `json:"amount"`
 		On          string `json:"on"`
 	}
-	// AllocationReversed is raised when an allocation is reversed.
+	// AllocationReversed se lanza cuando se deshace una aplicación.
 	AllocationReversed struct {
 		fw.EventMeta
 		Seller      string `json:"seller"`
@@ -129,34 +130,34 @@ type (
 	}
 )
 
-// EventType implementations.
+// Implementaciones de EventType.
 func (ReceivableOpened) EventType() string     { return "receivables.receivable_opened" }
 func (ReceivableSettled) EventType() string    { return "receivables.receivable_settled" }
 func (CollectionRegistered) EventType() string { return "receivables.collection_registered" }
 func (CollectionAllocated) EventType() string  { return "receivables.collection_allocated" }
 func (AllocationReversed) EventType() string   { return "receivables.allocation_reversed" }
 
-// New identities and parsing.
+// Identidades nuevas y análisis.
 func NewTermsID() TermsID                 { return TermsID{fw.NewUUID()} }
 func NewCollectionID() CollectionID       { return CollectionID{fw.NewUUID()} }
 func NewCreditProfileID() CreditProfileID { return CreditProfileID{fw.NewUUID()} }
 
-// ParseTermsID parses a textual identity.
+// ParseTermsID analiza una identidad textual.
 func ParseTermsID(s string) (TermsID, error) { u, err := fw.ParseUUID(s); return TermsID{u}, err }
 
-// ParseReceivableID parses a textual identity.
+// ParseReceivableID analiza una identidad textual.
 func ParseReceivableID(s string) (ReceivableID, error) {
 	u, err := fw.ParseUUID(s)
 	return ReceivableID{u}, err
 }
 
-// ParseCollectionID parses a textual identity.
+// ParseCollectionID analiza una identidad textual.
 func ParseCollectionID(s string) (CollectionID, error) {
 	u, err := fw.ParseUUID(s)
 	return CollectionID{u}, err
 }
 
-// ParseCreditProfileID parses a textual identity.
+// ParseCreditProfileID analiza una identidad textual.
 func ParseCreditProfileID(s string) (CreditProfileID, error) {
 	u, err := fw.ParseUUID(s)
 	return CreditProfileID{u}, err

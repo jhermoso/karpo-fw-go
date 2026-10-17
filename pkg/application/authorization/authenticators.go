@@ -7,13 +7,13 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
 )
 
-// Authenticators combines several ways of authenticating into one authz.Authenticator: the own
-// shared-secret token, the tokens of an external identity provider... Each one is tried in order
-// and the first that recognizes the credentials wins.
+// Authenticators combina varias formas de autenticar en un solo authz.Authenticator: el token
+// propio de secreto compartido, los tokens de un proveedor de identidad externo... Se prueban en
+// orden y gana el primero que reconoce las credenciales.
 //
-// Missing credentials are reported at once. When nobody recognizes them the caller gets
-// ErrInvalidCredentials, unless an authenticator failed for another reason (its source was
-// unavailable): that error is returned, so an outage is never disguised as a wrong token.
+// La falta de credenciales se informa en el acto. Cuando nadie las reconoce, quien llama recibe
+// ErrInvalidCredentials, salvo que un autenticador haya fallado por otro motivo (su fuente no
+// estaba disponible): entonces se devuelve ese error, para que una caída nunca se disfrace de token erróneo.
 func Authenticators(all ...authz.Authenticator) authz.Authenticator {
 	return authenticators(all)
 }

@@ -1,5 +1,5 @@
-// Package infrastructure stores the Documents context: SQL mapping, versioned schema of the five
-// engines and hot-swap factories.
+// Package infrastructure guarda el contexto Documents: mapeo SQL, esquema versionado de los cinco
+// motores y factorías intercambiables en caliente.
 package infrastructure
 
 import (
@@ -20,10 +20,10 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlserver"
 )
 
-// Context is the name of the bounded context.
+// Context es el nombre del contexto delimitado.
 const Context = "documents"
 
-// Technical tables of the context.
+// Tablas técnicas del contexto.
 const (
 	TableAuditLog = "documents_audit_log"
 	TableInbox    = "documents_inbox"
@@ -31,7 +31,7 @@ const (
 
 const audit = `created_at {ts}, created_by_id {str:64}, created_by_name {str:200}, modified_at {ts}, modified_by_id {str:64}, modified_by_name {str:200}`
 
-// A fact has one entry: the unique index is the backstop the C# register lacked.
+// Un hecho tiene una anotación: el índice único es la última defensa que le faltaba al registro del C#.
 var schemaDDL = []string{
 	`CREATE TABLE doc_documents (id {uuid} NOT NULL PRIMARY KEY, version {bigint} NOT NULL, company {uuid} NOT NULL, doc_type {str:20} NOT NULL,
 	fact_id {str:64} NOT NULL, doc_number {str:60} NOT NULL, reference {str:60}, doc_date {date} NOT NULL, party {uuid}, total {str:30},
@@ -58,7 +58,7 @@ func technicalDDL(d string) []string {
 	return nil
 }
 
-// Migrations is the versioned schema of the context.
+// Migrations es el esquema versionado del contexto.
 func Migrations() sqlrepo.MigrationSet {
 	technical := map[string][]string{}
 	for _, d := range sqlrepo.Dialects {
@@ -70,15 +70,15 @@ func Migrations() sqlrepo.MigrationSet {
 	}}
 }
 
-// Migrator returns the schema migrator of the context.
+// Migrator devuelve el migrador del esquema del contexto.
 func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 	return sqlrepo.NewMigrator(db, []sqlrepo.MigrationSet{Migrations()})
 }
 
-// Tables lists the tables of the context (drop order).
+// Tables lista las tablas del contexto (orden de borrado).
 var Tables = []string{"doc_documents", TableAuditLog, TableInbox}
 
-// DropAll removes the tables of the context and its migration history (tests only).
+// DropAll borra las tablas del contexto y su historial de migraciones (sólo para pruebas).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
 	for _, t := range Tables {
 		_, _ = db.ExecContext(ctx, "DROP TABLE "+t)
@@ -100,7 +100,7 @@ func optUUID(u fw.UUID) any {
 	return u
 }
 
-// DocumentMapping maps Document to doc_documents.
+// DocumentMapping mapea Document a doc_documents.
 func DocumentMapping() sqlrepo.Mapping[domain.DocumentID, *domain.Document] {
 	return sqlrepo.Mapping[domain.DocumentID, *domain.Document]{
 		Table: "doc_documents",
@@ -135,7 +135,7 @@ func DocumentMapping() sqlrepo.Mapping[domain.DocumentID, *domain.Document] {
 
 func unsupported(b hotswap.Backend) error { return fmt.Errorf("documents: unsupported backend %T", b) }
 
-// DocumentRepositoryFactory builds the register repository.
+// DocumentRepositoryFactory construye el repositorio del registro.
 func DocumentRepositoryFactory(b hotswap.Backend) (domain.DocumentRepository, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -146,7 +146,7 @@ func DocumentRepositoryFactory(b hotswap.Backend) (domain.DocumentRepository, er
 	return nil, unsupported(b)
 }
 
-// AuditLogFactory builds the audit log.
+// AuditLogFactory construye el registro de auditoría.
 func AuditLogFactory(b hotswap.Backend) (application.AuditLog, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -157,7 +157,7 @@ func AuditLogFactory(b hotswap.Backend) (application.AuditLog, error) {
 	return nil, unsupported(b)
 }
 
-// InboxFactory builds the inbox of the events Documents records.
+// InboxFactory construye el inbox de los eventos que registra Documents.
 func InboxFactory(b hotswap.Backend) (application.InboxStore, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:

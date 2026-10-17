@@ -1,6 +1,6 @@
-// Package infrastructure stores the Orders context: SQL mappings, versioned schema of the five
-// engines (with the inbox of the Inventory events), hot-swap factories and the adapters to
-// Products and Receivables.
+// Package infrastructure guarda el contexto Orders: mapeos SQL, esquema versionado de los cinco
+// motores (con el inbox de los eventos de Inventory), factorías intercambiables en caliente y los
+// adaptadores a Products y Receivables.
 package infrastructure
 
 import (
@@ -25,10 +25,10 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlserver"
 )
 
-// Context is the name of the bounded context.
+// Context es el nombre del contexto delimitado.
 const Context = "orders"
 
-// Technical tables of the context.
+// Tablas técnicas del contexto.
 const (
 	TableOutbox            = "orders_outbox"
 	TableIntegrationOutbox = "orders_integration_outbox"
@@ -80,7 +80,7 @@ func technicalDDL(d string) []string {
 	return nil
 }
 
-// Migrations is the versioned schema of the context.
+// Migrations es el esquema versionado del contexto.
 func Migrations() sqlrepo.MigrationSet {
 	technical := map[string][]string{}
 	for _, d := range sqlrepo.Dialects {
@@ -97,16 +97,16 @@ func Migrations() sqlrepo.MigrationSet {
 	}}
 }
 
-// Migrator returns the schema migrator of the context.
+// Migrator devuelve el migrador del esquema del contexto.
 func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 	return sqlrepo.NewMigrator(db, []sqlrepo.MigrationSet{Migrations()})
 }
 
-// Tables lists the tables of the context, children first (drop order).
+// Tables enumera las tablas del contexto, las hijas primero (orden de borrado).
 var Tables = []string{"ord_quote_lines", "ord_quotes", "ord_delivery_lines", "ord_deliveries", "ord_order_lines", "ord_orders", "ord_terms", "ord_counters", TableOutbox,
 	TableIntegrationOutbox, TableAuditLog, TableInbox}
 
-// DropAll removes the tables of the context and its migration history (tests only).
+// DropAll borra las tablas del contexto y su historial de migraciones (sólo para pruebas).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
 	for _, t := range Tables {
 		_, _ = db.ExecContext(ctx, "DROP TABLE "+t)
@@ -134,7 +134,7 @@ func byNo(rows []*sqlrepo.Row) []*sqlrepo.Row {
 	return out
 }
 
-// TermsMapping maps Terms to ord_terms.
+// TermsMapping mapea Terms a ord_terms.
 func TermsMapping() sqlrepo.Mapping[domain.TermsID, *domain.Terms] {
 	return sqlrepo.Mapping[domain.TermsID, *domain.Terms]{
 		Table:   "ord_terms",
@@ -156,7 +156,7 @@ func TermsMapping() sqlrepo.Mapping[domain.TermsID, *domain.Terms] {
 	}
 }
 
-// OrderMapping maps Order to ord_orders and its lines.
+// OrderMapping mapea Order a ord_orders y sus líneas.
 func OrderMapping() sqlrepo.Mapping[domain.OrderID, *domain.Order] {
 	return sqlrepo.Mapping[domain.OrderID, *domain.Order]{
 		Table: "ord_orders",
@@ -205,7 +205,7 @@ func OrderMapping() sqlrepo.Mapping[domain.OrderID, *domain.Order] {
 	}
 }
 
-// DeliveryMapping maps Delivery to ord_deliveries and its lines.
+// DeliveryMapping mapea Delivery a ord_deliveries y sus líneas.
 func DeliveryMapping() sqlrepo.Mapping[domain.DeliveryID, *domain.Delivery] {
 	return sqlrepo.Mapping[domain.DeliveryID, *domain.Delivery]{
 		Table: "ord_deliveries",
@@ -251,7 +251,7 @@ func DeliveryMapping() sqlrepo.Mapping[domain.DeliveryID, *domain.Delivery] {
 	}
 }
 
-// CounterMapping maps Counter to ord_counters.
+// CounterMapping mapea Counter a ord_counters.
 func CounterMapping() sqlrepo.Mapping[domain.CounterID, *domain.Counter] {
 	return sqlrepo.Mapping[domain.CounterID, *domain.Counter]{
 		Table:   "ord_counters",
@@ -282,7 +282,7 @@ func repository[ID fw.Identifier, T fw.AggregateRoot[ID]](b hotswap.Backend, m s
 	return nil, unsupported(b)
 }
 
-// Repository factories.
+// Factorías de repositorios.
 func OrderRepositoryFactory(b hotswap.Backend) (domain.OrderRepository, error) {
 	return repository(b, OrderMapping())
 }
@@ -299,10 +299,10 @@ func CounterRepositoryFactory(b hotswap.Backend) (domain.CounterRepository, erro
 	return repository(b, CounterMapping())
 }
 
-// OutboxFactory builds the domain event outbox.
+// OutboxFactory construye el outbox de eventos de dominio.
 func OutboxFactory(b hotswap.Backend) (application.OutboxStore, error) { return outbox(b, TableOutbox) }
 
-// IntegrationOutboxFactory builds the integration outbox.
+// IntegrationOutboxFactory construye el outbox de integración.
 func IntegrationOutboxFactory(b hotswap.Backend) (application.OutboxStore, error) {
 	return outbox(b, TableIntegrationOutbox)
 }
@@ -317,7 +317,7 @@ func outbox(b hotswap.Backend, table string) (application.OutboxStore, error) {
 	return nil, unsupported(b)
 }
 
-// AuditLogFactory builds the audit log.
+// AuditLogFactory construye el registro de auditoría.
 func AuditLogFactory(b hotswap.Backend) (application.AuditLog, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -328,7 +328,7 @@ func AuditLogFactory(b hotswap.Backend) (application.AuditLog, error) {
 	return nil, unsupported(b)
 }
 
-// InboxFactory builds the inbox of the events Orders consumes.
+// InboxFactory construye el inbox de los eventos que consume Orders.
 func InboxFactory(b hotswap.Backend) (application.InboxStore, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -339,7 +339,7 @@ func InboxFactory(b hotswap.Backend) (application.InboxStore, error) {
 	return nil, unsupported(b)
 }
 
-// ProductsCatalog adapts the Products Catalog and Pricing contracts to the Orders port (ACL).
+// ProductsCatalog adapta los contratos Catalog y Pricing de Products al puerto de Orders (ACL).
 type ProductsCatalog struct {
 	Catalog products.Catalog
 	Pricing products.Pricing
@@ -347,7 +347,7 @@ type ProductsCatalog struct {
 
 var _ domain.Catalog = ProductsCatalog{}
 
-// Price implements domain.Catalog.
+// Price implementa domain.Catalog.
 func (p ProductsCatalog) Price(ctx context.Context, company domain.OrganizationID, product domain.ProductID, list domain.PriceListID, q vocab.Decimal,
 	on vocab.Date) (domain.Item, bool, error) {
 	refs, err := p.Catalog.Products(ctx, []string{product.String()})
@@ -370,7 +370,7 @@ func (p ProductsCatalog) Price(ctx context.Context, company domain.OrganizationI
 		}
 	}
 	if it.Company != company {
-		return it, true, nil // the caller refuses it; no price of another company is asked
+		return it, true, nil // quien llama lo rechaza; no se pide ningún precio de otra empresa
 	}
 	priceList := ""
 	if !list.IsZero() {
@@ -389,12 +389,12 @@ func (p ProductsCatalog) Price(ctx context.Context, company domain.OrganizationI
 	return it, true, nil
 }
 
-// PartiesBlocks adapts the Parties tax identities contract to the Orders port (ACL).
+// PartiesBlocks adapta el contrato de identidades fiscales de Parties al puerto de Orders (ACL).
 type PartiesBlocks struct{ TaxIdentities parties.TaxIdentities }
 
 var _ domain.Blocks = PartiesBlocks{}
 
-// Blocked implements domain.Blocks; a party Parties does not know is not blocked.
+// Blocked implementa domain.Blocks; una party que Parties no conoce no está bloqueada.
 func (p PartiesBlocks) Blocked(ctx context.Context, party domain.PartyID) (bool, error) {
 	m, err := p.TaxIdentities.TaxIdentities(ctx, []string{party.String()})
 	if err != nil {
@@ -403,12 +403,12 @@ func (p PartiesBlocks) Blocked(ctx context.Context, party domain.PartyID) (bool,
 	return m[party.String()].Blocked, nil
 }
 
-// ReceivablesCredit adapts the Receivables Credit contract to the Orders port (ACL).
+// ReceivablesCredit adapta el contrato Credit de Receivables al puerto de Orders (ACL).
 type ReceivablesCredit struct{ Exposure receivables.Credit }
 
 var _ domain.CreditCheck = ReceivablesCredit{}
 
-// Credit implements domain.CreditCheck.
+// Credit implementa domain.CreditCheck.
 func (r ReceivablesCredit) Credit(ctx context.Context, company domain.OrganizationID, customer domain.PartyID, on vocab.Date) (domain.Credit, error) {
 	e, err := r.Exposure.Exposure(ctx, company.String(), customer.String(), on.String())
 	if err != nil {

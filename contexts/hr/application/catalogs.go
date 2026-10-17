@@ -7,23 +7,23 @@ import (
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// ListPositionTypes lists the position type catalog.
+// ListPositionTypes lista el catálogo de tipos de puesto.
 type ListPositionTypes struct{ ActiveOnly bool }
 
-// ListPositionStatuses lists the position status catalog.
+// ListPositionStatuses lista el catálogo de estados de puesto.
 type ListPositionStatuses struct{}
 
-// ListPositionClasses lists the position classification catalog.
+// ListPositionClasses lista el catálogo de clasificaciones de puesto.
 type ListPositionClasses struct{}
 
-// ListAgreements lists the collective agreements in force for an organization (the global ones
-// and its company agreements) or, without organization, those of the caller's scope.
+// ListAgreements lista los convenios colectivos en vigor para una organización (los globales y
+// sus convenios de empresa) o, sin organización, los del ámbito del que llama.
 type ListAgreements struct {
 	Organization string
-	InForceOn    string // civil date; empty: all
+	InForceOn    string // fecha civil; vacía: todos
 }
 
-// AgreementDTO is the transport form of a collective agreement.
+// AgreementDTO es la forma de transporte de un convenio colectivo.
 type AgreementDTO struct {
 	ID              string `json:"id"`
 	Code            string `json:"code"`

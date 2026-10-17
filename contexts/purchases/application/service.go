@@ -1,5 +1,5 @@
-// Package application holds the Purchases use cases (with permissions and company scope) and the
-// translation to its Published Language.
+// Package application contiene los casos de uso de Purchases (con permisos y ámbito de empresa) y
+// la traducción a su Published Language.
 package application
 
 import (
@@ -20,8 +20,8 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Permissions (the C# defined no purchase permission at all). Booking an invoice and annulling it
-// are separate.
+// Permisos (el C# no definía ningún permiso de compras). Registrar una factura y anularla son
+// permisos distintos.
 var (
 	PermInvoiceRead     = authz.MustPermission("Purchases.Invoice.Read")
 	PermInvoiceRegister = authz.MustPermission("Purchases.Invoice.Register")
@@ -30,7 +30,7 @@ var (
 	PermSupplierUpdate  = authz.MustPermission("Purchases.Supplier.Update")
 )
 
-// Deps are the ports the use cases need; Recorder and Audit are optional.
+// Deps son los puertos que necesitan los casos de uso; Recorder y Audit son opcionales.
 type Deps struct {
 	Invoices  domain.InvoiceRepository
 	Suppliers domain.SupplierRepository
@@ -41,7 +41,7 @@ type Deps struct {
 	Audit     app.AuditLog
 }
 
-// Service exposes the use cases.
+// Service expone los casos de uso.
 type Service struct {
 	RegisterInvoice app.CommandHandler[RegisterInvoice, InvoiceDTO]
 	CancelInvoice   app.CommandHandler[CancelInvoice, InvoiceDTO]
@@ -70,7 +70,7 @@ func scopeOf(ctx context.Context) scope {
 	return s
 }
 
-// check returns a uniform 404 outside the company's scope and 403 when it is read-only.
+// check devuelve un 404 uniforme fuera del ámbito de la empresa y 403 cuando es de sólo lectura.
 func (s scope) check(kind string, id fmt.Stringer, org domain.OrganizationID, write bool) error {
 	if !s.global && !slices.Contains(s.orgs, org) {
 		return fw.NotFound(kind, id)
@@ -97,7 +97,7 @@ type service struct {
 	suppliers *orchestration.Orchestrator[domain.SupplierID, *domain.SupplierProfile]
 }
 
-// NewService wires the use cases.
+// NewService conecta los casos de uso.
 func NewService(d Deps) *Service {
 	var opts []orchestration.Option
 	if d.Recorder != nil {
@@ -141,7 +141,7 @@ func retry[In, Out any]() app.Middleware[In, Out] {
 	return pipeline.RetryOnConflict[In, Out](5, 10*time.Millisecond)
 }
 
-// Publications translates the domain events into the Published Language.
+// Publications traduce los eventos de dominio al Published Language.
 func Publications(r *messaging.Recorder) *messaging.Recorder {
 	messaging.On(r, func(_ context.Context, e domain.InvoiceRegistered) ([]app.IntegrationEvent, error) {
 		id, err := domain.ParseInvoiceID(e.AggregateID)

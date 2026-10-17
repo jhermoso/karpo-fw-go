@@ -5,22 +5,22 @@ import (
 	"strings"
 )
 
-// Expr is a node of the specification expression tree: the Go counterpart of the C#
-// Expression<Func<T,bool>> used by Specification<T>. It is data, not code, so every persistence
-// adapter can translate it to its own query language (SQL dialects, document filters, ...).
+// Expr es un nodo del árbol de expresiones de una especificación: la contrapartida en Go de la
+// Expression<Func<T,bool>> de C# que usa Specification<T>. Es dato, no código, así que cada adaptador
+// de persistencia puede traducirlo a su propio lenguaje de consulta (dialectos SQL, filtros de documentos, ...).
 //
-// The set of nodes is closed: AndExpr, OrExpr, NotExpr, Const, Compare, AnyExpr and CustomExpr. Business-specific
-// rules that cannot be expressed with the standard nodes are CustomExpr nodes, which each adapter
-// implements explicitly (see Custom).
+// El conjunto de nodos es cerrado: AndExpr, OrExpr, NotExpr, Const, Compare, AnyExpr y CustomExpr. Las reglas
+// propias del negocio que no se pueden expresar con los nodos estándar son nodos CustomExpr, que cada
+// adaptador implementa explícitamente (véase Custom).
 type Expr interface {
 	isExpr()
 }
 
-// Op is a comparison operator of a Compare node.
+// Op es un operador de comparación de un nodo Compare.
 type Op uint8
 
-// Comparison operators. Text operators (Contains, StartsWith, EndsWith) follow the collation of
-// the backing store; the *Fold operators are case-insensitive everywhere.
+// Operadores de comparación. Los operadores de texto (Contains, StartsWith, EndsWith) siguen la
+// intercalación del almacén subyacente; los operadores *Fold no distinguen mayúsculas en ninguno.
 const (
 	OpEq Op = iota + 1
 	OpNe
@@ -53,37 +53,37 @@ func (o Op) String() string {
 	return fmt.Sprintf("Op(%d)", uint8(o))
 }
 
-// Compare compares a logical field with a value. Field is the logical (domain) name declared by
-// the typed field; adapters map it to a physical column. For OpIn/OpNotIn Value is a []any.
-// For OpIsNull/OpIsNotNull Value is nil.
+// Compare compara un campo lógico con un valor. Field es el nombre lógico (de dominio) que declara
+// el campo tipado; los adaptadores lo traducen a una columna física. Para OpIn/OpNotIn Value es un []any.
+// Para OpIsNull/OpIsNotNull Value es nil.
 type Compare struct {
 	Field string
 	Op    Op
 	Value any
 }
 
-// AndExpr is satisfied when every child expression is satisfied (true when empty).
+// AndExpr se cumple cuando se cumplen todas las expresiones hijas (true si está vacía).
 type AndExpr struct{ Exprs []Expr }
 
-// OrExpr is satisfied when at least one child expression is satisfied (false when empty).
+// OrExpr se cumple cuando se cumple al menos una expresión hija (false si está vacía).
 type OrExpr struct{ Exprs []Expr }
 
-// NotExpr negates its child expression.
+// NotExpr niega su expresión hija.
 type NotExpr struct{ Expr Expr }
 
-// Const is a constant truth value.
+// Const es un valor de verdad constante.
 type Const struct{ Value bool }
 
-// AnyExpr is satisfied when at least one element of the named child collection satisfies Where.
-// SQL adapters translate it to EXISTS (SELECT 1 FROM child WHERE fk = parent.id AND ...).
+// AnyExpr se cumple cuando al menos un elemento de la colección hija nombrada cumple Where.
+// Los adaptadores SQL lo traducen a EXISTS (SELECT 1 FROM child WHERE fk = parent.id AND ...).
 type AnyExpr struct {
 	Collection string
 	Where      Expr
 }
 
-// CustomExpr is a named business rule whose translation is supplied per adapter
-// (the "implement the specification contract for each database" extension point).
-// Adapters that do not know Name must fail with domain.ErrUnsupported.
+// CustomExpr es una regla de negocio con nombre cuya traducción aporta cada adaptador
+// (el punto de extensión «implementar el contrato de especificación para cada base de datos»).
+// Los adaptadores que no conocen Name deben fallar con domain.ErrUnsupported.
 type CustomExpr struct {
 	Name string
 	Args []any
@@ -97,8 +97,8 @@ func (Const) isExpr()      {}
 func (AnyExpr) isExpr()    {}
 func (CustomExpr) isExpr() {}
 
-// Walk traverses e depth-first, calling fn for each node. If fn returns false the children of
-// that node are skipped.
+// Walk recorre e en profundidad y llama a fn en cada nodo. Si fn devuelve false, se saltan los
+// hijos de ese nodo.
 func Walk(e Expr, fn func(Expr) bool) {
 	if e == nil || !fn(e) {
 		return
@@ -119,7 +119,7 @@ func Walk(e Expr, fn func(Expr) bool) {
 	}
 }
 
-// Format renders e as a human-readable string, for logs and error messages.
+// Format presenta e como una cadena legible, para logs y mensajes de error.
 func Format(e Expr) string {
 	var b strings.Builder
 	format(&b, e)

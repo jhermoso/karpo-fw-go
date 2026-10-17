@@ -7,15 +7,16 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// PersonalName is the name of a person: given name plus up to two surnames (Spanish naming uses
-// two; many countries use one). It replaces the C# PersonalName, which allowed one surname and
-// defaulted to "JOHN DOE" (see docs/LENGUAJE-UBICUO.md).
+// PersonalName es el nombre de una persona: nombre de pila más hasta dos apellidos (en España se
+// usan dos; muchos países usan uno). Sustituye al PersonalName de C#, que admitía un solo apellido
+// y por defecto valía "JOHN DOE" (ver docs/LENGUAJE-UBICUO.md).
 type PersonalName struct {
 	given, firstSurname, secondSurname string
 }
 
-// NewPersonalName validates and normalizes a personal name (trimmed, inner spaces collapsed;
-// case is preserved: "de la Fuente", "McDonald" and "O'Neill" are written by people, not rules).
+// NewPersonalName valida y normaliza un nombre de persona (sin espacios en los extremos y con los
+// interiores reducidos a uno; se conservan mayúsculas y minúsculas: "de la Fuente", "McDonald" y
+// "O'Neill" los escriben las personas, no las reglas).
 func NewPersonalName(given, firstSurname, secondSurname string) (PersonalName, error) {
 	n := PersonalName{given: clean(given), firstSurname: clean(firstSurname), secondSurname: clean(secondSurname)}
 	var v fw.Validation
@@ -31,35 +32,35 @@ func NewPersonalName(given, firstSurname, secondSurname string) (PersonalName, e
 	return n, nil
 }
 
-// Given returns the given name.
+// Given devuelve el nombre de pila.
 func (n PersonalName) Given() string { return n.given }
 
-// FirstSurname returns the first surname.
+// FirstSurname devuelve el primer apellido.
 func (n PersonalName) FirstSurname() string { return n.firstSurname }
 
-// SecondSurname returns the second surname ("" when there is none).
+// SecondSurname devuelve el segundo apellido ("" si no lo hay).
 func (n PersonalName) SecondSurname() string { return n.secondSurname }
 
-// IsZero reports whether the name is absent.
+// IsZero dice si falta el nombre.
 func (n PersonalName) IsZero() bool { return n == PersonalName{} }
 
-// String returns the display name "Given First Second".
+// String devuelve el nombre visible "Nombre Primero Segundo".
 func (n PersonalName) String() string {
 	return strings.TrimSpace(strings.Join([]string{n.given, n.firstSurname, n.secondSurname}, " "))
 }
 
-// Surnames returns "First Second".
+// Surnames devuelve "Primero Segundo".
 func (n PersonalName) Surnames() string {
 	return strings.TrimSpace(n.firstSurname + " " + n.secondSurname)
 }
 
-// OrganizationName is the legal name of an organization plus an optional trade name.
+// OrganizationName es la razón social de una organización más un nombre comercial opcional.
 type OrganizationName struct {
 	legal vocab.Name
 	trade string
 }
 
-// NewOrganizationName validates an organization name.
+// NewOrganizationName valida el nombre de una organización.
 func NewOrganizationName(legal, trade string) (OrganizationName, error) {
 	var v fw.Validation
 	name, err := vocab.NewName(clean(legal))
@@ -77,13 +78,13 @@ func NewOrganizationName(legal, trade string) (OrganizationName, error) {
 	return OrganizationName{legal: name, trade: trade}, nil
 }
 
-// Legal returns the legal name.
+// Legal devuelve la razón social.
 func (n OrganizationName) Legal() string { return n.legal.String() }
 
-// Trade returns the trade name ("" when it is the legal name).
+// Trade devuelve el nombre comercial ("" cuando es la razón social).
 func (n OrganizationName) Trade() string { return n.trade }
 
-// String returns the display name: the trade name when there is one, else the legal name.
+// String devuelve el nombre visible: el comercial si lo hay; si no, la razón social.
 func (n OrganizationName) String() string {
 	if n.trade != "" {
 		return n.trade
@@ -91,10 +92,10 @@ func (n OrganizationName) String() string {
 	return n.legal.String()
 }
 
-// Gender of a person (as registered; "unspecified" when not provided).
+// Gender es el género de una persona (tal como se registró; «unspecified» si no se indicó).
 type Gender string
 
-// Genders.
+// Géneros.
 const (
 	GenderUnspecified Gender = ""
 	GenderFemale      Gender = "female"
@@ -102,7 +103,7 @@ const (
 	GenderOther       Gender = "other"
 )
 
-// ParseGender validates a gender.
+// ParseGender valida un género.
 func ParseGender(s string) (Gender, error) {
 	switch g := Gender(strings.ToLower(strings.TrimSpace(s))); g {
 	case GenderUnspecified, GenderFemale, GenderMale, GenderOther:
@@ -113,10 +114,10 @@ func ParseGender(s string) (Gender, error) {
 	return "", v.Err()
 }
 
-// MaritalStatus of a person.
+// MaritalStatus es el estado civil de una persona.
 type MaritalStatus string
 
-// Marital statuses.
+// Estados civiles.
 const (
 	MaritalUnspecified    MaritalStatus = ""
 	MaritalSingle         MaritalStatus = "single"
@@ -128,7 +129,7 @@ const (
 	maritalStatusesString               = "single, married, civil-partnership, separated, divorced, widowed or empty"
 )
 
-// ParseMaritalStatus validates a marital status.
+// ParseMaritalStatus valida un estado civil.
 func ParseMaritalStatus(s string) (MaritalStatus, error) {
 	switch m := MaritalStatus(strings.ToLower(strings.TrimSpace(s))); m {
 	case MaritalUnspecified, MaritalSingle, MaritalMarried, MaritalCivilPartner, MaritalSeparated, MaritalDivorced, MaritalWidowed:

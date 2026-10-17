@@ -11,30 +11,31 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// GetStock lists the stock levels of a company, optionally of a warehouse or a product, or only
-// those at or under their reorder point.
+// GetStock lista los niveles de existencias de una empresa, opcionalmente de un almacén o de un
+// producto, o sólo los que están en su punto de pedido o por debajo.
 type GetStock struct {
 	Company, Warehouse, Product string
 	BelowReorder                bool
 }
 
-// GetLedger pages the movements of a company (the stock card of a product in a warehouse when
-// both are given), in posting order.
+// GetLedger pagina los movimientos de una empresa (la ficha de existencias de un producto en un
+// almacén cuando se dan los dos), en el orden en que se asentaron.
 type GetLedger struct {
 	Company, Warehouse, Product, From, To string
 	Page, Size                            int
 }
 
-// GetValuation values the stock of a company (optionally of a warehouse) at its average cost.
+// GetValuation valora las existencias de una empresa (opcionalmente de un almacén) a su coste
+// medio.
 type GetValuation struct{ Company, Warehouse string }
 
-// SearchReservations lists the reservations of a company.
+// SearchReservations lista las reservas de una empresa.
 type SearchReservations struct {
 	Company  string
 	OpenOnly bool
 }
 
-// ValuationLine is the value of a product across the warehouses asked for.
+// ValuationLine es el valor de un producto en el conjunto de los almacenes pedidos.
 type ValuationLine struct {
 	Product string `json:"product"`
 	SKU     string `json:"sku,omitempty"`
@@ -43,13 +44,14 @@ type ValuationLine struct {
 	Value   string `json:"value"`
 }
 
-// ValuationDTO is the value of the stock.
+// ValuationDTO es el valor de las existencias.
 type ValuationDTO struct {
 	Total string          `json:"total"`
 	Lines []ValuationLine `json:"lines"`
 }
 
-// levels loads the levels of a company the caller may read, with the names of their products.
+// levels carga los niveles de una empresa que el que llama puede leer, con los nombres de sus
+// productos.
 func (s service) levels(ctx context.Context, company, warehouse, product string) ([]*domain.Level, map[domain.ProductID]domain.Item, error) {
 	var v fw.Validation
 	cid := domain.OrganizationID{UUID: parseID(&v, "company", company)}
@@ -133,7 +135,7 @@ func (s service) queries(svc *Service) {
 		if err := scopeOf(ctx).check("parties.party", cid, cid, false); err != nil {
 			return fw.Page[MovementDTO]{}, err
 		}
-		// Within a level the sequence is the posting order; across levels, the date comes first.
+		// Dentro de un nivel la secuencia es el orden de asiento; entre niveles, la fecha va primero.
 		order := []spec.Order[*domain.Movement]{domain.MovFieldDate.Asc(), domain.MovFieldSeq.Asc()}
 		if q.Warehouse != "" && q.Product != "" {
 			order = order[1:]

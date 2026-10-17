@@ -7,7 +7,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 )
 
-// catalogs follows the backend of the switch.
+// catalogs sigue al backend del conmutador.
 type catalogs struct {
 	b *hotswap.Binding[domain.Catalogs]
 }

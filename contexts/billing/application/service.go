@@ -1,5 +1,6 @@
-// Package application holds the Billing use cases (with permissions and seller scope), the ports
-// Billing consumes (tax engine, fiscal identities) and the translation to its Published Language.
+// Package application contiene los casos de uso de Billing (con permisos y ámbito del vendedor), los
+// puertos que consume Billing (motor de impuestos, identidades fiscales) y la traducción a su
+// Published Language.
 package application
 
 import (
@@ -21,8 +22,8 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Permissions (the C# defined Invoicing.* codes but enforced none). Issuing is a permission of its
-// own, apart from preparing.
+// Permisos (el C# definía códigos Invoicing.* pero no exigía ninguno). Emitir es un permiso propio,
+// aparte de preparar.
 var (
 	PermInvoiceRead   = authz.MustPermission("Billing.Invoice.Read")
 	PermInvoiceCreate = authz.MustPermission("Billing.Invoice.Create")
@@ -32,19 +33,19 @@ var (
 	PermSeriesUpdate  = authz.MustPermission("Billing.Series.Update")
 )
 
-// Deps are the ports the use cases need; Recorder and Audit are optional.
+// Deps son los puertos que necesitan los casos de uso; Recorder y Audit son opcionales.
 type Deps struct {
 	Series     domain.SeriesRepository
 	Invoices   domain.InvoiceRepository
 	Taxes      domain.Taxes
 	Identities domain.Identities
-	Blocks     domain.Blocks // optional
+	Blocks     domain.Blocks // opcional
 	UoW        fw.UnitOfWork
 	Recorder   app.EventRecorder
 	Audit      app.AuditLog
 }
 
-// Service exposes the use cases.
+// Service expone los casos de uso.
 type Service struct {
 	OpenSeries   app.CommandHandler[OpenSeries, SeriesDTO]
 	CloseSeries  app.CommandHandler[CloseSeries, SeriesDTO]
@@ -79,7 +80,7 @@ func scopeOf(ctx context.Context) scope {
 	return s
 }
 
-// check returns a uniform 404 outside the seller's scope and 403 when it is read-only.
+// check devuelve un 404 uniforme fuera del ámbito del vendedor y un 403 cuando es de sólo lectura.
 func (s scope) check(kind string, id fmt.Stringer, org domain.OrganizationID, write bool) error {
 	if !s.global && !slices.Contains(s.orgs, org) {
 		return fw.NotFound(kind, id)
@@ -100,7 +101,7 @@ func within[T any](s scope, field spec.Field[T, domain.OrganizationID]) spec.Spe
 	return field.In(s.orgs...)
 }
 
-// notBlocked refuses a customer that takes part in nothing but queries.
+// notBlocked rechaza un cliente que no participa en nada salvo en consultas.
 func (s service) notBlocked(ctx context.Context, customer domain.PartyID) error {
 	if s.Blocks == nil {
 		return nil
@@ -166,7 +167,7 @@ func newService(d Deps) service {
 	}
 }
 
-// NewService wires the use cases.
+// NewService conecta los casos de uso.
 func NewService(d Deps) *Service {
 	s := newService(d)
 	svc := &Service{}
@@ -183,7 +184,7 @@ func retry[In, Out any]() app.Middleware[In, Out] {
 	return pipeline.RetryOnConflict[In, Out](5, 10*time.Millisecond)
 }
 
-// OpenSeries opens a numbering series of a seller for a year.
+// OpenSeries abre una serie de numeración de un vendedor para un año.
 type OpenSeries struct {
 	Seller     string `json:"seller"`
 	Code       string `json:"code"`
@@ -191,18 +192,18 @@ type OpenSeries struct {
 	Corrective bool   `json:"corrective,omitempty"`
 }
 
-// CloseSeries closes a series.
+// CloseSeries cierra una serie.
 type CloseSeries struct {
 	ID domain.SeriesID `json:"-"`
 }
 
-// SearchSeries lists the series of a seller.
+// SearchSeries lista las series de un vendedor.
 type SearchSeries struct {
 	Seller string
 	Year   int
 }
 
-// SeriesDTO is the transport form of a series.
+// SeriesDTO es la forma de transporte de una serie.
 type SeriesDTO struct {
 	ID         string `json:"id"`
 	Seller     string `json:"seller"`
@@ -284,7 +285,7 @@ func (s service) seriesUseCases(svc *Service) {
 	})
 }
 
-// Publications translates the domain events into the Published Language.
+// Publications traduce los eventos de dominio al Published Language.
 func Publications(r *messaging.Recorder) *messaging.Recorder {
 	messaging.On(r, func(_ context.Context, e domain.InvoiceIssued) ([]app.IntegrationEvent, error) {
 		s := e.Invoice

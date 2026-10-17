@@ -21,11 +21,11 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 )
 
-// TestShipmentsContext runs Shipments on every engine, fed with the delivery note of Orders as
-// its contract declares it: the shipment planned once through the SQL inbox, the round trip of
-// the plan with its optional columns, lines and history in order, carriers (unique code, blocked),
-// dispatch, tracking in transit, delivery, a shipment by hand returned, the searches and the
-// Published Language in the outbox.
+// TestShipmentsContext ejecuta Shipments en cada motor, alimentado con el albarán de Orders tal
+// como lo declara su contrato: el envío planificado una sola vez a través del inbox SQL, la ida y
+// vuelta del plan con sus columnas opcionales, líneas e historia en orden, transportistas (código
+// único, bloqueado), la expedición, el seguimiento en tránsito, la entrega, un envío a mano
+// devuelto, las búsquedas y el Published Language en el outbox.
 func TestShipmentsContext(t *testing.T) {
 	for _, e := range engines {
 		if e.name == "oracle-dotnet-guids" {
@@ -73,7 +73,7 @@ func TestShipmentsContext(t *testing.T) {
 					{Line: 3, SKU: "TUE-01", Description: "Tuercas", UoM: "ud", Stocked: true, Quantity: "50.5"}}}
 			raw, err := json.Marshal(note)
 			must(err)
-			for _, msg := range []string{"a", "a", "b"} { // the same message twice, and the same note in another message
+			for _, msg := range []string{"a", "a", "b"} { // el mismo mensaje dos veces, y el mismo albarán en otro mensaje
 				must(broker.Send(ctx, application.Envelope{ID: delivery + msg, Type: note.IntegrationEventType(), Source: "orders",
 					OccurredAt: time.Date(2026, 5, 6, 10, 0, 0, 0, time.UTC), Data: raw}))
 			}
@@ -158,7 +158,7 @@ func TestShipmentsContext(t *testing.T) {
 			if err != nil || len(cs) != 2 || cs[0].Code != "OLD" || cs[1].Code != "SEUR" {
 				t.Fatalf("carriers: %+v %v", cs, err)
 			}
-			// Two dispatches, a delivery and a return.
+			// Dos expediciones, una entrega y una devolución.
 			if n, err := sm.Relay(inprocess.NewBroker()).RelayOnce(ctx); err != nil || n != 4 {
 				t.Fatalf("published: %d %v", n, err)
 			}

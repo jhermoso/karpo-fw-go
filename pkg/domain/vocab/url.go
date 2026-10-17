@@ -5,10 +5,10 @@ import (
 	"strings"
 )
 
-// URL is an absolute http(s) URL (web sites, documents, callbacks).
+// URL es una URL http(s) absoluta (sitios web, documentos, callbacks).
 type URL struct{ value string }
 
-// NewURL validates an absolute http or https URL with a host.
+// NewURL valida una URL http o https absoluta con host.
 func NewURL(s string) (URL, error) {
 	s = strings.TrimSpace(s)
 	u, err := url.Parse(s)
@@ -20,7 +20,7 @@ func NewURL(s string) (URL, error) {
 	return URL{u.String()}, nil
 }
 
-// MustURL is like NewURL but panics on error.
+// MustURL es como NewURL pero entra en pánico si hay error.
 func MustURL(s string) URL {
 	u, err := NewURL(s)
 	if err != nil {
@@ -29,22 +29,22 @@ func MustURL(s string) URL {
 	return u
 }
 
-// String returns the URL.
+// String devuelve la URL.
 func (u URL) String() string { return u.value }
 
-// IsZero reports whether the URL is absent.
+// IsZero dice si falta la URL.
 func (u URL) IsZero() bool { return u.value == "" }
 
-// Parsed returns a fresh *url.URL (scheme, host, path, query...).
+// Parsed devuelve un *url.URL nuevo (esquema, host, ruta, consulta...).
 func (u URL) Parsed() *url.URL {
 	p, _ := url.Parse(u.value)
 	return p
 }
 
-// MarshalText implements encoding.TextMarshaler.
+// MarshalText implementa encoding.TextMarshaler.
 func (u URL) MarshalText() ([]byte, error) { return []byte(u.value), nil }
 
-// UnmarshalText implements encoding.TextUnmarshaler.
+// UnmarshalText implementa encoding.TextUnmarshaler.
 func (u *URL) UnmarshalText(b []byte) error {
 	if len(b) == 0 {
 		*u = URL{}

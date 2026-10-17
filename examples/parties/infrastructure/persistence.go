@@ -1,6 +1,6 @@
-// Package infrastructure adapts the Parties domain to storage: one SQL mapping valid for every
-// dialect, the DDL per engine, and the hot-swap factories that build the right adapter for
-// whatever backend is current.
+// Package infrastructure adapta el dominio de Parties al almacenamiento: un mapeo SQL válido
+// para todos los dialectos, el DDL de cada motor y las factorías de cambio en caliente que
+// construyen el adaptador adecuado para el almacén que esté vigente.
 package infrastructure
 
 import (
@@ -20,7 +20,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlserver"
 )
 
-// PartyMapping maps the Party aggregate to the parties / party_contacts tables.
+// PartyMapping mapea el agregado Party a las tablas parties / party_contacts.
 func PartyMapping() sqlrepo.Mapping[domain.PartyID, *domain.Party] {
 	return sqlrepo.Mapping[domain.PartyID, *domain.Party]{
 		Table:   "parties",
@@ -64,7 +64,7 @@ func PartyMapping() sqlrepo.Mapping[domain.PartyID, *domain.Party] {
 			},
 		}},
 		Custom: map[string]sqlrepo.CustomSQL{
-			// parties.min_contacts: a correlated COUNT sub-query, identical on every dialect.
+			// parties.min_contacts: una subconsulta COUNT correlacionada, idéntica en todos los dialectos.
 			domain.MinContactsName: func(b *sqlrepo.Builder, args []any) (string, error) {
 				id, err := b.Column("id")
 				if err != nil {
@@ -82,7 +82,8 @@ func PartyMapping() sqlrepo.Mapping[domain.PartyID, *domain.Party] {
 	}
 }
 
-// Schema returns the DDL of the Parties tables (plus the outbox and the audit log) for a dialect.
+// Schema devuelve el DDL de las tablas de Parties (más el outbox y el registro de auditoría)
+// para un dialecto.
 func Schema(dialect string) []string {
 	var ddl, outbox []string
 	switch dialect {
@@ -130,8 +131,9 @@ func Schema(dialect string) []string {
 	return append(ddl, outbox...)
 }
 
-// Migrations is the versioned schema of the Parties bounded context. Version 1 is the initial
-// schema of every engine; later changes are new migrations, never edits of an applied one.
+// Migrations es el esquema versionado del contexto delimitado Parties. La versión 1 es el
+// esquema inicial de cada motor; los cambios posteriores son migraciones nuevas, nunca
+// ediciones de una ya aplicada.
 func Migrations() sqlrepo.MigrationSet {
 	initial := map[string][]string{}
 	for _, d := range []string{"sqlite", "postgres", "sqlserver", "oracle", "mysql"} {
@@ -142,12 +144,12 @@ func Migrations() sqlrepo.MigrationSet {
 	}}
 }
 
-// Migrator returns the schema migrator of Parties on db.
+// Migrator devuelve el migrador del esquema de Parties sobre db.
 func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 	return sqlrepo.NewMigrator(db, []sqlrepo.MigrationSet{Migrations()})
 }
 
-// Migrate applies the pending Parties migrations on db.
+// Migrate aplica sobre db las migraciones pendientes de Parties.
 func Migrate(ctx context.Context, db *sqlrepo.DB) error {
 	m, err := Migrator(db)
 	if err != nil {
@@ -159,7 +161,8 @@ func Migrate(ctx context.Context, db *sqlrepo.DB) error {
 	return nil
 }
 
-// RepositoryFactory builds the Party repository for any backend (hot-swap factory).
+// RepositoryFactory construye el repositorio de Party para cualquier almacén (factoría de
+// cambio en caliente).
 func RepositoryFactory(b hotswap.Backend) (domain.Repository, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -170,7 +173,8 @@ func RepositoryFactory(b hotswap.Backend) (domain.Repository, error) {
 	return nil, fmt.Errorf("parties: unsupported backend %T", b)
 }
 
-// AuditLogFactory builds the audit log for any backend (hot-swap factory).
+// AuditLogFactory construye el registro de auditoría para cualquier almacén (factoría de cambio
+// en caliente).
 func AuditLogFactory(b hotswap.Backend) (application.AuditLog, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -181,11 +185,13 @@ func AuditLogFactory(b hotswap.Backend) (application.AuditLog, error) {
 	return nil, fmt.Errorf("parties: unsupported backend %T", b)
 }
 
-// IntegrationOutboxTable holds the integration events of Parties (its Published Language),
-// separate from the domain event outbox so each relay drains only its own messages.
+// IntegrationOutboxTable guarda los eventos de integración de Parties (su Published Language),
+// aparte del outbox de eventos de dominio, para que cada relay vacíe sólo sus propios
+// mensajes.
 const IntegrationOutboxTable = "parties_integration_outbox"
 
-// IntegrationOutboxFactory builds the integration outbox store for any backend.
+// IntegrationOutboxFactory construye el almacén del outbox de integración para cualquier
+// almacén.
 func IntegrationOutboxFactory(b hotswap.Backend) (application.OutboxStore, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -196,7 +202,8 @@ func IntegrationOutboxFactory(b hotswap.Backend) (application.OutboxStore, error
 	return nil, fmt.Errorf("parties: unsupported backend %T", b)
 }
 
-// OutboxFactory builds the outbox store for any backend (hot-swap factory).
+// OutboxFactory construye el almacén del outbox para cualquier almacén (factoría de cambio en
+// caliente).
 func OutboxFactory(b hotswap.Backend) (application.OutboxStore, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:

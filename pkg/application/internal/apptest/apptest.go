@@ -1,6 +1,6 @@
-// Package apptest provides the shared fixture of the application implementation tests:
-// an in-memory store, a Widget repository, an Orchestrator recording into the outbox,
-// and a Relay delivering to an in-process bus.
+// Package apptest ofrece el fixture común de las pruebas de las implementaciones de aplicación:
+// un almacén en memoria, un repositorio de Widget, un Orchestrator que registra en el outbox
+// y un Relay que entrega a un bus en proceso.
 package apptest
 
 import (
@@ -18,7 +18,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/testing/testkit"
 )
 
-// Fixture wires the application implementations over in-memory adapters.
+// Fixture conecta las implementaciones de aplicación sobre adaptadores en memoria.
 type Fixture struct {
 	H     *testkit.Harness
 	Repo  *memory.Repository[rt.WidgetID, *rt.Widget]
@@ -26,7 +26,7 @@ type Fixture struct {
 	Relay *outbox.Relay
 }
 
-// New creates a Fixture with the domain clock frozen at a fixed instant.
+// New crea un Fixture con el reloj del dominio congelado en un instante fijo.
 func New(t *testing.T) *Fixture {
 	h := testkit.NewHarness(t, time.Date(2026, 9, 24, 10, 0, 0, 0, time.UTC))
 	repo := memory.NewRepository[rt.WidgetID, *rt.Widget](h.Store, memory.WithClone((*rt.Widget).Clone))
@@ -36,7 +36,7 @@ func New(t *testing.T) *Fixture {
 	return &Fixture{H: h, Repo: repo, Orch: orch, Relay: outbox.NewRelay(h.Outbox, h.Registry, h.Bus)}
 }
 
-// Create registers a new widget through the orchestrator.
+// Create da de alta un widget nuevo mediante el orquestador.
 func (f *Fixture) Create(t *testing.T, name string) *rt.Widget {
 	t.Helper()
 	w, err := rt.NewWidget(rt.NewWidgetID(), name, 100, true, nil, domain.Now())
@@ -49,7 +49,7 @@ func (f *Fixture) Create(t *testing.T, name string) *rt.Widget {
 	return w
 }
 
-// Pending returns the pending outbox messages.
+// Pending devuelve los mensajes pendientes del outbox.
 func (f *Fixture) Pending(t *testing.T) []application.OutboxMessage {
 	t.Helper()
 	msgs, err := f.H.Outbox.Pending(context.Background(), 100, 10)

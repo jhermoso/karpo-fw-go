@@ -1,6 +1,6 @@
-// Package jwtauth implements authz.Authenticator for HS256 bearer tokens with the standard
-// library only (Go port of AddFwJwtAuthentication): issuer, audience, lifetime with clock skew
-// and signature are validated; claims sub, username, partyId and actorKind become the Principal.
+// Package jwtauth implementa authz.Authenticator para tokens bearer HS256 sólo con la biblioteca
+// estándar (traducción a Go de AddFwJwtAuthentication): se validan emisor, audiencia, vigencia
+// con desfase de reloj y firma; los claims sub, username, partyId y actorKind forman el Principal.
 package jwtauth
 
 import (
@@ -19,15 +19,15 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// Defaults of the Karpo security service.
+// Valores por defecto del servicio de seguridad de Karpo.
 const (
 	DefaultIssuer   = "erp-security"
 	DefaultAudience = "erp-api"
 	DefaultSkew     = time.Minute
 )
 
-// Config configures the authenticator. Secret is mandatory: without it there is no valid
-// authentication (D-SECRETS-IN-APPSETTINGS).
+// Config configura el autenticador. Secret es obligatorio: sin él no hay autenticación
+// válida (D-SECRETS-IN-APPSETTINGS).
 type Config struct {
 	Secret   []byte
 	Issuer   string
@@ -35,15 +35,15 @@ type Config struct {
 	Skew     time.Duration
 }
 
-// HS256 validates and issues HS256 JWTs.
+// HS256 valida y emite JWT HS256.
 type HS256 struct{ cfg Config }
 
 var _ authz.Authenticator = (*HS256)(nil)
 
-// ErrMissingSecret is returned by New without a secret.
+// ErrMissingSecret es lo que devuelve New sin secreto.
 var ErrMissingSecret = errors.New("jwtauth: secret not configured")
 
-// New builds an HS256 authenticator, applying the defaults.
+// New construye un autenticador HS256 y aplica los valores por defecto.
 func New(cfg Config) (*HS256, error) {
 	if len(cfg.Secret) == 0 {
 		return nil, ErrMissingSecret
@@ -60,7 +60,7 @@ func New(cfg Config) (*HS256, error) {
 	return &HS256{cfg: cfg}, nil
 }
 
-// Claims are the claims Karpo reads and writes.
+// Claims son los claims que Karpo lee y escribe.
 type Claims struct {
 	Subject   string   `json:"sub"`
 	Username  string   `json:"username"`
@@ -74,10 +74,10 @@ type Claims struct {
 	IssuedAt  int64    `json:"iat,omitempty"`
 }
 
-// Audience accepts the "aud" claim as a string or an array.
+// Audience acepta el claim "aud" como cadena o como array.
 type Audience []string
 
-// UnmarshalJSON implements json.Unmarshaler.
+// UnmarshalJSON implementa json.Unmarshaler.
 func (a *Audience) UnmarshalJSON(b []byte) error {
 	var one string
 	if err := json.Unmarshal(b, &one); err == nil {
@@ -92,7 +92,7 @@ func (a *Audience) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// MarshalJSON implements json.Marshaler.
+// MarshalJSON implementa json.Marshaler.
 func (a Audience) MarshalJSON() ([]byte, error) {
 	if len(a) == 1 {
 		return json.Marshal(a[0])
@@ -102,7 +102,7 @@ func (a Audience) MarshalJSON() ([]byte, error) {
 
 var b64 = base64.RawURLEncoding
 
-// Authenticate implements authz.Authenticator. credentials is the raw token or "Bearer <token>".
+// Authenticate implementa authz.Authenticator. credentials es el token en bruto o "Bearer <token>".
 func (h *HS256) Authenticate(_ context.Context, credentials string) (authz.Principal, error) {
 	token := strings.TrimSpace(credentials)
 	if len(token) > 7 && strings.EqualFold(token[:7], "bearer ") {
@@ -119,7 +119,7 @@ func (h *HS256) Authenticate(_ context.Context, credentials string) (authz.Princ
 	if strings.EqualFold(c.ActorKind, "service") {
 		p.Kind = authz.Service
 	}
-	// Malformed ids leave zero values: the resolver denies them as an incomplete principal.
+	// Los ids mal formados dejan valores cero: el resolvedor los deniega como principal incompleto.
 	if id, err := domain.ParseUUID(c.Subject); err == nil {
 		p.Subject = id
 	}
@@ -143,7 +143,7 @@ func (h *HS256) verify(token string) (Claims, error) {
 	if err := decode(parts[0], &header); err != nil {
 		return Claims{}, err
 	}
-	if header.Alg != "HS256" { // rejects "none" and algorithm confusion
+	if header.Alg != "HS256" { // rechaza "none" y la confusión de algoritmos
 		return Claims{}, fmt.Errorf("unsupported alg %q", header.Alg)
 	}
 	sig, err := b64.DecodeString(parts[2])
@@ -171,8 +171,8 @@ func (h *HS256) verify(token string) (Claims, error) {
 	return c, nil
 }
 
-// Issue signs claims, filling issuer, audience and iat when empty (used by the security
-// service and by tests).
+// Issue firma claims y rellena emisor, audiencia e iat cuando están vacíos (lo usan el servicio
+// de seguridad y las pruebas).
 func (h *HS256) Issue(c Claims) (string, error) {
 	if c.Issuer == "" {
 		c.Issuer = h.cfg.Issuer

@@ -1,5 +1,5 @@
-// Package documents composes the Documents (Documentos: registro de documentos emitidos) bounded
-// context on a hot-swap backend.
+// Package documents compone el contexto delimitado Documents (Documentos: registro de documentos
+// emitidos) sobre un backend intercambiable en caliente.
 package documents
 
 import (
@@ -18,17 +18,17 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 )
 
-// Module is the composed context.
+// Module es el contexto compuesto.
 type Module struct {
 	Service *dapp.Service
 	Audit   application.AuditLog
-	// Consumer receives the documents the other contexts issue: subscribe it to the transport.
+	// Consumer recibe los documentos que emiten los otros contextos: hay que suscribirlo al transporte.
 	Consumer *messaging.Consumer
-	// Register is the port other contexts use to resolve the document of a fact.
+	// Register es el puerto que usan otros contextos para resolver el documento de un hecho.
 	Register contracts.Register
 }
 
-// Compose builds the context on sw.
+// Compose construye el contexto sobre sw.
 func Compose(sw *hotswap.Switch) *Module {
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
 	d := dapp.Deps{Documents: hotswap.Repository(sw, infrastructure.DocumentRepositoryFactory), UoW: sw, Audit: audit}
@@ -41,7 +41,7 @@ func badID(w http.ResponseWriter, r *http.Request) {
 	distribution.WriteError(w, r, fmt.Errorf("%w: invalid id", fw.ErrValidation))
 }
 
-// RegisterRoutes implements distribution.EndpointModule.
+// RegisterRoutes implementa distribution.EndpointModule.
 func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	svc := m.Service
 

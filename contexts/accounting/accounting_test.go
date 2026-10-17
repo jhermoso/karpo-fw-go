@@ -51,9 +51,9 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/time/fake"
 )
 
-// host composes Parties, Fiscal, Billing, Receivables, Treasury and Accounting on one hot-swappable
-// backend, with one in-process broker carrying the Published Language between them. Payroll is
-// played by hand-made envelopes (its composition needs HR and Facilities).
+// host compone Parties, Fiscal, Billing, Receivables, Treasury y Accounting sobre un único backend
+// intercambiable en caliente, con un broker en proceso que lleva entre ellos el Published Language.
+// Payroll lo interpretan sobres hechos a mano (su composición necesita HR y Facilities).
 type host struct {
 	t        *testing.T
 	srv      *httptest.Server
@@ -153,7 +153,7 @@ func (h *host) ok(err error) {
 	}
 }
 
-// deliver relays the Published Language of Billing, Treasury and Receivables until quiet.
+// deliver retransmite el Published Language de Billing, Treasury y Receivables hasta que no queda nada.
 func (h *host) deliver() {
 	for moved := true; moved; {
 		moved = false
@@ -167,11 +167,11 @@ func (h *host) deliver() {
 	}
 }
 
-// afterTheReturn is when the facts that carry no date of their own happen: Accounting dates the
-// reversals on it, and the journal of the scenario is that of 2026 whatever the day the test runs.
+// afterTheReturn es cuando ocurren los hechos que no llevan fecha propia: Accounting fecha en él
+// las anulaciones, y el diario del escenario es el de 2026 sea cual sea el día en que corre la prueba.
 var afterTheReturn = time.Date(2026, 10, 28, 9, 0, 0, 0, time.UTC)
 
-// payroll plays Payroll: it sends one of its facts to the broker.
+// payroll hace de Payroll: envía al broker uno de sus hechos.
 func (h *host) payroll(id, typ string, data any) {
 	h.t.Helper()
 	raw, _ := json.Marshal(data)
@@ -226,7 +226,7 @@ func (h *host) scenario(tag string) {
 	}
 	ana, bea := person("Ana", "12345678Z"), person("Bea", "00000000T")
 
-	// The chart and the ledger of Acme.
+	// El plan de cuentas y la contabilidad de Acme.
 	chart := map[string]string{"43": "Clientes (cabecera)", "4300": "Clientes", "7000": "Ventas", "4770": "HP IVA repercutido", "4775": "Recargo de equivalencia",
 		"5700": "Caja", "5720": "Bancos", "4312": "Efectos al cobro", "6400": "Sueldos y salarios", "6420": "Seguridad Social a cargo de la empresa",
 		"4760": "Organismos de la Seguridad Social, acreedores", "4751": "HP acreedora por retenciones", "4650": "Remuneraciones pendientes de pago",
@@ -266,7 +266,7 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("ledger: %+v", ledger)
 	}
 
-	// Sales: two invoices of 21% VAT post customers against revenue and output tax.
+	// Ventas: dos facturas con IVA del 21 % asientan clientes contra ventas e IVA repercutido.
 	_, err := h.fiscal.Service.CreateRate.Handle(ctx, fapp.CreateRate{Type: "vat", Territory: "common", Code: "G21", Description: "General", Rate: "21",
 		From: vocab.MustDate(2012, 9, 1)})
 	h.ok(err)
@@ -295,15 +295,15 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("journal: %+v", journal.Items)
 	}
 
-	// Bea pays by transfer: bank against customers.
+	// Bea paga por transferencia: bancos contra clientes.
 	_, err = h.rec.Service.RegisterCollection.Handle(ctx, rapp.RegisterCollection{Seller: acme.ID, Payer: bea.ID, Date: vocab.MustDate(2026, 10, 1),
 		Amount: "60.50", Method: "transfer", Allocations: []rapp.AllocationInput{{Invoice: invBea.ID, Installment: 1, Amount: "60.50"}}})
 	h.ok(err)
 	h.deliver()
 	h.expect(acme.ID, map[string]string{"4300": "121.00", "5720": "60.50"})
 
-	// Ana pays by direct debit: the bank charges (bank against the clearing account, which
-	// Receivables' allocation credits against customers), then the debit is returned.
+	// Ana paga por domiciliación: el banco cobra (bancos contra la cuenta puente, que la aplicación
+	// de Receivables abona contra clientes) y después el adeudo se devuelve.
 	ts := h.treasury.Service
 	bank, err := ts.OpenAccount.Handle(ctx, tapp.OpenAccount{Owner: acme.ID, IBAN: "ES91 2100 0418 4502 0005 1332", BIC: "CAIXESBBXXX", Alias: "Cobros " + tag,
 		Collections: true, Opened: vocab.MustDate(2020, 1, 1)})
@@ -326,8 +326,8 @@ func (h *host) scenario(tag string) {
 	h.expect(acme.ID, map[string]string{"4300": "0.00", "5720": "181.50", "4312": "0.00"})
 	_, err = ts.Return.Handle(ctx, tapp.ReturnDebit{ID: rid, EndToEnd: rem.Items[0].EndToEnd, On: vocab.MustDate(2026, 10, 27), Reason: "AM04"})
 	h.ok(err)
-	// Receivables reverses the allocation when it hears of the return: only that runs on a fixed
-	// clock (the tokens are issued with the real one).
+	// Receivables deshace la aplicación cuando se entera de la devolución: sólo eso corre con un
+	// reloj fijo (los tokens se emiten con el real).
 	func() {
 		defer fw.SetClock(fake.New(afterTheReturn))()
 		h.deliver()
@@ -339,8 +339,8 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("ledger of 4300: %+v", mayor)
 	}
 
-	// Payroll: an approved payslip posts wages and social security; its redelivery and a second
-	// message about the same payslip post nothing; its cancellation reverses it.
+	// Payroll: una nómina aprobada asienta sueldos y Seguridad Social; su reentrega y un segundo
+	// mensaje sobre la misma nómina no asientan nada; su anulación la revierte.
 	slip := fw.NewUUID().String()
 	approved := map[string]any{"payslipId": slip, "person": ana.ID, "employer": acme.ID, "periodEnd": "2026-09-30", "gross": "2000.00",
 		"socialSecurity": "127.00", "incomeTax": "300.00", "otherDeductions": "0.00", "net": "1573.00", "employerCost": "640.00"}
@@ -353,7 +353,7 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("no other deductions line: %v", b)
 	}
 
-	// Manual entries: balanced, on detail accounts, in open periods; reversed once.
+	// Asientos manuales: cuadrados, en cuentas de detalle, en periodos abiertos; se revierten una vez.
 	var e1 aapp.EntryDTO
 	cashIn := map[string]any{"company": acme.ID, "date": "2026-10-05", "description": "Retirada de caja", "lines": []map[string]any{
 		{"account": "5700", "debit": "500"}, {"account": "5720", "credit": "500"}}}
@@ -380,7 +380,7 @@ func (h *host) scenario(tag string) {
 	h.must(h.do("GET", "/api/accounting/entries/"+e1.ID, "outsider", nil, nil), 404, "outsider")
 	h.must(h.do("GET", "/api/accounting/trial-balance?company="+acme.ID, "outsider", nil, nil), 404, "outsider")
 
-	// Closed periods reject entries until reopened.
+	// Los periodos cerrados rechazan asientos hasta que se reabren.
 	h.must(h.do("POST", "/api/accounting/ledgers/"+ledger.ID+"/periods/close", "accountant", map[string]any{"year": 2026, "month": 8}, &ledger), 200, "close")
 	august := map[string]any{"company": acme.ID, "date": "2026-08-31", "description": "Ajuste", "lines": []map[string]any{
 		{"account": "5700", "debit": "1"}, {"account": "5720", "credit": "1"}}}
@@ -391,13 +391,13 @@ func (h *host) scenario(tag string) {
 	}
 	h.must(h.do("POST", "/api/accounting/entries", "accountant", august, nil), 201, "open again")
 
-	// The payslip is cancelled: its entry is reversed, once.
+	// La nómina se anula: su asiento se revierte, una vez.
 	cancel := fw.NewUUID().String()
 	h.payroll(cancel, "payroll.payslip-cancelled.v1", map[string]any{"payslipId": slip})
 	h.payroll(fw.NewUUID().String(), "payroll.payslip-cancelled.v1", map[string]any{"payslipId": slip})
 	h.expect(acme.ID, map[string]string{"6400": "0.00", "6420": "0.00", "4760": "0.00", "4751": "0.00", "4650": "0.00"})
 
-	// The journal balances and numbers the year without gaps.
+	// El diario cuadra y numera el año sin huecos.
 	var all fw.Page[aapp.EntryDTO]
 	h.must(h.do("GET", "/api/accounting/entries?company="+acme.ID+"&size=100", "viewer", nil, &all), 200, "journal")
 	var numbers []int64

@@ -10,11 +10,12 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/trace"
 )
 
-// Span attributes of database spans. The statement text and its arguments are never recorded.
+// Atributos de los spans de base de datos. El texto de la sentencia y sus argumentos no se
+// registran nunca.
 const (
 	AttrEngine      = "db.system"
 	AttrOperation   = "db.operation"
-	AttrTransaction = "db.transaction" // "committed" or "rolled_back"
+	AttrTransaction = "db.transaction" // "committed" o "rolled_back"
 
 	OperationTransaction = "TRANSACTION"
 	OperationOther       = "OTHER"
@@ -23,21 +24,21 @@ const (
 	outcomeError = "error"
 )
 
-// telemetry is the instrumentation of a DB; nil when WithTelemetry was not used.
+// telemetry es la instrumentación de un DB; nil si no se usó WithTelemetry.
 type telemetry struct {
 	tracer     trace.Tracer
 	meter      metrics.Meter
 	duration   metrics.Histogram
-	unregister []func() // pool gauges, removed by Close
+	unregister []func() // indicadores del pool, los retira Close
 }
 
-// WithTelemetry instruments the DB: a span per unit of work (committed or rolled back) and per
-// statement, with the engine and the operation (SELECT, INSERT...) and never the arguments; the
-// histogram db.client.operation.duration by engine, operation and outcome; and the state of the
-// connection pool (db.client.connections) read from sql.DB.Stats, removed again by Close. The
-// pool series are labelled by WithName (default: the dialect): give each DB that shares a meter
-// with another of the same engine its own name. Either argument may be nil. Without this option
-// the DB does exactly what it did before.
+// WithTelemetry instrumenta el DB: un span por unidad de trabajo (con commit o con rollback) y
+// por sentencia, con el motor y la operación (SELECT, INSERT...) y nunca los argumentos; el
+// histograma db.client.operation.duration por motor, operación y resultado; y el estado del pool
+// de conexiones (db.client.connections) leído de sql.DB.Stats, que Close vuelve a retirar. Las
+// series del pool se etiquetan con WithName (por defecto, el dialecto): cada DB que comparta un
+// meter con otro del mismo motor debe tener su propio nombre. Cualquiera de los dos argumentos
+// puede ser nil. Sin esta opción el DB hace exactamente lo mismo que antes.
 func WithTelemetry(tracer trace.Tracer, meter metrics.Meter) Option {
 	return func(db *DB) {
 		m := metrics.OrNoop(meter)
@@ -50,7 +51,8 @@ func WithTelemetry(tracer trace.Tracer, meter metrics.Meter) Option {
 	}
 }
 
-// registerPool registers the pool gauges once every option is applied (the name is final).
+// registerPool registra los indicadores del pool una vez aplicadas todas las opciones (el nombre
+// ya es definitivo).
 func (db *DB) registerPool() {
 	const help = "Connections of the database pool by state."
 	stat := func(read func(sql.DBStats) int) func() float64 {
@@ -68,8 +70,8 @@ func (db *DB) registerPool() {
 	}
 }
 
-// unregisterPool removes the pool gauges: a closed pool (the old backend after a hot swap) must
-// neither keep reporting nor be kept alive by the meter.
+// unregisterPool retira los indicadores del pool: un pool cerrado (el backend antiguo tras un hot
+// swap) no debe seguir informando ni el meter debe mantenerlo vivo.
 func (db *DB) unregisterPool() {
 	if db.tel == nil {
 		return
@@ -89,7 +91,8 @@ func (t *telemetry) record(ctx context.Context, engine, operation string, start 
 		metrics.LabelEngine, engine, metrics.LabelOperation, operation, metrics.LabelOutcome, outcome)
 }
 
-// Operation returns the kind of a SQL statement from its first keyword, out of a closed set.
+// Operation devuelve el tipo de una sentencia SQL a partir de su primera palabra clave, dentro de
+// un conjunto cerrado.
 func Operation(query string) string {
 	q := strings.TrimLeft(query, " \t\r\n(")
 	end := strings.IndexAny(q, " \t\r\n(;")
@@ -103,7 +106,7 @@ func Operation(query string) string {
 	return OperationOther
 }
 
-// tracedExecutor wraps the executor of a DB with a span and a duration per statement.
+// tracedExecutor envuelve el ejecutor de un DB con un span y una duración por sentencia.
 type tracedExecutor struct {
 	db *DB
 	ex executor

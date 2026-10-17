@@ -11,10 +11,10 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 )
 
-// RunMigrations checks sqlrepo.Migrator on db: pending/applied/modified/unknown/dirty states,
-// idempotence, incremental application, independent contexts, out-of-order refusal, rollback
-// of a failed migration (or dirty state on engines without transactional DDL), Force, and the
-// lease lock.
+// RunMigrations comprueba sqlrepo.Migrator sobre db: los estados pending/applied/modified/
+// unknown/dirty, la idempotencia, la aplicación incremental, los contextos independientes, el
+// rechazo de lo que llega fuera de orden, el rollback de una migración fallida (o el estado dirty
+// en motores sin DDL transaccional), Force y el bloqueo con plazo.
 func RunMigrations(t *testing.T, db *sqlrepo.DB) {
 	ctx := context.Background()
 	for _, s := range []string{"t_mig_a", "t_mig_b", "t_mig_c", "t_mig_other", "t_mig_seed", sqlrepo.DefaultMigrationsTable, sqlrepo.DefaultMigrationsLock} {
@@ -59,7 +59,7 @@ func RunMigrations(t *testing.T, db *sqlrepo.DB) {
 		return n
 	}
 
-	// A fresh database: everything pending, Verify fails, Status does not write.
+	// Una base de datos nueva: todo pendiente, Verify falla, Status no escribe.
 	m := migrator(set(v1, v2))
 	if err := m.Verify(ctx); !errors.Is(err, application.ErrSchemaOutdated) {
 		t.Fatalf("verify on an empty database: %v", err)
@@ -78,13 +78,13 @@ func RunMigrations(t *testing.T, db *sqlrepo.DB) {
 		t.Fatalf("migrate is idempotent: %d %v", len(again), err)
 	}
 
-	// Incremental: only the new migration runs.
+	// Incremental: sólo se ejecuta la migración nueva.
 	m = migrator(set(v1, v2, v3))
 	if applied, err := m.Migrate(ctx); err != nil || len(applied) != 1 || applied[0].Name != "create b" || count("t_mig_a") != 1 {
 		t.Fatalf("incremental: %v %v", applied, err)
 	}
 
-	// Out of order: a pending migration older than an applied one is refused.
+	// Fuera de orden: se rechaza una migración pendiente más antigua que una aplicada.
 	if _, err := migrator(set(v1, v2, v3, sqlrepo.Migration{Version: 10, Name: "ten", Up: sqlrepo.Portable(`INSERT INTO t_mig_a (id, name) VALUES (10, 'ten')`)})).Migrate(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +94,7 @@ func RunMigrations(t *testing.T, db *sqlrepo.DB) {
 		t.Fatalf("out of order must be refused: %v", err)
 	}
 
-	// Modified: an applied migration whose statements changed.
+	// Modificada: una migración aplicada cuyas sentencias han cambiado.
 	v2b := v2
 	v2b.Up = sqlrepo.Portable(`INSERT INTO t_mig_a (id, name) VALUES (1, 'uno')`)
 	m = migrator(set(v1, v2b, v3, ten))
@@ -105,7 +105,7 @@ func RunMigrations(t *testing.T, db *sqlrepo.DB) {
 		t.Fatalf("migrate must refuse a modified history: %v", err)
 	}
 
-	// Unknown: the database is ahead of this code.
+	// Desconocida: la base de datos va por delante de este código.
 	m = migrator(set(v1))
 	if st := states(m); st["alpha/create b"] != application.MigrationUnknown {
 		t.Fatalf("unknown: %v", st)
@@ -114,7 +114,7 @@ func RunMigrations(t *testing.T, db *sqlrepo.DB) {
 		t.Fatalf("verify with unknown migrations: %v", err)
 	}
 
-	// A failing migration.
+	// Una migración que falla.
 	broken := sqlrepo.Migration{Version: 20, Name: "broken", Up: sqlrepo.Portable(
 		`CREATE TABLE t_mig_c (id INT NOT NULL PRIMARY KEY)`,
 		`INSERT INTO t_mig_missing (id) VALUES (1)`)}
@@ -143,7 +143,7 @@ func RunMigrations(t *testing.T, db *sqlrepo.DB) {
 		if _, err := m.Migrate(ctx); !errors.Is(err, application.ErrSchemaDirty) {
 			t.Fatalf("migrate must refuse a dirty history: %v", err)
 		}
-		// Repair by hand, then force.
+		// Se repara a mano y después se fuerza.
 		if err := m.Force(ctx, "alpha", 20); err != nil {
 			t.Fatal(err)
 		}
@@ -152,13 +152,13 @@ func RunMigrations(t *testing.T, db *sqlrepo.DB) {
 		}
 	}
 
-	// From here on the code declares whatever the database now holds.
+	// De aquí en adelante el código declara lo que la base de datos tiene ahora.
 	current := []sqlrepo.Migration{v1, v2, v3, ten}
 	if !transactional {
-		current = append(current, broken) // forced as applied
+		current = append(current, broken) // forzada como aplicada
 	}
 
-	// Lease lock: another live instance blocks, an expired one is taken over.
+	// Bloqueo con plazo: otra instancia viva bloquea; un bloqueo caducado se toma.
 	if _, err := db.ExecContext(ctx, "INSERT INTO "+db.Dialect().Quote(sqlrepo.DefaultMigrationsLock)+
 		" (id, owner, acquired_at) VALUES (1, 'other-instance', "+nowSQL(db)+")"); err != nil {
 		t.Fatal(err)
@@ -176,7 +176,8 @@ func RunMigrations(t *testing.T, db *sqlrepo.DB) {
 		t.Fatal("the lock must be released")
 	}
 
-	// Go migrations: seeds with the dialect's value binding, in the migration's unit of work.
+	// Migraciones en Go: semillas con el enlace de valores del dialecto, en la unidad de trabajo de
+	// la migración.
 	seed := []sqlrepo.MigrationSet{{Context: "seed", Migrations: []sqlrepo.Migration{
 		{Version: 1, Name: "seed table", Up: sqlrepo.Portable(`CREATE TABLE t_mig_seed (id INT NOT NULL PRIMARY KEY, name VARCHAR(50) NOT NULL)`)},
 		{Version: 2, Name: "seed rows", Run: func(ctx context.Context, db *sqlrepo.DB) error {
@@ -201,7 +202,7 @@ func RunMigrations(t *testing.T, db *sqlrepo.DB) {
 	if _, err := db.Update(ctx, "t_mig_seed", sqlrepo.Values{"name": "x"}, nil); err == nil {
 		t.Fatal("an update without condition is refused")
 	}
-	// InsertMany: more rows than one batch and more parameters than SQL Server's limit.
+	// InsertMany: más filas que un lote y más parámetros que el límite de SQL Server.
 	var many [][]any
 	for i := range 1234 {
 		many = append(many, []any{int64(1000 + i), fmt.Sprintf("n%04d", i)})
@@ -226,7 +227,7 @@ func RunMigrations(t *testing.T, db *sqlrepo.DB) {
 	}
 }
 
-// nowSQL returns an expression for "now minus a few seconds" valid on the engine.
+// nowSQL devuelve una expresión de «ahora» válida en el motor.
 func nowSQL(db *sqlrepo.DB) string {
 	switch db.Dialect().Name() {
 	case "sqlite":

@@ -12,21 +12,21 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Unit is a unit of measure. Units of the same dimension with a factor convert to each other
-// through the base unit of the dimension; packages (box, pallet) do not, their content depends on
-// the product. The C# seeded 14 units and a conversion table whose factor could never be set.
+// Unit es una unidad de medida. Las unidades de la misma dimensión con factor se convierten entre
+// sí a través de la unidad base de la dimensión; los embalajes (caja, palé) no, su contenido depende
+// del producto. El C# sembraba 14 unidades y una tabla de conversión cuyo factor no podía fijarse nunca.
 type Unit struct {
 	Code      string
 	Name      string
 	Dimension string        // count | mass | volume | length | area | time | package
-	Factor    vocab.Decimal // units of the base of its dimension; zero when it does not convert
+	Factor    vocab.Decimal // unidades de la base de su dimensión; cero cuando no se convierte
 }
 
 func unit(code, name, dim, factor string) Unit {
 	return Unit{Code: code, Name: name, Dimension: dim, Factor: vocab.MustDecimal(factor)}
 }
 
-// Units is the catalog of units of measure (the codes of the C# seed).
+// Units es el catálogo de unidades de medida (los códigos de la siembra del C#).
 var Units = []Unit{
 	unit("ea", "Unidad", "count", "1"), unit("pza", "Pieza", "count", "1"),
 	unit("kg", "Kilogramo", "mass", "1"), unit("g", "Gramo", "mass", "0.001"),
@@ -37,7 +37,7 @@ var Units = []Unit{
 	unit("caja", "Caja", "package", "0"), unit("pallet", "Palé", "package", "0"),
 }
 
-// UnitOf returns the unit of a code.
+// UnitOf devuelve la unidad de un código.
 func UnitOf(code string) (Unit, bool) {
 	k := slices.IndexFunc(Units, func(u Unit) bool { return u.Code == code })
 	if k < 0 {
@@ -46,7 +46,7 @@ func UnitOf(code string) (Unit, bool) {
 	return Units[k], true
 }
 
-// Convert converts a quantity between two units of the same dimension.
+// Convert convierte una cantidad entre dos unidades de la misma dimensión.
 func Convert(q vocab.Decimal, from, to string) (vocab.Decimal, error) {
 	f, ok1 := UnitOf(from)
 	t, ok2 := UnitOf(to)
@@ -56,7 +56,7 @@ func Convert(q vocab.Decimal, from, to string) (vocab.Decimal, error) {
 	if from == to {
 		return q, nil
 	}
-	if from == "min" && to == "h" { // exact, instead of the rounded factor
+	if from == "min" && to == "h" { // exacto, en lugar del factor redondeado
 		return q.Div(vocab.DecimalFromInt(60)).Round(6), nil
 	}
 	if from == "h" && to == "min" {
@@ -65,10 +65,10 @@ func Convert(q vocab.Decimal, from, to string) (vocab.Decimal, error) {
 	return q.Mul(f.Factor).Div(t.Factor).Round(6), nil
 }
 
-// CategoryKind is the stable aggregate type name.
+// CategoryKind es el nombre estable del tipo de agregado.
 const CategoryKind = "products.category"
 
-// CategoryState is the persisted state of a category.
+// CategoryState es el estado persistido de una categoría.
 type CategoryState struct {
 	Company OrganizationID
 	Code    string
@@ -77,15 +77,15 @@ type CategoryState struct {
 	Audit   traits.AuditStamp
 }
 
-// Category classifies the products of a company in a tree (the C# seeded eight categories without
-// a name and three of the currency-exchange vertical).
+// Category clasifica en un árbol los productos de una empresa (el C# sembraba ocho categorías sin
+// nombre y tres de la vertical de cambio de divisas).
 type Category struct {
 	fw.BaseAggregateRoot[CategoryID]
 	traits.Audited
 	s CategoryState
 }
 
-// ReconstituteCategory rebuilds a category.
+// ReconstituteCategory reconstruye una categoría.
 func ReconstituteCategory(id CategoryID, s CategoryState) (*Category, error) {
 	base, err := fw.NewBaseAggregateRoot(CategoryKind, id)
 	if err != nil {
@@ -103,10 +103,10 @@ func ReconstituteCategory(id CategoryID, s CategoryState) (*Category, error) {
 	return &Category{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// State returns the state.
+// State devuelve el estado.
 func (c *Category) State() CategoryState { return c.s }
 
-// Rename renames the category.
+// Rename cambia el nombre de la categoría.
 func (c *Category) Rename(name string) error {
 	s := c.s
 	s.Name = name
@@ -117,31 +117,31 @@ func (c *Category) Rename(name string) error {
 	return nil
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (c *Category) AuditSnapshot() map[string]any {
 	return map[string]any{"code": c.s.Code, "name": c.s.Name}
 }
 
-// Category fields.
+// Campos de la categoría.
 var (
 	CatFieldCompany = spec.Comparable("company", func(c *Category) OrganizationID { return c.s.Company })
 	CatFieldCode    = spec.Ordered("code", func(c *Category) string { return c.s.Code })
 )
 
-// PriceListKind is the stable aggregate type name.
+// PriceListKind es el nombre estable del tipo de agregado.
 const PriceListKind = "products.price_list"
 
-// MaxPriceLines bounds the lines of a price list.
+// MaxPriceLines limita las líneas de una lista de precios.
 const MaxPriceLines = 5000
 
-// PriceLine is the price of a product in a list from a quantity, within a validity.
+// PriceLine es el precio de un producto en una lista a partir de una cantidad, dentro de una vigencia.
 type PriceLine struct {
 	Product     ProductID
 	MinQuantity vocab.Decimal
 	UnitPrice   vocab.Decimal
-	Discount    vocab.Decimal // percentage on the unit price
+	Discount    vocab.Decimal // porcentaje sobre el precio unitario
 	From        vocab.Date
-	To          vocab.Date // zero: open
+	To          vocab.Date // cero: abierta
 }
 
 func (l PriceLine) validOn(d vocab.Date) bool {
@@ -152,7 +152,7 @@ func (l PriceLine) overlaps(o PriceLine) bool {
 	return (o.To.IsZero() || !l.From.After(o.To)) && (l.To.IsZero() || !o.From.After(l.To))
 }
 
-// PriceListState is the persisted state of a price list.
+// PriceListState es el estado persistido de una lista de precios.
 type PriceListState struct {
 	Company  OrganizationID
 	Code     string
@@ -163,8 +163,8 @@ type PriceListState struct {
 	Audit    traits.AuditStamp
 }
 
-// PriceList is a tariff of a company (the C# kept price lists under Parties, read their validity
-// in one place only and never their currency).
+// PriceList es una tarifa de una empresa (el C# tenía las listas de precios en Parties, leía su
+// vigencia en un solo sitio y su moneda nunca).
 type PriceList struct {
 	fw.BaseAggregateRoot[PriceListID]
 	traits.Audited
@@ -180,7 +180,7 @@ func checkLine(v *fw.Validation, f string, l PriceLine) {
 	v.Require(!l.From.IsZero() && (l.To.IsZero() || !l.To.Before(l.From)), f+".from", "range", "a start date and an end not before it")
 }
 
-// ReconstitutePriceList rebuilds a price list.
+// ReconstitutePriceList reconstruye una lista de precios.
 func ReconstitutePriceList(id PriceListID, s PriceListState) (*PriceList, error) {
 	base, err := fw.NewBaseAggregateRoot(PriceListKind, id)
 	if err != nil {
@@ -203,15 +203,15 @@ func ReconstitutePriceList(id PriceListID, s PriceListState) (*PriceList, error)
 	return &PriceList{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// State returns the state (lines are a copy).
+// State devuelve el estado (las líneas son una copia).
 func (p *PriceList) State() PriceListState {
 	s := p.s
 	s.Lines = slices.Clone(s.Lines)
 	return s
 }
 
-// SetPrice adds a price. Invariant: no two prices of a product from the same quantity overlap in
-// time (the C# picked the first row the database returned).
+// SetPrice añade un precio. Invariante: dos precios de un producto desde la misma cantidad no se
+// solapan en el tiempo (el C# cogía la primera fila que devolvía la base de datos).
 func (p *PriceList) SetPrice(l PriceLine) error {
 	var v fw.Validation
 	checkLine(&v, "line", l)
@@ -230,7 +230,7 @@ func (p *PriceList) SetPrice(l PriceLine) error {
 	return nil
 }
 
-// RemovePrice removes the price of a product from a quantity starting on a date.
+// RemovePrice quita el precio de un producto desde una cantidad, a partir de una fecha.
 func (p *PriceList) RemovePrice(product ProductID, minQuantity vocab.Decimal, from vocab.Date) error {
 	k := slices.IndexFunc(p.s.Lines, func(x PriceLine) bool {
 		return x.Product == product && x.MinQuantity.Equal(minQuantity) && x.From == from
@@ -242,11 +242,11 @@ func (p *PriceList) RemovePrice(product ProductID, minQuantity vocab.Decimal, fr
 	return nil
 }
 
-// SetActive enables or retires the list.
+// SetActive activa o retira la lista.
 func (p *PriceList) SetActive(active bool) { p.s.Active = active }
 
-// PriceFor returns the price of a product for a quantity on a date: the valid line with the
-// highest minimum quantity not above the quantity.
+// PriceFor devuelve el precio de un producto para una cantidad en una fecha: la línea vigente con
+// la mayor cantidad mínima que no supere la cantidad.
 func (p *PriceList) PriceFor(product ProductID, quantity vocab.Decimal, on vocab.Date) (PriceLine, bool) {
 	var best PriceLine
 	found := false
@@ -261,26 +261,26 @@ func (p *PriceList) PriceFor(product ProductID, quantity vocab.Decimal, on vocab
 	return best, found
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (p *PriceList) AuditSnapshot() map[string]any {
 	return map[string]any{"code": p.s.Code, "lines": len(p.s.Lines), "active": p.s.Active}
 }
 
-// Price list fields.
+// Campos de la lista de precios.
 var (
 	PlFieldCompany = spec.Comparable("company", func(p *PriceList) OrganizationID { return p.s.Company })
 	PlFieldCode    = spec.Ordered("code", func(p *PriceList) string { return p.s.Code })
 )
 
-// Quote is the price of a product for a quantity on a date.
+// Quote es el precio de un producto para una cantidad en una fecha.
 type Quote struct {
-	UnitPrice vocab.Decimal // before discount
-	Discount  vocab.Decimal // percentage
-	Net       vocab.Decimal // unit price after discount, 4 decimals
-	Source    string        // "list" or "base"
+	UnitPrice vocab.Decimal // antes del descuento
+	Discount  vocab.Decimal // porcentaje
+	Net       vocab.Decimal // precio unitario tras el descuento, 4 decimales
+	Source    string        // "list" o "base"
 }
 
-// QuoteOf prices a product: the line of the list when it has one, else its base price.
+// QuoteOf pone precio a un producto: la línea de la lista cuando la tiene; si no, su precio base.
 func QuoteOf(p *Product, list *PriceList, quantity vocab.Decimal, on vocab.Date) Quote {
 	if list != nil && list.s.Active {
 		if l, ok := list.PriceFor(p.ID(), quantity, on); ok {
@@ -291,23 +291,23 @@ func QuoteOf(p *Product, list *PriceList, quantity vocab.Decimal, on vocab.Date)
 	return Quote{UnitPrice: p.s.BasePrice, Discount: vocab.DecimalFromInt(0), Net: p.s.BasePrice, Source: "base"}
 }
 
-// Identities of the context.
+// Identidades del contexto.
 type (
-	// ProductID identifies a product.
+	// ProductID identifica un producto.
 	ProductID struct{ fw.UUID }
-	// CategoryID identifies a category.
+	// CategoryID identifica una categoría.
 	CategoryID struct{ fw.UUID }
-	// PriceListID identifies a price list.
+	// PriceListID identifica una lista de precios.
 	PriceListID struct{ fw.UUID }
-	// OrganizationID is the company, an internal organization of the Parties context.
+	// OrganizationID es la empresa, una organización interna del contexto Parties.
 	OrganizationID struct{ fw.UUID }
-	// PartyID is a supplier, a party of the Parties context.
+	// PartyID es un proveedor, una party del contexto Parties.
 	PartyID struct{ fw.UUID }
 )
 
-// Events of the context.
+// Eventos del contexto.
 type (
-	// ProductRegistered is raised when a product enters the catalog.
+	// ProductRegistered se lanza cuando un producto entra en el catálogo.
 	ProductRegistered struct {
 		fw.EventMeta
 		Company string `json:"company"`
@@ -315,7 +315,7 @@ type (
 		Name    string `json:"name"`
 		Kind    string `json:"kind"`
 	}
-	// ProductDiscontinued is raised when a product is retired.
+	// ProductDiscontinued se lanza cuando un producto se retira.
 	ProductDiscontinued struct {
 		fw.EventMeta
 		Company string `json:"company"`
@@ -324,31 +324,31 @@ type (
 	}
 )
 
-// EventType implementations.
+// Implementaciones de EventType.
 func (ProductRegistered) EventType() string   { return "products.product_registered" }
 func (ProductDiscontinued) EventType() string { return "products.product_discontinued" }
 
-// New identities and parsing.
+// Identidades nuevas y análisis.
 func NewProductID() ProductID     { return ProductID{fw.NewUUID()} }
 func NewCategoryID() CategoryID   { return CategoryID{fw.NewUUID()} }
 func NewPriceListID() PriceListID { return PriceListID{fw.NewUUID()} }
 
-// ParseProductID parses a textual identity.
+// ParseProductID analiza una identidad textual.
 func ParseProductID(s string) (ProductID, error) { u, err := fw.ParseUUID(s); return ProductID{u}, err }
 
-// ParseCategoryID parses a textual identity.
+// ParseCategoryID analiza una identidad textual.
 func ParseCategoryID(s string) (CategoryID, error) {
 	u, err := fw.ParseUUID(s)
 	return CategoryID{u}, err
 }
 
-// ParsePriceListID parses a textual identity.
+// ParsePriceListID analiza una identidad textual.
 func ParsePriceListID(s string) (PriceListID, error) {
 	u, err := fw.ParseUUID(s)
 	return PriceListID{u}, err
 }
 
-// Repositories of the context.
+// Repositorios del contexto.
 type (
 	ProductRepository   = fw.Repository[ProductID, *Product]
 	CategoryRepository  = fw.Repository[CategoryID, *Category]

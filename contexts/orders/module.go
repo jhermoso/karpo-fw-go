@@ -1,4 +1,5 @@
-// Package orders composes the Orders (Pedidos) bounded context on a hot-swap backend.
+// Package orders compone el contexto delimitado Orders (Pedidos) sobre un backend intercambiable
+// en caliente.
 package orders
 
 import (
@@ -20,19 +21,20 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 )
 
-// Module is the composed context.
+// Module es el contexto compuesto.
 type Module struct {
 	Service           *oapp.Service
 	IntegrationOutbox application.OutboxStore
 	Audit             application.AuditLog
-	// Consumer receives the stock Inventory holds for the orders and the invoices Billing issues
-	// for their delivery notes: subscribe it to the transport.
+	// Consumer recibe las existencias que Inventory retiene para los pedidos y las facturas que
+	// Billing emite para sus albaranes: hay que suscribirlo al transporte.
 	Consumer *messaging.Consumer
 }
 
-// Compose builds the context on sw. Orders needs the catalog and prices of Products and, when
-// credit is controlled, the exposure of Receivables (nil: no credit control): ports it owns.
-// blocks is optional: who answers whether a customer is blocked (Parties, in the host).
+// Compose construye el contexto sobre sw. Orders necesita el catálogo y los precios de Products y,
+// cuando se controla el crédito, el riesgo de Receivables (nil: sin control de crédito): puertos
+// propios. blocks es opcional: quién responde si un cliente está bloqueado (Parties, en el
+// anfitrión).
 func Compose(sw *hotswap.Switch, catalog domain.Catalog, credit domain.CreditCheck, blocks ...domain.Blocks) *Module {
 	integration := hotswap.Outbox(sw, infrastructure.IntegrationOutboxFactory)
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
@@ -52,7 +54,7 @@ func Compose(sw *hotswap.Switch, catalog domain.Catalog, credit domain.CreditChe
 	return &Module{Service: oapp.NewService(d), IntegrationOutbox: integration, Audit: audit, Consumer: consumer}
 }
 
-// Relay forwards the Published Language to a transport.
+// Relay reenvía el Published Language a un transporte.
 func (m *Module) Relay(sender application.MessageSender, opts ...outbox.RelayOption) *outbox.Relay {
 	return messaging.NewRelay(contracts.Source, m.IntegrationOutbox, sender, opts...)
 }
@@ -104,7 +106,7 @@ func create[In, Out any](status int, run func(context.Context, In) (Out, error))
 	}
 }
 
-// RegisterRoutes implements distribution.EndpointModule.
+// RegisterRoutes implementa distribution.EndpointModule.
 func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	svc := m.Service
 	ord := domain.ParseOrderID

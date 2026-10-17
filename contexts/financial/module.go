@@ -1,5 +1,5 @@
-// Package financial composes the Financial (Cuentas de clientes) bounded context on a hot-swap
-// backend.
+// Package financial compone el contexto delimitado Financial (Cuentas de clientes) sobre un backend
+// intercambiable en caliente.
 package financial
 
 import (
@@ -21,17 +21,17 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 )
 
-// Module is the composed context.
+// Module es el contexto compuesto.
 type Module struct {
 	Service           *fapp.Service
 	IntegrationOutbox application.OutboxStore
 	Audit             application.AuditLog
-	// Accounts answers other contexts which accounts a party has.
+	// Accounts responde a otros contextos qué cuentas tiene una party.
 	Accounts contracts.Accounts
 }
 
-// Compose builds the context on sw. It is the finance sector of Karpo: institutions tells which
-// companies are financial institutions, the only ones it exists for (nil: none).
+// Compose monta el contexto sobre sw. Es el sector financiero de Karpo: institutions dice qué
+// empresas son entidades financieras, las únicas para las que existe (nil: ninguna).
 func Compose(sw *hotswap.Switch, institutions domain.Institutions) *Module {
 	integration := hotswap.Outbox(sw, infrastructure.IntegrationOutboxFactory)
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
@@ -43,7 +43,7 @@ func Compose(sw *hotswap.Switch, institutions domain.Institutions) *Module {
 	return &Module{Service: svc, IntegrationOutbox: integration, Audit: audit, Accounts: fapp.NewDirectory(accounts)}
 }
 
-// Relay forwards the Published Language to a transport.
+// Relay reenvía el Published Language a un transporte.
 func (m *Module) Relay(sender application.MessageSender, opts ...outbox.RelayOption) *outbox.Relay {
 	return messaging.NewRelay(contracts.Source, m.IntegrationOutbox, sender, opts...)
 }
@@ -67,7 +67,7 @@ func on[In, Out any](set func(*In, domain.AccountID), run func(context.Context, 
 	return at(domain.ParseAccountID, set, run)
 }
 
-// at serves a command on the aggregate the path names.
+// at atiende un comando sobre el agregado que nombra la ruta.
 func at[ID interface{ IsZero() bool }, In, Out any](parse func(string) (ID, error), set func(*In, ID), run func(context.Context, In) (Out, error)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := parse(r.PathValue("id"))
@@ -88,7 +88,7 @@ func at[ID interface{ IsZero() bool }, In, Out any](parse func(string) (ID, erro
 	}
 }
 
-// RegisterRoutes implements distribution.EndpointModule.
+// RegisterRoutes implementa distribution.EndpointModule.
 func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	svc := m.Service
 	mux.HandleFunc("POST /api/financial/accounts", func(w http.ResponseWriter, r *http.Request) {

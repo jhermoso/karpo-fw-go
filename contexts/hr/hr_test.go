@@ -45,8 +45,8 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/testing/archtest"
 )
 
-// host composes four contexts on one hot-swappable backend, as a modular monolith would:
-// Parties (organizations, people, affiliations), Geography, Facilities and HR.
+// host compone cuatro contextos sobre un backend intercambiable en caliente, como haría un
+// monolito modular: Parties (organizaciones, personas, afiliaciones), Geography, Facilities y HR.
 type host struct {
 	t        *testing.T
 	srv      *httptest.Server
@@ -173,7 +173,7 @@ func (h *host) scenario(tag string) {
 	}
 	tower, plant, depot := facility("clerk", acme.ID, "Torre"), facility("clerk", acme.ID, "Planta"), facility("outsider", globex.ID, "Depósito")
 
-	// Work centers: a facility of the employer, unique code, one headquarters.
+	// Centros de trabajo: una instalación del empleador, código único, una sola sede.
 	var wc1, wc2 happ.WorkCenterDTO
 	h.must(h.do("POST", "/api/hr/work-centers", "clerk", map[string]any{"employer": acme.ID, "facility": tower.ID, "code": "28/1/01",
 		"headquarters": true, "opened": "2020-01-01"}, &wc1), 201, "work center")
@@ -188,7 +188,7 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("one headquarters: %+v %+v", wc1, wc2)
 	}
 
-	// Employments: an affiliated person, once per employer, inside the scope.
+	// Relaciones laborales: una persona afiliada, una vez por empleador, dentro del ámbito.
 	today := vocab.DateOf(fw.Now())
 	hired := today.AddDays(-200)
 	var anaJob, beaJob happ.EmploymentDTO
@@ -213,7 +213,7 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("contracts: %+v", anaJob.Contracts)
 	}
 
-	// Positions: the organization of a unit comes from Parties; holders are employees.
+	// Puestos: la organización de una unidad viene de Parties; los titulares son empleados.
 	var types []hdomain.PositionType
 	h.must(h.do("GET", "/api/hr/catalogs/position-types?active=true", "clerk", nil, &types), 200, "types")
 	var ceo, cto, dev happ.PositionDTO
@@ -254,7 +254,7 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("held: %+v", held)
 	}
 
-	// Scope: the outsider sees nothing of Acme; the reader reads but does not write.
+	// Ámbito: el ajeno no ve nada de Acme; el lector lee pero no escribe.
 	h.must(h.do("GET", "/api/hr/employments/"+anaJob.ID, "outsider", nil, nil), 404, "outsider")
 	h.must(h.do("GET", "/api/hr/positions/"+ceo.ID, "outsider", nil, nil), 404, "outsider")
 	var none fw.Page[happ.EmploymentDTO]
@@ -265,13 +265,13 @@ func (h *host) scenario(tag string) {
 	h.must(h.do("GET", "/api/hr/positions/"+ceo.ID, "reader", nil, nil), 200, "reader")
 	h.must(h.do("POST", "/api/hr/positions/"+ceo.ID+"/vacate", "reader", nil, nil), 403, "reader")
 
-	// Payroll asks the primary contract.
+	// Payroll pregunta por el contrato principal.
 	staff, err := h.hr.Staff.EmploymentsOn(context.Background(), []string{ana.ID, carl.ID}, today.String())
 	if err != nil || len(staff[ana.ID]) != 1 || staff[ana.ID][0].Contract == nil || staff[ana.ID][0].Contract.WorkCenter != wc1.ID {
 		t.Fatalf("staff: %+v %v", staff, err)
 	}
 
-	// A work center with contracts in force cannot close; termination ends contracts and positions.
+	// Un centro de trabajo con contratos en vigor no puede cerrar; la baja termina contratos y puestos.
 	h.must(h.do("POST", "/api/hr/work-centers/"+wc1.ID+"/close", "clerk", map[string]any{"on": today.String()}, nil), 422, "in use")
 	h.must(h.do("POST", "/api/hr/employments/"+anaJob.ID+"/terminate", "clerk", map[string]any{"on": today.AddDays(-1).String(),
 		"reason": "baja voluntaria"}, &anaJob), 200, "terminate ana")
@@ -339,7 +339,7 @@ func (h *host) scenario(tag string) {
 			t.Fatalf("published %v, missing %s", seen, k)
 		}
 	}
-	// Parties reacted: the Employment affiliation of Ana with Acme ended, Bea's did not.
+	// Parties reaccionó: la afiliación Employment de Ana con Acme terminó, la de Bea no.
 	orgs, err := h.parties.Organizations.InternalOrganizations(context.Background(), []string{ana.ID, bea.ID})
 	if err != nil || slices.Contains(orgs[ana.ID], acme.ID) || !slices.Contains(orgs[bea.ID], acme.ID) {
 		t.Fatalf("affiliations after the termination: %+v %v", orgs, err)

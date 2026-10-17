@@ -7,64 +7,64 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// Values holds column values of one row, keyed by column name.
+// Values guarda los valores de las columnas de una fila, por nombre de columna.
 type Values map[string]any
 
-// CustomSQL translates a custom specification (spec.Custom) to a SQL boolean expression.
-// Use b.Column to reference mapped fields of the current table, b.Arg to bind parameters and
-// b.Dialect to branch on engine-specific syntax.
+// CustomSQL traduce una especificación propia (spec.Custom) a una expresión booleana SQL.
+// Con b.Column se referencian los campos mapeados de la tabla en curso, con b.Arg se enlazan
+// parámetros y con b.Dialect se distingue la sintaxis propia de cada motor.
 type CustomSQL func(b *Builder, args []any) (string, error)
 
-// Mapping maps an aggregate root to tables. It is defined once per aggregate in the bounded
-// context's infrastructure layer and works with every Dialect.
+// Mapping mapea una raíz de agregado a tablas. Se define una vez por agregado en la capa de
+// infraestructura del contexto delimitado y funciona con todos los Dialect.
 type Mapping[ID domain.Identifier, T domain.AggregateRoot[ID]] struct {
-	// Table is the root table.
+	// Table es la tabla raíz.
 	Table string
-	// IDColumn is the primary key column (default "id"). It is exposed to specifications as
-	// the logical field "id".
+	// IDColumn es la columna de clave primaria (por defecto "id"). Se expone a las
+	// especificaciones como el campo lógico "id".
 	IDColumn string
-	// VersionColumn stores the optimistic concurrency version (default "version").
+	// VersionColumn guarda la versión de concurrencia optimista (por defecto "version").
 	VersionColumn string
-	// Columns are the data columns of the root table (excluding id and version).
+	// Columns son las columnas de datos de la tabla raíz (sin id ni version).
 	Columns []string
-	// Fields maps logical specification field names to columns when they differ.
-	// Columns are always addressable by their own name.
+	// Fields mapea nombres de campo lógicos de las especificaciones a columnas cuando difieren.
+	// Las columnas siempre se pueden referenciar por su propio nombre.
 	Fields map[string]string
-	// Dehydrate returns the value of every column in Columns.
+	// Dehydrate devuelve el valor de cada columna de Columns.
 	Dehydrate func(agg T) (Values, error)
-	// Hydrate rebuilds the whole aggregate from its root row (id, version and Columns) and the
-	// already loaded rows of its child collections, typically through a Reconstitute
-	// constructor of the domain. It must not raise domain events.
+	// Hydrate reconstruye el agregado entero a partir de su fila raíz (id, version y Columns) y
+	// las filas ya cargadas de sus colecciones hijas, normalmente mediante un constructor
+	// Reconstitute del dominio. No debe lanzar eventos de dominio.
 	Hydrate func(row *Row, children ChildRows) (T, error)
-	// Children maps child entity collections stored in their own tables.
+	// Children mapea las colecciones de entidades hijas guardadas en sus propias tablas.
 	Children []Child[T]
-	// Custom translates custom specifications (spec.Custom) by name.
+	// Custom traduce las especificaciones propias (spec.Custom) por nombre.
 	Custom map[string]CustomSQL
 }
 
-// ChildRows holds the loaded rows of each child collection of one aggregate, by child Name.
+// ChildRows guarda las filas cargadas de cada colección hija de un agregado, por Name del hijo.
 type ChildRows map[string][]*Row
 
-// Of returns the rows of the named child collection (in Child.OrderBy order).
+// Of devuelve las filas de la colección hija indicada (en el orden de Child.OrderBy).
 func (c ChildRows) Of(name string) []*Row { return c[name] }
 
-// Child maps a collection of child entities or value objects of the aggregate to a table.
-// Children are saved with a replace strategy (delete + insert) inside the aggregate's
-// transaction, and loaded in batches before hydration (no N+1).
+// Child mapea a una tabla una colección de entidades hijas u objetos de valor del agregado.
+// Los hijos se guardan reemplazándolos (borrar + insertar) dentro de la transacción del
+// agregado, y se cargan por lotes antes de la hidratación (sin N+1).
 type Child[T any] struct {
-	// Name is the logical collection name used by spec.Collection(...).Any.
+	// Name es el nombre lógico de la colección que usa spec.Collection(...).Any.
 	Name string
-	// Table is the child table.
+	// Table es la tabla hija.
 	Table string
-	// ForeignKey is the column referencing the root identity.
+	// ForeignKey es la columna que referencia la identidad de la raíz.
 	ForeignKey string
-	// Columns are the data columns (excluding ForeignKey).
+	// Columns son las columnas de datos (sin ForeignKey).
 	Columns []string
-	// Fields maps logical field names to columns when they differ.
+	// Fields mapea nombres de campo lógicos a columnas cuando difieren.
 	Fields map[string]string
-	// OrderBy lists columns that define the order children are loaded in.
+	// OrderBy enumera las columnas que fijan el orden en que se cargan los hijos.
 	OrderBy []string
-	// Dehydrate returns one Values per child element.
+	// Dehydrate devuelve un Values por cada elemento hijo.
 	Dehydrate func(root T) ([]Values, error)
 }
 
@@ -77,10 +77,10 @@ func checkIdent(kind, s string) error {
 	return nil
 }
 
-// table is the normalized, validated form of a mapped table used by the translator.
+// table es la forma normalizada y validada de una tabla mapeada que usa el traductor.
 type table struct {
 	name     string
-	key      string // id column (root) or foreign key (child)
+	key      string // columna id (raíz) o clave ajena (hijo)
 	columns  []string
 	fields   map[string]string
 	children map[string]*childTable

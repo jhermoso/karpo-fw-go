@@ -13,19 +13,19 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Statement permissions: recording what the bank says and explaining it are separate.
+// Permisos de los extractos: registrar lo que dice el banco y explicarlo van por separado.
 var (
 	PermStatementRead      = authz.MustPermission("Treasury.Statement.Read")
 	PermStatementImport    = authz.MustPermission("Treasury.Statement.Import")
 	PermStatementReconcile = authz.MustPermission("Treasury.Statement.Reconcile")
 )
 
-// MatchWindowDays is how far the date of a movement may be from the date of the remittance or
-// transfer order proposed for it.
+// MatchWindowDays es cuánto puede distar la fecha de un movimiento de la fecha de la remesa u
+// orden de transferencias que se le propone.
 const MatchWindowDays = 5
 
-// MovementInput is a movement of a statement recorded by hand: positive when the bank credits
-// the account, negative when it charges it.
+// MovementInput es un movimiento de un extracto registrado a mano: positivo cuando el banco abona
+// en la cuenta, negativo cuando carga en ella.
 type MovementInput struct {
 	Date      vocab.Date `json:"date"`
 	ValueDate vocab.Date `json:"valueDate,omitzero"`
@@ -34,7 +34,7 @@ type MovementInput struct {
 	Reference string     `json:"reference,omitempty"`
 }
 
-// ImportStatement records the statement of an account in a period.
+// ImportStatement registra el extracto de una cuenta en un periodo.
 type ImportStatement struct {
 	Account string          `json:"account"`
 	From    vocab.Date      `json:"from"`
@@ -44,14 +44,15 @@ type ImportStatement struct {
 	Lines   []MovementInput `json:"lines"`
 }
 
-// ImportNorma43 records the statements of a Cuaderno 43 file of an organization: each account of
-// the file must be one of its accounts.
+// ImportNorma43 registra los extractos de un fichero del Cuaderno 43 de una organización: cada
+// cuenta del fichero tiene que ser una de sus cuentas.
 type ImportNorma43 struct {
 	Owner   string `json:"owner"`
 	Content string `json:"content"`
 }
 
-// ReconcileLine explains a movement: against a remittance, a transfer order, or with a note.
+// ReconcileLine explica un movimiento: contra una remesa, una orden de transferencias o con una
+// nota.
 type ReconcileLine struct {
 	ID   domain.StatementID `json:"-"`
 	Line int                `json:"line"`
@@ -60,29 +61,29 @@ type ReconcileLine struct {
 	Note string             `json:"note,omitempty"`
 }
 
-// ReleaseLine undoes the reconciliation of a movement.
+// ReleaseLine deshace la conciliación de un movimiento.
 type ReleaseLine struct {
 	ID   domain.StatementID `json:"-"`
 	Line int                `json:"line"`
 }
 
-// AutoReconcile explains every movement that has exactly one candidate: a remittance or a
-// transfer order of the account with the same amount and a close date, not reconciled yet.
+// AutoReconcile explica cada movimiento que tiene exactamente un candidato: una remesa o una orden
+// de transferencias de la cuenta con el mismo importe y una fecha cercana, aún sin conciliar.
 type AutoReconcile struct {
 	ID domain.StatementID `json:"-"`
 }
 
-// GetStatement loads a statement with its movements.
+// GetStatement carga un extracto con sus movimientos.
 type GetStatement struct{ ID domain.StatementID }
 
-// SearchStatements searches the statements of the caller's scope.
+// SearchStatements busca los extractos del ámbito de quien llama.
 type SearchStatements struct {
 	Owner, Account string
-	Pending        bool // with movements to reconcile
+	Pending        bool // con movimientos por conciliar
 	Page, Size     int
 }
 
-// MovementDTO is the transport form of a movement.
+// MovementDTO es la forma de transporte de un movimiento.
 type MovementDTO struct {
 	Line      int    `json:"line"`
 	Date      string `json:"date"`
@@ -95,7 +96,7 @@ type MovementDTO struct {
 	MatchNote string `json:"matchNote,omitempty"`
 }
 
-// StatementDTO is the transport form of a statement.
+// StatementDTO es la forma de transporte de un extracto.
 type StatementDTO struct {
 	ID        string        `json:"id"`
 	Owner     string        `json:"owner"`
@@ -106,7 +107,7 @@ type StatementDTO struct {
 	Closing   string        `json:"closing"`
 	Movements int           `json:"movements"`
 	Pending   int           `json:"pending"`
-	Matched   int           `json:"matched,omitempty"` // movements explained by the last automatic run
+	Matched   int           `json:"matched,omitempty"` // movimientos explicados por la última pasada automática
 	Lines     []MovementDTO `json:"lines,omitempty"`
 	Version   int64         `json:"version"`
 }
@@ -130,8 +131,8 @@ func statementAmount(v *fw.Validation, field, s string) vocab.Decimal {
 	return d
 }
 
-// record stores a statement of an account after checking it continues the previous ones: periods
-// do not overlap, and the opening balance is the closing balance of the statement before.
+// record guarda un extracto de una cuenta tras comprobar que continúa los anteriores: los periodos
+// no se solapan, y el saldo inicial es el saldo final del extracto anterior.
 func (s service) record(ctx context.Context, acc *domain.Account, st domain.StatementState) (*domain.Statement, error) {
 	st.Owner, st.Account = acc.State().Owner, acc.ID()
 	stm, err := domain.ImportStatement(domain.NewStatementID(), st)
@@ -159,14 +160,14 @@ func (s service) record(ctx context.Context, acc *domain.Account, st domain.Stat
 	return stm, s.statements.Create(ctx, stm)
 }
 
-// candidate is something a movement may be reconciled against.
+// candidate es algo contra lo que se puede conciliar un movimiento.
 type candidate struct {
 	kind, id string
-	amount   vocab.Decimal // as the bank would report it: positive credits the account
+	amount   vocab.Decimal // como lo daría el banco: positivo abona en la cuenta
 	date     vocab.Date
 }
 
-// candidates lists the remittances and transfer orders of an account sent to the bank.
+// candidates enumera las remesas y órdenes de transferencias de una cuenta enviadas al banco.
 func (s service) candidates(ctx context.Context, owner domain.OrganizationID, account domain.AccountID) ([]candidate, error) {
 	sent := []int{int(domain.RemGenerated), int(domain.RemSettled)}
 	var out []candidate
@@ -227,7 +228,7 @@ func (s service) statementUseCases(svc *Service) {
 		return statementDTO(stm, true), nil
 	}, retry[ImportStatement, StatementDTO](), pipeline.Transactional[ImportStatement, StatementDTO](d.UoW))
 
-	// A file is recorded whole or not at all.
+	// Un fichero se registra entero o nada.
 	svc.ImportNorma43 = guard(PermStatementImport, func(ctx context.Context, c ImportNorma43) ([]StatementDTO, error) {
 		var v fw.Validation
 		owner := domain.OrganizationID{UUID: parseID(&v, "owner", c.Owner)}
@@ -271,8 +272,8 @@ func (s service) statementUseCases(svc *Service) {
 		})
 	}
 
-	// Against a remittance or a transfer order the amounts must be the same, it must have been sent
-	// to the bank from that account, and nothing else may be reconciled against it.
+	// Contra una remesa o una orden de transferencias los importes tienen que ser iguales, tiene que
+	// haberse enviado al banco desde esa cuenta, y no se puede conciliar nada más contra ella.
 	svc.Reconcile = guard(PermStatementReconcile, func(ctx context.Context, c ReconcileLine) (StatementDTO, error) {
 		kind := strings.TrimSpace(c.Kind)
 		var v fw.Validation
@@ -356,7 +357,7 @@ func (s service) statementUseCases(svc *Service) {
 					}
 				}
 				if len(fit) != 1 {
-					continue // nothing, or a choice a person must make
+					continue // nada, o una elección que debe hacer una persona
 				}
 				x := free[fit[0]]
 				if err := stm.Reconcile(l.No, domain.Match{Kind: x.kind, ID: x.id}); err != nil {

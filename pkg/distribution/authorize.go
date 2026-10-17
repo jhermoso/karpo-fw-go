@@ -10,23 +10,23 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// OrganizationScopeHeader carries the organizations the caller wants to work on
-// (comma-separated UUIDs); the effective scope is its intersection with the grants.
+// OrganizationScopeHeader lleva las organizaciones con las que quiere trabajar quien llama
+// (UUID separados por comas); el ámbito efectivo es su intersección con las concesiones.
 const OrganizationScopeHeader = "X-Organization-Scope"
 
-// RetryAfterIndeterminate is the Retry-After (seconds) sent when authorization is indeterminate.
+// RetryAfterIndeterminate es el Retry-After (segundos) que se envía cuando la autorización es indeterminada.
 const RetryAfterIndeterminate = "5"
 
-// Authorize authenticates the bearer token and resolves the authorization context once per
-// request (contract v1), before the endpoints:
+// Authorize autentica el token bearer y resuelve el contexto de autorización una vez por
+// petición (contrato v1), antes de los endpoints:
 //
-//   - invalid X-Organization-Scope -> 400
-//   - missing/invalid credentials or incomplete principal -> 401 with WWW-Authenticate: Bearer
-//   - Deny -> 403; Indeterminate -> 503 with Retry-After: 5 (fail closed)
-//   - Allow -> authz.WithContext plus application.WithActor, so the audit stamps the resolved
-//     subject and never an identity supplied by the client.
+//   - X-Organization-Scope no válido -> 400
+//   - credenciales ausentes o no válidas, o principal incompleto -> 401 con WWW-Authenticate: Bearer
+//   - Deny -> 403; Indeterminate -> 503 con Retry-After: 5 (falla cerrado)
+//   - Allow -> authz.WithContext más application.WithActor, de modo que la auditoría sella el
+//     sujeto resuelto y nunca una identidad aportada por el cliente.
 //
-// It replaces TenantActorContext for authenticated APIs; there is no Legacy fallback.
+// Sustituye a TenantActorContext en las API autenticadas; no hay alternativa Legacy.
 func Authorize(authn authz.Authenticator, resolver authz.Resolver) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -72,9 +72,9 @@ func Authorize(authn authz.Authenticator, resolver authz.Resolver) Middleware {
 	}
 }
 
-// RequirePermission protects one endpoint with a permission (the C# RequirePermission policy).
-// Prefer pipeline.RequirePermission on the use case, which also protects non-HTTP entry points;
-// this one is for endpoints without a handler.
+// RequirePermission protege un endpoint con un permiso (la política RequirePermission de C#).
+// Es preferible pipeline.RequirePermission en el caso de uso, que protege también las entradas
+// que no son HTTP; ésta es para endpoints sin manejador.
 func RequirePermission(p authz.Permission, next http.Handler) http.Handler {
 	p = authz.MustPermission(string(p))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

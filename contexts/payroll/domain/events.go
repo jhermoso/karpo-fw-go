@@ -4,9 +4,10 @@ import (
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// Domain events (the C# raised only a generic FactIssued when Documents numbered a payslip).
+// Eventos de dominio (el C# sólo lanzaba un FactIssued genérico cuando Documents numeraba una
+// nómina).
 type (
-	// PayslipDrafted is raised when a payslip is drafted.
+	// PayslipDrafted se lanza al preparar una nómina en borrador.
 	PayslipDrafted struct {
 		fw.EventMeta
 		Employment string `json:"employment"`
@@ -15,7 +16,7 @@ type (
 		Start      string `json:"start"`
 		End        string `json:"end"`
 	}
-	// PayslipApproved is raised when a payslip is approved, with its totals.
+	// PayslipApproved se lanza al aprobar una nómina, con sus totales.
 	PayslipApproved struct {
 		fw.EventMeta
 		Employment      string `json:"employment"`
@@ -29,29 +30,29 @@ type (
 		PerceptionKey   string `json:"perceptionKey,omitempty"`
 		Totals          Totals `json:"totals"`
 	}
-	// PayslipCancelled is raised when an approved payslip is cancelled.
+	// PayslipCancelled se lanza al anular una nómina aprobada.
 	PayslipCancelled struct {
 		fw.EventMeta
 		Reason string `json:"reason"`
 	}
-	// ProfileChanged is raised when the payroll terms of an employment change.
+	// ProfileChanged se lanza cuando cambian las condiciones de nómina de una relación laboral.
 	ProfileChanged struct {
 		fw.EventMeta
 		Employment string `json:"employment"`
 	}
-	// EmployerAccountRegistered is raised when a CCC is registered.
+	// EmployerAccountRegistered se lanza al dar de alta un CCC.
 	EmployerAccountRegistered struct {
 		fw.EventMeta
 		Employer string `json:"employer"`
 		Code     string `json:"code"`
 	}
-	// EmployerAccountDeactivated is raised on the Social Security "baja" of a CCC.
+	// EmployerAccountDeactivated se lanza con la baja de un CCC en la Seguridad Social.
 	EmployerAccountDeactivated struct {
 		fw.EventMeta
 	}
 )
 
-// EventType implementations.
+// Implementaciones de EventType.
 func (PayslipDrafted) EventType() string             { return "payroll.payslip_drafted" }
 func (PayslipApproved) EventType() string            { return "payroll.payslip_approved" }
 func (PayslipCancelled) EventType() string           { return "payroll.payslip_cancelled" }

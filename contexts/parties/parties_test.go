@@ -45,12 +45,12 @@ type env struct {
 	sw  *hotswap.Switch
 	mod *parties.Module
 	dir directory
-	// clock is the domain clock of the test host: do moves it forward before every request.
+	// clock es el reloj de dominio del anfitrión de prueba: do lo adelanta antes de cada petición.
 	clock *fake.FakeClock
-	// admin is a global administrator; the others work in an organization scope: reader
-	// (read-only), clerk (full), viewer (read-only grant, write permissions), outsider (full
-	// on another organization).
-	// on another organization), seller (full, everything but granting trials).
+	// admin es un administrador global; los demás trabajan en el ámbito de una organización:
+	// reader (sólo lectura), clerk (completo), viewer (acceso de sólo lectura, permisos de
+	// escritura), outsider (completo en otra organización), seller (completo, todo menos conceder
+	// pruebas).
 	admin, reader, clerk, viewer, outsider, seller string
 }
 
@@ -58,27 +58,28 @@ var allPerms = append(slices.Clone(sellerPerms), papp.PermRelationshipSetTrial, 
 
 var readerPerms = []authz.Permission{papp.PermPartyRead, papp.PermRelationshipRead}
 
-// sellerPerms are what a standard user gets from the Security catalog (read, create, update)
-// plus roles and terminations: everything but granting trials.
+// sellerPerms son lo que recibe un usuario estándar del catálogo de Security (leer, crear,
+// actualizar) más roles y finalizaciones: todo menos conceder pruebas.
 var sellerPerms = []authz.Permission{papp.PermPartyRead, papp.PermPartyCreate, papp.PermPartyUpdate, papp.PermRoleAssign,
 	papp.PermRelationshipRead, papp.PermRelationshipCreate, papp.PermRelationshipEnd, papp.PermRelationshipUpdate}
 
-// profiles are the users of the test host and their user names.
+// profiles son los usuarios del anfitrión de prueba y sus nombres de usuario.
 var profiles = map[string]string{"admin": "ana.admin", "reader": "rita.reader", "clerk": "carl.clerk", "viewer": "vera.viewer",
 	"outsider": "otto.outsider", "seller": "sara.seller"}
 
-// directory is the security source of the test host. The Parties use cases never see it: they
-// only read the authorization context the resolver builds from it on every request. The same
-// scenario runs over the in-memory directory of the framework and over the Security context.
+// directory es la fuente de seguridad del anfitrión de prueba. Los casos de uso de Parties nunca
+// la ven: sólo leen el contexto de autorización que el resolutor construye con ella en cada
+// petición. El mismo escenario corre sobre el directorio en memoria del framework y sobre el
+// contexto Security.
 type directory interface {
 	authz.Directory
-	// register creates the subject of a profile and returns its id and its party.
+	// register crea el sujeto de un perfil y devuelve su id y su party.
 	register(t *testing.T, profile, username string) (subject, party fw.UUID)
-	// grant gives a profile access to organizations.
+	// grant da a un perfil acceso a organizaciones.
 	grant(t *testing.T, profile string, level authz.AccessLevel, orgs ...string)
 }
 
-// memoryDirectory is the in-memory directory of the framework.
+// memoryDirectory es el directorio en memoria del framework.
 type memoryDirectory struct {
 	*authorization.MemoryDirectory
 	ids map[string]fw.UUID
@@ -112,12 +113,12 @@ func (d *memoryDirectory) grant(_ *testing.T, profile string, level authz.Access
 	d.Put(d.ids[profile], s)
 }
 
-// securityDirectory is the real directory: the Security bounded context, with its users, roles,
-// permission catalog and organization accesses in its own store.
+// securityDirectory es el directorio real: el contexto delimitado Security, con sus usuarios,
+// roles, catálogo de permisos y accesos a organizaciones en su propio almacén.
 type securityDirectory struct {
 	authz.Directory
 	sec   *security.Module
-	setup context.Context // a global administrator, for the setup
+	setup context.Context // un administrador global, para la preparación
 	roles map[string]sdomain.RoleID
 	ids   map[string]sdomain.UserID
 }
@@ -177,19 +178,21 @@ func (d *securityDirectory) grant(t *testing.T, profile string, level authz.Acce
 	}
 }
 
-// grant gives a user access to organizations (the security directory is read on every request).
+// grant da a un usuario acceso a organizaciones (el directorio de seguridad se lee en cada
+// petición).
 func (e *env) grant(user string, level authz.AccessLevel, orgs ...string) {
 	e.t.Helper()
 	e.dir.grant(e.t, user, level, orgs...)
 }
 
-// compose is the composition root of the test host: JWT authentication, the authorization
-// resolver over the security directory, and the Parties module on a hot-swap switch.
+// compose es la raíz de composición del anfitrión de prueba: autenticación JWT, el resolutor de
+// autorización sobre el directorio de seguridad y el módulo de Parties sobre un switch intercambiable en caliente.
 func compose(t *testing.T, newDirectory func(*testing.T) directory) *env {
-	// The system clock advances in ticks (up to 15.6 ms on Windows), longer than an in-memory
-	// request, so two requests could share an instant or not depending on the run. The scenario
-	// runs on a clock that every request advances: each validity it ends has a length. Ending at
-	// the instant of the start is covered in the domain (TestEndingAtTheInstantOfTheStart).
+	// El reloj del sistema avanza a saltos (de hasta 15,6 ms en Windows), más largos que una
+	// petición en memoria, así que dos peticiones podrían compartir un instante o no según la
+	// ejecución. El escenario corre sobre un reloj que cada petición adelanta: cada vigencia que
+	// termina tiene una duración. Terminar en el instante del inicio se cubre en el dominio
+	// (TestEndingAtTheInstantOfTheStart).
 	clock := fake.New(time.Now())
 	t.Cleanup(fw.SetClock(clock))
 	jwt, _ := jwtauth.New(jwtauth.Config{Secret: []byte("parties-test")})
@@ -247,7 +250,8 @@ func (e *env) must(status, want int, what string) {
 	}
 }
 
-// scenario runs the whole business flow on the current backend and returns the ids it created.
+// scenario ejecuta el flujo de negocio completo sobre el backend actual y devuelve los ids que ha
+// creado.
 func (e *env) scenario(prefix string) (acme, ana papp.PartyDTO) {
 	e.t.Helper()
 	e.must(e.do("POST", "/api/organizations", e.admin, map[string]any{"legalName": prefix + " Acme Sociedad Anónima",
@@ -259,13 +263,13 @@ func (e *env) scenario(prefix string) (acme, ana papp.PartyDTO) {
 		e.t.Fatalf("registered: %+v %+v", ana, acme)
 	}
 
-	// Business rules come back as problems.
+	// Las reglas de negocio vuelven como problemas.
 	e.must(e.do("POST", "/api/parties/"+acme.ID+"/roles", e.admin, map[string]any{"roleType": domain.RoleEmployee.String()}, nil),
 		422, "an organization cannot be an employee")
 	e.must(e.do("POST", "/api/persons", e.admin, map[string]any{"givenName": "X", "firstSurname": "Y",
 		"roles": []string{domain.RoleLegalCategory.String()}}, nil), 422, "categories cannot be assigned")
 
-	// Employment requires Employee -> Internal Organization.
+	// Employment exige Employee -> Internal Organization.
 	var rel papp.RelationshipDTO
 	body := map[string]any{"type": domain.RelEmployment.String(), "fromParty": ana.ID, "toParty": acme.ID, "remark": "hired"}
 	e.must(e.do("POST", "/api/party-relationships", e.admin, body, &rel), 201, "establish employment")
@@ -273,8 +277,8 @@ func (e *env) scenario(prefix string) (acme, ana papp.PartyDTO) {
 		e.t.Fatalf("relationship: %+v", rel)
 	}
 	e.must(e.do("POST", "/api/party-relationships", e.admin, body, nil), 422, "duplicate relationship")
-	// A relationship gives each side the role it lacks (D-49), but never makes an internal
-	// organization of anybody, nor gives a role to who cannot play it.
+	// Una relación da a cada lado el rol que le falta (D-49), pero nunca hace organización interna
+	// a nadie, ni da un rol a quien no puede desempeñarlo.
 	e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelEmployment.String(),
 		"fromParty": acme.ID, "toParty": ana.ID}, nil), 422, "an organization is not made an employee")
 	var boss papp.PartyDTO
@@ -292,8 +296,8 @@ func (e *env) scenario(prefix string) (acme, ana papp.PartyDTO) {
 		e.t.Fatalf("ana was not made a customer: %+v", ana.Roles)
 	}
 
-	// Ana becomes a bill-to customer too: a Customer by inheritance; a search for customers finds
-	// her once.
+	// Ana pasa a ser también cliente de facturación: un Customer por herencia; una búsqueda de
+	// clientes la encuentra una vez.
 	e.must(e.do("POST", "/api/parties/"+ana.ID+"/roles", e.admin, map[string]any{"roleType": domain.RoleBillToCustomer.String()}, &ana), 200, "assign role")
 	var customers fw.Page[papp.PartyDTO]
 	e.must(e.do("GET", "/api/parties?role="+domain.RoleCustomer.String()+"&q="+prefix, e.reader, nil, &customers), 200, "search customers")
@@ -301,7 +305,7 @@ func (e *env) scenario(prefix string) (acme, ana papp.PartyDTO) {
 		e.t.Fatalf("customers: %+v", customers)
 	}
 
-	// A role that ended does not count, unless the search asks for the ended ones too (D-48).
+	// Un rol que ha terminado no cuenta, salvo que la búsqueda pida también los terminados (D-48).
 	e.must(e.do("POST", "/api/parties/"+ana.ID+"/roles", e.admin, map[string]any{"roleType": domain.RoleContractor.String()}, &ana), 200, "ana, contractor")
 	contract := ana.Roles[slices.IndexFunc(ana.Roles, func(r papp.RoleDTO) bool { return r.RoleType == domain.RoleContractor.String() })].ID
 	e.must(e.do("POST", "/api/parties/"+ana.ID+"/roles/"+contract+"/end", e.admin, map[string]any{}, &ana), 200, "no longer a contractor")
@@ -316,8 +320,8 @@ func (e *env) scenario(prefix string) (acme, ana papp.PartyDTO) {
 		e.t.Fatalf("contractors ever: %+v", contractors)
 	}
 
-	// A role given by mistake is taken back (D-8): removed when nothing depends on it, ended and
-	// marked when a relationship was already made in it.
+	// Un rol dado por error se retira (D-8): se quita cuando nada depende de él, y se termina y se
+	// marca cuando ya se ha hecho una relación en él.
 	roleOf := func(p papp.PartyDTO, rt domain.RoleTypeID) (papp.RoleDTO, bool) {
 		i := slices.IndexFunc(p.Roles, func(r papp.RoleDTO) bool { return r.RoleType == rt.String() })
 		if i < 0 {
@@ -343,12 +347,12 @@ func (e *env) scenario(prefix string) (acme, ana papp.PartyDTO) {
 	if annulled.Total != 0 {
 		e.t.Fatalf("an annulled role counted: %+v", annulled)
 	}
-	// Not even for the days it lasted: the role can be given again from before.
+	// Ni siquiera por los días que duró: el rol puede volver a darse desde antes.
 	e.must(e.do("POST", "/api/parties/"+ana.ID+"/roles", e.admin, map[string]any{"roleType": domain.RoleEmployee.String(),
 		"from": employee.From}, &ana), 200, "the role again, from when the annulled one started")
 
-	// A duplicate is found and read, and takes part in nothing else (D-64); ending the Duplicate
-	// Of relationship undoes it.
+	// Un duplicado se encuentra y se lee, y no interviene en nada más (D-64); terminar la relación
+	// Duplicate Of lo deshace.
 	var dup, survivor papp.PartyDTO
 	e.must(e.do("POST", "/api/persons", e.admin, map[string]any{"givenName": "Duplicada", "firstSurname": prefix}, &dup), 201, "a duplicate")
 	e.must(e.do("POST", "/api/persons", e.admin, map[string]any{"givenName": "Buena", "firstSurname": prefix}, &survivor), 201, "the survivor")
@@ -373,7 +377,7 @@ func (e *env) scenario(prefix string) (acme, ana papp.PartyDTO) {
 	e.must(e.do("POST", "/api/party-relationships/"+dupRel.ID+"/terminate", e.admin, nil, nil), 200, "undo the duplicate")
 	e.must(e.do("PUT", "/api/parties/"+dup.ID+"/name", e.admin, map[string]any{"givenName": "Otra", "firstSurname": prefix}, nil), 200, "operable again")
 
-	// A party with relationships that have not ended is not deactivated (D-4); one without, is.
+	// Una party con relaciones sin terminar no se desactiva (D-4); una sin ellas, sí.
 	e.must(e.do("PUT", "/api/parties/"+ana.ID+"/active", e.admin, map[string]any{"active": false}, nil), 422, "ana works for acme and buys from it")
 	e.must(e.do("PUT", "/api/parties/"+acme.ID+"/active", e.admin, map[string]any{"active": false}, nil), 422, "acme has an employee and a customer")
 	var loner papp.PartyDTO
@@ -383,11 +387,11 @@ func (e *env) scenario(prefix string) (acme, ana papp.PartyDTO) {
 		e.t.Fatalf("still active: %+v", loner)
 	}
 
-	// The reader may read but not write.
+	// El reader puede leer pero no escribir.
 	e.must(e.do("PUT", "/api/parties/"+acme.ID+"/name", e.reader, map[string]any{"legalName": "Nope"}, nil), 403, "reader cannot rename")
 	e.must(e.do("GET", "/api/parties/"+acme.ID, "", nil, nil), 401, "anonymous")
 
-	// Rename, terminate, list.
+	// Renombrar, terminar, listar.
 	var renamed papp.PartyDTO
 	e.must(e.do("PUT", "/api/parties/"+acme.ID+"/name", e.admin, map[string]any{"legalName": prefix + " Acme Sociedad Anónima",
 		"tradeName": prefix + " Acme Group"}, &renamed), 200, "rename")
@@ -401,7 +405,7 @@ func (e *env) scenario(prefix string) (acme, ana papp.PartyDTO) {
 		e.t.Fatalf("active relationships: %+v", active)
 	}
 
-	// Directory (Open Host Service).
+	// Directorio (Open Host Service).
 	var refs []contracts.PartyRef
 	e.must(e.do("POST", "/api/parties/directory/resolve", e.reader, map[string]any{"partyIds": []string{ana.ID, acme.ID, fw.NewUUID().String(), "junk"}}, &refs), 200, "resolve")
 	if len(refs) != 2 {
@@ -413,8 +417,8 @@ func (e *env) scenario(prefix string) (acme, ana papp.PartyDTO) {
 	return acme, ana
 }
 
-// prospects covers the details a relationship carries because of its type (docs/PARTIES-UDM.md):
-// the prospect relationship with an internal organization and its trial.
+// prospects cubre los detalles que lleva una relación por su tipo (docs/PARTIES-UDM.md): la
+// relación de prospect con una organización interna y su prueba.
 func (e *env) prospects(acme, ana papp.PartyDTO) {
 	e.t.Helper()
 	ctx := context.Background()
@@ -428,8 +432,8 @@ func (e *env) prospects(acme, ana papp.PartyDTO) {
 		e.t.Fatalf("relationship type codes: %+v", codes)
 	}
 
-	// A prospect is registered inside the scope with its trial: role, relationship, affiliation
-	// and trial in one request.
+	// Un prospect se da de alta dentro del ámbito con su prueba: rol, relación, afiliación y
+	// prueba en una sola petición.
 	until := fw.Now().Add(30 * 24 * time.Hour).Truncate(time.Second)
 	var flotas papp.PartyDTO
 	e.must(e.do("POST", "/api/organizations", e.clerk, map[string]any{"legalName": "Flotas " + acme.ID[:8],
@@ -446,13 +450,13 @@ func (e *env) prospects(acme, ana papp.PartyDTO) {
 	}
 	trial := "/api/party-relationships/" + rels[0].ID + "/trial"
 
-	// Extending the trial needs the permission and a writable scope.
+	// Ampliar la prueba necesita el permiso y un ámbito con escritura.
 	longer := until.Add(15 * 24 * time.Hour)
 	var rel papp.RelationshipDTO
 	e.must(e.do("PUT", trial, e.reader, map[string]any{"trialUntil": longer}, nil), 403, "the reader lacks the permission")
 
-	// Granting a trial is its own permission: a seller creates and updates everything else in the
-	// organization, but gives no time away, neither afterwards nor with the relationship.
+	// Conceder una prueba tiene su propio permiso: un seller crea y actualiza todo lo demás en la
+	// organización, pero no regala tiempo, ni después ni con la relación.
 	e.grant("seller", authz.Full, acme.ID)
 	e.must(e.do("PUT", trial, e.seller, map[string]any{"trialUntil": longer}, nil), 403, "a seller cannot extend a trial")
 	lead := map[string]any{"organization": acme.ID, "relationshipType": domain.RelProspect.String(), "prospect": map[string]any{"trialUntil": until}}
@@ -473,7 +477,8 @@ func (e *env) prospects(acme, ana papp.PartyDTO) {
 		e.t.Fatalf("trials port: %+v %v", trials, err)
 	}
 
-	// Only prospect relationships have a trial; the other types keep working without details.
+	// Sólo las relaciones de prospect tienen prueba; los demás tipos siguen funcionando sin
+	// detalles.
 	var anas []papp.RelationshipDTO
 	e.must(e.do("GET", "/api/parties/"+ana.ID+"/relationships?active=true", e.reader, nil, &anas), 200, "ana's relationships")
 	if len(anas) != 1 || anas[0].Prospect != nil {
@@ -481,12 +486,12 @@ func (e *env) prospects(acme, ana papp.PartyDTO) {
 	}
 	e.must(e.do("PUT", "/api/party-relationships/"+anas[0].ID+"/trial", e.admin, map[string]any{"trialUntil": longer}, nil), 422, "a customer relationship has no trial")
 
-	// Establishing the relationship afterwards, with or without trial.
+	// Establecer la relación después, con o sin prueba.
 	var bea papp.PartyDTO
 	e.must(e.do("POST", "/api/persons", e.admin, map[string]any{"givenName": "Bea", "firstSurname": "Prueba " + acme.ID[:8],
 		"roles": []string{domain.RoleProspect.String()}}, &bea), 201, "register bea")
 	body := map[string]any{"type": domain.RelProspect.String(), "fromParty": bea.ID, "toParty": acme.ID}
-	rel = papp.RelationshipDTO{} // decoding into a used value would keep the fields the response omits
+	rel = papp.RelationshipDTO{} // decodificar sobre un valor usado conservaría los campos que la respuesta omite
 	e.must(e.do("POST", "/api/party-relationships", e.admin, body, &rel), 201, "a prospect without trial")
 	if rel.Prospect == nil || rel.Prospect.InTrial || rel.Prospect.TrialUntil != nil {
 		e.t.Fatalf("no trial: %+v", rel.Prospect)
@@ -501,8 +506,8 @@ func (e *env) prospects(acme, ana papp.PartyDTO) {
 		e.t.Fatalf("withdrawn: %+v", rel.Prospect)
 	}
 
-	// Converting the prospect into a customer: the customer relationship starts and the prospect
-	// relationship ends, and with it the trial. The party stays in the organization's scope.
+	// Convertir el prospect en cliente: empieza la relación de cliente y termina la relación de
+	// prospect, y con ella la prueba. La party sigue en el ámbito de la organización.
 	e.must(e.do("POST", "/api/parties/"+flotas.ID+"/roles", e.clerk, map[string]any{"roleType": domain.RoleCustomer.String()}, nil), 200, "customer role")
 	e.must(e.do("POST", "/api/party-relationships", e.clerk, map[string]any{"type": domain.RelCustomer.String(),
 		"fromParty": flotas.ID, "toParty": acme.ID}, nil), 201, "customer relationship")
@@ -517,7 +522,7 @@ func (e *env) prospects(acme, ana papp.PartyDTO) {
 		e.t.Fatalf("trials after the conversion: %+v %v", trials, err)
 	}
 
-	// The personal details of a person can be corrected after registration.
+	// Los datos personales de una persona se pueden corregir después del alta.
 	var edited papp.PartyDTO
 	person := "/api/parties/" + bea.ID + "/person"
 	e.must(e.do("PUT", person, e.admin, map[string]any{"gender": "female", "birthDate": "1988-02-29", "maritalStatus": "married"}, &edited), 200, "edit the person")
@@ -535,7 +540,7 @@ func (e *env) prospects(acme, ana papp.PartyDTO) {
 		e.t.Fatalf("replaced person details: %+v", edited.Person)
 	}
 
-	// Ownership: the stake of a shareholder is a detail of the ownership relationship.
+	// Ownership: la participación de un accionista es un detalle de la relación de propiedad.
 	var sara papp.PartyDTO
 	e.must(e.do("POST", "/api/persons", e.admin, map[string]any{"givenName": "Sara", "firstSurname": "Socia " + acme.ID[:8],
 		"roles": []string{domain.RoleShareholder.String()}}, &sara), 201, "register sara")
@@ -569,7 +574,8 @@ func (e *env) prospects(acme, ana papp.PartyDTO) {
 		e.t.Fatalf("cleared share: %+v", own.Ownership)
 	}
 
-	// Promotion code: the code of a collaborator is a detail of its relationship with the company.
+	// Código de promoción: el código de un colaborador es un detalle de su relación con la
+	// empresa.
 	var agency papp.PartyDTO
 	e.must(e.do("POST", "/api/organizations", e.admin, map[string]any{"legalName": "Agencia " + acme.ID[:8],
 		"roles": []string{domain.RoleCollaborator.String()}}, &agency), 201, "register the agency")
@@ -602,8 +608,8 @@ func (e *env) prospects(acme, ana papp.PartyDTO) {
 		e.t.Fatalf("a code taken away is nobody's: %+v", refers.Collaborator)
 	}
 
-	// The mark of a refused identity document: who has it is found by it, and a document that
-	// passes its checks answers it.
+	// La marca de un documento de identidad rechazado: quien la tiene se encuentra por ella, y un
+	// documento que pasa sus comprobaciones la resuelve.
 	var marked papp.PartyDTO
 	issue := "/api/parties/" + agency.ID + "/document-issue"
 	e.must(e.do("PUT", issue, e.reader, map[string]any{"number": "B12345678", "reason": "wrong check digit"}, nil), 403, "a reader marks nothing")
@@ -619,7 +625,7 @@ func (e *env) prospects(acme, ana papp.PartyDTO) {
 	}
 	e.must(e.do("PUT", issue, e.outsider, map[string]any{"reason": "x"}, nil), 404, "nobody marks what it does not see")
 	e.must(e.do("DELETE", issue, e.outsider, nil, nil), 404, "nor takes its mark away")
-	marked = papp.PartyDTO{} // decoding leaves what the answer does not bring
+	marked = papp.PartyDTO{} // decodificar deja lo que la respuesta no trae
 	e.must(e.do("POST", "/api/parties/"+agency.ID+"/identifications", e.admin, map[string]any{"documentType": domain.DocOther.String(),
 		"country": "ES", "number": "B12345678"}, &marked), 200, "the wrong number, kept as other document")
 	if marked.DocumentIssue == nil {
@@ -631,7 +637,7 @@ func (e *env) prospects(acme, ana papp.PartyDTO) {
 	if marked.DocumentIssue == nil {
 		e.t.Fatal("a passport is not the document that was wrong: it answers no mark")
 	}
-	marked = papp.PartyDTO{} // decoding leaves what the answer does not bring
+	marked = papp.PartyDTO{} // decodificar deja lo que la respuesta no trae
 	e.must(e.do("POST", "/api/parties/"+agency.ID+"/identifications", e.admin, map[string]any{"documentType": domain.DocTaxID.String(),
 		"country": "ES", "number": "A58818501"}, &marked), 200, "the right tax id")
 	if marked.DocumentIssue != nil {
@@ -648,8 +654,8 @@ func (e *env) prospects(acme, ana papp.PartyDTO) {
 		e.t.Fatalf("mark taken away: %+v, %d still marked", marked.DocumentIssue, withIssue.Total)
 	}
 
-	// Customer number: each organization numbers its own customers, so it is a detail of the
-	// customer relationship. It is of one customer for good.
+	// Número de cliente: cada organización numera a sus propios clientes, así que es un detalle de
+	// la relación de cliente. Es de un cliente para siempre.
 	customerOf := func(name string) (papp.PartyDTO, papp.RelationshipDTO) {
 		var p papp.PartyDTO
 		e.must(e.do("POST", "/api/organizations", e.admin, map[string]any{"legalName": name + " " + acme.ID[:8],
@@ -682,14 +688,15 @@ func (e *env) prospects(acme, ana papp.PartyDTO) {
 	e.must(e.do("PUT", "/api/party-relationships/"+buysToo.ID+"/customer-number", e.clerk, map[string]any{"customerNumber": "C-4300002"}, nil), 200,
 		"its own number")
 
-	// A number given up is free again: only a number some relationship carries is taken.
+	// Un número al que se renuncia queda libre otra vez: sólo está ocupado un número que lleva
+	// alguna relación.
 	e.must(e.do("PUT", "/api/party-relationships/"+buysToo.ID+"/customer-number", e.clerk, map[string]any{"customerNumber": "C-4300003"}, nil), 200,
 		"another number")
 	e.must(e.do("PUT", number, e.clerk, map[string]any{"customerNumber": "C-4300002"}, nil), 200, "the number the other gave up")
 	e.must(e.do("PUT", number, e.clerk, map[string]any{"customerNumber": "C-4300001"}, nil), 200, "and its own again")
 
-	// The number stays with the customer when the relationship ends: it is not handed to another
-	// one, and the customer gets it again if it comes back.
+	// El número se queda con el cliente cuando termina la relación: no se le da a otro, y el
+	// cliente lo recupera si vuelve.
 	e.must(e.do("POST", "/api/party-relationships/"+buys.ID+"/terminate", e.admin, map[string]any{}, nil), 200, "talleres stops buying")
 	e.must(e.do("PUT", number, e.clerk, map[string]any{"customerNumber": "C-9"}, nil), 422, "an ended relationship keeps its number")
 	e.must(e.do("PUT", "/api/party-relationships/"+buysToo.ID+"/customer-number", e.clerk, map[string]any{"customerNumber": "C-4300001"}, nil), 422,
@@ -703,9 +710,9 @@ func (e *env) prospects(acme, ana papp.PartyDTO) {
 		e.t.Fatalf("the number of the customer that came back: %+v", back.Customer)
 	}
 
-	// Who changes a third party (D-65, D-66): the organization that registered it; one that only
-	// relates to it, with PermPartyUpdateRelated (the clerk has it, the seller not); and an
-	// internal organization of others, nobody of Acme.
+	// Quién cambia a un tercero (D-65, D-66): la organización que lo dio de alta; una que sólo se
+	// relaciona con él, con PermPartyUpdateRelated (el clerk lo tiene, el seller no); y una
+	// organización interna de otros, nadie de Acme.
 	var third, mine papp.PartyDTO
 	e.must(e.do("POST", "/api/persons", e.admin, map[string]any{"givenName": "Tercera", "firstSurname": acme.ID[:8]}, &third), 201, "a party from elsewhere")
 	e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelCustomer.String(),
@@ -718,12 +725,12 @@ func (e *env) prospects(acme, ana papp.PartyDTO) {
 	e.must(e.do("POST", "/api/persons", e.seller, map[string]any{"givenName": "Mía", "firstSurname": acme.ID[:8],
 		"affiliation": map[string]any{"organization": acme.ID, "relationshipType": domain.RelCustomer.String()}}, &mine), 201, "registered from acme")
 	e.must(rename(e.seller, mine.ID), 200, "what acme registered, acme changes")
-	// Unless it was registered before the rule existed (D-77).
+	// Salvo que se diera de alta antes de que existiera la regla (D-77).
 	since := papp.RegistrationRuleSince
 	papp.RegistrationRuleSince = time.Now().Add(time.Hour)
 	e.must(rename(e.seller, mine.ID), 403, "a party registered before the rule is only related")
 	papp.RegistrationRuleSince = since
-	// Only the global administrator makes a party an internal organization (D-78).
+	// Sólo el administrador global hace de una party una organización interna (D-78).
 	e.must(e.do("POST", "/api/parties/"+mine.ID+"/roles", e.clerk, map[string]any{"roleType": domain.RoleInternalOrganization.String()}, nil), 403,
 		"a clerk does not make a company of the group")
 	e.must(e.do("POST", "/api/organizations", e.clerk, map[string]any{"legalName": "Filial " + acme.ID[:8], "roles": []string{domain.RoleInternalOrganization.String()},
@@ -744,8 +751,8 @@ func (e *env) prospects(acme, ana papp.PartyDTO) {
 	e.must(e.do("PUT", "/api/parties/"+other.ID+"/name", e.clerk, map[string]any{"legalName": "Nope"}, nil), 403,
 		"but nobody of acme changes an internal organization of others, permission or not")
 
-	// Marking a duplicate is changing it: who cannot change a party does not block it, nobody but
-	// the global administrator blocks a company, and who marked it can undo it.
+	// Marcar un duplicado es cambiarlo: quien no puede cambiar una party no la bloquea, nadie más
+	// que el administrador global bloquea una empresa, y quien la marcó puede deshacerlo.
 	e.must(e.do("POST", "/api/party-relationships", e.seller, map[string]any{"type": domain.RelDuplicateOf.String(),
 		"fromParty": third.ID, "toParty": mine.ID}, nil), 403, "the seller cannot change the related party, nor block it")
 	e.must(e.do("POST", "/api/party-relationships", e.clerk, map[string]any{"type": domain.RelDuplicateOf.String(),
@@ -759,8 +766,8 @@ func (e *env) prospects(acme, ana papp.PartyDTO) {
 		"a family relationship affiliates nobody")
 }
 
-// phase3 covers organization scope (decision P1), registration inside the scope, the
-// organization hierarchy and the ports for other contexts.
+// phase3 cubre el ámbito de organización (decisión P1), el alta dentro del ámbito, la jerarquía
+// de organizaciones y los puertos para otros contextos.
 func (e *env) phase3(acme, ana papp.PartyDTO) {
 	e.t.Helper()
 	ctx := context.Background()
@@ -774,7 +781,7 @@ func (e *env) phase3(acme, ana papp.PartyDTO) {
 	e.grant("viewer", authz.ReadOnly, acme.ID)
 	e.grant("outsider", authz.Full, globex.ID)
 
-	// Registration inside the scope: the customer role comes with the relationship.
+	// Alta dentro del ámbito: el rol de cliente viene con la relación.
 	e.must(e.do("POST", "/api/persons", e.clerk, map[string]any{"givenName": "Pedro", "firstSurname": "Ruiz"}, nil), 400, "affiliation required")
 	e.must(e.do("POST", "/api/persons", e.clerk, map[string]any{"givenName": "Pedro", "firstSurname": "Ruiz",
 		"affiliation": map[string]any{"organization": globex.ID, "relationshipType": domain.RelCustomer.String()}}, nil), 404, "globex is out of scope")
@@ -784,7 +791,7 @@ func (e *env) phase3(acme, ana papp.PartyDTO) {
 		e.t.Fatalf("pedro: %+v", pedro)
 	}
 
-	// Visibility: 404 out of scope, 403 read-only.
+	// Visibilidad: 404 fuera del ámbito, 403 sólo lectura.
 	e.must(e.do("GET", "/api/parties/"+pedro.ID, e.outsider, nil, nil), 404, "outsider cannot see pedro")
 	e.must(e.do("GET", "/api/parties/"+pedro.ID, e.reader, nil, &got), 200, "reader sees pedro through acme")
 	e.must(e.do("PUT", "/api/parties/"+pedro.ID+"/name", e.viewer, map[string]any{"givenName": "Pedro", "firstSurname": "Ruiz", "secondSurname": "Gil"}, nil),
@@ -797,11 +804,12 @@ func (e *env) phase3(acme, ana papp.PartyDTO) {
 		e.t.Fatalf("the outsider must not find pedro: %+v", page)
 	}
 	e.must(e.do("GET", "/api/parties?organization="+acme.ID+"&kind=person", e.clerk, nil, &page), 200, "members of acme")
-	if page.Total != 2 { // ana (employee, customer) and pedro
+	if page.Total != 2 { // ana (empleada, cliente) y pedro
 		e.t.Fatalf("acme members: %d", page.Total)
 	}
 
-	// A party without relationships is only for global administrators, unless it is shared.
+	// Una party sin relaciones es sólo para los administradores globales, salvo que esté
+	// compartida.
 	var loner papp.PartyDTO
 	e.must(e.do("POST", "/api/organizations", e.admin, map[string]any{"legalName": "Banco Común " + acme.ID[:8],
 		"roles": []string{domain.RoleFinancialInstitution.String()}}, &loner), 201, "register a bank")
@@ -814,7 +822,7 @@ func (e *env) phase3(acme, ana papp.PartyDTO) {
 		"fromParty": acme.ID, "toParty": loner.ID}, nil), 422, "a relationship gives no role to a party the caller cannot write")
 	e.must(e.do("PUT", "/api/parties/"+loner.ID+"/active", e.clerk, map[string]any{"active": false}, nil), 403, "nor is it deactivated by who only reads it")
 
-	// Hierarchy: Madrid office -> Sales division -> Acme.
+	// Jerarquía: oficina de Madrid -> división de ventas -> Acme.
 	var sales, madrid papp.PartyDTO
 	e.must(e.do("POST", "/api/organizations", e.admin, map[string]any{"legalName": "Acme Sales " + acme.ID[:8],
 		"roles": []string{domain.RoleDivision.String()}}, &sales), 201, "sales")
@@ -849,15 +857,15 @@ func (e *env) phase3(acme, ana papp.PartyDTO) {
 		e.t.Fatalf("the clerk's internal organizations: %+v", internal)
 	}
 
-	// A unit is registered under its company with the rollup: "an organization" is what Acme is,
-	// whatever roles it plays (D-53).
+	// Una unidad se da de alta bajo su empresa con el rollup: «una organización» es lo que es
+	// Acme, desempeñe los roles que desempeñe (D-53).
 	var north papp.PartyDTO
 	e.must(e.do("POST", "/api/organizations", e.clerk, map[string]any{"legalName": "Acme Norte " + acme.ID[:8],
 		"roles":       []string{domain.RoleDepartment.String()},
 		"affiliation": map[string]any{"organization": acme.ID, "relationshipType": domain.RelOrganizationRollup.String()}}, &north),
 		201, "a department registered under its company")
 
-	// Ending the relationship ends the visibility.
+	// Terminar la relación termina la visibilidad.
 	var rels []papp.RelationshipDTO
 	e.must(e.do("GET", "/api/parties/"+pedro.ID+"/relationships", e.clerk, nil, &rels), 200, "pedro's relationships")
 	if len(rels) != 1 {
@@ -867,7 +875,7 @@ func (e *env) phase3(acme, ana papp.PartyDTO) {
 	e.must(e.do("GET", "/api/parties/"+pedro.ID, e.clerk, nil, nil), 404, "pedro left acme's scope")
 }
 
-// phase2 covers identifications, contacts and classifications through HTTP.
+// phase2 cubre identificaciones, contactos y clasificaciones por HTTP.
 func (e *env) phase2(acme, ana papp.PartyDTO) {
 	e.t.Helper()
 	var opts []papp.DocumentOptionDTO
@@ -898,7 +906,8 @@ func (e *env) phase2(acme, ana papp.PartyDTO) {
 	if len(got.Contacts) != 2 || got.Contacts[0].Value != "ana@example.com" || got.Contacts[1].Address == nil || got.Contacts[1].Address.Locality != "Madrid" {
 		e.t.Fatalf("contacts: %+v", got.Contacts)
 	}
-	// Where in the street, piece by piece: stored and read back as given, each piece optional.
+	// Dónde en la calle, pieza a pieza: se guarda y se vuelve a leer tal como se dio, cada pieza
+	// opcional.
 	var withPieces papp.PartyDTO
 	e.must(e.do("POST", "/api/parties/"+acme.ID+"/contacts", e.admin, map[string]any{"kind": "postal", "purposes": []string{"shipping"},
 		"address": map[string]any{"streetType": "CL", "line1": "Mayor", "number": " 5 ", "numberQualifier": "bis", "block": "2", "portal": "A",
@@ -942,16 +951,16 @@ func (e *env) phase2(acme, ana papp.PartyDTO) {
 	}
 }
 
-// The whole scenario runs twice: over the in-memory security directory of the framework and over
-// the Security bounded context. Nothing in Parties changes between the two: its use cases read
-// the authorization context, not where it comes from.
+// El escenario completo corre dos veces: sobre el directorio de seguridad en memoria del framework
+// y sobre el contexto delimitado Security. Nada de Parties cambia entre los dos: sus casos de uso
+// leen el contexto de autorización, no de dónde viene.
 func TestParties_EndToEnd_MemoryThenSQLite(t *testing.T) {
 	t.Run("in-memory directory", func(t *testing.T) { endToEnd(t, newMemoryDirectory) })
 	t.Run("Security directory", func(t *testing.T) { endToEnd(t, newSecurityDirectory) })
 }
 
-// roleTypes adds role types to the catalog: a role without data of its own is a row placed under
-// its parent, and from then on it is assigned like any other.
+// roleTypes añade tipos de rol al catálogo: un rol sin datos propios es una fila colocada bajo su
+// padre, y a partir de ahí se asigna como cualquier otro.
 func (e *env) roleTypes(tag string) {
 	t := e.t
 	t.Helper()
@@ -986,7 +995,7 @@ func (e *env) roleTypes(tag string) {
 		t.Fatalf("role types after adding one: %d, were %d", len(all), seeded)
 	}
 
-	// What does not fit the catalog.
+	// Lo que no cabe en el catálogo.
 	for what, body := range map[string]map[string]any{
 		"the same name, whatever the case":  {"name": "GUARANTOR", "parent": domain.RolePersonCategory.String()},
 		"the name of a role of the program": {"name": "customer", "parent": domain.RolePartyRoot.String()},
@@ -1003,7 +1012,7 @@ func (e *env) roleTypes(tag string) {
 		e.must(e.do("POST", "/api/catalogs/party-role-types", e.admin, body, nil), 400, what)
 	}
 
-	// It is assigned like any other, to whom its place in the hierarchy says.
+	// Se asigna como cualquier otro, a quien dice su lugar en la jerarquía.
 	var person, company papp.PartyDTO
 	e.must(e.do("POST", "/api/persons", e.admin, map[string]any{"givenName": "Gus", "firstSurname": "Avalista " + tag,
 		"roles": []string{added.ID}}, &person), 201, "a person with the new role")
@@ -1018,13 +1027,13 @@ func (e *env) roleTypes(tag string) {
 		t.Fatalf("parties playing the new role: %+v", guarantors.Items)
 	}
 
-	// Who added it, and what it said, stays in the audit log.
+	// Quién lo añadió, y lo que dijo, queda en el registro de auditoría.
 	trail, err := e.mod.Audit.Trail(context.Background(), domain.RoleTypeKind, added.ID)
 	if err != nil || len(trail) != 1 || trail[0].Operation != "created" || trail[0].Actor.Name != "ana.admin" || len(trail[0].Changes) != 4 {
 		t.Fatalf("audit of the new role type: %+v %v", trail, err)
 	}
 
-	// A relationship type is added the same way: which role each side plays.
+	// Un tipo de relación se añade igual: qué rol desempeña cada lado.
 	var relTypes []papp.RelationshipTypeDTO
 	e.must(e.do("GET", "/api/catalogs/party-relationship-types", e.reader, nil, &relTypes), 200, "relationship types")
 	for _, rt := range relTypes {
@@ -1064,7 +1073,7 @@ func (e *env) roleTypes(tag string) {
 		t.Fatalf("audit of the new relationship type: %+v %v", trail, err)
 	}
 
-	// And relates parties like any other: a side that lacks its role is given it.
+	// Y relaciona parties como cualquier otro: al lado al que le falta su rol se le da.
 	var debtor papp.PartyDTO
 	e.must(e.do("POST", "/api/persons", e.admin, map[string]any{"givenName": "Dora", "firstSurname": "Deudora " + tag,
 		"roles": []string{domain.RoleCustomer.String()}}, &debtor), 201, "a customer")
@@ -1094,7 +1103,7 @@ func endToEnd(t *testing.T, newDirectory func(*testing.T) directory) {
 	}
 	e.roleTypes("mem")
 
-	// A migrated SQLite database is swapped in while the service keeps running.
+	// Se cambia a una base SQLite migrada mientras el servicio sigue funcionando.
 	raw, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "parties.db")+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)")
 	if err != nil {
 		t.Fatal(err)
@@ -1127,11 +1136,11 @@ func endToEnd(t *testing.T, newDirectory func(*testing.T) directory) {
 		t.Fatalf("seeded role types without a code: %d", n)
 	}
 	_ = raw.QueryRow("SELECT COUNT(*) FROM party_roles WHERE party_id = (SELECT id FROM parties WHERE name LIKE 'Ana sql%')").Scan(&n)
-	if n != 5 { // employee (annulled), customer by the relationship, bill-to customer, contractor (ended), employee again
+	if n != 5 { // empleada (anulado), cliente por la relación, cliente de facturación, contratista (terminado), empleada otra vez
 		t.Fatalf("ana's roles in SQL: %d", n)
 	}
 
-	// Audit trail and Published Language, both committed with the changes.
+	// Rastro de auditoría y Published Language, ambos confirmados con los cambios.
 	trail, err := e.mod.Audit.Trail(ctx, domain.PartyKind, acme.ID)
 	if err != nil || len(trail) != 6 || trail[1].Actor.Name != "ana.admin" || len(trail[3].Changes) != 1 || trail[3].Changes[0].Field != "contacts" ||
 		len(trail[4].Changes) != 1 || trail[4].Changes[0].Field != "classifications" {
@@ -1172,13 +1181,13 @@ func endToEnd(t *testing.T, newDirectory func(*testing.T) directory) {
 	if len(shares) != 3 || shares[0] != "30.00" || shares[1] != "45.50" || shares[2] != "" {
 		t.Fatalf("share events: %v", shares)
 	}
-	// Granted at registration, extended, granted later and withdrawn.
+	// Concedida en el alta, ampliada, concedida después y retirada.
 	if len(trials) != 4 || trials[0].Organization != acme.ID || trials[0].TrialUntil == nil || trials[3].TrialUntil != nil ||
 		!trials[1].TrialUntil.After(*trials[0].TrialUntil) || trials[2].Prospect != trials[3].Prospect {
 		t.Fatalf("trial events: %+v", trials)
 	}
 
-	// Last, so that the party it registers is not among the ones counted above.
+	// Al final, para que la party que da de alta no esté entre las contadas arriba.
 	e.roleTypes("sql")
 	_ = raw.QueryRow("SELECT COUNT(*) FROM role_types WHERE code = 'guarantor' AND category = 0").Scan(&n)
 	if n != 1 {

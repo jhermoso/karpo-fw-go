@@ -26,9 +26,10 @@ func explain(t *testing.T, d sqlrepo.Dialect, s spec.Specification[*rt.Widget], 
 	return repo.Explain(s, page)
 }
 
-// TestExplain_Dialects freezes the SQL generated for a specification that exercises boolean
-// conversion, case-insensitive LIKE with escaping, EXISTS on a child collection, a custom
-// specification, NOT IN and paging: filtering, ordering and paging all happen in the database.
+// TestExplain_Dialects congela el SQL generado para una especificación que ejercita la
+// conversión de booleanos, el LIKE sin distinguir mayúsculas con escape, EXISTS sobre una
+// colección hija, una especificación propia, NOT IN y la paginación: el filtrado, la ordenación
+// y la paginación ocurren todos en la base de datos.
 func TestExplain_Dialects(t *testing.T) {
 	s := rt.FieldActive.Eq(true).And(
 		rt.FieldName.ContainsFold("a%b"),
@@ -92,12 +93,12 @@ func TestExplain_BooleanAndUUIDRepresentation(t *testing.T) {
 	swapped := sqlrepo.SwapGUIDBytes([16]byte(id.UUID))
 	check(oracle.New(oracle.WithDotNetGUIDs()), swapped[:], int64(1))
 
-	// Round trip of the .NET byte order.
+	// Ida y vuelta del orden de bytes de .NET.
 	u, err := oracle.New(oracle.WithDotNetGUIDs()).ParseUUID(swapped[:])
 	if err != nil || u != id.UUID {
 		t.Fatalf(".NET GUID round trip failed: %v %v", u, err)
 	}
-	// SQL Server returns UNIQUEIDENTIFIER bytes in mixed-endian order.
+	// SQL Server devuelve los bytes de UNIQUEIDENTIFIER en orden mixto.
 	u, err = sqlserver.New().ParseUUID(swapped[:])
 	if err != nil || u != id.UUID {
 		t.Fatalf("sqlserver GUID parse failed: %v %v", u, err)

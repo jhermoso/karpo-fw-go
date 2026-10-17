@@ -14,16 +14,17 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Harness provides fresh backends to the suite.
+// Harness da a la batería almacenes nuevos.
 type Harness struct {
-	// New returns an empty repository and the unit of work its operations join.
+	// New devuelve un repositorio vacío y la unidad de trabajo a la que se unen sus operaciones.
 	New func(t *testing.T) (domain.Repository[WidgetID, *Widget], domain.UnitOfWork)
-	// EvaluatesInMemory is true for stores whose native execution is IsSatisfiedBy (memory):
-	// they can evaluate any custom specification, so the ErrUnsupported check is skipped.
+	// EvaluatesInMemory es true para los almacenes cuya ejecución nativa es IsSatisfiedBy
+	// (memoria): pueden evaluar cualquier especificación propia, así que se salta la
+	// comprobación de ErrUnsupported.
 	EvaluatesInMemory bool
 }
 
-// Run executes the whole conformance suite.
+// Run ejecuta la batería de conformidad entera.
 func Run(t *testing.T, h Harness) {
 	t.Run("Lifecycle", func(t *testing.T) { testLifecycle(t, h) })
 	t.Run("NotFound", func(t *testing.T) { testNotFound(t, h) })
@@ -260,7 +261,7 @@ func testRollback(t *testing.T, h Harness) {
 		t.Fatalf("update must be rolled back: price=%d version=%d", k.Price(), k.Version())
 	}
 
-	// A committed unit of work persists everything.
+	// Una unidad de trabajo confirmada lo persiste todo.
 	if err := uow.Do(ctx, func(ctx context.Context) error { return repo.Save(ctx, fresh) }); err != nil {
 		t.Fatal(err)
 	}
@@ -269,8 +270,9 @@ func testRollback(t *testing.T, h Harness) {
 	}
 }
 
-// fixtures avoids values whose comparison depends on collation (case variants, trailing
-// spaces, empty strings) so results are identical on every engine.
+// fixtures evita valores cuya comparación depende de la intercalación (variantes de
+// mayúsculas, espacios al final, cadenas vacías) para que los resultados sean idénticos en
+// todos los motores.
 func fixtures(t *testing.T) []*Widget {
 	day := func(n int) time.Time { return base.AddDate(0, 0, n) }
 	return []*Widget{
@@ -482,7 +484,8 @@ func testPaging(t *testing.T, h Harness) {
 		t.Fatalf("page beyond the end: %+v %v", beyond, err)
 	}
 
-	// The largest page number a caller can send is a page beyond the end too, not an overflow.
+	// El mayor número de página que puede mandar quien llama también es una página más allá del
+	// final, no un desbordamiento.
 	huge, err := repo.FindPage(ctx, s, domain.NewPageRequest(math.MaxInt, 4, FieldPrice.Desc()))
 	if err != nil || len(huge.Items) != 0 || huge.Total != int64(len(sorted)) {
 		t.Fatalf("largest page number: %+v %v", huge, err)

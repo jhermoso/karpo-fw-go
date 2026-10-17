@@ -1,19 +1,19 @@
-// Package hotswap lets a running service switch its persistence backend (e.g. SQL Server ->
-// PostgreSQL, or one server to another) without restarting and without breaking in-flight work.
+// Package hotswap permite a un servicio en marcha cambiar su backend de persistencia (p. ej. SQL
+// Server -> PostgreSQL, o de un servidor a otro) sin reiniciar y sin romper el trabajo en curso.
 //
-// How it works:
-//   - a Switch holds the current Backend (anything that provides a unit of work and can be closed:
-//     *sqlrepo.DB, *memory.Store, ...);
-//   - every operation leases the current backend for its duration; a unit of work pins its
-//     backend in the context, so all repository calls inside one transaction hit the same
-//     database even if a swap happens meanwhile;
-//   - Swap routes new operations to the new backend immediately, waits for the leases on the old
-//     one to drain and then closes it;
-//   - Bind / Repository / Outbox build adapters lazily per backend through a factory, so the
-//     same domain.Repository value keeps working across swaps.
+// Cómo funciona:
+//   - un Switch guarda el Backend actual (cualquier cosa que ofrezca una unidad de trabajo y se
+//     pueda cerrar: *sqlrepo.DB, *memory.Store, ...);
+//   - cada operación toma prestado el backend actual mientras dura; una unidad de trabajo fija su
+//     backend en el contexto, de modo que todas las llamadas a repositorios dentro de una
+//     transacción van a la misma base de datos aunque entretanto haya un cambio;
+//   - Swap dirige las operaciones nuevas al backend nuevo de inmediato, espera a que terminen los
+//     préstamos del antiguo y después lo cierra;
+//   - Bind / Repository / Outbox construyen los adaptadores de forma perezosa por backend mediante
+//     una factoría, de modo que el mismo valor domain.Repository sigue funcionando tras los cambios.
 //
-// Moving the data itself (replication, dual writes, backfill) is an operational concern outside
-// this package: Swap switches connections atomically and safely.
+// Mover los datos en sí (replicación, escrituras dobles, relleno) es un asunto operativo fuera de
+// este paquete: Swap cambia las conexiones de forma atómica y segura.
 package hotswap
 
 import (
@@ -26,14 +26,14 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// Backend is a swappable persistence backend.
+// Backend es un backend de persistencia intercambiable.
 type Backend interface {
 	domain.UnitOfWork
 	Name() string
 	Close() error
 }
 
-// ErrClosed is returned after the Switch is closed.
+// ErrClosed se devuelve después de cerrar el Switch.
 var ErrClosed = errors.New("hotswap: switch closed")
 
 type generation struct {
@@ -56,7 +56,7 @@ func (g *generation) release() {
 	}
 }
 
-// Switch routes operations to the current backend and swaps backends safely.
+// Switch dirige las operaciones al backend actual y cambia de backend con seguridad.
 type Switch struct {
 	mu      sync.RWMutex
 	current *generation
@@ -70,7 +70,7 @@ type Switch struct {
 
 type pinKey struct{ s *Switch }
 
-// New creates a Switch serving initial.
+// New crea un Switch que sirve initial.
 func New(initial Backend) *Switch {
 	s := &Switch{}
 	s.seq++
@@ -78,24 +78,24 @@ func New(initial Backend) *Switch {
 	return s
 }
 
-// Current returns the backend new operations are routed to.
+// Current devuelve el backend al que se dirigen las operaciones nuevas.
 func (s *Switch) Current() Backend {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.current.backend
 }
 
-// Name returns the name of the current backend.
+// Name devuelve el nombre del backend actual.
 func (s *Switch) Name() string { return s.Current().Name() }
 
-// OnSwap registers a callback invoked after each successful routing change.
+// OnSwap registra una función que se llama después de cada cambio de destino con éxito.
 func (s *Switch) OnSwap(fn func(old, next Backend)) {
 	s.hooksMu.Lock()
 	s.onSwap = append(s.onSwap, fn)
 	s.hooksMu.Unlock()
 }
 
-// acquire leases the backend pinned in ctx, or the current one.
+// acquire toma prestado el backend fijado en ctx, o el actual.
 func (s *Switch) acquire(ctx context.Context) (*generation, error) {
 	if g, ok := ctx.Value(pinKey{s}).(*generation); ok {
 		g.mu.Lock()
@@ -115,8 +115,8 @@ func (s *Switch) acquire(ctx context.Context) (*generation, error) {
 	return g, nil
 }
 
-// Do runs fn as a unit of work on the current backend, pinning that backend for every
-// operation performed with the context passed to fn.
+// Do ejecuta fn como unidad de trabajo en el backend actual, y fija ese backend para todas las
+// operaciones que se hagan con el contexto que recibe fn.
 func (s *Switch) Do(ctx context.Context, fn func(ctx context.Context) error) error {
 	g, err := s.acquire(ctx)
 	if err != nil {
@@ -127,9 +127,10 @@ func (s *Switch) Do(ctx context.Context, fn func(ctx context.Context) error) err
 	return g.backend.Do(ctx, fn)
 }
 
-// Swap routes new operations to next, waits (bounded by ctx) until operations leased on the
-// previous backend finish, and closes it. If ctx expires first, Swap returns ctx.Err() but the
-// routing change stays in effect and the previous backend is closed as soon as it drains.
+// Swap dirige las operaciones nuevas a next, espera (con el límite de ctx) a que terminen las
+// operaciones que tienen prestado el backend anterior, y lo cierra. Si ctx vence antes, Swap
+// devuelve ctx.Err(), pero el cambio de destino sigue en vigor y el backend anterior se cierra en
+// cuanto se vacía.
 func (s *Switch) Swap(ctx context.Context, next Backend) error {
 	if next == nil {
 		return fmt.Errorf("hotswap: nil backend")
@@ -189,7 +190,7 @@ func (s *Switch) retire(ctx context.Context, g *generation) error {
 	}
 }
 
-// Close drains and closes the current backend; further operations fail with ErrClosed.
+// Close vacía y cierra el backend actual; las operaciones posteriores fallan con ErrClosed.
 func (s *Switch) Close(ctx context.Context) error {
 	s.mu.Lock()
 	if s.closed {
@@ -202,8 +203,8 @@ func (s *Switch) Close(ctx context.Context) error {
 	return s.retire(ctx, g)
 }
 
-// Binding lazily builds one adapter X per backend generation (repositories, outboxes, read
-// models...) and runs operations with the right one.
+// Binding construye de forma perezosa un adaptador X por generación de backend (repositorios,
+// outboxes, modelos de lectura...) y ejecuta las operaciones con el que corresponde.
 type Binding[X any] struct {
 	s       *Switch
 	factory func(Backend) (X, error)
@@ -211,8 +212,8 @@ type Binding[X any] struct {
 	cache   map[uint64]X
 }
 
-// Bind creates a Binding; factory is called once per backend (typically a type switch on the
-// concrete backend: *sqlrepo.DB, *memory.Store, ...).
+// Bind crea un Binding; factory se llama una vez por backend (normalmente un type switch sobre el
+// backend concreto: *sqlrepo.DB, *memory.Store, ...).
 func Bind[X any](s *Switch, factory func(Backend) (X, error)) *Binding[X] {
 	b := &Binding[X]{s: s, factory: factory, cache: make(map[uint64]X)}
 	s.hooksMu.Lock()
@@ -225,7 +226,7 @@ func Bind[X any](s *Switch, factory func(Backend) (X, error)) *Binding[X] {
 	return b
 }
 
-// With leases the backend for ctx (pinned or current), resolves its adapter and runs fn.
+// With toma prestado el backend de ctx (el fijado o el actual), obtiene su adaptador y ejecuta fn.
 func (b *Binding[X]) With(ctx context.Context, fn func(ctx context.Context, x X) error) error {
 	g, err := b.s.acquire(ctx)
 	if err != nil {

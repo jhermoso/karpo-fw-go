@@ -15,43 +15,43 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Permissions of the context (the C# resources Parties/GeographicBoundary and the reference data).
+// Permisos del contexto (los recursos Parties/GeographicBoundary del C# y los datos de referencia).
 var (
 	PermBoundaryRead  = authz.MustPermission("Geography.Boundary.Read")
 	PermReferenceRead = authz.MustPermission("Geography.Reference.Read")
 )
 
-// SearchBoundaries searches boundaries by name, type, parent (direct children) or grouping.
+// SearchBoundaries busca límites por nombre, tipo, padre (hijos directos) o agrupación.
 type SearchBoundaries struct {
 	Text       string
 	Type       string
 	Parent     string
 	Grouping   string
-	Country    string // ISO 3166-1 alpha-2
-	Level      string // country, 1, 2, 3 or local
+	Country    string // ISO 3166-1 alfa-2
+	Level      string // country, 1, 2, 3 o local
 	Page, Size int
 }
 
-// GetBoundary loads a boundary with its ancestors and groupings.
+// GetBoundary carga un límite con sus antepasados y sus agrupaciones.
 type GetBoundary struct{ ID string }
 
-// LookupPostalCode lists the boundaries of a postal code in a country.
+// LookupPostalCode lista los límites de un código postal en un país.
 type LookupPostalCode struct{ Country, Code string }
 
-// CheckPostalAddress validates the geographic part of an address.
+// CheckPostalAddress valida la parte geográfica de una dirección.
 type CheckPostalAddress = contracts.PostalAddressQuery
 
-// ListCountries lists the country profiles.
+// ListCountries lista los perfiles de país.
 type ListCountries struct{}
 
-// GetCountry loads a country by ISO code.
+// GetCountry carga un país por su código ISO.
 type GetCountry struct{ Alpha2 string }
 
-// ListCatalog lists a reference catalog: "boundary-types", "currencies", "languages",
-// "time-zones" or "street-types" (optionally of a country).
+// ListCatalog lista un catálogo de referencia: «boundary-types», «currencies», «languages»,
+// «time-zones» o «street-types» (opcionalmente de un país).
 type ListCatalog struct{ Name, Country string }
 
-// BoundaryDTO is the transport representation of a boundary.
+// BoundaryDTO es la representación de transporte de un límite.
 type BoundaryDTO struct {
 	ID           string `json:"id"`
 	Name         string `json:"name"`
@@ -68,8 +68,8 @@ type BoundaryDTO struct {
 	Active       bool   `json:"active"`
 }
 
-// BoundaryLevelDTO names a level of the ladder in a country. Classification says which official
-// classification the level is in that country ("NUTS 2", "LAU"), when it has one.
+// BoundaryLevelDTO da nombre a un nivel de la escalera en un país. Classification dice qué
+// clasificación oficial es el nivel en ese país («NUTS 2», «LAU»), cuando la tiene.
 type BoundaryLevelDTO struct {
 	Country        string `json:"country"`
 	Level          string `json:"level"`
@@ -89,21 +89,21 @@ func classification(l domain.CountryLevel) string {
 	return ""
 }
 
-// BoundaryDetailDTO adds the ancestors (nearest first) and groupings.
+// BoundaryDetailDTO añade los antepasados (el más cercano primero) y las agrupaciones.
 type BoundaryDetailDTO struct {
 	BoundaryDTO
 	Ancestors []contracts.BoundaryRef `json:"ancestors"`
 	Groupings []contracts.BoundaryRef `json:"groupings"`
 }
 
-// PostalCodeDTO is a postal code entry.
+// PostalCodeDTO es una entrada de código postal.
 type PostalCodeDTO struct {
 	ID       string                `json:"id"`
 	Code     string                `json:"code"`
 	Boundary contracts.BoundaryRef `json:"boundary"`
 }
 
-// CountryDTO is the full reference data of a country.
+// CountryDTO son los datos de referencia completos de un país.
 type CountryDTO struct {
 	contracts.CountryInfo
 	Numeric             int    `json:"numeric"`
@@ -116,7 +116,7 @@ type CountryDTO struct {
 	RequiresSubdivision bool   `json:"requiresSubdivision"`
 }
 
-// Service exposes the queries of the context. Reference data is maintained by migrations.
+// Service expone las consultas del contexto. Los datos de referencia se mantienen con migraciones.
 type Service struct {
 	SearchBoundaries   app.QueryHandler[SearchBoundaries, fw.Page[BoundaryDTO]]
 	GetBoundary        app.QueryHandler[GetBoundary, BoundaryDetailDTO]
@@ -156,7 +156,7 @@ func invalid(field, msg string) error {
 	return v.Err()
 }
 
-// NewService wires the queries over the ports.
+// NewService monta las consultas sobre los puertos.
 func NewService(p Ports) *Service {
 	return &Service{
 		SearchBoundaries: guard(PermBoundaryRead, func(ctx context.Context, q SearchBoundaries) (fw.Page[BoundaryDTO], error) {

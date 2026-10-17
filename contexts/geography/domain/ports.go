@@ -6,15 +6,15 @@ import (
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// Repositories (contracts; implementations live in infrastructure). The data is maintained by
-// migrations; the use cases of this phase only read.
+// Repositorios (contratos; las implementaciones están en infrastructure). Los datos se mantienen
+// con migraciones; los casos de uso de esta fase sólo leen.
 type (
 	BoundaryRepository   = fw.Repository[BoundaryID, *Boundary]
 	PostalCodeRepository = fw.Repository[PostalCodeID, *PostalCode]
 	CountryRepository    = fw.Repository[CountryID, *Country]
 )
 
-// Catalogs are the small reference lists, read whole.
+// Catalogs son las listas de referencia pequeñas, que se leen enteras.
 type Catalogs interface {
 	BoundaryTypes(ctx context.Context) ([]BoundaryType, error)
 	CountryLevels(ctx context.Context) ([]CountryLevel, error)

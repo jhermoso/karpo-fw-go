@@ -1,10 +1,10 @@
 package application
 
-// Mapper converts a source value into a DTO (equivalent to the C# IDtoMapper<TSource,TDestination>).
-// DTOs are plain structs with JSON tags; they need no marker interface in Go.
+// Mapper convierte un valor de origen en un DTO (equivale a IDtoMapper<TSource,TDestination> de C#).
+// Los DTO son structs simples con etiquetas JSON; en Go no necesitan interfaz marcadora.
 type Mapper[S, D any] func(S) D
 
-// MapSlice converts every element of src with m.
+// MapSlice convierte con m cada elemento de src.
 func MapSlice[S, D any](src []S, m Mapper[S, D]) []D {
 	out := make([]D, len(src))
 	for i, s := range src {

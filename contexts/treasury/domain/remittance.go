@@ -13,17 +13,17 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// RemittanceKind is the stable aggregate type name.
+// RemittanceKind es el nombre estable del tipo de agregado.
 const RemittanceKind = "treasury.remittance"
 
-// MaxItems bounds the items of a remittance.
+// MaxItems limita los adeudos de una remesa.
 const MaxItems = 5000
 
-// RemittanceStatus is the status of a remittance: a draft is edited; a generated one is frozen and
-// its file sent to the bank; a settled one was charged (its items can still be returned).
+// RemittanceStatus es el estado de una remesa: un borrador se edita; una generada está congelada y
+// su fichero se envía al banco; una liquidada se cobró (sus adeudos aún se pueden devolver).
 type RemittanceStatus int
 
-// Statuses.
+// Estados.
 const (
 	RemDraft RemittanceStatus = iota + 1
 	RemGenerated
@@ -33,12 +33,12 @@ const (
 
 var remStatuses = map[RemittanceStatus]string{RemDraft: "draft", RemGenerated: "generated", RemSettled: "settled", RemCancelled: "cancelled"}
 
-// String returns the stable name.
+// String devuelve el nombre estable.
 func (s RemittanceStatus) String() string { return remStatuses[s] }
 
-// Item is a direct debit of a remittance: an installment of an invoice, collected with a mandate.
+// Item es un adeudo de una remesa: un vencimiento de una factura, cobrado con un mandato.
 type Item struct {
-	EndToEnd    string // unique id of the transaction (the invoice number and installment)
+	EndToEnd    string // id único de la operación (el número de factura y el vencimiento)
 	Invoice     InvoiceID
 	Number      string
 	Installment int
@@ -49,12 +49,12 @@ type Item struct {
 	Signed      vocab.Date
 	IBAN        vocab.IBAN
 	Amount      vocab.Decimal
-	Sequence    string // FRST or RCUR, fixed when the file is generated
+	Sequence    string // FRST o RCUR, fijado al generar el fichero
 	Returned    vocab.Date
-	Reason      string // ISO 20022 return reason (AC04, AM04, MD01, MS02…)
+	Reason      string // motivo de devolución ISO 20022 (AC04, AM04, MD01, MS02…)
 }
 
-// RemittanceState is the persisted state of a remittance.
+// RemittanceState es el estado persistido de una remesa.
 type RemittanceState struct {
 	Creditor       OrganizationID
 	Account        AccountID
@@ -71,15 +71,15 @@ type RemittanceState struct {
 	Audit          traits.AuditStamp
 }
 
-// Remittance is a batch of SEPA direct debits of a creditor from one of its accounts (nothing of
-// this existed in the C#).
+// Remittance es un lote de adeudos directos SEPA de un acreedor desde una de sus cuentas (nada de
+// esto existía en el C#).
 type Remittance struct {
 	fw.BaseAggregateRoot[RemittanceID]
 	traits.Audited
 	s RemittanceState
 }
 
-// ReconstituteRemittance rebuilds a remittance.
+// ReconstituteRemittance reconstruye una remesa.
 func ReconstituteRemittance(id RemittanceID, s RemittanceState) (*Remittance, error) {
 	base, err := fw.NewBaseAggregateRoot(RemittanceKind, id)
 	if err != nil {
@@ -100,19 +100,19 @@ func ReconstituteRemittance(id RemittanceID, s RemittanceState) (*Remittance, er
 	return &Remittance{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// DraftRemittance creates a draft.
+// DraftRemittance crea un borrador.
 func DraftRemittance(id RemittanceID, creditor OrganizationID, account AccountID, scheme Scheme, collection vocab.Date) (*Remittance, error) {
 	return ReconstituteRemittance(id, RemittanceState{Creditor: creditor, Account: account, Scheme: scheme, CollectionDate: collection, Status: RemDraft})
 }
 
-// State returns the state (items are a copy).
+// State devuelve el estado (los adeudos son una copia).
 func (r *Remittance) State() RemittanceState {
 	s := r.s
 	s.Items = slices.Clone(s.Items)
 	return s
 }
 
-// Total returns the sum of the items (returned ones included).
+// Total devuelve la suma de los adeudos (devueltos incluidos).
 func (r *Remittance) Total() vocab.Decimal {
 	t := vocab.DecimalFromInt(0)
 	for _, i := range r.s.Items {
@@ -128,8 +128,8 @@ func (r *Remittance) mustBeDraft() error {
 	return nil
 }
 
-// Add adds a direct debit. Invariants: a positive amount in cents, one item per installment, and
-// the mandate is of the remittance scheme (checked by the caller with the mandate).
+// Add añade un adeudo. Invariantes: un importe positivo en céntimos, un adeudo por vencimiento, y
+// el mandato es del esquema de la remesa (lo comprueba quien llama, con el mandato).
 func (r *Remittance) Add(i Item) error {
 	if err := r.mustBeDraft(); err != nil {
 		return err
@@ -149,8 +149,8 @@ func (r *Remittance) Add(i Item) error {
 	return nil
 }
 
-// endToEnd builds the end-to-end id: the invoice number and the installment, in SEPA characters,
-// at most 35.
+// endToEnd construye el id end-to-end: el número de factura y el vencimiento, en caracteres SEPA,
+// como mucho 35.
 func endToEnd(number string, installment int) string {
 	id := strings.Map(func(r rune) rune {
 		if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' {
@@ -164,7 +164,7 @@ func endToEnd(number string, installment int) string {
 	return id
 }
 
-// Remove removes the item of an installment.
+// Remove quita el adeudo de un vencimiento.
 func (r *Remittance) Remove(invoice InvoiceID, installment int) error {
 	if err := r.mustBeDraft(); err != nil {
 		return err
@@ -177,16 +177,16 @@ func (r *Remittance) Remove(invoice InvoiceID, installment int) error {
 	return nil
 }
 
-// Creditor is what the file needs of the creditor.
+// Creditor es lo que el fichero necesita del acreedor.
 type Creditor struct {
 	Name string
-	ID   string // SEPA creditor identifier
+	ID   string // identificador de acreedor SEPA
 	IBAN vocab.IBAN
 	BIC  string
 }
 
-// Generate freezes the remittance: the creditor data and the sequence type of each item (from its
-// mandate). The caller records the use of the mandates.
+// Generate congela la remesa: los datos del acreedor y el tipo de secuencia de cada adeudo (de su
+// mandato). Quien llama registra el uso de los mandatos.
 func (r *Remittance) Generate(c Creditor, sequences map[MandateID]string, at time.Time) error {
 	if err := r.mustBeDraft(); err != nil {
 		return err
@@ -211,7 +211,7 @@ func (r *Remittance) Generate(c Creditor, sequences map[MandateID]string, at tim
 	return nil
 }
 
-// Settle records that the bank charged the remittance on a date.
+// Settle registra que el banco cobró la remesa en una fecha.
 func (r *Remittance) Settle(on vocab.Date) error {
 	if r.s.Status != RemGenerated {
 		return fw.Violation("treasury.remittance_not_generated", "only a generated remittance is settled")
@@ -221,7 +221,7 @@ func (r *Remittance) Settle(on vocab.Date) error {
 	return nil
 }
 
-// Return records a direct debit returned by the debtor's bank (after settlement).
+// Return registra un adeudo devuelto por el banco del deudor (después de la liquidación).
 func (r *Remittance) Return(endToEnd string, on vocab.Date, reason string) error {
 	if r.s.Status != RemSettled {
 		return fw.Violation("treasury.remittance_not_settled", "only a settled remittance has returns")
@@ -244,7 +244,7 @@ func (r *Remittance) Return(endToEnd string, on vocab.Date, reason string) error
 	return nil
 }
 
-// Cancel cancels a remittance that was not settled (a generated file not sent, or a draft).
+// Cancel anula una remesa que no se liquidó (un fichero generado y no enviado, o un borrador).
 func (r *Remittance) Cancel() error {
 	if r.s.Status == RemSettled || r.s.Status == RemCancelled {
 		return fw.Violation("treasury.remittance_closed", "a settled or cancelled remittance does not change")
@@ -253,7 +253,7 @@ func (r *Remittance) Cancel() error {
 	return nil
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (r *Remittance) AuditSnapshot() map[string]any {
 	return map[string]any{"status": r.s.Status.String(), "items": len(r.s.Items), "total": r.Total().String()}
 }
@@ -262,7 +262,7 @@ type fwText string
 
 func (t fwText) String() string { return string(t) }
 
-// Remittance fields.
+// Campos de la remesa.
 var (
 	RemFieldCreditor = spec.Comparable("creditor", func(r *Remittance) OrganizationID { return r.s.Creditor })
 	RemFieldStatus   = spec.Comparable("status", func(r *Remittance) int { return int(r.s.Status) })
@@ -271,22 +271,22 @@ var (
 	ItemFieldInvoice = spec.Comparable("invoice", func(i Item) InvoiceID { return i.Invoice })
 )
 
-// Events of the context.
+// Eventos del contexto.
 type (
-	// RemittanceGenerated is raised when the file of a remittance is generated.
+	// RemittanceGenerated se lanza al generar el fichero de una remesa.
 	RemittanceGenerated struct {
 		fw.EventMeta
 		Items int    `json:"items"`
 		Total string `json:"total"`
 	}
-	// RemittanceSettled is raised when the bank charges a remittance, with its items.
+	// RemittanceSettled se lanza cuando el banco cobra una remesa, con sus adeudos.
 	RemittanceSettled struct {
 		fw.EventMeta
 		Creditor string `json:"creditor"`
 		Settled  string `json:"settled"`
 		Items    []Item `json:"items"`
 	}
-	// DirectDebitReturned is raised when a direct debit is returned.
+	// DirectDebitReturned se lanza al devolverse un adeudo.
 	DirectDebitReturned struct {
 		fw.EventMeta
 		Creditor string `json:"creditor"`
@@ -294,19 +294,19 @@ type (
 	}
 )
 
-// EventType implementations.
+// Implementaciones de EventType.
 func (RemittanceGenerated) EventType() string { return "treasury.remittance_generated" }
 func (RemittanceSettled) EventType() string   { return "treasury.remittance_settled" }
 func (DirectDebitReturned) EventType() string { return "treasury.direct_debit_returned" }
 
-// Repositories and ports of the context.
+// Repositorios y puertos del contexto.
 type (
 	AccountRepository    = fw.Repository[AccountID, *Account]
 	MandateRepository    = fw.Repository[MandateID, *Mandate]
 	RemittanceRepository = fw.Repository[RemittanceID, *Remittance]
 )
 
-// DueItem is an open installment Receivables can collect.
+// DueItem es un vencimiento abierto que Receivables puede cobrar.
 type DueItem struct {
 	Invoice     InvoiceID
 	Number      string
@@ -316,35 +316,36 @@ type DueItem struct {
 	Open        vocab.Decimal
 }
 
-// Receivables is what Treasury needs of Receivables (a port it owns; an adapter implements it over
-// the Receivables contracts).
+// Receivables es lo que Treasury necesita de Receivables (un puerto propio; un adaptador lo
+// implementa sobre los contratos de Receivables).
 type Receivables interface {
 	DueItems(ctx context.Context, seller OrganizationID, dueTo vocab.Date) ([]DueItem, error)
 }
 
-// Identity is the name and tax number of a party.
+// Identity es el nombre y el número fiscal de una party.
 type Identity struct {
 	Name string
 	NIF  string
 }
 
-// Identities resolves names and tax numbers of parties (a port Treasury owns over Parties).
+// Identities resuelve nombres y números fiscales de parties (un puerto propio de Treasury sobre
+// Parties).
 type Identities interface {
 	Identities(ctx context.Context, parties []PartyID) (map[PartyID]Identity, error)
 }
 
-// New identities and parsing.
+// Identidades nuevas e interpretación.
 func NewAccountID() AccountID       { return AccountID{fw.NewUUID()} }
 func NewMandateID() MandateID       { return MandateID{fw.NewUUID()} }
 func NewRemittanceID() RemittanceID { return RemittanceID{fw.NewUUID()} }
 
-// ParseAccountID parses a textual identity.
+// ParseAccountID interpreta una identidad en texto.
 func ParseAccountID(s string) (AccountID, error) { u, err := fw.ParseUUID(s); return AccountID{u}, err }
 
-// ParseMandateID parses a textual identity.
+// ParseMandateID interpreta una identidad en texto.
 func ParseMandateID(s string) (MandateID, error) { u, err := fw.ParseUUID(s); return MandateID{u}, err }
 
-// ParseRemittanceID parses a textual identity.
+// ParseRemittanceID interpreta una identidad en texto.
 func ParseRemittanceID(s string) (RemittanceID, error) {
 	u, err := fw.ParseUUID(s)
 	return RemittanceID{u}, err

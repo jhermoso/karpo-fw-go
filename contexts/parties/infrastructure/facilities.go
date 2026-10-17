@@ -8,11 +8,12 @@ import (
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// FacilitiesDirectory adapts the Facilities directory to the Parties port (ACL): Parties keeps
-// the facility id of its facility roles and asks Facilities who owns it and whether it is active.
+// FacilitiesDirectory adapta el directorio de Facilities al puerto de Parties (ACL): Parties
+// guarda el id de la instalación de sus roles en instalaciones y pregunta a Facilities de quién es
+// y si está activa.
 type FacilitiesDirectory struct{ Directory contracts.Directory }
 
-// Facilities implements papp.FacilityDirectory.
+// Facilities implementa papp.FacilityDirectory.
 func (f FacilitiesDirectory) Facilities(ctx context.Context, ids []fw.UUID) (map[fw.UUID]papp.FacilityInfo, error) {
 	want := make([]string, len(ids))
 	for i, id := range ids {

@@ -10,7 +10,7 @@ import (
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// CreateAccount adds an account to the chart of a company.
+// CreateAccount añade una cuenta al plan de cuentas de una empresa.
 type CreateAccount struct {
 	Company  string `json:"company"`
 	Code     string `json:"code"`
@@ -18,21 +18,21 @@ type CreateAccount struct {
 	Postable bool   `json:"postable"`
 }
 
-// RenameAccount renames an account.
+// RenameAccount cambia el nombre de una cuenta.
 type RenameAccount struct {
 	ID   domain.AccountID `json:"-"`
 	Name string           `json:"name"`
 }
 
-// DeactivateAccount retires an account.
+// DeactivateAccount da de baja una cuenta.
 type DeactivateAccount struct {
 	ID domain.AccountID `json:"-"`
 }
 
-// SearchAccounts lists the chart of a company, optionally under a code prefix.
+// SearchAccounts lista el plan de cuentas de una empresa, opcionalmente bajo un prefijo de código.
 type SearchAccounts struct{ Company, Prefix string }
 
-// AccountDTO is the transport form of an account.
+// AccountDTO es la forma de transporte de una cuenta.
 type AccountDTO struct {
 	ID       string `json:"id"`
 	Company  string `json:"company"`
@@ -48,39 +48,39 @@ func accountDTO(a *domain.Account) AccountDTO {
 	return AccountDTO{ID: a.ID().String(), Company: s.Company.String(), Code: s.Code, Name: s.Name, Nature: a.Nature().String(), Postable: s.Postable, Active: s.Active}
 }
 
-// OpenLedger opens the ledger of a company with its posting profile.
+// OpenLedger abre la contabilidad de una empresa con su perfil de contabilización.
 type OpenLedger struct {
 	Company    string            `json:"company"`
 	StartMonth int               `json:"startMonth"`
-	Accounts   map[string]string `json:"accounts,omitempty"` // role → account code
-	TaxCodes   map[string]string `json:"taxCodes,omitempty"` // tax code → output tax account
+	Accounts   map[string]string `json:"accounts,omitempty"` // papel → código de cuenta
+	TaxCodes   map[string]string `json:"taxCodes,omitempty"` // código de impuesto → cuenta de impuesto repercutido
 }
 
-// SetProfile replaces the posting profile of a ledger.
+// SetProfile sustituye el perfil de contabilización de una contabilidad.
 type SetProfile struct {
 	ID       domain.LedgerID   `json:"-"`
 	Accounts map[string]string `json:"accounts"`
 	TaxCodes map[string]string `json:"taxCodes,omitempty"`
 }
 
-// ChangePeriod closes or reopens a period.
+// ChangePeriod cierra o reabre un periodo.
 type ChangePeriod struct {
 	ID    domain.LedgerID `json:"-"`
 	Year  int             `json:"year"`
 	Month int             `json:"month"`
 }
 
-// GetLedger loads the ledger of a company.
+// GetLedger carga la contabilidad de una empresa.
 type GetLedger struct{ Company string }
 
-// LedgerDTO is the transport form of a ledger.
+// LedgerDTO es la forma de transporte de una contabilidad.
 type LedgerDTO struct {
 	ID         string            `json:"id"`
 	Company    string            `json:"company"`
 	StartMonth int               `json:"startMonth"`
 	Accounts   map[string]string `json:"accounts"`
 	TaxCodes   map[string]string `json:"taxCodes"`
-	Closed     []string          `json:"closed"` // YYYY/MM (fiscal year / period)
+	Closed     []string          `json:"closed"` // YYYY/MM (ejercicio / periodo)
 	Version    int64             `json:"version"`
 }
 

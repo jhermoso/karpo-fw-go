@@ -1,13 +1,13 @@
-// Package contracts is what other bounded contexts may depend on: the port to look a document up
-// in the register by the fact it stands for.
+// Package contracts es aquello de lo que pueden depender otros contextos delimitados: el puerto para
+// buscar un documento en el registro por el hecho que representa.
 package contracts
 
 import "context"
 
-// Source is the name of the bounded context.
+// Source es el nombre del contexto delimitado.
 const Source = "documents"
 
-// Document is an entry of the register as other contexts see it.
+// Document es una anotación del registro tal como la ven otros contextos.
 type Document struct {
 	ID        string `json:"id"`
 	Company   string `json:"company"`
@@ -18,8 +18,8 @@ type Document struct {
 	Cancelled bool   `json:"cancelled"`
 }
 
-// Register resolves the document of a fact (the C# IDocumentResolver). The boolean is false when
-// the register has not heard of it.
+// Register resuelve el documento de un hecho (el IDocumentResolver del C#). El booleano es false
+// cuando el registro no ha oído hablar de él.
 type Register interface {
 	ByFact(ctx context.Context, docType, factID string) (Document, bool, error)
 }

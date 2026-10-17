@@ -7,7 +7,7 @@ import (
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// PersonDTO is the transport representation of a person's data.
+// PersonDTO es la representación de transporte de los datos de una persona.
 type PersonDTO struct {
 	GivenName     string `json:"givenName"`
 	FirstSurname  string `json:"firstSurname"`
@@ -17,14 +17,14 @@ type PersonDTO struct {
 	MaritalStatus string `json:"maritalStatus,omitempty"`
 }
 
-// OrganizationDTO is the transport representation of an organization's data.
+// OrganizationDTO es la representación de transporte de los datos de una organización.
 type OrganizationDTO struct {
 	LegalName string `json:"legalName"`
 	TradeName string `json:"tradeName,omitempty"`
 	LegalForm string `json:"legalForm,omitempty"`
 }
 
-// RoleDTO is a role played by a party.
+// RoleDTO es un rol que desempeña una party.
 type RoleDTO struct {
 	ID       string     `json:"id"`
 	RoleType string     `json:"roleType"`
@@ -35,7 +35,7 @@ type RoleDTO struct {
 	Annulled bool       `json:"annulled,omitempty"`
 }
 
-// PartyDTO is the transport representation of a party.
+// PartyDTO es la representación de transporte de una party.
 type PartyDTO struct {
 	ID           string           `json:"id"`
 	Kind         string           `json:"kind"`
@@ -45,10 +45,10 @@ type PartyDTO struct {
 	Active       bool             `json:"active"`
 	Test         bool             `json:"test,omitempty"`
 	Shared       bool             `json:"shared,omitempty"`
-	Duplicate    bool             `json:"duplicate,omitempty"` // the duplicate of another party: it takes part in nothing but queries
-	// DocumentIssue is present when the identity document of the party was refused.
+	Duplicate    bool             `json:"duplicate,omitempty"` // el duplicado de otra party: sólo participa en consultas
+	// DocumentIssue está presente cuando el documento de identidad de la party se rechazó.
 	DocumentIssue   *DocumentIssueDTO   `json:"documentIssue,omitempty"`
-	Organizations   []string            `json:"organizations"` // internal organizations it is affiliated with now
+	Organizations   []string            `json:"organizations"` // organizaciones internas a las que está afiliada ahora
 	Roles           []RoleDTO           `json:"roles"`
 	Identifications []IdentificationDTO `json:"identifications"`
 	Contacts        []ContactDTO        `json:"contacts"`
@@ -59,13 +59,13 @@ type PartyDTO struct {
 	ModifiedBy      string              `json:"modifiedBy,omitempty"`
 }
 
-// DocumentIssueDTO is the mark of a refused identity document.
+// DocumentIssueDTO es la marca de un documento de identidad rechazado.
 type DocumentIssueDTO struct {
 	Number string `json:"number,omitempty"`
 	Reason string `json:"reason"`
 }
 
-// IdentificationDTO is an identity document of a party.
+// IdentificationDTO es un documento de identidad de una party.
 type IdentificationDTO struct {
 	ID               string `json:"id"`
 	DocumentType     string `json:"documentType"`
@@ -78,7 +78,7 @@ type IdentificationDTO struct {
 	Primary          bool   `json:"primary"`
 }
 
-// ContactDTO is a contact of a party.
+// ContactDTO es un contacto de una party.
 type ContactDTO struct {
 	ID              string      `json:"id"`
 	Kind            string      `json:"kind"`
@@ -91,7 +91,7 @@ type ContactDTO struct {
 	Active          bool        `json:"active"`
 }
 
-// ClassificationDTO is a classification of a party.
+// ClassificationDTO es una clasificación de una party.
 type ClassificationDTO struct {
 	ID     string     `json:"id"`
 	Type   string     `json:"type"`
@@ -101,14 +101,14 @@ type ClassificationDTO struct {
 	Active bool       `json:"active"`
 }
 
-// Names are the catalogs used to name the parts of a party (any may be nil).
+// Names son los catálogos con los que se nombran las partes de una party (cualquiera puede ser nil).
 type Names struct {
 	Roles           *domain.Catalog
 	Documents       *domain.DocumentPolicy
 	Classifications *domain.ClassificationCatalog
 }
 
-// ToDTO maps a party, naming its roles, documents and classifications with the catalogs.
+// ToDTO traduce una party, y nombra sus roles, documentos y clasificaciones con los catálogos.
 func ToDTO(p *domain.Party, names Names) PartyDTO {
 	cat := names.Roles
 	d := PartyDTO{ID: p.ID().String(), Kind: string(p.Kind()), Name: p.Name(), Active: p.IsActive(), Test: p.IsTest(),
@@ -201,7 +201,7 @@ func ToDTO(p *domain.Party, names Names) PartyDTO {
 	return d
 }
 
-// RelationshipDTO is the transport representation of a relationship.
+// RelationshipDTO es la representación de transporte de una relación.
 type RelationshipDTO struct {
 	ID        string     `json:"id"`
 	Type      string     `json:"type"`
@@ -214,40 +214,40 @@ type RelationshipDTO struct {
 	Until     *time.Time `json:"until,omitempty"`
 	Active    bool       `json:"active"`
 	Remark    string     `json:"remark,omitempty"`
-	// Prospect is present in prospect relationships only.
+	// Prospect sólo está presente en las relaciones de prospecto.
 	Prospect *ProspectDTO `json:"prospect,omitempty"`
-	// Ownership is present in ownership relationships only.
+	// Ownership sólo está presente en las relaciones de propiedad.
 	Ownership *OwnershipDTO `json:"ownership,omitempty"`
-	// Collaborator is present in collaborator relationships only.
+	// Collaborator sólo está presente en las relaciones de colaborador.
 	Collaborator *CollaboratorDTO `json:"collaborator,omitempty"`
-	// Customer is present in customer relationships only.
+	// Customer sólo está presente en las relaciones de cliente.
 	Customer *CustomerDTO `json:"customer,omitempty"`
 	Version  int64        `json:"version"`
 }
 
-// CustomerDTO are the details of a customer relationship.
+// CustomerDTO son los datos de una relación de cliente.
 type CustomerDTO struct {
 	Number string `json:"number,omitempty"`
 }
 
-// CollaboratorDTO are the details of a collaborator relationship.
+// CollaboratorDTO son los datos de una relación de colaborador.
 type CollaboratorDTO struct {
 	PromotionCode string `json:"promotionCode,omitempty"`
 }
 
-// OwnershipDTO are the details of an ownership relationship.
+// OwnershipDTO son los datos de una relación de propiedad.
 type OwnershipDTO struct {
-	Share string `json:"share,omitempty"` // points with two decimals ("30.00"); absent when unknown
+	Share string `json:"share,omitempty"` // puntos con dos decimales ("30.00"); ausente si se desconoce
 }
 
-// ProspectDTO are the details of a prospect relationship.
+// ProspectDTO son los datos de una relación de prospecto.
 type ProspectDTO struct {
 	TrialUntil *time.Time `json:"trialUntil,omitempty"`
 	InTrial    bool       `json:"inTrial"`
 }
 
-// RelationshipToDTO maps a relationship; types names it and tells which details it carries (nil
-// leaves the name empty and the details out).
+// RelationshipToDTO traduce una relación; types le da nombre y dice qué datos lleva (nil deja el
+// nombre vacío y los datos fuera).
 func RelationshipToDTO(r *domain.Relationship, types map[domain.RelationshipTypeID]domain.RelationshipType) RelationshipDTO {
 	d := RelationshipDTO{ID: r.ID().String(), Type: r.Type().String(), FromParty: r.From().String(), ToParty: r.To().String(),
 		FromRole: r.FromRole().String(), ToRole: r.ToRole().String(), Since: r.Since(), Until: r.Until(),
@@ -271,7 +271,7 @@ func RelationshipToDTO(r *domain.Relationship, types map[domain.RelationshipType
 	return d
 }
 
-// RoleTypeDTO is an entry of the role type catalog.
+// RoleTypeDTO es una entrada del catálogo de tipos de rol.
 type RoleTypeDTO struct {
 	ID            string `json:"id"`
 	Code          string `json:"code,omitempty"`
@@ -280,7 +280,7 @@ type RoleTypeDTO struct {
 	Parent        string `json:"parent,omitempty"`
 	Category      bool   `json:"category"`
 	Applicability string `json:"applicability"`
-	// WellKnown tells the types that come with the program from the ones added to the catalog.
+	// WellKnown distingue los tipos que vienen con el programa de los añadidos al catálogo.
 	WellKnown bool `json:"wellKnown"`
 }
 
@@ -293,7 +293,7 @@ func roleTypeDTO(cat *domain.Catalog, t domain.RoleType) RoleTypeDTO {
 	return dto
 }
 
-// RelationshipTypeDTO is an entry of the relationship type catalog.
+// RelationshipTypeDTO es una entrada del catálogo de tipos de relación.
 type RelationshipTypeDTO struct {
 	ID           string `json:"id"`
 	Code         string `json:"code,omitempty"`
@@ -302,7 +302,7 @@ type RelationshipTypeDTO struct {
 	FromRole     string `json:"fromRole"`
 	ToRole       string `json:"toRole"`
 	Hierarchical bool   `json:"hierarchical,omitempty"`
-	// WellKnown tells the types that come with the program from the ones added to the catalog.
+	// WellKnown distingue los tipos que vienen con el programa de los añadidos al catálogo.
 	WellKnown bool `json:"wellKnown"`
 }
 

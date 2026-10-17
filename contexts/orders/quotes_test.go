@@ -34,7 +34,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/time/fake"
 )
 
-// priceBook plays Products: what each product is and costs today.
+// priceBook hace de Products: qué es cada producto y cuánto cuesta hoy.
 type priceBook struct {
 	mu    sync.Mutex
 	items map[odomain.ProductID]odomain.Item
@@ -102,7 +102,7 @@ func (h *quoteHost) grant(user, org string) {
 	h.dir.Put(h.ids[user], s)
 }
 
-// do sends a request and decodes the answer into out, emptied first.
+// do envía una petición y decodifica la respuesta en out, vaciado antes.
 func (h *quoteHost) do(method, path, user string, body, out any) int {
 	h.t.Helper()
 	var buf bytes.Buffer
@@ -117,7 +117,7 @@ func (h *quoteHost) do(method, path, user string, body, out any) int {
 	}
 	defer res.Body.Close()
 	if out != nil && res.StatusCode < 300 {
-		switch o := out.(type) { // omitted fields must not keep what a previous answer left
+		switch o := out.(type) { // los campos omitidos no deben conservar lo que dejó una respuesta anterior
 		case *oapp.QuoteDTO:
 			*o = oapp.QuoteDTO{}
 		case *oapp.AcceptedQuoteDTO:
@@ -160,10 +160,10 @@ func (h *quoteHost) scenario() {
 		return map[string]any{"product": p.String(), "quantity": n}
 	}
 
-	// The customer has a discount of 5 %: a quote takes it, as an order does.
+	// El cliente tiene un descuento del 5 %: un presupuesto lo toma, como lo hace un pedido.
 	h.must(h.do("PUT", "/api/orders/terms", "manager", map[string]any{"company": acme, "customer": customer, "discount": "5"}, nil), 200, "terms")
 
-	// A draft.
+	// Un borrador.
 	draft := map[string]any{"company": acme, "customer": customer, "reference": "Obra 12", "notes": "Entrega en obra"}
 	var q oapp.QuoteDTO
 	h.must(h.do("POST", "/api/orders/quotes", "viewer", draft, nil), 403, "viewer")
@@ -176,7 +176,7 @@ func (h *quoteHost) scenario() {
 		t.Fatalf("draft: %+v", q)
 	}
 
-	// Lines, priced as an order prices them: 10 − 10 % − 5 % = 8.55.
+	// Líneas, con el precio que les pone un pedido:10 − 10 % − 5 % = 8.55.
 	h.must(h.do("POST", path(q, "lines"), "viewer", line(widget, "3"), nil), 403, "viewer")
 	h.must(h.do("POST", path(q, "lines"), "outsider", line(widget, "3"), nil), 404, "outsider")
 	h.must(h.do("POST", path(q, "lines"), "seller", line(widget, "0"), nil), 400, "nothing")
@@ -193,7 +193,7 @@ func (h *quoteHost) scenario() {
 		t.Fatalf("lines: %+v", q)
 	}
 
-	// What a draft says of itself changes; what is left out is emptied.
+	// Lo que un borrador dice de sí mismo cambia; lo que se omite se vacía.
 	until := today.AddDays(10).String()
 	h.must(h.do("PUT", "/api/orders/quotes/"+q.ID, "seller", map[string]any{"validUntil": today.AddDays(-3).String()}, nil), 400, "validity in the past")
 	h.must(h.do("PUT", "/api/orders/quotes/"+q.ID, "seller", map[string]any{"validUntil": until, "reference": "Obra 12-B"}, &q), 200, "change")
@@ -201,7 +201,7 @@ func (h *quoteHost) scenario() {
 		t.Fatalf("changed: %+v", q)
 	}
 
-	// Sending commits the company: a number, and nothing changes any more.
+	// Enviarlo compromete a la empresa: un número, y ya no cambia nada.
 	h.must(h.do("POST", path(q, "accept"), "manager", nil, nil), 422, "a draft is not accepted")
 	h.must(h.do("POST", path(q, "send"), "seller", nil, nil), 403, "preparing is not sending")
 	h.must(h.do("POST", path(q, "send"), "manager", nil, &q), 200, "send")
@@ -214,7 +214,7 @@ func (h *quoteHost) scenario() {
 	h.must(h.do("POST", path(q, "lines/remove"), "seller", map[string]any{"line": 1}, nil), 422, "nor loses lines")
 	h.must(h.do("PUT", "/api/orders/quotes/"+q.ID, "seller", map[string]any{"notes": "x"}, nil), 422, "nor its notes")
 
-	// Prices go up; the customer accepts: the order is the offer, at the prices offered.
+	// Los precios suben; el cliente acepta: el pedido es la oferta, a los precios ofrecidos.
 	h.book.set(widget, odomain.Item{Company: company, SKU: "W-1", Name: "Tornillo", UoM: "ud", TaxCode: "G", Stocked: true, Sellable: true,
 		UnitPrice: dec("12"), Discount: dec("0")})
 	var acc oapp.AcceptedQuoteDTO
@@ -231,14 +231,14 @@ func (h *quoteHost) scenario() {
 	h.must(h.do("POST", path(q, "accept"), "manager", nil, nil), 422, "accepted twice")
 	h.must(h.do("POST", path(q, "reject"), "manager", nil, nil), 422, "accepted is not rejected")
 	h.must(h.do("POST", path(q, "withdraw"), "seller", nil, nil), 422, "nor withdrawn")
-	// The order is an order like any other.
+	// El pedido es un pedido como cualquier otro.
 	var order oapp.OrderDTO
 	h.must(h.do("POST", "/api/orders/orders/"+o.ID+"/confirm", "manager", nil, &order), 200, "confirm the order")
 	if order.Status != "confirmed" || order.Number != fmt.Sprintf("PED-%d-000001", year) || order.Total != "215.65" {
 		t.Fatalf("order: %+v", order)
 	}
 
-	// The customer says no.
+	// El cliente dice que no.
 	send := func(body map[string]any, lines ...map[string]any) oapp.QuoteDTO {
 		t.Helper()
 		var x oapp.QuoteDTO
@@ -262,7 +262,7 @@ func (h *quoteHost) scenario() {
 	h.must(h.do("POST", path(no, "reject"), "manager", nil, nil), 422, "rejected twice")
 	h.must(h.do("POST", path(no, "accept"), "manager", nil, nil), 422, "rejected is not accepted")
 
-	// A draft nobody wants, and an offer taken back.
+	// Un borrador que nadie quiere, y una oferta retirada.
 	var gone oapp.QuoteDTO
 	h.must(h.do("POST", "/api/orders/quotes", "seller", draft, &gone), 201, "draft")
 	h.must(h.do("POST", path(gone, "send"), "manager", nil, nil), 422, "nothing to offer")
@@ -277,7 +277,7 @@ func (h *quoteHost) scenario() {
 		t.Fatalf("withdrawn: %+v", back)
 	}
 
-	// An offer holds until its last day, that day included.
+	// Una oferta vale hasta su último día, ese día incluido.
 	short := send(map[string]any{"company": acme, "customer": customer, "validUntil": today.String()}, line(service, "1"))
 	late := send(map[string]any{"company": acme, "customer": customer, "validUntil": today.AddDays(1).String()}, line(service, "3"))
 	var stale oapp.QuoteDTO
@@ -299,7 +299,7 @@ func (h *quoteHost) scenario() {
 		if _, err := svc.AcceptQuote.Handle(h.adminCtx, oapp.AcceptQuote{ID: shortID}); !errors.As(err, &rv) || rv.Code != "orders.quote_expired" {
 			t.Fatalf("accepting late: %v", err)
 		}
-		// A draft whose validity went by is not sent, and takes no number.
+		// Un borrador cuya validez ya pasó no se envía, y no toma número.
 		if _, err := svc.SendQuote.Handle(h.adminCtx, oapp.SendQuote{ID: staleID}); !errors.As(err, &rv) || rv.Code != "orders.quote_expired" {
 			t.Fatalf("sending late: %v", err)
 		}
@@ -322,7 +322,7 @@ func (h *quoteHost) scenario() {
 		t.Fatalf("numbers run without gaps: %+v", stale)
 	}
 
-	// Reading and searching.
+	// Lectura y búsqueda.
 	var got oapp.QuoteDTO
 	h.must(h.do("GET", "/api/orders/quotes/"+q.ID, "outsider", nil, nil), 404, "outsider")
 	h.must(h.do("GET", "/api/orders/quotes/nope", "viewer", nil, nil), 400, "bad id")
@@ -349,8 +349,8 @@ func (h *quoteHost) scenario() {
 		t.Fatalf("outsider: %+v", page.Items)
 	}
 
-	// Six sent; accepted, rejected, withdrawn and expired told once each (the draft withdrawn
-	// tells nobody); and the order confirmed, with the stock it asks for.
+	// Seis enviados; aceptado, rechazado, retirado y caducado avisados una vez cada uno (el borrador
+	// retirado no avisa a nadie); y el pedido confirmado, con las existencias que pide.
 	if n, err := h.ord.Relay(inprocess.NewBroker()).RelayOnce(context.Background()); err != nil || n != 12 {
 		t.Fatalf("published: %d %v", n, err)
 	}

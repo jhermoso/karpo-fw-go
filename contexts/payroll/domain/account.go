@@ -11,10 +11,10 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// EmployerAccountKind is the stable aggregate type name.
+// EmployerAccountKind es el nombre estable del tipo de agregado.
 const EmployerAccountKind = "payroll.employer_account"
 
-// NormalizeCCC removes separators from a Código de Cuenta de Cotización.
+// NormalizeCCC quita los separadores de un Código de Cuenta de Cotización.
 func NormalizeCCC(s string) string {
 	return strings.Map(func(r rune) rune {
 		if r >= '0' && r <= '9' {
@@ -24,8 +24,8 @@ func NormalizeCCC(s string) string {
 	}, s)
 }
 
-// ValidCCC checks a CCC: 11 digits, province (2) + number (7) + control (2), where the control is
-// (province × 10⁷ + number) mod 97 (the C# did not validate the format).
+// ValidCCC comprueba un CCC: 11 dígitos, provincia (2) + número (7) + control (2), donde el control
+// es (provincia × 10⁷ + número) mod 97 (el C# no validaba el formato).
 func ValidCCC(ccc string) bool {
 	if len(ccc) != 11 || NormalizeCCC(ccc) != ccc {
 		return false
@@ -36,10 +36,11 @@ func ValidCCC(ccc string) bool {
 	return province >= 1 && (province*10_000_000+number)%97 == control
 }
 
-// PaymentMethod is how the employer pays its contributions (the C# hardcoded codes).
+// PaymentMethod es cómo paga el empleador sus cotizaciones (el C# tenía los códigos escritos a
+// fuego).
 type PaymentMethod int
 
-// Payment methods.
+// Formas de pago.
 const (
 	DirectDebit  PaymentMethod = iota + 1 // cargo en cuenta
 	LatePayable                           // pagadero tardío
@@ -50,10 +51,10 @@ const (
 var paymentMethods = map[PaymentMethod]string{DirectDebit: "direct-debit", LatePayable: "late-payable", EarlyPayable: "early-payable",
 	ManualPayment: "manual"}
 
-// String returns the stable name.
+// String devuelve el nombre estable.
 func (m PaymentMethod) String() string { return paymentMethods[m] }
 
-// ParsePaymentMethod parses a payment method name.
+// ParsePaymentMethod interpreta el nombre de una forma de pago.
 func ParsePaymentMethod(s string) (PaymentMethod, bool) {
 	for k, n := range paymentMethods {
 		if n == s {
@@ -63,8 +64,8 @@ func ParsePaymentMethod(s string) (PaymentMethod, bool) {
 	return 0, false
 }
 
-// EmployerAccount is a Social Security contribution account (CCC) of an employer (the C#
-// CompanySocialSecurityAccount + Payment; representatives are deferred).
+// EmployerAccount es una cuenta de cotización a la Seguridad Social (CCC) de un empleador (el
+// CompanySocialSecurityAccount + Payment de C#; los representantes se dejan para más adelante).
 type EmployerAccount struct {
 	fw.BaseAggregateRoot[EmployerAccountID]
 	traits.Audited
@@ -77,11 +78,11 @@ type EmployerAccount struct {
 	active   bool
 }
 
-// EmployerAccountState is the persisted state of an employer account.
+// EmployerAccountState es el estado persistido de una cuenta de cotización.
 type EmployerAccountState struct {
 	Employer OrganizationID
 	Code     string
-	Regime   string // Social Security regime code (e.g. 0111 general)
+	Regime   string // código de régimen de la Seguridad Social (p. ej. 0111 general)
 	Activity string // CNAE
 	Method   PaymentMethod
 	IBAN     vocab.IBAN
@@ -100,7 +101,7 @@ func (s *EmployerAccountState) check(v *fw.Validation) {
 	v.Require(s.Method != DirectDebit || !s.IBAN.IsZero(), "iban", "required", "a direct debit needs a bank account")
 }
 
-// ReconstituteEmployerAccount rebuilds an employer account.
+// ReconstituteEmployerAccount reconstruye una cuenta de cotización.
 func ReconstituteEmployerAccount(id EmployerAccountID, s EmployerAccountState) (*EmployerAccount, error) {
 	base, err := fw.NewBaseAggregateRoot(EmployerAccountKind, id)
 	if err != nil {
@@ -116,7 +117,7 @@ func ReconstituteEmployerAccount(id EmployerAccountID, s EmployerAccountState) (
 		regime: s.Regime, activity: s.Activity, method: s.Method, iban: s.IBAN, active: s.Active}, nil
 }
 
-// RegisterEmployerAccount registers a CCC of an employer.
+// RegisterEmployerAccount da de alta un CCC de un empleador.
 func RegisterEmployerAccount(id EmployerAccountID, s EmployerAccountState) (*EmployerAccount, error) {
 	s.Active = true
 	a, err := ReconstituteEmployerAccount(id, s)
@@ -127,28 +128,28 @@ func RegisterEmployerAccount(id EmployerAccountID, s EmployerAccountState) (*Emp
 	return a, nil
 }
 
-// Employer returns the employer.
+// Employer devuelve el empleador.
 func (a *EmployerAccount) Employer() OrganizationID { return a.employer }
 
-// Code returns the CCC (11 digits).
+// Code devuelve el CCC (11 dígitos).
 func (a *EmployerAccount) Code() string { return a.code }
 
-// Regime returns the Social Security regime code.
+// Regime devuelve el código de régimen de la Seguridad Social.
 func (a *EmployerAccount) Regime() string { return a.regime }
 
-// Activity returns the CNAE.
+// Activity devuelve el CNAE.
 func (a *EmployerAccount) Activity() string { return a.activity }
 
-// Method returns the payment method.
+// Method devuelve la forma de pago.
 func (a *EmployerAccount) Method() PaymentMethod { return a.method }
 
-// IBAN returns the account the contributions are charged to.
+// IBAN devuelve la cuenta en la que se cargan las cotizaciones.
 func (a *EmployerAccount) IBAN() vocab.IBAN { return a.iban }
 
-// IsActive reports whether the account is registered with Social Security (not "de baja").
+// IsActive dice si la cuenta está de alta en la Seguridad Social (no «de baja»).
 func (a *EmployerAccount) IsActive() bool { return a.active }
 
-// SetPayment changes how contributions are paid.
+// SetPayment cambia cómo se pagan las cotizaciones.
 func (a *EmployerAccount) SetPayment(m PaymentMethod, iban vocab.IBAN) error {
 	s := EmployerAccountState{Employer: a.employer, Code: a.code, Regime: a.regime, Activity: a.activity, Method: m, IBAN: iban}
 	var v fw.Validation
@@ -160,7 +161,7 @@ func (a *EmployerAccount) SetPayment(m PaymentMethod, iban vocab.IBAN) error {
 	return nil
 }
 
-// Deactivate records the Social Security "baja" of the account.
+// Deactivate registra la baja de la cuenta en la Seguridad Social.
 func (a *EmployerAccount) Deactivate() {
 	if a.active {
 		a.active = false
@@ -168,12 +169,12 @@ func (a *EmployerAccount) Deactivate() {
 	}
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (a *EmployerAccount) AuditSnapshot() map[string]any {
 	return map[string]any{"code": a.code, "regime": a.regime, "method": a.method.String(), "active": a.active}
 }
 
-// Employer account fields.
+// Campos de la cuenta de cotización.
 var (
 	AccFieldID       = spec.Comparable("id", func(a *EmployerAccount) EmployerAccountID { return a.ID() })
 	AccFieldEmployer = spec.Comparable("employer", (*EmployerAccount).Employer)
@@ -181,14 +182,14 @@ var (
 	AccFieldActive   = spec.Comparable("active", (*EmployerAccount).IsActive)
 )
 
-// Repositories and catalogs of the context.
+// Repositorios y catálogos del contexto.
 type (
 	PayslipRepository         = fw.Repository[PayslipID, *Payslip]
 	ProfileRepository         = fw.Repository[ProfileID, *Profile]
 	EmployerAccountRepository = fw.Repository[EmployerAccountID, *EmployerAccount]
 )
 
-// Catalogs reads the pay concept catalog.
+// Catalogs lee el catálogo de conceptos retributivos.
 type Catalogs interface {
 	Concepts(ctx context.Context) ([]Concept, error)
 }

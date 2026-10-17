@@ -42,8 +42,8 @@ type client struct {
 	url string
 }
 
-// do sends a request with a bearer token ("" for none) and decodes a 2xx answer into out; a
-// *[]byte takes the body as it comes.
+// do envía una petición con un token bearer ("" para ninguno) y decodifica una respuesta 2xx en
+// out; un *[]byte recibe el cuerpo tal como viene.
 func (c client) do(method, path, token string, body, out any) int {
 	c.t.Helper()
 	var buf bytes.Buffer
@@ -76,9 +76,10 @@ func (c client) must(got, want int, what string) {
 	}
 }
 
-// scenario starts a host on a migrated backend and walks through what only the whole does: the
-// first administrator, a session, an import that registers companies in Parties, an account in
-// one of them, its export written by the chores, the messages delivered and the history read.
+// scenario arranca un anfitrión sobre un backend migrado y recorre lo que sólo hace el conjunto: el
+// primer administrador, una sesión, una importación que da de alta empresas en Parties, una cuenta
+// en una de ellas, su exportación escrita por las tareas, los mensajes entregados y la historia
+// leída.
 func scenario(t *testing.T, sw *hotswap.Switch) {
 	ctx := context.Background()
 	t.Setenv(security.EnvBootstrapUser, "root")
@@ -91,7 +92,7 @@ func scenario(t *testing.T, sw *hotswap.Switch) {
 		t.Fatal("a host does not start without a secret to sign sessions")
 	}
 
-	// Starting: the permissions of every context, the catalog of modules and the first administrator.
+	// El arranque: los permisos de cada contexto, el catálogo de módulos y el primer administrador.
 	started, err := h.Start(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -108,7 +109,7 @@ func scenario(t *testing.T, sw *hotswap.Switch) {
 	t.Cleanup(srv.Close)
 	c := client{t: t, url: srv.URL}
 
-	// Nothing without a session; the administrator changes the password first.
+	// Nada sin sesión; el administrador cambia primero la contraseña.
 	c.must(c.do("GET", "/api/financial/accounts", "", nil, nil), 401, "no session")
 	c.must(c.do("GET", "/api/audit/types", "not-a-token", nil, nil), 401, "a bad token")
 	var tok secapp.Tokens
@@ -123,7 +124,7 @@ func scenario(t *testing.T, sw *hotswap.Switch) {
 		t.Fatalf("the first administrator is global: %+v", who)
 	}
 
-	// Every permission of every context is in the catalog of Security.
+	// Cada permiso de cada contexto está en el catálogo de Security.
 	var catalog []struct {
 		Code   string `json:"code"`
 		Active bool   `json:"active"`
@@ -141,7 +142,7 @@ func scenario(t *testing.T, sw *hotswap.Switch) {
 		}
 	}
 
-	// Two companies in Parties, registered as an import of the organization used to register them.
+	// Dos empresas en Parties, dadas de alta como solía darlas de alta una importación de la organización.
 	admin, _ := authz.NewContext(authz.Context{Subject: fw.NewUUID(), SubjectName: "admin", Kind: authz.Service, Permissions: []authz.Permission{authz.Wildcard}})
 	admin.GlobalAdmin = true
 	actx := authz.WithContext(ctx, admin)
@@ -156,7 +157,7 @@ func scenario(t *testing.T, sw *hotswap.Switch) {
 	}
 	company := companies[0].ID
 
-	// The finance sector exists only for a company that is a financial institution: Parties says so.
+	// El sector financiero sólo existe para una empresa que es entidad financiera: lo dice Parties.
 	account := map[string]any{"company": company, "number": "ES91 2100 0418 4502 0005 1332", "holder": companies[0].ID, "name": "Cuenta de pago",
 		"uses": []string{"customer-payment"}}
 	c.must(c.do("POST", "/api/financial/accounts", root, account, nil), 422, "not a financial institution yet")
@@ -177,8 +178,8 @@ func scenario(t *testing.T, sw *hotswap.Switch) {
 		t.Fatal("the capability comes with the role: the menu and the sector say the same")
 	}
 
-	// An account of a customer of one of them, and its list as a file: asked over HTTP, written by
-	// the chores of the host, downloaded by who asked.
+	// Una cuenta de un cliente de una de ellas, y su lista como fichero: pedida por HTTP, escrita por
+	// las tareas del anfitrión, descargada por quien la pidió.
 	var acc finapp.AccountDTO
 	c.must(c.do("POST", "/api/financial/accounts", root, account, &acc), 201, "open an account")
 	var job expapp.JobDTO
@@ -197,8 +198,8 @@ func scenario(t *testing.T, sw *hotswap.Switch) {
 		t.Fatalf("nothing left to do: %+v %v", idle, err)
 	}
 
-	// A fact for the books of a company that has none yet does not hold anybody back: Accounting
-	// keeps it, and the chores will post it the day it can.
+	// Un hecho para los libros de una empresa que aún no tiene ninguno no retiene a nadie: Accounting
+	// lo guarda, y las tareas lo contabilizarán el día que se pueda.
 	charge, _ := json.Marshal(map[string]any{"assetId": acc.ID, "company": company, "code": "EQ-1", "period": "2026-03", "date": "2026-03-31", "amount": "50.00"})
 	if err := h.Broker.Send(ctx, application.Envelope{ID: acc.ID, Type: "assets.depreciation-charged.v1", Source: "assets", Subject: acc.ID, Data: charge}); err != nil {
 		t.Fatalf("a company without books holds the others back: %v", err)
@@ -217,7 +218,7 @@ func scenario(t *testing.T, sw *hotswap.Switch) {
 		t.Fatalf("it still has no books: %+v %v", again, err)
 	}
 
-	// What the contexts published reaches those that listen, and then there is nothing to carry.
+	// Lo que publicaron los contextos llega a quienes escuchan, y después no queda nada que llevar.
 	moved, err := h.Deliver(ctx)
 	if err != nil || moved < 5 {
 		t.Fatalf("delivered: %d %v", moved, err)
@@ -226,7 +227,7 @@ func scenario(t *testing.T, sw *hotswap.Switch) {
 		t.Fatalf("delivered twice: %d %v", moved, err)
 	}
 
-	// The history of anything, read in one place.
+	// La historia de cualquier cosa, leída en un solo sitio.
 	var types []struct {
 		Type string `json:"type"`
 	}

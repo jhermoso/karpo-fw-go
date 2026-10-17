@@ -1,4 +1,4 @@
-// Package memory provides an in-memory, thread-safe implementation of cache.Cache.
+// Package memory ofrece una implementación en memoria y segura entre goroutines de cache.Cache.
 package memory
 
 import (
@@ -17,19 +17,19 @@ type item[V any] struct {
 	hasTTL    bool
 }
 
-// MemoryCache is a thread-safe in-memory cache supporting TTL expiration.
+// MemoryCache es una caché en memoria, segura entre goroutines, con caducidad por TTL.
 type MemoryCache[K comparable, V any] struct {
 	mu    sync.RWMutex
 	items map[K]item[V]
 	clock time.Clock
 }
 
-// New creates a MemoryCache using the real system clock.
+// New crea una MemoryCache con el reloj real del sistema.
 func New[K comparable, V any]() *MemoryCache[K, V] {
 	return NewWithClock[K, V](real.New())
 }
 
-// NewWithClock creates a MemoryCache with a custom Clock for deterministic testing.
+// NewWithClock crea una MemoryCache con un Clock propio para pruebas deterministas.
 func NewWithClock[K comparable, V any](clock time.Clock) *MemoryCache[K, V] {
 	return &MemoryCache[K, V]{
 		items: make(map[K]item[V]),
@@ -37,7 +37,7 @@ func NewWithClock[K comparable, V any](clock time.Clock) *MemoryCache[K, V] {
 	}
 }
 
-// Get retrieves a value by key. If the item has expired, it is deleted and returns false.
+// Get recupera un valor por su clave. Si el elemento ha caducado, se borra y devuelve false.
 func (c *MemoryCache[K, V]) Get(_ context.Context, key K) (V, bool) {
 	c.mu.RLock()
 	it, ok := c.items[key]
@@ -49,7 +49,7 @@ func (c *MemoryCache[K, V]) Get(_ context.Context, key K) (V, bool) {
 	}
 
 	if it.hasTTL && c.clock.Now().After(it.expiresAt) {
-		// Clean up expired entry
+		// Limpia la entrada caducada
 		c.mu.Lock()
 		delete(c.items, key)
 		c.mu.Unlock()
@@ -61,7 +61,7 @@ func (c *MemoryCache[K, V]) Get(_ context.Context, key K) (V, bool) {
 	return it.value, true
 }
 
-// Set stores a value with an optional TTL.
+// Set guarda un valor con un TTL opcional.
 func (c *MemoryCache[K, V]) Set(_ context.Context, key K, value V, ttl stdtime.Duration) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -78,7 +78,7 @@ func (c *MemoryCache[K, V]) Set(_ context.Context, key K, value V, ttl stdtime.D
 	return nil
 }
 
-// Delete removes an entry by key.
+// Delete quita una entrada por su clave.
 func (c *MemoryCache[K, V]) Delete(_ context.Context, key K) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -87,7 +87,7 @@ func (c *MemoryCache[K, V]) Delete(_ context.Context, key K) error {
 	return nil
 }
 
-// Clear flushes all entries.
+// Clear vacía todas las entradas.
 func (c *MemoryCache[K, V]) Clear(_ context.Context) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()

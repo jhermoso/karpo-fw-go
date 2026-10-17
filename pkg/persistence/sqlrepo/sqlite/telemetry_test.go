@@ -54,7 +54,7 @@ func message(id string) application.OutboxMessage {
 		AggregateID: "p-" + id, Payload: []byte(`{"email":"` + secret + `"}`), OccurredAt: time.Now().UTC(), CorrelationID: "flow-" + id}
 }
 
-// The conformance suites must pass unchanged with the telemetry on.
+// Las suites de conformidad deben pasar sin cambios con la telemetría activa.
 func TestConformance_WithTelemetry(t *testing.T) {
 	opt := func() sqlrepo.Option {
 		return sqlrepo.WithTelemetry(tracevanilla.New(tracevanilla.WithExporter(tracevanilla.NewRecorder(0))), metricsvanilla.NewRegistry())
@@ -104,7 +104,7 @@ func TestTelemetry_TransactionAndStatementSpans(t *testing.T) {
 		}
 	}
 
-	// A statement outside a unit of work is a span of its own, child of the caller.
+	// Una sentencia fuera de una unidad de trabajo es un span propio, hijo del de quien llama.
 	rec.Reset()
 	if _, err := box.Pending(ctx, 10, 5); err != nil {
 		t.Fatal(err)
@@ -130,7 +130,7 @@ func TestTelemetry_NeverRecordsArguments(t *testing.T) {
 	if err := box.MarkFailed(ctx, "1", errors.New("smtp: "+secret+" rejected")); err != nil {
 		t.Fatal(err)
 	}
-	// A failing statement: its error text reaches the span, its arguments do not.
+	// Una sentencia que falla: el texto de su error llega al span; sus argumentos, no.
 	if _, err := db.ExecContext(ctx, "INSERT INTO no_such_table (a) VALUES (?)", secret); err == nil {
 		t.Fatal("expected an error")
 	}
@@ -204,7 +204,7 @@ func TestTelemetry_RollbackAndPanic(t *testing.T) {
 	if err != nil || len(pending) != 0 {
 		t.Fatalf("nothing may survive the rollback: %v, %v", pending, err)
 	}
-	// Both roll back, so both are failures: the error and the panic.
+	// Las dos hacen rollback, así que las dos son fallos: el error y el panic.
 	if n := reg.HistogramCount(metrics.DBOperationDuration, "engine", "sqlite", "operation", "TRANSACTION", "outcome", "error"); n != 2 {
 		t.Fatalf("both rolled back transactions must be measured as errors: %v", reg.SeriesLabels(metrics.DBOperationDuration))
 	}
@@ -248,7 +248,7 @@ func TestOperation(t *testing.T) {
 	}
 }
 
-// BenchmarkAppend compares a unit of work with one INSERT with and without telemetry.
+// BenchmarkAppend compara una unidad de trabajo con un INSERT, con telemetría y sin ella.
 func BenchmarkAppend(b *testing.B) {
 	for _, c := range []struct {
 		name string
@@ -273,7 +273,7 @@ func BenchmarkAppend(b *testing.B) {
 	}
 }
 
-// A panic inside the unit of work rolls it back and must be measured as a failure.
+// Un panic dentro de la unidad de trabajo la deshace y debe medirse como fallo.
 func TestTelemetry_PanicInsideTheUnitOfWorkIsAFailure(t *testing.T) {
 	rec := tracevanilla.NewRecorder(0)
 	reg := metricsvanilla.NewRegistry()
@@ -298,8 +298,8 @@ func TestTelemetry_PanicInsideTheUnitOfWorkIsAFailure(t *testing.T) {
 	}
 }
 
-// After a hot swap the old pool is closed: its gauges go away (they no longer report a closed
-// pool nor keep it alive), and closing it never removes the gauges of the new pool.
+// Tras un cambio en caliente se cierra el pool antiguo: sus gauges desaparecen (ya no informan de
+// un pool cerrado ni lo mantienen vivo), y cerrarlo nunca quita los gauges del pool nuevo.
 func TestTelemetry_ClosingThePoolRemovesItsGauges(t *testing.T) {
 	reg := metricsvanilla.NewRegistry()
 	old := openObserved(t, sqlrepo.WithTelemetry(nil, reg), sqlrepo.WithName("old"))
@@ -313,7 +313,7 @@ func TestTelemetry_ClosingThePoolRemovesItsGauges(t *testing.T) {
 		t.Fatal("a closed pool must not keep its gauges")
 	}
 
-	// Same name: the new pool replaces the series, and closing the old one leaves it alone.
+	// Mismo nombre: el pool nuevo sustituye la serie, y cerrar el antiguo no la toca.
 	first := openObserved(t, sqlrepo.WithTelemetry(nil, reg), sqlrepo.WithName("parties"))
 	second := openObserved(t, sqlrepo.WithTelemetry(nil, reg), sqlrepo.WithName("parties"))
 	if err := first.Close(); err != nil {

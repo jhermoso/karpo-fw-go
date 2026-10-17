@@ -11,7 +11,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// CreateWarehouse opens a warehouse of a company.
+// CreateWarehouse abre un almacén de una empresa.
 type CreateWarehouse struct {
 	Company  string `json:"company"`
 	Code     string `json:"code"`
@@ -19,15 +19,15 @@ type CreateWarehouse struct {
 	Facility string `json:"facility,omitempty"`
 }
 
-// CloseWarehouse retires an empty warehouse.
+// CloseWarehouse retira un almacén vacío.
 type CloseWarehouse struct {
 	ID domain.WarehouseID `json:"-"`
 }
 
-// SearchWarehouses lists the warehouses of a company.
+// SearchWarehouses lista los almacenes de una empresa.
 type SearchWarehouses struct{ Company string }
 
-// WarehouseDTO is the transport form of a warehouse.
+// WarehouseDTO es la forma de transporte de un almacén.
 type WarehouseDTO struct {
 	ID       string `json:"id"`
 	Company  string `json:"company"`
@@ -46,7 +46,7 @@ func warehouseDTO(w *domain.Warehouse) WarehouseDTO {
 	return d
 }
 
-// Receive puts stock in a warehouse at a unit cost.
+// Receive mete existencias en un almacén a un coste unitario.
 type Receive struct {
 	Warehouse  string     `json:"warehouse"`
 	Product    string     `json:"product"`
@@ -59,7 +59,7 @@ type Receive struct {
 	SourceID   string     `json:"sourceId,omitempty"`
 }
 
-// Issue takes stock out of a warehouse, optionally from a reservation.
+// Issue saca existencias de un almacén, opcionalmente de una reserva.
 type Issue struct {
 	Warehouse   string     `json:"warehouse"`
 	Product     string     `json:"product"`
@@ -72,7 +72,7 @@ type Issue struct {
 	SourceID    string     `json:"sourceId,omitempty"`
 }
 
-// Adjust sets the stock of a product in a warehouse to what was counted, with a reason.
+// Adjust fija las existencias de un producto en un almacén en lo contado, con un motivo.
 type Adjust struct {
 	Warehouse string     `json:"warehouse"`
 	Product   string     `json:"product"`
@@ -81,7 +81,7 @@ type Adjust struct {
 	Reason    string     `json:"reason"`
 }
 
-// Transfer moves stock between two warehouses of the same company, at its cost.
+// Transfer mueve existencias entre dos almacenes de la misma empresa, a su coste.
 type Transfer struct {
 	From     string     `json:"from"`
 	To       string     `json:"to"`
@@ -92,7 +92,7 @@ type Transfer struct {
 	Note     string     `json:"note,omitempty"`
 }
 
-// Reserve holds available stock for a source (an order line).
+// Reserve retiene existencias disponibles para un origen (una línea de pedido).
 type Reserve struct {
 	Warehouse  string `json:"warehouse"`
 	Product    string `json:"product"`
@@ -101,19 +101,19 @@ type Reserve struct {
 	SourceID   string `json:"sourceId"`
 }
 
-// Release frees what a reservation still holds.
+// Release libera lo que una reserva aún retiene.
 type Release struct {
 	ID domain.ReservationID `json:"-"`
 }
 
-// SetReorderPoint sets the reorder point of a product in a warehouse.
+// SetReorderPoint fija el punto de pedido de un producto en un almacén.
 type SetReorderPoint struct {
 	Warehouse string `json:"warehouse"`
 	Product   string `json:"product"`
 	Point     string `json:"point"`
 }
 
-// MovementDTO is the transport form of a movement.
+// MovementDTO es la forma de transporte de un movimiento.
 type MovementDTO struct {
 	ID         string `json:"id"`
 	Warehouse  string `json:"warehouse"`
@@ -138,7 +138,7 @@ func movementDTO(m *domain.Movement) MovementDTO {
 		Lot: s.Lot, Note: s.Note, SourceType: s.Source.Type, SourceID: s.Source.ID}
 }
 
-// LevelDTO is the transport form of a stock level.
+// LevelDTO es la forma de transporte de un nivel de existencias.
 type LevelDTO struct {
 	Warehouse    string `json:"warehouse"`
 	Product      string `json:"product"`
@@ -160,7 +160,7 @@ func levelDTO(l *domain.Level, it domain.Item) LevelDTO {
 		ReorderPoint: s.ReorderPoint.String(), BelowReorder: l.BelowReorder()}
 }
 
-// ReservationDTO is the transport form of a reservation.
+// ReservationDTO es la forma de transporte de una reserva.
 type ReservationDTO struct {
 	ID         string `json:"id"`
 	Warehouse  string `json:"warehouse"`
@@ -422,7 +422,7 @@ func (s service) stockUseCases(svc *Service) {
 			return nil, err
 		}
 		date := today(c.Date)
-		// The two movements point to each other through the id of the outgoing one.
+		// Los dos movimientos se señalan entre sí mediante el id del de salida.
 		mo, err := s.post(ctx, out, seqOut, domain.TransferOut, date, q.Neg(), cost, c.Lot, c.Note, domain.Source{})
 		if err != nil {
 			return nil, err

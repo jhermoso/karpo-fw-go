@@ -11,8 +11,8 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// DefaultAuditTable is the default audit log table name. Each dialect package provides the DDL
-// (AuditDDL) for its engine.
+// DefaultAuditTable es el nombre por defecto de la tabla del registro de auditoría. Cada paquete
+// de dialecto aporta el DDL (AuditDDL) de su motor.
 const DefaultAuditTable = "audit_log"
 
 var auditColumns = []string{
@@ -20,14 +20,15 @@ var auditColumns = []string{
 	"channel", "import_source", "import_run_id", "import_file", "correlation_id", "occurred_at", "changes", "events",
 }
 
-// AuditLog is the SQL implementation of application.AuditLog (append-only table, the Go
-// counterpart of the C# AuditLogEntry). Append joins the unit of work in ctx.
+// AuditLog es la implementación SQL de application.AuditLog (tabla en la que sólo se añade, la
+// contrapartida en Go del AuditLogEntry de C#). Append se une a la unidad de trabajo de ctx.
 type AuditLog struct {
 	db    *DB
 	table string
 }
 
-// NewAuditLog creates an audit log on db using table (DefaultAuditTable when empty).
+// NewAuditLog crea un registro de auditoría sobre db con la tabla table (DefaultAuditTable si
+// está vacía).
 func NewAuditLog(db *DB, table string) (*AuditLog, error) {
 	if table == "" {
 		table = DefaultAuditTable
@@ -40,7 +41,7 @@ func NewAuditLog(db *DB, table string) (*AuditLog, error) {
 
 func (l *AuditLog) q(s string) string { return l.db.d.Quote(s) }
 
-// Append inserts the records in the current unit of work.
+// Append inserta los registros en la unidad de trabajo en curso.
 func (l *AuditLog) Append(ctx context.Context, records ...application.AuditRecord) error {
 	if len(records) == 0 {
 		return nil
@@ -84,7 +85,7 @@ func (l *AuditLog) Append(ctx context.Context, records ...application.AuditRecor
 	})
 }
 
-// Trail returns the records of one aggregate, oldest first.
+// Trail devuelve los registros de un agregado, del más antiguo al más reciente.
 func (l *AuditLog) Trail(ctx context.Context, aggregateType, aggregateID string) ([]application.AuditRecord, error) {
 	b := &Builder{d: l.db.d}
 	tp, _ := b.Arg(aggregateType)

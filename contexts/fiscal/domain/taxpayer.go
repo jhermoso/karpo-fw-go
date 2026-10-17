@@ -9,17 +9,17 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// TaxpayerKind is the stable aggregate type name.
+// TaxpayerKind es el nombre estable del tipo de agregado.
 const TaxpayerKind = "fiscal.taxpayer"
 
-// Form is an AEAT tax form this context knows (the C# listed the codes in a comment and stored
-// them as free strings).
+// Form es un modelo de la AEAT que este contexto conoce (el C# enumeraba los códigos en un
+// comentario y los guardaba como texto libre).
 type Form string
 
-// Periodicity of a filing.
+// Periodicity es la periodicidad de una declaración.
 type Periodicity int
 
-// Periodicities.
+// Periodicidades.
 const (
 	Monthly Periodicity = iota + 1
 	Quarterly
@@ -28,23 +28,23 @@ const (
 
 var periodicities = map[Periodicity]string{Monthly: "monthly", Quarterly: "quarterly", Annual: "annual"}
 
-// String returns the stable name.
+// String devuelve el nombre estable.
 func (p Periodicity) String() string { return periodicities[p] }
 
-// ParsePeriodicity parses a periodicity name.
+// ParsePeriodicity interpreta el nombre de una periodicidad.
 func ParsePeriodicity(s string) (Periodicity, bool) { return parseEnum(periodicities, s) }
 
-// Forms and the periodicities they are filed with. Only 111 and 190 are generated in this phase;
-// the others can be registered as obligations.
+// Forms son los modelos y las periodicidades con que se presentan. En esta fase sólo se generan el 111 y el 190;
+// los demás se pueden registrar como obligaciones.
 var Forms = map[Form][]Periodicity{
 	"111": {Monthly, Quarterly}, "115": {Monthly, Quarterly}, "180": {Annual}, "190": {Annual}, "216": {Monthly, Quarterly},
 	"296": {Annual}, "303": {Monthly, Quarterly}, "347": {Annual}, "349": {Monthly, Quarterly, Annual}, "390": {Annual},
 }
 
-// ActivityCategory is the category of an economic activity.
+// ActivityCategory es la categoría de una actividad económica.
 type ActivityCategory int
 
-// Activity categories (the C# ActivityCategoryType).
+// Categorías de actividad (ActivityCategoryType del C#).
 const (
 	Trade ActivityCategory = iota + 1
 	Industry
@@ -56,17 +56,17 @@ const (
 var categories = map[ActivityCategory]string{Trade: "trade", Industry: "industry", Services: "services", Professional: "professional",
 	OtherActivity: "other"}
 
-// String returns the stable name.
+// String devuelve el nombre estable.
 func (c ActivityCategory) String() string { return categories[c] }
 
-// ParseActivityCategory parses a category name.
+// ParseActivityCategory interpreta el nombre de una categoría.
 func ParseActivityCategory(s string) (ActivityCategory, bool) { return parseEnum(categories, s) }
 
-// ActivityID identifies an activity.
+// ActivityID identifica una actividad.
 type ActivityID struct{ fw.UUID }
 
-// Activity is an economic activity of the taxpayer (the C# FiscalActivity, with from ≤ until now
-// checked).
+// Activity es una actividad económica del contribuyente (el FiscalActivity del C#, ahora con
+// from ≤ until comprobado).
 type Activity struct {
 	ID               ActivityID
 	Code             string
@@ -84,27 +84,27 @@ func (a Activity) activeOn(d vocab.Date) bool {
 	return !d.Before(a.From) && (a.Until.IsZero() || !d.After(a.Until))
 }
 
-// ObligationID identifies an obligation.
+// ObligationID identifica una obligación.
 type ObligationID struct{ fw.UUID }
 
-// Obligation is a form the taxpayer must file, with its periodicity, from a year on (the C#
-// OfficialTaxFormSubscription, with codes and periodicities checked).
+// Obligation es un modelo que el contribuyente debe presentar, con su periodicidad, desde un año
+// (el OfficialTaxFormSubscription del C#, con códigos y periodicidades comprobados).
 type Obligation struct {
 	ID          ObligationID
 	Form        Form
 	Periodicity Periodicity
 	FromYear    int
-	UntilYear   int // zero: open
+	UntilYear   int // cero: abierta
 }
 
-// Covers reports whether the obligation is in force in a year.
+// Covers dice si la obligación está vigente en un año.
 func (o Obligation) Covers(year int) bool {
 	return year >= o.FromYear && (o.UntilYear == 0 || year <= o.UntilYear)
 }
 
-// Taxpayer is the fiscal profile of an internal organization: territory, fiscal year start,
-// prorrata, activities and filing obligations (the fiscal slice of the C#
-// InternalOrganizationProfile, FiscalActivity and OfficialTaxFormSubscription).
+// Taxpayer es el perfil fiscal de una organización interna: territorio, inicio del ejercicio,
+// prorrata, actividades y obligaciones de presentación (la parte fiscal de
+// InternalOrganizationProfile, FiscalActivity y OfficialTaxFormSubscription del C#).
 type Taxpayer struct {
 	fw.BaseAggregateRoot[TaxpayerID]
 	traits.Audited
@@ -114,11 +114,11 @@ type Taxpayer struct {
 	obligations  []Obligation
 }
 
-// TaxpayerTerms are the editable terms of a taxpayer.
+// TaxpayerTerms son las condiciones editables de un contribuyente.
 type TaxpayerTerms struct {
 	Territory             Territory
 	FiscalYearStartMonth  int
-	GeneralProrata        vocab.Decimal // zero: no prorrata
+	GeneralProrata        vocab.Decimal // cero: sin prorrata
 	DifferentiatedSectors bool
 }
 
@@ -129,7 +129,7 @@ func (t TaxpayerTerms) check(v *fw.Validation) {
 	percent(v, "generalProrata", t.GeneralProrata)
 }
 
-// TaxpayerState is the persisted state of a taxpayer.
+// TaxpayerState es el estado persistido de un contribuyente.
 type TaxpayerState struct {
 	Organization OrganizationID
 	Terms        TaxpayerTerms
@@ -138,7 +138,7 @@ type TaxpayerState struct {
 	Audit        traits.AuditStamp
 }
 
-// ReconstituteTaxpayer rebuilds a taxpayer.
+// ReconstituteTaxpayer reconstruye un contribuyente.
 func ReconstituteTaxpayer(id TaxpayerID, s TaxpayerState) (*Taxpayer, error) {
 	base, err := fw.NewBaseAggregateRoot(TaxpayerKind, id)
 	if err != nil {
@@ -154,24 +154,24 @@ func ReconstituteTaxpayer(id TaxpayerID, s TaxpayerState) (*Taxpayer, error) {
 		activities: slices.Clone(s.Activities), obligations: slices.Clone(s.Obligations)}, nil
 }
 
-// RegisterTaxpayer creates the fiscal profile of an organization.
+// RegisterTaxpayer crea el perfil fiscal de una organización.
 func RegisterTaxpayer(id TaxpayerID, org OrganizationID, t TaxpayerTerms) (*Taxpayer, error) {
 	return ReconstituteTaxpayer(id, TaxpayerState{Organization: org, Terms: t})
 }
 
-// Organization returns the internal organization.
+// Organization devuelve la organización interna.
 func (t *Taxpayer) Organization() OrganizationID { return t.organization }
 
-// Terms returns the editable terms.
+// Terms devuelve las condiciones editables.
 func (t *Taxpayer) Terms() TaxpayerTerms { return t.terms }
 
-// Activities returns a copy of the activities.
+// Activities devuelve una copia de las actividades.
 func (t *Taxpayer) Activities() []Activity { return slices.Clone(t.activities) }
 
-// Obligations returns a copy of the obligations.
+// Obligations devuelve una copia de las obligaciones.
 func (t *Taxpayer) Obligations() []Obligation { return slices.Clone(t.obligations) }
 
-// SetTerms replaces the terms.
+// SetTerms sustituye las condiciones.
 func (t *Taxpayer) SetTerms(terms TaxpayerTerms) error {
 	var v fw.Validation
 	terms.check(&v)
@@ -182,7 +182,8 @@ func (t *Taxpayer) SetTerms(terms TaxpayerTerms) error {
 	return nil
 }
 
-// FiscalYearOf returns the fiscal year a date belongs to (named by the calendar year it starts in).
+// FiscalYearOf devuelve el ejercicio al que pertenece una fecha (con el nombre del año natural en
+// que empieza).
 func (t *Taxpayer) FiscalYearOf(d vocab.Date) int {
 	if int(d.Month()) < t.terms.FiscalYearStartMonth {
 		return d.Year() - 1
@@ -190,8 +191,8 @@ func (t *Taxpayer) FiscalYearOf(d vocab.Date) int {
 	return d.Year()
 }
 
-// AddActivity adds an activity. Invariants: from ≤ until, and one primary activity at a time (a
-// new primary makes the overlapping one secondary).
+// AddActivity añade una actividad. Invariantes: from ≤ until, y una sola actividad principal a la
+// vez (una principal nueva hace secundaria a la que se solapa).
 func (t *Taxpayer) AddActivity(a Activity) (ActivityID, error) {
 	var v fw.Validation
 	a.Code = text(&v, "code", a.Code, 1, 20)
@@ -217,7 +218,7 @@ func (t *Taxpayer) AddActivity(a Activity) (ActivityID, error) {
 	return a.ID, nil
 }
 
-// EndActivity ends an activity on a date.
+// EndActivity termina una actividad en una fecha.
 func (t *Taxpayer) EndActivity(id ActivityID, on vocab.Date) error {
 	i := slices.IndexFunc(t.activities, func(a Activity) bool { return a.ID == id })
 	if i < 0 {
@@ -231,7 +232,7 @@ func (t *Taxpayer) EndActivity(id ActivityID, on vocab.Date) error {
 	return nil
 }
 
-// PrimaryActivityOn returns the primary activity on a date.
+// PrimaryActivityOn devuelve la actividad principal en una fecha.
 func (t *Taxpayer) PrimaryActivityOn(d vocab.Date) (Activity, bool) {
 	for _, a := range t.activities {
 		if a.Primary && a.activeOn(d) {
@@ -241,8 +242,8 @@ func (t *Taxpayer) PrimaryActivityOn(d vocab.Date) (Activity, bool) {
 	return Activity{}, false
 }
 
-// AddObligation registers a form to file. Invariants: a known form with one of its
-// periodicities, and one obligation per form in each year.
+// AddObligation registra un modelo que hay que presentar. Invariantes: un modelo conocido con una
+// de sus periodicidades, y una obligación por modelo en cada año.
 func (t *Taxpayer) AddObligation(o Obligation) (ObligationID, error) {
 	var v fw.Validation
 	allowed, known := Forms[o.Form]
@@ -262,7 +263,7 @@ func (t *Taxpayer) AddObligation(o Obligation) (ObligationID, error) {
 	return o.ID, nil
 }
 
-// EndObligation ends an obligation after a year.
+// EndObligation termina una obligación después de un año.
 func (t *Taxpayer) EndObligation(id ObligationID, lastYear int) error {
 	i := slices.IndexFunc(t.obligations, func(o Obligation) bool { return o.ID == id })
 	if i < 0 {
@@ -276,7 +277,7 @@ func (t *Taxpayer) EndObligation(id ObligationID, lastYear int) error {
 	return nil
 }
 
-// ObligationFor returns the obligation of a form in force in a year.
+// ObligationFor devuelve la obligación de un modelo vigente en un año.
 func (t *Taxpayer) ObligationFor(f Form, year int) (Obligation, bool) {
 	for _, o := range t.obligations {
 		if o.Form == f && o.Covers(year) {
@@ -286,13 +287,13 @@ func (t *Taxpayer) ObligationFor(f Form, year int) (Obligation, bool) {
 	return Obligation{}, false
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (t *Taxpayer) AuditSnapshot() map[string]any {
 	return map[string]any{"territory": t.terms.Territory.String(), "prorrata": t.terms.GeneralProrata.String(),
 		"activities": len(t.activities), "obligations": len(t.obligations)}
 }
 
-// Taxpayer fields.
+// Campos del contribuyente.
 var (
 	TaxpayerFieldID  = spec.Comparable("id", func(t *Taxpayer) TaxpayerID { return t.ID() })
 	TaxpayerFieldOrg = spec.Comparable("organization", (*Taxpayer).Organization)

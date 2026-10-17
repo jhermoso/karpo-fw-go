@@ -13,54 +13,53 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// MaxLines bounds the currencies of a reservation.
+// MaxLines limita las monedas de una reserva.
 const MaxLines = 20
 
-// Status is where a reservation is.
+// Status es dónde está una reserva.
 type Status string
 
-// Statuses (those of the C#: Registrado, EmailVerificado, Notificado, Completado, Cancelado and
-// Expired).
+// Estados (los del C#: Registrado, EmailVerificado, Notificado, Completado, Cancelado y Expired).
 const (
 	Registered    Status = "registered"
 	EmailVerified Status = "email-verified"
-	Notified      Status = "notified" // the customer was told the cash is ready
+	Notified      Status = "notified" // se avisó al cliente de que el efectivo está preparado
 	Completed     Status = "completed"
 	Cancelled     Status = "cancelled"
 	Expired       Status = "expired"
 )
 
-// Statuses lists the valid statuses.
+// Statuses lista los estados válidos.
 var Statuses = []Status{Registered, EmailVerified, Notified, Completed, Cancelled, Expired}
 
-// forward is the only way a reservation advances.
+// forward es el único camino por el que avanza una reserva.
 var forward = map[Status]Status{Registered: EmailVerified, EmailVerified: Notified, Notified: Completed}
 
-// Channels a reservation arrives through.
+// Channels por los que llega una reserva.
 var Channels = []string{"web", "phone", "office"}
 
-// Line is an amount of a currency reserved, at the rate quoted when it was registered.
+// Line es un importe reservado de una moneda, al cambio cotizado cuando se registró.
 type Line struct {
 	No            int
 	Currency      string
 	Requested     vocab.Decimal
-	Delivered     vocab.Decimal // in whole notes
+	Delivered     vocab.Decimal // en billetes enteros
 	BaseRate      vocab.Decimal
 	OfferedRate   vocab.Decimal
 	MarginKind    MarginKind
 	MarginValue   vocab.Decimal
 	Eur           vocab.Decimal
-	Collector     bool // a collector's piece, not cash to spend
+	Collector     bool // una pieza de coleccionista, no efectivo para gastar
 	CollectorNote string
 }
 
-// Step is a change of status.
+// Step es un cambio de estado.
 type Step struct {
 	Status Status
 	At     time.Time
 }
 
-// ReservationState is the persisted state of a reservation.
+// ReservationState es el estado persistido de una reserva.
 type ReservationState struct {
 	Company       OrganizationID
 	Customer      PartyID
@@ -70,32 +69,32 @@ type ReservationState struct {
 	Pickup        time.Time
 	TimeSlot      string
 	ExpiresAt     time.Time
-	Facility      fw.UUID // the office where it is collected
+	Facility      fw.UUID // la oficina donde se recoge
 	PromotionCode string
-	Collaborator  PartyID // whose promotion code it carries
+	Collaborator  PartyID // de quién es el código de promoción que lleva
 	Lines         []Line
 	Status        Status
-	Reason        string // of the cancellation
+	Reason        string // de la cancelación
 	History       []Step
 	Audit         traits.AuditStamp
 }
 
-// Reservation is foreign cash a customer will collect at an office, at the rates quoted when it
-// was registered.
+// Reservation es efectivo en divisa que un cliente recogerá en una oficina, a los cambios cotizados
+// cuando se registró.
 type Reservation struct {
 	fw.BaseAggregateRoot[ReservationID]
 	traits.Audited
 	s ReservationState
 }
 
-// ReferenceOf builds the reference customers quote: RES, the year and eleven characters of the
-// identity (the C# format).
+// ReferenceOf construye la referencia que dan los clientes: RES, el año y once caracteres de la
+// identidad (el formato del C#).
 func ReferenceOf(id ReservationID, year int) string {
 	hex := strings.ToUpper(strings.ReplaceAll(id.String(), "-", ""))
 	return "RES-" + strconv.Itoa(year) + "-" + hex[len(hex)-11:]
 }
 
-// ReconstituteReservation rebuilds a reservation.
+// ReconstituteReservation reconstruye una reserva.
 func ReconstituteReservation(id ReservationID, s ReservationState) (*Reservation, error) {
 	base, err := fw.NewBaseAggregateRoot(ReservationKind, id)
 	if err != nil {
@@ -135,7 +134,7 @@ func ReconstituteReservation(id ReservationID, s ReservationState) (*Reservation
 	return &Reservation{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// Request is what a customer asks for: each amount already quoted.
+// Request es lo que pide un cliente: cada importe ya cotizado.
 type Request struct {
 	Company       OrganizationID
 	Customer      PartyID
@@ -149,15 +148,15 @@ type Request struct {
 	Lines         []RequestLine
 }
 
-// RequestLine is an amount of a currency with its quotation.
+// RequestLine es un importe de una moneda con su cotización.
 type RequestLine struct {
 	Quotation
 	Collector     bool
 	CollectorNote string
 }
 
-// RegisterReservation registers a reservation at a moment: the pickup is later, and the
-// reservation waits for it the hours the company sets.
+// RegisterReservation registra una reserva en un momento: la recogida es posterior, y la reserva la
+// espera las horas que fija la empresa.
 func RegisterReservation(id ReservationID, r Request, expiryHours int, now time.Time) (*Reservation, error) {
 	if !r.Pickup.After(now) {
 		return nil, fw.Violation("exchange.pickup_past", "the pickup time is still to come")
@@ -178,14 +177,14 @@ func RegisterReservation(id ReservationID, r Request, expiryHours int, now time.
 	return res, nil
 }
 
-// State returns the state (slices are copies).
+// State devuelve el estado (los slices son copias).
 func (r *Reservation) State() ReservationState {
 	s := r.s
 	s.Lines, s.History = slices.Clone(s.Lines), slices.Clone(s.History)
 	return s
 }
 
-// Total returns what the customer pays, in euros.
+// Total devuelve lo que paga el cliente, en euros.
 func (r *Reservation) Total() vocab.Decimal {
 	t := zero()
 	for _, l := range r.s.Lines {
@@ -194,12 +193,12 @@ func (r *Reservation) Total() vocab.Decimal {
 	return t
 }
 
-// Active reports whether the reservation is still on its way to being collected.
+// Active dice si la reserva sigue en camino de recogerse.
 func (r *Reservation) Active() bool {
 	return r.s.Status == Registered || r.s.Status == EmailVerified || r.s.Status == Notified
 }
 
-// Due reports whether an active reservation has waited long enough.
+// Due dice si una reserva activa ha esperado lo suficiente.
 func (r *Reservation) Due(now time.Time) bool { return r.Active() && !now.Before(r.s.ExpiresAt) }
 
 func (r *Reservation) set(to Status, now time.Time) {
@@ -210,8 +209,8 @@ func (r *Reservation) set(to Status, now time.Time) {
 		From: string(from), To: string(to), At: now.UTC(), Total: r.Total().StringFixed(2)})
 }
 
-// Advance moves the reservation one step forward: email verified, customer notified, collected.
-// Asking for the status it already has changes nothing; it reports whether anything changed.
+// Advance hace avanzar la reserva un paso: correo verificado, cliente avisado, recogida. Pedir el
+// estado que ya tiene no cambia nada; dice si algo cambió.
 func (r *Reservation) Advance(to Status, now time.Time) (bool, error) {
 	if r.s.Status == to {
 		return false, nil
@@ -226,7 +225,7 @@ func (r *Reservation) Advance(to Status, now time.Time) (bool, error) {
 	return true, nil
 }
 
-// Cancel abandons an active reservation. Cancelling a cancelled one changes nothing.
+// Cancel abandona una reserva activa. Cancelar una ya cancelada no cambia nada.
 func (r *Reservation) Cancel(now time.Time, reason string) (bool, error) {
 	if r.s.Status == Cancelled {
 		return false, nil
@@ -243,7 +242,7 @@ func (r *Reservation) Cancel(now time.Time, reason string) (bool, error) {
 	return true, nil
 }
 
-// Expire closes an active reservation nobody collected in time. It reports whether it did.
+// Expire cierra una reserva activa que nadie recogió a tiempo. Dice si lo hizo.
 func (r *Reservation) Expire(now time.Time) bool {
 	if !r.Due(now) {
 		return false
@@ -252,12 +251,12 @@ func (r *Reservation) Expire(now time.Time) bool {
 	return true
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (r *Reservation) AuditSnapshot() map[string]any {
 	return map[string]any{"reference": r.s.Reference, "status": string(r.s.Status), "total": r.Total().String(), "lines": len(r.s.Lines)}
 }
 
-// Reservation fields.
+// Campos de la reserva.
 var (
 	ResFieldCompany   = spec.Comparable("company", func(r *Reservation) OrganizationID { return r.s.Company })
 	ResFieldCustomer  = spec.Comparable("customer", func(r *Reservation) PartyID { return r.s.Customer })
@@ -270,9 +269,9 @@ var (
 	LineFieldCurrency = spec.Comparable("currency", func(l Line) string { return l.Currency })
 )
 
-// Events of a reservation.
+// Eventos de una reserva.
 type (
-	// ReservationRegistered is raised when a customer reserves.
+	// ReservationRegistered se lanza cuando un cliente reserva.
 	ReservationRegistered struct {
 		fw.EventMeta
 		Company   string    `json:"company"`
@@ -284,7 +283,7 @@ type (
 		Lines     int       `json:"lines"`
 		Total     string    `json:"total"`
 	}
-	// ReservationStatusChanged is raised on each change of status.
+	// ReservationStatusChanged se lanza en cada cambio de estado.
 	ReservationStatusChanged struct {
 		fw.EventMeta
 		Company   string    `json:"company"`
@@ -297,11 +296,11 @@ type (
 	}
 )
 
-// EventType implementations.
+// Implementaciones de EventType.
 func (ReservationRegistered) EventType() string    { return "exchange.reservation_registered" }
 func (ReservationStatusChanged) EventType() string { return "exchange.reservation_status_changed" }
 
-// ParseReservationID parses a textual identity.
+// ParseReservationID interpreta una identidad en texto.
 func ParseReservationID(s string) (ReservationID, error) {
 	u, err := fw.ParseUUID(s)
 	return ReservationID{u}, err

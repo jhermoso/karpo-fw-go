@@ -14,8 +14,8 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlite"
 )
 
-// A database seeded with the broken name gets it corrected; one seeded afterwards keeps the
-// right one.
+// A una base sembrada con el nombre roto se le corrige; una sembrada después conserva el
+// correcto.
 func TestFixBoundaryNames(t *testing.T) {
 	ctx := context.Background()
 	raw, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "geo.db")+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)")

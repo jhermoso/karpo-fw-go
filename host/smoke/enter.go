@@ -8,30 +8,31 @@ import (
 	"strings"
 )
 
-// The page of entry stores what the front engine of Karpo stores after a login that went well,
-// and under the same keys, all of them in sessionStorage (core/services/auth.service.ts of the
-// engine, as the smoke publisher of Theros reads it):
+// La página de entrada guarda lo que guarda el motor del front de Karpo tras un login que salió
+// bien, y bajo las mismas claves, todas en sessionStorage (core/services/auth.service.ts del
+// motor, como lo lee la publicadora de humo de Theros):
 //
-//	auth-refresh-token  the refresh token, as it came
+//	auth-refresh-token  el token de refresco, tal como llegó
 //	auth-session        {user, token, timestamp, fingerprint}, JSON
-//	auth-token          the access token, as it came
+//	auth-token          el token de acceso, tal como llegó
 //
-// The fingerprint is the djb2 of the user agent, the language and the size of the screen: the
-// page computes it as the engine does. sessionStorage is of an origin and of a tab, so the page
-// has to be opened from the origin of the front, in the tab that will be used.
+// La huella es el djb2 del user agent, el idioma y el tamaño de la pantalla: la página la calcula
+// como el motor. sessionStorage es de un origen y de una pestaña, así que la página se ha de abrir
+// desde el origen del front, en la pestaña que se vaya a usar.
 //
-// Karpo in Go has no front of its own: the page is here so that the four smoke publishers have
-// the same door, and the day a front is put before this host nothing has to change.
+// Karpo en Go no tiene front propio: la página está aquí para que las cuatro publicadoras de humo
+// tengan la misma puerta, y el día que se ponga un front delante de este anfitrión no haya que
+// cambiar nada.
 
-// entry is what the page of entry is given: the two tokens and the user the engine keeps.
+// entry es lo que se da a la página de entrada: los dos tokens y el usuario que guarda el motor.
 type entry struct {
 	AccessToken  string    `json:"accessToken"`
 	RefreshToken string    `json:"refreshToken"`
 	User         entryUser `json:"user"`
 }
 
-// entryUser is the User of the engine, without lastLogin, which the page sets to the moment it
-// runs. The token of the host says who and not what it may do: permissions is an empty list.
+// entryUser es el User del motor, sin lastLogin, que la página fija al momento en que se ejecuta.
+// El token del anfitrión dice quién y no qué puede hacer: permissions es una lista vacía.
 type entryUser struct {
 	ID          string   `json:"id"`
 	Username    string   `json:"username"`
@@ -41,8 +42,8 @@ type entryUser struct {
 	Permissions []string `json:"permissions"`
 }
 
-// page is the page of entry. %DATA% is the entry, as JSON: encoding/json escapes <, > and &,
-// so it cannot close the script.
+// page es la página de entrada. %DATA% es la entrada, como JSON: encoding/json escapa <, > y &,
+// así que no puede cerrar el script.
 const page = `<!doctype html>
 <html lang="en">
 <head>
@@ -80,7 +81,7 @@ const page = `<!doctype html>
 </html>
 `
 
-// enter answers the page of entry of a profile.
+// enter responde la página de entrada de un perfil.
 func (p *Publisher) enter(w http.ResponseWriter, r *http.Request) {
 	who, known := asked(w, r)
 	if !known {

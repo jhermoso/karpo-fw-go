@@ -1,11 +1,11 @@
-// Package log provides structured logging contracts for Karpo services.
+// Package log ofrece los contratos de log estructurado de los servicios de Karpo.
 package log
 
 import (
 	"context"
 )
 
-// Level defines logging severity.
+// Level define la gravedad del log.
 type Level int
 
 const (
@@ -15,8 +15,8 @@ const (
 	LevelError Level = 8
 )
 
-// Logger is the domain contract for structured logging.
-// Implementations can wrap slog, zap, log4net equivalent, or in-memory capture for tests.
+// Logger es el contrato de dominio para el log estructurado.
+// Las implementaciones pueden envolver slog, zap, un equivalente de log4net o una captura en memoria para pruebas.
 type Logger interface {
 	Debug(msg string, args ...any)
 	Info(msg string, args ...any)

@@ -6,12 +6,12 @@ import (
 	"unicode/utf8"
 )
 
-// Email is an e-mail address, normalized to lower case (the same normalization as the C# value,
-// so persisted data and uniqueness constraints stay compatible). LocalPart and Domain are
-// derived from the normalized value.
+// Email es una dirección de correo electrónico, normalizada a minúsculas (la misma normalización
+// que el valor de C#, para que los datos persistidos y las restricciones de unicidad sigan siendo
+// compatibles). LocalPart y Domain se derivan del valor normalizado.
 type Email struct{ value string }
 
-// NewEmail validates a bare address ("user@example.com"; display names are rejected).
+// NewEmail valida una dirección simple ("user@example.com"; los nombres para mostrar se rechazan).
 func NewEmail(s string) (Email, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {
@@ -45,7 +45,7 @@ func validDomain(d string) bool {
 	return true
 }
 
-// MustEmail is like NewEmail but panics on error.
+// MustEmail es como NewEmail pero entra en pánico si hay error.
 func MustEmail(s string) Email {
 	e, err := NewEmail(s)
 	if err != nil {
@@ -54,22 +54,22 @@ func MustEmail(s string) Email {
 	return e
 }
 
-// String returns the normalized address.
+// String devuelve la dirección normalizada.
 func (e Email) String() string { return e.value }
 
-// IsZero reports whether the address is absent.
+// IsZero dice si falta la dirección.
 func (e Email) IsZero() bool { return e.value == "" }
 
-// LocalPart returns the part before '@'.
+// LocalPart devuelve la parte anterior a '@'.
 func (e Email) LocalPart() string { return e.value[:strings.LastIndexByte(e.value, '@')] }
 
-// Domain returns the part after '@'.
+// Domain devuelve la parte posterior a '@'.
 func (e Email) Domain() string { return e.value[strings.LastIndexByte(e.value, '@')+1:] }
 
-// MarshalText implements encoding.TextMarshaler.
+// MarshalText implementa encoding.TextMarshaler.
 func (e Email) MarshalText() ([]byte, error) { return []byte(e.value), nil }
 
-// UnmarshalText implements encoding.TextUnmarshaler.
+// UnmarshalText implementa encoding.TextUnmarshaler.
 func (e *Email) UnmarshalText(b []byte) error {
 	if len(b) == 0 {
 		*e = Email{}

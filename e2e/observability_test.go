@@ -1,5 +1,6 @@
-// Package e2e holds end-to-end tests that compose real bounded contexts with the framework the
-// way a service does. They live outside contexts/ so they never collide with work on a context.
+// Package e2e contiene pruebas de extremo a extremo que componen contextos delimitados reales
+// con el framework como lo hace un servicio. Viven fuera de contexts/ para no chocar nunca con
+// el trabajo sobre un contexto.
 package e2e_test
 
 import (
@@ -39,7 +40,7 @@ import (
 	tracevanilla "github.com/jhermoso/karpo-fw-go/pkg/trace/vanilla"
 )
 
-// stdout is the standard output of the test service.
+// stdout es la salida estándar del servicio de prueba.
 type stdout struct {
 	mu  sync.Mutex
 	buf bytes.Buffer
@@ -57,7 +58,7 @@ func (b *stdout) String() string {
 	return b.buf.String()
 }
 
-// requests returns the request lines; every line of the output must be a JSON object.
+// requests devuelve las líneas de petición; cada línea de la salida debe ser un objeto JSON.
 func (b *stdout) requests(t *testing.T) []map[string]any {
 	t.Helper()
 	var out []map[string]any
@@ -76,8 +77,8 @@ func (b *stdout) requests(t *testing.T) []map[string]any {
 
 type service struct {
 	t        *testing.T
-	api      *httptest.Server // the public port
-	internal *httptest.Server // the internal port: /metrics
+	api      *httptest.Server // el puerto público
+	internal *httptest.Server // el puerto interno: /metrics
 	out      *stdout
 	spans    *tracevanilla.Recorder
 	reg      *metricsvanilla.Registry
@@ -98,8 +99,9 @@ func openSQLite(t *testing.T, name string, opts ...sqlrepo.Option) *sqlrepo.DB {
 	return sqlite.Open(raw, append([]sqlrepo.Option{sqlrepo.WithName(name)}, opts...)...)
 }
 
-// compose builds the Geography context on SQLite behind the standard chain of a service:
-// recovery, correlation, telemetry and authentication, with /metrics on a separate port.
+// compose construye el contexto Geography sobre SQLite detrás de la cadena estándar de un
+// servicio: recuperación, correlación, telemetría y autenticación, con /metrics en un puerto
+// aparte.
 func compose(t *testing.T) *service {
 	t.Helper()
 	ctx := context.Background()
@@ -141,7 +143,7 @@ func compose(t *testing.T) *service {
 	t.Cleanup(s.api.Close)
 	t.Cleanup(s.internal.Close)
 	t.Cleanup(func() { _ = s.sw.Close(ctx) })
-	s.spans.Reset() // forget the migration
+	s.spans.Reset() // olvida la migración
 	return s
 }
 
@@ -174,8 +176,8 @@ func (s *service) metricsText() string {
 	return string(body)
 }
 
-// eventually waits for what the server writes after the response left (the request line, the
-// span and the observation are recorded when the handler chain returns).
+// eventually espera a lo que escribe el servidor después de que salga la respuesta (la línea de
+// petición, el span y la observación se anotan cuando vuelve la cadena de manejadores).
 func eventually(t *testing.T, what string, cond func() bool) {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
@@ -189,12 +191,12 @@ func eventually(t *testing.T, what string, cond func() bool) {
 
 const countryRoute = "/api/reference/countries/{alpha2}"
 
-// An HTTP request to an existing context leaves one JSON line, one metric and one trace id, all
-// with the same correlation; a 500 leaves its cause.
+// Una petición HTTP a un contexto existente deja una línea JSON, una métrica y un id de traza,
+// todos con la misma correlación; un 500 deja su causa.
 func TestObservability_EndToEnd(t *testing.T) {
 	s := compose(t)
 
-	// --- A normal request -------------------------------------------------------------------
+	// --- Una petición normal ----------------------------------------------------------------
 	status, header, body := s.get("/api/reference/countries/ES", "e2e-flow-1", true)
 	if status != http.StatusOK {
 		t.Fatalf("status = %d %s", status, body)
@@ -204,7 +206,7 @@ func TestObservability_EndToEnd(t *testing.T) {
 	}
 	eventually(t, "the request line", func() bool { return len(s.out.requests(t)) == 1 })
 
-	// The line: JSON on stdout, one per request.
+	// La línea: JSON en stdout, una por petición.
 	if n := strings.Count(strings.TrimSpace(s.out.String()), "\n"); n != 0 {
 		t.Fatalf("a request must leave exactly one line:\n%s", s.out.String())
 	}
@@ -220,8 +222,8 @@ func TestObservability_EndToEnd(t *testing.T) {
 		t.Fatalf("the line carries the actor id and nothing personal or secret:\n%s", s.out.String())
 	}
 
-	// The trace: the server span has the trace id of the line and the same correlation, and the
-	// SQL statements of the request hang from it.
+	// La traza: el span del servidor tiene el id de traza de la línea y la misma correlación, y
+	// de él cuelgan las sentencias SQL de la petición.
 	eventually(t, "the server span", func() bool { return len(s.spans.Named("GET "+countryRoute)) == 1 })
 	server := s.spans.Named("GET " + countryRoute)[0]
 	if line["trace_id"] != server.Context.TraceIDString() || line["span_id"] != server.Context.SpanIDString() {
@@ -243,7 +245,7 @@ func TestObservability_EndToEnd(t *testing.T) {
 		}
 	}
 
-	// The metric: on the internal port, by route pattern.
+	// La métrica: en el puerto interno, por patrón de ruta.
 	if n := s.reg.HistogramCount(metrics.HTTPServerRequestDuration, "method", "GET", "route", countryRoute, "status", "200"); n != 1 {
 		t.Fatalf("expected one observation: %v", s.reg.SeriesLabels(metrics.HTTPServerRequestDuration))
 	}
@@ -261,7 +263,7 @@ func TestObservability_EndToEnd(t *testing.T) {
 		t.Fatal("no correlation and no raw path may become a metric label")
 	}
 
-	// --- An unauthenticated request: a line too, without a cause -----------------------------
+	// --- Una petición sin autenticar: también una línea, sin causa ---------------------------
 	if status, _, _ := s.get("/api/reference/countries/ES", "e2e-flow-401", false); status != http.StatusUnauthorized {
 		t.Fatalf("status = %d", status)
 	}
@@ -271,7 +273,7 @@ func TestObservability_EndToEnd(t *testing.T) {
 		t.Fatalf("unexpected 401 line: %v", l)
 	}
 
-	// --- A 500: the database loses its schema while the service runs --------------------------
+	// --- Un 500: la base de datos pierde su esquema mientras el servicio funciona -------------
 	if err := s.sw.Swap(context.Background(), openSQLite(t, "empty", sqlrepo.WithTelemetry(s.tracer, s.reg))); err != nil {
 		t.Fatal(err)
 	}
@@ -306,7 +308,7 @@ func TestObservability_EndToEnd(t *testing.T) {
 		t.Fatal("/metrics must count the 500")
 	}
 
-	// The metrics page is not on the public port.
+	// La página de métricas no está en el puerto público.
 	if res, err := http.Get(s.api.URL + "/metrics"); err == nil {
 		res.Body.Close()
 		if res.StatusCode == http.StatusOK {

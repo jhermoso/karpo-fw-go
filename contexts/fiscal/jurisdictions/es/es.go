@@ -1,8 +1,8 @@
-// Package es is the Spanish jurisdiction of the Fiscal context. This phase implements the general
-// regime only: base per rate aggregated on the whole document, quota per rate rounded to the cent
-// (half away from zero), exempt and not subject bases, and the equivalence surcharge. The rest
-// (reverse charge, special regimes by sector, intra-community and foreign operations, cash
-// accounting, prorrata…) is listed in BACKLOG §6.
+// Package es es la jurisdicción española del contexto Fiscal. Esta fase sólo implementa el régimen
+// general: base por tipo agregada sobre todo el documento, cuota por tipo redondeada al céntimo
+// (la mitad, alejándose de cero), bases exentas y no sujetas, y el recargo de equivalencia. El
+// resto (inversión del sujeto pasivo, regímenes especiales por sector, operaciones
+// intracomunitarias y con el extranjero, criterio de caja, prorrata…) está en BACKLOG §6.
 package es
 
 import (
@@ -15,15 +15,15 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Spain implements domain.Jurisdiction.
+// Spain implementa domain.Jurisdiction.
 type Spain struct{}
 
 var _ domain.Jurisdiction = Spain{}
 
-// Country implements domain.Jurisdiction.
+// Country implementa domain.Jurisdiction.
 func (Spain) Country() string { return "ES" }
 
-// taxOf returns the indirect tax levied in a territory.
+// taxOf devuelve el impuesto indirecto que se aplica en un territorio.
 func taxOf(t domain.Territory) domain.TaxType {
 	switch t {
 	case domain.Canaries:
@@ -36,7 +36,7 @@ func taxOf(t domain.Territory) domain.TaxType {
 
 var hundred = vocab.DecimalFromInt(100)
 
-// Calculate implements domain.Jurisdiction.
+// Calculate implementa domain.Jurisdiction.
 func (Spain) Calculate(ctx context.Context, a domain.Assessment, book domain.RateBook) (domain.Breakdown, error) {
 	if a.Taxpayer == nil {
 		return domain.Breakdown{}, fw.Violation("fiscal.no_taxpayer", "the seller has no fiscal profile")
@@ -94,7 +94,7 @@ func (Spain) Calculate(ctx context.Context, a domain.Assessment, book domain.Rat
 	out := domain.Breakdown{Net: zero, Tax: zero, Surcharge: zero}
 	for _, k := range order {
 		g := groups[k]
-		// The quota is computed once per rate on the aggregated base, not line by line.
+		// La cuota se calcula una vez por tipo sobre la base agregada, no línea a línea.
 		g.Amount = g.Base.Mul(g.Rate).Div(hundred).Round(2)
 		g.SurchargeAmount = g.Base.Mul(g.SurchargeRate).Div(hundred).Round(2)
 		out.Lines = append(out.Lines, *g)

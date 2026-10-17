@@ -2,21 +2,21 @@ package application
 
 import "context"
 
-// Module is a bounded context plugged into a host process (equivalent to the C# IBoundedContext).
-// Modules declare their dependencies by name, mirroring the Karpo hierarchy
-// (Fw <- ErpKernel <- ErpDetail <- Sectorial...). Optional lifecycle hooks: Starter, Stopper.
-// The host implementation lives in application/hosting.
+// Module es un contexto delimitado enchufado a un proceso anfitrión (equivale a IBoundedContext de C#).
+// Los módulos declaran sus dependencias por nombre, reflejando la jerarquía de Karpo
+// (Fw <- ErpKernel <- ErpDetail <- Sectorial...). Ganchos opcionales de ciclo de vida: Starter, Stopper.
+// La implementación del anfitrión está en application/hosting.
 type Module interface {
 	Name() string
 	Dependencies() []string
 }
 
-// Starter is implemented by modules needing initialization (migrations, relays, caches...).
+// Starter lo implementan los módulos que necesitan inicialización (migraciones, relays, cachés...).
 type Starter interface {
 	Start(ctx context.Context) error
 }
 
-// Stopper is implemented by modules holding resources.
+// Stopper lo implementan los módulos que retienen recursos.
 type Stopper interface {
 	Stop(ctx context.Context) error
 }

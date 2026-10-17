@@ -6,12 +6,12 @@ import (
 	"time"
 )
 
-// Server wraps http.Server with graceful shutdown support.
+// Server envuelve http.Server con apagado ordenado.
 type Server struct {
 	httpServer *http.Server
 }
 
-// NewServer creates a new HTTP Server configured with sensible timeout defaults.
+// NewServer crea un Server HTTP nuevo con plazos de espera por defecto razonables.
 func NewServer(addr string, handler http.Handler) *Server {
 	return &Server{
 		httpServer: &http.Server{
@@ -25,7 +25,7 @@ func NewServer(addr string, handler http.Handler) *Server {
 	}
 }
 
-// Start launches the HTTP server in a background goroutine.
+// Start arranca el servidor HTTP en una goroutine en segundo plano.
 func (s *Server) Start() <-chan error {
 	errCh := make(chan error, 1)
 	go func() {
@@ -37,7 +37,7 @@ func (s *Server) Start() <-chan error {
 	return errCh
 }
 
-// Shutdown gracefully stops the server, waiting for active connections to drain.
+// Shutdown detiene el servidor de forma ordenada, esperando a que terminen las conexiones activas.
 func (s *Server) Shutdown(ctx context.Context) error {
 	return s.httpServer.Shutdown(ctx)
 }

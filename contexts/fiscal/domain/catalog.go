@@ -1,8 +1,8 @@
-// Package domain is the model of the Fiscal bounded context: the tax rate and tax treatment
-// catalogs, the fiscal profile of each taxpayer (territory, prorrata, activities and filing
-// obligations), the withholdings reported by Payroll and the tax filings (Modelo 111 and 190 in
-// this phase) with their numbering. Invoices belong to Billing, payslips to Payroll, tax numbers
-// to Parties: this context references them by identity.
+// Package domain es el modelo del contexto delimitado Fiscal: los catálogos de tipos impositivos y de
+// tratamientos fiscales, el perfil fiscal de cada contribuyente (territorio, prorrata, actividades
+// y obligaciones de presentación), las retenciones que comunica Payroll y las declaraciones
+// (Modelos 111 y 190 en esta fase) con su numeración. Las facturas son de Billing, las nóminas de
+// Payroll, los NIF de Parties: este contexto los referencia por identidad.
 package domain
 
 import (
@@ -16,31 +16,31 @@ import (
 )
 
 type (
-	// TaxRateID identifies a tax rate.
+	// TaxRateID identifica un tipo impositivo.
 	TaxRateID struct{ fw.UUID }
-	// TreatmentID identifies a tax treatment.
+	// TreatmentID identifica un tratamiento fiscal.
 	TreatmentID struct{ fw.UUID }
-	// TaxpayerID identifies a taxpayer profile.
+	// TaxpayerID identifica un perfil de contribuyente.
 	TaxpayerID struct{ fw.UUID }
-	// FilingID identifies a tax filing.
+	// FilingID identifica una declaración.
 	FilingID struct{ fw.UUID }
-	// CounterID identifies a filing counter.
+	// CounterID identifica un contador de declaraciones.
 	CounterID struct{ fw.UUID }
-	// WithholdingID identifies a withholding record (the id of the payslip that reported it).
+	// WithholdingID identifica un registro de retención (el id de la nómina que la comunicó).
 	WithholdingID struct{ fw.UUID }
-	// OrganizationID is an internal organization of the Parties context.
+	// OrganizationID es una organización interna del contexto Parties.
 	OrganizationID struct{ fw.UUID }
-	// PartyID is a party of the Parties context.
+	// PartyID es una party del contexto Parties.
 	PartyID struct{ fw.UUID }
 )
 
 var hundred = vocab.DecimalFromInt(100)
 
-// Territory is a fiscal territory (the C# FiscalTerritory enum; OfficialTaxFormSubscription used
-// a free string instead).
+// Territory es un territorio fiscal (el enum FiscalTerritory del C#; OfficialTaxFormSubscription
+// usaba en su lugar un texto libre).
 type Territory int
 
-// Territories.
+// Territorios.
 const (
 	Common Territory = iota + 1
 	BasqueCountry
@@ -52,17 +52,17 @@ const (
 var territories = map[Territory]string{Common: "common", BasqueCountry: "basque-country", Navarre: "navarre", Canaries: "canaries",
 	CeutaMelilla: "ceuta-melilla"}
 
-// String returns the stable name.
+// String devuelve el nombre estable.
 func (t Territory) String() string { return territories[t] }
 
-// ParseTerritory parses a territory name.
+// ParseTerritory interpreta el nombre de un territorio.
 func ParseTerritory(s string) (Territory, bool) { return parseEnum(territories, s) }
 
-// TaxType is an indirect tax: VAT (IVA) in the peninsula and the Balearic Islands and the foral
-// territories, IGIC in the Canaries, IPSI in Ceuta and Melilla.
+// TaxType es un impuesto indirecto: el IVA en la península, Baleares y los territorios forales, el
+// IGIC en Canarias, el IPSI en Ceuta y Melilla.
 type TaxType int
 
-// Tax types.
+// Impuestos.
 const (
 	VAT TaxType = iota + 1
 	IGIC
@@ -71,13 +71,13 @@ const (
 
 var taxTypes = map[TaxType]string{VAT: "vat", IGIC: "igic", IPSI: "ipsi"}
 
-// String returns the stable name.
+// String devuelve el nombre estable.
 func (t TaxType) String() string { return taxTypes[t] }
 
-// ParseTaxType parses a tax type name.
+// ParseTaxType interpreta el nombre de un impuesto.
 func ParseTaxType(s string) (TaxType, bool) { return parseEnum(taxTypes, s) }
 
-// Applies reports whether the tax type is levied in the territory.
+// Applies dice si el impuesto se aplica en el territorio.
 func (t TaxType) Applies(in Territory) bool {
 	switch t {
 	case IGIC:
@@ -100,7 +100,7 @@ func parseEnum[K comparable](m map[K]string, s string) (K, bool) {
 	return zero, false
 }
 
-// NormalizeCode returns a catalog code in its stored form.
+// NormalizeCode devuelve un código de catálogo en la forma en que se guarda.
 func NormalizeCode(s string) string { return strings.ToUpper(strings.TrimSpace(s)) }
 
 func code(v *fw.Validation, s string) string {
@@ -120,28 +120,28 @@ func percent(v *fw.Validation, field string, d vocab.Decimal) {
 	v.Require(!d.IsNegative() && d.LessThanOrEqual(hundred) && d.Equal(d.Round(2)), field, "range", "a percentage from 0 to 100 with two decimals")
 }
 
-// TaxRateKind is the stable aggregate type name.
+// TaxRateKind es el nombre estable del tipo de agregado.
 const TaxRateKind = "fiscal.tax_rate"
 
-// TaxRate is a rate of an indirect tax in a territory, in force for a period (the C# VatGroup had
-// neither territory nor validity, so the Sage import collided on territorial codes). The
-// equivalence surcharge (recargo de equivalencia) exists only in VAT.
+// TaxRate es un tipo de un impuesto indirecto en un territorio, vigente durante un periodo (el
+// VatGroup del C# no tenía ni territorio ni vigencia, así que la importación de Sage chocaba con
+// los códigos territoriales). El recargo de equivalencia sólo existe en el IVA.
 type TaxRate struct {
 	fw.BaseAggregateRoot[TaxRateID]
 	traits.Audited
 	s TaxRateState
 }
 
-// TaxRateState is the persisted state of a tax rate.
+// TaxRateState es el estado persistido de un tipo impositivo.
 type TaxRateState struct {
 	Type        TaxType
 	Territory   Territory
 	Code        string
 	Description string
 	Rate        vocab.Decimal
-	Surcharge   vocab.Decimal // equivalence surcharge; zero when none
+	Surcharge   vocab.Decimal // recargo de equivalencia; cero si no hay
 	From        vocab.Date
-	Until       vocab.Date // zero: open
+	Until       vocab.Date // cero: abierto
 	Audit       traits.AuditStamp
 }
 
@@ -159,7 +159,7 @@ func (s *TaxRateState) check(v *fw.Validation) {
 	v.Require(!s.From.IsZero() && (s.Until.IsZero() || !s.Until.Before(s.From)), "from", "order", "a validity whose end does not precede its start")
 }
 
-// ReconstituteTaxRate rebuilds a tax rate.
+// ReconstituteTaxRate reconstruye un tipo impositivo.
 func ReconstituteTaxRate(id TaxRateID, s TaxRateState) (*TaxRate, error) {
 	base, err := fw.NewBaseAggregateRoot(TaxRateKind, id)
 	if err != nil {
@@ -173,21 +173,21 @@ func ReconstituteTaxRate(id TaxRateID, s TaxRateState) (*TaxRate, error) {
 	return &TaxRate{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// State returns the state of the rate.
+// State devuelve el estado del tipo.
 func (r *TaxRate) State() TaxRateState { return r.s }
 
-// InForceOn reports whether the rate applies on a date.
+// InForceOn dice si el tipo se aplica en una fecha.
 func (r *TaxRate) InForceOn(d vocab.Date) bool {
 	return !d.Before(r.s.From) && (r.s.Until.IsZero() || !d.After(r.s.Until))
 }
 
-// Overlaps reports whether two rates share type, territory and code in overlapping periods.
+// Overlaps dice si dos tipos comparten impuesto, territorio y código en periodos que se solapan.
 func (r *TaxRate) Overlaps(o TaxRateState) bool {
 	return r.s.Type == o.Type && r.s.Territory == o.Territory && r.s.Code == o.Code &&
 		(r.s.Until.IsZero() || !o.From.After(r.s.Until)) && (o.Until.IsZero() || !r.s.From.After(o.Until))
 }
 
-// End closes the validity of the rate on a date (a new rate replaces it).
+// End cierra la vigencia del tipo en una fecha (lo sustituye un tipo nuevo).
 func (r *TaxRate) End(on vocab.Date) error {
 	if on.Before(r.s.From) {
 		return fw.Violation("fiscal.rate_end_before_start", "a rate cannot end before it starts")
@@ -196,16 +196,16 @@ func (r *TaxRate) End(on vocab.Date) error {
 	return nil
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (r *TaxRate) AuditSnapshot() map[string]any {
 	return map[string]any{"code": r.s.Code, "rate": r.s.Rate.String(), "until": r.s.Until.String()}
 }
 
-// TreatmentKind says whether an operation is subject to the tax, exempt or not subject (the C#
-// VatIndicator allowed both flags at once).
+// TreatmentKind dice si una operación está sujeta al impuesto, exenta o no sujeta (el
+// VatIndicator del C# permitía los dos indicadores a la vez).
 type TreatmentKind int
 
-// Treatment kinds.
+// Clases de tratamiento.
 const (
 	Subject TreatmentKind = iota + 1
 	Exempt
@@ -214,23 +214,23 @@ const (
 
 var treatmentKinds = map[TreatmentKind]string{Subject: "subject", Exempt: "exempt", NotSubject: "not-subject"}
 
-// String returns the stable name.
+// String devuelve el nombre estable.
 func (k TreatmentKind) String() string { return treatmentKinds[k] }
 
-// ParseTreatmentKind parses a treatment kind name.
+// ParseTreatmentKind interpreta el nombre de una clase de tratamiento.
 func ParseTreatmentKind(s string) (TreatmentKind, bool) { return parseEnum(treatmentKinds, s) }
 
-// TreatmentKindName is the stable aggregate type name.
+// TreatmentKindName es el nombre estable del tipo de agregado.
 const TreatmentKindName = "fiscal.tax_treatment"
 
-// Treatment is a tax treatment (regime or exemption indicator) of a territory.
+// Treatment es un tratamiento fiscal (régimen o indicador de exención) de un territorio.
 type Treatment struct {
 	fw.BaseAggregateRoot[TreatmentID]
 	traits.Audited
 	s TreatmentState
 }
 
-// TreatmentState is the persisted state of a treatment.
+// TreatmentState es el estado persistido de un tratamiento.
 type TreatmentState struct {
 	Territory   Territory
 	Code        string
@@ -240,7 +240,7 @@ type TreatmentState struct {
 	Audit       traits.AuditStamp
 }
 
-// ReconstituteTreatment rebuilds a treatment.
+// ReconstituteTreatment reconstruye un tratamiento.
 func ReconstituteTreatment(id TreatmentID, s TreatmentState) (*Treatment, error) {
 	base, err := fw.NewBaseAggregateRoot(TreatmentKindName, id)
 	if err != nil {
@@ -259,18 +259,18 @@ func ReconstituteTreatment(id TreatmentID, s TreatmentState) (*Treatment, error)
 	return &Treatment{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// State returns the state of the treatment.
+// State devuelve el estado del tratamiento.
 func (t *Treatment) State() TreatmentState { return t.s }
 
-// Deactivate retires the treatment.
+// Deactivate retira el tratamiento.
 func (t *Treatment) Deactivate() { t.s.Active = false }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (t *Treatment) AuditSnapshot() map[string]any {
 	return map[string]any{"code": t.s.Code, "kind": t.s.Kind.String(), "active": t.s.Active}
 }
 
-// Catalog fields.
+// Campos de los catálogos.
 var (
 	RateFieldType      = spec.Comparable("tax_type", func(r *TaxRate) int { return int(r.s.Type) })
 	RateFieldTerritory = spec.Comparable("territory", func(r *TaxRate) int { return int(r.s.Territory) })

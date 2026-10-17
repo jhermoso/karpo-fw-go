@@ -27,8 +27,9 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlite"
 )
 
-// database is a new SQLite file, migrated: what cmd/karpo-smoke starts on. What a backend in
-// memory holds is not there for the next composition of the host; what a database holds is.
+// database es un fichero SQLite nuevo, migrado: sobre lo que arranca cmd/karpo-smoke. Lo que
+// guarda un backend en memoria no está para la siguiente composición del anfitrión; lo que guarda
+// una base de datos, sí.
 func database(t *testing.T) *hotswap.Switch {
 	t.Helper()
 	raw, err := sql.Open("sqlite", "file:"+filepath.ToSlash(filepath.Join(t.TempDir(), "karpo.db"))+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)")
@@ -48,8 +49,8 @@ func database(t *testing.T) *hotswap.Switch {
 	return hotswap.New(db)
 }
 
-// backend is a new backend in memory, with the catalogs of Geography: what a migrated database
-// nobody administers yet is.
+// backend es un backend nuevo en memoria, con los catálogos de Geography: lo que es una base de
+// datos migrada que nadie administra aún.
 func backend(t *testing.T) *hotswap.Switch {
 	t.Helper()
 	store := memory.NewStore("memory")
@@ -61,8 +62,8 @@ func backend(t *testing.T) *hotswap.Switch {
 	return sw
 }
 
-// noCredentials leaves the environment as the publisher wants it: without the credentials of the
-// first administrator.
+// noCredentials deja el entorno como lo quiere el publicador: sin las credenciales del primer
+// administrador.
 func noCredentials(t *testing.T) {
 	t.Helper()
 	t.Setenv(security.EnvBootstrapUser, "")
@@ -79,13 +80,13 @@ func publisher(t *testing.T) *smoke.Publisher {
 	return p
 }
 
-// do sends a request to a handler, as of this machine, and gives the status and the body.
+// do envía una petición a un handler, como desde esta máquina, y da el estado y el cuerpo.
 func do(t *testing.T, to http.Handler, method, path, token string, body any) (int, []byte, http.Header) {
 	t.Helper()
 	return doAs(t, to, "127.0.0.1:8092", method, path, token, body)
 }
 
-// doAs is do with the Host the request says.
+// doAs es do con el Host que dice la petición.
 func doAs(t *testing.T, to http.Handler, host, method, path, token string, body any) (int, []byte, http.Header) {
 	t.Helper()
 	var sent bytes.Buffer
@@ -112,7 +113,7 @@ func session(t *testing.T, raw []byte) smoke.Session {
 	return s
 }
 
-// The first barrier of the start: nothing but KARPO_ENV=development, exactly.
+// La primera barrera del arranque: nada más que KARPO_ENV=development, exactamente.
 func TestNew_RefusesOutsideDevelopment(t *testing.T) {
 	noCredentials(t)
 	for _, env := range []string{"", "production", "Development", "DEVELOPMENT", " development", "development ", "dev", "staging", "test"} {
@@ -132,7 +133,7 @@ func TestNew_RefusesOutsideDevelopment(t *testing.T) {
 	}
 }
 
-// The second barrier of the start: this machine alone.
+// La segunda barrera del arranque: sólo esta máquina.
 func TestListen_RefusesWhatIsNotThisMachine(t *testing.T) {
 	for _, address := range []string{"0.0.0.0:8092", ":8092", "[::]:8092", "192.168.1.10:8092", "10.0.0.1:8092", "example.com:8092", "host.docker.internal:8092", "127.0.0.1", "localhost",
 		"localhost:8092", "LOCALHOST:8092", "localhost.:8092"} {
@@ -157,7 +158,7 @@ func TestListen_RefusesWhatIsNotThisMachine(t *testing.T) {
 	_ = l.Close()
 }
 
-// It takes no credentials, and it does not open a door on a database somebody administers.
+// No toma credenciales, y no abre una puerta sobre una base de datos que alguien administra.
 func TestNew_TakesNoCredentialsAndOnlyANewDatabase(t *testing.T) {
 	noCredentials(t)
 	sw := database(t)
@@ -174,14 +175,15 @@ func TestNew_TakesNoCredentialsAndOnlyANewDatabase(t *testing.T) {
 	if _, err := smoke.New(context.Background(), smoke.Development, sw, smoke.Options{}); err != nil {
 		t.Fatal(err)
 	}
-	// The same database again: it has an administrator now, and nobody knows its password.
+	// La misma base de datos otra vez: ahora tiene un administrador, y nadie sabe su contraseña.
 	if _, err := smoke.New(context.Background(), smoke.Development, sw, smoke.Options{}); err == nil || !strings.Contains(err.Error(), "new database") {
 		t.Fatalf("it started on a database that already has an administrator: %v", err)
 	}
 }
 
-// A request that does not name this machine in its Host gets nothing, not even from the host
-// behind the door: that is what a page of anywhere sends when its name is made to resolve here.
+// Una petición que no nombra esta máquina en su Host no recibe nada, ni siquiera del anfitrión
+// tras la puerta: eso es lo que envía una página de cualquier sitio cuando se hace que su nombre
+// se resuelva aquí.
 func TestHost_OnlyThisMachine(t *testing.T) {
 	p := publisher(t)
 	_, raw, _ := do(t, p, "GET", "/api/smoke/token", "", nil)
@@ -197,7 +199,7 @@ func TestHost_OnlyThisMachine(t *testing.T) {
 			t.Errorf("Host %q, login: %d, want 403", host, status)
 		}
 	}
-	// Any port: that of the publisher, or what the development proxy of the front sends.
+	// Cualquier puerto: el del publicador, o el que envía el proxy de desarrollo del front.
 	for _, host := range []string{"127.0.0.1", "127.0.0.1:8092", "[::1]", "[::1]:8092", "localhost", "localhost:8092", "localhost:4200", "LocalHost:8081"} {
 		if status, body, _ := doAs(t, p, host, "GET", "/api/smoke/token", "", nil); status != http.StatusOK {
 			t.Errorf("Host %q: %d %s, want 200", host, status, body)
@@ -208,8 +210,8 @@ func TestHost_OnlyThisMachine(t *testing.T) {
 	}
 }
 
-// The door: a session without credentials, of an administrator who does not have to change a
-// password first, and nothing for who brings no session.
+// La puerta: una sesión sin credenciales, de un administrador que no tiene que cambiar antes una
+// contraseña, y nada para quien no trae sesión.
 func TestDoor_LetsTheProfileIn(t *testing.T) {
 	p := publisher(t)
 
@@ -236,7 +238,7 @@ func TestDoor_LetsTheProfileIn(t *testing.T) {
 
 	_, raw, _ := do(t, p, "GET", "/api/smoke/token?as=admin", "", nil)
 	s := session(t, raw)
-	// The host knows who it is, and that it may do everything.
+	// El anfitrión sabe quién es, y que puede hacerlo todo.
 	status, raw, _ := do(t, p, "GET", "/api/auth/context", s.AccessToken, nil)
 	var who authz.Resolution
 	if err := json.Unmarshal(raw, &who); status != http.StatusOK || err != nil || who.Context == nil {
@@ -245,25 +247,25 @@ func TestDoor_LetsTheProfileIn(t *testing.T) {
 	if !who.Context.GlobalAdmin || who.Context.SubjectName != "smoke-admin" || who.Context.Kind != authz.Human {
 		t.Fatalf("who gets in: %+v", who.Context)
 	}
-	// Not 403: the password was already changed, nobody has to do it.
+	// No es 403: la contraseña ya se cambió, nadie tiene que hacerlo.
 	if status, raw, _ := do(t, p, "GET", "/api/parties", s.AccessToken, nil); status != http.StatusOK {
 		t.Fatalf("a route of a context: %d %s", status, raw)
 	}
 	if status, raw, _ := do(t, p, "POST", "/api/organizations", s.AccessToken, map[string]any{"legalName": "Humo S.L."}); status != http.StatusCreated {
 		t.Fatalf("it may write: %d %s", status, raw)
 	}
-	// The session is one of the host: the host refreshes it.
+	// La sesión es del anfitrión: el anfitrión la refresca.
 	status, raw, _ = do(t, p, "POST", "/api/auth/refresh", "", map[string]any{"refreshToken": s.RefreshToken})
 	if again := session(t, raw); status != http.StatusOK || again.AccessToken == "" || again.RefreshToken == s.RefreshToken {
 		t.Fatalf("refresh: %d %s", status, raw)
 	}
-	// And the probes of the real program are there.
+	// Y las sondas del programa real están ahí.
 	if status, _, _ := do(t, p, "GET", "/healthz", "", nil); status != http.StatusOK {
 		t.Fatalf("healthz: %d", status)
 	}
 }
 
-// The login of the profiles looks at no password; that of anybody else is the one of the host.
+// El login de los perfiles no mira ninguna contraseña; el de cualquier otro es el del anfitrión.
 func TestLogin_AnyPasswordForTheProfilesOnly(t *testing.T) {
 	p := publisher(t)
 	for _, username := range []string{"admin", "smoke-admin"} {
@@ -284,7 +286,7 @@ func TestLogin_AnyPasswordForTheProfilesOnly(t *testing.T) {
 	}
 }
 
-// The page of entry stores, under the keys of the front engine, the session of the profile.
+// La página de entrada guarda, bajo las claves del motor del front, la sesión del perfil.
 func TestEnter_StoresWhatTheFrontReads(t *testing.T) {
 	p := publisher(t)
 	status, raw, header := do(t, p, "GET", "/api/smoke/enter?as=admin", "", nil)
@@ -298,7 +300,7 @@ func TestEnter_StoresWhatTheFrontReads(t *testing.T) {
 			t.Errorf("the page has no %s", piece)
 		}
 	}
-	// The token of the page is good for the host.
+	// El token de la página vale para el anfitrión.
 	_, rest, _ := strings.Cut(html, `"accessToken":"`)
 	token, _, _ := strings.Cut(rest, `"`)
 	if status, body, _ := do(t, p, "GET", "/api/auth/context", token, nil); status != http.StatusOK {
@@ -309,7 +311,7 @@ func TestEnter_StoresWhatTheFrontReads(t *testing.T) {
 	}
 }
 
-// The key that signs is made on every start: a session of one publisher is nothing for another.
+// La clave que firma se crea en cada arranque: una sesión de un publicador no es nada para otro.
 func TestKey_IsNewOnEveryStart(t *testing.T) {
 	one, other := publisher(t), publisher(t)
 	_, raw, _ := do(t, one, "GET", "/api/smoke/token", "", nil)
@@ -322,7 +324,7 @@ func TestKey_IsNewOnEveryStart(t *testing.T) {
 	}
 }
 
-// The seed loads once.
+// La semilla se carga una vez.
 func TestSeed_LoadsOnce(t *testing.T) {
 	p := publisher(t)
 	said, err := p.Seed()
@@ -334,7 +336,7 @@ func TestSeed_LoadsOnce(t *testing.T) {
 	}
 }
 
-// What it says when it starts cannot be taken for anything else.
+// Lo que dice al arrancar no se puede tomar por otra cosa.
 func TestBanner_SaysWhatItIs(t *testing.T) {
 	b := smoke.Banner("127.0.0.1:8092", "a file")
 	for _, piece := range []string{"NO AUTHENTICATION", "Never deploy it", "smoke-admin", "http://127.0.0.1:8092"} {

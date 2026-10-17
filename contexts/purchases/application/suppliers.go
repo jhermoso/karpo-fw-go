@@ -11,7 +11,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// SetSupplier creates or replaces the purchase profile of a supplier in a company.
+// SetSupplier crea o sustituye el perfil de compra de un proveedor en una empresa.
 type SetSupplier struct {
 	Company         string `json:"company"`
 	Supplier        string `json:"supplier"`
@@ -22,10 +22,10 @@ type SetSupplier struct {
 	Blocked         bool   `json:"blocked,omitempty"`
 }
 
-// SearchSuppliers lists the supplier profiles of a company.
+// SearchSuppliers lista los perfiles de proveedor de una empresa.
 type SearchSuppliers struct{ Company string }
 
-// SupplierDTO is the transport form of a supplier profile.
+// SupplierDTO es la forma de transporte de un perfil de proveedor.
 type SupplierDTO struct {
 	ID              string `json:"id"`
 	Company         string `json:"company"`

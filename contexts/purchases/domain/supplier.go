@@ -7,31 +7,32 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// SupplierKind is the stable aggregate type name.
+// SupplierKind es el nombre estable del tipo de agregado.
 const SupplierKind = "purchases.supplier_profile"
 
-// SupplierState is the persisted state of a supplier profile.
+// SupplierState es el estado persistido de un perfil de proveedor.
 type SupplierState struct {
 	Company         OrganizationID
 	Supplier        PartyID
-	Category        Category      // default category of the lines
-	WithholdingRate vocab.Decimal // default withholding (professionals)
-	PaymentDays     int           // due date = issue date + days, by default
-	IBAN            vocab.IBAN    // default account to pay to
-	Blocked         bool          // no new invoices are registered
+	Category        Category      // categoría por defecto de las líneas
+	WithholdingRate vocab.Decimal // retención por defecto (profesionales)
+	PaymentDays     int           // vencimiento = fecha de emisión + días, por defecto
+	IBAN            vocab.IBAN    // cuenta por defecto a la que pagar
+	Blocked         bool          // no se registran facturas nuevas
 	Audit           traits.AuditStamp
 }
 
-// SupplierProfile is what a company knows of a supplier to book its invoices (the purchase side
-// of the C# SupplierRelationshipCommercialProfile, whose withholding, VAT and accounts no code
-// read). GL accounts are not here: Accounting's posting profile decides them.
+// SupplierProfile es lo que una empresa sabe de un proveedor para registrar sus facturas (la parte
+// de compras del SupplierRelationshipCommercialProfile del C#, cuya retención, IVA y cuentas no
+// leía ningún código). Las cuentas contables no están aquí: las decide el perfil de contabilización
+// de Accounting.
 type SupplierProfile struct {
 	fw.BaseAggregateRoot[SupplierID]
 	traits.Audited
 	s SupplierState
 }
 
-// ReconstituteSupplier rebuilds a profile.
+// ReconstituteSupplier reconstruye un perfil.
 func ReconstituteSupplier(id SupplierID, s SupplierState) (*SupplierProfile, error) {
 	base, err := fw.NewBaseAggregateRoot(SupplierKind, id)
 	if err != nil {
@@ -48,10 +49,10 @@ func ReconstituteSupplier(id SupplierID, s SupplierState) (*SupplierProfile, err
 	return &SupplierProfile{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// State returns the state.
+// State devuelve el estado.
 func (p *SupplierProfile) State() SupplierState { return p.s }
 
-// Change replaces the defaults (company and supplier stay).
+// Change sustituye los valores por defecto (la empresa y el proveedor se mantienen).
 func (p *SupplierProfile) Change(s SupplierState) error {
 	s.Company, s.Supplier, s.Audit = p.s.Company, p.s.Supplier, p.s.Audit
 	if _, err := ReconstituteSupplier(p.ID(), s); err != nil {
@@ -61,12 +62,12 @@ func (p *SupplierProfile) Change(s SupplierState) error {
 	return nil
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (p *SupplierProfile) AuditSnapshot() map[string]any {
 	return map[string]any{"category": string(p.s.Category), "withholdingRate": p.s.WithholdingRate.String(), "blocked": p.s.Blocked}
 }
 
-// Supplier profile fields.
+// Campos del perfil de proveedor.
 var (
 	SupFieldCompany  = spec.Comparable("company", func(p *SupplierProfile) OrganizationID { return p.s.Company })
 	SupFieldSupplier = spec.Comparable("supplier", func(p *SupplierProfile) PartyID { return p.s.Supplier })

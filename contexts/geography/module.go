@@ -1,6 +1,6 @@
-// Package geography composes the Geography and reference data bounded context on a hot-swap
-// backend: the queries, the HTTP module and the ports other contexts use (gazetteer, address
-// checker, country reference).
+// Package geography compone el contexto delimitado de Geografía y datos de referencia sobre un
+// backend intercambiable en caliente: las consultas, el módulo HTTP y los puertos que usan otros
+// contextos (nomenclátor, comprobador de direcciones, referencia de países).
 package geography
 
 import (
@@ -11,18 +11,18 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 )
 
-// Module is the composed context.
+// Module es el contexto compuesto.
 type Module struct {
 	Service *gapp.Service
 	Ports   gapp.Ports // contracts.Gazetteer, contracts.AddressChecker, contracts.Reference
 	HTTP    *gdist.Module
-	// Holidays is the calendar of holidays (contracts.Calendar), and HolidaysHTTP its routes.
+	// Holidays es el calendario de festivos (contracts.Calendar), y HolidaysHTTP sus rutas.
 	Holidays     *gapp.Holidays
 	HolidaysHTTP *gdist.HolidaysModule
 }
 
-// Compose builds the context on sw. An in-memory backend must be filled with
-// infrastructure.LoadMemory; SQL backends get the data from the migrations.
+// Compose construye el contexto sobre sw. Un backend en memoria hay que llenarlo con
+// infrastructure.LoadMemory; los backends SQL toman los datos de las migraciones.
 func Compose(sw *hotswap.Switch) *Module {
 	ports := gapp.Ports{
 		Boundaries:  hotswap.Repository(sw, infrastructure.BoundaryRepositoryFactory),

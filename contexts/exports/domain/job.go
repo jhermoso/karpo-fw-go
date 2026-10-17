@@ -1,6 +1,6 @@
-// Package domain is the model of the Exports (Exportación de listados) bounded context: the job
-// that turns a list someone may read into a file, and how the file is written. The C# kept its
-// jobs in memory and its files in the temporary folder of one machine.
+// Package domain es el modelo del contexto delimitado Exports (Exportación de listados): el trabajo
+// que convierte en fichero una lista que alguien puede leer, y cómo se escribe el fichero. El C#
+// guardaba sus trabajos en memoria y sus ficheros en la carpeta temporal de una máquina.
 package domain
 
 import (
@@ -14,59 +14,59 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/traits"
 )
 
-// JobKind is the aggregate type name of a job.
+// JobKind es el nombre del tipo de agregado de un trabajo.
 const JobKind = "exports.job"
 
-// Limits of a job.
+// Límites de un trabajo.
 const (
-	MaxRows       = 1000000 // a sheet holds 1,048,576 rows
+	MaxRows       = 1000000 // una hoja admite 1.048.576 filas
 	MaxFilters    = 30
-	MaxActiveJobs = 5 // waiting or running, per person
+	MaxActiveJobs = 5 // esperando o en marcha, por persona
 )
 
-// JobID identifies a job.
+// JobID identifica un trabajo.
 type JobID struct{ fw.UUID }
 
-// NewJobID returns a fresh identity.
+// NewJobID devuelve una identidad nueva.
 func NewJobID() JobID { return JobID{fw.NewUUID()} }
 
-// ParseJobID parses a textual identity.
+// ParseJobID interpreta una identidad en texto.
 func ParseJobID(s string) (JobID, error) { u, err := fw.ParseUUID(s); return JobID{u}, err }
 
-// Formats a list is written in.
+// Formatos en que se escribe una lista.
 const (
 	CSV  = "csv"
 	XLSX = "xlsx"
 )
 
-// Formats lists the valid formats.
+// Formats enumera los formatos válidos.
 var Formats = []string{CSV, XLSX}
 
-// Status is where a job is.
+// Status es en qué punto está un trabajo.
 type Status string
 
-// Statuses. The C# had no "cancelled" (it was a failure with a text) and forgot its jobs on a
-// restart.
+// Estados. El C# no tenía «cancelado» (era un fallo con un texto) y olvidaba sus trabajos al
+// reiniciarse.
 const (
 	Queued     Status = "queued"
 	Processing Status = "processing"
 	Completed  Status = "completed"
 	Failed     Status = "failed"
 	Cancelled  Status = "cancelled"
-	Expired    Status = "expired" // its file was removed
+	Expired    Status = "expired" // su fichero se quitó
 )
 
-// Statuses lists the valid statuses.
+// Statuses enumera los estados válidos.
 var Statuses = []Status{Queued, Processing, Completed, Failed, Cancelled, Expired}
 
-// Access is an organization the requester could read when asking.
+// Access es una organización que el solicitante podía leer al pedir.
 type Access struct {
 	Organization fw.UUID
 	Level        string
 }
 
-// Requester is who asked for the export and what they could see then: the file is written with
-// that sight, whoever runs the job and whenever.
+// Requester es quién pidió la exportación y qué podía ver entonces: el fichero se escribe con esa
+// vista, lo ejecute quien lo ejecute y cuando sea.
 type Requester struct {
 	Subject fw.UUID
 	Name    string
@@ -76,13 +76,13 @@ type Requester struct {
 	Scope   []Access
 }
 
-// Filter is a condition of the list, as the dataset understands it.
+// Filter es una condición de la lista, tal como la entiende el dataset.
 type Filter struct {
 	Name  string
 	Value string
 }
 
-// JobState is the persisted state of a job.
+// JobState es el estado persistido de un trabajo.
 type JobState struct {
 	Dataset     string
 	Format      string
@@ -92,24 +92,24 @@ type JobState struct {
 	Status      Status
 	Rows        int
 	FileName    string
-	FileKey     string // where the storage keeps it
+	FileKey     string // dónde lo guarda el almacenamiento
 	Size        int64
 	Error       string
 	RequestedAt time.Time
 	StartedAt   time.Time
 	FinishedAt  time.Time
-	ExpiresAt   time.Time // until when the file is kept
+	ExpiresAt   time.Time // hasta cuándo se guarda el fichero
 	Audit       traits.AuditStamp
 }
 
-// Job is one export.
+// Job es una exportación.
 type Job struct {
 	fw.BaseAggregateRoot[JobID]
 	traits.Audited
 	s JobState
 }
 
-// ValidKey reports whether s can name a dataset: lower case letters, digits and dashes.
+// ValidKey dice si s puede nombrar un dataset: minúsculas, dígitos y guiones.
 func ValidKey(s string) bool {
 	if s == "" || len(s) > 64 {
 		return false
@@ -130,7 +130,7 @@ func clip(s string, n int) string {
 	return string([]rune(s)[:n])
 }
 
-// ReconstituteJob rebuilds a job.
+// ReconstituteJob reconstruye un trabajo.
 func ReconstituteJob(id JobID, s JobState) (*Job, error) {
 	base, err := fw.NewBaseAggregateRoot(JobKind, id)
 	if err != nil {
@@ -159,7 +159,7 @@ func ReconstituteJob(id JobID, s JobState) (*Job, error) {
 	return &Job{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// Request queues an export.
+// Request pone en cola una exportación.
 func Request(id JobID, dataset, format, title string, filters []Filter, by Requester, now time.Time) (*Job, error) {
 	fs := slices.Clone(filters)
 	slices.SortFunc(fs, func(a, b Filter) int { return strings.Compare(a.Name, b.Name) })
@@ -167,23 +167,23 @@ func Request(id JobID, dataset, format, title string, filters []Filter, by Reque
 		Status: Queued, RequestedAt: now.UTC()})
 }
 
-// State returns the state (slices are copies).
+// State devuelve el estado (los slices son copias).
 func (j *Job) State() JobState {
 	s := j.s
 	s.Filters, s.Requester.Scope = slices.Clone(s.Filters), slices.Clone(s.Requester.Scope)
 	return s
 }
 
-// Active reports whether the job waits or runs.
+// Active dice si el trabajo espera o se ejecuta.
 func (j *Job) Active() bool { return j.s.Status == Queued || j.s.Status == Processing }
 
-// OwnedBy reports whether the subject asked for it.
+// OwnedBy dice si el sujeto lo pidió.
 func (j *Job) OwnedBy(subject fw.UUID) bool {
 	return !subject.IsZero() && j.s.Requester.Subject == subject
 }
 
-// Begin takes a waiting job to write it. It reports whether it did: a job somebody cancelled or
-// another worker took is left alone.
+// Begin toma un trabajo que espera para escribirlo. Dice si lo hizo: un trabajo que alguien canceló
+// o que tomó otro worker se deja en paz.
 func (j *Job) Begin(now time.Time) bool {
 	if j.s.Status != Queued {
 		return false
@@ -192,15 +192,15 @@ func (j *Job) Begin(now time.Time) bool {
 	return true
 }
 
-// Progress notes how many rows are written.
+// Progress anota cuántas filas van escritas.
 func (j *Job) Progress(rows int) {
 	if j.s.Status == Processing && rows > j.s.Rows {
 		j.s.Rows = rows
 	}
 }
 
-// Complete records the file of a job that was being written and until when it is kept. A job
-// cancelled meanwhile stays cancelled: it reports false and the file is to be removed.
+// Complete registra el fichero de un trabajo que se estaba escribiendo y hasta cuándo se guarda. Un
+// trabajo cancelado entretanto sigue cancelado: devuelve false y el fichero hay que quitarlo.
 func (j *Job) Complete(rows int, fileName, fileKey string, size int64, now time.Time, keep time.Duration) bool {
 	if j.s.Status != Processing || fileKey == "" {
 		return false
@@ -210,8 +210,8 @@ func (j *Job) Complete(rows int, fileName, fileKey string, size int64, now time.
 	return true
 }
 
-// Fail closes a job that could not be written. What is told is for the person who asked, not the
-// text of an internal error.
+// Fail cierra un trabajo que no se pudo escribir. Lo que se cuenta es para la persona que pidió, no
+// el texto de un error interno.
 func (j *Job) Fail(reason string, now time.Time) bool {
 	if !j.Active() {
 		return false
@@ -220,7 +220,7 @@ func (j *Job) Fail(reason string, now time.Time) bool {
 	return true
 }
 
-// Cancel gives up a job that waits or runs. It reports whether it changed anything.
+// Cancel abandona un trabajo que espera o se ejecuta. Dice si cambió algo.
 func (j *Job) Cancel(now time.Time) bool {
 	if !j.Active() {
 		return false
@@ -229,10 +229,10 @@ func (j *Job) Cancel(now time.Time) bool {
 	return true
 }
 
-// Due reports whether the file of a completed job has been kept long enough.
+// Due dice si el fichero de un trabajo terminado se ha guardado el tiempo suficiente.
 func (j *Job) Due(now time.Time) bool { return j.s.Status == Completed && !now.Before(j.s.ExpiresAt) }
 
-// Expire forgets the file of a completed job and returns the key it had.
+// Expire olvida el fichero de un trabajo terminado y devuelve la clave que tenía.
 func (j *Job) Expire(now time.Time) (string, bool) {
 	if !j.Due(now) {
 		return "", false
@@ -242,13 +242,13 @@ func (j *Job) Expire(now time.Time) (string, bool) {
 	return key, true
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (j *Job) AuditSnapshot() map[string]any {
 	return map[string]any{"dataset": j.s.Dataset, "format": j.s.Format, "status": string(j.s.Status), "rows": j.s.Rows,
 		"requester": j.s.Requester.Subject.String()}
 }
 
-// Job fields.
+// Campos del trabajo.
 var (
 	JobFieldStatus    = spec.Comparable("status", func(j *Job) string { return string(j.s.Status) })
 	JobFieldRequester = spec.Comparable("requested_by", func(j *Job) fw.UUID { return j.s.Requester.Subject })
@@ -256,5 +256,5 @@ var (
 	JobFieldRequested = spec.OrderedBy("requested_at", func(j *Job) time.Time { return j.s.RequestedAt }, func(a, b time.Time) int { return a.Compare(b) })
 )
 
-// JobRepository stores jobs.
+// JobRepository guarda los trabajos.
 type JobRepository = fw.Repository[JobID, *Job]

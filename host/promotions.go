@@ -8,14 +8,14 @@ import (
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// PromotionCodes tells Exchange whose a promotion code is: the collaborator of the company that
-// has it in Parties, on its collaborator relationship. A code of the collaborator of another
-// company is nobody's here.
+// PromotionCodes dice a Exchange de quién es un código de promoción: del colaborador de la empresa
+// que lo tiene en Parties, en su relación de colaborador. Un código del colaborador de otra empresa
+// aquí no es de nadie.
 type PromotionCodes struct{ Collaborators parcontracts.Collaborators }
 
 var _ exgdomain.Collaborators = PromotionCodes{}
 
-// ByPromotionCode implements Exchange's Collaborators.
+// ByPromotionCode implementa Collaborators de Exchange.
 func (p PromotionCodes) ByPromotionCode(ctx context.Context, company exgdomain.OrganizationID, code string) (exgdomain.PartyID, bool, error) {
 	c, found, err := p.Collaborators.ByPromotionCode(ctx, company.String(), code)
 	if err != nil || !found {

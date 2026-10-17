@@ -13,28 +13,29 @@ import (
 	"testing"
 )
 
-// The smoke publisher (host/smoke and cmd/karpo-smoke) lets anybody in without credentials. It
-// exists only with the build tag smoke, and this file, which has no tag and so always runs, is
-// what the pipeline checks it with.
+// La publicadora de humo (host/smoke y cmd/karpo-smoke) deja entrar a cualquiera sin
+// credenciales. Sólo existe con la etiqueta de compilación smoke, y este fichero, que no tiene
+// etiqueta y por eso se ejecuta siempre, es con lo que el pipeline lo comprueba.
 
-// smokeTag is the line every file of the smoke publisher starts with.
+// smokeTag es la línea con la que empieza cada fichero de la publicadora de humo.
 const smokeTag = "//go:build smoke"
 
-// smokePackage and smokeRoute are what nothing without the tag may import or name. The route is
-// written in two pieces so that this file does not name it.
+// smokePackage y smokeRoute son lo que nada sin la etiqueta puede importar ni nombrar. La ruta
+// se escribe en dos trozos para que este fichero no la nombre.
 const (
 	smokePackage = "/host/smoke"
 	smokeRoute   = "/api/" + "smoke"
 )
 
-// smokeTrees are the directories where everything is of the smoke publisher.
+// smokeTrees son los directorios en los que todo es de la publicadora de humo.
 var smokeTrees = []string{"host/smoke", "cmd/karpo-smoke"}
 
-// importsSmoke is how a violation of rule 10 ends.
+// importsSmoke es cómo termina una infracción de la regla 10.
 const importsSmoke = "imports the smoke publisher"
 
-// behindSmoke says whether a build constraint is false whenever the tag smoke is not set: the
-// tag itself, an && with a side that is, or an || with both sides that are.
+// behindSmoke dice si una restricción de compilación es falsa siempre que no está puesta la
+// etiqueta smoke: la etiqueta misma, un && con un lado que lo es, o un || con los dos lados que
+// lo son.
 func behindSmoke(x constraint.Expr) bool {
 	switch x := x.(type) {
 	case *constraint.TagExpr:
@@ -47,9 +48,9 @@ func behindSmoke(x constraint.Expr) bool {
 	return false
 }
 
-// readSmoke parses the head of a Go file and says whether its build constraint (the //go:build
-// line before the package clause, as the compiler reads it) keeps it behind the tag smoke, and
-// whether it imports the smoke publisher.
+// readSmoke analiza la cabecera de un fichero Go y dice si su restricción de compilación (la
+// línea //go:build antes de la cláusula package, tal como la lee el compilador) lo deja detrás
+// de la etiqueta smoke, y si importa la publicadora de humo.
 func readSmoke(path string) (tagged, imports bool, err error) {
 	f, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.ImportsOnly|parser.ParseComments)
 	if err != nil {
@@ -73,10 +74,11 @@ func readSmoke(path string) (tagged, imports bool, err error) {
 	return tagged, imports, nil
 }
 
-// smokeViolations walks every Go file under root, tests included and every program of cmd, and
-// says what breaks the rules: a file of the smoke publisher that is not behind the tag, a file
-// outside the publisher that imports it (with the tag or without: a real program built with the
-// tag would have the door), or a file without the tag that names its routes.
+// smokeViolations recorre todos los ficheros Go bajo root, pruebas incluidas y todos los
+// programas de cmd, y dice qué incumple las reglas: un fichero de la publicadora de humo que no
+// está detrás de la etiqueta, un fichero fuera del publicador que lo importa (con la etiqueta o
+// sin ella: un programa real compilado con la etiqueta tendría la puerta), o un fichero sin la
+// etiqueta que nombra sus rutas.
 func smokeViolations(root string) ([]string, error) {
 	var out []string
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
@@ -125,8 +127,8 @@ func smokeViolations(root string) ([]string, error) {
 	return out, err
 }
 
-// Rule 10: nothing but the smoke publisher imports the smoke publisher: no program of cmd, no
-// package, no test, with the build tag or without it.
+// Regla 10: nada salvo la publicadora de humo importa la publicadora de humo: ningún programa de
+// cmd, ningún paquete, ninguna prueba, con la etiqueta de compilación o sin ella.
 func TestSmoke_IsNotImportedByThePrograms(t *testing.T) {
 	violations, err := smokeViolations(root(t))
 	if err != nil {
@@ -137,7 +139,7 @@ func TestSmoke_IsNotImportedByThePrograms(t *testing.T) {
 			t.Error(v)
 		}
 	}
-	// The real programs are where the rule looks for them.
+	// Los programas reales están donde la regla los busca.
 	for _, program := range []string{"karpo", "karpo-postgres"} {
 		if files, _ := filepath.Glob(filepath.Join(root(t, "cmd", program), "*.go")); len(files) == 0 {
 			t.Errorf("cmd/%s has no Go files: the rule is looking in the wrong place", program)
@@ -145,8 +147,8 @@ func TestSmoke_IsNotImportedByThePrograms(t *testing.T) {
 	}
 }
 
-// Rule 11: the smoke publisher stays behind its build tag, and nothing without the tag names its
-// routes.
+// Regla 11: la publicadora de humo se queda detrás de su etiqueta de compilación, y nada sin la
+// etiqueta nombra sus rutas.
 func TestSmoke_StaysBehindItsTag(t *testing.T) {
 	violations, err := smokeViolations(root(t))
 	if err != nil {
@@ -157,7 +159,7 @@ func TestSmoke_StaysBehindItsTag(t *testing.T) {
 			t.Error(v)
 		}
 	}
-	// The publisher is where the rule looks for it: if it moves, the rule moves with it.
+	// El publicador está donde la regla lo busca: si se mueve, la regla se mueve con él.
 	for _, tree := range smokeTrees {
 		if files, _ := filepath.Glob(filepath.Join(root(t, filepath.FromSlash(tree)), "*.go")); len(files) == 0 {
 			t.Errorf("%s has no Go files: the rule is looking in the wrong place", tree)
@@ -165,7 +167,7 @@ func TestSmoke_StaysBehindItsTag(t *testing.T) {
 	}
 }
 
-// The rule bites: each of the ways out of the tag is seen.
+// La regla muerde: se ve cada una de las formas de salirse de la etiqueta.
 func TestSmoke_TheRuleBites(t *testing.T) {
 	dir := t.TempDir()
 	write := func(rel, text string) {
@@ -181,34 +183,34 @@ func TestSmoke_TheRuleBites(t *testing.T) {
 	imported := "\n\nimport _ \"" + module + smokePackage + "\"\n"
 	named := "\n\nconst door = \"" + smokeRoute + "\"\n"
 	write("host/smoke/smoke.go", smokeTag+"\n\npackage smoke\n")
-	write("host/smoke/more.go", "// Something said before.\n\n//go:build smoke && !race\n\npackage smoke\n") // behind the tag, and something else
+	write("host/smoke/more.go", "// Something said before.\n\n//go:build smoke && !race\n\npackage smoke\n") // detrás de la etiqueta, y algo más
 	write("cmd/karpo-smoke/main.go", smokeTag+"\n\npackage main"+imported)
 	write("cmd/karpo-smoke/main_test.go", smokeTag+"\n\npackage main"+imported)
-	write("integration/door_test.go", smokeTag+"\n\npackage integration"+named) // with the tag, the door may be named
+	write("integration/door_test.go", smokeTag+"\n\npackage integration"+named) // con la etiqueta, la puerta se puede nombrar
 	write("host/host.go", "package host\n")
 	if got, err := smokeViolations(dir); err != nil || len(got) != 0 {
 		t.Fatalf("what is right is taken for wrong: %v %v", got, err)
 	}
 
 	wrong := map[string]string{
-		"host/smoke/extra.go":            "package smoke\n",                                 // a file of the publisher without the tag
-		"cmd/karpo-smoke/other.go":       "//go:build !production\n\npackage main\n",        // another tag is not the tag
-		"host/smoke/either.go":           "//go:build smoke || linux\n\npackage smoke\n",    // on linux it needs no tag
-		"host/smoke/never.go":            "//go:build !smoke\n\npackage smoke\n",            // the tag, the other way round
-		"cmd/karpo/main.go":              "package main" + imported,                         // the real program imports it
-		"cmd/karpo/door.go":              smokeTag + "\n\npackage main" + imported,          // with the tag too: built with it, it has the door
-		"cmd/another/main_test.go":       "package main" + imported,                         // a test, of a program nobody listed
-		"integration/enter_test.go":      smokeTag + "\n\npackage integration" + imported,   // a test with the tag
-		"host/serve/serve.go":            "package serve" + named,                           // the real program names the door
-		"contexts/security/door_test.go": "package security" + named,                        // a test without the tag
-		"pkg/late.go":                    "package pkg\n\n" + smokeTag + named,              // the tag after the package clause is not a tag
-		"pkg/block.go":                   "/*\n" + smokeTag + "\n*/\n\npackage pkg" + named, // nor is it inside a block comment
-		"pkg/old.go":                     "// +build smoke\n\npackage pkg" + named,          // nor in the old form, which is not looked at
+		"host/smoke/extra.go":            "package smoke\n",                                 // un fichero del publicador sin la etiqueta
+		"cmd/karpo-smoke/other.go":       "//go:build !production\n\npackage main\n",        // otra etiqueta no es la etiqueta
+		"host/smoke/either.go":           "//go:build smoke || linux\n\npackage smoke\n",    // en linux no necesita etiqueta
+		"host/smoke/never.go":            "//go:build !smoke\n\npackage smoke\n",            // la etiqueta, al revés
+		"cmd/karpo/main.go":              "package main" + imported,                         // el programa real lo importa
+		"cmd/karpo/door.go":              smokeTag + "\n\npackage main" + imported,          // también con la etiqueta: compilado con ella, tiene la puerta
+		"cmd/another/main_test.go":       "package main" + imported,                         // una prueba, de un programa que nadie ha listado
+		"integration/enter_test.go":      smokeTag + "\n\npackage integration" + imported,   // una prueba con la etiqueta
+		"host/serve/serve.go":            "package serve" + named,                           // el programa real nombra la puerta
+		"contexts/security/door_test.go": "package security" + named,                        // una prueba sin la etiqueta
+		"pkg/late.go":                    "package pkg\n\n" + smokeTag + named,              // la etiqueta después de la cláusula package no es una etiqueta
+		"pkg/block.go":                   "/*\n" + smokeTag + "\n*/\n\npackage pkg" + named, // ni lo es dentro de un comentario de bloque
+		"pkg/old.go":                     "// +build smoke\n\npackage pkg" + named,          // ni en la forma antigua, que no se mira
 	}
 	for rel, text := range wrong {
 		write(rel, text)
 	}
-	write(".hidden/skipped.go", "package hidden"+named) // not looked at
+	write(".hidden/skipped.go", "package hidden"+named) // no se mira
 	got, err := smokeViolations(dir)
 	if err != nil {
 		t.Fatal(err)

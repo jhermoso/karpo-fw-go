@@ -1,4 +1,5 @@
-// Package hr composes the Human Resources bounded context on a hot-swap backend.
+// Package hr compone el contexto delimitado de Recursos Humanos sobre un backend intercambiable en
+// caliente.
 package hr
 
 import (
@@ -20,7 +21,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 )
 
-// Module is the composed context.
+// Module es el contexto compuesto.
 type Module struct {
 	Service           *happ.Service
 	Staff             contracts.Staff
@@ -29,18 +30,18 @@ type Module struct {
 	Audit             application.AuditLog
 }
 
-// Option configures the composition.
+// Option configura la composición.
 type Option func(*happ.Deps)
 
-// WithOrganizations resolves units and affiliations with the Parties context.
+// WithOrganizations resuelve las unidades y las afiliaciones con el contexto Parties.
 func WithOrganizations(o happ.Organizations) Option {
 	return func(d *happ.Deps) { d.Organizations = o }
 }
 
-// WithFacilities checks the facilities of work centers with the Facilities context.
+// WithFacilities comprueba las instalaciones de los centros de trabajo con el contexto Facilities.
 func WithFacilities(f happ.Facilities) Option { return func(d *happ.Deps) { d.Facilities = f } }
 
-// Compose builds the context on sw.
+// Compose construye el contexto sobre sw.
 func Compose(sw *hotswap.Switch, opts ...Option) *Module {
 	positions := hotswap.Repository(sw, infrastructure.PositionRepositoryFactory)
 	employments := hotswap.Repository(sw, infrastructure.EmploymentRepositoryFactory)
@@ -60,7 +61,7 @@ func Compose(sw *hotswap.Switch, opts ...Option) *Module {
 		Positions: happ.PositionDirectory{Positions: positions}, IntegrationOutbox: integration, Audit: audit}
 }
 
-// Relay forwards the Published Language to a transport.
+// Relay reenvía el Published Language a un transporte.
 func (m *Module) Relay(sender application.MessageSender, opts ...outbox.RelayOption) *outbox.Relay {
 	return messaging.NewRelay(contracts.Source, m.IntegrationOutbox, sender, opts...)
 }
@@ -101,8 +102,8 @@ func decode(r *http.Request, v any) error {
 	return nil
 }
 
-// command handles PUT/POST /{id}/...: it parses the path id, decodes the body into In and lets
-// set place the id.
+// command atiende PUT/POST /{id}/...: interpreta el id de la ruta, decodifica el cuerpo en In y
+// deja que set coloque el id.
 func command[ID any, In any, Out any](parse func(string) (ID, error), set func(*In, ID), run func(context.Context, In) (Out, error)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := parse(r.PathValue("id"))
@@ -147,7 +148,7 @@ func get[ID any, Out any](parse func(string) (ID, error), run func(context.Conte
 	}
 }
 
-// RegisterRoutes implements distribution.EndpointModule.
+// RegisterRoutes implementa distribution.EndpointModule.
 func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	svc := m.Service
 	pos, emp, wc := domain.ParsePositionID, domain.ParseEmploymentID, domain.ParseWorkCenterID
@@ -156,7 +157,7 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 		return q.Get, func(k string) int { n, _ := strconv.Atoi(q.Get(k)); return n }
 	}
 
-	// Positions.
+	// Puestos.
 	mux.HandleFunc("POST /api/hr/positions", create(svc.OpenPosition.Handle))
 	mux.HandleFunc("GET /api/hr/positions", func(w http.ResponseWriter, r *http.Request) {
 		s, n := query(r)
@@ -184,7 +185,7 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/hr/positions/{id}/reports-to/end", command(pos, func(c *happ.EndReporting, id domain.PositionID) { c.ID = id }, svc.EndReporting.Handle))
 	mux.HandleFunc("POST /api/hr/positions/{id}/close", command(pos, func(c *happ.ClosePosition, id domain.PositionID) { c.ID = id }, svc.ClosePosition.Handle))
 
-	// Employments.
+	// Relaciones laborales.
 	mux.HandleFunc("POST /api/hr/employments", create(svc.Hire.Handle))
 	mux.HandleFunc("GET /api/hr/employments", func(w http.ResponseWriter, r *http.Request) {
 		s, n := query(r)
@@ -200,7 +201,7 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/hr/employments/{id}/terminate", command(emp, func(c *happ.Terminate, id domain.EmploymentID) { c.ID = id }, svc.Terminate.Handle))
 	mux.HandleFunc("PUT /api/hr/employments/{id}/classification", command(emp, func(c *happ.SetClassification, id domain.EmploymentID) { c.ID = id }, svc.SetClassification.Handle))
 
-	// Work centers.
+	// Centros de trabajo.
 	mux.HandleFunc("POST /api/hr/work-centers", create(svc.OpenWorkCenter.Handle))
 	mux.HandleFunc("GET /api/hr/work-centers", func(w http.ResponseWriter, r *http.Request) {
 		s, n := query(r)
@@ -214,7 +215,7 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/hr/work-centers/{id}/headquarters", command(wc, func(c *happ.SetHeadquarters, id domain.WorkCenterID) { c.ID = id }, svc.SetHeadquarters.Handle))
 	mux.HandleFunc("POST /api/hr/work-centers/{id}/close", command(wc, func(c *happ.CloseWorkCenter, id domain.WorkCenterID) { c.ID = id }, svc.CloseWorkCenter.Handle))
 
-	// Catalogs.
+	// Catálogos.
 	mux.HandleFunc("GET /api/hr/catalogs/position-types", func(w http.ResponseWriter, r *http.Request) {
 		out, err := svc.PositionTypes.Handle(r.Context(), happ.ListPositionTypes{ActiveOnly: r.URL.Query().Get("active") == "true"})
 		distribution.Respond(w, r, out, err, http.StatusOK)
@@ -233,7 +234,7 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 		distribution.Respond(w, r, out, err, http.StatusOK)
 	})
 
-	// Query ports for other contexts (they serve services, not users).
+	// Puertos de consulta para otros contextos (sirven a servicios, no a usuarios).
 	mux.Handle("POST /api/hr/staff/employments", distribution.RequirePermission(happ.PermEmploymentRead, http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			var body struct {

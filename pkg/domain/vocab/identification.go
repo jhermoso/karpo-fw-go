@@ -5,10 +5,10 @@ import (
 	"strings"
 )
 
-// DocumentKind is the kind of an identification document.
+// DocumentKind es el tipo de un documento de identificación.
 type DocumentKind string
 
-// Document kinds. TaxID accepts any Spanish NIF form (DNI, NIE, CIF, K/L/M NIF).
+// Tipos de documento. TaxID acepta cualquier forma de NIF español (DNI, NIE, CIF, NIF K/L/M).
 const (
 	NationalID     DocumentKind = "national_id"     // DNI
 	ResidentCard   DocumentKind = "resident_card"   // NIE
@@ -18,24 +18,24 @@ const (
 	OtherDocument  DocumentKind = "other"
 )
 
-// Identification is an identification document number of a given kind, issued by a country.
-// Values are normalized (upper case, no spaces or dashes) before validating. Country rules are
-// pluggable (RegisterDocumentRule); Spanish rules with check digits are built in.
+// Identification es el número de un documento de identificación de un tipo dado, emitido por un país.
+// Los valores se normalizan (mayúsculas, sin espacios ni guiones) antes de validarse. Las reglas por
+// país son enchufables (RegisterDocumentRule); las reglas españolas con dígito de control vienen incluidas.
 type Identification struct {
 	Kind    DocumentKind `json:"kind"`
 	Country CountryCode  `json:"country"`
 	Number  string       `json:"number"`
 }
 
-// DocumentRule validates a normalized document number and returns an error message ("" = valid).
+// DocumentRule valida un número de documento normalizado y devuelve un mensaje de error ("" = válido).
 type DocumentRule func(number string) string
 
 var documentRules = map[string]DocumentRule{}
 
 func ruleKey(c CountryCode, k DocumentKind) string { return c.String() + "/" + string(k) }
 
-// RegisterDocumentRule sets the validation rule of a document kind for a country. Call it
-// during initialization only (it is not safe for concurrent use with NewIdentification).
+// RegisterDocumentRule fija la regla de validación de un tipo de documento para un país. Sólo debe
+// llamarse durante la inicialización (no es seguro usarla a la vez que NewIdentification).
 func RegisterDocumentRule(country CountryCode, kind DocumentKind, rule DocumentRule) {
 	documentRules[ruleKey(country, kind)] = rule
 }
@@ -47,8 +47,8 @@ func init() {
 	RegisterDocumentRule(Spain, SocialSecurity, esNSS)
 }
 
-// NewIdentification normalizes and validates a document number. Kinds without a country rule
-// are checked with a generic rule (3..20 letters or digits); passports require 5..20.
+// NewIdentification normaliza y valida un número de documento. Los tipos sin regla de país se
+// comprueban con una regla genérica (3..20 letras o dígitos); los pasaportes exigen 5..20.
 func NewIdentification(kind DocumentKind, country CountryCode, number string) (Identification, error) {
 	n := strings.ToUpper(strings.NewReplacer(" ", "", "-", "", ".", "").Replace(strings.TrimSpace(number)))
 	if country.IsZero() {
@@ -64,10 +64,10 @@ func NewIdentification(kind DocumentKind, country CountryCode, number string) (I
 	return Identification{Kind: kind, Country: country, Number: n}, nil
 }
 
-// IsZero reports whether the identification is absent.
+// IsZero dice si falta la identificación.
 func (i Identification) IsZero() bool { return i.Number == "" }
 
-// String returns "ES/tax_id:B12345674".
+// String devuelve "ES/tax_id:B12345674".
 func (i Identification) String() string {
 	return i.Country.String() + "/" + string(i.Kind) + ":" + i.Number
 }
@@ -129,8 +129,8 @@ func esNIE(n string) string {
 	return ""
 }
 
-// esCIF validates the NIF of legal entities: letter + 7 digits + check (digit or letter from
-// "JABCDEFGHI"). P, Q, R, S, N, W require a letter; A, B, E, H require a digit.
+// esCIF valida el NIF de las personas jurídicas: letra + 7 dígitos + control (dígito o letra de
+// "JABCDEFGHI"). P, Q, R, S, N, W exigen letra; A, B, E, H exigen dígito.
 func esCIF(n string) string {
 	if len(n) != 9 || strings.IndexByte("ABCDEFGHJNPQRSUVW", n[0]) < 0 || !digits(n[1:8]) {
 		return "CIF must be an entity letter, 7 digits and a check character"
@@ -138,7 +138,7 @@ func esCIF(n string) string {
 	sum := 0
 	for i := 0; i < 7; i++ {
 		d := int(n[1+i] - '0')
-		if i%2 == 0 { // odd positions (1st, 3rd...) are doubled
+		if i%2 == 0 { // las posiciones impares (1.ª, 3.ª...) se doblan
 			d *= 2
 			d = d/10 + d%10
 		}
@@ -163,7 +163,7 @@ func esCIF(n string) string {
 	return ""
 }
 
-// esNIF accepts any Spanish tax id: DNI, NIE, CIF or K/L/M NIF (K/L/M + 7 digits + DNI letter).
+// esNIF acepta cualquier identificador fiscal español: DNI, NIE, CIF o NIF K/L/M (K/L/M + 7 dígitos + letra del DNI).
 func esNIF(n string) string {
 	if len(n) != 9 {
 		return "NIF must have 9 characters"
@@ -187,9 +187,9 @@ func esNIF(n string) string {
 	}
 }
 
-// esNSS validates the Spanish social security number: province (2) + number (8) + control (2),
-// control = value mod 97, where value = province*10^7 + number when number < 10^7, else the
-// concatenation province‖number.
+// esNSS valida el número de la Seguridad Social español: provincia (2) + número (8) + control (2),
+// control = valor módulo 97, donde valor = provincia*10^7 + número cuando número < 10^7 y, si no, la
+// concatenación provincia‖número.
 func esNSS(n string) string {
 	if len(n) != 12 || !digits(n) {
 		return "NSS must have 12 digits"

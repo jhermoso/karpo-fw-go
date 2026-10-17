@@ -1,6 +1,6 @@
-// Package parties composes the Parties bounded context: its ports bound to a hot-swappable
-// backend, the use cases, the HTTP module, the party directory and the relay of its Published
-// Language. A host mounts Module.HTTP and runs Module.Relay.
+// Package parties compone el contexto delimitado Parties: sus puertos ligados a un backend
+// intercambiable en caliente, los casos de uso, el módulo HTTP, el directorio de parties y el
+// relay de su Published Language. Un anfitrión monta Module.HTTP y ejecuta Module.Relay.
 package parties
 
 import (
@@ -14,35 +14,36 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 )
 
-// Module is the composed context.
+// Module es el contexto compuesto.
 type Module struct {
 	Service           *papp.Service
 	Directory         contracts.Directory
 	Organizations     papp.Organizations // Membership, OrganizationHierarchy, InternalOrganizationCatalog
 	TaxIdentities     contracts.TaxIdentities
-	Trials            contracts.Trials        // whether the trial of a prospect is in force
-	Collaborators     contracts.Collaborators // whose a promotion code is
+	Trials            contracts.Trials        // si la prueba de un prospect está en vigor
+	Collaborators     contracts.Collaborators // de quién es un código de promoción
 	HTTP              *pdist.Module
-	Outbox            application.OutboxStore // domain events, inside Parties
+	Outbox            application.OutboxStore // eventos de dominio, dentro de Parties
 	IntegrationOutbox application.OutboxStore // Published Language
 	Audit             application.AuditLog
-	// Consumer receives the integration events Parties reacts to (hr.employee-terminated.v1):
-	// subscribe it to the transport.
+	// Consumer recibe los eventos de integración a los que reacciona Parties
+	// (hr.employee-terminated.v1): hay que suscribirlo al transporte.
 	Consumer *messaging.Consumer
 }
 
-// Option configures the composition.
+// Option configura la composición.
 type Option func(*papp.Deps)
 
-// WithAddressChecker validates postal addresses with the Geography context.
+// WithAddressChecker valida las direcciones postales con el contexto Geography.
 func WithAddressChecker(c papp.AddressChecker) Option { return func(d *papp.Deps) { d.Addresses = c } }
 
-// WithFacilityDirectory resolves facilities with the Facilities context (facility roles).
+// WithFacilityDirectory resuelve las instalaciones con el contexto Facilities (roles en
+// instalaciones).
 func WithFacilityDirectory(f papp.FacilityDirectory) Option {
 	return func(d *papp.Deps) { d.FacilityDirectory = f }
 }
 
-// Compose builds the context on sw. idem may be nil.
+// Compose construye el contexto sobre sw. idem puede ser nil.
 func Compose(sw *hotswap.Switch, idem application.IdempotencyStore, opts ...Option) *Module {
 	parties := hotswap.Repository(sw, infrastructure.PartyRepositoryFactory)
 	relationships := hotswap.Repository(sw, infrastructure.RelationshipRepositoryFactory)
@@ -71,7 +72,7 @@ func Compose(sw *hotswap.Switch, idem application.IdempotencyStore, opts ...Opti
 		Outbox: domainOutbox, IntegrationOutbox: integrationOutbox, Audit: audit, Consumer: consumer}
 }
 
-// Relay forwards the Published Language to a transport (at-least-once).
+// Relay reenvía el Published Language a un transporte (al menos una vez).
 func (m *Module) Relay(sender application.MessageSender, opts ...outbox.RelayOption) *outbox.Relay {
 	return messaging.NewRelay(contracts.Source, m.IntegrationOutbox, sender, opts...)
 }

@@ -10,39 +10,39 @@ import (
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// DefineRole defines a custom role.
+// DefineRole define un rol propio.
 type DefineRole struct {
 	Name        string   `json:"name"`
 	Description string   `json:"description,omitempty"`
 	Permissions []string `json:"permissions"`
 }
 
-// DescribeRole changes the name and the description of a custom role.
+// DescribeRole cambia el nombre y la descripción de un rol propio.
 type DescribeRole struct {
 	ID          domain.RoleID `json:"-"`
 	Name        string        `json:"name"`
 	Description string        `json:"description,omitempty"`
 }
 
-// SetRolePermissions replaces the permissions of a custom role.
+// SetRolePermissions sustituye los permisos de un rol propio.
 type SetRolePermissions struct {
 	ID          domain.RoleID `json:"-"`
 	Permissions []string      `json:"permissions"`
 }
 
-// RetireRole deletes a custom role no user holds.
+// RetireRole borra un rol propio que ningún usuario tiene.
 type RetireRole struct{ ID domain.RoleID }
 
-// GetRole loads a role.
+// GetRole carga un rol.
 type GetRole struct{ ID domain.RoleID }
 
-// ListRoles lists the roles.
+// ListRoles lista los roles.
 type ListRoles struct{}
 
-// ListPermissions lists the permission catalog.
+// ListPermissions lista el catálogo de permisos.
 type ListPermissions struct{}
 
-// RoleDTO is the transport form of a role.
+// RoleDTO es la forma de transporte de un rol.
 type RoleDTO struct {
 	ID          string   `json:"id"`
 	Name        string   `json:"name"`
@@ -52,7 +52,7 @@ type RoleDTO struct {
 	Version     int64    `json:"version"`
 }
 
-// PermissionDTO is one entry of the permission catalog.
+// PermissionDTO es una entrada del catálogo de permisos.
 type PermissionDTO struct {
 	Code        string `json:"code"`
 	Namespace   string `json:"namespace"`
@@ -87,9 +87,9 @@ func permissionDTOs(entries []*domain.PermissionEntry) []PermissionDTO {
 	return out
 }
 
-// requireGlobal reserves roles and the catalog to the global administrator (decision P3): holding
-// the permission is not enough. Without an authorization context it fails closed, unlike the C#
-// EnsureGlobalAdmin, which let the request through.
+// requireGlobal reserva los roles y el catálogo al administrador global (decisión P3): no basta con
+// tener el permiso. Sin contexto de autorización falla cerrado, a diferencia del EnsureGlobalAdmin
+// de C#, que dejaba pasar la petición.
 func requireGlobal(ctx context.Context) error {
 	a, err := administratorOf(ctx)
 	if err != nil {
@@ -101,7 +101,7 @@ func requireGlobal(ctx context.Context) error {
 	return nil
 }
 
-// catalog loads the permissions in force.
+// catalog carga los permisos en vigor.
 func (s *service) catalog(ctx context.Context) (domain.Catalog, error) {
 	entries, err := s.Permissions.Find(ctx, domain.PermFieldActive.Eq(true))
 	if err != nil {
@@ -114,7 +114,7 @@ func (s *service) catalog(ctx context.Context) (domain.Catalog, error) {
 	return domain.NewCatalog(codes...), nil
 }
 
-// rolePermissions checks the permissions of a command against the catalog.
+// rolePermissions comprueba los permisos de un comando contra el catálogo.
 func (s *service) rolePermissions(ctx context.Context, codes []string) ([]domain.Permission, error) {
 	c, err := s.catalog(ctx)
 	if err != nil {
@@ -209,19 +209,20 @@ func (s *service) retireRole(ctx context.Context, c RetireRole) (Done, error) {
 	})
 }
 
-// Catalog keeps the permission catalog in step with what the bounded contexts declare, and the
-// system roles in step with the catalog. The host calls Sync on start, after migrating.
+// Catalog mantiene el catálogo de permisos al paso de lo que declaran los contextos delimitados, y
+// los roles del sistema al paso del catálogo. El anfitrión llama a Sync al arrancar, tras migrar.
 type Catalog struct{ s *service }
 
-// CatalogSync reports what a synchronization changed.
+// CatalogSync informa de lo que cambió una sincronización.
 type CatalogSync struct {
 	Added, Reactivated, Deactivated, RolesUpdated int
 }
 
-// Sync declares the permissions of every context (the own ones are always included): new codes
-// enter the catalog, codes nobody declares anymore are deactivated and stop granting, and the
-// system roles get the permissions the standard rule computes. Custom roles are never touched,
-// unlike the C# seeder, which re-added whatever an administrator had removed. It is idempotent.
+// Sync declara los permisos de cada contexto (los propios siempre se incluyen): los códigos nuevos
+// entran en el catálogo, los que ya nadie declara se desactivan y dejan de conceder, y los roles
+// del sistema reciben los permisos que calcula la regla estándar. Los roles propios nunca se tocan,
+// a diferencia del sembrador de C#, que volvía a añadir lo que un administrador hubiera quitado. Es
+// idempotente.
 func (c Catalog) Sync(ctx context.Context, declared ...authz.Permission) (CatalogSync, error) {
 	s := c.s
 	decls := domain.OwnPermissions()
@@ -301,22 +302,22 @@ func (c Catalog) Sync(ctx context.Context, declared ...authz.Permission) (Catalo
 	return report, err
 }
 
-// Bootstrap creates the first global administrator of an installation (decision 7).
+// Bootstrap crea el primer administrador global de una instalación (decisión 7).
 type Bootstrap struct{ s *service }
 
-// Outcomes of Bootstrap.Run.
+// Resultados de Bootstrap.Run.
 const (
 	BootstrapNotNeeded     = "an active global administrator already exists"
 	BootstrapNoCredentials = "no bootstrap credentials: nothing created"
 	BootstrapCreated       = "bootstrap administrator created"
 )
 
-// Run creates the bootstrap administrator only when no active global administrator exists and
-// both credentials are given (the host reads them from the environment, never from versioned
-// configuration). The user must change the password before doing anything else. If the user name
-// is already taken, nothing is created and no role is granted: in C# the existing user was
-// promoted to global administrator keeping its own password. The catalog must be synchronized
-// first. It never logs nor returns the password.
+// Run crea el administrador de arranque sólo cuando no existe ningún administrador global activo y
+// se dan las dos credenciales (el anfitrión las lee del entorno, nunca de configuración
+// versionada). El usuario tiene que cambiar la contraseña antes de hacer nada más. Si el nombre de
+// usuario ya está cogido, no se crea nada ni se concede ningún rol: en C# el usuario existente se
+// ascendía a administrador global conservando su propia contraseña. Antes hay que sincronizar el
+// catálogo. Nunca escribe en el log ni devuelve la contraseña.
 func (b Bootstrap) Run(ctx context.Context, username, password string) (string, error) {
 	s := b.s
 	exists, err := s.Users.Exists(ctx, domain.GlobalAdministrators(domain.UserID{}))

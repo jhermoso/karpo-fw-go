@@ -134,13 +134,13 @@ func TestIdempotent_KeyBelongsToTheCallerAndToTheRequest(t *testing.T) {
 		t.Fatalf("the same caller repeating the request must get the stored result: %q %v calls=%d", again, err, calls)
 	}
 
-	// Another caller with the same key is another request: it runs, and gets its own result.
+	// Otro llamante con la misma clave es otra petición: se ejecuta y recibe su propio resultado.
 	other, err := h.Handle(luis, openWidget{Name: "Alpha", Key: "k1"})
 	if err != nil || other != "luis opened Alpha" || calls != 2 {
 		t.Fatalf("another caller must not receive the first caller's result: %q %v calls=%d", other, err, calls)
 	}
 
-	// The same caller reusing the key for a different request is told so, and nothing runs.
+	// Al mismo llamante que reutiliza la clave para otra petición se le avisa, y no se ejecuta nada.
 	_, err = h.Handle(ana, openWidget{Name: "Beta", Key: "k1"})
 	var rv *domain.RuleViolationError
 	if !errors.As(err, &rv) || rv.Code != pipeline.CodeIdempotencyKeyReused || calls != 2 {

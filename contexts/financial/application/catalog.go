@@ -12,7 +12,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Permissions of the catalog of products and of the agreements.
+// Permisos del catálogo de productos y de los acuerdos.
 var (
 	PermProductRead     = authz.MustPermission("Financial.Product.Read")
 	PermProductUpdate   = authz.MustPermission("Financial.Product.Update")
@@ -20,9 +20,9 @@ var (
 	PermAgreementUpdate = authz.MustPermission("Financial.Agreement.Update")
 )
 
-// Commands and queries of products and agreements.
+// Comandos y consultas de productos y acuerdos.
 type (
-	// DefineProduct adds a product to what an institution offers.
+	// DefineProduct añade un producto a lo que ofrece una entidad.
 	DefineProduct struct {
 		Company        string `json:"company"`
 		Code           string `json:"code"`
@@ -31,7 +31,7 @@ type (
 		Family         string `json:"family"`
 		RegulatoryCode string `json:"regulatoryCode,omitempty"`
 	}
-	// ChangeProduct replaces what describes a product.
+	// ChangeProduct sustituye lo que describe un producto.
 	ChangeProduct struct {
 		ID             domain.ProductID `json:"-"`
 		Name           string           `json:"name"`
@@ -39,49 +39,49 @@ type (
 		Family         string           `json:"family"`
 		RegulatoryCode string           `json:"regulatoryCode,omitempty"`
 	}
-	// DiscontinueProduct stops offering a product from a day (today when empty); Reinstate offers
-	// it again.
+	// DiscontinueProduct deja de ofrecer un producto desde un día (hoy si está vacío); Reinstate lo
+	// vuelve a ofrecer.
 	DiscontinueProduct struct {
 		ID        domain.ProductID `json:"-"`
 		On        vocab.Date       `json:"on,omitzero"`
 		Reinstate bool             `json:"-"`
 	}
-	// GetProduct reads a product.
+	// GetProduct lee un producto.
 	GetProduct struct{ ID domain.ProductID }
-	// SearchProducts lists the products of the caller's scope, by code.
+	// SearchProducts lista los productos del alcance del llamante, por código.
 	SearchProducts struct {
 		Company, Family, Offered string
 		Page, Size               int
 	}
-	// SignAgreement records an agreement signed with a customer.
+	// SignAgreement registra un acuerdo firmado con un cliente.
 	SignAgreement struct {
 		Company     string     `json:"company"`
 		Customer    string     `json:"customer"`
 		Number      string     `json:"number"`
 		Name        string     `json:"name"`
 		Description string     `json:"description,omitempty"`
-		Family      string     `json:"family,omitempty"` // that of the product when empty
+		Family      string     `json:"family,omitempty"` // la del producto si está vacío
 		Product     string     `json:"product,omitempty"`
 		Signed      vocab.Date `json:"signed,omitzero"`
 		From        vocab.Date `json:"from,omitzero"`
 		Thru        vocab.Date `json:"thru,omitzero"`
 	}
-	// ChangeAgreement replaces the name, the description and the last day of an agreement.
+	// ChangeAgreement sustituye el nombre, la descripción y el último día de un acuerdo.
 	ChangeAgreement struct {
 		ID          domain.AgreementID `json:"-"`
 		Name        string             `json:"name"`
 		Description string             `json:"description,omitempty"`
 		Thru        vocab.Date         `json:"thru,omitzero"`
 	}
-	// TerminateAgreement ends an agreement on a day (today when empty), saying why.
+	// TerminateAgreement termina un acuerdo en un día (hoy si está vacío), diciendo por qué.
 	TerminateAgreement struct {
 		ID     domain.AgreementID `json:"-"`
 		On     vocab.Date         `json:"on,omitzero"`
 		Reason string             `json:"reason,omitempty"`
 	}
-	// GetAgreement reads an agreement.
+	// GetAgreement lee un acuerdo.
 	GetAgreement struct{ ID domain.AgreementID }
-	// SearchAgreements lists the agreements of the caller's scope, by number.
+	// SearchAgreements lista los acuerdos del alcance del llamante, por número.
 	SearchAgreements struct {
 		Company, Customer, Product, Status string
 		Page, Size                         int
@@ -99,7 +99,7 @@ type (
 		Family         string `json:"family"`
 		RegulatoryCode string `json:"regulatoryCode,omitempty"`
 		Discontinued   string `json:"discontinued,omitempty"`
-		Offered        bool   `json:"offered"` // today
+		Offered        bool   `json:"offered"` // hoy
 		Version        int64  `json:"version"`
 	}
 	AgreementDTO struct {
@@ -133,7 +133,7 @@ func agreementDTO(a *domain.Agreement) AgreementDTO {
 		Thru: optDate(s.Thru), Status: string(s.Status), Reason: s.Reason, Version: a.Version()}
 }
 
-// institution refuses a company that is not a financial institution: this context is not for it.
+// institution rechaza una empresa que no es entidad financiera: este contexto no es para ella.
 func (s service) institution(ctx context.Context, company domain.OrganizationID) error {
 	ok := false
 	if s.Institutions != nil {
@@ -148,7 +148,7 @@ func (s service) institution(ctx context.Context, company domain.OrganizationID)
 	return nil
 }
 
-// productOf returns a product of a company, or a violation.
+// productOf devuelve un producto de una empresa, o una violación.
 func (s service) productOf(ctx context.Context, company domain.OrganizationID, id fw.UUID) (*domain.Product, error) {
 	p, err := s.Products.Get(ctx, domain.ProductID{UUID: id})
 	if err != nil || p.State().Company != company {
@@ -157,7 +157,7 @@ func (s service) productOf(ctx context.Context, company domain.OrganizationID, i
 	return p, nil
 }
 
-// agreementOf returns an agreement of a company, or a violation.
+// agreementOf devuelve un acuerdo de una empresa, o una violación.
 func (s service) agreementOf(ctx context.Context, company domain.OrganizationID, id fw.UUID) (*domain.Agreement, error) {
 	a, err := s.Agreements.Get(ctx, domain.AgreementID{UUID: id})
 	if err != nil || a.State().Company != company {
@@ -166,8 +166,8 @@ func (s service) agreementOf(ctx context.Context, company domain.OrganizationID,
 	return a, nil
 }
 
-// governs checks what an account is opened under or moved to: a product of the institution and an
-// agreement of the institution in force, signed with one of its holders.
+// governs comprueba aquello bajo lo que se abre una cuenta o a lo que se pasa: un producto de la
+// entidad y un acuerdo vigente de la entidad, firmado con uno de sus titulares.
 func (s service) governs(ctx context.Context, company domain.OrganizationID, product, agreement fw.UUID, holders []domain.PartyID, on vocab.Date,
 	opening bool) error {
 	if !product.IsZero() {
@@ -288,7 +288,7 @@ func (s service) catalogUseCases(svc *Service) {
 			}
 			return fw.MapPage(page, productDTO), nil
 		}
-		// Whether it is offered depends on the day: a catalog is short enough to tell here.
+		// Si se ofrece depende del día: un catálogo es lo bastante corto para decirlo aquí.
 		all, err := d.Products.Find(ctx, spec.And(parts...))
 		if err != nil {
 			return fw.Page[ProductDTO]{}, err

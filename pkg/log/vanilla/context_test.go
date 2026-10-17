@@ -93,7 +93,7 @@ func TestVanillaLogger_ExplicitAttributeWins(t *testing.T) {
 func TestVanillaLogger_TextAlsoReadsTheContext(t *testing.T) {
 	var buf bytes.Buffer
 	ctx := application.WithCorrelationID(context.Background(), "corr-2")
-	ctx = trace.ContextWithSpan(ctx, trace.FromContext(ctx)) // a no-op span adds nothing
+	ctx = trace.ContextWithSpan(ctx, trace.FromContext(ctx)) // un span vacío no añade nada
 
 	vanilla.NewText(&buf, log.LevelInfo).WithContext(ctx).Info("hello")
 

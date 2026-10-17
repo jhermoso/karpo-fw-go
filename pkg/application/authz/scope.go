@@ -7,14 +7,14 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
 )
 
-// ScopeSpec restricts a query to the organizations in the authorization scope of ctx: the Go
-// counterpart of the C# IOrganizationScopeProvider filters (159 files), expressed as a
-// specification so the filter runs in the database like any other.
+// ScopeSpec restringe una consulta a las organizaciones del ámbito de autorización de ctx: la
+// contrapartida en Go de los filtros IOrganizationScopeProvider de C# (159 ficheros), expresada
+// como especificación para que el filtro se ejecute en la base de datos como cualquier otro.
 //
 //	s := authz.ScopeSpec(ctx, FieldOwner, func(u domain.UUID) OrgID { return OrgID{u} })
 //	page, err := repo.FindPage(ctx, s.And(userFilter), pageReq)
 //
-// Global admins get every row; without an authorization context no row matches (fail closed).
+// Los administradores globales reciben todas las filas; sin contexto de autorización no coincide ninguna (falla cerrado).
 func ScopeSpec[T any, ID comparable](ctx context.Context, owner spec.Field[T, ID], wrap func(domain.UUID) ID) spec.Spec[T] {
 	c, ok := FromContext(ctx)
 	if !ok {

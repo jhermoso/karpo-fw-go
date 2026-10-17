@@ -12,14 +12,14 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// EntryKind is the stable aggregate type name.
+// EntryKind es el nombre estable del tipo de agregado.
 const EntryKind = "accounting.entry"
 
-// MaxLines bounds the lines of an entry.
+// MaxLines limita las líneas de un asiento.
 const MaxLines = 1000
 
-// Line is a line of an entry: an account debited or credited, optionally for a party (the
-// subledger of customers, employees…).
+// Line es una línea de un asiento: una cuenta cargada o abonada, opcionalmente para una party (el
+// auxiliar de clientes, empleados…).
 type Line struct {
 	Account     string
 	Party       PartyID
@@ -28,15 +28,15 @@ type Line struct {
 	Description string
 }
 
-// Source is the fact an entry comes from: the type of the event and its id (idempotency), and a
-// key to find it again (to reverse it).
+// Source es el hecho del que viene un asiento: el tipo del evento y su id (idempotencia), y una
+// clave para volver a encontrarlo (para revertirlo).
 type Source struct {
 	Type string
 	ID   string
 	Key  string
 }
 
-// EntryState is the persisted state of an entry.
+// EntryState es el estado persistido de un asiento.
 type EntryState struct {
 	Company     OrganizationID
 	Number      int64
@@ -46,21 +46,21 @@ type EntryState struct {
 	Description string
 	Source      Source
 	Lines       []Line
-	Reverses    EntryID // this entry reverses another
-	ReversedBy  EntryID // this entry was reversed
+	Reverses    EntryID // este asiento revierte otro
+	ReversedBy  EntryID // este asiento fue revertido
 	Audit       traits.AuditStamp
 }
 
-// Entry is a journal entry with its lines (the C# kept header and lines as separate aggregates,
-// so nothing could enforce that debits equal credits).
+// Entry es un asiento del diario con sus líneas (el C# tenía cabecera y líneas como agregados
+// separados, así que nada podía exigir que el debe fuese igual al haber).
 type Entry struct {
 	fw.BaseAggregateRoot[EntryID]
 	traits.Audited
 	s EntryState
 }
 
-// Balanced lines: each line debits or credits a positive amount in cents, the entry has at least
-// two lines, and debits equal credits.
+// Líneas cuadradas: cada línea carga o abona un importe positivo en céntimos, el asiento tiene al
+// menos dos líneas, y el debe es igual al haber.
 func checkLines(v *fw.Validation, lines []Line) {
 	v.Require(len(lines) >= 2 && len(lines) <= MaxLines, "lines", "count", "an entry has from 2 lines")
 	debit, credit := vocab.DecimalFromInt(0), vocab.DecimalFromInt(0)
@@ -75,7 +75,7 @@ func checkLines(v *fw.Validation, lines []Line) {
 	v.Require(debit.Equal(credit), "lines", "balance", "debits ("+debit.StringFixed(2)+") must equal credits ("+credit.StringFixed(2)+")")
 }
 
-// ReconstituteEntry rebuilds an entry.
+// ReconstituteEntry reconstruye un asiento.
 func ReconstituteEntry(id EntryID, s EntryState) (*Entry, error) {
 	base, err := fw.NewBaseAggregateRoot(EntryKind, id)
 	if err != nil {
@@ -95,8 +95,9 @@ func ReconstituteEntry(id EntryID, s EntryState) (*Entry, error) {
 	return &Entry{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// Draft is an entry to post: its lines may carry signed amounts (a negative debit is a credit),
-// as automatic entries of credits and corrective invoices produce them.
+// Draft es un asiento por contabilizar: sus líneas pueden llevar importes con signo (un cargo
+// negativo es un abono), tal como los producen los asientos automáticos de abonos y facturas
+// rectificativas.
 type Draft struct {
 	Company     OrganizationID
 	Date        vocab.Date
@@ -105,7 +106,7 @@ type Draft struct {
 	Lines       []Line
 }
 
-// Normalize turns negative amounts into the opposite side and drops zero lines.
+// Normalize pasa los importes negativos al lado contrario y quita las líneas a cero.
 func Normalize(lines []Line) []Line {
 	out := make([]Line, 0, len(lines))
 	zero := vocab.DecimalFromInt(0)
@@ -123,14 +124,14 @@ func Normalize(lines []Line) []Line {
 	return out
 }
 
-// Post creates a posted entry with its number in a period of a ledger.
+// Post crea un asiento contabilizado con su número en un periodo de una contabilidad.
 func Post(id EntryID, d Draft, l *Ledger, number int64) (*Entry, error) {
 	p := l.PeriodOf(d.Date)
 	if l.IsClosed(p) {
 		return nil, fw.Violation("accounting.period_closed", fmt.Sprintf("the period %d/%d is closed", p.Month, p.Year))
 	}
 	if d.Source.ID == "" {
-		d.Source.ID = id.String() // manual entries are their own source (unique per company)
+		d.Source.ID = id.String() // los asientos manuales son su propio origen (único por empresa)
 	}
 	e, err := ReconstituteEntry(id, EntryState{Company: d.Company, Number: number, Year: p.Year, Month: p.Month, Date: d.Date,
 		Description: d.Description, Source: d.Source, Lines: Normalize(d.Lines)})
@@ -141,14 +142,14 @@ func Post(id EntryID, d Draft, l *Ledger, number int64) (*Entry, error) {
 	return e, nil
 }
 
-// State returns the state (lines are a copy).
+// State devuelve el estado (las líneas son una copia).
 func (e *Entry) State() EntryState {
 	s := e.s
 	s.Lines = slices.Clone(s.Lines)
 	return s
 }
 
-// Total returns the debits (equal to the credits).
+// Total devuelve el debe (igual al haber).
 func (e *Entry) Total() vocab.Decimal {
 	t := vocab.DecimalFromInt(0)
 	for _, l := range e.s.Lines {
@@ -157,7 +158,7 @@ func (e *Entry) Total() vocab.Decimal {
 	return t
 }
 
-// Reversal returns the draft that reverses the entry (debits and credits swapped) on a date.
+// Reversal devuelve el borrador que revierte el asiento (debe y haber intercambiados) en una fecha.
 func (e *Entry) Reversal(on vocab.Date, src Source) (Draft, error) {
 	if !e.s.ReversedBy.IsZero() {
 		return Draft{}, fw.Violation("accounting.already_reversed", "the entry is already reversed")
@@ -177,7 +178,7 @@ func (e *Entry) Reversal(on vocab.Date, src Source) (Draft, error) {
 	return Draft{Company: e.s.Company, Date: on, Description: desc, Source: src, Lines: lines}, nil
 }
 
-// MarkReversed links the entry with its reversal.
+// MarkReversed enlaza el asiento con su anulación.
 func (e *Entry) MarkReversed(by EntryID) error {
 	if !e.s.ReversedBy.IsZero() {
 		return fw.Violation("accounting.already_reversed", "the entry is already reversed")
@@ -186,15 +187,15 @@ func (e *Entry) MarkReversed(by EntryID) error {
 	return nil
 }
 
-// LinkReversal records the entry this one reverses.
+// LinkReversal anota el asiento que éste revierte.
 func (e *Entry) LinkReversal(of EntryID) { e.s.Reverses = of }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (e *Entry) AuditSnapshot() map[string]any {
 	return map[string]any{"number": e.s.Number, "year": e.s.Year, "total": e.Total().String(), "reversedBy": e.s.ReversedBy.String()}
 }
 
-// Entry fields.
+// Campos del asiento.
 var (
 	EntFieldCompany  = spec.Comparable("company", func(e *Entry) OrganizationID { return e.s.Company })
 	EntFieldDate     = spec.OrderedBy("entry_date", func(e *Entry) vocab.Date { return e.s.Date }, vocab.CompareDates)
@@ -206,10 +207,10 @@ var (
 	EntFieldReversed = spec.Comparable("reversed", func(e *Entry) bool { return !e.s.ReversedBy.IsZero() })
 )
 
-// CounterKind is the stable aggregate type name.
+// CounterKind es el nombre estable del tipo de agregado.
 const CounterKind = "accounting.entry_counter"
 
-// Counter numbers the entries of a company and fiscal year, without gaps (optimistic concurrency).
+// Counter numera los asientos de una empresa y ejercicio, sin huecos (concurrencia optimista).
 type Counter struct {
 	fw.BaseAggregateRoot[CounterID]
 	company OrganizationID
@@ -217,7 +218,7 @@ type Counter struct {
 	last    int64
 }
 
-// ReconstituteCounter rebuilds a counter.
+// ReconstituteCounter reconstruye un contador.
 func ReconstituteCounter(id CounterID, company OrganizationID, year int, last int64) (*Counter, error) {
 	base, err := fw.NewBaseAggregateRoot(CounterKind, id)
 	if err != nil {
@@ -231,19 +232,19 @@ func ReconstituteCounter(id CounterID, company OrganizationID, year int, last in
 	return &Counter{BaseAggregateRoot: base, company: company, year: year, last: last}, nil
 }
 
-// Next returns the next number.
+// Next devuelve el número siguiente.
 func (c *Counter) Next() int64 { c.last++; return c.last }
 
-// Values returns the key and the last number.
+// Values devuelve la clave y el último número.
 func (c *Counter) Values() (OrganizationID, int, int64) { return c.company, c.year, c.last }
 
-// Counter fields.
+// Campos del contador.
 var (
 	CntFieldCompany = spec.Comparable("company", func(c *Counter) OrganizationID { return c.company })
 	CntFieldYear    = spec.Comparable("fiscal_year", func(c *Counter) int { return c.year })
 )
 
-// EntryPosted is raised when an entry is posted.
+// EntryPosted se lanza cuando se contabiliza un asiento.
 type EntryPosted struct {
 	fw.EventMeta
 	Company string `json:"company"`
@@ -252,10 +253,10 @@ type EntryPosted struct {
 	Source  string `json:"source,omitempty"`
 }
 
-// EventType implements domain.Event.
+// EventType implementa domain.Event.
 func (EntryPosted) EventType() string { return "accounting.entry_posted" }
 
-// Repositories of the context.
+// Repositorios del contexto.
 type (
 	AccountRepository = fw.Repository[AccountID, *Account]
 	LedgerRepository  = fw.Repository[LedgerID, *Ledger]
@@ -263,17 +264,17 @@ type (
 	CounterRepository = fw.Repository[CounterID, *Counter]
 )
 
-// New identities and parsing.
+// Identidades nuevas e interpretación.
 func NewAccountID() AccountID { return AccountID{fw.NewUUID()} }
 func NewLedgerID() LedgerID   { return LedgerID{fw.NewUUID()} }
 func NewEntryID() EntryID     { return EntryID{fw.NewUUID()} }
 func NewCounterID() CounterID { return CounterID{fw.NewUUID()} }
 
-// ParseAccountID parses a textual identity.
+// ParseAccountID interpreta una identidad en texto.
 func ParseAccountID(s string) (AccountID, error) { u, err := fw.ParseUUID(s); return AccountID{u}, err }
 
-// ParseLedgerID parses a textual identity.
+// ParseLedgerID interpreta una identidad en texto.
 func ParseLedgerID(s string) (LedgerID, error) { u, err := fw.ParseUUID(s); return LedgerID{u}, err }
 
-// ParseEntryID parses a textual identity.
+// ParseEntryID interpreta una identidad en texto.
 func ParseEntryID(s string) (EntryID, error) { u, err := fw.ParseUUID(s); return EntryID{u}, err }

@@ -10,29 +10,29 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// TimeEntryKind is the stable aggregate type name.
+// TimeEntryKind es el nombre estable del tipo de agregado.
 const TimeEntryKind = "work.time_entry"
 
-// MaxHoursADay is what a person may record in a day, over all their work.
+// MaxHoursADay es lo que una persona puede anotar en un día, sumando todos sus trabajos.
 const MaxHoursADay = 24
 
-// TimeEntryState is the persisted state of a time entry.
+// TimeEntryState es el estado persistido de una anotación de tiempo.
 type TimeEntryState struct {
 	Company  OrganizationID
 	Work     WorkID
 	Person   PartyID
 	Date     vocab.Date
 	Hours    vocab.Decimal
-	Rate     vocab.Decimal // the hourly rate of the assignment that day, fixed when recorded
+	Rate     vocab.Decimal // la tarifa por hora de la asignación ese día, fijada al anotarse
 	Billable bool
 	Comment  string
 	Approved bool
 	Audit    traits.AuditStamp
 }
 
-// TimeEntry is the time a person worked on a piece of work in a day (the C# TimeEntry had hours
-// but no day, and its Timesheet neither period nor status). A draft may be corrected or withdrawn;
-// once approved it is final and counts in the hours and cost of the work.
+// TimeEntry es el tiempo que una persona trabajó en un trabajo en un día (el TimeEntry del C# tenía
+// horas pero no día, y su Timesheet ni periodo ni estado). Un borrador se puede corregir o retirar;
+// una vez aprobado es definitivo y cuenta en las horas y el coste del trabajo.
 type TimeEntry struct {
 	fw.BaseAggregateRoot[TimeEntryID]
 	traits.Audited
@@ -45,7 +45,7 @@ func checkHours(v *fw.Validation, hours vocab.Decimal, comment string) {
 	v.Require(utf8.RuneCountInString(comment) <= 500, "comment", "length", "at most 500 characters")
 }
 
-// ReconstituteTimeEntry rebuilds a time entry.
+// ReconstituteTimeEntry reconstruye una anotación de tiempo.
 func ReconstituteTimeEntry(id TimeEntryID, s TimeEntryState) (*TimeEntry, error) {
 	base, err := fw.NewBaseAggregateRoot(TimeEntryKind, id)
 	if err != nil {
@@ -63,7 +63,7 @@ func ReconstituteTimeEntry(id TimeEntryID, s TimeEntryState) (*TimeEntry, error)
 	return &TimeEntry{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// RecordTime records the time of a person on a piece of work, at the rate the work gives.
+// RecordTime anota el tiempo de una persona en un trabajo, a la tarifa que da el trabajo.
 func RecordTime(id TimeEntryID, w *Work, person PartyID, on vocab.Date, hours vocab.Decimal, billable bool, comment string) (*TimeEntry, error) {
 	if on.IsZero() {
 		return nil, fw.Violation("work.date", "the day is required")
@@ -76,10 +76,10 @@ func RecordTime(id TimeEntryID, w *Work, person PartyID, on vocab.Date, hours vo
 		Billable: billable, Comment: comment})
 }
 
-// State returns the state.
+// State devuelve el estado.
 func (t *TimeEntry) State() TimeEntryState { return t.s }
 
-// Cost returns the hours at the rate, in cents.
+// Cost devuelve las horas a la tarifa, en céntimos.
 func (t *TimeEntry) Cost() vocab.Decimal { return t.s.Hours.Mul(t.s.Rate).Round(2) }
 
 func (t *TimeEntry) draft() error {
@@ -89,7 +89,7 @@ func (t *TimeEntry) draft() error {
 	return nil
 }
 
-// Correct changes the hours, the comment and whether a draft is billable.
+// Correct cambia las horas, el comentario y si un borrador es facturable.
 func (t *TimeEntry) Correct(hours vocab.Decimal, billable bool, comment string) error {
 	if err := t.draft(); err != nil {
 		return err
@@ -104,10 +104,10 @@ func (t *TimeEntry) Correct(hours vocab.Decimal, billable bool, comment string) 
 	return nil
 }
 
-// Withdraw checks that the entry may be deleted: only a draft.
+// Withdraw comprueba que la anotación se puede borrar: sólo un borrador.
 func (t *TimeEntry) Withdraw() error { return t.draft() }
 
-// Approve makes the entry final.
+// Approve hace definitiva la anotación.
 func (t *TimeEntry) Approve() error {
 	if err := t.draft(); err != nil {
 		return err
@@ -118,13 +118,13 @@ func (t *TimeEntry) Approve() error {
 	return nil
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (t *TimeEntry) AuditSnapshot() map[string]any {
 	return map[string]any{"work": t.s.Work.String(), "person": t.s.Person.String(), "date": t.s.Date.String(), "hours": t.s.Hours.String(),
 		"approved": t.s.Approved}
 }
 
-// Time entry fields.
+// Campos de la anotación de tiempo.
 var (
 	TimFieldCompany  = spec.Comparable("company", func(t *TimeEntry) OrganizationID { return t.s.Company })
 	TimFieldWork     = spec.Comparable("work_id", func(t *TimeEntry) WorkID { return t.s.Work })
@@ -133,7 +133,7 @@ var (
 	TimFieldApproved = spec.Comparable("approved", func(t *TimeEntry) bool { return t.s.Approved })
 )
 
-// TimeApproved is raised when a time entry becomes final.
+// TimeApproved se lanza cuando una anotación de tiempo pasa a ser definitiva.
 type TimeApproved struct {
 	fw.EventMeta
 	Company  string `json:"company"`
@@ -145,17 +145,17 @@ type TimeApproved struct {
 	Billable bool   `json:"billable"`
 }
 
-// EventType implements fw.Event.
+// EventType implementa fw.Event.
 func (TimeApproved) EventType() string { return "work.time_approved" }
 
-// NewTimeEntryID returns a new identity.
+// NewTimeEntryID devuelve una identidad nueva.
 func NewTimeEntryID() TimeEntryID { return TimeEntryID{fw.NewUUID()} }
 
-// ParseTimeEntryID parses a textual identity.
+// ParseTimeEntryID analiza una identidad textual.
 func ParseTimeEntryID(s string) (TimeEntryID, error) {
 	u, err := fw.ParseUUID(s)
 	return TimeEntryID{u}, err
 }
 
-// TimeEntryRepository stores time entries.
+// TimeEntryRepository guarda anotaciones de tiempo.
 type TimeEntryRepository = fw.Repository[TimeEntryID, *TimeEntry]

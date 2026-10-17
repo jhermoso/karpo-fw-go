@@ -51,12 +51,12 @@ func TestDocumentPolicy(t *testing.T) {
 		}
 	}
 	bad := []domain.IdentificationData{
-		{Type: domain.DocNationalID, Country: es, Number: "12345678A"},                                      // check letter
-		{Type: domain.DocNationalID, Country: es, Number: "1234567Z"},                                       // length and format
-		{Type: domain.DocTaxID, Country: es, Number: "12345678Z"},                                           // TXID in ES is the CIF form
-		{Type: domain.DocTaxID, Country: pt, Number: "501964844"},                                           // PT check digit
-		{Type: domain.DocAlienRegistation, Country: es, Number: "X1234567L"},                                // NIE requires expiry
-		{Type: domain.DocPassport, Country: us, Number: "X12345678", ExpiresOn: vocab.MustDate(2030, 1, 1)}, // authority
+		{Type: domain.DocNationalID, Country: es, Number: "12345678A"},                                      // letra de control
+		{Type: domain.DocNationalID, Country: es, Number: "1234567Z"},                                       // longitud y formato
+		{Type: domain.DocTaxID, Country: es, Number: "12345678Z"},                                           // TXID en ES tiene la forma del CIF
+		{Type: domain.DocTaxID, Country: pt, Number: "501964844"},                                           // dígito de control de PT
+		{Type: domain.DocAlienRegistation, Country: es, Number: "X1234567L"},                                // el NIE exige caducidad
+		{Type: domain.DocPassport, Country: us, Number: "X12345678", ExpiresOn: vocab.MustDate(2030, 1, 1)}, // autoridad
 		{Type: domain.DocumentTypeID{UUID: fw.NewUUID()}, Country: es, Number: "1"},
 		{Type: domain.DocNationalID, Number: "12345678Z"},
 	}
@@ -140,7 +140,7 @@ func TestParty_Contacts(t *testing.T) {
 	if c, _ := ana.ContactFor(domain.ContactPostal, domain.PurposeBilling); c.ID != home || c.Address.String() != "CL Mayor 1, 28013 Madrid, ES" {
 		t.Fatalf("address: %q", c.Address.String())
 	}
-	// An e-mail and an address are different kinds: both can be "default".
+	// Un e-mail y una dirección son clases distintas: los dos pueden ser "default".
 	if _, err := ana.AddContact(domain.ContactData{Kind: domain.ContactPhone, Value: "+34 600 000 001", Purposes: []domain.Purpose{domain.PurposeDefault}}, t0); err != nil {
 		t.Fatal(err)
 	}
@@ -191,7 +191,7 @@ func TestParty_Classifications(t *testing.T) {
 	if _, err := acme.Classify(cc, domain.ClassCorporate, t0.AddDate(0, 1, 0)); err != nil {
 		t.Fatalf("after ending, the segment changes: %v", err)
 	}
-	// Sectors are not exclusive.
+	// Los sectores no son exclusivos.
 	if _, err := acme.Classify(cc, domain.ClassFinancial, t0); err != nil {
 		t.Fatal(err)
 	}

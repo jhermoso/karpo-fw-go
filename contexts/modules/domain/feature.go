@@ -1,8 +1,8 @@
-// Package domain is the Modules model: the catalog of what the product can do (modules a company
-// contracts, capabilities that cut across them, and the economic sector of a company) and what
-// each company has switched on. In C# these were three tables with three providers of their own,
-// one of which derived a capability from a party role and fell back to "everything" without a
-// scope.
+// Package domain es el modelo de Modules: el catálogo de lo que el producto sabe hacer (los
+// módulos que contrata una empresa, las capacidades que los atraviesan y el sector económico de
+// una empresa) y lo que cada empresa tiene encendido. En el C# eran tres tablas con tres
+// proveedores propios, uno de los cuales deducía una capacidad de un rol de party y, sin ámbito,
+// caía en «todo».
 package domain
 
 import (
@@ -16,42 +16,43 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/traits"
 )
 
-// Aggregate type names.
+// Nombres de tipo de agregado.
 const (
 	FeatureKind    = "modules.feature"
 	ActivationKind = "modules.activation"
 )
 
-// Identities of the context.
+// Identidades del contexto.
 type (
-	// FeatureID identifies an entry of the catalog.
+	// FeatureID identifica una entrada del catálogo.
 	FeatureID struct{ fw.UUID }
-	// ActivationID identifies what a company has (or had) switched on.
+	// ActivationID identifica lo que una empresa tiene (o tuvo) encendido.
 	ActivationID struct{ fw.UUID }
-	// OrganizationID is a company, an internal organization of the Parties context.
+	// OrganizationID es una empresa, una organización interna del contexto Parties.
 	OrganizationID struct{ fw.UUID }
 )
 
-// Kind is what a feature is.
+// Kind es lo que es una funcionalidad.
 type Kind string
 
-// Kinds. A company has any number of modules and capabilities, and one sector.
+// Clases. Una empresa tiene cualquier número de módulos y capacidades, y un sector.
 const (
-	Module     Kind = "module"     // what a company contracts: accounting, sales, treasury…
-	Capability Kind = "capability" // what cuts across modules: financial, logistics…
-	Sector     Kind = "sector"     // the economic sector of the company
+	Module     Kind = "module"     // lo que contrata una empresa: contabilidad, ventas, tesorería…
+	Capability Kind = "capability" // lo que atraviesa los módulos: financiera, logística…
+	Sector     Kind = "sector"     // el sector económico de la empresa
 )
 
-// Kinds lists the valid kinds.
+// Kinds lista las clases válidas.
 var Kinds = []Kind{Module, Capability, Sector}
 
-// Exclusive reports whether a company has at most one feature of the kind.
+// Exclusive dice si una empresa tiene como mucho una funcionalidad de la clase.
 func (k Kind) Exclusive() bool { return k == Sector }
 
-// NormalizeCode lowers and trims a feature code.
+// NormalizeCode pasa a minúsculas y recorta un código de funcionalidad.
 func NormalizeCode(s string) string { return strings.ToLower(strings.TrimSpace(s)) }
 
-// ValidCode reports whether s is a feature code: 1 to 30 lowercase letters, digits or dashes.
+// ValidCode dice si s es un código de funcionalidad: de 1 a 30 letras minúsculas, dígitos o
+// guiones.
 func ValidCode(s string) bool {
 	if s == "" || len(s) > 30 || s[0] == '-' || s[len(s)-1] == '-' {
 		return false
@@ -64,17 +65,17 @@ func ValidCode(s string) bool {
 	return true
 }
 
-// FeatureState is the persisted state of a catalog entry.
+// FeatureState es el estado persistido de una entrada del catálogo.
 type FeatureState struct {
 	Kind        Kind
 	Code        string
 	Name        string
 	Description string
-	Retired     bool // no longer offered: it stays where it is on, and is not switched on anew
+	Retired     bool // ya no se ofrece: sigue donde está encendida, y no se enciende de nuevo
 	Audit       traits.AuditStamp
 }
 
-// Feature is an entry of the catalog, the same for every company.
+// Feature es una entrada del catálogo, la misma para todas las empresas.
 type Feature struct {
 	fw.BaseAggregateRoot[FeatureID]
 	traits.Audited
@@ -87,7 +88,7 @@ func checkFeature(v *fw.Validation, s *FeatureState) {
 	v.Require(utf8.RuneCountInString(s.Description) <= 500, "description", "length", "at most 500 characters")
 }
 
-// ReconstituteFeature rebuilds a catalog entry.
+// ReconstituteFeature reconstruye una entrada del catálogo.
 func ReconstituteFeature(id FeatureID, s FeatureState) (*Feature, error) {
 	base, err := fw.NewBaseAggregateRoot(FeatureKind, id)
 	if err != nil {
@@ -104,11 +105,11 @@ func ReconstituteFeature(id FeatureID, s FeatureState) (*Feature, error) {
 	return &Feature{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// State returns the state.
+// State devuelve el estado.
 func (f *Feature) State() FeatureState { return f.s }
 
-// Change replaces the name and description, and retires or restores the entry. Kind and code
-// never change: they are what companies and the user interface refer to.
+// Change sustituye el nombre y la descripción, y retira o restaura la entrada. La clase y el
+// código nunca cambian: son a lo que se refieren las empresas y la interfaz de usuario.
 func (f *Feature) Change(name, description string, retired bool) error {
 	s := f.s
 	s.Name, s.Description, s.Retired = name, description, retired
@@ -121,12 +122,12 @@ func (f *Feature) Change(name, description string, retired bool) error {
 	return nil
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (f *Feature) AuditSnapshot() map[string]any {
 	return map[string]any{"kind": string(f.s.Kind), "code": f.s.Code, "name": f.s.Name, "retired": f.s.Retired}
 }
 
-// ActivationState is the persisted state of an activation.
+// ActivationState es el estado persistido de una activación.
 type ActivationState struct {
 	Organization  OrganizationID
 	Kind          Kind
@@ -140,15 +141,16 @@ type ActivationState struct {
 	Audit         traits.AuditStamp
 }
 
-// Activation is a feature of a company: one per company and feature, switched on and off (the
-// C# toggle row, whose "one active row" rule lived only in a filtered index).
+// Activation es una funcionalidad de una empresa: una por empresa y funcionalidad, que se enciende
+// y se apaga (la fila de interruptor del C#, cuya regla de «una sola fila activa» sólo vivía en un
+// índice filtrado).
 type Activation struct {
 	fw.BaseAggregateRoot[ActivationID]
 	traits.Audited
 	s ActivationState
 }
 
-// ReconstituteActivation rebuilds an activation.
+// ReconstituteActivation reconstruye una activación.
 func ReconstituteActivation(id ActivationID, s ActivationState) (*Activation, error) {
 	base, err := fw.NewBaseAggregateRoot(ActivationKind, id)
 	if err != nil {
@@ -167,12 +169,12 @@ func ReconstituteActivation(id ActivationID, s ActivationState) (*Activation, er
 	return &Activation{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// NewActivation creates the row of a company and a feature, switched off.
+// NewActivation crea la fila de una empresa y una funcionalidad, apagada.
 func NewActivation(id ActivationID, org OrganizationID, f *Feature) (*Activation, error) {
 	return ReconstituteActivation(id, ActivationState{Organization: org, Kind: f.s.Kind, Code: f.s.Code})
 }
 
-// State returns the state.
+// State devuelve el estado.
 func (a *Activation) State() ActivationState { return a.s }
 
 func checkNotes(notes string) (string, error) {
@@ -183,8 +185,8 @@ func checkNotes(notes string) (string, error) {
 	return notes, nil
 }
 
-// Activate switches the feature on. It reports whether anything changed: switching on what is on
-// only replaces the notes.
+// Activate enciende la funcionalidad. Dice si algo cambió: encender lo que ya está encendido sólo
+// sustituye las notas.
 func (a *Activation) Activate(by string, at time.Time, notes string) (bool, error) {
 	notes, err := checkNotes(notes)
 	if err != nil {
@@ -206,7 +208,7 @@ func (a *Activation) Activate(by string, at time.Time, notes string) (bool, erro
 	return true, nil
 }
 
-// Deactivate switches the feature off. It reports whether anything changed.
+// Deactivate apaga la funcionalidad. Dice si algo cambió.
 func (a *Activation) Deactivate(by string, at time.Time, notes string) (bool, error) {
 	notes, err := checkNotes(notes)
 	if err != nil {
@@ -223,12 +225,12 @@ func (a *Activation) Deactivate(by string, at time.Time, notes string) (bool, er
 	return true, nil
 }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (a *Activation) AuditSnapshot() map[string]any {
 	return map[string]any{"organization": a.s.Organization.String(), "kind": string(a.s.Kind), "code": a.s.Code, "active": a.s.Active}
 }
 
-// Fields.
+// Campos.
 var (
 	FtFieldKind    = spec.Ordered("kind", func(f *Feature) string { return string(f.s.Kind) })
 	FtFieldCode    = spec.Ordered("code", func(f *Feature) string { return f.s.Code })
@@ -240,16 +242,16 @@ var (
 	ActFieldActive       = spec.Comparable("active", func(a *Activation) bool { return a.s.Active })
 )
 
-// Events of activations.
+// Eventos de las activaciones.
 type (
-	// FeatureActivated is raised when a company switches a feature on.
+	// FeatureActivated se lanza cuando una empresa enciende una funcionalidad.
 	FeatureActivated struct {
 		fw.EventMeta
 		Organization string `json:"organization"`
 		Kind         string `json:"kind"`
 		Code         string `json:"code"`
 	}
-	// FeatureDeactivated is raised when a company switches a feature off.
+	// FeatureDeactivated se lanza cuando una empresa apaga una funcionalidad.
 	FeatureDeactivated struct {
 		fw.EventMeta
 		Organization string `json:"organization"`
@@ -258,25 +260,25 @@ type (
 	}
 )
 
-// EventType implementations.
+// Implementaciones de EventType.
 func (FeatureActivated) EventType() string   { return "modules.feature_activated" }
 func (FeatureDeactivated) EventType() string { return "modules.feature_deactivated" }
 
-// Identities.
+// Identidades.
 func NewFeatureID() FeatureID       { return FeatureID{fw.NewUUID()} }
 func NewActivationID() ActivationID { return ActivationID{fw.NewUUID()} }
 
-// ParseFeatureID parses a textual identity.
+// ParseFeatureID interpreta una identidad en texto.
 func ParseFeatureID(s string) (FeatureID, error) { u, err := fw.ParseUUID(s); return FeatureID{u}, err }
 
-// Repositories.
+// Repositorios.
 type (
 	FeatureRepository    = fw.Repository[FeatureID, *Feature]
 	ActivationRepository = fw.Repository[ActivationID, *Activation]
 )
 
-// Seed is the catalog the product starts with: the eight modules seeded in C#, with their codes
-// (the user interface refers to them), and the capabilities its code named.
+// Seed es el catálogo con el que empieza el producto: los ocho módulos sembrados en el C#, con sus
+// códigos (la interfaz de usuario se refiere a ellos), y las capacidades que nombraba el código del C#.
 var Seed = []FeatureState{
 	{Kind: Module, Code: "contabilidad", Name: "Contabilidad", Description: "Contabilidad general y plan de cuentas"},
 	{Kind: Module, Code: "rrhh", Name: "Recursos Humanos", Description: "Empleados, nóminas y Seguridad Social"},

@@ -11,8 +11,9 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Permissions of quotes (the C# quote endpoints required authentication only). Preparing an
-// offer, committing the company to it and recording what the customer answered are separate.
+// Permisos de los presupuestos (los endpoints de presupuesto de C# sólo pedían autenticación).
+// Preparar una oferta, comprometer a la empresa con ella y registrar lo que contestó el cliente van
+// por separado.
 var (
 	PermQuoteRead    = authz.MustPermission("Orders.Quote.Read")
 	PermQuoteUpdate  = authz.MustPermission("Orders.Quote.Update")
@@ -20,8 +21,8 @@ var (
 	PermQuoteResolve = authz.MustPermission("Orders.Quote.Resolve")
 )
 
-// DraftQuote opens a draft quote for a customer, with the price list and discount of its terms.
-// Without a validity it holds thirty days from its date.
+// DraftQuote abre un presupuesto en borrador para un cliente, con la tarifa y el descuento de sus
+// condiciones. Sin validez, vale treinta días desde su fecha.
 type DraftQuote struct {
 	Company    string     `json:"company"`
 	Customer   string     `json:"customer"`
@@ -31,8 +32,8 @@ type DraftQuote struct {
 	Notes      string     `json:"notes,omitempty"`
 }
 
-// ChangeQuote replaces the dates, the reference and the notes of a draft: what is not sent is
-// left empty (the validity, thirty days again).
+// ChangeQuote sustituye las fechas, la referencia y las notas de un borrador: lo que no se envía
+// se deja vacío (la validez, otra vez treinta días).
 type ChangeQuote struct {
 	ID         domain.QuoteID `json:"-"`
 	Date       vocab.Date     `json:"date,omitzero"`
@@ -41,52 +42,53 @@ type ChangeQuote struct {
 	Notes      string         `json:"notes,omitempty"`
 }
 
-// AddQuoteLine adds a product to a draft quote, priced by Products.
+// AddQuoteLine añade un producto a un presupuesto en borrador, con el precio de Products.
 type AddQuoteLine struct {
 	ID       domain.QuoteID `json:"-"`
 	Product  string         `json:"product"`
 	Quantity string         `json:"quantity"`
 }
 
-// RemoveQuoteLine removes a line from a draft quote.
+// RemoveQuoteLine quita una línea de un presupuesto en borrador.
 type RemoveQuoteLine struct {
 	ID   domain.QuoteID `json:"-"`
 	Line int            `json:"line"`
 }
 
-// SendQuote commits a draft quote: it is numbered and no longer changes.
+// SendQuote envía un presupuesto en borrador: se numera y ya no cambia.
 type SendQuote struct {
 	ID domain.QuoteID `json:"-"`
 }
 
-// AcceptQuote records that the customer took the offer: it becomes a draft order at the quoted
-// prices, served from the warehouse given (it may be set when the order is confirmed).
+// AcceptQuote registra que el cliente tomó la oferta: se convierte en un pedido en borrador a los
+// precios presupuestados, servido desde el almacén indicado (se puede poner al confirmar el pedido).
 type AcceptQuote struct {
 	ID        domain.QuoteID `json:"-"`
 	Warehouse string         `json:"warehouse,omitempty"`
 }
 
-// EndQuote rejects or withdraws a quote, with a reason.
+// EndQuote rechaza o retira un presupuesto, con un motivo.
 type EndQuote struct {
 	ID     domain.QuoteID `json:"-"`
 	Reason string         `json:"reason,omitempty"`
 }
 
-// ExpireQuotes closes the sent quotes of a company whose validity is over (for a scheduled job).
+// ExpireQuotes cierra los presupuestos enviados de una empresa cuya validez ha terminado (para una
+// tarea programada).
 type ExpireQuotes struct {
 	Company string `json:"company"`
 }
 
-// GetQuote loads a quote.
+// GetQuote carga un presupuesto.
 type GetQuote struct{ ID domain.QuoteID }
 
-// SearchQuotes searches quotes of the caller's scope, the latest first.
+// SearchQuotes busca presupuestos del ámbito de quien llama, los más recientes primero.
 type SearchQuotes struct {
 	Company, Customer, Status string
 	Page, Size                int
 }
 
-// QuoteLineDTO is the transport form of a quote line.
+// QuoteLineDTO es la forma de transporte de una línea de presupuesto.
 type QuoteLineDTO struct {
 	No          int    `json:"no"`
 	Product     string `json:"product"`
@@ -102,7 +104,7 @@ type QuoteLineDTO struct {
 	Amount      string `json:"amount"`
 }
 
-// QuoteDTO is the transport form of a quote.
+// QuoteDTO es la forma de transporte de un presupuesto.
 type QuoteDTO struct {
 	ID               string         `json:"id"`
 	Company          string         `json:"company"`
@@ -117,18 +119,18 @@ type QuoteDTO struct {
 	Status           string         `json:"status"`
 	Total            string         `json:"total"`
 	Reason           string         `json:"reason,omitempty"`
-	Order            string         `json:"order,omitempty"` // the order it became
+	Order            string         `json:"order,omitempty"` // el pedido en que se convirtió
 	Lines            []QuoteLineDTO `json:"lines"`
 	Version          int64          `json:"version"`
 }
 
-// AcceptedQuoteDTO is an accepted quote with the order it became.
+// AcceptedQuoteDTO es un presupuesto aceptado con el pedido en que se convirtió.
 type AcceptedQuoteDTO struct {
 	Quote QuoteDTO `json:"quote"`
 	Order OrderDTO `json:"order"`
 }
 
-// ExpiredQuotesDTO lists the quotes a run closed.
+// ExpiredQuotesDTO enumera los presupuestos que cerró una pasada.
 type ExpiredQuotesDTO struct {
 	Numbers []string `json:"numbers"`
 }
@@ -147,7 +149,8 @@ func quoteDTO(q *domain.Quote) QuoteDTO {
 	return d
 }
 
-// item prices a product of the company for a sale on a date, and refuses what cannot be sold.
+// item pone precio a un producto de la empresa para una venta en una fecha, y rechaza lo que no se
+// puede vender.
 func (s service) item(ctx context.Context, company domain.OrganizationID, list domain.PriceListID, product domain.ProductID, q vocab.Decimal,
 	on vocab.Date) (domain.Item, error) {
 	it, ok, err := s.Catalog.Price(ctx, company, product, list, q, on)
@@ -258,7 +261,7 @@ func (s service) quoteUseCases(svc *Service) {
 	svc.SendQuote = changing(s, PermQuoteSend, func(ctx context.Context, c SendQuote) (QuoteDTO, error) {
 		return dto(update(ctx, c.ID, func(ctx context.Context, q *domain.Quote) error {
 			qs := q.State()
-			if qs.Status != domain.QuoteDraft { // before a number is taken for nothing
+			if qs.Status != domain.QuoteDraft { // antes de tomar un número para nada
 				return fw.Violation("orders.quote_not_draft", "only a draft quote is sent")
 			}
 			number, err := s.number(ctx, qs.Company, "PRE", qs.Date.Year())
@@ -283,7 +286,7 @@ func (s service) quoteUseCases(svc *Service) {
 		if err != nil {
 			return AcceptedQuoteDTO{}, err
 		}
-		// The order takes the prices of the quote as they are: that is what was offered.
+		// El pedido toma los precios del presupuesto tal cual: es lo que se ofreció.
 		qs := q.State()
 		o, err := domain.DraftOrder(id, domain.OrderState{Company: qs.Company, Customer: qs.Customer, Date: today, Warehouse: warehouse, PriceList: qs.PriceList,
 			CustomerDiscount: qs.CustomerDiscount, Reference: qs.Reference, Notes: qs.Notes})

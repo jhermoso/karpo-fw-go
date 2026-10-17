@@ -1,5 +1,5 @@
-// Package application holds the Modules use cases (with permissions and company scope), the port
-// other contexts ask, and the translation to the Published Language.
+// Package application contiene los casos de uso de Modules (con permisos y ámbito de empresa), el
+// puerto al que preguntan otros contextos y la traducción al Published Language.
 package application
 
 import (
@@ -20,30 +20,30 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
 )
 
-// FeatureRef names a feature: its kind and its code.
+// FeatureRef nombra una funcionalidad: su clase y su código.
 type FeatureRef struct {
 	Kind domain.Kind
 	Code string
 }
 
-// Derivation tells the features a company has because of what it is, not because somebody
-// switched them on: the financial capability of a company that is a financial institution. What
-// is derived is never switched by hand; an activation of it that was recorded does not count.
+// Derivation dice las funcionalidades que una empresa tiene por lo que es, no porque alguien las
+// encendiera: la capacidad financiera de una empresa que es una entidad financiera. Lo deducido
+// nunca se enciende ni se apaga a mano; una activación suya que se hubiera registrado no cuenta.
 type Derivation interface {
-	// Features lists what is derived.
+	// Features lista lo que se deduce.
 	Features() []FeatureRef
-	// Of lists the derived features a company has now.
+	// Of lista las funcionalidades deducidas que una empresa tiene ahora.
 	Of(ctx context.Context, organization fw.UUID) ([]FeatureRef, error)
-	// Holders lists the companies that have a derived feature now.
+	// Holders lista las empresas que tienen ahora una funcionalidad deducida.
 	Holders(ctx context.Context, f FeatureRef) ([]fw.UUID, error)
 }
 
-// derived reports whether a feature is derived.
+// derived dice si una funcionalidad es deducida.
 func derived(d Derivation, kind domain.Kind, code string) bool {
 	return d != nil && slices.Contains(d.Features(), FeatureRef{Kind: kind, Code: code})
 }
 
-// Deps are the ports the use cases need; Derivation, Recorder and Audit are optional.
+// Deps son los puertos que necesitan los casos de uso; Derivation, Recorder y Audit son opcionales.
 type Deps struct {
 	Features    domain.FeatureRepository
 	Activations domain.ActivationRepository
@@ -53,7 +53,7 @@ type Deps struct {
 	Audit       app.AuditLog
 }
 
-// Service exposes the use cases.
+// Service expone los casos de uso.
 type Service struct {
 	Define  app.CommandHandler[DefineFeature, FeatureDTO]
 	Change  app.CommandHandler[ChangeFeature, FeatureDTO]
@@ -63,7 +63,7 @@ type Service struct {
 	Deactivate    app.CommandHandler[SwitchFeature, ActivationDTO]
 	Of            app.QueryHandler[ListActivations, []ActivationDTO]
 	Organizations app.QueryHandler[ListOrganizations, []string]
-	// Current needs no permission: it is what the caller's own companies have on.
+	// Current no necesita permiso: es lo que tienen encendido las propias empresas del que llama.
 	Current app.QueryHandler[GetCurrent, CurrentDTO]
 }
 
@@ -103,7 +103,8 @@ func scopeOf(ctx context.Context) scope {
 	return s
 }
 
-// check returns a uniform 404 outside the company's scope and 403 when it is read-only.
+// check devuelve un 404 uniforme fuera del ámbito de la empresa y un 403 cuando es de sólo
+// lectura.
 func (s scope) check(org domain.OrganizationID, write bool) error {
 	if !s.global && !slices.Contains(s.orgs, org) {
 		return fw.NotFound("parties.party", org)
@@ -141,7 +142,7 @@ func changing[In, Out any](uow fw.UnitOfWork, p authz.Permission, fn func(contex
 	return guard(p, fn, pipeline.RetryOnConflict[In, Out](5, 10*time.Millisecond), pipeline.Transactional[In, Out](uow))
 }
 
-// DefineFeature adds an entry to the catalog.
+// DefineFeature añade una entrada al catálogo.
 type DefineFeature struct {
 	Kind        string `json:"kind"`
 	Code        string `json:"code"`
@@ -149,7 +150,7 @@ type DefineFeature struct {
 	Description string `json:"description,omitempty"`
 }
 
-// ChangeFeature renames an entry of the catalog, or retires or restores it.
+// ChangeFeature renombra una entrada del catálogo, o la retira o la restaura.
 type ChangeFeature struct {
 	ID          domain.FeatureID `json:"-"`
 	Name        string           `json:"name"`
@@ -157,13 +158,13 @@ type ChangeFeature struct {
 	Retired     bool             `json:"retired,omitempty"`
 }
 
-// ListCatalog lists the catalog.
+// ListCatalog lista el catálogo.
 type ListCatalog struct {
 	Kind    string
-	Retired bool // also the retired entries
+	Retired bool // también las entradas retiradas
 }
 
-// SwitchFeature switches a feature of a company on or off.
+// SwitchFeature enciende o apaga una funcionalidad de una empresa.
 type SwitchFeature struct {
 	Organization string `json:"organization"`
 	Kind         string `json:"kind"`
@@ -171,16 +172,16 @@ type SwitchFeature struct {
 	Notes        string `json:"notes,omitempty"`
 }
 
-// ListActivations lists what a company has, or had, on.
+// ListActivations lista lo que una empresa tiene, o tuvo, encendido.
 type ListActivations struct{ Organization string }
 
-// ListOrganizations lists the companies of the caller's scope with a feature on.
+// ListOrganizations lista las empresas del ámbito del que llama con una funcionalidad encendida.
 type ListOrganizations struct{ Kind, Code string }
 
-// GetCurrent asks what the caller's companies have on.
+// GetCurrent pregunta qué tienen encendido las empresas del que llama.
 type GetCurrent struct{}
 
-// FeatureDTO is the transport form of a catalog entry.
+// FeatureDTO es la forma de transporte de una entrada del catálogo.
 type FeatureDTO struct {
 	ID          string `json:"id"`
 	Kind        string `json:"kind"`
@@ -197,13 +198,13 @@ func featureDTO(f *domain.Feature) FeatureDTO {
 		Version: f.Version()}
 }
 
-// ActivationDTO is the transport form of an activation.
+// ActivationDTO es la forma de transporte de una activación.
 type ActivationDTO struct {
 	Organization  string `json:"organization"`
 	Kind          string `json:"kind"`
 	Code          string `json:"code"`
 	Active        bool   `json:"active"`
-	Derived       bool   `json:"derived,omitempty"` // it has it because of what it is: nobody switched it on
+	Derived       bool   `json:"derived,omitempty"` // la tiene por lo que es: nadie la encendió
 	ActivatedAt   string `json:"activatedAt,omitempty"`
 	ActivatedBy   string `json:"activatedBy,omitempty"`
 	DeactivatedAt string `json:"deactivatedAt,omitempty"`
@@ -225,7 +226,7 @@ func activationDTO(a *domain.Activation) ActivationDTO {
 		ActivatedBy: s.ActivatedBy, DeactivatedAt: stamp(s.DeactivatedAt), DeactivatedBy: s.DeactivatedBy, Notes: s.Notes, Version: a.Version()}
 }
 
-// CurrentDTO is what the caller's companies have on: the union over them, by kind.
+// CurrentDTO es lo que tienen encendido las empresas del que llama: la unión de todas, por clase.
 type CurrentDTO struct {
 	Modules      []string `json:"modules"`
 	Capabilities []string `json:"capabilities"`
@@ -251,8 +252,8 @@ func (s service) activation(ctx context.Context, org domain.OrganizationID, kind
 	return found[0], nil
 }
 
-// EnsureCatalog adds the seed entries the catalog lacks (existing ones are left as they are). It
-// reports how many were added.
+// EnsureCatalog añade las entradas de la semilla que le faltan al catálogo (las que existen se
+// dejan como están). Dice cuántas se añadieron.
 func EnsureCatalog(ctx context.Context, d Deps) (int, error) {
 	s, added := newService(d), 0
 	err := d.UoW.Do(ctx, func(ctx context.Context) error {
@@ -279,12 +280,12 @@ func EnsureCatalog(ctx context.Context, d Deps) (int, error) {
 	return added, err
 }
 
-// NewService wires the use cases.
+// NewService monta los casos de uso.
 func NewService(d Deps) *Service {
 	s := newService(d)
 	svc := &Service{}
 
-	// The catalog is everybody's: only a global administrator changes it.
+	// El catálogo es de todos: sólo lo cambia un administrador global.
 	global := func(ctx context.Context) error {
 		if !scopeOf(ctx).global {
 			return fmt.Errorf("%w: the catalog is changed by a global administrator", fw.ErrForbidden)
@@ -345,7 +346,8 @@ func NewService(d Deps) *Service {
 		return out, nil
 	})
 
-	// Switching on: the feature must be offered; a company has one sector, so the one it had goes off.
+	// Encender: la funcionalidad debe ofrecerse; una empresa tiene un solo sector, así que el que
+	// tenía se apaga.
 	svc.Activate = changing(d.UoW, PermActivationUpdate, func(ctx context.Context, c SwitchFeature) (ActivationDTO, error) {
 		var v fw.Validation
 		org, kind := domain.OrganizationID{UUID: parseID(&v, "organization", c.Organization)}, parseKind(&v, c.Kind)
@@ -404,7 +406,7 @@ func NewService(d Deps) *Service {
 			return ActivationDTO{}, fw.Violation("modules.retired_feature", "the "+string(kind)+" is no longer offered")
 		}
 		if notes := strings.TrimSpace(c.Notes); act.State().Active && (notes == "" || notes == act.State().Notes) {
-			return activationDTO(act), nil // on already
+			return activationDTO(act), nil // ya está encendida
 		}
 		act, err = s.activations.Update(ctx, act.ID(), func(_ context.Context, a *domain.Activation) error {
 			_, err := a.Activate(sc.actor(), now, c.Notes)
@@ -436,7 +438,7 @@ func NewService(d Deps) *Service {
 			return ActivationDTO{}, fw.Violation("modules.not_active", "the company never had that "+string(kind))
 		}
 		if !act.State().Active {
-			return activationDTO(act), nil // off already
+			return activationDTO(act), nil // ya está apagada
 		}
 		act, err = s.activations.Update(ctx, act.ID(), func(_ context.Context, a *domain.Activation) error {
 			_, err := a.Deactivate(sc.actor(), fw.Now(), c.Notes)
@@ -463,7 +465,7 @@ func NewService(d Deps) *Service {
 		}
 		out := []ActivationDTO{}
 		for _, a := range as {
-			if !derived(d.Derivation, a.State().Kind, a.State().Code) { // what is derived is told below, as it is now
+			if !derived(d.Derivation, a.State().Kind, a.State().Code) { // lo deducido se dice más abajo, tal como está ahora
 				out = append(out, activationDTO(a))
 			}
 		}
@@ -522,8 +524,8 @@ func NewService(d Deps) *Service {
 		return out, nil
 	})
 
-	// What the caller sees: a global administrator, everything offered; anyone else, what their
-	// companies have on, and nothing without companies (the C# fell back to everything).
+	// Lo que ve el que llama: un administrador global, todo lo que se ofrece; cualquier otro, lo que
+	// tienen encendido sus empresas, y nada si no tiene empresas (el C# caía en todo).
 	svc.Current = app.HandlerFunc[GetCurrent, CurrentDTO](func(ctx context.Context, _ GetCurrent) (CurrentDTO, error) {
 		out := CurrentDTO{Modules: []string{}, Capabilities: []string{}, Sectors: []string{}}
 		add := func(kind domain.Kind, code string) {
@@ -572,8 +574,9 @@ func NewService(d Deps) *Service {
 	return svc
 }
 
-// Features implements contracts.Features on the repository: the port other contexts ask. What is
-// derived is answered by the derivation, whatever was recorded by hand.
+// Features implementa contracts.Features sobre el repositorio: el puerto al que preguntan otros
+// contextos. Lo deducido lo responde la derivación, se haya registrado lo que se haya registrado a
+// mano.
 type Features struct {
 	Activations domain.ActivationRepository
 	Derivation  Derivation
@@ -606,7 +609,7 @@ func (f Features) on(ctx context.Context, organization, kind string, more ...spe
 	return f.Activations.Find(ctx, spec.And(parts...), domain.ActFieldCode.Asc())
 }
 
-// Has implements contracts.Features.
+// Has implementa contracts.Features.
 func (f Features) Has(ctx context.Context, organization, kind, code string) (bool, error) {
 	if derived(f.Derivation, domain.Kind(kind), domain.NormalizeCode(code)) {
 		codes, err := f.derivedOf(ctx, organization, kind)
@@ -616,7 +619,7 @@ func (f Features) Has(ctx context.Context, organization, kind, code string) (boo
 	return len(as) > 0, err
 }
 
-// Of implements contracts.Features.
+// Of implementa contracts.Features.
 func (f Features) Of(ctx context.Context, organization, kind string) ([]string, error) {
 	as, err := f.on(ctx, organization, kind)
 	if err != nil {
@@ -634,7 +637,7 @@ func (f Features) Of(ctx context.Context, organization, kind string) ([]string, 
 	return out, err
 }
 
-// Publications translates the domain events into the Published Language.
+// Publications traduce los eventos de dominio al Published Language.
 func Publications(r *messaging.Recorder) *messaging.Recorder {
 	messaging.On(r, func(_ context.Context, e domain.FeatureActivated) ([]app.IntegrationEvent, error) {
 		return []app.IntegrationEvent{contracts.FeatureActivatedV1{Organization: e.Organization, Kind: e.Kind, Code: e.Code}}, nil

@@ -11,10 +11,10 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// PayslipKind is the stable aggregate type name.
+// PayslipKind es el nombre estable del tipo de agregado.
 const PayslipKind = "payroll.payslip"
 
-// MaxLines bounds the lines of a payslip.
+// MaxLines limita las líneas de una nómina.
 const MaxLines = 200
 
 var (
@@ -22,11 +22,11 @@ var (
 	zero    = vocab.DecimalFromInt(0)
 )
 
-// Kind of payslip: one ordinary payslip per period, and extra pays or a settlement (finiquito)
-// apart.
+// Kind es la clase de nómina: una nómina ordinaria por periodo, y las pagas extra o un finiquito
+// aparte.
 type Kind int
 
-// Payslip kinds.
+// Clases de nómina.
 const (
 	Ordinary Kind = iota + 1
 	ExtraPay
@@ -35,10 +35,10 @@ const (
 
 var payslipKinds = map[Kind]string{Ordinary: "ordinary", ExtraPay: "extra-pay", Settlement: "settlement"}
 
-// String returns the stable name.
+// String devuelve el nombre estable.
 func (k Kind) String() string { return payslipKinds[k] }
 
-// ParseKind parses a payslip kind name.
+// ParseKind interpreta el nombre de una clase de nómina.
 func ParseKind(s string) (Kind, bool) {
 	for k, n := range payslipKinds {
 		if n == s {
@@ -48,12 +48,12 @@ func ParseKind(s string) (Kind, bool) {
 	return 0, false
 }
 
-// Status of a payslip (the C# used magic ints 0 and 2, and let issued payslips change or be
-// deleted).
+// Status es el estado de una nómina (el C# usaba los enteros mágicos 0 y 2, y dejaba cambiar o
+// borrar las nóminas emitidas).
 type Status int
 
-// Statuses: a draft changes freely and can be discarded; an approved payslip is immutable and
-// is corrected by cancelling it and drafting a new one.
+// Estados: un borrador cambia libremente y se puede descartar; una nómina aprobada es inmutable y
+// se corrige anulándola y preparando una nueva.
 const (
 	Draft Status = iota + 1
 	Approved
@@ -62,10 +62,10 @@ const (
 
 var statuses = map[Status]string{Draft: "draft", Approved: "approved", Cancelled: "cancelled"}
 
-// String returns the stable name.
+// String devuelve el nombre estable.
 func (s Status) String() string { return statuses[s] }
 
-// ParseStatus parses a status name.
+// ParseStatus interpreta el nombre de un estado.
 func ParseStatus(s string) (Status, bool) {
 	for k, n := range statuses {
 		if n == s {
@@ -75,11 +75,11 @@ func ParseStatus(s string) (Status, bool) {
 	return 0, false
 }
 
-// LineID identifies a payslip line.
+// LineID identifica una línea de nómina.
 type LineID struct{ fw.UUID }
 
-// Line is a line of a payslip. It keeps a snapshot of its concept (kind, bases, key) so that later
-// catalog changes do not alter an approved payslip.
+// Line es una línea de una nómina. Guarda una instantánea de su concepto (clase, bases, clave) para
+// que los cambios posteriores del catálogo no alteren una nómina aprobada.
 type Line struct {
 	ID            LineID
 	Concept       ConceptID
@@ -89,16 +89,16 @@ type Line struct {
 	Taxable       bool
 	PerceptionKey string
 	Description   string
-	Quantity      vocab.Decimal // with UnitAmount: amount = quantity × unit
+	Quantity      vocab.Decimal // con UnitAmount: importe = cantidad × unidad
 	UnitAmount    vocab.Decimal
-	Base          vocab.Decimal // with Percent: amount = base × percent / 100
+	Base          vocab.Decimal // con Percent: importe = base × porcentaje / 100
 	Percent       vocab.Decimal
 	Amount        vocab.Decimal
 }
 
-// LineInput is a new line: an amount, a quantity and a unit amount, or a base and a percentage.
-// The amount of the last two is computed, rounded to cents half away from zero (the C# only
-// checked Amount > 0 and never Base × %).
+// LineInput es una línea nueva: un importe, una cantidad y un importe unitario, o una base y un
+// porcentaje. El importe de las dos últimas se calcula, redondeado a céntimos con la mitad
+// alejándose de cero (el C# sólo comprobaba Amount > 0 y nunca Base × %).
 type LineInput struct {
 	Description string
 	Amount      vocab.Decimal
@@ -108,7 +108,7 @@ type LineInput struct {
 	Percent     vocab.Decimal
 }
 
-// NewLine builds a line of a concept.
+// NewLine construye una línea de un concepto.
 func NewLine(c Concept, in LineInput) (Line, error) {
 	var v fw.Validation
 	v.Require(c.Active, "concept", "inactive", "the concept is not active")
@@ -146,20 +146,20 @@ func NewLine(c Concept, in LineInput) (Line, error) {
 		Percent: in.Percent, Amount: amount}, nil
 }
 
-// Totals are derived from the lines (the C# trusted the gross and net sent by the client).
+// Totals se derivan de las líneas (el C# se fiaba del bruto y el líquido que enviaba el cliente).
 type Totals struct {
-	Gross            vocab.Decimal // Σ earnings
-	ContributionBase vocab.Decimal // Σ contributable earnings
-	TaxableBase      vocab.Decimal // Σ taxable earnings
-	SocialSecurity   vocab.Decimal // Σ employee contributions
-	IncomeTax        vocab.Decimal // Σ IRPF withholdings
-	OtherDeductions  vocab.Decimal // Σ other deductions
-	Net              vocab.Decimal // gross − deductions
-	EmployerCost     vocab.Decimal // Σ employer contributions
-	CompanyCost      vocab.Decimal // gross + employer contributions
+	Gross            vocab.Decimal // Σ devengos
+	ContributionBase vocab.Decimal // Σ devengos cotizables
+	TaxableBase      vocab.Decimal // Σ devengos sujetos a retención
+	SocialSecurity   vocab.Decimal // Σ cotizaciones del trabajador
+	IncomeTax        vocab.Decimal // Σ retenciones de IRPF
+	OtherDeductions  vocab.Decimal // Σ otras deducciones
+	Net              vocab.Decimal // bruto − deducciones
+	EmployerCost     vocab.Decimal // Σ cotizaciones de la empresa
+	CompanyCost      vocab.Decimal // bruto + cotizaciones de la empresa
 }
 
-// TotalsOf adds up lines.
+// TotalsOf suma líneas.
 func TotalsOf(lines []Line) Totals {
 	t := Totals{Gross: zero, ContributionBase: zero, TaxableBase: zero, SocialSecurity: zero, IncomeTax: zero, OtherDeductions: zero,
 		EmployerCost: zero}
@@ -188,7 +188,7 @@ func TotalsOf(lines []Line) Totals {
 	return t
 }
 
-// Snapshot is what the payslip keeps of HR and of the payroll profile when it is drafted.
+// Snapshot es lo que la nómina guarda de HR y del perfil de nómina al prepararse.
 type Snapshot struct {
 	EmployeeNumber    string
 	Agreement         AgreementID
@@ -198,7 +198,7 @@ type Snapshot struct {
 	EmployerAccount   EmployerAccountID
 }
 
-// Payslip is the pay document of an employment for a period, with its lines.
+// Payslip es el recibo de salarios de una relación laboral para un periodo, con sus líneas.
 type Payslip struct {
 	fw.BaseAggregateRoot[PayslipID]
 	traits.Audited
@@ -214,7 +214,7 @@ type Payslip struct {
 	cancelReason string
 }
 
-// PayslipState is the persisted state of a payslip.
+// PayslipState es el estado persistido de una nómina.
 type PayslipState struct {
 	Employment   EmploymentID
 	Person       PersonID
@@ -229,7 +229,7 @@ type PayslipState struct {
 	Audit        traits.AuditStamp
 }
 
-// ReconstitutePayslip rebuilds a payslip.
+// ReconstitutePayslip reconstruye una nómina.
 func ReconstitutePayslip(id PayslipID, s PayslipState) (*Payslip, error) {
 	base, err := fw.NewBaseAggregateRoot(PayslipKind, id)
 	if err != nil {
@@ -255,8 +255,8 @@ func ReconstitutePayslip(id PayslipID, s PayslipState) (*Payslip, error) {
 		lines: slices.Clone(s.Lines), cancelReason: s.CancelReason}, nil
 }
 
-// DraftPayslip creates a draft payslip. The application checks the employment is active in the
-// period and that no other payslip of the kind exists for it.
+// DraftPayslip crea una nómina en borrador. La aplicación comprueba que la relación laboral está
+// activa en el periodo y que no existe otra nómina de esa clase para ella en el periodo.
 func DraftPayslip(id PayslipID, s PayslipState) (*Payslip, error) {
 	s.Status, s.Lines, s.CancelReason = Draft, nil, ""
 	p, err := ReconstitutePayslip(id, s)
@@ -268,37 +268,37 @@ func DraftPayslip(id PayslipID, s PayslipState) (*Payslip, error) {
 	return p, nil
 }
 
-// Employment returns the HR employment.
+// Employment devuelve la relación laboral de HR.
 func (p *Payslip) Employment() EmploymentID { return p.employment }
 
-// Person returns the employee.
+// Person devuelve el empleado.
 func (p *Payslip) Person() PersonID { return p.person }
 
-// Employer returns the employer.
+// Employer devuelve el empleador.
 func (p *Payslip) Employer() OrganizationID { return p.employer }
 
-// Kind returns the payslip kind.
+// Kind devuelve la clase de nómina.
 func (p *Payslip) Kind() Kind { return p.kind }
 
-// Period returns the period (civil dates, both included).
+// Period devuelve el periodo (fechas civiles, las dos incluidas).
 func (p *Payslip) Period() (vocab.Date, vocab.Date) { return p.start, p.end }
 
-// PaymentDate returns the payment date.
+// PaymentDate devuelve la fecha de pago.
 func (p *Payslip) PaymentDate() vocab.Date { return p.paymentDate }
 
-// Status returns the status.
+// Status devuelve el estado.
 func (p *Payslip) Status() Status { return p.status }
 
-// Snapshot returns what the payslip keeps of HR and the profile.
+// Snapshot devuelve lo que la nómina guarda de HR y del perfil.
 func (p *Payslip) Snapshot() Snapshot { return p.snapshot }
 
-// Lines returns a copy of the lines.
+// Lines devuelve una copia de las líneas.
 func (p *Payslip) Lines() []Line { return slices.Clone(p.lines) }
 
-// Totals returns the totals derived from the lines.
+// Totals devuelve los totales derivados de las líneas.
 func (p *Payslip) Totals() Totals { return TotalsOf(p.lines) }
 
-// CancelReason returns why an approved payslip was cancelled.
+// CancelReason devuelve por qué se anuló una nómina aprobada.
 func (p *Payslip) CancelReason() string { return p.cancelReason }
 
 func (p *Payslip) mustBeDraft() error {
@@ -308,7 +308,7 @@ func (p *Payslip) mustBeDraft() error {
 	return nil
 }
 
-// AddLine adds a line (drafts only).
+// AddLine añade una línea (sólo en borradores).
 func (p *Payslip) AddLine(l Line) (LineID, error) {
 	if err := p.mustBeDraft(); err != nil {
 		return LineID{}, err
@@ -320,7 +320,7 @@ func (p *Payslip) AddLine(l Line) (LineID, error) {
 	return l.ID, nil
 }
 
-// RemoveLine removes a line (drafts only).
+// RemoveLine quita una línea (sólo en borradores).
 func (p *Payslip) RemoveLine(id LineID) error {
 	if err := p.mustBeDraft(); err != nil {
 		return err
@@ -333,7 +333,7 @@ func (p *Payslip) RemoveLine(id LineID) error {
 	return nil
 }
 
-// Reschedule changes the payment date (drafts only).
+// Reschedule cambia la fecha de pago (sólo en borradores).
 func (p *Payslip) Reschedule(d vocab.Date) error {
 	if err := p.mustBeDraft(); err != nil {
 		return err
@@ -345,8 +345,8 @@ func (p *Payslip) Reschedule(d vocab.Date) error {
 	return nil
 }
 
-// Approve freezes the payslip. Invariants: at least one earning, the net is not negative, the
-// withholding does not exceed its base and the employee contributions do not exceed the gross.
+// Approve congela la nómina. Invariantes: al menos un devengo, el líquido no es negativo, la
+// retención no supera su base y las cotizaciones del trabajador no superan el bruto.
 func (p *Payslip) Approve() error {
 	if err := p.mustBeDraft(); err != nil {
 		return err
@@ -379,7 +379,7 @@ func (p *Payslip) Approve() error {
 	return nil
 }
 
-// Cancel annuls an approved payslip; a new draft corrects it.
+// Cancel anula una nómina aprobada; la corrige un borrador nuevo.
 func (p *Payslip) Cancel(reason string) error {
 	if p.status != Approved {
 		return fw.Violation("payroll.payslip_not_approved", "only an approved payslip is cancelled; a draft is discarded")
@@ -395,17 +395,18 @@ func (p *Payslip) Cancel(reason string) error {
 	return nil
 }
 
-// Discard checks a payslip can be deleted: only drafts are (the C# hard-deleted issued ones).
+// Discard comprueba que una nómina se puede borrar: sólo los borradores (el C# borraba físicamente
+// las emitidas).
 func (p *Payslip) Discard() error { return p.mustBeDraft() }
 
-// AuditSnapshot implements traits.Snapshotter.
+// AuditSnapshot implementa traits.Snapshotter.
 func (p *Payslip) AuditSnapshot() map[string]any {
 	t := p.Totals()
 	return map[string]any{"status": p.status.String(), "lines": len(p.lines), "gross": t.Gross.String(), "net": t.Net.String(),
 		"paymentDate": p.paymentDate.String()}
 }
 
-// Payslip fields and specifications.
+// Campos y especificaciones de la nómina.
 var (
 	PayFieldID         = spec.Comparable("id", func(p *Payslip) PayslipID { return p.ID() })
 	PayFieldEmployment = spec.Comparable("employment", (*Payslip).Employment)
@@ -416,7 +417,7 @@ var (
 	PayFieldStart      = spec.OrderedBy("period_start", func(p *Payslip) vocab.Date { return p.start }, vocab.CompareDates)
 )
 
-// SamePeriod matches the payslips of an employment, kind and period start that are not cancelled.
+// SamePeriod selecciona las nóminas no anuladas de una relación laboral, clase e inicio de periodo.
 func SamePeriod(e EmploymentID, k Kind, start vocab.Date) spec.Spec[*Payslip] {
 	return spec.And(PayFieldEmployment.Eq(e), PayFieldKind.Eq(int(k)), PayFieldStart.Eq(start), PayFieldStatus.Ne(int(Cancelled)))
 }

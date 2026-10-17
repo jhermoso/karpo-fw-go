@@ -14,19 +14,19 @@ type outboxRow struct {
 	processed bool
 }
 
-// Outbox is an in-memory application.OutboxStore bound to a Store's unit of work.
+// Outbox es un application.OutboxStore en memoria ligado a la unidad de trabajo de un Store.
 type Outbox struct {
 	store *Store
 	mu    sync.Mutex
 	rows  map[string]*outboxRow
 }
 
-// NewOutbox creates an outbox on store.
+// NewOutbox crea un outbox sobre store.
 func NewOutbox(store *Store) *Outbox {
 	return &Outbox{store: store, rows: make(map[string]*outboxRow)}
 }
 
-// Append adds messages; they are removed again if the unit of work rolls back.
+// Append añade mensajes; se vuelven a quitar si la unidad de trabajo hace rollback.
 func (o *Outbox) Append(ctx context.Context, msgs ...application.OutboxMessage) error {
 	if o.store.closed.Load() {
 		return ErrClosed
@@ -46,7 +46,7 @@ func (o *Outbox) Append(ctx context.Context, msgs ...application.OutboxMessage) 
 	return nil
 }
 
-// Pending returns unprocessed messages below maxAttempts, oldest first.
+// Pending devuelve los mensajes sin procesar que no llegan a maxAttempts, primero los más antiguos.
 func (o *Outbox) Pending(_ context.Context, limit, maxAttempts int) ([]application.OutboxMessage, error) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
@@ -71,7 +71,7 @@ func (o *Outbox) Pending(_ context.Context, limit, maxAttempts int) ([]applicati
 	return out, nil
 }
 
-// MarkProcessed flags a message as delivered.
+// MarkProcessed marca un mensaje como entregado.
 func (o *Outbox) MarkProcessed(_ context.Context, id string) error {
 	o.mu.Lock()
 	defer o.mu.Unlock()
@@ -81,7 +81,7 @@ func (o *Outbox) MarkProcessed(_ context.Context, id string) error {
 	return nil
 }
 
-// MarkFailed records a failed delivery attempt.
+// MarkFailed anota un intento de entrega fallido.
 func (o *Outbox) MarkFailed(_ context.Context, id string, cause error) error {
 	o.mu.Lock()
 	defer o.mu.Unlock()
@@ -94,7 +94,7 @@ func (o *Outbox) MarkFailed(_ context.Context, id string, cause error) error {
 	return nil
 }
 
-// IdempotencyStore is an in-memory application.IdempotencyStore with expiry.
+// IdempotencyStore es un application.IdempotencyStore en memoria con caducidad.
 type IdempotencyStore struct {
 	mu    sync.Mutex
 	now   func() time.Time
@@ -106,12 +106,12 @@ type idemItem struct {
 	expires time.Time
 }
 
-// NewIdempotencyStore creates an empty store.
+// NewIdempotencyStore crea un almacén vacío.
 func NewIdempotencyStore() *IdempotencyStore {
 	return &IdempotencyStore{now: time.Now, items: make(map[string]idemItem)}
 }
 
-// Get returns a stored, non-expired value.
+// Get devuelve un valor guardado que no haya caducado.
 func (s *IdempotencyStore) Get(_ context.Context, key string) ([]byte, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -126,7 +126,7 @@ func (s *IdempotencyStore) Get(_ context.Context, key string) ([]byte, bool, err
 	return it.value, true, nil
 }
 
-// Put stores value for ttl (ttl <= 0: no expiry).
+// Put guarda value durante ttl (ttl <= 0: sin caducidad).
 func (s *IdempotencyStore) Put(_ context.Context, key string, value []byte, ttl time.Duration) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

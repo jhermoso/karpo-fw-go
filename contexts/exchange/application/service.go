@@ -1,5 +1,5 @@
-// Package application holds the Exchange use cases (with permissions and company scope) and the
-// translation to the Published Language.
+// Package application contiene los casos de uso de Exchange (con permisos y ámbito de empresa) y la
+// traducción al Published Language.
 package application
 
 import (
@@ -20,7 +20,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Deps are the ports the use cases need; Collaborators, Recorder and Audit are optional.
+// Deps son los puertos que necesitan los casos de uso; Collaborators, Recorder y Audit son opcionales.
 type Deps struct {
 	Currencies    domain.CurrencyRepository
 	Margins       domain.MarginRepository
@@ -32,7 +32,7 @@ type Deps struct {
 	Audit         app.AuditLog
 }
 
-// Service exposes the use cases.
+// Service expone los casos de uso.
 type Service struct {
 	SetCurrency    app.CommandHandler[SetCurrency, CurrencyDTO]
 	SetRate        app.CommandHandler[SetRate, CurrencyDTO]
@@ -78,7 +78,7 @@ func scopeOf(ctx context.Context) scope {
 	return s
 }
 
-// check returns a uniform 404 outside the company's scope and 403 when it is read-only.
+// check devuelve un 404 uniforme fuera del ámbito de la empresa y un 403 cuando es de sólo lectura.
 func (s scope) check(kind string, id fmt.Stringer, org domain.OrganizationID, write bool) error {
 	if !s.global && !slices.Contains(s.orgs, org) {
 		return fw.NotFound(kind, id)
@@ -143,7 +143,7 @@ func changing[In, Out any](uow fw.UnitOfWork, p authz.Permission, fn func(contex
 	return guard(p, fn, pipeline.RetryOnConflict[In, Out](5, 10*time.Millisecond), pipeline.Transactional[In, Out](uow))
 }
 
-// company parses the company of a command and checks the caller's scope over it.
+// company interpreta la empresa de una orden y comprueba el ámbito de quien llama sobre ella.
 func company(ctx context.Context, v *fw.Validation, s string, write bool) (domain.OrganizationID, error) {
 	org := domain.OrganizationID{UUID: parseID(v, "company", s)}
 	if err := v.Err(); err != nil {
@@ -152,7 +152,7 @@ func company(ctx context.Context, v *fw.Validation, s string, write bool) (domai
 	return org, scopeOf(ctx).check("parties.party", org, org, write)
 }
 
-// settingsOf returns the settings of a company: its own, or the defaults until it changes them.
+// settingsOf devuelve la configuración de una empresa: la suya, o la de por omisión hasta que la cambie.
 func (s service) settingsOf(ctx context.Context, org domain.OrganizationID) (*domain.Settings, domain.SettingsState, error) {
 	found, err := s.Settings.Find(ctx, domain.SetFieldCompany.Eq(org))
 	if err != nil {
@@ -184,7 +184,7 @@ func (s service) margin(ctx context.Context, org domain.OrganizationID, currency
 	return found[0], nil
 }
 
-// quote prices an amount of a currency of a company for a segment.
+// quote pone precio a un importe de una moneda de una empresa para un segmento.
 func (s service) quote(ctx context.Context, org domain.OrganizationID, set domain.SettingsState, currency, segment string, amount vocab.Decimal) (domain.Quotation, error) {
 	if segment == "" {
 		segment = domain.DefaultSegment
@@ -200,7 +200,7 @@ func (s service) quote(ctx context.Context, org domain.OrganizationID, set domai
 	return domain.Quote(c, m, set, segment, amount)
 }
 
-// NewService wires the use cases.
+// NewService conecta los casos de uso.
 func NewService(d Deps) *Service {
 	var opts []orchestration.Option
 	if d.Recorder != nil {
@@ -220,7 +220,7 @@ func NewService(d Deps) *Service {
 	return svc
 }
 
-// Publications translates the domain events into the Published Language.
+// Publications traduce los eventos de dominio al Published Language.
 func Publications(r *messaging.Recorder) *messaging.Recorder {
 	messaging.On(r, func(_ context.Context, e domain.ReservationRegistered) ([]app.IntegrationEvent, error) {
 		return []app.IntegrationEvent{contracts.ReservationRegisteredV1{ReservationID: e.AggregateID, Reference: e.Reference, Company: e.Company,

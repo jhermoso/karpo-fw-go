@@ -25,7 +25,7 @@ import (
 	tracevanilla "github.com/jhermoso/karpo-fw-go/pkg/trace/vanilla"
 )
 
-// observed is a handler behind the standard chain, with everything it leaves behind.
+// observed es un manejador detrás de la cadena estándar, con todo lo que deja tras de sí.
 type observed struct {
 	handler http.Handler
 	logs    *bytes.Buffer
@@ -69,7 +69,7 @@ func (o observed) do(method, target string, headers ...string) *httptest.Respons
 	return rec
 }
 
-// passthrough is a middleware that copies the request, as Authorize and TenantActorContext do.
+// passthrough es un middleware que copia la petición, como hacen Authorize y TenantActorContext.
 func passthrough(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), struct{ k string }{"x"}, 1)))
@@ -248,7 +248,7 @@ func TestObserve_PanicsLeaveTheirCause(t *testing.T) {
 			if n := reg.HistogramCount(metrics.HTTPServerRequestDuration, "method", "GET", "route", "/boom", "status", "500"); n != 1 {
 				t.Fatalf("the panic must be measured as a 500: %v", reg.SeriesLabels(metrics.HTTPServerRequestDuration))
 			}
-			// The body carries the correlation too, wherever Recovery sits in the chain.
+			// El cuerpo también lleva la correlación, esté donde esté Recovery en la cadena.
 			var problem distribution.ProblemDetails
 			if err := json.Unmarshal(rec.Body.Bytes(), &problem); err != nil || problem.CorrelationID == "" ||
 				problem.CorrelationID != rec.Header().Get(distribution.CorrelationHeader) {
@@ -289,8 +289,8 @@ func TestObserve_RouteNeverFallsBackToThePath(t *testing.T) {
 		distribution.WriteJSON(w, http.StatusOK, "no request at hand")
 	})
 
-	// Behind a middleware that copies the request, a handler that never tells its pattern is
-	// "unmatched", like a 404 of the mux; the path is never used.
+	// Detrás de un middleware que copia la petición, un manejador que nunca dice su patrón es
+	// "unmatched", como un 404 del mux; nunca se usa la ruta real.
 	o := observe(mux, passthrough)
 	o.do(http.MethodGet, "/plain/7")
 	o.do(http.MethodGet, "/nowhere/123")
@@ -304,7 +304,7 @@ func TestObserve_RouteNeverFallsBackToThePath(t *testing.T) {
 		t.Fatalf("unknown methods share one label: %v", o.reg.SeriesLabels(metrics.HTTPServerRequestDuration))
 	}
 
-	// With the router at hand, every matched request gets its pattern.
+	// Con el router a mano, cada petición que casa recibe su patrón.
 	reg := metricsvanilla.NewRegistry()
 	h := distribution.Chain(mux, distribution.Observe(nil, nil, reg, distribution.ObserveRoutes(mux)), passthrough)
 	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/plain/7", nil))
@@ -312,7 +312,7 @@ func TestObserve_RouteNeverFallsBackToThePath(t *testing.T) {
 		t.Fatalf("ObserveRoutes must resolve the pattern: %v", reg.SeriesLabels(metrics.HTTPServerRequestDuration))
 	}
 
-	// Wrapping the mux directly, the mux itself tells the pattern.
+	// Si se envuelve el mux directamente, el propio mux dice el patrón.
 	reg = metricsvanilla.NewRegistry()
 	h = distribution.Chain(mux, distribution.Observe(nil, nil, reg))
 	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/plain/7", nil))
@@ -362,8 +362,8 @@ func TestObserve_WithoutDestinationsDoesNothing(t *testing.T) {
 	}
 }
 
-// A streamed response (server-sent events) must cross Observe and RequestLogging: each event
-// reaches the client when it is flushed, not when the handler returns.
+// Una respuesta en streaming (server-sent events) debe atravesar Observe y RequestLogging: cada
+// evento llega al cliente cuando se hace flush, no cuando el manejador termina.
 func TestObserve_StreamedResponsesCrossTheMiddleware(t *testing.T) {
 	for name, mw := range map[string]distribution.Middleware{
 		"Observe":        distribution.Observe(logvanilla.NewJSON(&bytes.Buffer{}, log.LevelInfo), tracevanilla.New(), metricsvanilla.NewRegistry()),

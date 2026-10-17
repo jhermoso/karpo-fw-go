@@ -1,6 +1,6 @@
-// Package application holds the Fiscal use cases (with permissions and organization scope), the
-// Payroll subscription that feeds the withholding forms, the rate lookup for other contexts and
-// the translation to its Published Language.
+// Package application reúne los casos de uso de Fiscal (con permisos y alcance por organización),
+// la suscripción a Payroll que alimenta los modelos de retenciones, la consulta de tipos para otros
+// contextos y la traducción a su Published Language.
 package application
 
 import (
@@ -19,8 +19,8 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Permissions (the C# fiscal endpoints required authentication only). The rate catalog is legal
-// data shared by every company: changing it is a permission of its own.
+// Permisos (los endpoints fiscales del C# sólo exigían autenticación). El catálogo de tipos contiene
+// datos legales que comparten todas las empresas: cambiarlo es un permiso aparte.
 var (
 	PermCatalogRead   = authz.MustPermission("Fiscal.Catalog.Read")
 	PermCatalogUpdate = authz.MustPermission("Fiscal.Catalog.Update")
@@ -31,7 +31,7 @@ var (
 	PermFilingSubmit  = authz.MustPermission("Fiscal.Filing.Submit")
 )
 
-// Deps are the ports the use cases need; Recorder and Audit are optional.
+// Deps son los puertos que necesitan los casos de uso; Recorder y Audit son opcionales.
 type Deps struct {
 	Rates        domain.TaxRateRepository
 	Treatments   domain.TreatmentRepository
@@ -45,7 +45,7 @@ type Deps struct {
 	Audit        app.AuditLog
 }
 
-// Service exposes the use cases.
+// Service expone los casos de uso.
 type Service struct {
 	CreateRate       app.CommandHandler[CreateRate, RateDTO]
 	EndRate          app.CommandHandler[EndRate, RateDTO]
@@ -70,8 +70,8 @@ type Service struct {
 	SearchFilings  app.QueryHandler[SearchFilings, fw.Page[FilingDTO]]
 }
 
-// scope: taxpayers and filings belong to their organization; visible inside its scope (uniform
-// 404 elsewhere) and writable with a Full grant on it.
+// scope: los contribuyentes y las declaraciones pertenecen a su organización; visibles dentro de
+// su alcance (404 uniforme fuera de él) y se pueden escribir con un acceso Full a ella.
 type scope struct {
 	global bool
 	ac     *authz.Context
@@ -147,7 +147,7 @@ func dateText(d vocab.Date) string {
 	return d.String()
 }
 
-// NewService wires the use cases.
+// NewService conecta los casos de uso.
 func NewService(d Deps) *Service {
 	var opts []orchestration.Option
 	if d.Recorder != nil {

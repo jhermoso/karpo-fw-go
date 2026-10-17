@@ -1,6 +1,6 @@
-// Package distribution exposes the Security use cases over HTTP and adapts the token issuer of
-// the host. The sign-in routes are public and mounted outside the authorization middleware; the
-// rest needs an authorization context.
+// Package distribution expone por HTTP los casos de uso de Security y adapta el emisor de tokens
+// del anfitrión. Las rutas de inicio de sesión son públicas y se montan fuera del middleware de
+// autorización; el resto necesita un contexto de autorización.
 package distribution
 
 import (
@@ -19,20 +19,20 @@ import (
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// HS256Issuer adapts the shared-secret JWT of the framework to the TokenIssuer port. It is the
-// only place where Security meets that token format: the token carries who the user is (sub,
-// username, partyId) and nothing about what the user may do.
+// HS256Issuer adapta el JWT de secreto compartido del framework al puerto TokenIssuer. Es el único
+// sitio donde Security se encuentra con ese formato de token: el token lleva quién es el usuario
+// (sub, username, partyId) y nada sobre lo que puede hacer.
 type HS256Issuer struct{ JWT *jwtauth.HS256 }
 
-// IssueAccessToken implements application.TokenIssuer.
+// IssueAccessToken implementa application.TokenIssuer.
 func (i HS256Issuer) IssueAccessToken(_ context.Context, subject fw.UUID, username string, party fw.UUID, expiresAt time.Time) (string, error) {
 	return i.JWT.Issue(jwtauth.Claims{Subject: subject.String(), Username: username, PartyID: party.String(), ExpiresAt: expiresAt.Unix()})
 }
 
-// Module is the HTTP module of Security.
+// Module es el módulo HTTP de Security.
 type Module struct{ svc *sapp.Service }
 
-// NewModule builds the HTTP module.
+// NewModule construye el módulo HTTP.
 func NewModule(svc *sapp.Service) *Module { return &Module{svc: svc} }
 
 var _ distribution.EndpointModule = (*Module)(nil)
@@ -57,14 +57,14 @@ func pathID[T any](r *http.Request, name string, parse func(string) (T, error)) 
 	return v, nil
 }
 
-// respond writes the result of a use case; responses with tokens or authorization data are never
-// cached by intermediaries.
+// respond escribe el resultado de un caso de uso; los intermediarios nunca guardan en caché las
+// respuestas con tokens o datos de autorización.
 func respond[T any](w http.ResponseWriter, r *http.Request, v T, err error, status int) {
 	w.Header().Set("Cache-Control", "no-store")
 	distribution.Respond(w, r, v, err, status)
 }
 
-// command decodes the body into C and runs the use case.
+// command decodifica el cuerpo en C y ejecuta el caso de uso.
 func command[C, R any](handle func(context.Context, C) (R, error), prepare func(*http.Request, *C) error, status int) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var c C
@@ -89,8 +89,8 @@ func command[C, R any](handle func(context.Context, C) (R, error), prepare func(
 	}
 }
 
-// RegisterPublicRoutes mounts the routes that authenticate: they receive credentials, not an
-// access token, so they go outside distribution.Authorize.
+// RegisterPublicRoutes monta las rutas que autentican: reciben credenciales, no un token de
+// acceso, así que van fuera de distribution.Authorize.
 func (m *Module) RegisterPublicRoutes(mux *http.ServeMux) {
 	svc := m.svc
 	mux.HandleFunc("POST /api/auth/login", command(svc.Login.Handle, nil, http.StatusOK))
@@ -98,15 +98,15 @@ func (m *Module) RegisterPublicRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/auth/logout", command(svc.Logout.Handle, nil, http.StatusNoContent))
 }
 
-// RegisterRoutes implements distribution.EndpointModule (routes behind distribution.Authorize).
+// RegisterRoutes implementa distribution.EndpointModule (rutas tras distribution.Authorize).
 func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	svc := m.svc
 	userID := func(r *http.Request) (domain.UserID, error) { return pathID(r, "id", domain.ParseUserID) }
 	roleID := func(r *http.Request, name string) (domain.RoleID, error) { return pathID(r, name, domain.ParseRoleID) }
 
 	mux.HandleFunc("POST /api/auth/change-password", command(svc.ChangePassword.Handle, nil, http.StatusOK))
-	// The resolved authorization of the caller, in the shape of the contract (authz.Resolution):
-	// what a front paints its menus with, and the base of a future Http resolver.
+	// La autorización resuelta de quien llama, con la forma del contrato (authz.Resolution): con lo
+	// que un front pinta sus menús, y la base de un futuro resolvedor Http.
 	mux.HandleFunc("GET /api/auth/context", func(w http.ResponseWriter, r *http.Request) {
 		ac, ok := authz.FromContext(r.Context())
 		if !ok {

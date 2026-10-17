@@ -11,8 +11,8 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// toDriver converts a domain value (typed identifiers, named primitives, bools, times) into a
-// value the driver of dialect d accepts.
+// toDriver convierte un valor del dominio (identificadores tipados, primitivos con nombre,
+// booleanos, instantes) en un valor que acepta el driver del dialecto d.
 func toDriver(d Dialect, v any) (any, error) {
 	switch x := v.(type) {
 	case nil:

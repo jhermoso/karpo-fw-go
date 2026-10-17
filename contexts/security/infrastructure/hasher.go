@@ -12,24 +12,25 @@ import (
 	"strings"
 )
 
-// PBKDF2 parameters (decision 3). 600 000 iterations of HMAC-SHA256 is the OWASP figure for this
-// algorithm; the C# used 10 000.
+// Parámetros de PBKDF2 (decisión 3). 600 000 iteraciones de HMAC-SHA256 es la cifra de OWASP para
+// este algoritmo; el C# usaba 10 000.
 const (
 	DefaultIterations = 600_000
 	pbkdf2Algorithm   = "pbkdf2-sha256"
 	pbkdf2SaltSize    = 16
 	pbkdf2KeySize     = 32
-	maxIterations     = 10_000_000 // refuses absurd costs found in a stored hash
+	maxIterations     = 10_000_000 // rechaza costes absurdos encontrados en un hash guardado
 	csharpIterations  = 10_000
 )
 
-// PBKDF2 hashes passwords with PBKDF2-HMAC-SHA256 from the standard library. The stored form is
-// self-describing, "pbkdf2-sha256$<iterations>$<salt>$<key>" (base64 without padding), so the
-// cost can be raised, or the algorithm replaced, without a migration: a hash weaker than the
-// current settings still verifies and is reported as stale, and the login recomputes it.
+// PBKDF2 calcula el hash de las contraseñas con PBKDF2-HMAC-SHA256 de la biblioteca estándar. La
+// forma guardada es autodescriptiva, "pbkdf2-sha256$<iterations>$<salt>$<key>" (base64 sin
+// relleno), así que el coste se puede subir, o el algoritmo sustituir, sin una migración: un hash
+// más débil que la configuración actual sigue verificándose y se informa como desfasado, y el
+// login lo recalcula.
 type PBKDF2 struct{ iterations int }
 
-// NewPBKDF2 builds a hasher (iterations <= 0 takes DefaultIterations).
+// NewPBKDF2 construye un hasher (iterations <= 0 toma DefaultIterations).
 func NewPBKDF2(iterations int) PBKDF2 {
 	if iterations <= 0 {
 		iterations = DefaultIterations
@@ -43,7 +44,7 @@ func encodeHash(iterations int, salt, key []byte) string {
 	return fmt.Sprintf("%s$%d$%s$%s", pbkdf2Algorithm, iterations, b64.EncodeToString(salt), b64.EncodeToString(key))
 }
 
-// Hash implements application.PasswordHasher.
+// Hash implementa application.PasswordHasher.
 func (h PBKDF2) Hash(password string) (string, error) {
 	salt := make([]byte, pbkdf2SaltSize)
 	if _, err := rand.Read(salt); err != nil {
@@ -73,7 +74,7 @@ func decodeHash(hash string) (iterations int, salt, key []byte, err error) {
 	return iterations, salt, key, nil
 }
 
-// Verify implements application.PasswordHasher. The comparison takes constant time.
+// Verify implementa application.PasswordHasher. La comparación tarda un tiempo constante.
 func (h PBKDF2) Verify(password, hash string) (ok, stale bool) {
 	iterations, salt, want, err := decodeHash(hash)
 	if err != nil {
@@ -86,9 +87,9 @@ func (h PBKDF2) Verify(password, hash string) (ok, stale bool) {
 	return true, iterations < h.iterations
 }
 
-// FromCSharp converts a C# security_user row (PasswordHash in base64, PasswordSalt as bytes,
-// HashAlgorithm PBKDF2_SHA256 with 10 000 iterations) into the self-describing form, so imported
-// users keep their password and get a current hash on their first login.
+// FromCSharp convierte una fila security_user de C# (PasswordHash en base64, PasswordSalt como
+// bytes, HashAlgorithm PBKDF2_SHA256 con 10 000 iteraciones) a la forma autodescriptiva, para que
+// los usuarios importados conserven su contraseña y reciban un hash actual en su primer login.
 func FromCSharp(passwordHash string, salt []byte) (string, error) {
 	key, err := base64.StdEncoding.DecodeString(passwordHash)
 	if err != nil || len(key) == 0 || len(salt) == 0 {

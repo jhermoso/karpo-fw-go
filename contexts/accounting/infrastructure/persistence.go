@@ -1,6 +1,7 @@
-// Package infrastructure stores the Accounting context: SQL mappings, versioned schema of the five
-// engines (with the inbox of the events it posts), hot-swap factories. No chart is seeded: the C#
-// had none (the Sage import loads each company's).
+// Package infrastructure guarda el contexto Accounting: mapeos SQL, esquema versionado de los cinco
+// motores (con el inbox de los eventos que contabiliza), factorías intercambiables en
+// caliente. No se siembra ningún plan de cuentas: el C# no tenía ninguno (la importación de Sage
+// carga el de cada empresa).
 package infrastructure
 
 import (
@@ -23,10 +24,10 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlserver"
 )
 
-// Context is the name of the bounded context.
+// Context es el nombre del contexto delimitado.
 const Context = "accounting"
 
-// Technical tables of the context.
+// Tablas técnicas del contexto.
 const (
 	TableOutbox            = "accounting_outbox"
 	TableIntegrationOutbox = "accounting_integration_outbox"
@@ -79,7 +80,7 @@ func technicalDDL(d string) []string {
 	return nil
 }
 
-// Migrations is the versioned schema of the context.
+// Migrations es el esquema versionado del contexto.
 func Migrations() sqlrepo.MigrationSet {
 	technical := map[string][]string{}
 	for _, d := range sqlrepo.Dialects {
@@ -92,16 +93,16 @@ func Migrations() sqlrepo.MigrationSet {
 	}}
 }
 
-// Migrator returns the schema migrator of the context.
+// Migrator devuelve el migrador del esquema del contexto.
 func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 	return sqlrepo.NewMigrator(db, []sqlrepo.MigrationSet{Migrations()})
 }
 
-// Tables lists the tables of the context, children first (drop order).
+// Tables lista las tablas del contexto, las hijas primero (orden de borrado).
 var Tables = []string{"acc_parked_facts", "acc_entry_lines", "acc_entries", "acc_counters", "acc_closed_periods", "acc_ledger_taxes", "acc_ledger_roles", "acc_ledgers",
 	"acc_accounts", TableOutbox, TableIntegrationOutbox, TableAuditLog, TableInbox}
 
-// DropAll removes the tables of the context and its migration history (tests only).
+// DropAll borra las tablas del contexto y su historial de migraciones (sólo para pruebas).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
 	for _, t := range Tables {
 		_, _ = db.ExecContext(ctx, "DROP TABLE "+t)
@@ -123,7 +124,7 @@ func optUUID(u fw.UUID) any {
 	return u
 }
 
-// AccountMapping maps Account to acc_accounts.
+// AccountMapping mapea Account a acc_accounts.
 func AccountMapping() sqlrepo.Mapping[domain.AccountID, *domain.Account] {
 	return sqlrepo.Mapping[domain.AccountID, *domain.Account]{
 		Table:   "acc_accounts",
@@ -144,7 +145,7 @@ func AccountMapping() sqlrepo.Mapping[domain.AccountID, *domain.Account] {
 	}
 }
 
-// LedgerMapping maps Ledger to acc_ledgers, its roles, tax accounts and closed periods.
+// LedgerMapping mapea Ledger a acc_ledgers, sus papeles, cuentas de impuestos y periodos cerrados.
 func LedgerMapping() sqlrepo.Mapping[domain.LedgerID, *domain.Ledger] {
 	return sqlrepo.Mapping[domain.LedgerID, *domain.Ledger]{
 		Table:   "acc_ledgers",
@@ -205,7 +206,7 @@ func LedgerMapping() sqlrepo.Mapping[domain.LedgerID, *domain.Ledger] {
 	}
 }
 
-// EntryMapping maps Entry to acc_entries and its lines.
+// EntryMapping mapea Entry a acc_entries y sus líneas.
 func EntryMapping() sqlrepo.Mapping[domain.EntryID, *domain.Entry] {
 	return sqlrepo.Mapping[domain.EntryID, *domain.Entry]{
 		Table: "acc_entries",
@@ -259,7 +260,7 @@ func EntryMapping() sqlrepo.Mapping[domain.EntryID, *domain.Entry] {
 	}
 }
 
-// CounterMapping maps Counter to acc_counters.
+// CounterMapping mapea Counter a acc_counters.
 func CounterMapping() sqlrepo.Mapping[domain.CounterID, *domain.Counter] {
 	return sqlrepo.Mapping[domain.CounterID, *domain.Counter]{
 		Table:   "acc_counters",
@@ -290,7 +291,7 @@ func repository[ID fw.Identifier, T fw.AggregateRoot[ID]](b hotswap.Backend, m s
 	return nil, unsupported(b)
 }
 
-// Repository factories.
+// Factorías de repositorios.
 func AccountRepositoryFactory(b hotswap.Backend) (domain.AccountRepository, error) {
 	return repository(b, AccountMapping())
 }
@@ -307,10 +308,10 @@ func CounterRepositoryFactory(b hotswap.Backend) (domain.CounterRepository, erro
 	return repository(b, CounterMapping())
 }
 
-// OutboxFactory builds the domain event outbox; IntegrationOutboxFactory, the Published Language one.
+// OutboxFactory construye el outbox de eventos de dominio; IntegrationOutboxFactory, el del Published Language.
 func OutboxFactory(b hotswap.Backend) (application.OutboxStore, error) { return outbox(b, TableOutbox) }
 
-// IntegrationOutboxFactory builds the integration outbox.
+// IntegrationOutboxFactory construye el outbox de integración.
 func IntegrationOutboxFactory(b hotswap.Backend) (application.OutboxStore, error) {
 	return outbox(b, TableIntegrationOutbox)
 }
@@ -325,7 +326,7 @@ func outbox(b hotswap.Backend, table string) (application.OutboxStore, error) {
 	return nil, unsupported(b)
 }
 
-// AuditLogFactory builds the audit log.
+// AuditLogFactory construye el registro de auditoría.
 func AuditLogFactory(b hotswap.Backend) (application.AuditLog, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -336,7 +337,7 @@ func AuditLogFactory(b hotswap.Backend) (application.AuditLog, error) {
 	return nil, unsupported(b)
 }
 
-// InboxFactory builds the inbox of the events Accounting posts.
+// InboxFactory construye el inbox de los eventos que contabiliza Accounting.
 func InboxFactory(b hotswap.Backend) (application.InboxStore, error) {
 	switch db := b.(type) {
 	case *sqlrepo.DB:
@@ -357,7 +358,7 @@ var parkedDDL = []string{
 	`CREATE INDEX ix_acc_parked_subject ON acc_parked_facts (subject_id, status)`,
 }
 
-// ParkedMapping maps ParkedFact to acc_parked_facts.
+// ParkedMapping mapea ParkedFact a acc_parked_facts.
 func ParkedMapping() sqlrepo.Mapping[domain.ParkedID, *domain.ParkedFact] {
 	text := func(s string) any {
 		if s == "" {
@@ -406,7 +407,7 @@ func ParkedMapping() sqlrepo.Mapping[domain.ParkedID, *domain.ParkedFact] {
 	}
 }
 
-// ParkedRepositoryFactory builds the repository of the facts that wait.
+// ParkedRepositoryFactory construye el repositorio de los hechos que esperan.
 func ParkedRepositoryFactory(b hotswap.Backend) (domain.ParkedRepository, error) {
 	return repository(b, ParkedMapping())
 }

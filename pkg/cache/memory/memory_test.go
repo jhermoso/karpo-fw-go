@@ -14,12 +14,12 @@ func TestMemoryCache_BasicOperations(t *testing.T) {
 	ctx := context.Background()
 	c := memory.New[string, int]()
 
-	// Initial Get
+	// Get inicial
 	if _, found := c.Get(ctx, "count"); found {
 		t.Fatalf("expected key 'count' not found")
 	}
 
-	// Set and Get
+	// Set y Get
 	if err := c.Set(ctx, "count", 42, 0); err != nil {
 		t.Fatalf("failed to set: %v", err)
 	}
@@ -54,17 +54,17 @@ func TestMemoryCache_TTL_WithFakeClock(t *testing.T) {
 	mockClock := fake.New(startTime)
 	c := memory.NewWithClock[string, string](mockClock)
 
-	// Set with 10 second TTL
+	// Set con un TTL de 10 segundos
 	_ = c.Set(ctx, "token", "secret123", 10*stdtime.Second)
 
-	// Still valid after 5 seconds
+	// Sigue siendo válido tras 5 segundos
 	mockClock.Advance(5 * stdtime.Second)
 	val, found := c.Get(ctx, "token")
 	if !found || val != "secret123" {
 		t.Fatalf("expected token to still be valid after 5s")
 	}
 
-	// Expired after another 6 seconds (total 11s)
+	// Caducado tras otros 6 segundos (11 s en total)
 	mockClock.Advance(6 * stdtime.Second)
 	if _, found := c.Get(ctx, "token"); found {
 		t.Fatalf("expected token to be expired after 11s")

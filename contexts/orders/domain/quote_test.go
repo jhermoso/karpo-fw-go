@@ -36,7 +36,7 @@ func TestQuote_Lifecycle(t *testing.T) {
 	line := domain.QuoteLine{Product: domain.ProductID{UUID: fw.NewUUID()}, SKU: "W", Description: "Tornillo", UoM: "ud", Quantity: dec("3"), UnitPrice: dec("10"),
 		Discount: dec("10")}
 
-	// A draft starts clean whatever it is given, and holds thirty days.
+	// Un borrador empieza limpio se le dé lo que se le dé, y vale treinta días.
 	q := draft("")
 	if s := q.State(); s.Status != domain.QuoteDraft || s.Number != "" || !s.Order.IsZero() || s.ValidUntil != day("2026-11-07") {
 		t.Fatalf("draft: %+v", s)
@@ -73,7 +73,7 @@ func TestQuote_Lifecycle(t *testing.T) {
 	quoteViolates(t, q.RemoveLine(1), "orders.quote_not_draft")
 	quoteViolates(t, q.Change(day("2026-10-09"), day("2026-10-20"), "", ""), "orders.quote_not_draft")
 
-	// The last day counts; the next does not.
+	// El último día cuenta; el siguiente, no.
 	if q.Due(day("2026-10-20")) || !q.Due(day("2026-10-21")) || q.Expire(day("2026-10-20")) {
 		t.Fatal("due")
 	}
@@ -89,7 +89,7 @@ func TestQuote_Lifecycle(t *testing.T) {
 		t.Fatal("an accepted quote does not expire")
 	}
 
-	// Expired, and a draft withdrawn without telling anyone.
+	// Caducado, y un borrador retirado sin avisar a nadie.
 	e := draft("2026-10-10")
 	_, _ = e.AddLine(line)
 	_ = e.Send("PRE-3", day("2026-10-08"))

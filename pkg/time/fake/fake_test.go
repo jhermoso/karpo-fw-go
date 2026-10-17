@@ -15,7 +15,7 @@ func TestFakeClock(t *testing.T) {
 		t.Fatalf("expected initial time %v, got %v", start, clk.Now())
 	}
 
-	// Advance 5 minutes
+	// Avanza 5 minutos
 	clk.Advance(5 * time.Minute)
 	expected := start.Add(5 * time.Minute)
 	if !clk.Now().Equal(expected) {

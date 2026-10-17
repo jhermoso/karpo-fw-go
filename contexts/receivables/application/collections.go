@@ -13,17 +13,17 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// GetReceivable loads the receivable of an invoice.
+// GetReceivable carga el cobro pendiente de una factura.
 type GetReceivable struct{ ID domain.ReceivableID }
 
-// SearchReceivables searches receivables of the caller's scope.
+// SearchReceivables busca cobros pendientes del ámbito de quien llama.
 type SearchReceivables struct {
 	Seller, Customer string
 	OpenOnly         bool
 	Page, Size       int
 }
 
-// InstallmentDTO is the transport form of an installment.
+// InstallmentDTO es la forma de transporte de un vencimiento.
 type InstallmentDTO struct {
 	No        int    `json:"no"`
 	Due       string `json:"due"`
@@ -32,7 +32,7 @@ type InstallmentDTO struct {
 	Open      string `json:"open"`
 }
 
-// ReceivableDTO is the transport form of a receivable.
+// ReceivableDTO es la forma de transporte de un cobro pendiente.
 type ReceivableDTO struct {
 	InvoiceID    string           `json:"invoiceId"`
 	Number       string           `json:"number"`
@@ -56,14 +56,14 @@ func receivableDTO(r *domain.Receivable) ReceivableDTO {
 	return d
 }
 
-// AllocationInput applies an amount to an installment of an invoice.
+// AllocationInput aplica un importe a un vencimiento de una factura.
 type AllocationInput struct {
 	Invoice     string `json:"invoice"`
 	Installment int    `json:"installment"`
 	Amount      string `json:"amount"`
 }
 
-// RegisterCollection records money received from a customer, optionally allocated at once.
+// RegisterCollection anota el dinero recibido de un cliente, que se puede aplicar en el acto.
 type RegisterCollection struct {
 	Seller      string            `json:"seller"`
 	Payer       string            `json:"payer"`
@@ -74,25 +74,25 @@ type RegisterCollection struct {
 	Allocations []AllocationInput `json:"allocations,omitempty"`
 }
 
-// Allocate applies part of a collection to an installment.
+// Allocate aplica parte de un cobro a un vencimiento.
 type Allocate struct {
 	ID domain.CollectionID `json:"-"`
 	AllocationInput
 }
 
-// Deallocate reverses an allocation.
+// Deallocate deshace una aplicación.
 type Deallocate struct {
 	ID         domain.CollectionID `json:"-"`
 	Allocation string              `json:"allocation"`
 }
 
-// CancelCollection cancels a collection and reverses its allocations.
+// CancelCollection anula un cobro y deshace sus aplicaciones.
 type CancelCollection struct {
 	ID domain.CollectionID `json:"-"`
 }
 
-// OffsetCredit nets a credit (a corrective invoice) against an installment of an invoice of the
-// same customer.
+// OffsetCredit compensa un abono (una factura rectificativa) con un vencimiento de una factura del
+// mismo cliente.
 type OffsetCredit struct {
 	Seller      string     `json:"seller"`
 	Credit      string     `json:"credit"`
@@ -102,16 +102,16 @@ type OffsetCredit struct {
 	Date        vocab.Date `json:"date,omitzero"`
 }
 
-// GetCollection loads a collection.
+// GetCollection carga un cobro.
 type GetCollection struct{ ID domain.CollectionID }
 
-// SearchCollections searches collections of the caller's scope.
+// SearchCollections busca cobros del ámbito de quien llama.
 type SearchCollections struct {
 	Seller, Payer string
 	Page, Size    int
 }
 
-// AllocationDTO is the transport form of an allocation.
+// AllocationDTO es la forma de transporte de una aplicación.
 type AllocationDTO struct {
 	ID          string `json:"id"`
 	Invoice     string `json:"invoice"`
@@ -120,7 +120,7 @@ type AllocationDTO struct {
 	On          string `json:"on"`
 }
 
-// CollectionDTO is the transport form of a collection.
+// CollectionDTO es la forma de transporte de un cobro.
 type CollectionDTO struct {
 	ID          string          `json:"id"`
 	Seller      string          `json:"seller"`
@@ -148,8 +148,8 @@ func collectionDTO(c *domain.Collection) CollectionDTO {
 	return d
 }
 
-// apply records an allocation on both sides: the collection (its amount) and the receivable (what
-// is open). Both aggregates change in the caller's unit of work.
+// apply anota una aplicación en los dos lados: el cobro (su importe) y el cobro pendiente (lo que
+// queda abierto). Los dos agregados cambian en la unidad de trabajo de quien llama.
 func (s service) apply(ctx context.Context, c *domain.Collection, in AllocationInput, on vocab.Date) error {
 	var v fw.Validation
 	rid := domain.ReceivableID{UUID: parseID(&v, "invoice", in.Invoice)}
@@ -166,7 +166,7 @@ func (s service) apply(ctx context.Context, c *domain.Collection, in AllocationI
 		if rs.Customer != cs.Payer {
 			return fw.Violation("receivables.other_customer", "the invoice is of another customer")
 		}
-		// The receivable validates first: a refused amount leaves no allocation on the collection.
+		// El cobro pendiente valida primero: un importe rechazado no deja aplicación en el cobro.
 		if err := r.Apply(in.Installment, amount); err != nil {
 			return err
 		}
@@ -376,7 +376,7 @@ func (s service) collectionUseCases(svc *Service) {
 	})
 }
 
-// InvoiceIssued is the Receivables copy of billing.invoice-issued.v1: only the fields it needs.
+// InvoiceIssued es la copia de Receivables de billing.invoice-issued.v1: sólo los campos que necesita.
 type InvoiceIssued struct {
 	InvoiceID string `json:"invoiceId"`
 	Number    string `json:"number"`
@@ -388,13 +388,14 @@ type InvoiceIssued struct {
 	Total     string `json:"total"`
 }
 
-// IntegrationEventType implements application.IntegrationEvent.
+// IntegrationEventType implementa application.IntegrationEvent.
 func (InvoiceIssued) IntegrationEventType() string { return "billing.invoice-issued.v1" }
 
-// Subscribe opens the receivable of each issued invoice (approved decision of docs/FACTURACION.md:
-// Billing publishes, Receivables consumes). The schedule is the explicit due date of the invoice;
-// else the terms of the customer's credit profile; else a single installment on the issue date.
-// Credits (corrective invoices) are due at once. Redeliveries are harmless.
+// Subscribe abre el cobro pendiente de cada factura emitida (decisión aprobada de
+// docs/FACTURACION.md: Billing publica, Receivables consume). Los vencimientos son el vencimiento
+// explícito de la factura; si no, las condiciones del perfil de crédito del cliente; si no, un único
+// vencimiento en la fecha de emisión. Los abonos (facturas rectificativas) vencen en el acto. Las
+// reentregas no hacen daño.
 func Subscribe(c *messaging.Consumer, d Deps) {
 	s := newOrchestrators(d)
 	messaging.Handle(c, func(ctx context.Context, e InvoiceIssued, _ app.Envelope) error {

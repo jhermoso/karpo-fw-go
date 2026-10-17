@@ -44,8 +44,8 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/testing/archtest"
 )
 
-// host composes Parties, Fiscal, Purchases, Payments and Accounting on one hot-swappable backend,
-// with one in-process broker carrying the Published Language between them.
+// host compone Parties, Fiscal, Purchases, Payments y Accounting sobre un único backend
+// intercambiable en caliente, con un broker en proceso que lleva el Published Language entre ellos.
 type host struct {
 	t        *testing.T
 	srv      *httptest.Server
@@ -147,7 +147,7 @@ func (h *host) ok(err error) {
 	}
 }
 
-// deliver relays the Published Language of Purchases and Payments until quiet.
+// deliver reenvía el Published Language de Purchases y Payments hasta que no queda nada.
 func (h *host) deliver() {
 	for moved := true; moved; {
 		moved = false
@@ -206,7 +206,7 @@ func (h *host) scenario(tag string) {
 	}
 	h.grant("outsider", globex.ID)
 
-	// Fiscal: rates, taxpayer and its Modelo 111. Accounting: the chart and the ledger.
+	// Fiscal: tipos, contribuyente y su Modelo 111. Accounting: el plan de cuentas y el libro mayor.
 	fs := h.fiscal.Service
 	for code, rate := range map[string]string{"G21": "21", "R10": "10"} {
 		_, err := fs.CreateRate.Handle(ctx, fapp.CreateRate{Type: "vat", Territory: "common", Code: code, Description: code, Rate: rate, From: vocab.MustDate(2012, 9, 1)})
@@ -226,14 +226,14 @@ func (h *host) scenario(tag string) {
 		"input-tax": "4720", "withholding-payable": "4751", "purchases": "6000", "professional-services": "6230", "supplies": "6280"}})
 	h.ok(err)
 
-	// The adviser's profile: professional services, 15% withheld, 30 days, paid to his account.
+	// El perfil del asesor: servicios profesionales, 15 % retenido, 30 días, pagado a su cuenta.
 	h.must(h.do("PUT", "/api/purchases/suppliers", "viewer", map[string]any{"company": acme.ID, "supplier": asesor.ID}, nil), 403, "viewer")
 	h.must(h.do("PUT", "/api/purchases/suppliers", "clerk", map[string]any{"company": acme.ID, "supplier": asesor.ID, "category": "food"}, nil), 400, "category")
 	var prof uapp.SupplierDTO
 	h.must(h.do("PUT", "/api/purchases/suppliers", "clerk", map[string]any{"company": acme.ID, "supplier": asesor.ID, "category": "professional-services",
 		"withholdingRate": "15", "paymentDays": 30, "iban": "ES7921000813610123456789"}, &prof), 200, "supplier profile")
 
-	// The adviser's invoice, booked with the defaults of his profile.
+	// La factura del asesor, registrada con los valores por defecto de su perfil.
 	adviser := map[string]any{"company": acme.ID, "supplier": asesor.ID, "supplierNumber": "2026/0042", "issued": "2026-09-30", "received": "2026-10-02",
 		"lines": []map[string]any{{"description": "Asesoría fiscal septiembre", "base": "1000", "taxCode": "G21"}}, "total": "1210.00"}
 	var inv1 uapp.InvoiceDTO
@@ -252,7 +252,7 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("adviser's invoice: %+v", inv1)
 	}
 
-	// The stationer's invoice (two rates), a non-deductible one and a corrective one.
+	// La factura del papelero (dos tipos), una no deducible y una rectificativa.
 	var inv2, inv3, inv4 uapp.InvoiceDTO
 	h.must(h.do("POST", "/api/purchases/invoices", "clerk", map[string]any{"company": acme.ID, "supplier": papeleria.ID, "supplierNumber": "A-77",
 		"issued": "2026-10-01", "received": "2026-10-03", "due": "2026-10-31", "withholdingRate": "15", "total": "176.00",
@@ -273,7 +273,7 @@ func (h *host) scenario(tag string) {
 	}
 	h.deliver()
 
-	// Payments owes what is paid to each supplier (nothing for the corrective one).
+	// Payments debe lo que se paga a cada proveedor (nada por la rectificativa).
 	pays, err := h.pay.Service.SearchPayables.Handle(ctx, yapp.SearchPayables{Company: acme.ID, Kind: "supplier-invoice"})
 	h.ok(err)
 	byDoc := map[string]yapp.PayableDTO{}
@@ -285,17 +285,17 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("payables: %+v", pays.Items)
 	}
 
-	// Accounting: expenses and input tax against suppliers and the withholding.
+	// Accounting: gastos e impuesto soportado contra proveedores y la retención.
 	h.expect(acme.ID, map[string]string{"6230": "1000.00", "6000": "80.00", "6280": "292.00", "4720": "231.80", "4751": "-150.00", "4000": "-1453.80"})
 
-	// Fiscal: the withholding enters the Modelo 111 of the third quarter (invoice date).
+	// Fiscal: la retención entra en el Modelo 111 del tercer trimestre (fecha de la factura).
 	q3, err := fs.GenerateFiling.Handle(ctx, fapp.GenerateFiling{Organization: acme.ID, Form: "111", Year: 2026, Period: "3T"})
 	if err != nil || q3.Withheld != "150.00" || q3.Recipients != 1 || len(q3.Lines) != 1 || q3.Lines[0].Key != "G" || q3.Lines[0].Perceptions != "1000.00" {
 		t.Fatalf("Modelo 111: %+v %v", q3, err)
 	}
 
-	// The adviser's invoice was booked by mistake: cancelling it withdraws the payable, reverses
-	// the entry and the withholding.
+	// La factura del asesor se registró por error: anularla retira la deuda y revierte el asiento
+	// y la retención.
 	h.must(h.do("POST", "/api/purchases/invoices/"+inv1.ID+"/cancel", "clerk", map[string]any{"reason": "duplicada"}, nil), 403, "registering is not cancelling")
 	h.must(h.do("POST", "/api/purchases/invoices/"+inv1.ID+"/cancel", "canceller", map[string]any{"reason": "duplicada"}, &inv1), 200, "cancel")
 	h.must(h.do("POST", "/api/purchases/invoices/"+inv1.ID+"/cancel", "canceller", map[string]any{"reason": "duplicada"}, nil), 422, "cancelled once")
@@ -308,7 +308,7 @@ func (h *host) scenario(tag string) {
 	if err != nil || q3.Withheld != "0.00" {
 		t.Fatalf("Modelo 111 after the cancellation: %+v %v", q3, err)
 	}
-	// Booked again, now with the next number of the register.
+	// Registrada de nuevo, ahora con el siguiente número del registro.
 	h.must(h.do("POST", "/api/purchases/invoices", "clerk", adviser, &inv1), 201, "booked again")
 	if inv1.Register != "FR-2026-000005" {
 		t.Fatalf("register: %s", inv1.Register)
