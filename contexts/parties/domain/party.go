@@ -2,6 +2,7 @@ package domain
 
 import (
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -54,6 +55,8 @@ type PartyRole struct {
 	// Annulled marca un rol dado por error que no se pudo quitar porque ya se había dicho algo
 	// de la party en ese rol. Terminó cuando se anuló.
 	Annulled bool
+	// Details son los datos que lleva el rol por su tipo (el perfil del rol); a cero en los demás.
+	Details RoleDetails
 }
 
 // IsActiveAt dice si el rol se desempeña en t.
@@ -451,11 +454,21 @@ func (p *Party) AuditSnapshot() map[string]any {
 		}
 	}
 	now := fw.Now()
-	var roles, classes []string
+	var roles, classes, selfEmployed []string
 	for _, r := range p.roles {
-		if r.IsActiveAt(now) {
-			roles = append(roles, r.RoleType.String())
+		if !r.IsActiveAt(now) {
+			continue
 		}
+		roles = append(roles, r.RoleType.String())
+		// Cada perfil, de los mismos roles que lista roles: el id del rol y sus datos entre
+		// comillas (strconv.Quote), así una coma o un signo en el nombre comercial no lo confunden.
+		if d := r.Details.SelfEmployed; !d.IsZero() {
+			selfEmployed = append(selfEmployed, r.ID.String()+":"+strconv.Quote(d.TradeName)+" "+strconv.Quote(d.ActivityCode)+" "+
+				strconv.Quote(d.RegisteredOn.String()))
+		}
+	}
+	if len(selfEmployed) > 0 { // sólo si hay alguno: no cambia el registro de quien no es autónomo
+		s["selfEmployed"] = strings.Join(selfEmployed, ",")
 	}
 	for _, c := range p.classifications {
 		if c.Period.IsActiveAt(now) {

@@ -56,6 +56,7 @@ type Service struct {
 	AssignRole            app.CommandHandler[AssignRole, PartyDTO]
 	EndRole               app.CommandHandler[EndRole, PartyDTO]
 	AnnulRole             app.CommandHandler[AnnulRole, PartyDTO]
+	SetSelfEmployed       app.CommandHandler[SetSelfEmployedDetails, PartyDTO]
 	EstablishRelationship app.CommandHandler[EstablishRelationship, RelationshipDTO]
 	TerminateRelationship app.CommandHandler[TerminateRelationship, RelationshipDTO]
 	SetProspectTrial      app.CommandHandler[SetProspectTrial, RelationshipDTO]
@@ -376,6 +377,26 @@ func NewService(d Deps) *Service {
 			return err
 		})
 	}, pipeline.RetryOnConflict[AnnulRole, PartyDTO](retry, backoff))
+
+	// El perfil del autónomo es un dato de la party: lo cambia quien puede modificarla (D-85).
+	svc.SetSelfEmployed = chain(PermPartyUpdate, func(ctx context.Context, c SetSelfEmployedDetails) (PartyDTO, error) {
+		var registered vocab.Date
+		if c.RegisteredOn != "" {
+			var err error
+			if registered, err = vocab.ParseDate(c.RegisteredOn); err != nil {
+				var v fw.Validation
+				v.Add("registeredOn", "format", "registeredOn must be YYYY-MM-DD")
+				return PartyDTO{}, v.Err()
+			}
+		}
+		details, err := domain.NewSelfEmployedDetails(c.TradeName, c.ActivityCode, registered)
+		if err != nil {
+			return PartyDTO{}, err
+		}
+		return s.updateParty(ctx, c.PartyID, func(p *domain.Party, cat *domain.Catalog) error {
+			return p.SetSelfEmployedDetails(cat, c.RoleID, details)
+		})
+	}, pipeline.RetryOnConflict[SetSelfEmployedDetails, PartyDTO](retry, backoff))
 
 	svc.EstablishRelationship = chain(PermRelationshipCreate, func(ctx context.Context, c EstablishRelationship) (RelationshipDTO, error) {
 		var v fw.Validation

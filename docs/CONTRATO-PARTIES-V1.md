@@ -418,6 +418,7 @@ qué cambia y qué falta para poder reescribirlo.
 | D-4 | `PUT /api/parties/{id}/active` con `false` devuelve 422 (`parties.has_relationships`) si la party tiene relaciones sin terminar. El front debe ofrecer terminarlas, no un «Eliminar» | Hecho |
 | D-8 | Ruta nueva `POST /api/parties/{id}/roles/{roleId}/annul`; el rol lleva `annulled` | Hecho para roles |
 | D-62 | El catálogo de tipos es el mismo en todos: los desplegables de rol y de relación pueden fiarse de los códigos (`customer`, `supplier`, `team`…) | Hecho, salvo «Duplicate Of» |
+| D-85 | Ruta nueva `PUT /api/parties/{id}/roles/{roleId}/self-employed` con `{tradeName, activityCode, registeredOn}`; el rol lleva `selfEmployed`. Añadir un documento que no es de la clase de la ficha responde 422 (`parties.document_not_for_kind`) | Hecho (`PARTIES.md` §19) |
 
 **Lo que sigue impidiendo reescribir la búsqueda** (§3): la primera pregunta de Theros (¿Talleres
 Pérez, que compra a Acme y a Acme Levante, sale una vez o dos en «Clientes»?) y las tres de D-15

@@ -220,6 +220,23 @@ func addPhase2(svc *Service, s service) {
 		if err != nil {
 			return PartyDTO{}, err
 		}
+		// La party se mira antes de buscar el documento en las demás: a quien no puede cambiarla no
+		// se le dice si el documento está cogido, y a quien pone un CIF a una persona se le dice
+		// eso, no que el CIF es de otra party (D-85). updateParty lo vuelve a comprobar al cambiarla.
+		sc := s.scope(ctx)
+		p, err := sc.visible(s.Parties.Get(ctx, c.PartyID))
+		if err != nil {
+			return PartyDTO{}, err
+		}
+		if err := sc.writable(p); err != nil {
+			return PartyDTO{}, err
+		}
+		if err := operable(p); err != nil {
+			return PartyDTO{}, err
+		}
+		if err := policy.CheckKind(p.Kind(), d); err != nil {
+			return PartyDTO{}, err
+		}
 		// Un documento identifica a una sola party: el C# sólo ofrecía una búsqueda por valor.
 		// Cuenta toda party, visible o no: un documento identifica a una sola party en toda la
 		// instalación (decisión P1: la identidad base es compartida).

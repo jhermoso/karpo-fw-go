@@ -41,6 +41,7 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/parties/{id}/roles", m.assignRole)
 	mux.HandleFunc("POST /api/parties/{id}/roles/{roleId}/end", m.endRole)
 	mux.HandleFunc("POST /api/parties/{id}/roles/{roleId}/annul", m.annulRole)
+	mux.HandleFunc("PUT /api/parties/{id}/roles/{roleId}/self-employed", m.setSelfEmployed)
 	mux.HandleFunc("GET /api/parties/{id}/relationships", m.relationships)
 	mux.HandleFunc("POST /api/party-relationships", m.establish)
 	mux.HandleFunc("POST /api/party-relationships/{id}/terminate", m.terminate)
@@ -212,6 +213,25 @@ func (m *Module) annulRole(w http.ResponseWriter, r *http.Request) {
 	}
 	p, err := m.svc.AnnulRole.Handle(r.Context(), papp.AnnulRole{PartyID: id, RoleID: roleID})
 	distribution.Respond(w, r, p, err, http.StatusOK)
+}
+
+// setSelfEmployed fija el perfil de actividad de un rol Self Employed (D-85).
+func (m *Module) setSelfEmployed(w http.ResponseWriter, r *http.Request) {
+	id, err := pathParty(r)
+	if err != nil {
+		distribution.WriteError(w, r, err)
+		return
+	}
+	roleID, err := domain.ParsePartyRoleID(r.PathValue("roleId"))
+	if err != nil {
+		distribution.WriteError(w, r, fmt.Errorf("%w: invalid role id", fw.ErrValidation))
+		return
+	}
+	c := papp.SetSelfEmployedDetails{}
+	handle(w, r, &c, true, http.StatusOK, func(c papp.SetSelfEmployedDetails) (papp.PartyDTO, error) {
+		c.PartyID, c.RoleID = id, roleID
+		return m.svc.SetSelfEmployed.Handle(r.Context(), c)
+	})
 }
 
 func (m *Module) relationships(w http.ResponseWriter, r *http.Request) {

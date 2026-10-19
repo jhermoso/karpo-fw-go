@@ -233,15 +233,57 @@ func (i Identification) Matches(t DocumentTypeID, c vocab.CountryCode, number st
 	return i.Type == t && i.Country == c && i.Number == number
 }
 
+var spain = vocab.MustCountryCode("ES")
+
+// DocumentFitsKind dice si una party de clase kind puede llevar un documento del tipo t expedido
+// en country (docs/DECISIONES-COMUNES.md, D-85). Una organización sólo lleva identificaciones
+// fiscales y «otros documentos»: el pasaporte, el documento nacional, el permiso de conducir, la
+// Seguridad Social y el número de extranjero (NIE) son de personas. Una persona lleva todos salvo
+// la identificación fiscal española, que es el CIF: el NIF de una persona es su DNI o su NIE. La
+// identificación fiscal de otro país sí la lleva una persona. La regla vale al añadir un documento;
+// lo que ya estaba guardado se rehidrata tal cual.
+func DocumentFitsKind(kind Kind, t DocumentTypeID, country vocab.CountryCode) bool {
+	switch kind {
+	case KindOrganization:
+		return t == DocTaxID || t == DocOther
+	case KindPerson:
+		return t != DocTaxID || country != spain
+	}
+	return false
+}
+
+// CheckKind rechaza un documento que la clase de party no puede llevar (DocumentFitsKind), con un
+// mensaje que nombra el tipo de documento. Lo usa AddIdentification, y el caso de uso antes de
+// buscar el documento en otras parties.
+func (p *DocumentPolicy) CheckKind(kind Kind, d IdentificationData) error {
+	if DocumentFitsKind(kind, d.Type, d.Country) {
+		return nil
+	}
+	name := d.Type.String()
+	if t, ok := p.types[d.Type]; ok {
+		name = t.Name.String()
+	}
+	if kind == KindOrganization {
+		return fw.Violation("parties.document_not_for_kind",
+			"an organization is identified by a tax identification number or another document, not by a "+name)
+	}
+	return fw.Violation("parties.document_not_for_kind",
+		"the "+name+" of "+d.Country.String()+" identifies organizations: a person is identified by a national identity or alien registration number")
+}
+
 // AddIdentification valida y añade un documento de identidad. Invariantes: un número válido para
-// el tipo y el país, no registrado dos veces en la party, y una sola identificación principal (la
-// primera es la principal; una nueva principal degrada a la anterior).
+// el tipo y el país, no registrado dos veces en la party, admitido por su clase (DocumentFitsKind),
+// y una sola identificación principal (la primera es la principal; una nueva principal degrada a
+// la anterior).
 func (p *Party) AddIdentification(policy *DocumentPolicy, d IdentificationData, primary bool) (IdentificationID, error) {
 	if err := p.requireActive("get identifications"); err != nil {
 		return IdentificationID{}, err
 	}
 	number, err := policy.Validate(d)
 	if err != nil {
+		return IdentificationID{}, err
+	}
+	if err := policy.CheckKind(p.kind, d); err != nil {
 		return IdentificationID{}, err
 	}
 	for _, i := range p.identifications {

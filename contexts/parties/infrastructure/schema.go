@@ -233,6 +233,12 @@ func Migrations() sqlrepo.MigrationSet {
 		// La marca de una party que es el duplicado de otra (docs/DECISIONES-COMUNES.md, D-64).
 		{Version: 24, Name: "mark of a duplicate party", Up: sqlrepo.RenderDDLAll(
 			`ALTER TABLE parties {add:duplicate} {bool} DEFAULT {false} NOT NULL{addEnd}`)},
+		// El perfil de actividad del autónomo, en su rol Self Employed (docs/DECISIONES-COMUNES.md,
+		// D-85). Como los detalles de las relaciones, son columnas anulables de la fila del rol.
+		{Version: 25, Name: "self-employed role details: trade name, activity code and registration", Up: sqlrepo.RenderDDLAll(
+			`ALTER TABLE party_roles {add:trade_name} {str:120}{addEnd}`,
+			`ALTER TABLE party_roles {add:activity_code} {str:10}{addEnd}`,
+			`ALTER TABLE party_roles {add:registered_on} {date}{addEnd}`)},
 	}}
 }
 

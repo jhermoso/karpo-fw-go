@@ -3,6 +3,7 @@ package integration
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -179,6 +180,34 @@ func TestPartiesContext(t *testing.T) {
 			if _, err := svc.AddIdentification.Handle(ctx, papp.AddIdentification{PartyID: luisID, DocumentType: domain.DocNationalID.String(),
 				Country: "ES", Number: "12345678Z"}); !errors.Is(err, fw.ErrRuleViolation) {
 				t.Fatalf("document taken: %v", err)
+			}
+			// Migración 25: el perfil del autónomo va en su rol Self Employed y se relee igual (D-85).
+			luisSelf, err := svc.AssignRole.Handle(ctx, papp.AssignRole{PartyID: luisID, RoleType: domain.RoleSelfEmployed.String()})
+			if err != nil {
+				t.Fatal(err)
+			}
+			selfRole := luisSelf.Roles[slices.IndexFunc(luisSelf.Roles, func(r papp.RoleDTO) bool { return r.RoleType == domain.RoleSelfEmployed.String() })].ID
+			selfRoleID, _ := domain.ParsePartyRoleID(selfRole)
+			if _, err := svc.SetSelfEmployed.Handle(ctx, papp.SetSelfEmployedDetails{PartyID: luisID, RoleID: selfRoleID,
+				TradeName: "Fontanería Pérez", ActivityCode: "504.1", RegisteredOn: "2019-07-01"}); err != nil {
+				t.Fatal(err)
+			}
+			readSelf := func() *papp.SelfEmployedDTO {
+				t.Helper()
+				p, err := svc.Get.Handle(ctx, papp.GetParty{ID: luisID})
+				if err != nil {
+					t.Fatal(err)
+				}
+				return p.Roles[slices.IndexFunc(p.Roles, func(r papp.RoleDTO) bool { return r.ID == selfRole })].SelfEmployed
+			}
+			if got := readSelf(); got == nil || *got != (papp.SelfEmployedDTO{TradeName: "Fontanería Pérez", ActivityCode: "504.1", RegisteredOn: "2019-07-01"}) {
+				t.Fatalf("self-employed profile round trip: %+v", got)
+			}
+			if _, err := svc.SetSelfEmployed.Handle(ctx, papp.SetSelfEmployedDetails{PartyID: luisID, RoleID: selfRoleID}); err != nil {
+				t.Fatal(err)
+			}
+			if got := readSelf(); got != nil {
+				t.Fatalf("an empty profile is stored as nulls: %+v", got)
 			}
 			boundary := fw.NewUUID()
 			if _, err := svc.AddContact.Handle(ctx, papp.AddContact{PartyID: anaID, Kind: "postal", Purposes: []string{"billing"},

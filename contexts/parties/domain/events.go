@@ -85,6 +85,19 @@ type PartyRoleEnded struct {
 // EventType implementa domain.Event.
 func (PartyRoleEnded) EventType() string { return "parties.party_role_ended" }
 
+// SelfEmployedDetailsSet se lanza cuando cambia el perfil de actividad de un rol Self Employed
+// (docs/DECISIONES-COMUNES.md, D-85). Los campos vacíos son datos que el perfil no tiene.
+type SelfEmployedDetailsSet struct {
+	fw.EventMeta
+	RoleID       string `json:"roleId"`
+	TradeName    string `json:"tradeName,omitempty"`
+	ActivityCode string `json:"activityCode,omitempty"`
+	RegisteredOn string `json:"registeredOn,omitempty"`
+}
+
+// EventType implementa domain.Event.
+func (SelfEmployedDetailsSet) EventType() string { return "parties.self_employed_details_set" }
+
 // RelationshipEstablished se lanza cuando dos parties pasan a estar relacionadas.
 type RelationshipEstablished struct {
 	fw.EventMeta
