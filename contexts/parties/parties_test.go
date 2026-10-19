@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -414,7 +415,105 @@ func (e *env) scenario(prefix string) (acme, ana papp.PartyDTO) {
 	e.phase2(acme, ana)
 	e.phase3(acme, ana)
 	e.prospects(acme, ana)
+	e.selfEmployed(acme)
 	return acme, ana
+}
+
+// selfEmployed cubre al autónomo (D-85): una persona con el rol Self Employed, identificada con su
+// documento de identidad y con el perfil de actividad en su rol.
+func (e *env) selfEmployed(acme papp.PartyDTO) {
+	e.t.Helper()
+	var eva papp.PartyDTO
+	e.must(e.do("POST", "/api/persons", e.clerk, map[string]any{"givenName": "Eva", "firstSurname": "Autónoma " + acme.ID[:8],
+		"roles":       []string{domain.RoleSelfEmployed.String()},
+		"affiliation": map[string]any{"organization": acme.ID, "relationshipType": domain.RelCustomer.String()}}, &eva), 201, "a self-employed customer")
+	ids := "/api/parties/" + eva.ID + "/identifications"
+	// Acme ya tiene el CIF B12345674 (phase2): la clase se mira antes que el documento cogido.
+	e.mustProblem(e.problem("POST", ids, e.clerk, map[string]any{"documentType": domain.DocTaxID.String(), "country": "ES", "number": "B12345674"}),
+		422, "parties.document_not_for_kind", "a person is not identified by a CIF, even one somebody else holds")
+	e.mustProblem(e.problem("POST", ids, e.clerk, map[string]any{"documentType": domain.DocTaxID.String(), "country": "es", "number": "A58818501"}),
+		422, "parties.document_not_for_kind", "nor with the country in lower case")
+	e.must(e.do("POST", ids, e.clerk, map[string]any{"documentType": domain.DocNationalID.String(), "country": "ES", "number": "00000001R"}, &eva),
+		200, "her NIF is her DNI")
+	e.mustProblem(e.problem("POST", "/api/parties/"+acme.ID+"/identifications", e.admin, map[string]any{"documentType": domain.DocNationalID.String(),
+		"country": "ES", "number": "00000002W"}), 422, "parties.document_not_for_kind", "an organization is not identified by a DNI")
+
+	roleID := func(p papp.PartyDTO, rt domain.RoleTypeID) string {
+		return p.Roles[slices.IndexFunc(p.Roles, func(r papp.RoleDTO) bool { return r.RoleType == rt.String() })].ID
+	}
+	self := "/api/parties/" + eva.ID + "/roles/" + roleID(eva, domain.RoleSelfEmployed) + "/self-employed"
+	profile := map[string]any{"tradeName": " Fontanería   Eva ", "activityCode": "504.1", "registeredOn": "2020-03-01"}
+	e.must(e.do("PUT", self, e.reader, profile, nil), 403, "a reader changes no profile")
+	e.must(e.do("PUT", self, e.viewer, profile, nil), 403, "nor who has the permission and sees her, but only to read")
+	e.must(e.do("PUT", self, e.outsider, profile, nil), 404, "nor who does not see her")
+	e.must(e.do("PUT", self, e.clerk, map[string]any{"tradeName": strings.Repeat("x", 121)}, nil), 400, "a trade name of 121 characters")
+	e.must(e.do("PUT", self, e.clerk, map[string]any{"registeredOn": "2999-01-01"}, nil), 400, "a registration in the future")
+	e.must(e.do("PUT", self, e.clerk, map[string]any{"registeredOn": "1 March"}, nil), 400, "a date that is not one")
+	e.must(e.do("PUT", self, e.clerk, map[string]any{"activityCode": "12345678901"}, nil), 400, "an activity code too long")
+	e.must(e.do("PUT", self, e.clerk, map[string]any{"nif": "x"}, nil), 400, "the NIF is the identity document, not the profile")
+	e.must(e.do("PUT", "/api/parties/"+eva.ID+"/roles/"+roleID(eva, domain.RoleCustomer)+"/self-employed", e.clerk, profile, nil),
+		422, "a customer role has no self-employed profile")
+	e.must(e.do("PUT", self, e.clerk, profile, &eva), 200, "the profile")
+	e.must(e.do("GET", "/api/parties/"+eva.ID, e.reader, nil, &eva), 200, "eva, read back")
+	got := eva.Roles[slices.IndexFunc(eva.Roles, func(r papp.RoleDTO) bool { return r.RoleType == domain.RoleSelfEmployed.String() })].SelfEmployed
+	if got == nil || *got != (papp.SelfEmployedDTO{TradeName: "Fontanería Eva", ActivityCode: "504.1", RegisteredOn: "2020-03-01"}) {
+		e.t.Fatalf("self-employed profile: %+v", got)
+	}
+	if c := eva.Roles[slices.IndexFunc(eva.Roles, func(r papp.RoleDTO) bool { return r.RoleType == domain.RoleCustomer.String() })]; c.SelfEmployed != nil {
+		e.t.Fatalf("the customer role shows a profile: %+v", c)
+	}
+	eva = papp.PartyDTO{} // decodificar deja lo que la respuesta no trae
+	e.must(e.do("PUT", self, e.clerk, map[string]any{}, &eva), 200, "an empty profile")
+	if r := eva.Roles[slices.IndexFunc(eva.Roles, func(r papp.RoleDTO) bool { return r.RoleType == domain.RoleSelfEmployed.String() })]; r.SelfEmployed != nil {
+		e.t.Fatalf("an empty profile is not shown: %+v", r)
+	}
+
+	// Un duplicado no cambia su perfil (D-64); deshecho el duplicado, sí.
+	var other papp.PartyDTO
+	e.must(e.do("POST", "/api/persons", e.admin, map[string]any{"givenName": "Eva", "firstSurname": "Buena " + acme.ID[:8]}, &other), 201, "the survivor")
+	var dupRel papp.RelationshipDTO
+	e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelDuplicateOf.String(),
+		"fromParty": eva.ID, "toParty": other.ID}, &dupRel), 201, "eva is a duplicate")
+	e.mustProblem(e.problem("PUT", self, e.admin, profile), 422, "parties.duplicate", "a duplicate changes no profile")
+	e.must(e.do("POST", "/api/party-relationships/"+dupRel.ID+"/terminate", e.admin, nil, nil), 200, "not a duplicate any more")
+
+	// El perfil de un rol terminado ya no cambia.
+	e.must(e.do("POST", "/api/parties/"+eva.ID+"/roles/"+roleID(eva, domain.RoleSelfEmployed)+"/end", e.clerk, map[string]any{}, nil), 200,
+		"no longer self-employed")
+	e.mustProblem(e.problem("PUT", self, e.clerk, profile), 422, "parties.role_ended", "the profile of an ended role")
+}
+
+// problemResult es el estado y el código de problema de una respuesta.
+type problemResult struct {
+	status int
+	code   string
+}
+
+// problem es do para una respuesta de error: devuelve el estado y el código del problema.
+func (e *env) problem(method, path, auth string, body any) problemResult {
+	e.t.Helper()
+	var buf bytes.Buffer
+	_ = json.NewEncoder(&buf).Encode(body)
+	req, _ := http.NewRequest(method, e.srv.URL+path, &buf)
+	req.Header.Set("Authorization", auth)
+	e.clock.Advance(time.Millisecond)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	defer res.Body.Close()
+	var p struct {
+		Code string `json:"code"`
+	}
+	_ = json.NewDecoder(res.Body).Decode(&p)
+	return problemResult{res.StatusCode, p.Code}
+}
+
+func (e *env) mustProblem(got problemResult, want int, wantCode, what string) {
+	e.t.Helper()
+	if got.status != want || got.code != wantCode {
+		e.t.Fatalf("%s: %d %q, want %d %q", what, got.status, got.code, want, wantCode)
+	}
 }
 
 // prospects cubre los detalles que lleva una relación por su tipo (docs/PARTIES-UDM.md): la
@@ -631,11 +730,14 @@ func (e *env) prospects(acme, ana papp.PartyDTO) {
 	if marked.DocumentIssue == nil {
 		e.t.Fatal("an other document, which nobody checks, answers no mark")
 	}
-	marked = papp.PartyDTO{}
+	// Una organización no lleva pasaporte (D-85): se rechaza y la marca sigue.
 	e.must(e.do("POST", "/api/parties/"+agency.ID+"/identifications", e.admin, map[string]any{"documentType": domain.DocPassport.String(),
-		"country": "ES", "number": "PAB765432", "issuedOn": "2021-02-03", "expiresOn": "2031-02-02", "issuingAuthority": "Policía Nacional"}, &marked), 200, "a passport")
+		"country": "ES", "number": "PAB765432", "issuedOn": "2021-02-03", "expiresOn": "2031-02-02", "issuingAuthority": "Policía Nacional"}, nil), 422,
+		"an organization carries no passport")
+	marked = papp.PartyDTO{}
+	e.must(e.do("GET", "/api/parties/"+agency.ID, e.admin, nil, &marked), 200, "the agency")
 	if marked.DocumentIssue == nil {
-		e.t.Fatal("a passport is not the document that was wrong: it answers no mark")
+		e.t.Fatal("a refused passport answers no mark")
 	}
 	marked = papp.PartyDTO{} // decodificar deja lo que la respuesta no trae
 	e.must(e.do("POST", "/api/parties/"+agency.ID+"/identifications", e.admin, map[string]any{"documentType": domain.DocTaxID.String(),

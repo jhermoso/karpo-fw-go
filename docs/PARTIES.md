@@ -464,8 +464,8 @@ facturas, tiene plan contable y empleados).
   de organización. Su nombre es el de la persona.
 - **Buscar por la categoría «Organization» o «Legal»** ya no devuelve a quien sólo juega
   «Supplier» o «Internal Organization»; para eso está el tipo de party (`kind`).
-- **Sin decidir:** con qué documento se identifica un autónomo (su NIF de persona, D-53 en §2 del
-  registro), y que la importación de proveedores cargue personas.
+- **El autónomo** lo resuelve D-85 (§19): es una persona con el rol «Self Employed», identificada
+  con su DNI o su NIE. Go no tiene importación de proveedores.
 
 ## 13. El catálogo común de tipos
 
@@ -615,4 +615,46 @@ modificarlo**. Ahora:
   cualquier otro. Falta el circuito que Javier describe: que el usuario que dice representar al
   tercero lo pida, aporte pruebas y confirme los datos que ya hay, y el global lo apruebe.
 - Esquema: nada nuevo.
+
+## 19. El autónomo
+
+Decisión de Javier (D-85, precisa D-53): el autónomo es una **persona** con el rol «Self Employed»
+(código `self-employed`, sólo de personas, con vigencia). Una ficha es persona u organización,
+nunca las dos. Su NIF es su documento de identidad (DNI o NIE), y sus datos de actividad van en un
+perfil del rol.
+
+**Qué documentos lleva cada clase de ficha.** Se comprueba al añadir un documento; lo guardado
+antes se lee tal cual.
+
+| Clase | Puede llevar | No puede llevar |
+|---|---|---|
+| Organización | Identificación fiscal (TXID) de cualquier país, «Otro» (OTHR) | Pasaporte, documento nacional, permiso de conducir, Seguridad Social, número de extranjero (NIE) |
+| Persona | Todos | La identificación fiscal española: en España el TXID es el CIF |
+
+- Se rechaza con 422 y el código `parties.document_not_for_kind`. *Ejemplo:* un CIF a una persona,
+  o un DNI a una organización. Se mira antes que si otra party tiene ya el documento: un CIF que
+  es de otra organización, puesto a una persona, recibe este código y no `parties.document_taken`.
+- Un documento con formato o dígito de control erróneo se sigue rechazando como inválido (400, D-5
+  y D-92), antes de mirar la clase.
+- Una persona sí puede llevar la identificación fiscal de otro país (el NIF portugués de un
+  autónomo de Oporto).
+
+**El perfil de actividad**, en el rol:
+
+| Qué | Cómo |
+|---|---|
+| Ruta | `PUT /api/parties/{id}/roles/{roleId}/self-employed` |
+| Cuerpo | `{"tradeName": "Fontanería Eva", "activityCode": "504.1", "registeredOn": "2020-03-01"}`. Todo opcional; lo que falta se borra, y un cuerpo vacío deja el perfil vacío |
+| Reglas | Nombre comercial de hasta 120 caracteres (se recortan los espacios); epígrafe (el del IAE) de hasta 10, en mayúsculas; fecha de alta en la actividad no futura. Si no, 400 |
+| Qué rol | Sólo «Self Employed» o un tipo que cuelgue de él (422, `parties.role_details_not_for_type`). No un rol anulado (422, `parties.role_annulled`), ni el de un duplicado (422, `parties.duplicate`). Tiene que estar vigente ahora: el perfil de un rol terminado (o que aún no ha empezado) ya no se cambia (422, `parties.role_ended`) |
+| Permiso y ámbito | `Parties.Party.Update` y poder modificar la party (§18), como el resto de sus datos |
+| Respuesta | La party. El rol lleva `selfEmployed: {tradeName, activityCode, registeredOn}` cuando el perfil tiene algún dato; si está vacío, no aparece |
+| Evento | `parties.self_employed_details_set` (interno; no se publica fuera) |
+| Auditoría | El registro de la party lleva `selfEmployed` con el perfil de los roles vigentes (los mismos que `roles`): `idDelRol:"nombre" "epígrafe" "fecha"`, separados por comas. Como sólo se cambia el perfil de un rol vigente, todo cambio queda en el registro |
+| Esquema | Migración 25: `party_roles.trade_name`, `activity_code` y `registered_on`, anulables |
+
+- **Lo que falta:** que la importación cree personas cuando el NIF es un DNI o un NIE (Go no tiene
+  importación), y corregir en Trench las organizaciones con NIF de persona antes de converger.
+- Que una persona empresa del grupo (D-86) se identifique con su documento de identidad ya lo
+  permite la regla de documentos; no hay nada más hecho para D-86.
 

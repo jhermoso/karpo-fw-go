@@ -33,6 +33,15 @@ type RoleDTO struct {
 	Until    *time.Time `json:"until,omitempty"`
 	Active   bool       `json:"active"`
 	Annulled bool       `json:"annulled,omitempty"`
+	// SelfEmployed es el perfil de actividad de un rol Self Employed; ausente si no tiene (D-85).
+	SelfEmployed *SelfEmployedDTO `json:"selfEmployed,omitempty"`
+}
+
+// SelfEmployedDTO es el perfil de actividad de un autónomo.
+type SelfEmployedDTO struct {
+	TradeName    string `json:"tradeName,omitempty"`
+	ActivityCode string `json:"activityCode,omitempty"`
+	RegisteredOn string `json:"registeredOn,omitempty"` // YYYY-MM-DD
 }
 
 // PartyDTO es la representación de transporte de una party.
@@ -137,6 +146,9 @@ func ToDTO(p *domain.Party, names Names) PartyDTO {
 		rd := RoleDTO{ID: r.ID.String(), RoleType: r.RoleType.String(), From: r.Period.From(), Active: r.IsActiveAt(now), Annulled: r.Annulled}
 		if t, ok := r.Period.To(); ok {
 			rd.Until = &t
+		}
+		if se := r.Details.SelfEmployed; !se.IsZero() {
+			rd.SelfEmployed = &SelfEmployedDTO{TradeName: se.TradeName, ActivityCode: se.ActivityCode, RegisteredOn: se.RegisteredOn.String()}
 		}
 		if cat != nil {
 			if rt, ok := cat.RoleType(r.RoleType); ok {

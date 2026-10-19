@@ -171,6 +171,17 @@ type AnnulRole struct {
 	RoleID  domain.PartyRoleID `json:"-"`
 }
 
+// SetSelfEmployedDetails fija el perfil de actividad de un rol Self Employed
+// (docs/DECISIONES-COMUNES.md, D-85). Sustituye al que hubiera: un campo vacío borra ese dato y
+// todos vacíos dejan el perfil vacío. RegisteredOn es una fecha YYYY-MM-DD.
+type SetSelfEmployedDetails struct {
+	PartyID      domain.PartyID     `json:"-"`
+	RoleID       domain.PartyRoleID `json:"-"`
+	TradeName    string             `json:"tradeName,omitempty"`
+	ActivityCode string             `json:"activityCode,omitempty"`
+	RegisteredOn string             `json:"registeredOn,omitempty"`
+}
+
 // EstablishRelationship relaciona dos parties (los roles salen del tipo de relación). Los datos
 // del tipo, si tiene, pueden venir con ella.
 type EstablishRelationship struct {
