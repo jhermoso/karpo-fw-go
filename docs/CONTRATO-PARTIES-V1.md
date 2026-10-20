@@ -350,7 +350,9 @@ anteriores donde difieran.** Nada de esto está aprobado por Javier.
 - Cada ruta exige una acción con nombre. Leer: `Parties.Party.Read`, `Parties.Relationship.Read`.
   Crear: `Parties.Party.Create`. Cambiar: `Parties.Party.Update`. Roles:
   `Parties.PartyRole.Assign`. Relaciones: `Parties.Relationship.Create`, `…Terminate`,
-  `…Update`. (Son los nombres de Go; C# propone los suyos y hay que casarlos.)
+  `…Update`. Fusionar (marcar «Duplicate Of» o deshacerlo): `Parties.Party.Merge`, y poder cambiar
+  las dos parties (D-95, D-96). (Son los nombres de Go; C# propone los suyos y hay que casarlos:
+  allí es `party.merge`.)
 - La cabecera `X-Organization-Scope` **nunca amplía** lo que quien llama puede ver; sólo lo
   reduce.
 - Fuera de ámbito, **404**; dentro pero sin poder escribir, **403**. Escribir exige acceso

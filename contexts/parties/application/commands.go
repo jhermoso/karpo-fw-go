@@ -23,6 +23,10 @@ var (
 	// administrador global puede quitarla (docs/DECISIONES-COMUNES.md, D-66).
 	PermPartyUpdateRelated = authz.MustPermission("Parties.Party.UpdateRelated")
 	PermRoleAssign         = authz.MustPermission("Parties.PartyRole.Assign")
+	// PermPartyMerge marca una party como duplicado de otra (la fusiona en ella) o deshace la
+	// marca. Una acción propia, distinta de cambiar una party (docs/DECISIONES-COMUNES.md, D-95):
+	// la regla estándar de Security no se la da al usuario estándar.
+	PermPartyMerge = authz.MustPermission("Parties.Party.Merge")
 	// PermRoleAnnul retira un rol dado por error, y lo borra cuando nada depende de él: una
 	// acción propia, que la regla estándar de Security no reparte.
 	PermRoleAnnul          = authz.MustPermission("Parties.PartyRole.Annul")
@@ -47,7 +51,7 @@ var (
 func Permissions() []authz.Permission {
 	return []authz.Permission{PermPartyRead, PermPartyCreate, PermPartyUpdate, PermRoleAssign, PermRelationshipRead,
 		PermRelationshipCreate, PermRelationshipEnd, PermRelationshipUpdate, PermRelationshipSetTrial, PermRoleTypeDefine,
-		PermRelationshipTypeDefine, PermRoleAnnul, PermPartyUpdateRelated}
+		PermRelationshipTypeDefine, PermRoleAnnul, PermPartyUpdateRelated, PermPartyMerge}
 }
 
 // RegisterPerson da de alta una persona, si se quiere con roles iniciales (el CreatePartyWithRole de C#).

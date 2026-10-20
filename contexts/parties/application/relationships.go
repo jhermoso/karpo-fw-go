@@ -159,7 +159,7 @@ func (s service) establish(ctx context.Context, rt domain.RelationshipType, from
 		}
 	}
 	if rt.ID == domain.RelDuplicateOf {
-		if err := canMarkDuplicate(s.scope(ctx), from); err != nil {
+		if err := canMarkDuplicate(ctx, s.scope(ctx), from, to); err != nil {
 			return nil, err
 		}
 	}
@@ -284,7 +284,7 @@ func (s service) writableRelationship(ctx context.Context, id domain.Relationshi
 		if !sc.sees(from, fw.Now()) {
 			return nil, nil, nil, fw.NotFound(domain.RelationshipKind, id)
 		}
-		if err := canMarkDuplicate(sc, from); err != nil {
+		if err := canMarkDuplicate(ctx, sc, from, to); err != nil {
 			return nil, nil, nil, err
 		}
 		return r, from, to, nil
@@ -308,15 +308,23 @@ func operable(p *domain.Party) error {
 	return nil
 }
 
-// canMarkDuplicate dice si el llamante puede marcar una party como duplicado, o quitarle la
-// marca: bloquear una party es cambiarla, así que necesita poder escribirla; y una organización
-// interna sólo la bloquea el administrador global.
-func canMarkDuplicate(sc scope, p *domain.Party) error {
+// canMarkDuplicate dice si el llamante puede marcar la party p como duplicado de survivor, o
+// quitarle la marca. Fusionar es una acción propia (D-95); y, como cambia las dos fichas (las
+// relaciones de negocio de la que cede pasan a la superviviente, D-93), hay que poder escribir en
+// las dos (D-96). Una organización interna sólo la bloquea el administrador global.
+func canMarkDuplicate(ctx context.Context, sc scope, p, survivor *domain.Party) error {
+	if err := authz.Require(ctx, PermPartyMerge); err != nil {
+		return err
+	}
 	if sc.global {
 		return nil
 	}
-	if !sc.canWrite(p, fw.Now()) {
+	now := fw.Now()
+	if !sc.canWrite(p, now) {
 		return fmt.Errorf("%w: marking a party as a duplicate needs to be able to change it", fw.ErrForbidden)
+	}
+	if !sc.canWrite(survivor, now) {
+		return fmt.Errorf("%w: merging into a party needs to be able to change the survivor too", fw.ErrForbidden)
 	}
 	if slices.ContainsFunc(p.Roles(), func(r domain.PartyRole) bool { return r.RoleType == domain.RoleInternalOrganization && !r.Annulled }) {
 		return fmt.Errorf("%w: only the global administrator marks an internal organization as a duplicate", fw.ErrForbidden)
