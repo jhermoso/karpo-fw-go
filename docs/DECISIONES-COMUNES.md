@@ -267,6 +267,13 @@ relaciones vigentes de cliente o de proveedor pasan a la superviviente con su pe
 no las tiene ya con esa empresa, y deshacer la fusión las devuelve; faltan que la pantalla de
 fusión las enseñe y decidir las direcciones por defecto del perfil trasladado.
 
+**D-91 y D-93 aplicados en los datos de Trench** (su sesión, 2026-10-20; su PR 58). Tras una copia
+de seguridad y un ensayo en un contenedor aparte, se fusionaron en su PostgreSQL local las 38 fichas
+con el CIF repetido: 35 relaciones de negocio pasaron a la superviviente y 3 se quedaron porque ya
+las tenía; no se perdió ninguna. Quedan 6 CIF repetidos a propósito: parecen empresas distintas con
+el CIF mal dado de alta en Sage y se corrigen allí. En Trench, «un documento, una party» (D-50) se
+cumple salvo en esos 6 casos, identificados.
+
 ### 1.2 Extensibilidad
 
 Detalle en [EXTENSIBILIDAD.md](EXTENSIBILIDAD.md) §1.
