@@ -45,6 +45,13 @@ func (Dialect) DateValue(y int, m time.Month, d int) any {
 // DateExpr devuelve el placeholder sin cambios.
 func (Dialect) DateExpr(ph string) string { return ph }
 
+// DecimalExpr convierte el texto del decimal con CAST(... AS DECIMAL(p,s)) a la medida del valor:
+// MySQL compara un texto con un DECIMAL como coma flotante (double), lo que pierde cifras. El
+// driver lee DECIMAL como []byte con punto.
+func (Dialect) DecimalExpr(ph string, precision, scale int) string {
+	return fmt.Sprintf("CAST(%s AS DECIMAL(%d,%d))", ph, precision, scale)
+}
+
 func (Dialect) IsUniqueViolation(err error) bool {
 	return sqlrepo.ErrorContains(err, "Error 1062", "Duplicate entry")
 }

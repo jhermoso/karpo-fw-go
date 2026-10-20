@@ -274,6 +274,14 @@ las tenía; no se perdió ninguna. Quedan 6 CIF repetidos a propósito: parecen 
 el CIF mal dado de alta en Sage y se corrigen allí. En Trench, «un documento, una party» (D-50) se
 cumple salvo en esos 6 casos, identificados.
 
+### 1.1 septies Decimales (sesión de Theros)
+
+Propuesta por la sesión de Theros y decidida en esta sesión el 2026-10-20.
+
+| # | Decisión (lectura) | Lo que dijo Javier |
+|---|---|---|
+| D-94 | **El framework tiene un tipo de columna decimal `{dec:p,s}` (NUMERIC/DECIMAL/NUMBER; texto en SQLite), se escribe y se lee sin float, y se puede filtrar y ordenar por valor. Las columnas decimales que hoy son texto en los contextos de Karpo Go se pasan a numéricas (tarea aparte), para parecerse a Trench y Karpo C#** | «1 sí, 2 a» (esta sesión, 2026-10-20), a la propuesta de Theros |
+
 ### 1.2 Extensibilidad
 
 Detalle en [EXTENSIBILIDAD.md](EXTENSIBILIDAD.md) §1.
@@ -468,3 +476,4 @@ Lo que Go no cumple todavía de lo decidido. Cada sesión lleva la suya en su re
 | D-47 | Security de Go no tiene el rescate ni el restablecimiento por un administrador | Planificarlo con el diseño de Karpo |
 | D-5, D-9, D-10, D-14, D-25, D-26 | **Cumple** (PR 13 a 18) | — |
 | D-1, D-2, D-3, D-6 (caso sin atributos), D-7, D-11 | **Cumple** | — |
+| D-94 | **Hecho el tipo** (rama `feat/sqlrepo-decimal`): `{dec:p,s}` en `RenderDDL` (1 ≤ p ≤ 28); `vocab.Decimal` se enlaza como texto y se convierte en SQL (`TO_NUMBER` con NLS explícito en Oracle, `CAST` en SQL Server y MySQL); `Row.Decimal` lee exacto y rechaza float; `Mapping.Decimals` declara (p,s) de cada columna: rechaza al escribir lo que no cabe (sin redondear) y lo que no es un `vocab.Decimal`, y compara y ordena por valor, también en SQLite (clave de orden numérico) y con valores de más decimales que la columna; `sqlrepo.AlterColumnToDecimal` (un `Migration.Run`) valida los datos sin tocarlos y pasa una columna de texto a decimal en los cinco motores, en Oracle de forma repetible y conservando nombre y posición. Detalle en [ARQUITECTURA.md](ARQUITECTURA.md) §4 y [ESQUEMA-MIGRACIONES.md](ESQUEMA-MIGRACIONES.md) | Migrar las columnas decimales de texto de los contextos y declararlas en `Mapping.Decimals` |

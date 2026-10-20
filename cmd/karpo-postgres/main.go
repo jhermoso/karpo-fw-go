@@ -69,6 +69,11 @@ func run(ctx context.Context, command string, logger log.Logger) error {
 	if err != nil {
 		return err
 	}
+	if command == serve.Migrate {
+		// Una migración puede cambiar el tipo de una columna: sin caché de sentencias, ninguna
+		// sentencia preparada antes del cambio se reutiliza con los tipos viejos.
+		url = postgres.WithoutStatementCache(url)
+	}
 	raw, err := open(ctx, url, conns)
 	if err != nil {
 		return err

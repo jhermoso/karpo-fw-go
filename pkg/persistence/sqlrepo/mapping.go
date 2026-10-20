@@ -30,6 +30,13 @@ type Mapping[ID domain.Identifier, T domain.AggregateRoot[ID]] struct {
 	// Fields mapea nombres de campo lógicos de las especificaciones a columnas cuando difieren.
 	// Las columnas siempre se pueden referenciar por su propio nombre.
 	Fields map[string]string
+	// Decimals declara las columnas de Columns que son {dec:p,s}, con su precisión y su escala.
+	// Sólo aceptan vocab.Decimal, *vocab.Decimal o nil, y un valor que no cabe en (p,s) es un
+	// error, no se redondea; se comparan (con valores vocab.Decimal) y se ordenan por valor
+	// numérico en todos los motores, también en SQLite, que las guarda como texto. Un
+	// vocab.Decimal en una columna que no está aquí es domain.ErrUnsupported, al escribir y al
+	// comparar.
+	Decimals map[string]DecimalColumn
 	// Dehydrate devuelve el valor de cada columna de Columns.
 	Dehydrate func(agg T) (Values, error)
 	// Hydrate reconstruye el agregado entero a partir de su fila raíz (id, version y Columns) y
@@ -62,6 +69,8 @@ type Child[T any] struct {
 	Columns []string
 	// Fields mapea nombres de campo lógicos a columnas cuando difieren.
 	Fields map[string]string
+	// Decimals declara las columnas {dec:p,s} de Columns (como Mapping.Decimals).
+	Decimals map[string]DecimalColumn
 	// OrderBy enumera las columnas que fijan el orden en que se cargan los hijos.
 	OrderBy []string
 	// Dehydrate devuelve un Values por cada elemento hijo.
@@ -83,7 +92,41 @@ type table struct {
 	key      string // columna id (raíz) o clave ajena (hijo)
 	columns  []string
 	fields   map[string]string
+	decimals map[string]DecimalColumn // columnas {dec:p,s}
 	children map[string]*childTable
+}
+
+// DecimalColumn es la precisión (cifras) y la escala (decimales) de una columna {dec:p,s}.
+type DecimalColumn struct {
+	Precision, Scale int
+}
+
+// Dec devuelve la DecimalColumn de un {dec:precision,scale}.
+func Dec(precision, scale int) DecimalColumn {
+	return DecimalColumn{Precision: precision, Scale: scale}
+}
+
+func (c DecimalColumn) String() string { return fmt.Sprintf("{dec:%d,%d}", c.Precision, c.Scale) }
+
+func (c DecimalColumn) validate() error {
+	_, _, err := parseDecimalMarker(fmt.Sprintf("%d,%d", c.Precision, c.Scale))
+	return err
+}
+
+// decimalSet valida las columnas decimales de un mapeo: deben estar entre sus columnas y tener una
+// precisión y una escala válidas.
+func decimalSet(tableName string, columns []string, decimals map[string]DecimalColumn) (map[string]DecimalColumn, error) {
+	set := make(map[string]DecimalColumn, len(decimals))
+	for c, dc := range decimals {
+		if !contains(columns, c) {
+			return nil, fmt.Errorf("sqlrepo: decimal column %q is not a column of %q", c, tableName)
+		}
+		if err := dc.validate(); err != nil {
+			return nil, fmt.Errorf("sqlrepo: decimal column %s.%s: %w", tableName, c, err)
+		}
+		set[c] = dc
+	}
+	return set, nil
 }
 
 type childTable struct {
@@ -133,7 +176,11 @@ func (m *Mapping[ID, T]) normalize() (*table, error) {
 	fields[m.IDColumn] = m.IDColumn
 	fields[m.VersionColumn] = m.VersionColumn
 
-	root := &table{name: m.Table, key: m.IDColumn, columns: m.Columns, fields: fields, children: map[string]*childTable{}}
+	decimals, err := decimalSet(m.Table, m.Columns, m.Decimals)
+	if err != nil {
+		return nil, err
+	}
+	root := &table{name: m.Table, key: m.IDColumn, columns: m.Columns, fields: fields, decimals: decimals, children: map[string]*childTable{}}
 	for _, c := range m.Children {
 		if c.Dehydrate == nil {
 			return nil, fmt.Errorf("sqlrepo: child %q needs Dehydrate", c.Name)
@@ -156,8 +203,12 @@ func (m *Mapping[ID, T]) normalize() (*table, error) {
 				return nil, err
 			}
 		}
+		cd, err := decimalSet(c.Table, c.Columns, c.Decimals)
+		if err != nil {
+			return nil, err
+		}
 		root.children[c.Name] = &childTable{
-			table:   table{name: c.Table, key: c.ForeignKey, columns: c.Columns, fields: cf},
+			table:   table{name: c.Table, key: c.ForeignKey, columns: c.Columns, fields: cf, decimals: cd},
 			orderBy: c.OrderBy,
 		}
 	}

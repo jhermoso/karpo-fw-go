@@ -11,6 +11,9 @@
 //   - los booleanos se guardan como NUMBER(1) (0/1) y los instantes como TIMESTAMP WITH TIME ZONE
 //     (UTC);
 //   - las fechas civiles (vocab.Date) se enlazan como TO_DATE('YYYY-MM-DD'), nunca como instantes;
+//   - los decimales (vocab.Decimal) se enlazan como texto convertido con TO_NUMBER y un
+//     NLS_NUMERIC_CHARACTERS explícito, y go-ora lee NUMBER como texto con punto: ni la escritura
+//     ni la lectura dependen de la coma decimal de la sesión;
 //   - las listas IN se parten en trozos de 1000 (ORA-01795).
 //
 // Zonas horarias: go-ora pone como zona horaria de la sesión la del cliente. Los instantes se
@@ -119,6 +122,18 @@ func (Dialect) DateValue(y int, m time.Month, d int) any {
 // DateExpr envuelve el placeholder en TO_DATE(..., 'YYYY-MM-DD'), con independencia de la
 // configuración NLS.
 func (Dialect) DateExpr(ph string) string { return "TO_DATE(" + ph + ", 'YYYY-MM-DD')" }
+
+// DecimalExpr convierte el texto del decimal con TO_NUMBER, un formato con tantas cifras como el
+// valor y NLS_NUMERIC_CHARACTERS explícito: una conversión implícita de texto a NUMBER usaría el
+// separador decimal de la sesión, y con coma decimal "12.5" fallaría (ORA-01722). El formato 9
+// admite el signo menos inicial.
+func (Dialect) DecimalExpr(ph string, precision, scale int) string {
+	format := strings.Repeat("9", max(precision-scale, 1))
+	if scale > 0 {
+		format += "D" + strings.Repeat("9", scale)
+	}
+	return "TO_NUMBER(" + ph + ", '" + format + "', 'NLS_NUMERIC_CHARACTERS=''.,''')"
+}
 
 func (Dialect) IsUniqueViolation(err error) bool {
 	return sqlrepo.ErrorContains(err, "ORA-00001")
