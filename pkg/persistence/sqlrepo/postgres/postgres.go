@@ -3,6 +3,15 @@
 //
 // Tipos de columna recomendados: UUID para las identidades, BOOLEAN, TIMESTAMPTZ, BIGINT para las
 // versiones.
+//
+// Sentencias preparadas y cambios de tipo. Por defecto pgx prepara cada sentencia una vez por
+// conexión y la guarda (modo cache_statement). Si después una migración cambia el tipo de una
+// columna (sqlrepo.AlterColumnToDecimal), la sentencia guardada conserva los tipos de antes y
+// PostgreSQL la rechaza: «cached plan must not change result type» (SQLSTATE 0A000) si cambia una
+// columna leída, o un error de tipos si cambia el tipo de un parámetro. Por eso el proceso que
+// migra abre su conexión con WithoutStatementCache, que no guarda sentencias ni sus tipos; los
+// procesos que sirven arrancan después de migrar (serve verifica el esquema y no migra), con un
+// pool nuevo, y conservan la caché.
 package postgres
 
 import (
@@ -24,6 +33,32 @@ func New() Dialect { return Dialect{} }
 // Open envuelve un *sql.DB de PostgreSQL ya abierto.
 func Open(db *sql.DB, opts ...sqlrepo.Option) *sqlrepo.DB { return sqlrepo.New(db, New(), opts...) }
 
+// WithoutStatementCache añade a una cadena de conexión de pgx (URL o pares clave=valor)
+// default_query_exec_mode=describe_exec: cada sentencia se describe al ejecutarla y no se guarda
+// nada por conexión, así que un cambio de tipo de columna no deja sentencias con tipos viejos. Los
+// parámetros siguen tomando su tipo del servidor (un decimal enlazado como texto sigue siendo
+// NUMERIC), a cambio de un viaje más por sentencia. Es para el proceso que migra. Si la cadena ya
+// fija el modo, se deja como está.
+func WithoutStatementCache(dsn string) string {
+	const param = "default_query_exec_mode"
+	if strings.Contains(dsn, param+"=") {
+		return dsn
+	}
+	if strings.Contains(dsn, "://") {
+		base, fragment, hasFragment := strings.Cut(dsn, "#")
+		sep := "?"
+		if strings.Contains(base, "?") {
+			sep = "&"
+		}
+		out := base + sep + param + "=describe_exec"
+		if hasFragment {
+			out += "#" + fragment
+		}
+		return out
+	}
+	return strings.TrimSpace(dsn + " " + param + "=describe_exec")
+}
+
 func (Dialect) Name() string                         { return "postgres" }
 func (Dialect) Placeholder(n int) string             { return fmt.Sprintf("$%d", n) }
 func (Dialect) Quote(ident string) string            { return `"` + strings.ReplaceAll(ident, `"`, `""`) + `"` }
@@ -42,6 +77,11 @@ func (Dialect) DateValue(y int, m time.Month, d int) any {
 
 // DateExpr devuelve el placeholder sin cambios.
 func (Dialect) DateExpr(ph string) string { return ph }
+
+// DecimalExpr devuelve el placeholder sin cambios: PostgreSQL deduce el tipo NUMERIC del parámetro
+// por la columna con la que se compara o en la que se escribe, y la entrada de NUMERIC desde
+// texto es exacta y no depende de lc_numeric. pgx lee NUMERIC como texto.
+func (Dialect) DecimalExpr(ph string, _, _ int) string { return ph }
 
 func (Dialect) IsUniqueViolation(err error) bool {
 	return sqlrepo.ErrorContains(err, "SQLSTATE 23505", "(23505)", "duplicate key value violates unique constraint")

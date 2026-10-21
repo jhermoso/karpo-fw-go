@@ -144,10 +144,72 @@ que estaban escritas a mano con `VARCHAR2(N)`. Los demás motores no cambian.
 - Una columna declarada más ancha para esquivar el problema (por ejemplo `{str:4000}` para 1000
   caracteres) solo puede volver a su tamaño con una migración nueva, no editando la aplicada.
 
+## Decimales: `{dec:p,s}` y el paso de texto a decimal (D-94)
+
+**Marcador.** `{dec:p,s}` es `NUMERIC(p,s)` en PostgreSQL, `DECIMAL(p,s)` en SQL Server y MySQL,
+`NUMBER(p,s)` en Oracle y `TEXT` en SQLite (su `NUMERIC` pierde cifras). Exige 1 ≤ p ≤ 28 y
+0 ≤ s ≤ p; un marcador mal formado (`{dec}`, `{dec:18}`, `{dec:29,2}`, `{dec:5,6}`) hace que
+`RenderDDL` y `RenderDDLAll` entren en pánico, como `regexp.MustCompile`, porque el DDL es una
+constante del programa; `RenderDDLChecked` devuelve el error. Cómo se escriben, leen y consultan
+los decimales: [ARQUITECTURA.md](ARQUITECTURA.md) §4, «Decimales».
+
+**Pasar una columna de texto a decimal.** El DDL portable no cambiaba tipos de columna.
+`sqlrepo.AlterColumnToDecimal(tabla, columna, p, s, notNull)` devuelve el `Run` de una migración
+(`Migration{Version: n, Name: "...", Run: run}`) que pasa una columna de texto con decimales
+escritos con punto a `{dec:p,s}` sin perder ni redondear ningún valor. Es Go, y no sentencias de
+`Up`, porque tiene que validar los datos antes de tocar nada y, en Oracle, mirar el estado de la
+columna.
+
+**Validación previa, en los cinco motores.** Lee los valores no nulos y falla, sin cambiar
+nada, si alguno no es un decimal con punto (`^-?([0-9]+(\.[0-9]+)?|\.[0-9]+)$`: ni texto, ni
+vacío, ni espacios, ni `+`, ni exponentes, ni `NaN`, ni `1.`) o no cabe en (p,s): más decimales
+que s o más cifras enteras que p-s. Así PostgreSQL no acepta `1e3` ni `NaN`, MySQL en modo no
+estricto no convierte `abc` en 0 y ningún motor redondea. `.5`, `-.5`, `002.50` y `-0` son
+válidos.
+
+| Motor | Después de validar |
+|---|---|
+| PostgreSQL | `ALTER TABLE … ALTER COLUMN … TYPE NUMERIC(p,s) USING CAST(… AS NUMERIC(p,s))` |
+| SQL Server | `ALTER TABLE … ALTER COLUMN … DECIMAL(p,s) [NOT] NULL` |
+| MySQL | `ALTER TABLE … MODIFY COLUMN … DECIMAL(p,s) [NOT] NULL`. Redefine la columna: pierde su `DEFAULT`, su `COMMENT` y sus `CHECK` |
+| Oracle | no cambia el tipo de una columna con datos (ORA-01439). Con una columna auxiliar `karpo_dec_tmp`: se añade, se copia en ella cada valor con `TO_NUMBER` y `NLS_NUMERIC_CHARACTERS` explícito, la columna se deja admitir nulos, se vacía, se cambia a `NUMBER(p,s)`, se copia de vuelta, se borra la auxiliar y, si `notNull`, vuelve a `NOT NULL`. Conserva el nombre y la posición de la columna; puede perder su `DEFAULT` y sus `CHECK` (un `CHECK` que no admita NULL impide vaciarla) |
+| SQLite | `{dec}` ya es `TEXT`: reescribe cada valor en su forma canónica (`002.50` → `2.5`), para que la clave de orden que calcula SQLite coincida con la de Go |
+
+**Si falla a medias.** En PostgreSQL, SQL Server y SQLite todo va en la transacción de la
+migración y un fallo no deja nada hecho. En MySQL el cambio es una sola sentencia. En Oracle cada
+DDL hace commit, así que un fallo puede dejar la tabla a medias, pero los valores están siempre en
+la columna o en la auxiliar, y el `Run` se puede repetir: mira el tipo de la columna y si existe la
+auxiliar, y retoma donde se quedó (sólo copia las filas cuyo texto sigue en la columna). Para
+repetirlo, `Migrator.Force` sobre la migración sucia y `Migrate`. Para deshacerlo a mano antes de
+vaciar la columna, basta con borrar la auxiliar.
+
+`notNull` hay que darlo porque SQL Server, MySQL y Oracle redefinen la columna. La columna no debe
+estar en índices, claves ni restricciones: se quitan antes y se vuelven a crear después. Tras la
+migración, la columna se declara en `Mapping.Decimals` con su (p,s) y el mapeo escribe el
+`vocab.Decimal`, no su texto.
+
+**PostgreSQL: sentencias preparadas.** pgx prepara por defecto cada sentencia una vez por
+conexión y la guarda con sus tipos (modo `cache_statement`). Una sentencia preparada antes de un
+cambio de tipo y reutilizada después falla con «cached plan must not change result type»
+(SQLSTATE 0A000) si cambia una columna leída, o con un error de tipos si cambia un parámetro.
+Dentro de la transacción de una migración no se puede reintentar. Por eso el proceso que migra
+(`karpo-postgres migrate`) abre su conexión con `postgres.WithoutStatementCache`, que añade
+`default_query_exec_mode=describe_exec` a la cadena de conexión: cada sentencia se describe al
+ejecutarla y no se guarda nada, a cambio de un viaje más por sentencia. Los procesos que sirven no
+migran (verifican el esquema) y arrancan después, con un pool nuevo, así que conservan la caché.
+Se descartaron reintentar ante 0A000 (no sirve dentro de una transacción, y la otra conexión del
+pool puede tener la misma sentencia vieja) y vaciar la caché tras la migración (database/sql no da
+acceso a la caché de pgx sin importar el driver en el dialecto).
+
 ## Validación
 
 - `sqlconformance.RunStrings` en los cinco motores: una columna `{str:1000}` guarda y devuelve
   1000 caracteres de 2, 3 y 4 bytes (los de 4, salvo en SQL Server).
+- `sqlconformance.RunDecimals` en los cinco motores: columnas `{dec:28,8}` y `{dec:28,28}`, y el
+  paso de `{str:40}` a `{dec:18,4}` con `AlterColumnToDecimal`: con un valor no válido o que
+  desborda falla y los datos siguen intactos; con valores válidos (`.5`, `-.5`, NULL, columna
+  `NOT NULL` y otra que admite nulos) los conserva, se puede repetir y la columna se ordena por
+  valor.
 
 - `sqlconformance.RunMigrations` en SQLite, PostgreSQL, SQL Server, Oracle y MySQL:
   - base vacía pendiente y `Verify` fallando;
