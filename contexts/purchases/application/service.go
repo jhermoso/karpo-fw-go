@@ -97,8 +97,7 @@ type service struct {
 	suppliers *orchestration.Orchestrator[domain.SupplierID, *domain.SupplierProfile]
 }
 
-// NewService conecta los casos de uso.
-func NewService(d Deps) *Service {
+func newService(d Deps) service {
 	var opts []orchestration.Option
 	if d.Recorder != nil {
 		opts = append(opts, orchestration.WithOutbox(d.Recorder))
@@ -106,10 +105,15 @@ func NewService(d Deps) *Service {
 	if d.Audit != nil {
 		opts = append(opts, orchestration.WithAuditLog(d.Audit))
 	}
-	s := service{Deps: d,
+	return service{Deps: d,
 		invoices:  orchestration.New[domain.InvoiceID, *domain.Invoice](d.Invoices, d.UoW, opts...),
 		suppliers: orchestration.New[domain.SupplierID, *domain.SupplierProfile](d.Suppliers, d.UoW, opts...),
 	}
+}
+
+// NewService conecta los casos de uso.
+func NewService(d Deps) *Service {
+	s := newService(d)
 	svc := &Service{}
 	s.invoiceUseCases(svc)
 	s.supplierUseCases(svc)

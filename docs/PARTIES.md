@@ -558,8 +558,8 @@ depende del dato. Si nada depende, lo borra; si algo depende, lo deja marcado co
 
 Decisión de Javier (D-64): una party que es duplicado de otra se puede seguir encontrando y
 consultando, pero por norma se excluye al buscar y no puede intervenir en ninguna operación que no
-sea de consulta. Sus relaciones se quedan donde están; fusionar (pasarlas a la buena y retirar una)
-se verá caso por caso.
+sea de consulta. Marcarla es fusionarla: sus relaciones de negocio pasan a la superviviente
+(D-93, más abajo); las demás se quedan donde están.
 
 | Qué | Cómo |
 |---|---|
@@ -568,7 +568,7 @@ se verá caso por caso.
 | Buscar | `GET /api/parties` lo deja fuera; con `includeMergedParties=true`, entra (el nombre es el de Trench, su PR 45). Leerlo por su identificador funciona siempre |
 | Lo que se rechaza (422, `parties.duplicate`) | Cualquier cambio en la party (nombre, roles, documentos, contactos, activar o desactivar…), crearle relaciones y cambiar los datos de las que tiene |
 | Lo que se permite | Leerla y terminar sus relaciones, la de duplicado incluida |
-| Esquema | Migración 24: `parties.duplicate` |
+| Esquema | Migración 24: `parties.duplicate`; migración 27: `party_relationships.transferred_from` (D-93) |
 
 - **Quién marca y desmarca:** quien puede modificar el duplicado (§18); la superviviente sólo
   tiene que verse. Una empresa interna sólo la marca el administrador global. Desmarcar pide lo
@@ -580,6 +580,93 @@ se verá caso por caso.
   rectificativa: corregir lo facturado es una obligación. Lo saben preguntando a Parties por el
   contrato de identidades fiscales, que lleva `blocked`. Los demás contextos (Compras,
   Cobros, Tesorería) no lo miran todavía.
+
+### Las relaciones de negocio pasan a la superviviente (D-93)
+
+Fusionar y deshacer se hacen ahora: una fecha que se aleje más de un minuto del reloj del
+servidor, hacia atrás o hacia delante, se rechaza con 422 `parties.merge_not_now` (una pasada
+movería o resucitaría relaciones que cambiaron después; una futura, relaciones que pueden cambiar
+antes). Dentro del margen, la fecha de la marca es la pedida, pero las relaciones se buscan y se
+mueven en el más tardío de los dos instantes, la fecha pedida o ahora: no pasa una que terminó hace
+unos segundos ni se olvida una creada en ese minuto. Una fusión se deshace una sola vez (422 `parties.merge_undone`), y la
+superviviente de una fusión vigente no se fusiona en otra (D-97, 422 `parties.merge_chain`).
+
+Al marcar el duplicado, en la misma transacción, cada relación de cliente (`RelCustomer`) o de
+proveedor (`RelSupplier`) de la ficha que cede, vigente en ese instante:
+
+- **pasa** cuando la que cede es el tercero de la relación (el cliente, el proveedor), la empresa
+  no es la propia superviviente ni está marcada como duplicado (con ella no se establece nada),
+  quien fusiona puede escribir en la empresa, y la superviviente no tiene ya una sin terminar del
+  mismo tipo con ella. Se termina la de la que cede y se establece
+  una igual para la superviviente: mismo tipo, misma empresa en el mismo lado, mismo número de
+  cliente y comentario, **mismo fin** si lo tenía. La nueva guarda en `transferredFrom` la
+  relación de la que viene. Si a la superviviente le falta el rol (Customer, Supplier), se le da
+  (D-49);
+- **se queda** en la que cede, bloqueada con ella, en los demás casos, para revisarla caso por
+  caso. También se quedan las que empiezan después de la fusión (una renovación ya dada de alta).
+
+La respuesta al marcar lleva `merge`: `transferred` (la relación nueva, `previous` y la empresa) y
+`kept` (las de la que cede que siguen sin terminar). En cada una, `counterparty` es la otra party de
+la relación: la empresa, salvo cuando la fusionada es la empresa (entonces, su cliente o
+proveedor). Después, las que esperan revisión son las
+relaciones de cliente o proveedor sin terminar de la ficha fusionada
+(`GET /api/parties/{id}/relationships`). Revisar una es terminarla o deshacer la fusión.
+
+**El perfil comercial de la pareja** vive en otros contextos (número en Parties; límite y bloqueo
+de crédito en Cobros; condiciones de venta en Pedidos; perfil de proveedor en Compras). Por cada
+relación que pasa, la nueva lanza `RelationshipTransferred`, que Parties publica como
+`parties.relationship-transferred.v1` (empresa, `cedingParty`, `receivingParty`, `typeCode`).
+Cobros y Pedidos (clientes) y Compras (proveedores; tiene inbox desde su migración 4) copian el
+perfil de (X, la que cede) a (X, la que recibe) si allí no hay ninguno; el de la que cede no se
+toca. Copiar a la superviviente no es operar con el duplicado (D-64, D-70). Al deshacer, la
+relación que vuelve publica el mismo evento con `returning: true`, y nadie copia nada (decisión de
+esta sesión: es lo más sencillo; el perfil de la superviviente es suyo, y la que vuelve conserva el
+que tenía, que nunca se tocó). El perfil se copia
+cuando llega el evento: si el de la que cede se crea después, ya no se copia (nadie lo repara).
+
+**No se mueven**, porque no son de la pareja empresa–tercero sino de otra cosa:
+
+- los **mandatos de adeudo directo** de Tesorería: los firma el deudor sobre una cuenta suya, y
+  la superviviente tiene que firmar el suyo;
+- los **proveedores de los productos** de Productos (`SupplierItem`): son datos del producto, que
+  se corrigen en el producto.
+
+**La ficha que cede sigue afiliada a X mientras dure la fusión**, aunque su relación haya
+terminado: así X la sigue encontrando (D-64) y quien la fusionó puede deshacerlo (D-96). Es una
+excepción a D-15, anotada en [DECISIONES-COMUNES.md](DECISIONES-COMUNES.md) §4.
+
+**Deshacer** (terminar la «Duplicate Of»):
+
+- quien deshace tiene que poder escribir en la empresa de cada relación que vuelve; si no, 403
+  y no se deshace nada (como D-96 pide poder cambiar las dos fichas);
+- se cierran las afiliaciones que la que cedió conservó por cada relación que tuvo sucesora en la
+  superviviente, termine la sucesora como termine, también las que tenían un fin futuro;
+- vuelven las sucesoras que siguen sin terminar: se termina la de la superviviente (y su
+  afiliación) y se establece para la que cedió una igual que la continúa (`transferredFrom` apunta
+  a la de la superviviente; lleva su número actual y su fin);
+- se quedan en la superviviente, y la respuesta las lista en `merge.kept`, aquellas en las que la
+  que cedió ya tiene otra sin terminar con esa empresa (una renovación) y las de empresas marcadas
+  como duplicado entretanto;
+- las que la superviviente terminó durante la fusión no vuelven.
+
+Para saber si X dio de alta la party (D-74), Parties sigue la cadena `transferredFrom` hacia atrás
+hasta la relación de origen. Lo lee del primer registro de auditoría de cada relación, así que
+sólo cuesta lecturas cuando la relación de la afiliación no nació con la party; lo que X dio de
+alta lo sigue cambiando X después de cualquier número de fusiones deshechas.
+
+Decisiones técnicas de esta sesión, para que Javier las vea:
+
+- **Sólo pasan las relaciones con empresas en las que escribe quien fusiona** (o todas, si es el
+  administrador global). Si no, un administrador de Y que puede escribir las dos fichas movería la
+  relación de X y haría la superviviente visible para X. Es la opción conservadora; **pendiente de
+  que Javier la confirme**.
+- **Los perfiles copiados no se borran al deshacer, y en la vuelta no se copia ninguno**: la
+  superviviente pudo cambiarlos, y el de la que cede nunca se tocó.
+- **El número de cliente pasa sin comprobar que esté libre**: es el mismo cliente para la empresa.
+
+**Pregunta para Javier:** si la superviviente ya tenía un perfil con X, no se toca. Así, si la
+ficha fusionada estaba bloqueada por crédito en X y la superviviente tenía un perfil antiguo sin
+bloquear, la superviviente queda sin el bloqueo. ¿Se copia el bloqueo, se avisa, o se deja así?
 
 ## 18. Quién modifica a un tercero
 

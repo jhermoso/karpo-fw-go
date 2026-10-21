@@ -45,6 +45,10 @@ func Publications(r *messaging.Recorder) *messaging.Recorder {
 	messaging.On(r, func(_ context.Context, e domain.RelationshipTerminated) ([]app.IntegrationEvent, error) {
 		return one(contracts.RelationshipTerminatedV1{RelationshipID: e.AggregateID, At: e.At})
 	})
+	messaging.On(r, func(_ context.Context, e domain.RelationshipTransferred) ([]app.IntegrationEvent, error) {
+		return one(contracts.RelationshipTransferredV1{RelationshipID: e.AggregateID, TransferredFrom: e.Previous, Type: e.Type, TypeCode: e.TypeCode,
+			Organization: e.Organization, CedingParty: e.Ceding, ReceivingParty: e.Receiving, Returning: e.Returning, At: e.At})
+	})
 	messaging.On(r, func(_ context.Context, e domain.ProspectTrialChanged) ([]app.IntegrationEvent, error) {
 		return one(contracts.ProspectTrialChangedV1{RelationshipID: e.AggregateID, Prospect: e.Prospect,
 			Organization: e.Organization, TrialUntil: e.TrialUntil, ChangedAt: e.OccurredAt})

@@ -92,6 +92,29 @@ func (RelationshipTerminatedV1) IntegrationEventType() string {
 	return "parties.relationship-terminated.v1"
 }
 
+// RelationshipTransferredV1 se publica cuando una relación de negocio (cliente o proveedor de una
+// empresa) pasa de una party a otra al fusionarlas, o vuelve al deshacer la fusión
+// (docs/DECISIONES-COMUNES.md, D-93). La empresa no cambia; al fusionar (Returning falso), los
+// contextos que guardan algo de la pareja (empresa, CedingParty) lo copian a (empresa,
+// ReceivingParty) si allí no hay nada. Al deshacer (Returning cierto) no se copia nada: lo que
+// tenga la superviviente es suyo, y la que vuelve conserva lo que tenía.
+type RelationshipTransferredV1 struct {
+	RelationshipID  string    `json:"relationshipId"`  // la nueva
+	TransferredFrom string    `json:"transferredFrom"` // la que terminó
+	Type            string    `json:"type"`
+	TypeCode        string    `json:"typeCode"` // customer | supplier
+	Organization    string    `json:"organization"`
+	CedingParty     string    `json:"cedingParty"`
+	ReceivingParty  string    `json:"receivingParty"`
+	Returning       bool      `json:"returning"`
+	At              time.Time `json:"at"`
+}
+
+// IntegrationEventType implementa application.IntegrationEvent.
+func (RelationshipTransferredV1) IntegrationEventType() string {
+	return "parties.relationship-transferred.v1"
+}
+
 // PartyRef es lo que necesitan los demás contextos para mostrar una party: identidad, nombre y si
 // está activa.
 type PartyRef struct {

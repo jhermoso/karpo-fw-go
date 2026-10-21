@@ -158,9 +158,20 @@ func (s service) establish(ctx context.Context, rt domain.RelationshipType, from
 			return nil, err
 		}
 	}
+	var moment time.Time // cuándo se mueven las relaciones de negocio de una fusión
 	if rt.ID == domain.RelDuplicateOf {
 		if err := canMarkDuplicate(ctx, s.scope(ctx), from, to); err != nil {
 			return nil, err
+		}
+		if moment, err = mergeMoment(since); err != nil {
+			return nil, err
+		}
+		// No se encadenan fusiones (D-97): la superviviente de otra no se fusiona en nadie.
+		if survives, err := s.Relationships.Exists(ctx, spec.And(domain.RelFieldType.Eq(domain.RelDuplicateOf), domain.RelFieldTo.Eq(from.ID()),
+			domain.NotEndedAt(since))); err != nil {
+			return nil, err
+		} else if survives {
+			return nil, fw.Violation("parties.merge_chain", "the party is the survivor of another merge: merge that one directly into the new survivor")
 		}
 	}
 	if dup, err := s.Relationships.Exists(ctx, domain.SameRelationship(rt, from.ID(), to.ID(), since)); err != nil {
@@ -190,8 +201,11 @@ func (s service) establish(ctx context.Context, rt domain.RelationshipType, from
 	if err := s.relationships.Create(ctx, r); err != nil {
 		return nil, err
 	}
-	if rt.ID == domain.RelDuplicateOf { // el duplicado se marca, y no se afilia a nadie
+	if rt.ID == domain.RelDuplicateOf { // el duplicado se marca, no se afilia a nadie y cede sus relaciones de negocio (D-93)
 		if _, err := s.parties.Update(ctx, from.ID(), func(_ context.Context, p *domain.Party) error { return p.MarkDuplicate() }); err != nil {
+			return nil, err
+		}
+		if err := s.transferBusiness(ctx, from.ID(), to.ID(), moment); err != nil {
 			return nil, err
 		}
 		return r, nil
@@ -348,28 +362,38 @@ func (s service) operableRelationship(ctx context.Context, id domain.Relationshi
 }
 
 // terminate termina una relación y las afiliaciones que produjo. El llamante necesita ver la
-// relación y tener permiso para relacionar sus parties.
-func (s service) terminate(ctx context.Context, id domain.RelationshipID, at time.Time) (*domain.Relationship, error) {
-	_, from, to, err := s.writableRelationship(ctx, id)
+// relación y tener permiso para relacionar sus parties. Terminar una «Duplicate Of» es deshacer la
+// fusión: sólo una vez, desde ahora, y devuelve lo que hizo con las relaciones de negocio (D-93).
+func (s service) terminate(ctx context.Context, id domain.RelationshipID, at time.Time) (*domain.Relationship, *MergeDTO, error) {
+	r, from, to, err := s.writableRelationship(ctx, id)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	r, err := s.relationships.Update(ctx, id, func(_ context.Context, r *domain.Relationship) error { return r.Terminate(at) })
-	if err != nil {
-		return nil, err
+	if r.Type() == domain.RelDuplicateOf {
+		if r.Until() != nil {
+			return nil, nil, fw.Violation("parties.merge_undone", "the merge has already been undone")
+		}
 	}
-	if r.Type() == domain.RelDuplicateOf { // deshacer la marca es terminar la relación
+	moment := at
+	if r.Type() == domain.RelDuplicateOf {
+		if moment, err = mergeMoment(at); err != nil {
+			return nil, nil, err
+		}
+	}
+	if r, err = s.relationships.Update(ctx, id, func(_ context.Context, r *domain.Relationship) error { return r.Terminate(at) }); err != nil {
+		return nil, nil, err
+	}
+	var merge *MergeDTO
+	if r.Type() == domain.RelDuplicateOf { // deshacer la marca es terminar la relación, y vuelven las relaciones que pasaron (D-93)
 		if _, err := s.parties.Update(ctx, r.From(), func(_ context.Context, p *domain.Party) error { p.ClearDuplicate(); return nil }); err != nil {
-			return nil, err
+			return nil, nil, err
+		}
+		if merge, err = s.returnBusiness(ctx, from.ID(), to.ID(), moment); err != nil {
+			return nil, nil, err
 		}
 	}
-	for _, p := range []*domain.Party{from, to} {
-		if !slices.ContainsFunc(p.Affiliations(), func(a domain.Affiliation) bool { return a.Relationship == id }) {
-			continue // nada que terminar: no se sube la versión de una party que no cambió
-		}
-		if _, err := s.parties.Update(ctx, p.ID(), func(_ context.Context, p *domain.Party) error { return p.EndAffiliation(id, at) }); err != nil {
-			return nil, err
-		}
+	if err := s.endAffiliations(ctx, id, at); err != nil {
+		return nil, nil, err
 	}
-	return r, nil
+	return r, merge, nil
 }

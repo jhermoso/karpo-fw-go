@@ -77,9 +77,9 @@ Puntuación de 1 a 5 por criterio; nota ponderada sobre 100. **Mantener** ≥ 70
 contexts/purchases/
 ├── domain/          # Invoice (+Line, Breakdown, PayTo, Expenses), SupplierProfile, Counter, puerto Taxes
 ├── contracts/       # lenguaje publicado v1
-├── application/     # casos de uso con permisos y ámbito
-├── infrastructure/  # esquema pur_* de 5 motores, mapeos, adaptador FiscalTaxes
-└── module.go        # composición y rutas /api/purchases/...
+├── application/     # casos de uso con permisos y ámbito, suscripción a Parties
+├── infrastructure/  # esquema pur_* de 5 motores (con inbox desde la migración 4), mapeos, adaptador FiscalTaxes
+└── module.go        # composición, Consumer y rutas /api/purchases/...
 ```
 
 - **El ciclo completo**, sin escrituras entre contextos. Compras publica
@@ -104,7 +104,13 @@ contexts/purchases/
   - `pur_invoices` (+ `pur_invoice_lines`, `pur_invoice_taxes`, `pur_invoice_accounts`);
   - `pur_suppliers`;
   - `pur_counters`;
-  - las bandejas de salida y la auditoría.
+  - las bandejas de salida, la auditoría y, desde la migración 4, `purchases_inbox`.
+- **Fusión de fichas** (D-93; [PARTIES.md](PARTIES.md) §17): Compras escucha
+  `parties.relationship-transferred.v1`. Cuando la relación de proveedor de una empresa pasa de
+  una ficha a otra, copia el perfil de proveedor (categoría, retención, días de pago, IBAN,
+  bloqueo) de (empresa, la que cede) a (empresa, la que recibe) si ésta no tiene uno. El de la que
+  cede no se toca. Al deshacer la
+  fusión (`returning: true`) no se copia nada.
 
 ## Decisiones (aprobadas por Javier el 2026-10-04)
 

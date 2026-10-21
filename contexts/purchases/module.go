@@ -26,6 +26,9 @@ type Module struct {
 	Service           *uapp.Service
 	IntegrationOutbox application.OutboxStore
 	Audit             application.AuditLog
+	// Consumer recibe los proveedores que Parties traslada al fusionar fichas: hay que suscribirlo
+	// al transporte.
+	Consumer *messaging.Consumer
 }
 
 // Compose construye el contexto sobre sw. Purchases necesita el motor de impuestos de Fiscal, un
@@ -33,13 +36,15 @@ type Module struct {
 func Compose(sw *hotswap.Switch, taxes domain.Taxes) *Module {
 	integration := hotswap.Outbox(sw, infrastructure.IntegrationOutboxFactory)
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
-	svc := uapp.NewService(uapp.Deps{
+	d := uapp.Deps{
 		Invoices: hotswap.Repository(sw, infrastructure.InvoiceRepositoryFactory), Suppliers: hotswap.Repository(sw, infrastructure.SupplierRepositoryFactory),
 		Counters: hotswap.Repository(sw, infrastructure.CounterRepositoryFactory), Taxes: taxes, UoW: sw, Audit: audit,
 		Recorder: outbox.Recorders(outbox.NewRecorder(hotswap.Outbox(sw, infrastructure.OutboxFactory)),
 			uapp.Publications(messaging.NewRecorder(contracts.Source, integration))),
-	})
-	return &Module{Service: svc, IntegrationOutbox: integration, Audit: audit}
+	}
+	consumer := messaging.NewConsumer(contracts.Source, hotswap.Inbox(sw, infrastructure.InboxFactory), sw)
+	uapp.Subscribe(consumer, d)
+	return &Module{Service: uapp.NewService(d), IntegrationOutbox: integration, Audit: audit, Consumer: consumer}
 }
 
 // Relay reenvía el Published Language a un transporte.

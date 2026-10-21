@@ -90,6 +90,11 @@ contexts/receivables/
     consultas;
   - `rec_collections` (+ `rec_allocations`);
   - las bandejas de salida, la auditoría y `receivables_inbox`.
+- **Fusión de fichas** (D-93; [PARTIES.md](PARTIES.md) §17): Cobros escucha
+  `parties.relationship-transferred.v1`. Cuando la relación de cliente de un vendedor pasa de una
+  ficha a otra, copia el perfil de crédito (condiciones, límite, bloqueo) de (vendedor, la que
+  cede) a (vendedor, la que recibe) si ésta no tiene uno. El de la que cede no se toca. Al deshacer la
+  fusión (`returning: true`) no se copia nada.
 
 ## Decisiones (aprobadas por Javier el 2026-09-28)
 

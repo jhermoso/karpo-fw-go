@@ -137,3 +137,96 @@ func TestPairs_CustomerAndSupplierRelationships(t *testing.T) {
 		t.Fatalf("suppliers: %+v", sup)
 	}
 }
+
+// Al fusionar fichas (D-93), la pareja de la ficha fusionada con su empresa pasa a la
+// superviviente: la vista por pareja la enseña con el número de cliente de la que cedió y, cuando
+// Cobros oye el traslado, con su límite de crédito.
+func TestPairs_MergeMovesThePairToTheSurvivor(t *testing.T) {
+	ctx := context.Background()
+	t.Setenv(security.EnvBootstrapUser, "root")
+	t.Setenv(security.EnvBootstrapPassword, bootPassword)
+	sw := hotswap.New(memory.NewStore("memory"))
+	t.Cleanup(func() { _ = sw.Close(ctx) })
+	h, err := host.Compose(sw, host.Options{JWTSecret: []byte("pairs-merge-test-secret")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(h.Handler())
+	t.Cleanup(srv.Close)
+	c := client{t: t, url: srv.URL}
+	var tok secapp.Tokens
+	c.must(c.do("POST", "/api/auth/login", "", map[string]any{"username": "root", "password": bootPassword}, &tok), 200, "login")
+	c.must(c.do("POST", "/api/auth/change-password", tok.AccessToken, map[string]any{"currentPassword": bootPassword, "newPassword": rootPassword}, &tok), 200, "change password")
+	root := tok.AccessToken
+
+	admin, _ := authz.NewContext(authz.Context{Subject: fw.NewUUID(), SubjectName: "admin", Kind: authz.Service, Permissions: []authz.Permission{authz.Wildcard}})
+	admin.GlobalAdmin = true
+	actx := authz.WithContext(ctx, admin)
+	ok := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	acme, err := h.Parties.Service.RegisterOrganization.Handle(actx, parapp.RegisterOrganization{LegalName: "Acme", Roles: []string{pardomain.RoleInternalOrganization.String()}})
+	ok(err)
+	dup, err := h.Parties.Service.RegisterOrganization.Handle(actx, parapp.RegisterOrganization{LegalName: "Talleres Perez",
+		Affiliation: &parapp.NewAffiliation{Organization: acme.ID, RelationshipType: pardomain.RelCustomer.String()}})
+	ok(err)
+	rels, err := h.Parties.Service.Relationships.Handle(actx, parapp.PartyRelationships{PartyID: pardomain.PartyID{UUID: fw.MustParseUUID(dup.ID)}})
+	ok(err)
+	id, _ := pardomain.ParseRelationshipID(rels[0].ID)
+	_, err = h.Parties.Service.SetCustomerNumber.Handle(actx, parapp.SetCustomerNumber{ID: id, CustomerNumber: "C-002"})
+	ok(err)
+	limit := "5000"
+	_, err = h.Receivables.Service.SetCredit.Handle(actx, reapp.SetCredit{Seller: acme.ID, Customer: dup.ID, Limit: &limit})
+	ok(err)
+	_, err = h.Parties.Service.EstablishRelationship.Handle(actx, parapp.EstablishRelationship{Type: pardomain.RelSupplier.String(), From: acme.ID, To: dup.ID})
+	ok(err)
+	_, err = h.Purchases.Service.SetSupplier.Handle(actx, puapp.SetSupplier{Company: acme.ID, Supplier: dup.ID, Blocked: true})
+	ok(err)
+	survivor, err := h.Parties.Service.RegisterOrganization.Handle(actx, parapp.RegisterOrganization{LegalName: "Talleres Pérez"})
+	ok(err)
+
+	var mark parapp.RelationshipDTO
+	c.must(c.do("POST", "/api/party-relationships", root, map[string]any{"type": pardomain.RelDuplicateOf.String(),
+		"fromParty": dup.ID, "toParty": survivor.ID}, &mark), 201, "merge")
+	if mark.Merge == nil || len(mark.Merge.Transferred) != 2 || len(mark.Merge.Kept) != 0 {
+		t.Fatalf("what the merge did: %+v", mark.Merge)
+	}
+	if _, err := h.Deliver(ctx); err != nil {
+		t.Fatal(err)
+	}
+	type page struct {
+		Items []host.PairRow `json:"items"`
+		Total int            `json:"total"`
+	}
+	var p page
+	c.must(c.do("POST", "/api/customer-relationships/search", root, map[string]any{
+		"filter": map[string]any{"internalOrganizationIds": []string{acme.ID}, "active": true}}, &p), 200, "acme's customers")
+	var row *host.PairRow
+	for i := range p.Items {
+		if p.Items[i].PartyID == survivor.ID {
+			row = &p.Items[i]
+		}
+	}
+	if row == nil || row.CustomerNumber != "C-002" || row.CreditLimit == nil || *row.CreditLimit != "5000.00" {
+		t.Fatalf("the survivor with acme after the merge: %+v", p)
+	}
+	// Y Compras, que también lo oye por el anfitrión: el proveedor bloqueado sigue bloqueado.
+	var sp page
+	c.must(c.do("POST", "/api/supplier-relationships/search", root, map[string]any{
+		"filter": map[string]any{"internalOrganizationIds": []string{acme.ID}}}, &sp), 200, "acme's suppliers")
+	row = nil
+	for i := range sp.Items {
+		if sp.Items[i].PartyID == survivor.ID {
+			row = &sp.Items[i]
+		}
+	}
+	if row == nil || row.BlockInvoices == nil || !*row.BlockInvoices {
+		t.Fatalf("the survivor as acme's supplier after the merge: %+v", sp)
+	}
+}

@@ -121,6 +121,24 @@ type RelationshipTerminated struct {
 // EventType implementa domain.Event.
 func (RelationshipTerminated) EventType() string { return "parties.relationship_terminated" }
 
+// RelationshipTransferred se lanza cuando una relación de negocio pasa de una party a otra por una
+// fusión, o vuelve al deshacerla (docs/DECISIONES-COMUNES.md, D-93): la relación del evento es la
+// nueva, que continúa a Previous con la misma organización.
+type RelationshipTransferred struct {
+	fw.EventMeta
+	Previous     string    `json:"previous"`
+	Type         string    `json:"type"`
+	TypeCode     string    `json:"typeCode,omitempty"`
+	Organization string    `json:"organization"` // el lado que no cambia: la empresa
+	Ceding       string    `json:"ceding"`       // la party que tenía la relación
+	Receiving    string    `json:"receiving"`    // la party que la tiene ahora
+	Returning    bool      `json:"returning"`    // vuelve al deshacer la fusión
+	At           time.Time `json:"at"`
+}
+
+// EventType implementa domain.Event.
+func (RelationshipTransferred) EventType() string { return "parties.relationship_transferred" }
+
 // ProspectTrialChanged se lanza cuando la prueba de una relación de prospect se concede, se
 // amplía, se acorta o se retira (TrialUntil nil).
 type ProspectTrialChanged struct {

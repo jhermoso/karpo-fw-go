@@ -226,7 +226,7 @@ func Compose(sw *hotswap.Switch, o Options) (*Host, error) {
 	h.Deliveries = mailbox.New(sw)
 	h.Deliveries.OnGivenUp(o.OnDeliveryGivenUp)
 	for _, c := range []mailbox.Listener{h.Accounting.Parking, h.Billing.Consumer, h.Documents.Consumer, h.Fiscal.Consumer, h.Inventory.Consumer, h.Orders.Consumer, h.Parties.Consumer,
-		h.Payments.Consumer, h.Receivables.Consumer, h.Shipments.Consumer} {
+		h.Payments.Consumer, h.Purchases.Consumer, h.Receivables.Consumer, h.Shipments.Consumer} {
 		h.Broker.Subscribe(c.Name(), h.Deliveries.For(c))
 	}
 	for _, r := range []interface {
