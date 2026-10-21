@@ -58,6 +58,16 @@ func TestInvoice(t *testing.T) {
 	if _, err := inv.AddLine(domain.LineInput{Description: "X", Quantity: dec("1"), UnitPrice: dec("1")}); err == nil {
 		t.Fatal("a tax code or a treatment is required")
 	}
+	// Las escalas de la columna: cantidad y precio con 4 decimales, descuento con 4.
+	for _, in := range []domain.LineInput{
+		{Description: "X", Quantity: dec("1.00001"), UnitPrice: dec("1"), TaxCode: "G21"},
+		{Description: "X", Quantity: dec("1"), UnitPrice: dec("0.00001"), TaxCode: "G21"},
+		{Description: "X", Quantity: dec("1"), UnitPrice: dec("1"), Discount: dec("12.12345"), TaxCode: "G21"},
+	} {
+		if _, err := inv.AddLine(in); !errors.Is(err, fw.ErrValidation) {
+			t.Fatalf("more decimals than the column: %+v: %v", in, err)
+		}
+	}
 	// 3 × 33.335 = 100.005, menos el 10 % = 90.0045 → 90.00
 	if _, err := inv.AddLine(domain.LineInput{Description: "Consultoría", Quantity: dec("3"), UnitPrice: dec("33.335"), Discount: dec("10"), TaxCode: "g21"}); err != nil {
 		t.Fatal(err)

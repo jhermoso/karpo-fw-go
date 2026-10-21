@@ -3,7 +3,8 @@
 //
 // Notas de semántica: el LIKE de SQLite no distingue mayúsculas de minúsculas en ASCII salvo que
 // se active PRAGMA case_sensitive_like; los booleanos se guardan como 0/1; los UUID como TEXT; los
-// instantes como TEXT UTC de ancho fijo (orden lexicográfico == orden cronológico).
+// instantes como TEXT UTC de ancho fijo (orden lexicográfico == orden cronológico); los decimales
+// como TEXT con punto, comparados y ordenados por una clave de orden numérico (decimal.go).
 package sqlite
 
 import (

@@ -86,6 +86,7 @@ func Migrations() sqlrepo.MigrationSet {
 		{Version: 2, Name: "outboxes and audit log", Up: technical},
 		{Version: 3, Name: "inbox of the Orders events", Up: map[string][]string{"sqlite": sqlite.InboxDDL(TableInbox), "postgres": postgres.InboxDDL(TableInbox),
 			"sqlserver": sqlserver.InboxDDL(TableInbox), "oracle": oracle.InboxDDL(TableInbox), "mysql": mysql.InboxDDL(TableInbox)}},
+		{Version: 4, Name: "decimal columns", Run: decimalColumnsV4.Run},
 	}}
 }
 
@@ -140,12 +141,13 @@ func WarehouseMapping() sqlrepo.Mapping[domain.WarehouseID, *domain.Warehouse] {
 // LevelMapping mapea Level a inv_levels.
 func LevelMapping() sqlrepo.Mapping[domain.LevelID, *domain.Level] {
 	return sqlrepo.Mapping[domain.LevelID, *domain.Level]{
-		Table:   "inv_levels",
-		Columns: []string{"company", "warehouse_id", "product", "on_hand", "reserved", "average_cost", "reorder_point", "moves", "is_empty"},
+		Table:    "inv_levels",
+		Decimals: decimalColumns.Of("inv_levels"),
+		Columns:  []string{"company", "warehouse_id", "product", "on_hand", "reserved", "average_cost", "reorder_point", "moves", "is_empty"},
 		Dehydrate: func(l *domain.Level) (sqlrepo.Values, error) {
 			s := l.State()
-			return sqlrepo.Values{"company": s.Company, "warehouse_id": s.Warehouse, "product": s.Product, "on_hand": s.OnHand.String(),
-				"reserved": s.Reserved.String(), "average_cost": s.AverageCost.StringFixed(4), "reorder_point": s.ReorderPoint.String(), "moves": s.Moves,
+			return sqlrepo.Values{"company": s.Company, "warehouse_id": s.Warehouse, "product": s.Product, "on_hand": s.OnHand,
+				"reserved": s.Reserved, "average_cost": s.AverageCost.Round(4), "reorder_point": s.ReorderPoint, "moves": s.Moves,
 				"is_empty": s.OnHand.IsZero()}, nil
 		},
 		Hydrate: func(r *sqlrepo.Row, _ sqlrepo.ChildRows) (*domain.Level, error) {
@@ -163,14 +165,15 @@ func LevelMapping() sqlrepo.Mapping[domain.LevelID, *domain.Level] {
 // MovementMapping mapea Movement a inv_movements.
 func MovementMapping() sqlrepo.Mapping[domain.MovementID, *domain.Movement] {
 	return sqlrepo.Mapping[domain.MovementID, *domain.Movement]{
-		Table: "inv_movements",
+		Table:    "inv_movements",
+		Decimals: decimalColumns.Of("inv_movements"),
 		Columns: sqlrepo.WithAuditColumns("company", "warehouse_id", "product", "seq", "kind", "moved_on", "quantity", "unit_cost", "move_value", "balance",
 			"lot", "note", "source_type", "source_id"),
 		Dehydrate: func(m *domain.Movement) (sqlrepo.Values, error) {
 			s := m.State()
 			return sqlrepo.AuditStampValues(sqlrepo.Values{"company": s.Company, "warehouse_id": s.Warehouse, "product": s.Product, "seq": s.Seq,
-				"kind": int64(s.Kind), "moved_on": s.Date, "quantity": s.Quantity.String(), "unit_cost": s.UnitCost.StringFixed(4),
-				"move_value": s.Value.StringFixed(2), "balance": s.Balance.String(), "lot": opt(s.Lot), "note": opt(s.Note), "source_type": opt(s.Source.Type),
+				"kind": int64(s.Kind), "moved_on": s.Date, "quantity": s.Quantity, "unit_cost": s.UnitCost.Round(4),
+				"move_value": s.Value.Round(2), "balance": s.Balance, "lot": opt(s.Lot), "note": opt(s.Note), "source_type": opt(s.Source.Type),
 				"source_id": opt(s.Source.ID)}, m.AuditStamp()), nil
 		},
 		Hydrate: func(r *sqlrepo.Row, _ sqlrepo.ChildRows) (*domain.Movement, error) {
@@ -190,12 +193,13 @@ func MovementMapping() sqlrepo.Mapping[domain.MovementID, *domain.Movement] {
 // ReservationMapping mapea Reservation a inv_reservations.
 func ReservationMapping() sqlrepo.Mapping[domain.ReservationID, *domain.Reservation] {
 	return sqlrepo.Mapping[domain.ReservationID, *domain.Reservation]{
-		Table:   "inv_reservations",
-		Columns: sqlrepo.WithAuditColumns("company", "warehouse_id", "product", "source_type", "source_id", "quantity", "open_quantity", "closed"),
+		Table:    "inv_reservations",
+		Decimals: decimalColumns.Of("inv_reservations"),
+		Columns:  sqlrepo.WithAuditColumns("company", "warehouse_id", "product", "source_type", "source_id", "quantity", "open_quantity", "closed"),
 		Dehydrate: func(x *domain.Reservation) (sqlrepo.Values, error) {
 			s := x.State()
 			return sqlrepo.AuditStampValues(sqlrepo.Values{"company": s.Company, "warehouse_id": s.Warehouse, "product": s.Product,
-				"source_type": s.Source.Type, "source_id": s.Source.ID, "quantity": s.Quantity.String(), "open_quantity": s.Open.String(),
+				"source_type": s.Source.Type, "source_id": s.Source.ID, "quantity": s.Quantity, "open_quantity": s.Open,
 				"closed": s.Open.IsZero()}, x.AuditStamp()), nil
 		},
 		Hydrate: func(r *sqlrepo.Row, _ sqlrepo.ChildRows) (*domain.Reservation, error) {

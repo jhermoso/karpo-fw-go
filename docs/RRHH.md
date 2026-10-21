@@ -97,7 +97,8 @@ contexts/hr/
   - agregados: `hr_positions` (+ `hr_position_holders` y `hr_position_reporting`),
     `hr_work_centers` y `hr_employments` (+ `hr_contracts`);
   - las dos bandejas de salida y la auditoría.
-  - Las horas y los decimales se guardan como texto exacto.
+  - Las horas semanales son columnas `{dec:5,2}` desde la migración 5 (D-94; tabla en
+    [ESQUEMA-MIGRACIONES.md](ESQUEMA-MIGRACIONES.md)).
   - Los hijos se ordenan en Go, por el orden GUID de SQL Server.
 
 ## Decisiones (aprobadas por Javier el 2026-09-27)

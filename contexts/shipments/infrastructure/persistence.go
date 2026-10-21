@@ -76,6 +76,7 @@ func Migrations() sqlrepo.MigrationSet {
 	return sqlrepo.MigrationSet{Context: Context, Migrations: []sqlrepo.Migration{
 		{Version: 1, Name: "carriers and shipments", Up: sqlrepo.RenderDDLAll(schemaDDL...)},
 		{Version: 2, Name: "outboxes, audit log and inbox", Up: technical},
+		{Version: 3, Name: "decimal columns", Run: decimalColumnsV3.Run},
 	}}
 }
 
@@ -127,7 +128,8 @@ func byNo(rows []*sqlrepo.Row) []*sqlrepo.Row {
 // ShipmentMapping mapea Shipment a shp_shipments, sus líneas y su historial.
 func ShipmentMapping() sqlrepo.Mapping[domain.ShipmentID, *domain.Shipment] {
 	return sqlrepo.Mapping[domain.ShipmentID, *domain.Shipment]{
-		Table: "shp_shipments",
+		Table:    "shp_shipments",
+		Decimals: decimalColumns.Of("shp_shipments"),
 		Columns: sqlrepo.WithAuditColumns("company", "customer", "source_type", "source_id", "source_ref", "method", "carrier", "tracking", "recipient",
 			"destination", "packages", "weight_kg", "cost", "instructions", "estimated_ship", "estimated_arrival", "status", "planned_on", "dispatched",
 			"closed_on", "received_by", "reason"),
@@ -136,7 +138,7 @@ func ShipmentMapping() sqlrepo.Mapping[domain.ShipmentID, *domain.Shipment] {
 			return sqlrepo.AuditStampValues(sqlrepo.Values{"company": st.Company, "customer": st.Customer, "source_type": opt(st.Source.Type),
 				"source_id": opt(st.Source.ID), "source_ref": opt(st.Source.Ref), "method": opt(string(st.Method)), "carrier": optUUID(st.Carrier.UUID),
 				"tracking": opt(st.Tracking), "recipient": opt(st.Recipient), "destination": opt(st.Destination), "packages": int64(st.Packages),
-				"weight_kg": st.WeightKg.StringFixed(3), "cost": st.Cost.StringFixed(2), "instructions": opt(st.Instructions),
+				"weight_kg": st.WeightKg.Round(3), "cost": st.Cost.Round(2), "instructions": opt(st.Instructions),
 				"estimated_ship": optDate(st.EstimatedShip), "estimated_arrival": optDate(st.EstimatedArrival), "status": string(st.Status),
 				"planned_on": st.History[0].On, "dispatched": optDate(st.Dispatched), "closed_on": optDate(st.Closed), "received_by": opt(st.ReceivedBy),
 				"reason": opt(st.Reason)}, s.AuditStamp()), nil
@@ -170,11 +172,12 @@ func ShipmentMapping() sqlrepo.Mapping[domain.ShipmentID, *domain.Shipment] {
 		},
 		Children: []sqlrepo.Child[*domain.Shipment]{{
 			Name: "lines", Table: "shp_shipment_lines", ForeignKey: "shipment_id", OrderBy: []string{"line_no"},
-			Columns: []string{"line_no", "sku", "description", "quantity", "uom"},
+			Decimals: decimalColumns.Of("shp_shipment_lines"),
+			Columns:  []string{"line_no", "sku", "description", "quantity", "uom"},
 			Dehydrate: func(s *domain.Shipment) ([]sqlrepo.Values, error) {
 				out := []sqlrepo.Values{}
 				for _, l := range s.State().Lines {
-					out = append(out, sqlrepo.Values{"line_no": int64(l.No), "sku": opt(l.SKU), "description": l.Description, "quantity": l.Quantity.String(),
+					out = append(out, sqlrepo.Values{"line_no": int64(l.No), "sku": opt(l.SKU), "description": l.Description, "quantity": l.Quantity,
 						"uom": opt(l.UoM)})
 				}
 				return out, nil

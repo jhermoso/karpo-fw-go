@@ -85,6 +85,7 @@ func Migrations() sqlrepo.MigrationSet {
 	return sqlrepo.MigrationSet{Context: Context, Migrations: []sqlrepo.Migration{
 		{Version: 1, Name: "categories, products and price lists", Up: sqlrepo.RenderDDLAll(schemaDDL...)},
 		{Version: 2, Name: "outboxes and audit log", Up: technical},
+		{Version: 3, Name: "decimal columns", Run: decimalColumnsV3.Run},
 	}}
 }
 
@@ -156,14 +157,15 @@ func CategoryMapping() sqlrepo.Mapping[domain.CategoryID, *domain.Category] {
 // ProductMapping mapea Product a prd_products, sus códigos de barras, componentes y proveedores.
 func ProductMapping() sqlrepo.Mapping[domain.ProductID, *domain.Product] {
 	return sqlrepo.Mapping[domain.ProductID, *domain.Product]{
-		Table: "prd_products",
+		Table:    "prd_products",
+		Decimals: decimalColumns.Of("prd_products"),
 		Columns: sqlrepo.WithAuditColumns("company", "sku", "name", "description", "kind", "uom", "category_id", "tax_code", "expense_category",
 			"base_price", "standard_cost", "for_sale", "for_purchase", "stocked", "tracking", "blocked_sales", "blocked_purchase", "discontinued"),
 		Dehydrate: func(p *domain.Product) (sqlrepo.Values, error) {
 			s := p.State()
 			return sqlrepo.AuditStampValues(sqlrepo.Values{"company": s.Company, "sku": s.SKU, "name": s.Name, "description": opt(s.Description),
 				"kind": int64(s.Kind), "uom": s.UoM, "category_id": optUUID(s.Category.UUID), "tax_code": opt(s.TaxCode),
-				"expense_category": opt(s.ExpenseCategory), "base_price": s.BasePrice.StringFixed(4), "standard_cost": s.StandardCost.StringFixed(4),
+				"expense_category": opt(s.ExpenseCategory), "base_price": s.BasePrice.Round(4), "standard_cost": s.StandardCost.Round(4),
 				"for_sale": s.ForSale, "for_purchase": s.ForPurchase, "stocked": s.Stocked, "tracking": int64(s.Tracking), "blocked_sales": s.BlockedSales,
 				"blocked_purchase": s.BlockedPurchase, "discontinued": optDate(s.Discontinued)}, p.AuditStamp()), nil
 		},
@@ -207,11 +209,12 @@ func ProductMapping() sqlrepo.Mapping[domain.ProductID, *domain.Product] {
 			},
 		}, {
 			Name: "components", Table: "prd_components", ForeignKey: "product_id", OrderBy: []string{"line_no"},
-			Columns: []string{"line_no", "component_id", "quantity"},
+			Decimals: decimalColumns.Of("prd_components"),
+			Columns:  []string{"line_no", "component_id", "quantity"},
 			Dehydrate: func(p *domain.Product) ([]sqlrepo.Values, error) {
 				out := []sqlrepo.Values{}
 				for i, c := range p.State().Components {
-					out = append(out, sqlrepo.Values{"line_no": int64(i + 1), "component_id": c.Product, "quantity": c.Quantity.String()})
+					out = append(out, sqlrepo.Values{"line_no": int64(i + 1), "component_id": c.Product, "quantity": c.Quantity})
 				}
 				return out, nil
 			},
@@ -261,12 +264,13 @@ func PriceListMapping() sqlrepo.Mapping[domain.PriceListID, *domain.PriceList] {
 		},
 		Children: []sqlrepo.Child[*domain.PriceList]{{
 			Name: "lines", Table: "prd_price_lines", ForeignKey: "price_list_id", OrderBy: []string{"line_no"},
-			Columns: []string{"line_no", "product_id", "min_quantity", "unit_price", "discount", "valid_from", "valid_to"},
+			Decimals: decimalColumns.Of("prd_price_lines"),
+			Columns:  []string{"line_no", "product_id", "min_quantity", "unit_price", "discount", "valid_from", "valid_to"},
 			Dehydrate: func(p *domain.PriceList) ([]sqlrepo.Values, error) {
 				out := []sqlrepo.Values{}
 				for i, l := range p.State().Lines {
-					out = append(out, sqlrepo.Values{"line_no": int64(i + 1), "product_id": l.Product, "min_quantity": l.MinQuantity.String(),
-						"unit_price": l.UnitPrice.StringFixed(4), "discount": l.Discount.StringFixed(2), "valid_from": l.From, "valid_to": optDate(l.To)})
+					out = append(out, sqlrepo.Values{"line_no": int64(i + 1), "product_id": l.Product, "min_quantity": l.MinQuantity,
+						"unit_price": l.UnitPrice.Round(4), "discount": l.Discount.Round(2), "valid_from": l.From, "valid_to": optDate(l.To)})
 				}
 				return out, nil
 			},

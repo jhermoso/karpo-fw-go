@@ -67,6 +67,7 @@ func Migrations() sqlrepo.MigrationSet {
 	return sqlrepo.MigrationSet{Context: Context, Migrations: []sqlrepo.Migration{
 		{Version: 1, Name: "document register", Up: sqlrepo.RenderDDLAll(schemaDDL...)},
 		{Version: 2, Name: "audit log and inbox", Up: technical},
+		{Version: 3, Name: "decimal columns", Run: decimalColumnsV3.Run},
 	}}
 }
 
@@ -103,7 +104,8 @@ func optUUID(u fw.UUID) any {
 // DocumentMapping mapea Document a doc_documents.
 func DocumentMapping() sqlrepo.Mapping[domain.DocumentID, *domain.Document] {
 	return sqlrepo.Mapping[domain.DocumentID, *domain.Document]{
-		Table: "doc_documents",
+		Table:    "doc_documents",
+		Decimals: decimalColumns.Of("doc_documents"),
 		Columns: sqlrepo.WithAuditColumns("company", "doc_type", "fact_id", "doc_number", "reference", "doc_date", "party", "total", "origin_type",
 			"origin_id", "relation", "cancelled", "cancel_reason"),
 		Dehydrate: func(d *domain.Document) (sqlrepo.Values, error) {
@@ -112,7 +114,7 @@ func DocumentMapping() sqlrepo.Mapping[domain.DocumentID, *domain.Document] {
 				"reference": opt(s.Reference), "doc_date": s.Date, "party": optUUID(s.Party.UUID), "total": nil, "origin_type": opt(string(s.Origin.Type)),
 				"origin_id": opt(s.Origin.ID), "relation": opt(s.Relation), "cancelled": s.Cancelled, "cancel_reason": opt(s.CancelReason)}
 			if s.HasTotal {
-				v["total"] = s.Total.StringFixed(2)
+				v["total"] = s.Total.Round(2)
 			}
 			return sqlrepo.AuditStampValues(v, d.AuditStamp()), nil
 		},
@@ -122,7 +124,7 @@ func DocumentMapping() sqlrepo.Mapping[domain.DocumentID, *domain.Document] {
 				Reference: r.String("reference"), Date: r.Date("doc_date"), Party: domain.PartyID{UUID: r.UUID("party")},
 				Origin: domain.Ref{Type: domain.Type(r.String("origin_type")), ID: r.String("origin_id")}, Relation: r.String("relation"),
 				Cancelled: r.Bool("cancelled"), CancelReason: r.String("cancel_reason"), Audit: r.AuditStamp()}
-			if t := r.String("total"); t != "" {
+			if !r.IsNull("total") {
 				s.Total, s.HasTotal = r.Decimal("total"), true
 			}
 			if err := r.Err(); err != nil {

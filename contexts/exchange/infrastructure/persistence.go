@@ -83,6 +83,7 @@ func Migrations() sqlrepo.MigrationSet {
 	return sqlrepo.MigrationSet{Context: Context, Migrations: []sqlrepo.Migration{
 		{Version: 1, Name: "currencies, margins, settings and reservations", Up: sqlrepo.RenderDDLAll(schemaDDL...)},
 		{Version: 2, Name: "outboxes and audit log", Up: technical},
+		{Version: 3, Name: "decimal columns", Run: decimalColumnsV3.Run},
 	}}
 }
 
@@ -134,12 +135,13 @@ func byNo(rows []*sqlrepo.Row) []*sqlrepo.Row {
 // CurrencyMapping mapea Currency a exg_currencies.
 func CurrencyMapping() sqlrepo.Mapping[domain.CurrencyID, *domain.Currency] {
 	return sqlrepo.Mapping[domain.CurrencyID, *domain.Currency]{
-		Table:   "exg_currencies",
-		Columns: sqlrepo.WithAuditColumns("company", "code", "name", "rate", "rate_on", "facial", "crypto", "blocked"),
+		Table:    "exg_currencies",
+		Decimals: decimalColumns.Of("exg_currencies"),
+		Columns:  sqlrepo.WithAuditColumns("company", "code", "name", "rate", "rate_on", "facial", "crypto", "blocked"),
 		Dehydrate: func(c *domain.Currency) (sqlrepo.Values, error) {
 			s := c.State()
-			return sqlrepo.AuditStampValues(sqlrepo.Values{"company": s.Company, "code": s.Code, "name": s.Name, "rate": s.Rate.StringFixed(6),
-				"rate_on": optDate(s.RateOn), "facial": s.Facial.StringFixed(2), "crypto": s.Crypto, "blocked": s.Blocked}, c.AuditStamp()), nil
+			return sqlrepo.AuditStampValues(sqlrepo.Values{"company": s.Company, "code": s.Code, "name": s.Name, "rate": s.Rate.Round(6),
+				"rate_on": optDate(s.RateOn), "facial": s.Facial.Round(2), "crypto": s.Crypto, "blocked": s.Blocked}, c.AuditStamp()), nil
 		},
 		Hydrate: func(r *sqlrepo.Row, _ sqlrepo.ChildRows) (*domain.Currency, error) {
 			s := domain.CurrencyState{Company: domain.OrganizationID{UUID: r.UUID("company")}, Code: r.String("code"), Name: r.String("name"),
@@ -156,12 +158,13 @@ func CurrencyMapping() sqlrepo.Mapping[domain.CurrencyID, *domain.Currency] {
 // MarginMapping mapea Margin a exg_margins.
 func MarginMapping() sqlrepo.Mapping[domain.MarginID, *domain.Margin] {
 	return sqlrepo.Mapping[domain.MarginID, *domain.Margin]{
-		Table:   "exg_margins",
-		Columns: sqlrepo.WithAuditColumns("company", "currency", "segment_code", "kind", "level1", "level2", "level3"),
+		Table:    "exg_margins",
+		Decimals: decimalColumns.Of("exg_margins"),
+		Columns:  sqlrepo.WithAuditColumns("company", "currency", "segment_code", "kind", "level1", "level2", "level3"),
 		Dehydrate: func(m *domain.Margin) (sqlrepo.Values, error) {
 			s := m.State()
 			return sqlrepo.AuditStampValues(sqlrepo.Values{"company": s.Company, "currency": s.Currency, "segment_code": s.Segment, "kind": string(s.Kind),
-				"level1": s.Values[0].String(), "level2": s.Values[1].String(), "level3": s.Values[2].String()}, m.AuditStamp()), nil
+				"level1": s.Values[0], "level2": s.Values[1], "level3": s.Values[2]}, m.AuditStamp()), nil
 		},
 		Hydrate: func(r *sqlrepo.Row, _ sqlrepo.ChildRows) (*domain.Margin, error) {
 			s := domain.MarginState{Company: domain.OrganizationID{UUID: r.UUID("company")}, Currency: r.String("currency"), Segment: r.String("segment_code"),
@@ -200,7 +203,8 @@ func SettingsMapping() sqlrepo.Mapping[domain.SettingsID, *domain.Settings] {
 // ReservationMapping mapea Reservation a exg_reservations, sus líneas y su historial.
 func ReservationMapping() sqlrepo.Mapping[domain.ReservationID, *domain.Reservation] {
 	return sqlrepo.Mapping[domain.ReservationID, *domain.Reservation]{
-		Table: "exg_reservations",
+		Table:    "exg_reservations",
+		Decimals: decimalColumns.Of("exg_reservations"),
 		Columns: sqlrepo.WithAuditColumns("company", "customer", "reference", "channel", "segment_code", "pickup_at", "pickup_on", "time_slot", "expires_at",
 			"facility", "promotion_code", "collaborator", "status", "reason", "created_on", "total"),
 		Dehydrate: func(x *domain.Reservation) (sqlrepo.Values, error) {
@@ -208,7 +212,7 @@ func ReservationMapping() sqlrepo.Mapping[domain.ReservationID, *domain.Reservat
 			return sqlrepo.AuditStampValues(sqlrepo.Values{"company": s.Company, "customer": s.Customer, "reference": s.Reference, "channel": s.Channel,
 				"segment_code": s.Segment, "pickup_at": s.Pickup, "pickup_on": vocab.DateOf(s.Pickup), "time_slot": opt(s.TimeSlot), "expires_at": s.ExpiresAt,
 				"facility": optUUID(s.Facility), "promotion_code": opt(s.PromotionCode), "collaborator": optUUID(s.Collaborator.UUID),
-				"status": string(s.Status), "reason": opt(s.Reason), "created_on": vocab.DateOf(s.History[0].At), "total": x.Total().StringFixed(2)},
+				"status": string(s.Status), "reason": opt(s.Reason), "created_on": vocab.DateOf(s.History[0].At), "total": x.Total().Round(2)},
 				x.AuditStamp()), nil
 		},
 		Hydrate: func(r *sqlrepo.Row, children sqlrepo.ChildRows) (*domain.Reservation, error) {
@@ -239,14 +243,15 @@ func ReservationMapping() sqlrepo.Mapping[domain.ReservationID, *domain.Reservat
 		},
 		Children: []sqlrepo.Child[*domain.Reservation]{{
 			Name: "lines", Table: "exg_reservation_lines", ForeignKey: "reservation_id", OrderBy: []string{"line_no"},
+			Decimals: decimalColumns.Of("exg_reservation_lines"),
 			Columns: []string{"line_no", "currency", "requested", "delivered", "base_rate", "offered_rate", "margin_kind", "margin_value", "eur", "collector",
 				"collector_note"},
 			Dehydrate: func(x *domain.Reservation) ([]sqlrepo.Values, error) {
 				out := []sqlrepo.Values{}
 				for _, l := range x.State().Lines {
-					out = append(out, sqlrepo.Values{"line_no": int64(l.No), "currency": l.Currency, "requested": l.Requested.StringFixed(2),
-						"delivered": l.Delivered.StringFixed(2), "base_rate": l.BaseRate.StringFixed(6), "offered_rate": l.OfferedRate.StringFixed(6),
-						"margin_kind": string(l.MarginKind), "margin_value": l.MarginValue.String(), "eur": l.Eur.StringFixed(2), "collector": l.Collector,
+					out = append(out, sqlrepo.Values{"line_no": int64(l.No), "currency": l.Currency, "requested": l.Requested.Round(2),
+						"delivered": l.Delivered.Round(2), "base_rate": l.BaseRate.Round(6), "offered_rate": l.OfferedRate.Round(6),
+						"margin_kind": string(l.MarginKind), "margin_value": l.MarginValue, "eur": l.Eur.Round(2), "collector": l.Collector,
 						"collector_note": opt(l.CollectorNote)})
 				}
 				return out, nil

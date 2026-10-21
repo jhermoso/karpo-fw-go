@@ -20,6 +20,9 @@ const MaxLines = 500
 
 var hundred = vocab.DecimalFromInt(100)
 
+// places dice si d tiene como mucho n decimales.
+func places(d vocab.Decimal, n int32) bool { return d.Equal(d.Round(n)) }
+
 // Kind de factura: ordinaria o rectificativa. El C# modelaba la exención como un tipo de factura
 // ("Exenta") y los abonos como una cabecera aparte sin líneas.
 type Kind int
@@ -249,10 +252,13 @@ func (i *Invoice) AddLine(in LineInput) (LineID, error) {
 	var v fw.Validation
 	desc := strings.TrimSpace(in.Description)
 	v.Require(desc != "" && utf8.RuneCountInString(desc) <= 500, "description", "length", "a description of 1 to 500 characters")
-	v.Require(!in.Quantity.IsZero() && (i.s.Kind == Corrective || in.Quantity.IsPositive()), "quantity", "range",
-		"a positive quantity (negative only in corrective invoices)")
-	v.Require(!in.UnitPrice.IsNegative(), "unitPrice", "range", "a non-negative unit price")
-	v.Require(!in.Discount.IsNegative() && in.Discount.LessThanOrEqual(hundred), "discount", "range", "a discount from 0 to 100")
+	// Las escalas son las de las columnas (bil_invoice_lines: cantidad y precio (18,4), descuento
+	// (7,4)): un valor con más decimales es un error del campo, no de la base de datos.
+	v.Require(!in.Quantity.IsZero() && (i.s.Kind == Corrective || in.Quantity.IsPositive()) && places(in.Quantity, 4), "quantity", "range",
+		"a positive quantity of up to 4 decimals (negative only in corrective invoices)")
+	v.Require(!in.UnitPrice.IsNegative() && places(in.UnitPrice, 4), "unitPrice", "range", "a non-negative unit price of up to 4 decimals")
+	v.Require(!in.Discount.IsNegative() && in.Discount.LessThanOrEqual(hundred) && places(in.Discount, 4), "discount", "range",
+		"a discount from 0 to 100 with up to 4 decimals")
 	code, treat := strings.ToUpper(strings.TrimSpace(in.TaxCode)), strings.ToUpper(strings.TrimSpace(in.Treatment))
 	v.Require(code != "" || treat != "", "taxCode", "required", "a tax code or an exempt or not subject treatment")
 	v.Require(utf8.RuneCountInString(code) <= 5 && utf8.RuneCountInString(treat) <= 5, "taxCode", "length", "codes of at most 5 characters")

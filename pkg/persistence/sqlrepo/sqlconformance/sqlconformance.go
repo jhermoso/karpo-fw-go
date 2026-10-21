@@ -18,8 +18,9 @@ import (
 // El mismo mapeo sirve para todos los dialectos.
 func WidgetMapping() sqlrepo.Mapping[repotest.WidgetID, *repotest.Widget] {
 	return sqlrepo.Mapping[repotest.WidgetID, *repotest.Widget]{
-		Table:   "widgets",
-		Columns: []string{"name", "price", "active", "color", "created_at", "weight", "launch"},
+		Table:    "widgets",
+		Columns:  []string{"name", "price", "active", "color", "created_at", "weight", "launch"},
+		Decimals: map[string]sqlrepo.DecimalColumn{"weight": sqlrepo.Dec(18, 4)},
 		Dehydrate: func(w *repotest.Widget) (sqlrepo.Values, error) {
 			return sqlrepo.Values{
 				"name":       w.Name(),
@@ -89,7 +90,7 @@ func Schema(dialect string) (drop, create []string) {
 		create = []string{
 			`CREATE TABLE widgets (id TEXT PRIMARY KEY, version INTEGER NOT NULL, name TEXT NOT NULL,
 				price INTEGER NOT NULL, active INTEGER NOT NULL, color TEXT, created_at TEXT NOT NULL,
-				weight NUMERIC NOT NULL, launch TEXT NOT NULL)`,
+				weight TEXT NOT NULL, launch TEXT NOT NULL)`,
 			`CREATE TABLE widget_parts (widget_id TEXT NOT NULL REFERENCES widgets(id), pos INTEGER NOT NULL,
 				name TEXT NOT NULL, qty INTEGER NOT NULL, PRIMARY KEY (widget_id, pos))`,
 		}

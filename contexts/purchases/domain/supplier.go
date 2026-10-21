@@ -41,7 +41,8 @@ func ReconstituteSupplier(id SupplierID, s SupplierState) (*SupplierProfile, err
 	var v fw.Validation
 	v.Require(!s.Company.IsZero() && !s.Supplier.IsZero(), "supplier", "required", "company and supplier are required")
 	v.Require(s.Category == "" || ValidCategory(s.Category), "category", "enum", "an expense category")
-	v.Require(!s.WithholdingRate.IsNegative() && !s.WithholdingRate.GreaterThan(vocab.DecimalFromInt(50)), "withholdingRate", "range", "from 0 to 50")
+	v.Require(!s.WithholdingRate.IsNegative() && !s.WithholdingRate.GreaterThan(vocab.DecimalFromInt(50)) && cents(s.WithholdingRate), "withholdingRate",
+		"range", "from 0 to 50, with two decimals")
 	v.Require(s.PaymentDays >= 0 && s.PaymentDays <= 365, "paymentDays", "range", "from 0 to 365 days")
 	if err := v.Err(); err != nil {
 		return nil, err

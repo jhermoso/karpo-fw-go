@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/jhermoso/karpo-fw-go/pkg/domain"
+	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
 // Dialect recoge todo lo que cambia de un motor SQL a otro.
@@ -52,8 +53,23 @@ type Dialect interface {
 	// DateExpr envuelve el marcador de una fecha civil cuando el motor necesita una conversión
 	// explícita (Oracle: TO_DATE(:n, 'YYYY-MM-DD')); la mayoría de motores lo devuelven tal cual.
 	DateExpr(placeholder string) string
+	// DecimalExpr envuelve el marcador de un decimal (vocab.Decimal), que se enlaza siempre como
+	// texto con punto ("-12.5"), en la conversión exacta a número del motor, sin pasar por coma
+	// flotante ni depender de la configuración regional de la sesión. precision y scale son las del
+	// propio valor (cifras y decimales; "-12.5" es 3,1). Se usa al escribir y al comparar.
+	DecimalExpr(placeholder string, precision, scale int) string
 	// IsUniqueViolation dice si err es una violación de clave primaria o de restricción única.
 	IsUniqueViolation(err error) bool
+}
+
+// TextDecimals lo implementa el dialecto que guarda las columnas {dec:p,s} como texto (SQLite).
+// Como el orden del texto no es el numérico ("10" < "9"), las comparaciones y la ordenación de una
+// columna decimal (Mapping.Decimals) usan una clave de texto cuyo orden sí es el numérico:
+// DecimalKeyExpr la calcula en SQL sobre la columna y DecimalKey en Go sobre el valor comparado.
+// Las dos deben dar la misma clave para el mismo número.
+type TextDecimals interface {
+	DecimalKeyExpr(column string) string
+	DecimalKey(v vocab.Decimal) string
 }
 
 // ParseUUIDDefault interpreta las representaciones habituales de un UUID leído: cadenas

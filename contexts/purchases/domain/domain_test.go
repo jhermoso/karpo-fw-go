@@ -59,6 +59,7 @@ func TestRegister(t *testing.T) {
 		func(d *domain.Draft) { d.Lines[1].TaxCode = "" },
 		func(d *domain.Draft) { d.Lines[1].No = 3 },
 		func(d *domain.Draft) { d.WithholdingRate = dec("51") },
+		func(d *domain.Draft) { d.WithholdingRate = dec("15.125") },
 	}
 	for i, f := range bad {
 		d := draft()
@@ -152,6 +153,9 @@ func TestSupplierProfile(t *testing.T) {
 	p, err := domain.ReconstituteSupplier(domain.NewSupplierID(), domain.SupplierState{Company: company, Supplier: supplier, Category: domain.Rent, PaymentDays: 30})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if err := p.Change(domain.SupplierState{WithholdingRate: dec("15.125")}); !errors.Is(err, fw.ErrValidation) {
+		t.Fatalf("a withholding rate with two decimals: %v", err)
 	}
 	if err := p.Change(domain.SupplierState{PaymentDays: 400}); !errors.Is(err, fw.ErrValidation) {
 		t.Fatalf("days: %v", err)
