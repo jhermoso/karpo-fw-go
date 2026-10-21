@@ -51,6 +51,17 @@ func TestLines(t *testing.T) {
 	if _, err := domain.NewLine(c["IRPF_GEN"], domain.LineInput{Base: dec("100"), Percent: dec("15"), Amount: dec("20")}); err == nil {
 		t.Fatal("the amount of a rate line is computed")
 	}
+	// Las escalas de la columna: cantidad, importe unitario y base con 4 decimales, porcentaje con 2.
+	for _, in := range []domain.LineInput{{Quantity: dec("1.00001"), UnitAmount: dec("1")}, {Quantity: dec("1"), UnitAmount: dec("0.00001")},
+		{Base: dec("100.00001"), Percent: dec("15")}, {Base: dec("100"), Percent: dec("15.125")}} {
+		concept := c["HORAS_EXTRA"]
+		if !in.Base.IsZero() {
+			concept = c["IRPF_GEN"]
+		}
+		if _, err := domain.NewLine(concept, in); !errors.Is(err, fw.ErrValidation) {
+			t.Fatalf("more decimals than the column: %+v: %v", in, err)
+		}
+	}
 	if _, err := domain.NewLine(c["SALARIO_BASE"], domain.LineInput{Amount: dec("0")}); err == nil {
 		t.Fatal("an earning needs an amount")
 	}
@@ -145,6 +156,9 @@ func TestProfileSplits(t *testing.T) {
 	a := mustIBAN("ES9121000418450200051332")
 	b := mustIBAN("ES7921000813610123456789")
 	g := mustIBAN("ES6621000418401234567891")
+	if _, err := p.AddSplit(domain.Split{IBAN: a, Percent: dec("10.125"), From: from}); !errors.Is(err, fw.ErrValidation) {
+		t.Fatalf("a percentage with two decimals: %v", err)
+	}
 	if _, err := p.AddSplit(domain.Split{IBAN: a, Percent: dec("10"), Amount: dec("5"), From: from}); err == nil {
 		t.Fatal("one mode per split")
 	}

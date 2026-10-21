@@ -91,6 +91,7 @@ func Migrations() sqlrepo.MigrationSet {
 	return sqlrepo.MigrationSet{Context: Context, Migrations: []sqlrepo.Migration{
 		{Version: 1, Name: "terms, credit profiles, receivables and collections", Up: sqlrepo.RenderDDLAll(schemaDDL...)},
 		{Version: 2, Name: "outboxes, audit log and inbox", Up: technical},
+		{Version: 3, Name: "decimal columns", Run: decimalColumnsV3.Run},
 	}}
 }
 
@@ -183,8 +184,9 @@ func TermsMapping() sqlrepo.Mapping[domain.TermsID, *domain.Terms] {
 // CreditMapping mapea CreditProfile a rec_credit_profiles.
 func CreditMapping() sqlrepo.Mapping[domain.CreditProfileID, *domain.CreditProfile] {
 	return sqlrepo.Mapping[domain.CreditProfileID, *domain.CreditProfile]{
-		Table:   "rec_credit_profiles",
-		Columns: sqlrepo.WithAuditColumns("seller", "customer", "terms_id", "limited", "credit_limit", "blocked"),
+		Table:    "rec_credit_profiles",
+		Decimals: decimalColumns.Of("rec_credit_profiles"),
+		Columns:  sqlrepo.WithAuditColumns("seller", "customer", "terms_id", "limited", "credit_limit", "blocked"),
 		Dehydrate: func(p *domain.CreditProfile) (sqlrepo.Values, error) {
 			s := p.State()
 			v := sqlrepo.Values{"seller": s.Seller, "customer": s.Customer, "terms_id": nil, "limited": s.Limited, "credit_limit": nil, "blocked": s.Blocked}
@@ -192,7 +194,7 @@ func CreditMapping() sqlrepo.Mapping[domain.CreditProfileID, *domain.CreditProfi
 				v["terms_id"] = s.Terms
 			}
 			if s.Limited {
-				v["credit_limit"] = s.Limit.StringFixed(2)
+				v["credit_limit"] = s.Limit.Round(2)
 			}
 			return sqlrepo.AuditStampValues(v, p.AuditStamp()), nil
 		},
@@ -211,12 +213,13 @@ func CreditMapping() sqlrepo.Mapping[domain.CreditProfileID, *domain.CreditProfi
 // ReceivableMapping mapea Receivable a rec_receivables y sus vencimientos.
 func ReceivableMapping() sqlrepo.Mapping[domain.ReceivableID, *domain.Receivable] {
 	return sqlrepo.Mapping[domain.ReceivableID, *domain.Receivable]{
-		Table:   "rec_receivables",
-		Columns: sqlrepo.WithAuditColumns("seller", "customer", "invoice_number", "issued", "currency", "total", "open_amount", "settled"),
+		Table:    "rec_receivables",
+		Decimals: decimalColumns.Of("rec_receivables"),
+		Columns:  sqlrepo.WithAuditColumns("seller", "customer", "invoice_number", "issued", "currency", "total", "open_amount", "settled"),
 		Dehydrate: func(r *domain.Receivable) (sqlrepo.Values, error) {
 			s := r.State()
 			return sqlrepo.AuditStampValues(sqlrepo.Values{"seller": s.Seller, "customer": s.Customer, "invoice_number": s.Number, "issued": s.Issued,
-				"currency": s.Currency.String(), "total": s.Total.StringFixed(2), "open_amount": r.Open().StringFixed(2), "settled": r.Settled()},
+				"currency": s.Currency.String(), "total": s.Total.Round(2), "open_amount": r.Open().Round(2), "settled": r.Settled()},
 				r.AuditStamp()), nil
 		},
 		Hydrate: func(r *sqlrepo.Row, children sqlrepo.ChildRows) (*domain.Receivable, error) {
@@ -241,12 +244,13 @@ func ReceivableMapping() sqlrepo.Mapping[domain.ReceivableID, *domain.Receivable
 		},
 		Children: []sqlrepo.Child[*domain.Receivable]{{
 			Name: "installments", Table: "rec_installments", ForeignKey: "receivable_id", OrderBy: []string{"installment_no"},
-			Columns: []string{"installment_no", "due_date", "amount", "collected"},
+			Decimals: decimalColumns.Of("rec_installments"),
+			Columns:  []string{"installment_no", "due_date", "amount", "collected"},
 			Dehydrate: func(r *domain.Receivable) ([]sqlrepo.Values, error) {
 				out := []sqlrepo.Values{}
 				for _, i := range r.State().Installments {
-					out = append(out, sqlrepo.Values{"installment_no": int64(i.No), "due_date": i.Due, "amount": i.Amount.StringFixed(2),
-						"collected": i.Collected.StringFixed(2)})
+					out = append(out, sqlrepo.Values{"installment_no": int64(i.No), "due_date": i.Due, "amount": i.Amount.Round(2),
+						"collected": i.Collected.Round(2)})
 				}
 				return out, nil
 			},
@@ -257,11 +261,12 @@ func ReceivableMapping() sqlrepo.Mapping[domain.ReceivableID, *domain.Receivable
 // CollectionMapping mapea Collection a rec_collections y sus aplicaciones.
 func CollectionMapping() sqlrepo.Mapping[domain.CollectionID, *domain.Collection] {
 	return sqlrepo.Mapping[domain.CollectionID, *domain.Collection]{
-		Table:   "rec_collections",
-		Columns: sqlrepo.WithAuditColumns("seller", "payer", "collected_on", "amount", "currency", "method", "reference", "cancelled"),
+		Table:    "rec_collections",
+		Decimals: decimalColumns.Of("rec_collections"),
+		Columns:  sqlrepo.WithAuditColumns("seller", "payer", "collected_on", "amount", "currency", "method", "reference", "cancelled"),
 		Dehydrate: func(c *domain.Collection) (sqlrepo.Values, error) {
 			s := c.State()
-			return sqlrepo.AuditStampValues(sqlrepo.Values{"seller": s.Seller, "payer": s.Payer, "collected_on": s.Date, "amount": s.Amount.StringFixed(2),
+			return sqlrepo.AuditStampValues(sqlrepo.Values{"seller": s.Seller, "payer": s.Payer, "collected_on": s.Date, "amount": s.Amount.Round(2),
 				"currency": s.Currency.String(), "method": int64(s.Method), "reference": opt(s.Reference), "cancelled": s.Cancelled}, c.AuditStamp()), nil
 		},
 		Hydrate: func(r *sqlrepo.Row, children sqlrepo.ChildRows) (*domain.Collection, error) {
@@ -288,12 +293,13 @@ func CollectionMapping() sqlrepo.Mapping[domain.CollectionID, *domain.Collection
 		},
 		Children: []sqlrepo.Child[*domain.Collection]{{
 			Name: "allocations", Table: "rec_allocations", ForeignKey: "collection_id", OrderBy: []string{"id"},
-			Columns: []string{"id", "receivable_id", "installment_no", "amount", "allocated_on"},
+			Decimals: decimalColumns.Of("rec_allocations"),
+			Columns:  []string{"id", "receivable_id", "installment_no", "amount", "allocated_on"},
 			Dehydrate: func(c *domain.Collection) ([]sqlrepo.Values, error) {
 				out := []sqlrepo.Values{}
 				for _, a := range c.State().Allocations {
 					out = append(out, sqlrepo.Values{"id": a.ID, "receivable_id": a.Receivable, "installment_no": int64(a.Installment),
-						"amount": a.Amount.StringFixed(2), "allocated_on": a.On})
+						"amount": a.Amount.Round(2), "allocated_on": a.On})
 				}
 				return out, nil
 			},

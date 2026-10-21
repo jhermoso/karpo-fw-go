@@ -90,6 +90,7 @@ func Migrations() sqlrepo.MigrationSet {
 		{Version: 1, Name: "chart of accounts, ledgers and journal", Up: sqlrepo.RenderDDLAll(schemaDDL...)},
 		{Version: 2, Name: "outboxes, audit log and inbox", Up: technical},
 		{Version: 3, Name: "facts that wait to be posted", Up: sqlrepo.RenderDDLAll(parkedDDL...)},
+		{Version: 4, Name: "decimal columns", Run: decimalColumnsV4.Run},
 	}}
 }
 
@@ -247,12 +248,13 @@ func EntryMapping() sqlrepo.Mapping[domain.EntryID, *domain.Entry] {
 		},
 		Children: []sqlrepo.Child[*domain.Entry]{{
 			Name: "lines", Table: "acc_entry_lines", ForeignKey: "entry_id", OrderBy: []string{"line_no"},
-			Columns: []string{"line_no", "account_code", "party", "debit", "credit", "description"},
+			Columns:  []string{"line_no", "account_code", "party", "debit", "credit", "description"},
+			Decimals: decimalColumns.Of("acc_entry_lines"),
 			Dehydrate: func(e *domain.Entry) ([]sqlrepo.Values, error) {
 				out := []sqlrepo.Values{}
 				for i, l := range e.State().Lines {
 					out = append(out, sqlrepo.Values{"line_no": int64(i + 1), "account_code": l.Account, "party": optUUID(l.Party.UUID),
-						"debit": l.Debit.StringFixed(2), "credit": l.Credit.StringFixed(2), "description": opt(strings.TrimSpace(l.Description))})
+						"debit": l.Debit.Round(2), "credit": l.Credit.Round(2), "description": opt(strings.TrimSpace(l.Description))})
 				}
 				return out, nil
 			},

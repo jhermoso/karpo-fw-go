@@ -2,6 +2,7 @@ package sqlrepo
 
 import (
 	"database/sql/driver"
+	"errors"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -115,12 +116,21 @@ func integerDigits(v decimal.Decimal) int {
 	return len(strings.TrimLeft(intPart, "0"))
 }
 
+// ErrDecimalDoesNotFit es el error de un decimal que no cabe en su columna {dec:p,s}: más decimales
+// que la escala o más cifras enteras que p-s. No envuelve domain.ErrValidation a propósito: cada
+// dominio valida la escala de sus valores antes de guardarlos, así que un valor que llega aquí sin
+// caber es un fallo del programa (un mapeo que declara menos escala de la que produce su dominio),
+// no un dato del usuario. Sale como error interno (500, sin detalle), y no como un 400 que le
+// enseñaría al usuario el nombre de la tabla y de la columna. AlterColumnToDecimal lo devuelve
+// también para un valor guardado que no cabe.
+var ErrDecimalDoesNotFit = errors.New("sqlrepo: decimal does not fit its column")
+
 // fits dice si v cabe en la columna sin redondear: como mucho Scale decimales y
 // Precision-Scale cifras enteras.
 func (c DecimalColumn) fits(v decimal.Decimal) error {
 	_, frac, _ := strings.Cut(v.String(), ".")
 	if len(frac) > c.Scale || integerDigits(v) > c.Precision-c.Scale {
-		return fmt.Errorf("%w: decimal %s does not fit in %s; round it in the domain first", domain.ErrValidation, v.String(), c)
+		return fmt.Errorf("%w: decimal %s does not fit in %s; round it in the domain first", ErrDecimalDoesNotFit, v.String(), c)
 	}
 	return nil
 }

@@ -211,7 +211,8 @@ func (p *Profile) AddSplit(s Split) (SplitID, error) {
 		}
 	}
 	v.Require(modes == 1, "split", "mode", "a split is a percentage, an amount or the residual")
-	v.Require(s.Percent.IsZero() || (s.Percent.IsPositive() && s.Percent.LessThanOrEqual(hundred)), "percent", "range", "over 0 and up to 100")
+	v.Require(s.Percent.IsZero() || (s.Percent.IsPositive() && s.Percent.LessThanOrEqual(hundred) && places(s.Percent, 2)), "percent", "range",
+		"over 0 and up to 100, with two decimals")
 	v.Require(s.Amount.IsZero() || (s.Amount.IsPositive() && s.Amount.Equal(s.Amount.Round(2))), "amount", "range", "a positive amount in cents")
 	v.Require(!s.From.IsZero() && (s.Until.IsZero() || !s.Until.Before(s.From)), "from", "order", "a validity whose end does not precede its start")
 	if err := v.Err(); err != nil {

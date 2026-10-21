@@ -64,6 +64,9 @@ func TestShipment_Rules(t *testing.T) {
 	if _, err := schedule(domain.Plan{}, []domain.Line{{Description: "x", Quantity: vocab.MustDecimal("0")}}); !errors.Is(err, fw.ErrValidation) {
 		t.Fatalf("quantity: %v", err)
 	}
+	if _, err := schedule(domain.Plan{}, []domain.Line{{Description: "x", Quantity: vocab.MustDecimal("1.00001")}}); !errors.Is(err, fw.ErrValidation) {
+		t.Fatalf("a quantity of up to 4 decimals: %v", err)
+	}
 
 	s, err := schedule(domain.Plan{}, lines)
 	if err != nil || s.State().Status != domain.Scheduled || s.State().Lines[0].No != 1 {

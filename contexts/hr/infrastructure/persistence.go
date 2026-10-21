@@ -109,6 +109,7 @@ func Migrations() sqlrepo.MigrationSet {
 		{Version: 2, Name: "positions, work centers and employments", Up: sqlrepo.RenderDDLAll(schemaDDL...)},
 		{Version: 3, Name: "outboxes and audit log", Up: technical},
 		{Version: 4, Name: "catalog seed", Run: seed},
+		{Version: 5, Name: "decimal columns", Run: decimalColumnsV5.Run},
 	}}
 }
 
@@ -188,11 +189,21 @@ func optDate(d vocab.Date) any {
 	return d
 }
 
+// optDecimal es el texto de un decimal, o nil si es cero. Sólo lo usa la semilla (migración 4), que
+// escribe cuando las columnas decimales aún eran texto; la migración 5 las pasa a {dec:p,s}.
 func optDecimal(d vocab.Decimal) any {
 	if d.IsZero() {
 		return nil
 	}
 	return d.String()
+}
+
+// nullDecimal es el decimal, o nil si es cero, para una columna {dec:p,s}.
+func nullDecimal(d vocab.Decimal) any {
+	if d.IsZero() {
+		return nil
+	}
+	return d
 }
 
 func optTime(p vocab.ValidPeriod) any {
@@ -319,6 +330,7 @@ func EmploymentMapping() sqlrepo.Mapping[domain.EmploymentID, *domain.Employment
 		},
 		Children: []sqlrepo.Child[*domain.Employment]{{
 			Name: "contracts", Table: "hr_contracts", ForeignKey: "employment_id",
+			Decimals: decimalColumns.Of("hr_contracts"),
 			Columns: []string{"id", "type_code", "contract_number", "start_date", "end_date", "agreement", "work_center", "weekly_hours",
 				"bonified", "is_primary", "termination_reason"},
 			OrderBy: []string{"start_date", "id"},
@@ -326,7 +338,7 @@ func EmploymentMapping() sqlrepo.Mapping[domain.EmploymentID, *domain.Employment
 				out := []sqlrepo.Values{}
 				for _, c := range e.Contracts() {
 					out = append(out, sqlrepo.Values{"id": c.ID, "type_code": c.TypeCode, "contract_number": opt(c.Number), "start_date": c.Start,
-						"end_date": optDate(c.End), "agreement": c.Agreement, "work_center": c.WorkCenter, "weekly_hours": optDecimal(c.WeeklyHours),
+						"end_date": optDate(c.End), "agreement": c.Agreement, "work_center": c.WorkCenter, "weekly_hours": nullDecimal(c.WeeklyHours),
 						"bonified": c.Bonified, "is_primary": c.Primary, "termination_reason": opt(c.TerminationReason)})
 				}
 				return out, nil

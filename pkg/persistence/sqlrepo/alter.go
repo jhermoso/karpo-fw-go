@@ -65,6 +65,38 @@ func AlterColumnToDecimal(table, column string, precision, scale int, notNull bo
 	}, nil
 }
 
+// ValidateDecimalColumn comprueba, sin cambiar nada, que AlterColumnToDecimal puede pasar la columna
+// a {dec:precision,scale}: que cada valor no nulo es un decimal con punto que cabe sin redondear.
+// Devuelve el mismo error que daría AlterColumnToDecimal (un valor que no cabe es
+// ErrDecimalDoesNotFit; uno que no es un decimal, domain.ErrValidation). Una columna que ya es
+// decimal también se valida (sus valores caben), salvo en Oracle, donde una columna NUMBER ya está
+// cambiada o a medio cambiar y AlterColumnToDecimal retoma sin leer su texto.
+func ValidateDecimalColumn(ctx context.Context, db *DB, table, column string, precision, scale int) error {
+	for _, id := range []struct{ kind, v string }{{"table", table}, {"column", column}} {
+		if err := checkIdent(id.kind, id.v); err != nil {
+			return err
+		}
+	}
+	dc := Dec(precision, scale)
+	if err := dc.validate(); err != nil {
+		return fmt.Errorf("sqlrepo: %s.%s: %w", table, column, err)
+	}
+	if db.d.Name() == "oracle" {
+		typ, _, err := oracleColumn(ctx, db, table, column)
+		if err != nil {
+			return err
+		}
+		if typ == "" {
+			return fmt.Errorf("sqlrepo: %s.%s does not exist", table, column)
+		}
+		if typ == "NUMBER" {
+			return nil
+		}
+	}
+	_, err := decimalTexts(ctx, db, table, column, dc)
+	return err
+}
+
 // alterDecimalSQL es el cambio de tipo en PostgreSQL, SQL Server y MySQL.
 func alterDecimalSQL(d Dialect, table, column string, dc DecimalColumn, notNull bool) []string {
 	t, c := d.Quote(table), d.Quote(column)

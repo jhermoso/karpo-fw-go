@@ -239,6 +239,7 @@ func Migrations() sqlrepo.MigrationSet {
 			`ALTER TABLE party_roles {add:trade_name} {str:120}{addEnd}`,
 			`ALTER TABLE party_roles {add:activity_code} {str:10}{addEnd}`,
 			`ALTER TABLE party_roles {add:registered_on} {date}{addEnd}`)},
+		{Version: 26, Name: "decimal columns", Run: decimalColumnsV26.Run},
 	}}
 }
 

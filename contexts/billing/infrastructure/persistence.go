@@ -96,6 +96,7 @@ func Migrations() sqlrepo.MigrationSet {
 		{Version: 3, Name: "source document of an invoice", Up: sqlrepo.RenderDDLAll(sourceDDL...)},
 		{Version: 4, Name: "inbox of the Orders events", Up: map[string][]string{"sqlite": sqlite.InboxDDL(TableInbox), "postgres": postgres.InboxDDL(TableInbox),
 			"sqlserver": sqlserver.InboxDDL(TableInbox), "oracle": oracle.InboxDDL(TableInbox), "mysql": mysql.InboxDDL(TableInbox)}},
+		{Version: 5, Name: "decimal columns", Run: decimalColumnsV5.Run},
 	}}
 }
 
@@ -140,7 +141,7 @@ func optDecimal(d vocab.Decimal) any {
 	if d.IsZero() {
 		return nil
 	}
-	return d.String()
+	return d
 }
 
 // SeriesMapping mapea Series a bil_series.
@@ -167,7 +168,8 @@ func SeriesMapping() sqlrepo.Mapping[domain.SeriesID, *domain.Series] {
 // InvoiceMapping mapea Invoice a bil_invoices, sus líneas y su desglose de impuestos.
 func InvoiceMapping() sqlrepo.Mapping[domain.InvoiceID, *domain.Invoice] {
 	return sqlrepo.Mapping[domain.InvoiceID, *domain.Invoice]{
-		Table: "bil_invoices",
+		Table:    "bil_invoices",
+		Decimals: decimalColumns.Of("bil_invoices"),
 		Columns: sqlrepo.WithAuditColumns("seller", "customer", "kind", "status", "currency", "description", "operation_date", "due_date",
 			"equivalence_surcharge", "corrects", "reason", "series_id", "invoice_number", "issue_date", "seller_nif", "seller_name", "seller_country",
 			"customer_nif", "customer_name", "customer_country", "tax_country", "net", "tax_amount", "surcharge", "source_type", "source_id", "source_ref"),
@@ -179,10 +181,10 @@ func InvoiceMapping() sqlrepo.Mapping[domain.InvoiceID, *domain.Invoice] {
 				"series_id": optUUID(s.Series.UUID), "invoice_number": opt(s.Number), "issue_date": optDate(s.IssueDate),
 				"seller_nif": opt(s.SellerIdentity.NIF), "seller_name": opt(s.SellerIdentity.Name), "seller_country": opt(s.SellerIdentity.Country),
 				"customer_nif": opt(s.CustomerIdentity.NIF), "customer_name": opt(s.CustomerIdentity.Name), "customer_country": opt(s.CustomerIdentity.Country),
-				"tax_country": opt(s.Taxes.Country), "net": i.Net().StringFixed(2), "tax_amount": nil, "surcharge": nil,
+				"tax_country": opt(s.Taxes.Country), "net": i.Net().Round(2), "tax_amount": nil, "surcharge": nil,
 				"source_type": opt(s.Source.Type), "source_id": opt(s.Source.ID), "source_ref": opt(s.Source.Ref)}
 			if s.Status == domain.Issued {
-				v["tax_amount"], v["surcharge"] = s.Taxes.Tax.StringFixed(2), s.Taxes.Surcharge.StringFixed(2)
+				v["tax_amount"], v["surcharge"] = s.Taxes.Tax.Round(2), s.Taxes.Surcharge.Round(2)
 			}
 			return sqlrepo.AuditStampValues(v, i.AuditStamp()), nil
 		},
@@ -235,25 +237,27 @@ func InvoiceMapping() sqlrepo.Mapping[domain.InvoiceID, *domain.Invoice] {
 		},
 		Children: []sqlrepo.Child[*domain.Invoice]{{
 			Name: "lines", Table: "bil_invoice_lines", ForeignKey: "invoice_id", OrderBy: []string{"id"},
-			Columns: []string{"id", "description", "quantity", "unit_price", "discount", "tax_code", "treatment", "net"},
+			Columns:  []string{"id", "description", "quantity", "unit_price", "discount", "tax_code", "treatment", "net"},
+			Decimals: decimalColumns.Of("bil_invoice_lines"),
 			Dehydrate: func(i *domain.Invoice) ([]sqlrepo.Values, error) {
 				out := []sqlrepo.Values{}
 				for _, l := range i.State().Lines {
-					out = append(out, sqlrepo.Values{"id": l.ID, "description": l.Description, "quantity": l.Quantity.String(),
-						"unit_price": l.UnitPrice.String(), "discount": optDecimal(l.Discount), "tax_code": opt(l.TaxCode), "treatment": opt(l.Treatment),
-						"net": l.Net.StringFixed(2)})
+					out = append(out, sqlrepo.Values{"id": l.ID, "description": l.Description, "quantity": l.Quantity,
+						"unit_price": l.UnitPrice, "discount": optDecimal(l.Discount), "tax_code": opt(l.TaxCode), "treatment": opt(l.Treatment),
+						"net": l.Net.Round(2)})
 				}
 				return out, nil
 			},
 		}, {
 			Name: "taxes", Table: "bil_invoice_taxes", ForeignKey: "invoice_id", OrderBy: []string{"line_no"},
-			Columns: []string{"line_no", "tax_type", "tax_code", "treatment", "treatment_kind", "rate", "base", "amount", "surcharge_rate", "surcharge_amount"},
+			Columns:  []string{"line_no", "tax_type", "tax_code", "treatment", "treatment_kind", "rate", "base", "amount", "surcharge_rate", "surcharge_amount"},
+			Decimals: decimalColumns.Of("bil_invoice_taxes"),
 			Dehydrate: func(i *domain.Invoice) ([]sqlrepo.Values, error) {
 				out := []sqlrepo.Values{}
 				for k, l := range i.State().Taxes.Lines {
 					out = append(out, sqlrepo.Values{"line_no": int64(k + 1), "tax_type": opt(l.TaxType), "tax_code": opt(l.TaxCode),
-						"treatment": opt(l.Treatment), "treatment_kind": l.TreatmentKind, "rate": l.Rate.String(), "base": l.Base.StringFixed(2),
-						"amount": l.Amount.StringFixed(2), "surcharge_rate": optDecimal(l.SurchargeRate), "surcharge_amount": optDecimal(l.SurchargeAmount)})
+						"treatment": opt(l.Treatment), "treatment_kind": l.TreatmentKind, "rate": l.Rate, "base": l.Base.Round(2),
+						"amount": l.Amount.Round(2), "surcharge_rate": optDecimal(l.SurchargeRate), "surcharge_amount": optDecimal(l.SurchargeAmount)})
 				}
 				return out, nil
 			},

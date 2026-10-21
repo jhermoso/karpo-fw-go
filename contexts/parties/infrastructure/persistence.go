@@ -280,7 +280,8 @@ func PartyMapping() sqlrepo.Mapping[domain.PartyID, *domain.Party] {
 // RelationshipMapping mapea Relationship a party_relationships.
 func RelationshipMapping() sqlrepo.Mapping[domain.RelationshipID, *domain.Relationship] {
 	return sqlrepo.Mapping[domain.RelationshipID, *domain.Relationship]{
-		Table: "party_relationships",
+		Table:    "party_relationships",
+		Decimals: decimalColumns.Of("party_relationships"),
 		Columns: sqlrepo.WithAuditColumns("rel_type", "from_party", "to_party", "from_role", "to_role",
 			"valid_from", "valid_to", "remark", "trial_until", "share_percent", "promotion_code", "customer_number"),
 		Fields: map[string]string{"type": "rel_type"},
@@ -290,7 +291,7 @@ func RelationshipMapping() sqlrepo.Mapping[domain.RelationshipID, *domain.Relati
 				"remark": nullable(r.Remark()), "trial_until": r.TrialUntil(), "share_percent": nil, "promotion_code": nullable(r.PromotionCode()),
 				"customer_number": nullable(r.CustomerNumber())}
 			if s := r.OwnershipShare(); s != nil {
-				v["share_percent"] = s.Points().StringFixed(2) // texto exacto, como todos los decimales de los contextos
+				v["share_percent"] = s.Points().Round(2)
 			}
 			return sqlrepo.AuditStampValues(v, r.AuditStamp()), nil
 		},

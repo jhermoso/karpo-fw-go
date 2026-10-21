@@ -91,6 +91,7 @@ func Migrations() sqlrepo.MigrationSet {
 	return sqlrepo.MigrationSet{Context: Context, Migrations: []sqlrepo.Migration{
 		{Version: 1, Name: "tax catalogs, taxpayers, filings and withholdings", Up: sqlrepo.RenderDDLAll(schemaDDL...)},
 		{Version: 2, Name: "outboxes, audit log and inbox", Up: technical},
+		{Version: 3, Name: "decimal columns", Run: decimalColumnsV3.Run},
 	}}
 }
 
@@ -129,7 +130,7 @@ func optDecimal(d vocab.Decimal) any {
 	if d.IsZero() {
 		return nil
 	}
-	return d.String()
+	return d
 }
 
 func optInt(n int) any {
@@ -142,12 +143,13 @@ func optInt(n int) any {
 // TaxRateMapping mapea TaxRate a fis_tax_rates.
 func TaxRateMapping() sqlrepo.Mapping[domain.TaxRateID, *domain.TaxRate] {
 	return sqlrepo.Mapping[domain.TaxRateID, *domain.TaxRate]{
-		Table:   "fis_tax_rates",
-		Columns: sqlrepo.WithAuditColumns("tax_type", "territory", "code", "description", "rate", "surcharge", "valid_from", "valid_to"),
+		Table:    "fis_tax_rates",
+		Decimals: decimalColumns.Of("fis_tax_rates"),
+		Columns:  sqlrepo.WithAuditColumns("tax_type", "territory", "code", "description", "rate", "surcharge", "valid_from", "valid_to"),
 		Dehydrate: func(r *domain.TaxRate) (sqlrepo.Values, error) {
 			s := r.State()
 			return sqlrepo.AuditStampValues(sqlrepo.Values{"tax_type": int64(s.Type), "territory": int64(s.Territory), "code": s.Code,
-				"description": s.Description, "rate": s.Rate.String(), "surcharge": optDecimal(s.Surcharge), "valid_from": s.From,
+				"description": s.Description, "rate": s.Rate, "surcharge": optDecimal(s.Surcharge), "valid_from": s.From,
 				"valid_to": optDate(s.Until)}, r.AuditStamp()), nil
 		},
 		Hydrate: func(r *sqlrepo.Row, _ sqlrepo.ChildRows) (*domain.TaxRate, error) {
@@ -186,8 +188,9 @@ func TreatmentMapping() sqlrepo.Mapping[domain.TreatmentID, *domain.Treatment] {
 // TaxpayerMapping mapea Taxpayer a fis_taxpayers, sus actividades y sus obligaciones.
 func TaxpayerMapping() sqlrepo.Mapping[domain.TaxpayerID, *domain.Taxpayer] {
 	return sqlrepo.Mapping[domain.TaxpayerID, *domain.Taxpayer]{
-		Table:   "fis_taxpayers",
-		Columns: sqlrepo.WithAuditColumns("organization", "territory", "fy_start_month", "general_prorata", "differentiated_sectors"),
+		Table:    "fis_taxpayers",
+		Decimals: decimalColumns.Of("fis_taxpayers"),
+		Columns:  sqlrepo.WithAuditColumns("organization", "territory", "fy_start_month", "general_prorata", "differentiated_sectors"),
 		Dehydrate: func(t *domain.Taxpayer) (sqlrepo.Values, error) {
 			tm := t.Terms()
 			return sqlrepo.AuditStampValues(sqlrepo.Values{"organization": t.Organization(), "territory": int64(tm.Territory),
@@ -302,13 +305,14 @@ func FilingMapping() sqlrepo.Mapping[domain.FilingID, *domain.Filing] {
 		},
 		Children: []sqlrepo.Child[*domain.Filing]{{
 			Name: "lines", Table: "fis_filing_lines", ForeignKey: "filing_id", OrderBy: []string{"line_no"},
-			Columns: []string{"line_no", "party", "nif", "recipient_name", "province", "perception_key", "payments", "perceptions", "withheld"},
+			Columns:  []string{"line_no", "party", "nif", "recipient_name", "province", "perception_key", "payments", "perceptions", "withheld"},
+			Decimals: decimalColumns.Of("fis_filing_lines"),
 			Dehydrate: func(f *domain.Filing) ([]sqlrepo.Values, error) {
 				out := []sqlrepo.Values{}
 				for i, r := range f.State().Recipients {
 					out = append(out, sqlrepo.Values{"line_no": int64(i + 1), "party": r.Party, "nif": opt(r.Identity.NIF), "recipient_name": opt(r.Identity.Name),
 						"province": opt(r.Identity.Province), "perception_key": r.Key, "payments": int64(r.Payments),
-						"perceptions": r.Perceptions.StringFixed(2), "withheld": r.Withheld.StringFixed(2)})
+						"perceptions": r.Perceptions.Round(2), "withheld": r.Withheld.Round(2)})
 				}
 				return out, nil
 			},
@@ -339,12 +343,13 @@ func CounterMapping() sqlrepo.Mapping[domain.CounterID, *domain.Counter] {
 // WithholdingMapping mapea Withholding a fis_withholdings.
 func WithholdingMapping() sqlrepo.Mapping[domain.WithholdingID, *domain.Withholding] {
 	return sqlrepo.Mapping[domain.WithholdingID, *domain.Withholding]{
-		Table:   "fis_withholdings",
-		Columns: []string{"payer", "recipient", "payment_date", "perception_key", "perceptions", "withheld", "cancelled"},
+		Table:    "fis_withholdings",
+		Decimals: decimalColumns.Of("fis_withholdings"),
+		Columns:  []string{"payer", "recipient", "payment_date", "perception_key", "perceptions", "withheld", "cancelled"},
 		Dehydrate: func(w *domain.Withholding) (sqlrepo.Values, error) {
 			s := w.State()
 			return sqlrepo.Values{"payer": s.Payer, "recipient": s.Recipient, "payment_date": s.PaymentDate, "perception_key": s.Key,
-				"perceptions": s.Perceptions.StringFixed(2), "withheld": s.Withheld.StringFixed(2), "cancelled": s.Cancelled}, nil
+				"perceptions": s.Perceptions.Round(2), "withheld": s.Withheld.Round(2), "cancelled": s.Cancelled}, nil
 		},
 		Hydrate: func(r *sqlrepo.Row, _ sqlrepo.ChildRows) (*domain.Withholding, error) {
 			s := domain.WithholdingState{Payer: domain.OrganizationID{UUID: r.UUID("payer")}, Recipient: domain.PartyID{UUID: r.UUID("recipient")},

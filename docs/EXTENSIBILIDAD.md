@@ -108,7 +108,7 @@ tipos de columna, orientativos para Go.
 | 1 | **Las filas hijas se borran y se reinsertan en cada guardado.** Así guarda Go un agregado (`sqlrepo`, `replaceChildren`) | Un rol es hijo de la party. Con una tabla de extensión enganchada al rol, guardar la party por cualquier motivo se llevaría los campos añadidos de todos sus roles. O el guardado del agregado escribe también la extensión, o el repositorio deja de reemplazar hijos |
 | 2 | **El servidor crea tablas mientras sirve.** Hoy migrar y servir están separados y el servidor no arranca con un esquema que no es el suyo | Las tablas de extensión tienen que quedar fuera de esa comprobación, y el usuario de base de datos necesita permiso para crear tablas |
 | 3 | **Acrónimo de empresa.** Go no lo tiene | Es parte del nombre de las tablas por empresa |
-| 4 | **Decimales.** Go guarda todos como texto exacto | Para ordenar y filtrar por un campo decimal conviene una columna numérica; falta comprobar que la persistencia la lee sin pasar por coma flotante |
+| 4 | **Decimales.** Resuelto (D-94): las columnas decimales son `{dec:p,s}`, se leen sin coma flotante y se filtran y ordenan por valor | — |
 | 5 | **Cinco motores.** El contrato cubre tres; Go promete además MySQL y SQLite | En MySQL crear o cambiar una tabla confirma la transacción en curso |
 | 6 | **Consultas por un campo añadido.** Go escribe las consultas a partir de campos conocidos al compilar | Hace falta decidir si se puede filtrar y ordenar por ellos, y cómo |
 

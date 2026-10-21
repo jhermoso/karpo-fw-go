@@ -94,6 +94,7 @@ func Migrations() sqlrepo.MigrationSet {
 			`ALTER TABLE ord_deliveries {add:invoice_number} {str:40}{addEnd}`,
 			`ALTER TABLE ord_deliveries {add:invoiced} {bool} DEFAULT {false} NOT NULL{addEnd}`)},
 		{Version: 4, Name: "quotes", Up: sqlrepo.RenderDDLAll(quotesDDL...)},
+		{Version: 5, Name: "decimal columns", Run: decimalColumnsV5.Run},
 	}}
 }
 
@@ -137,12 +138,13 @@ func byNo(rows []*sqlrepo.Row) []*sqlrepo.Row {
 // TermsMapping mapea Terms a ord_terms.
 func TermsMapping() sqlrepo.Mapping[domain.TermsID, *domain.Terms] {
 	return sqlrepo.Mapping[domain.TermsID, *domain.Terms]{
-		Table:   "ord_terms",
-		Columns: sqlrepo.WithAuditColumns("company", "customer", "price_list", "discount", "block_orders", "block_delivery"),
+		Table:    "ord_terms",
+		Decimals: decimalColumns.Of("ord_terms"),
+		Columns:  sqlrepo.WithAuditColumns("company", "customer", "price_list", "discount", "block_orders", "block_delivery"),
 		Dehydrate: func(t *domain.Terms) (sqlrepo.Values, error) {
 			s := t.State()
 			return sqlrepo.AuditStampValues(sqlrepo.Values{"company": s.Company, "customer": s.Customer, "price_list": optUUID(s.PriceList.UUID),
-				"discount": s.Discount.StringFixed(2), "block_orders": s.BlockOrders, "block_delivery": s.BlockDelivery}, t.AuditStamp()), nil
+				"discount": s.Discount.Round(2), "block_orders": s.BlockOrders, "block_delivery": s.BlockDelivery}, t.AuditStamp()), nil
 		},
 		Hydrate: func(r *sqlrepo.Row, _ sqlrepo.ChildRows) (*domain.Terms, error) {
 			s := domain.TermsState{Company: domain.OrganizationID{UUID: r.UUID("company")}, Customer: domain.PartyID{UUID: r.UUID("customer")},
@@ -159,13 +161,14 @@ func TermsMapping() sqlrepo.Mapping[domain.TermsID, *domain.Terms] {
 // OrderMapping mapea Order a ord_orders y sus líneas.
 func OrderMapping() sqlrepo.Mapping[domain.OrderID, *domain.Order] {
 	return sqlrepo.Mapping[domain.OrderID, *domain.Order]{
-		Table: "ord_orders",
+		Table:    "ord_orders",
+		Decimals: decimalColumns.Of("ord_orders"),
 		Columns: sqlrepo.WithAuditColumns("company", "customer", "order_number", "order_date", "warehouse", "price_list", "customer_discount", "reference",
 			"notes", "status", "close_reason"),
 		Dehydrate: func(o *domain.Order) (sqlrepo.Values, error) {
 			s := o.State()
 			return sqlrepo.AuditStampValues(sqlrepo.Values{"company": s.Company, "customer": s.Customer, "order_number": opt(s.Number), "order_date": s.Date,
-				"warehouse": optUUID(s.Warehouse.UUID), "price_list": optUUID(s.PriceList.UUID), "customer_discount": s.CustomerDiscount.StringFixed(2),
+				"warehouse": optUUID(s.Warehouse.UUID), "price_list": optUUID(s.PriceList.UUID), "customer_discount": s.CustomerDiscount.Round(2),
 				"reference": opt(s.Reference), "notes": opt(s.Notes), "status": int64(s.Status), "close_reason": opt(s.CloseReason)}, o.AuditStamp()), nil
 		},
 		Hydrate: func(r *sqlrepo.Row, children sqlrepo.ChildRows) (*domain.Order, error) {
@@ -191,13 +194,14 @@ func OrderMapping() sqlrepo.Mapping[domain.OrderID, *domain.Order] {
 			Name: "lines", Table: "ord_order_lines", ForeignKey: "order_id", OrderBy: []string{"line_no"},
 			Columns: []string{"line_no", "product", "sku", "description", "uom", "tax_code", "stocked", "quantity", "unit_price", "discount", "net_price",
 				"amount", "reserved", "delivered"},
+			Decimals: decimalColumns.Of("ord_order_lines"),
 			Dehydrate: func(o *domain.Order) ([]sqlrepo.Values, error) {
 				out := []sqlrepo.Values{}
 				for _, l := range o.State().Lines {
 					out = append(out, sqlrepo.Values{"line_no": int64(l.No), "product": l.Product, "sku": l.SKU, "description": l.Description, "uom": l.UoM,
-						"tax_code": opt(l.TaxCode), "stocked": l.Stocked, "quantity": l.Quantity.String(), "unit_price": l.UnitPrice.StringFixed(4),
-						"discount": l.Discount.StringFixed(2), "net_price": l.NetPrice.StringFixed(4), "amount": l.Amount.StringFixed(2),
-						"reserved": l.Reserved.String(), "delivered": l.Delivered.String()})
+						"tax_code": opt(l.TaxCode), "stocked": l.Stocked, "quantity": l.Quantity, "unit_price": l.UnitPrice.Round(4),
+						"discount": l.Discount.Round(2), "net_price": l.NetPrice.Round(4), "amount": l.Amount.Round(2),
+						"reserved": l.Reserved, "delivered": l.Delivered})
 				}
 				return out, nil
 			},
@@ -237,13 +241,14 @@ func DeliveryMapping() sqlrepo.Mapping[domain.DeliveryID, *domain.Delivery] {
 		},
 		Children: []sqlrepo.Child[*domain.Delivery]{{
 			Name: "lines", Table: "ord_delivery_lines", ForeignKey: "delivery_id", OrderBy: []string{"line_no"},
-			Columns: []string{"line_no", "product", "sku", "description", "uom", "tax_code", "stocked", "quantity", "net_price", "amount"},
+			Columns:  []string{"line_no", "product", "sku", "description", "uom", "tax_code", "stocked", "quantity", "net_price", "amount"},
+			Decimals: decimalColumns.Of("ord_delivery_lines"),
 			Dehydrate: func(d *domain.Delivery) ([]sqlrepo.Values, error) {
 				out := []sqlrepo.Values{}
 				for _, l := range d.State().Lines {
 					out = append(out, sqlrepo.Values{"line_no": int64(l.Line), "product": l.Product, "sku": l.SKU, "description": l.Description, "uom": l.UoM,
-						"tax_code": opt(l.TaxCode), "stocked": l.Stocked, "quantity": l.Quantity.String(), "net_price": l.NetPrice.StringFixed(4),
-						"amount": l.Amount.StringFixed(2)})
+						"tax_code": opt(l.TaxCode), "stocked": l.Stocked, "quantity": l.Quantity, "net_price": l.NetPrice.Round(4),
+						"amount": l.Amount.Round(2)})
 				}
 				return out, nil
 			},
