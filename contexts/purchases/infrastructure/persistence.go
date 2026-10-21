@@ -30,6 +30,7 @@ const (
 	TableOutbox            = "purchases_outbox"
 	TableIntegrationOutbox = "purchases_integration_outbox"
 	TableAuditLog          = "purchases_audit_log"
+	TableInbox             = "purchases_inbox"
 )
 
 const audit = `created_at {ts}, created_by_id {str:64}, created_by_name {str:200}, modified_at {ts}, modified_by_id {str:64}, modified_by_name {str:200}`
@@ -75,15 +76,36 @@ func technicalDDL(d string) []string {
 	return nil
 }
 
+func inboxDDL(d string) []string {
+	switch d {
+	case "sqlite":
+		return sqlite.InboxDDL(TableInbox)
+	case "postgres":
+		return postgres.InboxDDL(TableInbox)
+	case "sqlserver":
+		return sqlserver.InboxDDL(TableInbox)
+	case "oracle":
+		return oracle.InboxDDL(TableInbox)
+	case "mysql":
+		return mysql.InboxDDL(TableInbox)
+	}
+	return nil
+}
+
 // Migrations es el esquema versionado del contexto.
 func Migrations() sqlrepo.MigrationSet {
-	technical := map[string][]string{}
+	technical, inbox := map[string][]string{}, map[string][]string{}
 	for _, d := range sqlrepo.Dialects {
 		technical[d] = technicalDDL(d)
+		inbox[d] = inboxDDL(d)
 	}
 	return sqlrepo.MigrationSet{Context: Context, Migrations: []sqlrepo.Migration{
 		{Version: 1, Name: "received invoices, suppliers and register", Up: sqlrepo.RenderDDLAll(schemaDDL...)},
 		{Version: 2, Name: "outboxes and audit log", Up: technical},
+		// El inbox de los eventos de Parties: los proveedores que pasan a otra ficha al fusionar
+		// (docs/DECISIONES-COMUNES.md, D-93). La 3 está reservada: la ocupa otra rama sin fusionar
+		// (feat/contextos-decimales).
+		{Version: 4, Name: "inbox", Up: inbox},
 	}}
 }
 
@@ -94,7 +116,7 @@ func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 
 // Tables lista las tablas del contexto, primero las hijas (orden de borrado).
 var Tables = []string{"pur_invoice_accounts", "pur_invoice_taxes", "pur_invoice_lines", "pur_invoices", "pur_suppliers", "pur_counters", TableOutbox,
-	TableIntegrationOutbox, TableAuditLog}
+	TableIntegrationOutbox, TableAuditLog, TableInbox}
 
 // DropAll borra las tablas del contexto y su historial de migraciones (sólo pruebas).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
@@ -306,6 +328,17 @@ func AuditLogFactory(b hotswap.Backend) (application.AuditLog, error) {
 		return sqlrepo.NewAuditLog(db, TableAuditLog)
 	case *memory.Store:
 		return memory.NewAuditLog(db), nil
+	}
+	return nil, unsupported(b)
+}
+
+// InboxFactory construye el inbox de los eventos de Parties.
+func InboxFactory(b hotswap.Backend) (application.InboxStore, error) {
+	switch db := b.(type) {
+	case *sqlrepo.DB:
+		return sqlrepo.NewInbox(db, TableInbox)
+	case *memory.Store:
+		return memory.NewInbox(db), nil
 	}
 	return nil, unsupported(b)
 }

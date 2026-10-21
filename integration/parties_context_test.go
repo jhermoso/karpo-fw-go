@@ -284,6 +284,30 @@ func TestPartiesContext(t *testing.T) {
 			if again, err := svc.Relationships.Handle(clerkCtx, papp.PartyRelationships{PartyID: pedroID}); err != nil || again[0].Customer.Number != "C-4300001" {
 				t.Fatalf("the customer number read back: %+v %v", again, err)
 			}
+			// Migración 27: la relación de negocio que pasa a la superviviente al fusionar recuerda
+			// de cuál viene, y deshacer la fusión la devuelve (D-93).
+			heir, err := svc.RegisterOrganization.Handle(ctx, papp.RegisterOrganization{LegalName: "Pedro Ruiz Heredero"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			mark, err := svc.EstablishRelationship.Handle(ctx, papp.EstablishRelationship{Type: domain.RelDuplicateOf.String(), From: pedro.ID, To: heir.ID})
+			if err != nil || mark.Merge == nil || len(mark.Merge.Transferred) != 1 {
+				t.Fatalf("merging pedro: %+v %v", mark.Merge, err)
+			}
+			// La superviviente tiene también la propia «Duplicate Of»: se mira sólo la de cliente.
+			moved, err := svc.Relationships.Handle(ctx, papp.PartyRelationships{PartyID: mustParty(t, heir.ID), ActiveOnly: true})
+			moved = slices.DeleteFunc(moved, func(r papp.RelationshipDTO) bool { return r.Type != domain.RelCustomer.String() })
+			if err != nil || len(moved) != 1 || moved[0].TransferredFrom != buys[0].ID || moved[0].Customer.Number != "C-4300001" {
+				t.Fatalf("the relationship that passed to the survivor, read back: %+v %v", moved, err)
+			}
+			markID, _ := domain.ParseRelationshipID(mark.ID)
+			if _, err := svc.TerminateRelationship.Handle(ctx, papp.TerminateRelationship{ID: markID}); err != nil {
+				t.Fatal(err)
+			}
+			back, err := svc.Relationships.Handle(ctx, papp.PartyRelationships{PartyID: pedroID, ActiveOnly: true})
+			if err != nil || len(back) != 1 || back[0].TransferredFrom != moved[0].ID || back[0].Customer.Number != "C-4300001" {
+				t.Fatalf("the relationship that came back, read back: %+v %v", back, err)
+			}
 			rival, err := svc.RegisterOrganization.Handle(clerkCtx, papp.RegisterOrganization{LegalName: "Rival Sociedad Limitada",
 				Affiliation: &papp.NewAffiliation{Organization: acme.ID, RelationshipType: domain.RelCustomer.String()}})
 			if err != nil {

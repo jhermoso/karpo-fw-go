@@ -870,6 +870,254 @@ func (e *env) prospects(acme, ana papp.PartyDTO) {
 	e.must(e.do("POST", "/api/persons", e.seller, map[string]any{"givenName": "Nadie", "firstSurname": acme.ID[:8],
 		"affiliation": map[string]any{"organization": acme.ID, "relationshipType": domain.RelFamily.String()}}, nil), 400,
 		"a family relationship affiliates nobody")
+	e.merges(acme)
+}
+
+// merges cubre lo que pasa al fusionar con las relaciones de negocio de la ficha que cede (D-93):
+// las que la superviviente no tiene con esa empresa pasan a ella con su número de cliente; las que
+// ya tiene se quedan en la que cede, para revisarlas; deshacer la fusión devuelve las que pasaron.
+func (e *env) merges(acme papp.PartyDTO) {
+	e.t.Helper()
+	tag := acme.ID[:8]
+	var bilbao, cede, survivor papp.PartyDTO
+	e.must(e.do("POST", "/api/organizations", e.admin, map[string]any{"legalName": "Bilbao " + tag,
+		"roles": []string{domain.RoleInternalOrganization.String()}}, &bilbao), 201, "another company of the group")
+	e.must(e.do("POST", "/api/persons", e.seller, map[string]any{"givenName": "Cede", "firstSurname": tag,
+		"affiliation": map[string]any{"organization": acme.ID, "relationshipType": domain.RelCustomer.String()}}, &cede), 201, "acme registers a customer")
+	relationships := func(p papp.PartyDTO) []papp.RelationshipDTO {
+		var rs []papp.RelationshipDTO
+		e.must(e.do("GET", "/api/parties/"+p.ID+"/relationships", e.admin, nil, &rs), 200, "relationships")
+		return rs
+	}
+	find := func(p papp.PartyDTO, typ domain.RelationshipTypeID, org string, active bool) (papp.RelationshipDTO, bool) {
+		for _, r := range relationships(p) {
+			if r.Type == typ.String() && (r.FromParty == org || r.ToParty == org) && r.Active == active {
+				return r, true
+			}
+		}
+		return papp.RelationshipDTO{}, false
+	}
+	buys, _ := find(cede, domain.RelCustomer, acme.ID, true)
+	e.must(e.do("PUT", "/api/party-relationships/"+buys.ID+"/customer-number", e.admin, map[string]any{"customerNumber": "M-77"}, nil), 200, "its number")
+	e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelSupplier.String(),
+		"fromParty": acme.ID, "toParty": cede.ID}, nil), 201, "acme also buys from it")
+	e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelCustomer.String(),
+		"fromParty": cede.ID, "toParty": bilbao.ID}, nil), 201, "and it buys from bilbao")
+	e.must(e.do("POST", "/api/persons", e.admin, map[string]any{"givenName": "Superviviente", "firstSurname": tag}, &survivor), 201, "the survivor")
+	e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelCustomer.String(),
+		"fromParty": survivor.ID, "toParty": bilbao.ID}, nil), 201, "which already buys from bilbao")
+	e.must(e.do("GET", "/api/parties/"+survivor.ID, e.seller, nil, nil), 404, "acme does not see the survivor yet")
+
+	var mark papp.RelationshipDTO
+	e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelDuplicateOf.String(),
+		"fromParty": cede.ID, "toParty": survivor.ID}, &mark), 201, "merge")
+	if m := mark.Merge; m == nil || len(m.Transferred) != 2 || len(m.Kept) != 1 || m.Kept[0].Counterparty != bilbao.ID {
+		e.t.Fatalf("what the merge did: %+v", mark.Merge)
+	}
+	moved, ok := find(survivor, domain.RelCustomer, acme.ID, true)
+	if !ok || moved.Customer == nil || moved.Customer.Number != "M-77" || moved.TransferredFrom != buys.ID || !moved.Since.Equal(mark.Since) {
+		e.t.Fatalf("the customer relationship of the survivor: %+v", moved)
+	}
+	if _, ok := find(survivor, domain.RelSupplier, acme.ID, true); !ok {
+		e.t.Fatalf("the supplier relationship did not pass: %+v", relationships(survivor))
+	}
+	if _, ok := find(cede, domain.RelCustomer, acme.ID, true); ok {
+		e.t.Fatalf("the merged party still buys from acme: %+v", relationships(cede))
+	}
+	if _, ok := find(cede, domain.RelCustomer, bilbao.ID, true); !ok {
+		e.t.Fatalf("what the survivor already had stays with the merged party: %+v", relationships(cede))
+	}
+	e.must(e.do("GET", "/api/parties/"+survivor.ID, e.seller, nil, nil), 200, "acme sees the survivor now")
+	e.must(e.do("GET", "/api/parties/"+cede.ID, e.seller, nil, nil), 200, "and still finds the merged party")
+
+	e.must(e.do("POST", "/api/party-relationships/"+mark.ID+"/terminate", e.admin, nil, nil), 200, "undo the merge")
+	if _, ok := find(survivor, domain.RelCustomer, acme.ID, true); ok {
+		e.t.Fatalf("the survivor kept the customer relationship: %+v", relationships(survivor))
+	}
+	back, ok := find(cede, domain.RelCustomer, acme.ID, true)
+	if !ok || back.Customer == nil || back.Customer.Number != "M-77" || back.TransferredFrom != moved.ID {
+		e.t.Fatalf("the customer relationship that came back: %+v", back)
+	}
+	if _, ok := find(cede, domain.RelSupplier, acme.ID, true); !ok {
+		e.t.Fatalf("the supplier relationship did not come back: %+v", relationships(cede))
+	}
+	e.must(e.do("GET", "/api/parties/"+survivor.ID, e.seller, nil, nil), 404, "acme no longer sees the survivor")
+	e.must(e.do("PUT", "/api/parties/"+cede.ID+"/name", e.seller, map[string]any{"givenName": "Cedida", "firstSurname": tag}, nil), 200,
+		"what acme registered, acme still changes after the merge is undone")
+
+	// Una fusión se deshace una sola vez: terminar otra vez la primera no desbloquea a la que cede
+	// cuando hay una segunda vigente.
+	merge := func(from, to string) papp.RelationshipDTO {
+		var m papp.RelationshipDTO
+		e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelDuplicateOf.String(),
+			"fromParty": from, "toParty": to}, &m), 201, "merge")
+		return m
+	}
+	undo := func(m papp.RelationshipDTO) papp.RelationshipDTO {
+		var out papp.RelationshipDTO
+		e.must(e.do("POST", "/api/party-relationships/"+m.ID+"/terminate", e.admin, nil, &out), 200, "undo the merge")
+		return out
+	}
+	e.must(e.do("POST", "/api/party-relationships/"+mark.ID+"/terminate", e.admin, nil, nil), 422, "a merge is undone once")
+	second := merge(cede.ID, survivor.ID)
+	e.must(e.do("POST", "/api/party-relationships/"+mark.ID+"/terminate", e.admin, nil, nil), 422, "nor the first one again while the second holds")
+	e.must(e.do("PUT", "/api/parties/"+cede.ID+"/name", e.admin, map[string]any{"givenName": "Otra", "firstSurname": tag}, nil), 422, "still blocked")
+	// Ni se fusiona ni se deshace con una fecha pasada.
+	e.must(e.do("POST", "/api/party-relationships/"+second.ID+"/terminate", e.admin, map[string]any{"at": time.Now().Add(-time.Hour)}, nil), 422,
+		"undoing in the past")
+	e.must(e.do("POST", "/api/party-relationships/"+second.ID+"/terminate", e.admin, map[string]any{"at": time.Now().Add(time.Hour)}, nil), 422,
+		"nor in the future")
+	// No se encadenan fusiones (D-97): la superviviente de una vigente no se fusiona en otra.
+	var third papp.PartyDTO
+	e.must(e.do("POST", "/api/persons", e.admin, map[string]any{"givenName": "Tercera", "firstSurname": tag}, &third), 201, "a third party")
+	e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelDuplicateOf.String(),
+		"fromParty": survivor.ID, "toParty": third.ID}, nil), 422, "the survivor of a merge is not merged into another")
+	undo(second)
+	e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelDuplicateOf.String(),
+		"fromParty": cede.ID, "toParty": survivor.ID, "since": time.Now().Add(-time.Hour)}, nil), 422, "merging in the past")
+	e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelDuplicateOf.String(),
+		"fromParty": cede.ID, "toParty": survivor.ID, "since": time.Now().Add(time.Hour)}, nil), 422, "nor in the future")
+	// Muchas fusiones y vueltas: lo que Acme dio de alta lo sigue cambiando Acme (D-74), por larga
+	// que sea la cadena de relaciones que se continúan.
+	for range 6 {
+		undo(merge(cede.ID, survivor.ID))
+	}
+	e.must(e.do("PUT", "/api/parties/"+cede.ID+"/name", e.seller, map[string]any{"givenName": "Cedida", "firstSurname": tag + " bis"}, nil), 200,
+		"after six merges undone")
+	if p, ok := e.party(cede.ID); !ok || len(p.Organizations) != 2 {
+		e.t.Fatalf("the party is affiliated to acme and bilbao: %+v", p)
+	}
+	e.must(e.do("GET", "/api/parties/"+survivor.ID, e.seller, nil, nil), 404, "and acme does not see the survivor")
+
+	// La relación que pasa conserva su fin; una renovación que empieza después se queda en la que
+	// cede, y al deshacer, si la que cede ya la tiene, la de la superviviente no vuelve.
+	var renewing, heir papp.PartyDTO
+	e.must(e.do("POST", "/api/persons", e.admin, map[string]any{"givenName": "Renueva", "firstSurname": tag}, &renewing), 201, "a customer that renews")
+	end := time.Now().Add(48 * time.Hour).UTC().Truncate(time.Second)
+	var current papp.RelationshipDTO
+	e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelCustomer.String(),
+		"fromParty": renewing.ID, "toParty": acme.ID}, &current), 201, "buys until the day after tomorrow")
+	e.must(e.do("POST", "/api/party-relationships/"+current.ID+"/terminate", e.admin, map[string]any{"at": end}, nil), 200, "ends then")
+	var renewal papp.RelationshipDTO
+	e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelCustomer.String(),
+		"fromParty": renewing.ID, "toParty": acme.ID, "since": end}, &renewal), 201, "and renews from then")
+	e.must(e.do("POST", "/api/persons", e.admin, map[string]any{"givenName": "Hereda", "firstSurname": tag}, &heir), 201, "the survivor")
+	m := merge(renewing.ID, heir.ID)
+	if len(m.Merge.Transferred) != 1 || len(m.Merge.Kept) != 1 || m.Merge.Kept[0].Relationship != renewal.ID {
+		e.t.Fatalf("a merge with a renewal ahead: %+v", m.Merge)
+	}
+	took, ok := find(heir, domain.RelCustomer, acme.ID, true)
+	if !ok || took.Until == nil || !took.Until.Equal(end) {
+		e.t.Fatalf("the relationship that passed keeps its end: %+v", took)
+	}
+	back = undo(m)
+	if back.Merge == nil || len(back.Merge.Transferred) != 0 || len(back.Merge.Kept) != 1 || back.Merge.Kept[0].Relationship != took.ID {
+		e.t.Fatalf("undoing, the merged party has the renewal: %+v", back.Merge)
+	}
+	if _, ok := find(heir, domain.RelCustomer, acme.ID, true); !ok {
+		e.t.Fatalf("the survivor keeps what did not come back: %+v", relationships(heir))
+	}
+
+	// Si la superviviente terminó durante la fusión la relación que recibió, no vuelve, y la que
+	// cedió deja de estar afiliada a la empresa al deshacer.
+	var gone, gets papp.PartyDTO
+	e.must(e.do("POST", "/api/persons", e.seller, map[string]any{"givenName": "Se Va", "firstSurname": tag,
+		"affiliation": map[string]any{"organization": acme.ID, "relationshipType": domain.RelCustomer.String()}}, &gone), 201, "acme's customer")
+	leaving, _ := find(gone, domain.RelCustomer, acme.ID, true)
+	e.must(e.do("POST", "/api/party-relationships/"+leaving.ID+"/terminate", e.admin, map[string]any{"at": time.Now().Add(30 * 24 * time.Hour)}, nil), 200,
+		"it will stop buying in a month")
+	e.must(e.do("POST", "/api/persons", e.admin, map[string]any{"givenName": "Recibe", "firstSurname": tag}, &gets), 201, "the survivor")
+	m = merge(gone.ID, gets.ID)
+	e.must(e.do("POST", "/api/party-relationships/"+m.Merge.Transferred[0].Relationship+"/terminate", e.admin, nil, nil), 200,
+		"the survivor stops buying from acme")
+	if back = undo(m); len(back.Merge.Transferred) != 0 {
+		e.t.Fatalf("an ended relationship came back: %+v", back.Merge)
+	}
+	e.must(e.do("GET", "/api/parties/"+gone.ID, e.seller, nil, nil), 404, "acme no longer sees the party that left")
+
+	// Una empresa del grupo que se fusiona no pasa a nadie sus clientes: es la empresa, no el
+	// tercero.
+	var branch, branchHeir, client papp.PartyDTO
+	e.must(e.do("POST", "/api/organizations", e.admin, map[string]any{"legalName": "Sucursal " + tag,
+		"roles": []string{domain.RoleInternalOrganization.String()}}, &branch), 201, "a company of the group")
+	e.must(e.do("POST", "/api/organizations", e.admin, map[string]any{"legalName": "Sucursal Buena " + tag,
+		"roles": []string{domain.RoleInternalOrganization.String()}}, &branchHeir), 201, "the company it is merged into")
+	e.must(e.do("POST", "/api/persons", e.admin, map[string]any{"givenName": "Clienta", "firstSurname": tag,
+		"affiliation": map[string]any{"organization": branch.ID, "relationshipType": domain.RelCustomer.String()}}, &client), 201, "its customer")
+	if m := merge(branch.ID, branchHeir.ID); len(m.Merge.Transferred) != 0 || len(m.Merge.Kept) != 1 || m.Merge.Kept[0].Counterparty != client.ID {
+		e.t.Fatalf("merging a company of the group: %+v", m.Merge)
+	}
+
+	// Quien fusiona sólo mueve las relaciones con empresas en las que escribe: el clerk de Acme
+	// fusiona dos fichas que puede cambiar, y la relación con Bilbao se queda en la que cede.
+	var both, kin papp.PartyDTO
+	e.must(e.do("POST", "/api/persons", e.seller, map[string]any{"givenName": "Ambas", "firstSurname": tag,
+		"affiliation": map[string]any{"organization": acme.ID, "relationshipType": domain.RelCustomer.String()}}, &both), 201, "a customer of acme")
+	e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelCustomer.String(),
+		"fromParty": both.ID, "toParty": bilbao.ID}, nil), 201, "and of bilbao")
+	e.must(e.do("POST", "/api/persons", e.seller, map[string]any{"givenName": "Pariente", "firstSurname": tag,
+		"affiliation": map[string]any{"organization": acme.ID, "relationshipType": domain.RelSupplier.String()}}, &kin), 201, "acme's supplier")
+	var scoped papp.RelationshipDTO
+	e.must(e.do("POST", "/api/party-relationships", e.clerk, map[string]any{"type": domain.RelDuplicateOf.String(),
+		"fromParty": both.ID, "toParty": kin.ID}, &scoped), 201, "the clerk merges")
+	if len(scoped.Merge.Transferred) != 1 || scoped.Merge.Transferred[0].Counterparty != acme.ID || len(scoped.Merge.Kept) != 1 ||
+		scoped.Merge.Kept[0].Counterparty != bilbao.ID {
+		e.t.Fatalf("a merge limited to the clerk's companies: %+v", scoped.Merge)
+	}
+	if _, ok := find(kin, domain.RelCustomer, bilbao.ID, true); ok {
+		e.t.Fatalf("bilbao's customer moved by somebody of acme: %+v", relationships(kin))
+	}
+
+	// Y quien deshace tiene que poder escribir en las empresas de lo que vuelve: el clerk no deshace
+	// una fusión que movió una relación con Bilbao.
+	var wide, wider papp.PartyDTO
+	e.must(e.do("POST", "/api/persons", e.seller, map[string]any{"givenName": "Amplia", "firstSurname": tag,
+		"affiliation": map[string]any{"organization": acme.ID, "relationshipType": domain.RelCustomer.String()}}, &wide), 201, "a customer of acme")
+	e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelCustomer.String(),
+		"fromParty": wide.ID, "toParty": bilbao.ID}, nil), 201, "and of bilbao")
+	e.must(e.do("POST", "/api/persons", e.seller, map[string]any{"givenName": "Más Amplia", "firstSurname": tag,
+		"affiliation": map[string]any{"organization": acme.ID, "relationshipType": domain.RelSupplier.String()}}, &wider), 201, "acme's supplier")
+	m = merge(wide.ID, wider.ID)
+	if len(m.Merge.Transferred) != 2 {
+		e.t.Fatalf("the global administrator moves both: %+v", m.Merge)
+	}
+	e.must(e.do("POST", "/api/party-relationships/"+m.ID+"/terminate", e.clerk, nil, nil), 403, "the clerk cannot give back bilbao's customer")
+	if p, _ := e.party(wide.ID); !p.Duplicate {
+		e.t.Fatalf("a refused undo changed nothing: %+v", p)
+	}
+	undo(m)
+
+	// Una empresa marcada como duplicado no recibe relaciones: las que tiene con ella se quedan,
+	// al fusionar y al deshacer, y nada falla.
+	var old, fresh, buyer, heir2, heir3 papp.PartyDTO
+	for _, x := range []struct {
+		name string
+		out  *papp.PartyDTO
+	}{{"Vieja " + tag, &old}, {"Nueva " + tag, &fresh}} {
+		e.must(e.do("POST", "/api/organizations", e.admin, map[string]any{"legalName": x.name,
+			"roles": []string{domain.RoleInternalOrganization.String()}}, x.out), 201, "a company of the group")
+	}
+	e.must(e.do("POST", "/api/persons", e.admin, map[string]any{"givenName": "Compradora", "firstSurname": tag,
+		"affiliation": map[string]any{"organization": old.ID, "relationshipType": domain.RelCustomer.String()}}, &buyer), 201, "the old company's customer")
+	e.must(e.do("POST", "/api/persons", e.admin, map[string]any{"givenName": "Heredera", "firstSurname": tag}, &heir2), 201, "a survivor")
+	e.must(e.do("POST", "/api/persons", e.admin, map[string]any{"givenName": "Otra Heredera", "firstSurname": tag}, &heir3), 201, "another")
+	first := merge(buyer.ID, heir2.ID)
+	if len(first.Merge.Transferred) != 1 {
+		e.t.Fatalf("the customer of the old company moves: %+v", first.Merge)
+	}
+	merge(old.ID, fresh.ID)
+	if back = undo(first); len(back.Merge.Transferred) != 0 || len(back.Merge.Kept) != 1 || back.Merge.Kept[0].Counterparty != old.ID {
+		e.t.Fatalf("undoing with the company now a duplicate: %+v", back.Merge)
+	}
+	if m = merge(heir2.ID, heir3.ID); len(m.Merge.Transferred) != 0 || len(m.Merge.Kept) != 1 {
+		e.t.Fatalf("merging with the company a duplicate: %+v", m.Merge)
+	}
+}
+
+// party lee una party como el administrador.
+func (e *env) party(id string) (papp.PartyDTO, bool) {
+	var p papp.PartyDTO
+	return p, e.do("GET", "/api/parties/"+id, e.admin, nil, &p) == 200
 }
 
 // phase3 cubre el ámbito de organización (decisión P1), el alta dentro del ámbito, la jerarquía

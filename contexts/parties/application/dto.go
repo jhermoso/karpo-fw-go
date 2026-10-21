@@ -234,7 +234,33 @@ type RelationshipDTO struct {
 	Collaborator *CollaboratorDTO `json:"collaborator,omitempty"`
 	// Customer sólo está presente en las relaciones de cliente.
 	Customer *CustomerDTO `json:"customer,omitempty"`
-	Version  int64        `json:"version"`
+	// TransferredFrom es la relación de otra party a la que ésta continúa: la que pasó a la
+	// superviviente al fusionar o volvió al deshacer la fusión (D-93).
+	TransferredFrom string `json:"transferredFrom,omitempty"`
+	// Merge sólo está en la respuesta al marcar un duplicado o deshacer la marca: qué relaciones de
+	// negocio pasaron (a la superviviente, o de vuelta) y cuáles se quedaron, para revisarlas una a una.
+	Merge   *MergeDTO `json:"merge,omitempty"`
+	Version int64     `json:"version"`
+}
+
+// MergeDTO es lo que hizo una fusión con las relaciones de negocio de la ficha fusionada (D-93).
+type MergeDTO struct {
+	Transferred []MergedRelationshipDTO `json:"transferred"`
+	// Kept son, al fusionar, las de la fusionada que no pasan (la superviviente ya las tenía, empiezan
+	// después, la fusionada es la empresa o quien fusiona no escribe en ella): siguen en la fusionada,
+	// bloqueadas con ella, hasta que alguien decida caso por caso. Al deshacer, las de la superviviente
+	// que no vuelven porque la que cedió ya tiene otra con esa empresa o quien deshace no escribe en ella.
+	Kept []MergedRelationshipDTO `json:"kept"`
+}
+
+// MergedRelationshipDTO es una relación de negocio de la ficha fusionada.
+type MergedRelationshipDTO struct {
+	Relationship string `json:"relationship"`       // la nueva, o la que se quedó
+	Previous     string `json:"previous,omitempty"` // la que terminó, si pasó
+	Type         string `json:"type"`
+	// Counterparty es la otra party de la relación: la empresa, salvo cuando la ficha fusionada es
+	// la empresa (entonces, su cliente o proveedor).
+	Counterparty string `json:"counterparty"`
 }
 
 // CustomerDTO son los datos de una relación de cliente.
@@ -264,6 +290,9 @@ func RelationshipToDTO(r *domain.Relationship, types map[domain.RelationshipType
 	d := RelationshipDTO{ID: r.ID().String(), Type: r.Type().String(), FromParty: r.From().String(), ToParty: r.To().String(),
 		FromRole: r.FromRole().String(), ToRole: r.ToRole().String(), Since: r.Since(), Until: r.Until(),
 		Active: r.Period().IsActive(), Remark: r.Remark(), Version: r.Version()}
+	if id := r.TransferredFrom(); !id.IsZero() {
+		d.TransferredFrom = id.String()
+	}
 	if t, ok := types[r.Type()]; ok {
 		d.TypeName = t.Name.String()
 		switch t.Code {

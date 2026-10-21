@@ -27,7 +27,8 @@ type Module struct {
 	IntegrationOutbox application.OutboxStore
 	Audit             application.AuditLog
 	// Consumer recibe las existencias que Inventory retiene para los pedidos y las facturas que
-	// Billing emite para sus albaranes: hay que suscribirlo al transporte.
+	// Billing emite para sus albaranes, y las relaciones de cliente que Parties traslada al fusionar
+	// fichas: hay que suscribirlo al transporte.
 	Consumer *messaging.Consumer
 }
 
@@ -51,6 +52,7 @@ func Compose(sw *hotswap.Switch, catalog domain.Catalog, credit domain.CreditChe
 	}
 	consumer := messaging.NewConsumer(contracts.Source, hotswap.Inbox(sw, infrastructure.InboxFactory), sw)
 	oapp.Subscribe(consumer, d)
+	oapp.SubscribeParties(consumer, d)
 	return &Module{Service: oapp.NewService(d), IntegrationOutbox: integration, Audit: audit, Consumer: consumer}
 }
 

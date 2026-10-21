@@ -239,6 +239,12 @@ func Migrations() sqlrepo.MigrationSet {
 			`ALTER TABLE party_roles {add:trade_name} {str:120}{addEnd}`,
 			`ALTER TABLE party_roles {add:activity_code} {str:10}{addEnd}`,
 			`ALTER TABLE party_roles {add:registered_on} {date}{addEnd}`)},
+		// De qué relación viene una relación de negocio que pasó a otra party al fusionar, o volvió
+		// al deshacer la fusión (docs/DECISIONES-COMUNES.md, D-93). La 26 está reservada: la ocupa
+		// otra rama sin fusionar (feat/contextos-decimales).
+		{Version: 27, Name: "business relationships transferred by a merge", Up: sqlrepo.RenderDDLAll(
+			`ALTER TABLE party_relationships {add:transferred_from} {uuid}{addEnd}`,
+			`CREATE INDEX ix_party_rel_transferred ON party_relationships (transferred_from)`)},
 	}}
 }
 

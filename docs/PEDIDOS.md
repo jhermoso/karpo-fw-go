@@ -122,6 +122,11 @@ contexts/inventory/  # + suscripción a Pedidos (migración 3: inventory_inbox),
   - `ord_terms` (único por empresa y cliente);
   - `ord_counters`;
   - las bandejas de salida, la auditoría y `orders_inbox`.
+- **Fusión de fichas** (D-93; [PARTIES.md](PARTIES.md) §17): Pedidos escucha
+  `parties.relationship-transferred.v1`. Cuando la relación de cliente de una empresa pasa de una
+  ficha a otra, copia las condiciones de venta (tarifa, descuento, bloqueos) de (empresa, la que
+  cede) a (empresa, la que recibe) si ésta no tiene unas. Las de la que cede no se tocan. Al deshacer la
+  fusión (`returning: true`) no se copia nada.
 
 ## Decisiones (aprobadas por Javier el 2026-10-05)
 

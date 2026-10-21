@@ -282,13 +282,17 @@ func RelationshipMapping() sqlrepo.Mapping[domain.RelationshipID, *domain.Relati
 	return sqlrepo.Mapping[domain.RelationshipID, *domain.Relationship]{
 		Table: "party_relationships",
 		Columns: sqlrepo.WithAuditColumns("rel_type", "from_party", "to_party", "from_role", "to_role",
-			"valid_from", "valid_to", "remark", "trial_until", "share_percent", "promotion_code", "customer_number"),
+			"valid_from", "valid_to", "remark", "trial_until", "share_percent", "promotion_code", "customer_number",
+			"transferred_from"),
 		Fields: map[string]string{"type": "rel_type"},
 		Dehydrate: func(r *domain.Relationship) (sqlrepo.Values, error) {
 			v := sqlrepo.Values{"rel_type": r.Type(), "from_party": r.From(), "to_party": r.To(),
 				"from_role": r.FromRole(), "to_role": r.ToRole(), "valid_from": r.Since(), "valid_to": r.Until(),
 				"remark": nullable(r.Remark()), "trial_until": r.TrialUntil(), "share_percent": nil, "promotion_code": nullable(r.PromotionCode()),
-				"customer_number": nullable(r.CustomerNumber())}
+				"customer_number": nullable(r.CustomerNumber()), "transferred_from": nil}
+			if id := r.TransferredFrom(); !id.IsZero() {
+				v["transferred_from"] = id
+			}
 			if s := r.OwnershipShare(); s != nil {
 				v["share_percent"] = s.Points().StringFixed(2) // texto exacto, como todos los decimales de los contextos
 			}
@@ -307,6 +311,7 @@ func RelationshipMapping() sqlrepo.Mapping[domain.RelationshipID, *domain.Relati
 				Details: domain.RelationshipDetails{Prospect: domain.ProspectDetails{TrialUntil: row.NullTime("trial_until")},
 					Collaborator: domain.CollaboratorDetails{PromotionCode: row.String("promotion_code")},
 					Customer:     domain.CustomerDetails{Number: row.String("customer_number")}},
+				TransferredFrom: domain.RelationshipID{UUID: row.UUID("transferred_from")},
 			}
 			if !row.IsNull("share_percent") {
 				share := vocab.NewPercentage(row.Decimal("share_percent"))

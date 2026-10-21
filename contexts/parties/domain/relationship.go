@@ -109,6 +109,9 @@ type Relationship struct {
 	period   vocab.ValidPeriod
 	remark   string
 	details  RelationshipDetails
+	// transferredFrom es la relación a la que ésta continúa en otra party, por una fusión o por
+	// deshacerla (D-93); cero si nació por sí misma.
+	transferredFrom RelationshipID
 }
 
 // RelationshipDetails son los datos que lleva una relación por su tipo (los subtipos UDM de PARTY
@@ -222,6 +225,7 @@ type RelationshipState struct {
 	Period           vocab.ValidPeriod
 	Remark           string
 	Details          RelationshipDetails
+	TransferredFrom  RelationshipID
 	Audit            traits.AuditStamp
 }
 
@@ -240,7 +244,36 @@ func ReconstituteRelationship(id RelationshipID, s RelationshipState) (*Relation
 		return nil, err
 	}
 	return &Relationship{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), relType: s.Type,
-		from: s.From, to: s.To, fromRole: s.FromRole, toRole: s.ToRole, period: s.Period, remark: s.Remark, details: s.Details}, nil
+		from: s.From, to: s.To, fromRole: s.FromRole, toRole: s.ToRole, period: s.Period, remark: s.Remark, details: s.Details,
+		transferredFrom: s.TransferredFrom}, nil
+}
+
+// TransferredFrom devuelve la relación a la que ésta continúa en otra party (cero si ninguna).
+func (r *Relationship) TransferredFrom() RelationshipID { return r.transferredFrom }
+
+// Continue hace de una relación recién establecida la continuación de prev en otra party: mismo
+// tipo, la misma organización en el mismo lado y los mismos datos (el número de cliente). Es como
+// una relación de negocio pasa de la ficha fusionada a la superviviente y vuelve al deshacer la
+// fusión (docs/DECISIONES-COMUNES.md, D-93); returning dice que es esto último. Terminar prev es
+// cosa de quien llama.
+func (r *Relationship) Continue(t RelationshipType, prev *Relationship, returning bool) error {
+	if t.ID != r.relType || prev.relType != r.relType {
+		return fw.Violation("parties.transfer_type_mismatch", "a relationship continues another of its same type")
+	}
+	var org, ceding, receiving PartyID
+	switch {
+	case prev.from == r.from && prev.to != r.to:
+		org, ceding, receiving = r.from, prev.to, r.to
+	case prev.to == r.to && prev.from != r.from:
+		org, ceding, receiving = r.to, prev.from, r.from
+	default:
+		return fw.Violation("parties.transfer_side_mismatch", "a relationship continues another with the same organization and another party")
+	}
+	r.details = prev.details
+	r.transferredFrom = prev.ID()
+	r.Raise(RelationshipTransferred{EventMeta: r.NewEventMeta(), Previous: prev.ID().String(), Type: t.ID.String(), TypeCode: t.Code,
+		Organization: org.String(), Ceding: ceding.String(), Receiving: receiving.String(), Returning: returning, At: r.Since()})
+	return nil
 }
 
 // Type devuelve el tipo de relación.
@@ -442,7 +475,15 @@ func (r *Relationship) AuditSnapshot() map[string]any {
 	return map[string]any{"type": r.relType.String(), "from": r.from.String(), "to": r.to.String(),
 		"since": r.Since().Format(time.RFC3339), "until": format(r.Until()), "remark": r.remark,
 		"trialUntil": format(r.TrialUntil()), "share": shareText(r.OwnershipShare()), "promotionCode": r.PromotionCode(),
-		"customerNumber": r.CustomerNumber()}
+		"customerNumber": r.CustomerNumber(), "transferredFrom": transferredText(r.transferredFrom)}
+}
+
+// transferredText escribe la relación de la que viene otra ("" para ninguna).
+func transferredText(id RelationshipID) string {
+	if id.IsZero() {
+		return ""
+	}
+	return id.String()
 }
 
 // shareText escribe una participación con dos decimales ("" para nil).

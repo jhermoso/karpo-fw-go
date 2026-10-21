@@ -176,6 +176,8 @@ var (
 	RelFieldPromotionCode = spec.Comparable("promotion_code", (*Relationship).PromotionCode)
 
 	RelFieldCustomerNumber = spec.Comparable("customer_number", (*Relationship).CustomerNumber)
+
+	RelFieldTransferredFrom = spec.Comparable("transferred_from", (*Relationship).TransferredFrom)
 )
 
 // InTrialAt selecciona las relaciones de prospect cuya prueba está vigente en t.

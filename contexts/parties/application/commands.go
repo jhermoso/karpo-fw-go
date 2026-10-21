@@ -202,10 +202,21 @@ type EstablishRelationship struct {
 type RelationshipDetailsInput struct {
 	Prospect  *ProspectInput  `json:"prospect,omitempty"`  // relaciones de prospecto
 	Ownership *OwnershipInput `json:"ownership,omitempty"` // relaciones de propiedad
+	// continues es la relación de otra party a la que continúa la nueva, con sus datos: la que pasa
+	// a la superviviente al fusionar o vuelve al deshacer la fusión (D-93). No llega por HTTP.
+	continues *domain.Relationship
+	// returning dice que continues vuelve al deshacer la fusión: el traslado se publica marcado
+	// como vuelta y los otros contextos no copian perfiles (docs/PARTIES.md §17).
+	returning bool
 }
 
 // apply pone los datos en una relación de tipo rt.
 func (d RelationshipDetailsInput) apply(r *domain.Relationship, rt domain.RelationshipType) error {
+	if d.continues != nil {
+		if err := r.Continue(rt, d.continues, d.returning); err != nil {
+			return err
+		}
+	}
 	if d.Prospect != nil {
 		if err := r.SetTrial(rt, d.Prospect.TrialUntil); err != nil {
 			return err

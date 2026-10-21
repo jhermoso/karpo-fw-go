@@ -188,8 +188,36 @@ func (s service) registeredWith(ctx context.Context, p *domain.Party, a domain.A
 	if !ok || party.CorrelationID == "" || party.At.Before(RegistrationRuleSince) {
 		return false
 	}
-	rel, ok := first(domain.RelationshipKind, a.Relationship.String())
-	return ok && rel.CorrelationID == party.CorrelationID
+	// Una relación que volvió al deshacer una fusión continúa a otra (D-93): si la de la afiliación
+	// no nació con la party, se sigue la cadena hacia atrás hasta la de origen. De qué relación viene
+	// cada una lo dice su propio primer registro, así que la cadena no cuesta lecturas de relaciones.
+	id := a.Relationship.String()
+	for range maxTransferChain {
+		rel, ok := first(domain.RelationshipKind, id)
+		if !ok {
+			return false
+		}
+		if rel.CorrelationID == party.CorrelationID {
+			return true
+		}
+		if id = transferredFromOf(rel); id == "" {
+			return false
+		}
+	}
+	return false
+}
+
+// transferredFromOf devuelve, del registro de auditoría del alta de una relación, la relación a la
+// que continúa ("" si ninguna).
+func transferredFromOf(rec app.AuditRecord) string {
+	for _, c := range rec.Changes {
+		if c.Field == "transferredFrom" {
+			if s, ok := c.New.(string); ok {
+				return s
+			}
+		}
+	}
+	return ""
 }
 
 // RegistrationRuleSince es el momento en que entró en vigor «la organización que dio de alta una party la
@@ -436,7 +464,13 @@ func NewService(d Deps) *Service {
 		if err != nil {
 			return RelationshipDTO{}, err
 		}
-		return RelationshipToDTO(r, types), nil
+		out := RelationshipToDTO(r, types)
+		if rt.ID == domain.RelDuplicateOf {
+			if out.Merge, err = s.mergeOf(ctx, r.From(), r.To(), r.Since()); err != nil {
+				return RelationshipDTO{}, err
+			}
+		}
+		return out, nil
 	}, pipeline.Transactional[EstablishRelationship, RelationshipDTO](d.UoW))
 
 	svc.TerminateRelationship = chain(PermRelationshipEnd, func(ctx context.Context, c TerminateRelationship) (RelationshipDTO, error) {
@@ -444,11 +478,13 @@ func NewService(d Deps) *Service {
 		if err != nil {
 			return RelationshipDTO{}, err
 		}
-		r, err := s.terminate(ctx, c.ID, nowOr(c.At))
+		r, merge, err := s.terminate(ctx, c.ID, nowOr(c.At))
 		if err != nil {
 			return RelationshipDTO{}, err
 		}
-		return RelationshipToDTO(r, types), nil
+		out := RelationshipToDTO(r, types)
+		out.Merge = merge
+		return out, nil
 	}, pipeline.Transactional[TerminateRelationship, RelationshipDTO](d.UoW))
 
 	svc.Get = chain(PermPartyRead, func(ctx context.Context, q GetParty) (PartyDTO, error) {
