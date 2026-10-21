@@ -131,8 +131,9 @@ func decimalWriteLimits(t *testing.T, db *sqlrepo.DB) {
 	}
 	repo := sqlrepo.MustRepository(db, DecimalWidgetMapping())
 	for _, w := range []string{"0.000000001", "123456789012345678901", "-123456789012345678901.5"} {
-		if err := repo.Save(ctx, widget(w)); !errors.Is(err, domain.ErrValidation) {
-			t.Errorf("%s does not fit {dec:28,8}: err = %v, want ErrValidation", w, err)
+		// Un fallo del programa, no un dato del usuario: no es ErrValidation (no sale como 400).
+		if err := repo.Save(ctx, widget(w)); !errors.Is(err, sqlrepo.ErrDecimalDoesNotFit) || errors.Is(err, domain.ErrValidation) {
+			t.Errorf("%s does not fit {dec:28,8}: err = %v, want ErrDecimalDoesNotFit and not ErrValidation", w, err)
 		}
 	}
 	if err := repo.Save(ctx, widget("99999999999999999999.99999999")); err != nil {

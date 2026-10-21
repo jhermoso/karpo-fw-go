@@ -206,9 +206,11 @@ cabe en el `decimal` de C#; 0 ≤ s ≤ p) y nunca pasa por `float64`:
 - **Escritura** (`Repository.Save`): una columna declarada sólo admite `vocab.Decimal`,
   `*vocab.Decimal` o nil; un texto o un `float64` es `domain.ErrUnsupported` (un texto llegaría a
   Oracle con una conversión implícita que depende de `NLS_NUMERIC_CHARACTERS`). Un valor con más
-  decimales que s o más cifras enteras que p-s es `domain.ErrValidation` en los cinco motores:
-  nunca se redondea (PostgreSQL, SQL Server, Oracle y MySQL redondearían en silencio y SQLite lo
-  guardaría tal cual). Un `vocab.Decimal` en una columna no declarada es `domain.ErrUnsupported`:
+  decimales que s o más cifras enteras que p-s es `sqlrepo.ErrDecimalDoesNotFit` en los cinco
+  motores: nunca se redondea (PostgreSQL, SQL Server, Oracle y MySQL redondearían en silencio y
+  SQLite lo guardaría tal cual). No es `domain.ErrValidation`: cada dominio valida la escala de sus
+  valores, así que un valor que no cabe es un fallo del programa y sale como error interno (500,
+  sin detalle), no como un 400 que enseñaría la tabla y la columna. Un `vocab.Decimal` en una columna no declarada es `domain.ErrUnsupported`:
   a una columna de texto se le pasa su texto. El valor se enlaza como texto con punto
   (`Decimal.String()`) y se convierte en SQL como dice la tabla.
 - **Lectura**: `Row.Decimal` / `Row.NullDecimal` aceptan texto, bytes y enteros, y rechazan

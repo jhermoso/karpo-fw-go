@@ -84,6 +84,7 @@ func Migrations() sqlrepo.MigrationSet {
 	return sqlrepo.MigrationSet{Context: Context, Migrations: []sqlrepo.Migration{
 		{Version: 1, Name: "received invoices, suppliers and register", Up: sqlrepo.RenderDDLAll(schemaDDL...)},
 		{Version: 2, Name: "outboxes and audit log", Up: technical},
+		{Version: 3, Name: "decimal columns", Run: decimalColumnsV3.Run},
 	}}
 }
 
@@ -120,7 +121,8 @@ func byNo(rows []*sqlrepo.Row) []*sqlrepo.Row {
 // InvoiceMapping mapea Invoice a pur_invoices, sus líneas, su desglose de impuestos y sus cuentas.
 func InvoiceMapping() sqlrepo.Mapping[domain.InvoiceID, *domain.Invoice] {
 	return sqlrepo.Mapping[domain.InvoiceID, *domain.Invoice]{
-		Table: "pur_invoices",
+		Table:    "pur_invoices",
+		Decimals: decimalColumns.Of("pur_invoices"),
 		Columns: sqlrepo.WithAuditColumns("company", "supplier", "supplier_number", "register_number", "fiscal_year", "issued", "received", "due_on",
 			"corrects", "non_deductible", "withholding_rate", "withholding", "country", "net", "tax", "declared_total", "cancelled", "cancel_reason"),
 		Dehydrate: func(i *domain.Invoice) (sqlrepo.Values, error) {
@@ -131,9 +133,9 @@ func InvoiceMapping() sqlrepo.Mapping[domain.InvoiceID, *domain.Invoice] {
 			}
 			return sqlrepo.AuditStampValues(sqlrepo.Values{"company": s.Company, "supplier": s.Supplier, "supplier_number": s.SupplierNumber,
 				"register_number": s.Register, "fiscal_year": int64(s.Year), "issued": s.Issued, "received": s.Received, "due_on": s.Due, "corrects": corrects,
-				"non_deductible": s.NonDeductible, "withholding_rate": s.WithholdingRate.StringFixed(2), "withholding": s.Withholding.StringFixed(2),
-				"country": opt(s.Breakdown.Country), "net": s.Breakdown.Net.StringFixed(2), "tax": s.Breakdown.Tax.StringFixed(2),
-				"declared_total": s.DeclaredTotal.StringFixed(2), "cancelled": s.Cancelled, "cancel_reason": opt(s.CancelReason)}, i.AuditStamp()), nil
+				"non_deductible": s.NonDeductible, "withholding_rate": s.WithholdingRate, "withholding": s.Withholding.Round(2),
+				"country": opt(s.Breakdown.Country), "net": s.Breakdown.Net.Round(2), "tax": s.Breakdown.Tax.Round(2),
+				"declared_total": s.DeclaredTotal.Round(2), "cancelled": s.Cancelled, "cancel_reason": opt(s.CancelReason)}, i.AuditStamp()), nil
 		},
 		Hydrate: func(r *sqlrepo.Row, children sqlrepo.ChildRows) (*domain.Invoice, error) {
 			s := domain.InvoiceState{Draft: domain.Draft{Company: domain.OrganizationID{UUID: r.UUID("company")}, Supplier: domain.PartyID{UUID: r.UUID("supplier")},
@@ -171,33 +173,36 @@ func InvoiceMapping() sqlrepo.Mapping[domain.InvoiceID, *domain.Invoice] {
 		},
 		Children: []sqlrepo.Child[*domain.Invoice]{{
 			Name: "lines", Table: "pur_invoice_lines", ForeignKey: "invoice_id", OrderBy: []string{"line_no"},
-			Columns: []string{"line_no", "description", "category", "base", "tax_code", "treatment"},
+			Decimals: decimalColumns.Of("pur_invoice_lines"),
+			Columns:  []string{"line_no", "description", "category", "base", "tax_code", "treatment"},
 			Dehydrate: func(i *domain.Invoice) ([]sqlrepo.Values, error) {
 				out := []sqlrepo.Values{}
 				for _, l := range i.State().Lines {
 					out = append(out, sqlrepo.Values{"line_no": int64(l.No), "description": opt(l.Description), "category": string(l.Category),
-						"base": l.Base.StringFixed(2), "tax_code": opt(l.TaxCode), "treatment": opt(l.Treatment)})
+						"base": l.Base.Round(2), "tax_code": opt(l.TaxCode), "treatment": opt(l.Treatment)})
 				}
 				return out, nil
 			},
 		}, {
 			Name: "taxes", Table: "pur_invoice_taxes", ForeignKey: "invoice_id", OrderBy: []string{"line_no"},
-			Columns: []string{"line_no", "tax_type", "tax_code", "treatment", "treatment_kind", "rate", "base", "amount"},
+			Decimals: decimalColumns.Of("pur_invoice_taxes"),
+			Columns:  []string{"line_no", "tax_type", "tax_code", "treatment", "treatment_kind", "rate", "base", "amount"},
 			Dehydrate: func(i *domain.Invoice) ([]sqlrepo.Values, error) {
 				out := []sqlrepo.Values{}
 				for k, t := range i.State().Breakdown.Lines {
 					out = append(out, sqlrepo.Values{"line_no": int64(k + 1), "tax_type": opt(t.TaxType), "tax_code": opt(t.TaxCode), "treatment": opt(t.Treatment),
-						"treatment_kind": t.TreatmentKind, "rate": t.Rate.StringFixed(2), "base": t.Base.StringFixed(2), "amount": t.Amount.StringFixed(2)})
+						"treatment_kind": t.TreatmentKind, "rate": t.Rate.Round(2), "base": t.Base.Round(2), "amount": t.Amount.Round(2)})
 				}
 				return out, nil
 			},
 		}, {
 			Name: "accounts", Table: "pur_invoice_accounts", ForeignKey: "invoice_id", OrderBy: []string{"line_no"},
-			Columns: []string{"line_no", "iban", "amount"},
+			Decimals: decimalColumns.Of("pur_invoice_accounts"),
+			Columns:  []string{"line_no", "iban", "amount"},
 			Dehydrate: func(i *domain.Invoice) ([]sqlrepo.Values, error) {
 				out := []sqlrepo.Values{}
 				for k, p := range i.State().PayTo {
-					out = append(out, sqlrepo.Values{"line_no": int64(k + 1), "iban": p.IBAN.String(), "amount": p.Amount.StringFixed(2)})
+					out = append(out, sqlrepo.Values{"line_no": int64(k + 1), "iban": p.IBAN.String(), "amount": p.Amount.Round(2)})
 				}
 				return out, nil
 			},
@@ -208,12 +213,13 @@ func InvoiceMapping() sqlrepo.Mapping[domain.InvoiceID, *domain.Invoice] {
 // SupplierMapping mapea SupplierProfile a pur_suppliers.
 func SupplierMapping() sqlrepo.Mapping[domain.SupplierID, *domain.SupplierProfile] {
 	return sqlrepo.Mapping[domain.SupplierID, *domain.SupplierProfile]{
-		Table:   "pur_suppliers",
-		Columns: sqlrepo.WithAuditColumns("company", "supplier", "category", "withholding_rate", "payment_days", "iban", "blocked"),
+		Table:    "pur_suppliers",
+		Decimals: decimalColumns.Of("pur_suppliers"),
+		Columns:  sqlrepo.WithAuditColumns("company", "supplier", "category", "withholding_rate", "payment_days", "iban", "blocked"),
 		Dehydrate: func(p *domain.SupplierProfile) (sqlrepo.Values, error) {
 			s := p.State()
 			return sqlrepo.AuditStampValues(sqlrepo.Values{"company": s.Company, "supplier": s.Supplier, "category": opt(string(s.Category)),
-				"withholding_rate": s.WithholdingRate.StringFixed(2), "payment_days": int64(s.PaymentDays), "iban": opt(s.IBAN.String()),
+				"withholding_rate": s.WithholdingRate, "payment_days": int64(s.PaymentDays), "iban": opt(s.IBAN.String()),
 				"blocked": s.Blocked}, p.AuditStamp()), nil
 		},
 		Hydrate: func(r *sqlrepo.Row, _ sqlrepo.ChildRows) (*domain.SupplierProfile, error) {

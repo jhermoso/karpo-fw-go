@@ -84,6 +84,7 @@ func Migrations() sqlrepo.MigrationSet {
 	return sqlrepo.MigrationSet{Context: Context, Migrations: []sqlrepo.Migration{
 		{Version: 1, Name: "payables and payments", Up: sqlrepo.RenderDDLAll(schemaDDL...)},
 		{Version: 2, Name: "outboxes, audit log and inbox", Up: technical},
+		{Version: 3, Name: "decimal columns", Run: decimalColumnsV3.Run},
 	}}
 }
 
@@ -120,14 +121,15 @@ func optUUID(u fw.UUID) any {
 // PayableMapping mapea Payable a pay_payables y sus cuentas.
 func PayableMapping() sqlrepo.Mapping[domain.PayableID, *domain.Payable] {
 	return sqlrepo.Mapping[domain.PayableID, *domain.Payable]{
-		Table: "pay_payables",
+		Table:    "pay_payables",
+		Decimals: decimalColumns.Of("pay_payables"),
 		Columns: sqlrepo.WithAuditColumns("company", "payee", "authority", "kind", "source_type", "source_id", "document", "description", "issued", "due_on",
 			"currency", "amount", "paid", "settled", "cancelled"),
 		Dehydrate: func(p *domain.Payable) (sqlrepo.Values, error) {
 			s := p.State()
 			return sqlrepo.AuditStampValues(sqlrepo.Values{"company": s.Company, "payee": optUUID(s.Payee.UUID), "authority": opt(s.Authority),
 				"kind": s.Kind.String(), "source_type": s.Source.Type, "source_id": s.Source.ID, "document": s.Document, "description": opt(s.Description),
-				"issued": s.Issued, "due_on": s.Due, "currency": s.Currency.String(), "amount": s.Amount.StringFixed(2), "paid": s.Paid.StringFixed(2),
+				"issued": s.Issued, "due_on": s.Due, "currency": s.Currency.String(), "amount": s.Amount.Round(2), "paid": s.Paid.Round(2),
 				"settled": p.Settled(), "cancelled": s.Cancelled}, p.AuditStamp()), nil
 		},
 		Hydrate: func(r *sqlrepo.Row, children sqlrepo.ChildRows) (*domain.Payable, error) {
@@ -169,11 +171,12 @@ func PayableMapping() sqlrepo.Mapping[domain.PayableID, *domain.Payable] {
 		},
 		Children: []sqlrepo.Child[*domain.Payable]{{
 			Name: "accounts", Table: "pay_payable_accounts", ForeignKey: "payable_id", OrderBy: []string{"line_no"},
-			Columns: []string{"line_no", "iban", "amount"},
+			Decimals: decimalColumns.Of("pay_payable_accounts"),
+			Columns:  []string{"line_no", "iban", "amount"},
 			Dehydrate: func(p *domain.Payable) ([]sqlrepo.Values, error) {
 				out := []sqlrepo.Values{}
 				for i, t := range p.State().PayTo {
-					out = append(out, sqlrepo.Values{"line_no": int64(i + 1), "iban": t.IBAN.String(), "amount": t.Amount.StringFixed(2)})
+					out = append(out, sqlrepo.Values{"line_no": int64(i + 1), "iban": t.IBAN.String(), "amount": t.Amount.Round(2)})
 				}
 				return out, nil
 			},
@@ -184,12 +187,13 @@ func PayableMapping() sqlrepo.Mapping[domain.PayableID, *domain.Payable] {
 // PaymentMapping mapea Payment a pay_payments y sus aplicaciones.
 func PaymentMapping() sqlrepo.Mapping[domain.PaymentID, *domain.Payment] {
 	return sqlrepo.Mapping[domain.PaymentID, *domain.Payment]{
-		Table:   "pay_payments",
-		Columns: sqlrepo.WithAuditColumns("company", "payee", "authority", "paid_on", "amount", "currency", "method", "reference", "cancelled"),
+		Table:    "pay_payments",
+		Decimals: decimalColumns.Of("pay_payments"),
+		Columns:  sqlrepo.WithAuditColumns("company", "payee", "authority", "paid_on", "amount", "currency", "method", "reference", "cancelled"),
 		Dehydrate: func(p *domain.Payment) (sqlrepo.Values, error) {
 			s := p.State()
 			return sqlrepo.AuditStampValues(sqlrepo.Values{"company": s.Company, "payee": optUUID(s.Payee.UUID), "authority": opt(s.Authority),
-				"paid_on": s.Date, "amount": s.Amount.StringFixed(2), "currency": s.Currency.String(), "method": int64(s.Method), "reference": opt(s.Reference),
+				"paid_on": s.Date, "amount": s.Amount.Round(2), "currency": s.Currency.String(), "method": int64(s.Method), "reference": opt(s.Reference),
 				"cancelled": s.Cancelled}, p.AuditStamp()), nil
 		},
 		Hydrate: func(r *sqlrepo.Row, children sqlrepo.ChildRows) (*domain.Payment, error) {
@@ -216,11 +220,12 @@ func PaymentMapping() sqlrepo.Mapping[domain.PaymentID, *domain.Payment] {
 		},
 		Children: []sqlrepo.Child[*domain.Payment]{{
 			Name: "allocations", Table: "pay_allocations", ForeignKey: "payment_id", OrderBy: []string{"id"},
-			Columns: []string{"id", "payable_id", "kind", "amount", "allocated_on"},
+			Decimals: decimalColumns.Of("pay_allocations"),
+			Columns:  []string{"id", "payable_id", "kind", "amount", "allocated_on"},
 			Dehydrate: func(p *domain.Payment) ([]sqlrepo.Values, error) {
 				out := []sqlrepo.Values{}
 				for _, a := range p.State().Allocations {
-					out = append(out, sqlrepo.Values{"id": a.ID, "payable_id": a.Payable, "kind": int64(a.Kind), "amount": a.Amount.StringFixed(2),
+					out = append(out, sqlrepo.Values{"id": a.ID, "payable_id": a.Payable, "kind": int64(a.Kind), "amount": a.Amount.Round(2),
 						"allocated_on": a.On})
 				}
 				return out, nil

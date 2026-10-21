@@ -68,6 +68,7 @@ func Migrations() sqlrepo.MigrationSet {
 	return sqlrepo.MigrationSet{Context: Context, Migrations: []sqlrepo.Migration{
 		{Version: 1, Name: "asset register and depreciation charges", Up: sqlrepo.RenderDDLAll(schemaDDL...)},
 		{Version: 2, Name: "outboxes and audit log", Up: technical},
+		{Version: 3, Name: "decimal columns", Run: decimalColumnsV3.Run},
 	}}
 }
 
@@ -104,17 +105,18 @@ func optUUID(u fw.UUID) any {
 // AssetMapping mapea Asset a ast_assets y sus cargos.
 func AssetMapping() sqlrepo.Mapping[domain.AssetID, *domain.Asset] {
 	return sqlrepo.Mapping[domain.AssetID, *domain.Asset]{
-		Table: "ast_assets",
+		Table:    "ast_assets",
+		Decimals: decimalColumns.Of("ast_assets"),
 		Columns: sqlrepo.WithAuditColumns("company", "code", "asset_class", "name", "serial", "location", "supplier", "document", "acquired",
 			"in_service", "cost", "residual", "life_months", "disposed", "disposed_on", "disposal", "proceeds"),
 		Dehydrate: func(a *domain.Asset) (sqlrepo.Values, error) {
 			s := a.State()
 			v := sqlrepo.Values{"company": s.Company, "code": s.Code, "asset_class": string(s.Class), "name": s.Name, "serial": opt(s.Serial),
 				"location": optUUID(s.Location.UUID), "supplier": optUUID(s.Supplier.UUID), "document": opt(s.Document), "acquired": s.Acquired,
-				"in_service": s.InService, "cost": s.Cost.StringFixed(2), "residual": s.Residual.StringFixed(2), "life_months": int64(s.LifeMonths),
+				"in_service": s.InService, "cost": s.Cost.Round(2), "residual": s.Residual.Round(2), "life_months": int64(s.LifeMonths),
 				"disposed": !s.Disposed.IsZero(), "disposed_on": nil, "disposal": nil, "proceeds": nil}
 			if !s.Disposed.IsZero() {
-				v["disposed_on"], v["disposal"], v["proceeds"] = s.Disposed, s.Disposal, s.Proceeds.StringFixed(2)
+				v["disposed_on"], v["disposal"], v["proceeds"] = s.Disposed, s.Disposal, s.Proceeds.Round(2)
 			}
 			return sqlrepo.AuditStampValues(v, a.AuditStamp()), nil
 		},
@@ -144,12 +146,13 @@ func AssetMapping() sqlrepo.Mapping[domain.AssetID, *domain.Asset] {
 		},
 		Children: []sqlrepo.Child[*domain.Asset]{{
 			Name: "charges", Table: "ast_asset_charges", ForeignKey: "asset_id", OrderBy: []string{"line_no"},
-			Columns: []string{"line_no", "period_year", "period_month", "amount"},
+			Columns:  []string{"line_no", "period_year", "period_month", "amount"},
+			Decimals: decimalColumns.Of("ast_asset_charges"),
 			Dehydrate: func(a *domain.Asset) ([]sqlrepo.Values, error) {
 				out := []sqlrepo.Values{}
 				for k, c := range a.State().Charges {
 					out = append(out, sqlrepo.Values{"line_no": int64(k + 1), "period_year": int64(c.Period.Year), "period_month": int64(c.Period.Month),
-						"amount": c.Amount.StringFixed(2)})
+						"amount": c.Amount.Round(2)})
 				}
 				return out, nil
 			},

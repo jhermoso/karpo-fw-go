@@ -101,6 +101,7 @@ func Migrations() sqlrepo.MigrationSet {
 			}
 			return db.InsertMany(ctx, "pay_concepts", []string{"id", "code", "name", "kind", "contributable", "taxable", "perception_key", "active"}, rows)
 		}},
+		{Version: 4, Name: "decimal columns", Run: decimalColumnsV4.Run},
 	}}
 }
 
@@ -146,7 +147,7 @@ func optDecimal(d vocab.Decimal) any {
 	if d.IsZero() {
 		return nil
 	}
-	return d.String()
+	return d
 }
 
 func iban(r *sqlrepo.Row, col string) (vocab.IBAN, error) {
@@ -159,7 +160,8 @@ func iban(r *sqlrepo.Row, col string) (vocab.IBAN, error) {
 // PayslipMapping mapea Payslip a pay_payslips y sus líneas.
 func PayslipMapping() sqlrepo.Mapping[domain.PayslipID, *domain.Payslip] {
 	return sqlrepo.Mapping[domain.PayslipID, *domain.Payslip]{
-		Table: "pay_payslips",
+		Table:    "pay_payslips",
+		Decimals: decimalColumns.Of("pay_payslips"),
 		Columns: sqlrepo.WithAuditColumns("employment", "person", "employer", "kind", "period_start", "period_end", "payment_date", "status",
 			"employee_number", "agreement", "work_center", "contribution_group", "income_tax_rate", "employer_account", "gross", "net", "cancel_reason"),
 		Dehydrate: func(p *domain.Payslip) (sqlrepo.Values, error) {
@@ -170,7 +172,7 @@ func PayslipMapping() sqlrepo.Mapping[domain.PayslipID, *domain.Payslip] {
 				"kind": int64(p.Kind()), "period_start": start, "period_end": end, "payment_date": p.PaymentDate(), "status": int64(p.Status()),
 				"employee_number": opt(sn.EmployeeNumber), "agreement": optUUID(sn.Agreement.UUID), "work_center": optUUID(sn.WorkCenter.UUID),
 				"contribution_group": int64(sn.ContributionGroup), "income_tax_rate": optDecimal(sn.IncomeTaxRate),
-				"employer_account": optUUID(sn.EmployerAccount.UUID), "gross": t.Gross.StringFixed(2), "net": t.Net.StringFixed(2),
+				"employer_account": optUUID(sn.EmployerAccount.UUID), "gross": t.Gross.Round(2), "net": t.Net.Round(2),
 				"cancel_reason": opt(p.CancelReason())}, p.AuditStamp()), nil
 		},
 		Hydrate: func(r *sqlrepo.Row, children sqlrepo.ChildRows) (*domain.Payslip, error) {
@@ -200,6 +202,7 @@ func PayslipMapping() sqlrepo.Mapping[domain.PayslipID, *domain.Payslip] {
 		},
 		Children: []sqlrepo.Child[*domain.Payslip]{{
 			Name: "lines", Table: "pay_payslip_lines", ForeignKey: "payslip_id",
+			Decimals: decimalColumns.Of("pay_payslip_lines"),
 			Columns: []string{"id", "concept", "code", "kind", "contributable", "taxable", "perception_key", "description", "quantity",
 				"unit_amount", "base_amount", "rate_percent", "amount"},
 			OrderBy: []string{"id"},
@@ -209,7 +212,7 @@ func PayslipMapping() sqlrepo.Mapping[domain.PayslipID, *domain.Payslip] {
 					out = append(out, sqlrepo.Values{"id": l.ID, "concept": l.Concept, "code": l.Code, "kind": int64(l.Kind),
 						"contributable": l.Contributable, "taxable": l.Taxable, "perception_key": opt(l.PerceptionKey), "description": l.Description,
 						"quantity": optDecimal(l.Quantity), "unit_amount": optDecimal(l.UnitAmount), "base_amount": optDecimal(l.Base),
-						"rate_percent": optDecimal(l.Percent), "amount": l.Amount.StringFixed(2)})
+						"rate_percent": optDecimal(l.Percent), "amount": l.Amount.Round(2)})
 				}
 				return out, nil
 			},
@@ -220,16 +223,17 @@ func PayslipMapping() sqlrepo.Mapping[domain.PayslipID, *domain.Payslip] {
 // ProfileMapping mapea Profile a pay_profiles y sus repartos.
 func ProfileMapping() sqlrepo.Mapping[domain.ProfileID, *domain.Profile] {
 	return sqlrepo.Mapping[domain.ProfileID, *domain.Profile]{
-		Table: "pay_profiles",
+		Table:    "pay_profiles",
+		Decimals: decimalColumns.Of("pay_profiles"),
 		Columns: sqlrepo.WithAuditColumns("employment", "person", "employer", "contribution_group", "income_tax_rate", "salary_amount",
 			"salary_periodicity", "payments_per_year", "employer_account"),
 		Dehydrate: func(p *domain.Profile) (sqlrepo.Values, error) {
 			t := p.Terms()
 			v := sqlrepo.Values{"employment": p.Employment(), "person": p.Person(), "employer": p.Employer(),
-				"contribution_group": int64(t.ContributionGroup), "income_tax_rate": t.IncomeTaxRate.String(), "salary_amount": nil,
+				"contribution_group": int64(t.ContributionGroup), "income_tax_rate": t.IncomeTaxRate, "salary_amount": nil,
 				"salary_periodicity": nil, "payments_per_year": nil, "employer_account": optUUID(t.Account.UUID)}
 			if !t.Salary.IsZero() {
-				v["salary_amount"], v["salary_periodicity"], v["payments_per_year"] = t.Salary.Amount.String(), int64(t.Salary.Periodicity),
+				v["salary_amount"], v["salary_periodicity"], v["payments_per_year"] = t.Salary.Amount, int64(t.Salary.Periodicity),
 					int64(t.Salary.PaymentsPerYear)
 			}
 			return sqlrepo.AuditStampValues(v, p.AuditStamp()), nil
@@ -262,8 +266,9 @@ func ProfileMapping() sqlrepo.Mapping[domain.ProfileID, *domain.Profile] {
 		},
 		Children: []sqlrepo.Child[*domain.Profile]{{
 			Name: "splits", Table: "pay_profile_splits", ForeignKey: "profile_id",
-			Columns: []string{"id", "iban", "split_percent", "split_amount", "is_residual", "split_priority", "garnishment", "valid_from", "valid_to"},
-			OrderBy: []string{"id"},
+			Decimals: decimalColumns.Of("pay_profile_splits"),
+			Columns:  []string{"id", "iban", "split_percent", "split_amount", "is_residual", "split_priority", "garnishment", "valid_from", "valid_to"},
+			OrderBy:  []string{"id"},
 			Dehydrate: func(p *domain.Profile) ([]sqlrepo.Values, error) {
 				out := []sqlrepo.Values{}
 				for _, s := range p.Splits() {

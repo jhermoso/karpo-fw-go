@@ -89,6 +89,7 @@ func Migrations() sqlrepo.MigrationSet {
 			`ALTER TABLE fac_facilities {add:addr_staircase} {str:10}{addEnd}`,
 			`ALTER TABLE fac_facilities {add:addr_floor} {str:10}{addEnd}`,
 			`ALTER TABLE fac_facilities {add:addr_door} {str:10}{addEnd}`)},
+		{Version: 5, Name: "decimal columns", Run: decimalColumnsV5.Run},
 	}}
 }
 
@@ -122,7 +123,8 @@ func optUUID(u fw.UUID) any {
 // FacilityMapping mapea Facility a fac_facilities.
 func FacilityMapping() sqlrepo.Mapping[domain.FacilityID, *domain.Facility] {
 	return sqlrepo.Mapping[domain.FacilityID, *domain.Facility]{
-		Table: "fac_facilities",
+		Table:    "fac_facilities",
+		Decimals: decimalColumns.Of("fac_facilities"),
 		Columns: sqlrepo.WithAuditColumns("organization", "facility_type", "name", "description", "part_of", "area_m2", "street_type",
 			"line1", "line2", "postal_code", "locality", "region", "country", "geo_postal_code", "geo_boundary", "phone", "email", "active",
 			"addr_number", "addr_qualifier", "addr_block", "addr_portal", "addr_staircase", "addr_floor", "addr_door"),
@@ -135,7 +137,7 @@ func FacilityMapping() sqlrepo.Mapping[domain.FacilityID, *domain.Facility] {
 				partOf = *p
 			}
 			if !f.Area().IsZero() {
-				area = f.Area().String()
+				area = f.Area()
 			}
 			return sqlrepo.AuditStampValues(sqlrepo.Values{"organization": f.Owner(), "facility_type": f.Type(), "name": f.Name(),
 				"description": opt(f.Description()), "part_of": partOf, "area_m2": area, "street_type": opt(a.StreetType),
@@ -155,10 +157,8 @@ func FacilityMapping() sqlrepo.Mapping[domain.FacilityID, *domain.Facility] {
 				p := domain.FacilityID{UUID: r.UUID("part_of")}
 				s.PartOf = &p
 			}
-			if a := r.String("area_m2"); a != "" {
-				d, err := vocab.ParseDecimal(a)
-				v.Merge("area_m2", err)
-				s.Area = d
+			if !r.IsNull("area_m2") {
+				s.Area = r.Decimal("area_m2")
 			}
 			addr := domain.Address{StreetType: r.String("street_type"), Line1: r.String("line1"), Line2: r.String("line2"),
 				PostalCode: r.String("postal_code"), Locality: r.String("locality"), Region: r.String("region"),
