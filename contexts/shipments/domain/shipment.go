@@ -165,7 +165,7 @@ func ReconstituteShipment(id ShipmentID, s ShipmentState) (*Shipment, error) {
 		v.Require(l.No == i+1, "lines", "order", "lines are numbered from 1")
 		v.Require(l.Description != "" && utf8.RuneCountInString(l.Description) <= 200 && len(l.SKU) <= 40 && len(l.UoM) <= 10, "lines", "format",
 			"a description of 1 to 200 characters")
-		v.Require(l.Quantity.IsPositive(), "lines", "quantity", "a positive quantity")
+		v.Require(l.Quantity.IsPositive() && l.Quantity.Equal(l.Quantity.Round(4)), "lines", "quantity", "a positive quantity of up to 4 decimals")
 	}
 	if err := v.Err(); err != nil {
 		return nil, err

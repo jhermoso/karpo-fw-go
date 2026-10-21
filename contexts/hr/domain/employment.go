@@ -176,7 +176,8 @@ func (e *Employment) AddContract(c Contract) (ContractID, error) {
 	c.Number = shortCode(&v, "number", c.Number, 30)
 	v.Require(!c.Start.IsZero(), "start", "required", "the start date is required")
 	v.Require(c.End.IsZero() || !c.End.Before(c.Start), "end", "order", "the end cannot precede the start")
-	v.Require(c.WeeklyHours.Sign() >= 0 && c.WeeklyHours.LessThanOrEqual(vocab.DecimalFromInt(60)), "weeklyHours", "range", "0 to 60 hours")
+	v.Require(c.WeeklyHours.Sign() >= 0 && c.WeeklyHours.LessThanOrEqual(vocab.DecimalFromInt(60)) && c.WeeklyHours.Equal(c.WeeklyHours.Round(2)),
+		"weeklyHours", "range", "0 to 60 hours, with two decimals")
 	if err := v.Err(); err != nil {
 		return ContractID{}, err
 	}

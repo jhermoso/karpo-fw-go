@@ -109,7 +109,8 @@ contexts/payroll/
   - `pay_profiles` (+ `pay_profile_splits`);
   - `pay_payslips` (+ `pay_payslip_lines`);
   - las dos bandejas de salida y la auditoría.
-  - Los importes se guardan como texto decimal exacto.
+  - Los importes y porcentajes son columnas `{dec:p,s}` desde la migración 4 (D-94; tabla en
+    [ESQUEMA-MIGRACIONES.md](ESQUEMA-MIGRACIONES.md)).
   - El bruto y el neto se guardan también en la cabecera para informes; al leer, se recalculan
     desde las líneas.
 

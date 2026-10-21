@@ -22,6 +22,10 @@ var (
 	zero    = vocab.DecimalFromInt(0)
 )
 
+// places dice si d tiene como mucho n decimales, los de su columna (pay_payslip_lines: cantidad,
+// importe unitario y base (18,4), porcentaje (5,2); pay_profile_splits: porcentaje (5,2)).
+func places(d vocab.Decimal, n int32) bool { return d.Equal(d.Round(n)) }
+
 // Kind es la clase de nómina: una nómina ordinaria por periodo, y las pagas extra o un finiquito
 // aparte.
 type Kind int
@@ -124,12 +128,14 @@ func NewLine(c Concept, in LineInput) (Line, error) {
 	case byUnits && byRate:
 		v.Add("amount", "mode", "a line is an amount, quantity × unit or base × percent")
 	case byUnits:
-		v.Require(in.Quantity.IsPositive() && in.UnitAmount.IsPositive(), "quantity", "range", "quantity and unit amount must be positive")
+		v.Require(in.Quantity.IsPositive() && in.UnitAmount.IsPositive() && places(in.Quantity, 4) && places(in.UnitAmount, 4), "quantity", "range",
+			"quantity and unit amount must be positive, with up to 4 decimals")
 		v.Require(in.Amount.IsZero(), "amount", "mode", "the amount is computed from quantity × unit")
 		amount = in.Quantity.Mul(in.UnitAmount).Round(2)
 	case byRate:
-		v.Require(in.Base.IsPositive(), "base", "range", "the base must be positive")
-		v.Require(in.Percent.IsPositive() && in.Percent.LessThanOrEqual(hundred), "percent", "range", "a percentage over 0 and up to 100")
+		v.Require(in.Base.IsPositive() && places(in.Base, 4), "base", "range", "the base must be positive, with up to 4 decimals")
+		v.Require(in.Percent.IsPositive() && in.Percent.LessThanOrEqual(hundred) && places(in.Percent, 2), "percent", "range",
+			"a percentage over 0 and up to 100 with two decimals")
 		v.Require(in.Amount.IsZero(), "amount", "mode", "the amount is computed from base × percent")
 		amount = in.Base.Mul(in.Percent).Div(hundred).Round(2)
 	default:

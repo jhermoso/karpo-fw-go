@@ -60,9 +60,18 @@ var engines = []engine{
 
 func open(t *testing.T, e engine) *sqlrepo.DB {
 	t.Helper()
+	return openWith(t, e, nil)
+}
+
+// openWith abre el motor con la cadena de conexión ajustada por adjust (si no es nil).
+func openWith(t *testing.T, e engine, adjust func(string) string) *sqlrepo.DB {
+	t.Helper()
 	dsn := os.Getenv(e.env)
 	if dsn == "" {
 		t.Skipf("%s not set", e.env)
+	}
+	if adjust != nil {
+		dsn = adjust(dsn)
 	}
 	raw, err := sql.Open(e.driver, dsn)
 	if err != nil {
@@ -104,6 +113,23 @@ func TestMigrations(t *testing.T) {
 			continue
 		}
 		t.Run(e.name, func(t *testing.T) { sqlconformance.RunMigrations(t, open(t, e)) })
+	}
+}
+
+// TestDecimals comprueba en cada motor las columnas {dec:p,s}: ida y vuelta exacta, comparación y
+// orden por valor iguales a los de memoria, la sesión de Oracle con coma decimal y el paso de una
+// columna de texto a decimal. Como cambia tipos de columna en el mismo proceso, PostgreSQL se abre
+// como el proceso que migra: sin caché de sentencias (postgres.WithoutStatementCache).
+func TestDecimals(t *testing.T) {
+	for _, e := range engines {
+		if e.name == "oracle-dotnet-guids" {
+			continue
+		}
+		var adjust func(string) string
+		if e.name == "postgres" {
+			adjust = postgres.WithoutStatementCache
+		}
+		t.Run(e.name, func(t *testing.T) { sqlconformance.RunDecimals(t, openWith(t, e, adjust)) })
 	}
 }
 

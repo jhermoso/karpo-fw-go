@@ -21,13 +21,14 @@ var quotesDDL = []string{
 // QuoteMapping mapea Quote a ord_quotes y sus líneas.
 func QuoteMapping() sqlrepo.Mapping[domain.QuoteID, *domain.Quote] {
 	return sqlrepo.Mapping[domain.QuoteID, *domain.Quote]{
-		Table: "ord_quotes",
+		Table:    "ord_quotes",
+		Decimals: decimalColumns.Of("ord_quotes"),
 		Columns: sqlrepo.WithAuditColumns("company", "customer", "quote_number", "quote_date", "valid_until", "price_list", "customer_discount", "reference",
 			"notes", "status", "reason", "order_id"),
 		Dehydrate: func(q *domain.Quote) (sqlrepo.Values, error) {
 			s := q.State()
 			return sqlrepo.AuditStampValues(sqlrepo.Values{"company": s.Company, "customer": s.Customer, "quote_number": opt(s.Number), "quote_date": s.Date,
-				"valid_until": s.ValidUntil, "price_list": optUUID(s.PriceList.UUID), "customer_discount": s.CustomerDiscount.StringFixed(2),
+				"valid_until": s.ValidUntil, "price_list": optUUID(s.PriceList.UUID), "customer_discount": s.CustomerDiscount.Round(2),
 				"reference": opt(s.Reference), "notes": opt(s.Notes), "status": string(s.Status), "reason": opt(s.Reason), "order_id": optUUID(s.Order.UUID)},
 				q.AuditStamp()), nil
 		},
@@ -55,12 +56,13 @@ func QuoteMapping() sqlrepo.Mapping[domain.QuoteID, *domain.Quote] {
 			Name: "lines", Table: "ord_quote_lines", ForeignKey: "quote_id", OrderBy: []string{"line_no"},
 			Columns: []string{"line_no", "product", "sku", "description", "uom", "tax_code", "stocked", "quantity", "unit_price", "discount", "net_price",
 				"amount"},
+			Decimals: decimalColumns.Of("ord_quote_lines"),
 			Dehydrate: func(q *domain.Quote) ([]sqlrepo.Values, error) {
 				out := []sqlrepo.Values{}
 				for _, l := range q.State().Lines {
 					out = append(out, sqlrepo.Values{"line_no": int64(l.No), "product": l.Product, "sku": l.SKU, "description": l.Description, "uom": l.UoM,
-						"tax_code": opt(l.TaxCode), "stocked": l.Stocked, "quantity": l.Quantity.String(), "unit_price": l.UnitPrice.StringFixed(4),
-						"discount": l.Discount.StringFixed(2), "net_price": l.NetPrice.StringFixed(4), "amount": l.Amount.StringFixed(2)})
+						"tax_code": opt(l.TaxCode), "stocked": l.Stocked, "quantity": l.Quantity, "unit_price": l.UnitPrice.Round(4),
+						"discount": l.Discount.Round(2), "net_price": l.NetPrice.Round(4), "amount": l.Amount.Round(2)})
 				}
 				return out, nil
 			},

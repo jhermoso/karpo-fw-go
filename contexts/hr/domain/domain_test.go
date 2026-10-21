@@ -175,6 +175,10 @@ func TestEmployment(t *testing.T) {
 	if _, err := e.AddContract(domain.Contract{TypeCode: "100", Start: vocab.MustDate(2026, 1, 1), Agreement: agreement, WorkCenter: wc}); !isViolation(err, "hr.contract_outside_employment") {
 		t.Fatalf("before hiring: %v", err)
 	}
+	if _, err := e.AddContract(domain.Contract{TypeCode: "401", Start: st.Hired, Agreement: agreement, WorkCenter: wc,
+		WeeklyHours: vocab.MustDecimal("37.125")}); !errors.Is(err, fw.ErrValidation) {
+		t.Fatalf("weekly hours with two decimals: %v", err)
+	}
 	first, err := e.AddContract(domain.Contract{TypeCode: "401", Start: st.Hired, Agreement: agreement, WorkCenter: wc, Primary: true,
 		WeeklyHours: vocab.DecimalFromInt(40)})
 	if err != nil {

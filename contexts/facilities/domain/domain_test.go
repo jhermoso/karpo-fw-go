@@ -54,6 +54,12 @@ func TestFacility(t *testing.T) {
 	if err := warehouse.SetArea(vocab.MustDecimal("-1")); !errors.Is(err, fw.ErrValidation) {
 		t.Fatal("negative area")
 	}
+	if err := warehouse.SetArea(vocab.MustDecimal("120.555")); !errors.Is(err, fw.ErrValidation) {
+		t.Fatal("an area with two decimals")
+	}
+	if err := warehouse.SetArea(vocab.MustDecimal("120.55")); err != nil {
+		t.Fatal(err)
+	}
 	office.Deactivate()
 	if err := office.Rename("x"); !isViolation(err, "facilities.inactive") {
 		t.Fatal("inactive facilities are not renamed")

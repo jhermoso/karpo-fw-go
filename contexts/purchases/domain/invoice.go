@@ -153,7 +153,8 @@ func checkDraft(v *fw.Validation, d *Draft) {
 		v.Require(!l.Base.IsZero() && cents(l.Base), f+".base", "range", "a non-zero base in cents")
 		v.Require((l.TaxCode == "") != (l.Treatment == ""), f+".taxCode", "required", "a tax code or a treatment")
 	}
-	v.Require(!d.WithholdingRate.IsNegative() && !d.WithholdingRate.GreaterThan(vocab.DecimalFromInt(50)), "withholdingRate", "range", "from 0 to 50")
+	v.Require(!d.WithholdingRate.IsNegative() && !d.WithholdingRate.GreaterThan(vocab.DecimalFromInt(50)) && cents(d.WithholdingRate), "withholdingRate",
+		"range", "from 0 to 50, with two decimals")
 	v.Require(cents(d.DeclaredTotal), "declaredTotal", "range", "the declared total in cents")
 	for i, p := range d.PayTo {
 		v.Require(!p.IBAN.IsZero() && p.Amount.IsPositive() && cents(p.Amount), fmt.Sprintf("payTo[%d]", i), "range", "an IBAN and a positive amount")

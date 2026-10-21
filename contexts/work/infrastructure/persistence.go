@@ -77,6 +77,7 @@ func Migrations() sqlrepo.MigrationSet {
 	return sqlrepo.MigrationSet{Context: Context, Migrations: []sqlrepo.Migration{
 		{Version: 1, Name: "work, assignments, status history and time entries", Up: sqlrepo.RenderDDLAll(schemaDDL...)},
 		{Version: 2, Name: "outboxes and audit log", Up: technical},
+		{Version: 3, Name: "decimal columns", Run: decimalColumnsV3.Run},
 	}}
 }
 
@@ -127,7 +128,8 @@ func byNo(rows []*sqlrepo.Row) []*sqlrepo.Row {
 // WorkMapping mapea Work a wrk_works, sus asignaciones y su historial.
 func WorkMapping() sqlrepo.Mapping[domain.WorkID, *domain.Work] {
 	return sqlrepo.Mapping[domain.WorkID, *domain.Work]{
-		Table: "wrk_works",
+		Table:    "wrk_works",
+		Decimals: decimalColumns.Of("wrk_works"),
 		Columns: sqlrepo.WithAuditColumns("company", "code", "kind", "parent", "name", "description", "purpose", "customer", "facility", "asset",
 			"planned_start", "planned_end", "estimated_hours", "budget", "status", "started", "finished", "cancel_reason", "hours", "cost"),
 		Dehydrate: func(w *domain.Work) (sqlrepo.Values, error) {
@@ -135,9 +137,9 @@ func WorkMapping() sqlrepo.Mapping[domain.WorkID, *domain.Work] {
 			return sqlrepo.AuditStampValues(sqlrepo.Values{"company": s.Company, "code": s.Code, "kind": string(s.Kind), "parent": optUUID(s.Parent.UUID),
 				"name": s.Name, "description": opt(s.Description), "purpose": opt(s.Purpose), "customer": optUUID(s.Customer.UUID),
 				"facility": optUUID(s.Facility), "asset": optUUID(s.Asset), "planned_start": optDate(s.PlannedStart), "planned_end": optDate(s.PlannedEnd),
-				"estimated_hours": s.EstimatedHours.StringFixed(2), "budget": s.Budget.StringFixed(2), "status": string(s.Status),
-				"started": optDate(s.Started), "finished": optDate(s.Finished), "cancel_reason": opt(s.CancelReason), "hours": s.Hours.StringFixed(2),
-				"cost": s.Cost.StringFixed(2)}, w.AuditStamp()), nil
+				"estimated_hours": s.EstimatedHours.Round(2), "budget": s.Budget.Round(2), "status": string(s.Status),
+				"started": optDate(s.Started), "finished": optDate(s.Finished), "cancel_reason": opt(s.CancelReason), "hours": s.Hours.Round(2),
+				"cost": s.Cost.Round(2)}, w.AuditStamp()), nil
 		},
 		Hydrate: func(r *sqlrepo.Row, children sqlrepo.ChildRows) (*domain.Work, error) {
 			s := domain.WorkState{Company: domain.OrganizationID{UUID: r.UUID("company")}, Code: r.String("code"), Kind: domain.Kind(r.String("kind")),
@@ -168,11 +170,12 @@ func WorkMapping() sqlrepo.Mapping[domain.WorkID, *domain.Work] {
 		},
 		Children: []sqlrepo.Child[*domain.Work]{{
 			Name: "assignments", Table: "wrk_work_assignments", ForeignKey: "work_id", OrderBy: []string{"line_no"},
-			Columns: []string{"line_no", "person", "role_name", "rate", "from_day", "until_day"},
+			Decimals: decimalColumns.Of("wrk_work_assignments"),
+			Columns:  []string{"line_no", "person", "role_name", "rate", "from_day", "until_day"},
 			Dehydrate: func(w *domain.Work) ([]sqlrepo.Values, error) {
 				out := []sqlrepo.Values{}
 				for k, a := range w.State().Assignments {
-					out = append(out, sqlrepo.Values{"line_no": int64(k + 1), "person": a.Person, "role_name": opt(a.Role), "rate": a.Rate.StringFixed(2),
+					out = append(out, sqlrepo.Values{"line_no": int64(k + 1), "person": a.Person, "role_name": opt(a.Role), "rate": a.Rate.Round(2),
 						"from_day": a.From, "until_day": optDate(a.Until)})
 				}
 				return out, nil
@@ -194,12 +197,13 @@ func WorkMapping() sqlrepo.Mapping[domain.WorkID, *domain.Work] {
 // TimeEntryMapping mapea TimeEntry a wrk_time_entries.
 func TimeEntryMapping() sqlrepo.Mapping[domain.TimeEntryID, *domain.TimeEntry] {
 	return sqlrepo.Mapping[domain.TimeEntryID, *domain.TimeEntry]{
-		Table:   "wrk_time_entries",
-		Columns: sqlrepo.WithAuditColumns("company", "work_id", "person", "work_date", "hours", "rate", "billable", "comment_text", "approved"),
+		Table:    "wrk_time_entries",
+		Decimals: decimalColumns.Of("wrk_time_entries"),
+		Columns:  sqlrepo.WithAuditColumns("company", "work_id", "person", "work_date", "hours", "rate", "billable", "comment_text", "approved"),
 		Dehydrate: func(t *domain.TimeEntry) (sqlrepo.Values, error) {
 			s := t.State()
 			return sqlrepo.AuditStampValues(sqlrepo.Values{"company": s.Company, "work_id": s.Work, "person": s.Person, "work_date": s.Date,
-				"hours": s.Hours.StringFixed(2), "rate": s.Rate.StringFixed(2), "billable": s.Billable, "comment_text": opt(s.Comment),
+				"hours": s.Hours.Round(2), "rate": s.Rate.Round(2), "billable": s.Billable, "comment_text": opt(s.Comment),
 				"approved": s.Approved}, t.AuditStamp()), nil
 		},
 		Hydrate: func(r *sqlrepo.Row, _ sqlrepo.ChildRows) (*domain.TimeEntry, error) {

@@ -224,9 +224,11 @@ func stringOf(v any) string {
 	return s
 }
 
-// Decimal devuelve una columna numérica exacta (cero si es NULL). Los drivers entregan
-// NUMERIC/DECIMAL como texto, bytes o, en algunos motores, float64/int64; el texto se interpreta
-// de forma exacta.
+// Decimal devuelve una columna decimal exacta (cero si es NULL): una columna {dec:p,s} o una de
+// texto con el número escrito con punto. Los cinco drivers entregan NUMERIC/DECIMAL/NUMBER como
+// texto o bytes con punto decimal, sin pasar por coma flotante: pgx y go-ora como string,
+// go-mssqldb y go-sql-driver/mysql como []byte; SQLite guarda {dec} como TEXT. También se acepta
+// int64 (una columna entera). Un float64 se rechaza, porque ya habría perdido cifras.
 func (r *Row) Decimal(col string) vocab.Decimal {
 	switch x := r.Raw(col).(type) {
 	case nil:
@@ -239,14 +241,19 @@ func (r *Row) Decimal(col string) vocab.Decimal {
 		return d
 	case int64:
 		return decimal.NewFromInt(x)
-	case float64:
-		return decimal.NewFromFloat(x)
-	case float32:
-		return decimal.NewFromFloat32(x)
 	default:
-		r.fail(col, fmt.Errorf("cannot convert %T to decimal", x))
+		r.fail(col, fmt.Errorf("cannot convert %T to a decimal without losing digits; declare the column as {dec:p,s}", x))
 		return decimal.Zero
 	}
+}
+
+// NullDecimal devuelve nil si es NULL.
+func (r *Row) NullDecimal(col string) *vocab.Decimal {
+	if r.IsNull(col) {
+		return nil
+	}
+	d := r.Decimal(col)
+	return &d
 }
 
 // Date devuelve una columna de fecha civil (el Date cero si es NULL). Los valores DATE se leen en
