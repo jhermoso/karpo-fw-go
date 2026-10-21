@@ -427,8 +427,8 @@ func NewService(d Deps) *Service {
 		if err != nil {
 			return RelationshipDTO{}, err
 		}
-		// Una Duplicate Of sólo pide poder cambiar el duplicado (lo comprueba establish); al
-		// superviviente sólo se le apunta.
+		// Una Duplicate Of pide el permiso de fusionar y poder cambiar las dos parties (lo
+		// comprueba establish, D-95 y D-96), no poder relacionarlas.
 		if rt.ID != domain.RelDuplicateOf && !sc.canRelate(from, to) {
 			return RelationshipDTO{}, fw.ErrForbidden
 		}

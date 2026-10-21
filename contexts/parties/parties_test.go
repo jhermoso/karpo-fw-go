@@ -55,7 +55,7 @@ type env struct {
 	admin, reader, clerk, viewer, outsider, seller string
 }
 
-var allPerms = append(slices.Clone(sellerPerms), papp.PermRelationshipSetTrial, papp.PermRoleTypeDefine, papp.PermRelationshipTypeDefine, papp.PermRoleAnnul, papp.PermPartyUpdateRelated)
+var allPerms = append(slices.Clone(sellerPerms), papp.PermRelationshipSetTrial, papp.PermRoleTypeDefine, papp.PermRelationshipTypeDefine, papp.PermRoleAnnul, papp.PermPartyUpdateRelated, papp.PermPartyMerge)
 
 var readerPerms = []authz.Permission{papp.PermPartyRead, papp.PermRelationshipRead}
 
@@ -853,16 +853,20 @@ func (e *env) prospects(acme, ana papp.PartyDTO) {
 	e.must(e.do("PUT", "/api/parties/"+other.ID+"/name", e.clerk, map[string]any{"legalName": "Nope"}, nil), 403,
 		"but nobody of acme changes an internal organization of others, permission or not")
 
-	// Marcar un duplicado es cambiarlo: quien no puede cambiar una party no la bloquea, nadie más
-	// que el administrador global bloquea una empresa, y quien la marcó puede deshacerlo.
+	// Marcar un duplicado es fusionarlo: tiene su propio permiso (D-95), que el usuario estándar
+	// no tiene; pide poder cambiar las dos parties, la que cede y la superviviente (D-96); nadie
+	// más que el administrador global bloquea una empresa, y quien la marcó puede deshacerlo.
 	e.must(e.do("POST", "/api/party-relationships", e.seller, map[string]any{"type": domain.RelDuplicateOf.String(),
-		"fromParty": third.ID, "toParty": mine.ID}, nil), 403, "the seller cannot change the related party, nor block it")
+		"fromParty": mine.ID, "toParty": third.ID}, nil), 403, "merging has its own permission: the seller cannot, though it changes both")
 	e.must(e.do("POST", "/api/party-relationships", e.clerk, map[string]any{"type": domain.RelDuplicateOf.String(),
 		"fromParty": acme.ID, "toParty": other.ID}, nil), 403, "nor a clerk its own company")
+	e.must(e.do("POST", "/api/party-relationships", e.clerk, map[string]any{"type": domain.RelDuplicateOf.String(),
+		"fromParty": mine.ID, "toParty": other.ID}, nil), 403, "nor into a survivor the clerk cannot change")
 	var dupMark papp.RelationshipDTO
-	e.must(e.do("POST", "/api/party-relationships", e.seller, map[string]any{"type": domain.RelDuplicateOf.String(),
-		"fromParty": mine.ID, "toParty": third.ID}, &dupMark), 201, "the seller blocks what acme registered")
-	e.must(e.do("POST", "/api/party-relationships/"+dupMark.ID+"/terminate", e.seller, nil, nil), 200, "and undoes it")
+	e.must(e.do("POST", "/api/party-relationships", e.clerk, map[string]any{"type": domain.RelDuplicateOf.String(),
+		"fromParty": mine.ID, "toParty": third.ID}, &dupMark), 201, "the clerk merges what acme registered into a party it can change")
+	e.must(e.do("POST", "/api/party-relationships/"+dupMark.ID+"/terminate", e.seller, nil, nil), 403, "undoing a merge needs the permission too")
+	e.must(e.do("POST", "/api/party-relationships/"+dupMark.ID+"/terminate", e.clerk, nil, nil), 200, "and the clerk undoes it")
 	e.must(e.do("POST", "/api/persons", e.seller, map[string]any{"givenName": "Nadie", "firstSurname": acme.ID[:8],
 		"affiliation": map[string]any{"organization": acme.ID, "relationshipType": domain.RelFamily.String()}}, nil), 400,
 		"a family relationship affiliates nobody")
