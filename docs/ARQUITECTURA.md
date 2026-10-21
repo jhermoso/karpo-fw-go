@@ -110,7 +110,10 @@ s.Expr()           // árbol traducible: AND(active = true, LOWER(name) LIKE ...
 
 - Los campos son **tipados** (`Text`, `Ordered`, `Comparable`, `Time`, `Optional`,
   `Collection`): no se puede comparar un `int64` con un `string` ni ordenar por un campo que no
-  es ordenable.
+  es ordenable. Los valores con orden propio usan `OrderedBy` con su función de comparación: un
+  decimal es `spec.OrderedBy[T, vocab.Decimal](nombre, accesor, vocab.CompareDecimal)`, y en SQL
+  se compara y se ordena por valor si su columna es `{dec:p,s}` y está en `Mapping.Decimals`
+  (ver §4, «Decimales»).
 - Los nombres de campo son **lógicos**; cada adaptador los mapea a columnas.
 - Los nodos son un conjunto cerrado: `Compare`, `AndExpr`, `OrExpr`, `NotExpr`, `Const`,
   `AnyExpr` (colecciones hijas → `EXISTS`) y `CustomExpr`.
@@ -184,6 +187,58 @@ escapes de `%` y `_`...) y exige que el resultado de la base de datos sea **idé
 | Cadena vacía | Oracle la trata como `NULL` |
 | Orden de `UNIQUEIDENTIFIER` | SQL Server ordena los GUID por grupos de bytes (los 6 últimos primero): `ORDER BY id` no es cronológico con UUID v7. Los mapeos que necesitan un orden estable lo imponen en Go (Parties ordena sus hijos al hidratar) |
 | Orden de textos | depende de la collation; el desempate siempre es por identidad |
+
+### Decimales (D-94)
+Un `vocab.Decimal` se guarda en una columna `{dec:p,s}` del DDL portable (1 ≤ p ≤ 28, lo que
+cabe en el `decimal` de C#; 0 ≤ s ≤ p) y nunca pasa por `float64`:
+
+| Motor | Columna | Escritura y comparación | Lectura (lo que entrega el driver) |
+|---|---|---|---|
+| PostgreSQL | `NUMERIC(p,s)` | texto; PostgreSQL deduce `NUMERIC` por la columna | `string` (pgx) |
+| SQL Server | `DECIMAL(p,s)` | `CAST(@p AS DECIMAL(p',s'))`, a la medida del valor | `[]byte` (go-mssqldb) |
+| MySQL | `DECIMAL(p,s)` | `CAST(? AS DECIMAL(p',s'))`: sin él, MySQL compara texto y decimal como `double` | `[]byte` |
+| Oracle | `NUMBER(p,s)` | `TO_NUMBER(:n, '99D9', 'NLS_NUMERIC_CHARACTERS=''.,''')`: no depende de la coma decimal de la sesión | `string` con punto (go-ora decodifica el NUMBER binario) |
+| SQLite | `TEXT` | texto; se compara y ordena por una clave de orden numérico | `string` |
+
+- **Declaración**: las columnas decimales se declaran con su precisión y su escala en
+  `Mapping.Decimals` (y `Child.Decimals`): `Decimals: map[string]sqlrepo.DecimalColumn{"amount":
+  sqlrepo.Dec(18, 2)}`.
+- **Escritura** (`Repository.Save`): una columna declarada sólo admite `vocab.Decimal`,
+  `*vocab.Decimal` o nil; un texto o un `float64` es `domain.ErrUnsupported` (un texto llegaría a
+  Oracle con una conversión implícita que depende de `NLS_NUMERIC_CHARACTERS`). Un valor con más
+  decimales que s o más cifras enteras que p-s es `sqlrepo.ErrDecimalDoesNotFit` en los cinco
+  motores: nunca se redondea (PostgreSQL, SQL Server, Oracle y MySQL redondearían en silencio y
+  SQLite lo guardaría tal cual). No es `domain.ErrValidation`: cada dominio valida la escala de sus
+  valores, así que un valor que no cabe es un fallo del programa y sale como error interno (500,
+  sin detalle), no como un 400 que enseñaría la tabla y la columna. Un `vocab.Decimal` en una columna no declarada es `domain.ErrUnsupported`:
+  a una columna de texto se le pasa su texto. El valor se enlaza como texto con punto
+  (`Decimal.String()`) y se convierte en SQL como dice la tabla.
+- **Lectura**: `Row.Decimal` / `Row.NullDecimal` aceptan texto, bytes y enteros, y rechazan
+  `float64`, que ya habría perdido cifras.
+- **Consulta**: sobre una columna declarada, `Eq`, `Ne`, `Gt`, `Ge`, `Lt`, `Le`, `In`, `NotIn` y
+  la ordenación son numéricos en los cinco motores. Un valor con más decimales que la columna se
+  reescribe, de forma exacta, sobre su escala: con f el valor redondeado hacia abajo a s
+  decimales, `> x` y `>= x` son `> f`, `< x` y `<= x` son `<= f`, `= x` no coincide con nada y
+  `<> x` es `IS NOT NULL`; así ningún motor redondea ni desborda (SQL Server, más allá de 38
+  cifras). Un `*vocab.Decimal` nil en `Eq`/`Ne` es `IS NULL`/`IS NOT NULL`. Son
+  `domain.ErrUnsupported`: comparar un decimal con una columna no declarada, una columna decimal
+  con algo que no es un decimal, un nil en un operador de orden o en `In`, un operador de texto,
+  y un valor con más de 38 cifras (tras la reescritura) o más de 30 decimales.
+- **Lo que no conoce el tipo de la columna**: `DB.Insert`, `DB.Update`, `DB.Delete`,
+  `DB.InsertMany` y `Builder.Arg` (y por tanto `CustomSQL`) convierten un `vocab.Decimal` con la
+  expresión del motor (son para columnas `{dec}`), pero no comprueban que quepa ni reescriben la
+  comparación; en SQLite, el `where` de `DB.Update`/`DB.Delete`, el `orderBy` de `DB.Select` y el
+  SQL de `CustomSQL` comparan y ordenan el texto, no el número.
+- **SQLite**: su `NUMERIC` convierte a coma flotante, así que `{dec}` es `TEXT`, y el orden del
+  texto no es el numérico (`"10" < "9"`). La columna y el valor se convierten en una clave de texto
+  cuyo orden sí lo es, exacta con cualquier número de cifras (`pkg/persistence/sqlrepo/sqlite/decimal.go`):
+  la de la columna la calcula SQLite y la del valor, Go. No usa extensiones ni funciones
+  registradas en el driver; a cambio, la comparación no aprovecha índices sobre la columna.
+- **Pruebas**: `sqlconformance.RunDecimals` (ida y vuelta con 28 cifras, negativos, escala
+  completa, cero y NULL; comparaciones y orden iguales a los del repositorio en memoria en los
+  casos en que el texto o el `double` fallan, también con 30 decimales frente a una columna de 20
+  cifras enteras; rechazo de lo que no cabe; Oracle con coma decimal en la sesión; paso de texto a
+  decimal, con sus fallos).
 
 ### Añadir otra tecnología
 1. Si es SQL: implementar `sqlrepo.Dialect` en un paquete nuevo y pasar

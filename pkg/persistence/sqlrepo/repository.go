@@ -10,6 +10,7 @@ import (
 
 	"github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
+	"github.com/shopspring/decimal"
 )
 
 // Repository es la implementación SQL genérica de domain.Repository.
@@ -287,7 +288,7 @@ func (r *Repository[ID, T]) loadChildren(ctx context.Context, roots []*Row) (map
 		cols := append([]string{c.ForeignKey}, c.Columns...)
 		order := []string{"c." + r.q(c.ForeignKey)}
 		for _, o := range ct.orderBy {
-			order = append(order, "c."+r.q(o))
+			order = append(order, orderColumn(r.db.d, &ct.table, "c."+r.q(o), o))
 		}
 		for start := 0; start < len(keys); start += chunk {
 			end := min(start+chunk, len(keys))
@@ -324,7 +325,40 @@ func (r *Repository[ID, T]) loadChildren(ctx context.Context, roots []*Row) (map
 	return out, nil
 }
 
-func (r *Repository[ID, T]) rowArgs(b *Builder, cols []string, vals Values, what string) ([]string, error) {
+// columnValue comprueba el valor de una columna antes de enlazarlo: una columna decimal sólo
+// admite vocab.Decimal, *vocab.Decimal o nil, y el valor debe caber en su (p,s) sin redondear (un
+// texto llegaría a Oracle con una conversión implícita que depende de NLS_NUMERIC_CHARACTERS); un
+// vocab.Decimal en una columna que no es decimal es un error (se le pasa su texto).
+func columnValue(tbl *table, col string, v any) (any, error) {
+	if p, ok := v.(*decimal.Decimal); ok {
+		if p == nil {
+			v = nil
+		} else {
+			v = *p
+		}
+	}
+	dc, isDecimal := tbl.decimals[col]
+	switch x := v.(type) {
+	case nil:
+		return nil, nil
+	case decimal.Decimal:
+		if !isDecimal {
+			return nil, fmt.Errorf("%w: a vocab.Decimal for column %q, which is not in Mapping.Decimals; declare it or pass its text",
+				domain.ErrUnsupported, col)
+		}
+		if err := dc.fits(x); err != nil {
+			return nil, err
+		}
+		return x, nil
+	default:
+		if isDecimal {
+			return nil, fmt.Errorf("%w: decimal column %q needs a vocab.Decimal, got %T", domain.ErrUnsupported, col, v)
+		}
+		return v, nil
+	}
+}
+
+func (r *Repository[ID, T]) rowArgs(b *Builder, tbl *table, cols []string, vals Values, what string) ([]string, error) {
 	if len(vals) != len(cols) {
 		for k := range vals {
 			if !contains(cols, k) {
@@ -337,6 +371,10 @@ func (r *Repository[ID, T]) rowArgs(b *Builder, cols []string, vals Values, what
 		v, ok := vals[c]
 		if !ok {
 			return nil, fmt.Errorf("sqlrepo: %s: missing value for column %q", what, c)
+		}
+		v, err := columnValue(tbl, c, v)
+		if err != nil {
+			return nil, fmt.Errorf("sqlrepo: %s column %q: %w", what, c, err)
 		}
 		ph, err := b.Arg(v)
 		if err != nil {
@@ -372,7 +410,7 @@ func (r *Repository[ID, T]) Save(ctx context.Context, agg T) error {
 		if v == 0 {
 			idPh, _ := b.Arg(id)
 			verPh, _ := b.Arg(int64(1))
-			phs, err := r.rowArgs(b, r.m.Columns, vals, "insert "+r.kind)
+			phs, err := r.rowArgs(b, r.root, r.m.Columns, vals, "insert "+r.kind)
 			if err != nil {
 				return err
 			}
@@ -389,7 +427,7 @@ func (r *Repository[ID, T]) Save(ctx context.Context, agg T) error {
 				return fmt.Errorf("sqlrepo: insert %s: %w", r.kind, err)
 			}
 		} else {
-			phs, err := r.rowArgs(b, r.m.Columns, vals, "update "+r.kind)
+			phs, err := r.rowArgs(b, r.root, r.m.Columns, vals, "update "+r.kind)
 			if err != nil {
 				return err
 			}
@@ -477,7 +515,7 @@ func (r *Repository[ID, T]) replaceChildren(ctx context.Context, ex executor, ag
 			if err != nil {
 				return err
 			}
-			phs, err := r.rowArgs(b, c.Columns, vals, "insert "+r.kind+"."+c.Name)
+			phs, err := r.rowArgs(b, &r.root.children[c.Name].table, c.Columns, vals, "insert "+r.kind+"."+c.Name)
 			if err != nil {
 				return err
 			}

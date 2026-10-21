@@ -60,6 +60,15 @@ func (Dialect) DateValue(y int, m time.Month, d int) any {
 // DateExpr devuelve el placeholder sin cambios.
 func (Dialect) DateExpr(ph string) string { return ph }
 
+// DecimalExpr convierte el texto del decimal (que go-mssqldb enlaza como NVARCHAR) con
+// CAST(... AS DECIMAL(p,s)) a la medida del valor. La conversión implícita lo llevaría al tipo de
+// la columna y daría un error de desbordamiento, en vez de no coincidir, con un valor más grande
+// que la columna. La conversión de texto a DECIMAL no depende del idioma de la sesión. El driver
+// lee DECIMAL como []byte con punto.
+func (Dialect) DecimalExpr(ph string, precision, scale int) string {
+	return fmt.Sprintf("CAST(%s AS DECIMAL(%d,%d))", ph, precision, scale)
+}
+
 func (Dialect) IsUniqueViolation(err error) bool {
 	return sqlrepo.ErrorContains(err, "Error 2627", "Error 2601", "Violation of PRIMARY KEY", "Violation of UNIQUE KEY", "Cannot insert duplicate key")
 }

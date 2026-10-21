@@ -149,7 +149,7 @@ func Reconstitute(id FacilityID, s FacilityState) (*Facility, error) {
 	v.Require(name != "" && utf8.RuneCountInString(name) <= 200, "name", "length", "a facility needs a name of at most 200 characters")
 	v.Require(utf8.RuneCountInString(s.Description) <= 1000, "description", "length", "at most 1000 characters")
 	v.Require(s.PartOf == nil || s.PartOf.UUID != id.UUID, "partOf", "self", "a facility cannot be part of itself")
-	v.Require(s.Area.Sign() >= 0, "area", "range", "the area cannot be negative")
+	v.Require(validArea(s.Area), "area", "range", areaRule)
 	if err := v.Err(); err != nil {
 		return nil, err
 	}
@@ -313,11 +313,17 @@ func (f *Facility) MoveUnder(parent *Facility) error {
 	return nil
 }
 
+// areaRule es la regla de la superficie: no negativa y con dos decimales, los de su columna
+// (fac_facilities.area_m2, (18,2)).
+const areaRule = "an area that is not negative, with two decimals"
+
+func validArea(m2 vocab.Decimal) bool { return m2.Sign() >= 0 && m2.Equal(m2.Round(2)) }
+
 // SetArea registra la superficie en metros cuadrados.
 func (f *Facility) SetArea(m2 vocab.Decimal) error {
-	if m2.Sign() < 0 {
+	if !validArea(m2) {
 		var v fw.Validation
-		v.Add("area", "range", "the area cannot be negative")
+		v.Add("area", "range", areaRule)
 		return v.Err()
 	}
 	f.area = m2

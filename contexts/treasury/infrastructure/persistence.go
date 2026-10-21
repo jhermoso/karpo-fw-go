@@ -109,6 +109,7 @@ func Migrations() sqlrepo.MigrationSet {
 		{Version: 2, Name: "outboxes and audit log", Up: technical},
 		{Version: 3, Name: "credit transfer orders", Up: sqlrepo.RenderDDLAll(transfersDDL...)},
 		{Version: 4, Name: "bank statements", Up: sqlrepo.RenderDDLAll(statementsDDL...)},
+		{Version: 5, Name: "decimal columns", Run: decimalColumnsV5.Run},
 	}}
 }
 
@@ -264,6 +265,7 @@ func RemittanceMapping() sqlrepo.Mapping[domain.RemittanceID, *domain.Remittance
 		},
 		Children: []sqlrepo.Child[*domain.Remittance]{{
 			Name: "items", Table: "trs_remittance_items", ForeignKey: "remittance_id", OrderBy: []string{"end_to_end"},
+			Decimals: decimalColumns.Of("trs_remittance_items"),
 			Columns: []string{"end_to_end", "invoice", "invoice_number", "installment_no", "debtor", "debtor_name", "mandate_id", "mandate_reference",
 				"mandate_signed", "iban", "amount", "sequence_type", "returned", "return_reason"},
 			Dehydrate: func(r *domain.Remittance) ([]sqlrepo.Values, error) {
@@ -271,7 +273,7 @@ func RemittanceMapping() sqlrepo.Mapping[domain.RemittanceID, *domain.Remittance
 				for _, i := range r.State().Items {
 					out = append(out, sqlrepo.Values{"end_to_end": i.EndToEnd, "invoice": i.Invoice, "invoice_number": i.Number,
 						"installment_no": int64(i.Installment), "debtor": i.Debtor, "debtor_name": opt(i.DebtorName), "mandate_id": i.Mandate,
-						"mandate_reference": i.MandateRef, "mandate_signed": i.Signed, "iban": i.IBAN.String(), "amount": i.Amount.StringFixed(2),
+						"mandate_reference": i.MandateRef, "mandate_signed": i.Signed, "iban": i.IBAN.String(), "amount": i.Amount.Round(2),
 						"sequence_type": opt(i.Sequence), "returned": optDate(i.Returned), "return_reason": opt(i.Reason)})
 				}
 				return out, nil
@@ -327,12 +329,13 @@ func TransferOrderMapping() sqlrepo.Mapping[domain.TransferOrderID, *domain.Tran
 		},
 		Children: []sqlrepo.Child[*domain.TransferOrder]{{
 			Name: "transfers", Table: "trs_transfers", ForeignKey: "order_id", OrderBy: []string{"end_to_end"},
-			Columns: []string{"end_to_end", "payable", "line_no", "document", "payee", "payee_name", "iban", "amount", "rejected", "reject_reason"},
+			Decimals: decimalColumns.Of("trs_transfers"),
+			Columns:  []string{"end_to_end", "payable", "line_no", "document", "payee", "payee_name", "iban", "amount", "rejected", "reject_reason"},
 			Dehydrate: func(o *domain.TransferOrder) ([]sqlrepo.Values, error) {
 				out := []sqlrepo.Values{}
 				for _, t := range o.State().Transfers {
 					out = append(out, sqlrepo.Values{"end_to_end": t.EndToEnd, "payable": t.Payable, "line_no": int64(t.Line), "document": t.Document,
-						"payee": t.Payee, "payee_name": opt(t.PayeeName), "iban": t.IBAN.String(), "amount": t.Amount.StringFixed(2),
+						"payee": t.Payee, "payee_name": opt(t.PayeeName), "iban": t.IBAN.String(), "amount": t.Amount.Round(2),
 						"rejected": optDate(t.Rejected), "reject_reason": opt(t.Reason)})
 				}
 				return out, nil
@@ -344,12 +347,13 @@ func TransferOrderMapping() sqlrepo.Mapping[domain.TransferOrderID, *domain.Tran
 // StatementMapping mapea Statement a trs_statements y sus movimientos.
 func StatementMapping() sqlrepo.Mapping[domain.StatementID, *domain.Statement] {
 	return sqlrepo.Mapping[domain.StatementID, *domain.Statement]{
-		Table:   "trs_statements",
-		Columns: sqlrepo.WithAuditColumns("owner", "account_id", "period_from", "period_to", "opening", "closing", "pending"),
+		Table:    "trs_statements",
+		Decimals: decimalColumns.Of("trs_statements"),
+		Columns:  sqlrepo.WithAuditColumns("owner", "account_id", "period_from", "period_to", "opening", "closing", "pending"),
 		Dehydrate: func(s *domain.Statement) (sqlrepo.Values, error) {
 			st := s.State()
 			return sqlrepo.AuditStampValues(sqlrepo.Values{"owner": st.Owner, "account_id": st.Account, "period_from": st.From, "period_to": st.To,
-				"opening": st.Opening.StringFixed(2), "closing": st.Closing.StringFixed(2), "pending": int64(s.Pending())}, s.AuditStamp()), nil
+				"opening": st.Opening.Round(2), "closing": st.Closing.Round(2), "pending": int64(s.Pending())}, s.AuditStamp()), nil
 		},
 		Hydrate: func(r *sqlrepo.Row, children sqlrepo.ChildRows) (*domain.Statement, error) {
 			st := domain.StatementState{Owner: domain.OrganizationID{UUID: r.UUID("owner")}, Account: domain.AccountID{UUID: r.UUID("account_id")},
@@ -371,11 +375,12 @@ func StatementMapping() sqlrepo.Mapping[domain.StatementID, *domain.Statement] {
 		},
 		Children: []sqlrepo.Child[*domain.Statement]{{
 			Name: "lines", Table: "trs_statement_lines", ForeignKey: "statement_id", OrderBy: []string{"line_no"},
-			Columns: []string{"line_no", "booked", "value_date", "amount", "concept", "reference", "match_kind", "match_id", "match_note"},
+			Decimals: decimalColumns.Of("trs_statement_lines"),
+			Columns:  []string{"line_no", "booked", "value_date", "amount", "concept", "reference", "match_kind", "match_id", "match_note"},
 			Dehydrate: func(s *domain.Statement) ([]sqlrepo.Values, error) {
 				out := []sqlrepo.Values{}
 				for _, l := range s.State().Lines {
-					out = append(out, sqlrepo.Values{"line_no": int64(l.No), "booked": l.Date, "value_date": l.ValueDate, "amount": l.Amount.StringFixed(2),
+					out = append(out, sqlrepo.Values{"line_no": int64(l.No), "booked": l.Date, "value_date": l.ValueDate, "amount": l.Amount.Round(2),
 						"concept": opt(l.Concept), "reference": opt(l.Reference), "match_kind": opt(l.Match.Kind), "match_id": opt(l.Match.ID),
 						"match_note": opt(l.Match.Note)})
 				}

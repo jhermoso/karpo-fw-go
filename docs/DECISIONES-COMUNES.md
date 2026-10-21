@@ -299,6 +299,14 @@ las tenía; no se perdió ninguna. Quedan 6 CIF repetidos a propósito: parecen 
 el CIF mal dado de alta en Sage y se corrigen allí. En Trench, «un documento, una party» (D-50) se
 cumple salvo en esos 6 casos, identificados.
 
+### 1.1 septies Decimales (sesión de Theros)
+
+Propuesta por la sesión de Theros y decidida en esta sesión el 2026-10-20.
+
+| # | Decisión (lectura) | Lo que dijo Javier |
+|---|---|---|
+| D-94 | **El framework tiene un tipo de columna decimal `{dec:p,s}` (NUMERIC/DECIMAL/NUMBER; texto en SQLite), se escribe y se lee sin float, y se puede filtrar y ordenar por valor. Las columnas decimales que hoy son texto en los contextos de Karpo Go se pasan a numéricas (tarea aparte), para parecerse a Trench y Karpo C#** | «1 sí, 2 a» (esta sesión, 2026-10-20), a la propuesta de Theros |
+
 ### 1.2 Extensibilidad
 
 Detalle en [EXTENSIBILIDAD.md](EXTENSIBILIDAD.md) §1.
@@ -501,3 +509,4 @@ Lo que Go no cumple todavía de lo decidido. Cada sesión lleva la suya en su re
 | D-47 | Security de Go no tiene el rescate ni el restablecimiento por un administrador | Planificarlo con el diseño de Karpo |
 | D-5, D-9, D-10, D-14, D-25, D-26 | **Cumple** (PR 13 a 18) | — |
 | D-1, D-2, D-3, D-6 (caso sin atributos), D-7, D-11 | **Cumple** | — |
+| D-94 | **Hecho: el tipo (PR 9) y las columnas de los contextos** (rama `feat/contextos-decimales`). El tipo: `{dec:p,s}` en `RenderDDL`, escritura y lectura sin float, comparación y orden por valor, `sqlrepo.AlterColumnToDecimal` (detalle en [ARQUITECTURA.md](ARQUITECTURA.md) §4). Las columnas: 126 columnas de 19 contextos pasan de texto a `{dec:p,s}` con una migración «decimal columns» por contexto (la siguiente a la última), se declaran en `Mapping.Decimals` y se escriben como `vocab.Decimal`. Cada dominio valida la escala de su columna (400). Un valor que aun así no cabe es `sqlrepo.ErrDecimalDoesNotFit`, un error interno; la precisión y la escala de cada una, y de dónde salen, en [ESQUEMA-MIGRACIONES.md](ESQUEMA-MIGRACIONES.md), «Columnas decimales de los contextos» | Divergencias en (p,s): productos y tarifas siguen a Karpo C# (18,4) y no a Trench (18,2), que tiene menos decimales que el dominio; en las líneas de nómina se sigue el DDL de los dos (18,4 y 18,2), no su EF (19,4). |
