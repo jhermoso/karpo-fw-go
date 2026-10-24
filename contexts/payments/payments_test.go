@@ -86,7 +86,7 @@ type host struct {
 	adminCtx context.Context
 }
 
-func compose(t *testing.T) *host {
+func compose(t *testing.T, opts ...payments.Option) *host {
 	// Treasury sella una orden de transferencia con el momento en que se genera su fichero y la
 	// liquida ese día o después: el escenario corre con un reloj fijo, para que sus fechas valgan sea
 	// cual sea el día en que corre la prueba. Los tokens se emiten y se comprueban con el mismo reloj.
@@ -95,7 +95,7 @@ func compose(t *testing.T) *host {
 	sw := hotswap.New(memory.NewStore("memory"))
 	splits := netPay{}
 	pm := parties.Compose(sw, nil)
-	ym := payments.Compose(sw, splits)
+	ym := payments.Compose(sw, splits, opts...)
 	tm := treasury.Compose(sw, nil, tinfra.PaymentsPayables{Payable: ym.Payable}, tinfra.PartiesIdentities{TaxIdentities: pm.TaxIdentities})
 	am := accounting.Compose(sw)
 	broker := inprocess.NewBroker()

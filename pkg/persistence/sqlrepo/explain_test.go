@@ -65,6 +65,32 @@ func TestExplain_Dialects(t *testing.T) {
 	}
 }
 
+// TestExplain_LongNotInIsChunked fija que un NOT IN más largo que la lista que admite el motor
+// (1000 en Oracle) sale troceado dentro de un único NOT: NOT ((c IN (…1000)) OR c IN (…500)).
+// Es lo que hacen los listados que dejan fuera las fichas fusionadas (D-100). Trocear no evita el
+// límite de parámetros por petición de SQL Server (2100): véase BACKLOG.md.
+func TestExplain_LongNotInIsChunked(t *testing.T) {
+	ids := make([]rt.WidgetID, 1500)
+	for i := range ids {
+		ids[i] = rt.NewWidgetID()
+	}
+	got, args, err := explain(t, oracle.New(), rt.FieldID.NotIn(ids...), domain.PageRequest[*rt.Widget]{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(args) != 1500 {
+		t.Fatalf("%d args, want 1500", len(args))
+	}
+	for _, want := range []string{`WHERE NOT ((t0."ID" IN (:1, :2, `, `, :1000) OR t0."ID" IN (:1001, `, `, :1500)))`} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("SQL without %q:\n%s", want, got)
+		}
+	}
+	if strings.Count(got, " IN (") != 2 {
+		t.Fatalf("want two IN groups:\n%s", got)
+	}
+}
+
 func TestExplain_BooleanAndUUIDRepresentation(t *testing.T) {
 	id := rt.NewWidgetID()
 	s := rt.FieldID.Eq(id).And(rt.FieldActive.Eq(true))

@@ -60,7 +60,7 @@ type host struct {
 	adminCtx context.Context
 }
 
-func compose(t *testing.T) *host {
+func compose(t *testing.T, opts ...hr.Option) *host {
 	ctx := context.Background()
 	store := memory.NewStore("memory")
 	if err := ginfra.LoadMemory(ctx, store); err != nil {
@@ -71,8 +71,8 @@ func compose(t *testing.T) *host {
 	fac := facilities.Compose(sw, facilities.WithAddressChecker(finfra.GeographyAddresses{Checker: geo.Ports}))
 	pm := parties.Compose(sw, nil, parties.WithAddressChecker(pinfra.GeographyAddresses{Checker: geo.Ports}),
 		parties.WithFacilityDirectory(pinfra.FacilitiesDirectory{Directory: fac.Directory}))
-	hm := hr.Compose(sw, hr.WithOrganizations(hinfra.PartiesOrganizations{Hierarchy: pm.Organizations, Membership: pm.Organizations}),
-		hr.WithFacilities(hinfra.FacilitiesDirectory{Directory: fac.Directory}))
+	hm := hr.Compose(sw, append([]hr.Option{hr.WithOrganizations(hinfra.PartiesOrganizations{Hierarchy: pm.Organizations, Membership: pm.Organizations}),
+		hr.WithFacilities(hinfra.FacilitiesDirectory{Directory: fac.Directory})}, opts...)...)
 
 	jwt, _ := jwtauth.New(jwtauth.Config{Secret: []byte("hr-test")})
 	dir := authorization.NewMemoryDirectory()

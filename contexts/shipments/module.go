@@ -30,8 +30,17 @@ type Module struct {
 	Consumer *messaging.Consumer
 }
 
+// Option configura la composición.
+type Option func(*sapp.Deps)
+
+// WithMergedParties dice qué parties están fusionadas en otra (Parties, en el anfitrión): los
+// listados dejan fuera sus registros salvo que se pidan con includeMergedParties (D-100).
+func WithMergedParties(m application.MergedParties) Option {
+	return func(d *sapp.Deps) { d.Merged = m }
+}
+
 // Compose construye el contexto sobre sw.
-func Compose(sw *hotswap.Switch) *Module {
+func Compose(sw *hotswap.Switch, opts ...Option) *Module {
 	integration := hotswap.Outbox(sw, infrastructure.IntegrationOutboxFactory)
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
 	d := sapp.Deps{
@@ -39,6 +48,9 @@ func Compose(sw *hotswap.Switch) *Module {
 		UoW: sw, Audit: audit,
 		Recorder: outbox.Recorders(outbox.NewRecorder(hotswap.Outbox(sw, infrastructure.OutboxFactory)),
 			sapp.Publications(messaging.NewRecorder(contracts.Source, integration))),
+	}
+	for _, o := range opts {
+		o(&d)
 	}
 	consumer := messaging.NewConsumer(contracts.Source, hotswap.Inbox(sw, infrastructure.InboxFactory), sw)
 	sapp.Subscribe(consumer, d)
@@ -105,7 +117,8 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 		q := r.URL.Query()
 		atoi := func(k string) int { n, _ := strconv.Atoi(q.Get(k)); return n }
 		out, err := svc.SearchShipments.Handle(r.Context(), sapp.SearchShipments{Company: q.Get("company"), Customer: q.Get("customer"),
-			Status: q.Get("status"), Carrier: q.Get("carrier"), Tracking: q.Get("tracking"), Delivery: q.Get("delivery"), Page: atoi("page"), Size: atoi("size")})
+			Status: q.Get("status"), Carrier: q.Get("carrier"), Tracking: q.Get("tracking"), Delivery: q.Get("delivery"),
+			IncludeMergedParties: q.Get("includeMergedParties") == "true", Page: atoi("page"), Size: atoi("size")})
 		distribution.Respond(w, r, out, err, http.StatusOK)
 	})
 	mux.HandleFunc("GET /api/shipments/{id}", func(w http.ResponseWriter, r *http.Request) {

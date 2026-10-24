@@ -51,11 +51,11 @@ type host struct {
 	adminCtx context.Context
 }
 
-func compose(t *testing.T) *host {
+func compose(t *testing.T, opts ...financial.Option) *host {
 	ctx := context.Background()
 	sw := hotswap.New(memory.NewStore("memory"))
 	banks := institutions{}
-	fm := financial.Compose(sw, banks)
+	fm := financial.Compose(sw, banks, opts...)
 	jwt, _ := jwtauth.New(jwtauth.Config{Secret: []byte("financial-test")})
 	dir := authorization.NewMemoryDirectory()
 	h := &host{t: t, sw: sw, dir: dir, ids: map[string]fw.UUID{}, tokens: map[string]string{}, fin: fm, banks: banks}

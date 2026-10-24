@@ -30,16 +30,29 @@ type Module struct {
 	Accounts contracts.Accounts
 }
 
+// Option configura la composición.
+type Option func(*fapp.Deps)
+
+// WithMergedParties dice qué parties están fusionadas en otra (Parties, en el anfitrión): los
+// listados dejan fuera sus registros salvo que se pidan con includeMergedParties (D-100).
+func WithMergedParties(m application.MergedParties) Option {
+	return func(d *fapp.Deps) { d.Merged = m }
+}
+
 // Compose monta el contexto sobre sw. Es el sector financiero de Karpo: institutions dice qué
 // empresas son entidades financieras, las únicas para las que existe (nil: ninguna).
-func Compose(sw *hotswap.Switch, institutions domain.Institutions) *Module {
+func Compose(sw *hotswap.Switch, institutions domain.Institutions, opts ...Option) *Module {
 	integration := hotswap.Outbox(sw, infrastructure.IntegrationOutboxFactory)
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
 	accounts := hotswap.Repository(sw, infrastructure.AccountRepositoryFactory)
-	svc := fapp.NewService(fapp.Deps{Accounts: accounts, Products: hotswap.Repository(sw, infrastructure.ProductRepositoryFactory),
+	d := fapp.Deps{Accounts: accounts, Products: hotswap.Repository(sw, infrastructure.ProductRepositoryFactory),
 		Agreements: hotswap.Repository(sw, infrastructure.AgreementRepositoryFactory), Institutions: institutions, UoW: sw, Audit: audit,
 		Recorder: outbox.Recorders(outbox.NewRecorder(hotswap.Outbox(sw, infrastructure.OutboxFactory)),
-			fapp.Publications(messaging.NewRecorder(contracts.Source, integration)))})
+			fapp.Publications(messaging.NewRecorder(contracts.Source, integration)))}
+	for _, o := range opts {
+		o(&d)
+	}
+	svc := fapp.NewService(d)
 	return &Module{Service: svc, IntegrationOutbox: integration, Audit: audit, Accounts: fapp.NewDirectory(accounts)}
 }
 
@@ -105,7 +118,7 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 		atoi := func(k string) int { n, _ := strconv.Atoi(q.Get(k)); return n }
 		out, err := svc.Search.Handle(r.Context(), fapp.SearchAccounts{Company: q.Get("company"), Status: q.Get("status"), Party: q.Get("party"),
 			Use: q.Get("use"), Currency: q.Get("currency"), Name: q.Get("name"), Demo: q.Get("demo"), Product: q.Get("product"),
-			Agreement: q.Get("agreement"), Page: atoi("page"), Size: atoi("size")})
+			Agreement: q.Get("agreement"), IncludeMergedParties: q.Get("includeMergedParties") == "true", Page: atoi("page"), Size: atoi("size")})
 		distribution.Respond(w, r, out, err, http.StatusOK)
 	})
 	mux.HandleFunc("GET /api/financial/accounts/stats", func(w http.ResponseWriter, r *http.Request) {
@@ -178,7 +191,7 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 		q := r.URL.Query()
 		atoi := func(k string) int { n, _ := strconv.Atoi(q.Get(k)); return n }
 		out, err := svc.SearchAgreements.Handle(r.Context(), fapp.SearchAgreements{Company: q.Get("company"), Customer: q.Get("customer"),
-			Product: q.Get("product"), Status: q.Get("status"), Page: atoi("page"), Size: atoi("size")})
+			Product: q.Get("product"), Status: q.Get("status"), IncludeMergedParties: q.Get("includeMergedParties") == "true", Page: atoi("page"), Size: atoi("size")})
 		distribution.Respond(w, r, out, err, http.StatusOK)
 	})
 	agr := domain.ParseAgreementID

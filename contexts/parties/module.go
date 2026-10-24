@@ -20,6 +20,7 @@ type Module struct {
 	Directory         contracts.Directory
 	Organizations     papp.Organizations // Membership, OrganizationHierarchy, InternalOrganizationCatalog
 	TaxIdentities     contracts.TaxIdentities
+	MergedParties     contracts.MergedParties // las fusionadas, que los listados de los demás dejan fuera (D-100)
 	Trials            contracts.Trials        // si la prueba de un prospect está en vigor
 	Collaborators     contracts.Collaborators // de quién es un código de promoción
 	HTTP              *pdist.Module
@@ -67,7 +68,8 @@ func Compose(sw *hotswap.Switch, idem application.IdempotencyStore, opts ...Opti
 	consumer := messaging.NewConsumer(contracts.Source, hotswap.Inbox(sw, infrastructure.InboxFactory), sw)
 	papp.Subscribe(consumer, svc, relationships)
 	trials := papp.Trials{Relationships: relationships, Catalogs: infrastructure.SwappableCatalogs(sw)}
-	return &Module{Service: svc, Directory: dir, Organizations: orgs, TaxIdentities: papp.TaxIdentities{Parties: parties}, Trials: trials,
+	return &Module{Service: svc, Directory: dir, Organizations: orgs, TaxIdentities: papp.TaxIdentities{Parties: parties},
+		MergedParties: papp.MergedParties{Parties: parties}, Trials: trials,
 		Collaborators: papp.Collaborators{Relationships: relationships, Catalogs: infrastructure.SwappableCatalogs(sw)}, HTTP: pdist.NewModule(svc, dir),
 		Outbox: domainOutbox, IntegrationOutbox: integrationOutbox, Audit: audit, Consumer: consumer}
 }

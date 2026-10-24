@@ -26,6 +26,7 @@ type Deps struct {
 	Documents domain.DocumentRepository
 	UoW       fw.UnitOfWork
 	Audit     app.AuditLog
+	Merged    app.MergedParties // opcional: las parties fusionadas, que los listados dejan fuera (D-100)
 }
 
 // Service expone las consultas.
@@ -95,10 +96,20 @@ type GetDocument struct {
 	Type, FactID string
 }
 
+// documentParty es la party del documento como campo que admite nulo: un documento sin party
+// tiene la columna nula y no se deja fuera al quitar las parties fusionadas (D-100).
+var documentParty = spec.Optional("party", func(d *domain.Document) *domain.PartyID {
+	if p := d.State().Party; !p.IsZero() {
+		return &p
+	}
+	return nil
+})
+
 // SearchDocuments busca en el registro del ámbito de quien llama.
 type SearchDocuments struct {
 	Company, Type, Party, Number, From, To string
 	Live                                   bool // no anulados
+	IncludeMergedParties                   bool // también los de parties fusionadas en otra (D-100)
 	Page, Size                             int
 }
 
@@ -246,6 +257,12 @@ func NewService(d Deps) *Service {
 		if err := v.Err(); err != nil {
 			return fw.Page[DocumentDTO]{}, err
 		}
+		merged, err := app.WithoutMergedOptional(ctx, d.Merged, q.IncludeMergedParties || q.Party != "", documentParty,
+			func(u fw.UUID) domain.PartyID { return domain.PartyID{UUID: u} })
+		if err != nil {
+			return fw.Page[DocumentDTO]{}, err
+		}
+		parts = append(parts, merged...)
 		page, err := d.Documents.FindPage(ctx, spec.And(parts...), fw.NewPageRequest(q.Page, q.Size, domain.DocFieldDate.Asc(), domain.DocFieldNumber.Asc()))
 		if err != nil {
 			return fw.Page[DocumentDTO]{}, err

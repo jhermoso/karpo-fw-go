@@ -64,14 +64,14 @@ type host struct {
 	adminCtx context.Context
 }
 
-func compose(t *testing.T) *host {
+func compose(t *testing.T, opts ...orders.Option) *host {
 	ctx := context.Background()
 	sw := hotswap.New(memory.NewStore("memory"))
 	pm := parties.Compose(sw, nil)
 	dm := products.Compose(sw)
 	im := inventory.Compose(sw, iinfra.ProductsCatalog{Catalog: dm.Catalog})
 	rm := receivables.Compose(sw, nil)
-	om := orders.Compose(sw, oinfra.ProductsCatalog{Catalog: dm.Catalog, Pricing: dm.Pricing}, oinfra.ReceivablesCredit{Exposure: rm.Credit})
+	om := orders.Compose(sw, oinfra.ProductsCatalog{Catalog: dm.Catalog, Pricing: dm.Pricing}, oinfra.ReceivablesCredit{Exposure: rm.Credit}, opts...)
 	broker := inprocess.NewBroker()
 	broker.Subscribe("inventory", im.Consumer)
 	broker.Subscribe("orders", om.Consumer)

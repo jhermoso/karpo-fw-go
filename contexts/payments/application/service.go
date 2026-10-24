@@ -36,10 +36,33 @@ type Deps struct {
 	Payables domain.PayableRepository
 	Payments domain.PaymentRepository
 	NetPay   domain.NetPaySplits
+	Merged   app.MergedParties // opcional: las parties fusionadas, que los listados dejan fuera (D-100)
 	UoW      fw.UnitOfWork
 	Recorder app.EventRecorder
 	Audit    app.AuditLog
 }
+
+// withoutMerged deja fuera de un listado los registros cuyo beneficiario es una party fusionada,
+// salvo que se pidan con includeMergedParties (docs/DECISIONES-COMUNES.md, D-100). El beneficiario
+// admite nulo (lo que se paga a una administración): esos registros se quedan.
+func withoutMerged[T any](ctx context.Context, m app.MergedParties, include bool, f spec.OptionalField[T, domain.PartyID]) ([]spec.Specification[T], error) {
+	return app.WithoutMergedOptional(ctx, m, include, f, func(u fw.UUID) domain.PartyID { return domain.PartyID{UUID: u} })
+}
+
+// payee es el beneficiario como campo que admite nulo (sin party, la columna es nula).
+func payee[T any](name string, get func(T) domain.PartyID) spec.OptionalField[T, domain.PartyID] {
+	return spec.Optional(name, func(t T) *domain.PartyID {
+		if p := get(t); !p.IsZero() {
+			return &p
+		}
+		return nil
+	})
+}
+
+var (
+	payablePayee = payee("payee", func(p *domain.Payable) domain.PartyID { return p.State().Payee })
+	paymentPayee = payee("payee", func(p *domain.Payment) domain.PartyID { return p.State().Payee })
+)
 
 // Service expone los casos de uso.
 type Service struct {

@@ -29,9 +29,18 @@ type Module struct {
 	Consumer *messaging.Consumer
 }
 
+// Option configura la composición.
+type Option func(*bapp.Deps)
+
+// WithMergedParties dice qué parties están fusionadas en otra (Parties, en el anfitrión): los
+// listados dejan fuera sus registros salvo que se pidan con includeMergedParties (D-100).
+func WithMergedParties(m application.MergedParties) Option {
+	return func(d *bapp.Deps) { d.Merged = m }
+}
+
 // Compose construye el contexto sobre sw. Billing necesita el motor de impuestos de Fiscal y las
 // identidades de Parties: los dos son puertos propios.
-func Compose(sw *hotswap.Switch, taxes domain.Taxes, identities domain.Identities) *Module {
+func Compose(sw *hotswap.Switch, taxes domain.Taxes, identities domain.Identities, opts ...Option) *Module {
 	integration := hotswap.Outbox(sw, infrastructure.IntegrationOutboxFactory)
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
 	d := bapp.Deps{
@@ -42,6 +51,9 @@ func Compose(sw *hotswap.Switch, taxes domain.Taxes, identities domain.Identitie
 	}
 	if b, ok := identities.(domain.Blocks); ok { // Parties responde a los dos
 		d.Blocks = b
+	}
+	for _, o := range opts {
+		o(&d)
 	}
 	consumer := messaging.NewConsumer(contracts.Source, hotswap.Inbox(sw, infrastructure.InboxFactory), sw)
 	bapp.Subscribe(consumer, d)
@@ -119,7 +131,8 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 		q := r.URL.Query()
 		atoi := func(k string) int { n, _ := strconv.Atoi(q.Get(k)); return n }
 		page, err := svc.SearchInvoices.Handle(r.Context(), bapp.SearchInvoices{Seller: q.Get("seller"), Customer: q.Get("customer"),
-			Status: q.Get("status"), From: q.Get("from"), To: q.Get("to"), Page: atoi("page"), Size: atoi("size")})
+			Status: q.Get("status"), From: q.Get("from"), To: q.Get("to"), IncludeMergedParties: q.Get("includeMergedParties") == "true",
+			Page: atoi("page"), Size: atoi("size")})
 		distribution.Respond(w, r, page, err, http.StatusOK)
 	})
 	mux.HandleFunc("GET /api/billing/invoices/{id}", func(w http.ResponseWriter, r *http.Request) {

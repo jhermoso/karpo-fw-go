@@ -745,3 +745,80 @@ antes se lee tal cual.
 - Que una persona empresa del grupo (D-86) se identifique con su documento de identidad ya lo
   permite la regla de documentos; no hay nada más hecho para D-86.
 
+## 20. Los listados dejan fuera los registros de las fichas fusionadas
+
+D-100 amplía D-64: no sólo la búsqueda de parties, **cualquier listado de registros** deja fuera
+por defecto los de una ficha fusionada (una party marcada «Duplicate Of» otra), y los trae con el
+filtro `includeMergedParties=true`. Un registro pedido por su identidad (`GET …/{id}`) se sigue
+encontrando: la ficha está bloqueada, no es invisible. Deshacer la fusión (terminar la relación
+«Duplicate Of») los devuelve a los listados.
+
+**Cómo.** Parties publica en su contrato el puerto `MergedParties` (`contexts/parties/contracts`):
+devuelve los ids de las parties marcadas ahora como duplicado. Son pocas, así que se piden todas de
+una vez; lo implementa `application.MergedParties` leyendo el repositorio dentro del proceso, sin
+los permisos del usuario (D-103), igual que `TaxIdentities`. El anfitrión (`host/host.go`) lo
+pasa a cada contexto con la opción `WithMergedParties` de su `Compose`. Cada listado afectado
+añade a su especificación «campo de party NOT IN (…)» con `pkg/application.WithoutMerged`. Si el
+campo admite nulo (un registro sin party), la condición es «IS NULL OR NOT IN»
+(`WithoutMergedOptional`), para no perder esos registros en SQL. El dominio de los contextos no
+cambia; tampoco el esquema. El total y las páginas del listado cuentan sólo lo que se enseña.
+
+**Límite.** Cada ficha fusionada es un parámetro de la consulta. La traducción a SQL trocea las
+listas largas en varios IN (Oracle admite 1000 por lista), pero SQL Server admite 2100 parámetros
+por petición, no por lista: con unas 2000 fichas fusionadas, los listados fallarían en SQL Server.
+Hoy son pocas; la salida (una subconsulta o una tabla de fusionadas) está en BACKLOG.md. Además,
+`MergedParties` reconstruye las parties enteras para sacar sus ids, porque el repositorio no lee
+sólo identidades; también está anotado.
+
+**D-108: un filtro explícito por una ficha la trae aunque esté fusionada.** Decisión de Javier del
+2026-10-24 («que el filtro explícito incluya sus registros»). Cuando un listado filtra por una party
+concreta en el campo de la ficha (`customer=`, `supplier=`, `payee=`, `payer=`, `debtor=`,
+`party=`, `person=`, el titular de `GET /api/financial/accounts?party=`, y los mismos filtros de
+las exportaciones), sus registros salen sin `includeMergedParties`; las demás fusionadas siguen
+fuera por defecto. Como el filtro ya limita el listado a esa party, basta con no aplicar la
+exclusión a ese campo: cada listado pasa `IncludeMergedParties || <filtro> != ""` al ayudante.
+Ejemplo: `GET /api/orders/orders?company=…&customer=<Talleres Perez>` enseña los pedidos de
+Talleres Perez aunque esté fusionada en Talleres Pérez.
+
+Ejemplo: Talleres Perez (duplicado) se fusiona en Talleres Pérez. `GET /api/orders/orders?company=…`
+ya no enseña los pedidos de Talleres Perez; `…&includeMergedParties=true` sí;
+`GET /api/orders/orders/{id}` de uno de ellos, también.
+
+| Listado | Campo de party («la ficha») | Estado |
+|---|---|---|
+| `GET /api/parties` | la party misma | Hecho antes (D-64) |
+| `POST /api/customer-relationships/search`, `POST /api/supplier-relationships/search` | el tercero de la pareja | Hecho antes (D-64); pide a Cobros, Pedidos y Compras sus perfiles con las fusionadas y filtra ella |
+| `GET /api/orders/orders` | cliente | Hecho |
+| `GET /api/orders/quotes` | cliente | Hecho |
+| `GET /api/orders/deliveries` | cliente | Hecho |
+| `GET /api/orders/terms` | cliente (condiciones de venta de la pareja) | Hecho |
+| `GET /api/billing/invoices` | cliente | Hecho |
+| `GET /api/receivables/invoices` | cliente (deudor) | Hecho |
+| `GET /api/receivables/collections` | pagador | Hecho |
+| `SearchCredit` de Cobros (sin ruta; la usa la vista por pareja) | cliente | Hecho |
+| `GET /api/purchases/invoices` | proveedor | Hecho |
+| `GET /api/purchases/suppliers` | proveedor (perfil de la pareja) | Hecho |
+| `GET /api/payments/payables`, `GET /api/payments/payments` | beneficiario (nulo si se paga a una administración: se queda) | Hecho |
+| `GET /api/treasury/mandates` | deudor | Hecho |
+| `GET /api/shipments` | cliente (destinatario) | Hecho |
+| `GET /api/work` | cliente del trabajo (nulo en uno interno: se queda) | Hecho |
+| `GET /api/time` | persona que imputa | Hecho |
+| `GET /api/documents` | party del documento (nula en uno sin party: se queda) | Hecho |
+| `GET /api/exchange/reservations` | cliente | Hecho |
+| `GET /api/financial/accounts` | titulares vigentes: fuera si todos lo están; los autorizados y beneficiarios no cuentan | Hecho |
+| `GET /api/financial/agreements` | cliente | Hecho |
+| `GET /api/hr/employments` | empleado | Hecho |
+| `GET /api/payroll/payslips`, `GET /api/payroll/profiles` | empleado | Hecho |
+| Exportaciones (`GET /api/exports/datasets`: parties, clientes, empleados, facturas, pedidos, cobros pendientes, facturas de proveedor, obligaciones de pago, cuentas de clientes) | el de la búsqueda que usan | Hecho: son esas búsquedas; el filtro `includeMergedParties` las trae |
+| `GET /api/treasury/remittances`, `GET /api/treasury/transfers` | — | **Pendiente**: el acreedor o el deudor es la empresa; las fichas están en los recibos y las transferencias de dentro, y una remesa junta muchas. Quitar la remesa entera por un recibo sería un error; habría que filtrar las líneas, que es otro cambio |
+| `GET /api/accounting/entries` | — | **Pendiente**: la party va, opcional, en las líneas del asiento; un asiento junta varias. Igual que las remesas |
+| `GET /api/accounting/trial-balance`, `GET /api/accounting/ledger`, `GET /api/inventory/valuation`, `GET /api/assets/book`, `GET /api/exchange/dashboard`, `GET /api/financial/accounts/stats` | — | **Pendiente o no aplica**: informes y agregados; un saldo no se puede quitar «por ficha» sin rehacer el cálculo |
+| `GET /api/parties/directory/search-ids` | la party | **Pendiente**: es el Open Host Service del directorio (`SearchIDsByName`); cambiarlo es cambiar el contrato. Hoy nadie lo usa |
+| `GET /api/time/sheet` | persona | No aplica: se pide por persona, como por identidad |
+| `GET /api/parties/{id}/relationships` | — | No aplica: se pide por identidad |
+| `GET /api/security/users` | party del usuario | No aplica (decisión de esta sesión, por confirmar): es la cuenta de acceso, no un registro de la ficha; quien administra tiene que ver quién puede entrar |
+| `GET /api/assets` | proveedor del activo | No aplica (por confirmar): el activo es de la empresa; el proveedor es un dato suyo, no su ficha |
+| `GET /api/carriers` | party del transportista | No aplica: catálogo de configuración |
+| Cuentas de tesorería, extractos, cuentas de cotización, declaraciones y contribuyentes fiscales, instalaciones, centros de trabajo, puestos, módulos | la empresa del grupo | No aplica: la party es la propia empresa (una empresa interna sólo la fusiona el global, D-99) |
+| Catálogos y configuración (series, tarifas, productos, categorías, unidades, almacenes, reservas y movimientos de inventario, tipos, divisas, márgenes, condiciones de pago, roles, permisos, cuentas contables, libros, exportaciones hechas, entregas del buzón, auditoría) | — | No aplica: sin party |
+

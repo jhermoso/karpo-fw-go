@@ -32,11 +32,22 @@ type Module struct {
 	Consumer *messaging.Consumer
 }
 
+// Option configura la composición.
+type Option func(*oapp.Deps)
+
+// WithBlocks dice quién responde si un cliente está bloqueado (Parties, en el anfitrión).
+func WithBlocks(b domain.Blocks) Option { return func(d *oapp.Deps) { d.Blocks = b } }
+
+// WithMergedParties dice qué parties están fusionadas en otra (Parties, en el anfitrión): los
+// listados dejan fuera sus registros salvo que se pidan con includeMergedParties (D-100).
+func WithMergedParties(m application.MergedParties) Option {
+	return func(d *oapp.Deps) { d.Merged = m }
+}
+
 // Compose construye el contexto sobre sw. Orders necesita el catálogo y los precios de Products y,
 // cuando se controla el crédito, el riesgo de Receivables (nil: sin control de crédito): puertos
-// propios. blocks es opcional: quién responde si un cliente está bloqueado (Parties, en el
-// anfitrión).
-func Compose(sw *hotswap.Switch, catalog domain.Catalog, credit domain.CreditCheck, blocks ...domain.Blocks) *Module {
+// propios. Las opciones son los puertos de Parties: bloqueos y fusionadas.
+func Compose(sw *hotswap.Switch, catalog domain.Catalog, credit domain.CreditCheck, opts ...Option) *Module {
 	integration := hotswap.Outbox(sw, infrastructure.IntegrationOutboxFactory)
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
 	d := oapp.Deps{
@@ -47,8 +58,8 @@ func Compose(sw *hotswap.Switch, catalog domain.Catalog, credit domain.CreditChe
 		Recorder: outbox.Recorders(outbox.NewRecorder(hotswap.Outbox(sw, infrastructure.OutboxFactory)),
 			oapp.Publications(messaging.NewRecorder(contracts.Source, integration))),
 	}
-	if len(blocks) > 0 {
-		d.Blocks = blocks[0]
+	for _, o := range opts {
+		o(&d)
 	}
 	consumer := messaging.NewConsumer(contracts.Source, hotswap.Inbox(sw, infrastructure.InboxFactory), sw)
 	oapp.Subscribe(consumer, d)
@@ -119,7 +130,8 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 
 	mux.HandleFunc("PUT /api/orders/terms", create(http.StatusOK, svc.SetTerms.Handle))
 	mux.HandleFunc("GET /api/orders/terms", func(w http.ResponseWriter, r *http.Request) {
-		out, err := svc.SearchTerms.Handle(r.Context(), oapp.SearchTerms{Company: r.URL.Query().Get("company")})
+		out, err := svc.SearchTerms.Handle(r.Context(), oapp.SearchTerms{Company: r.URL.Query().Get("company"),
+			IncludeMergedParties: r.URL.Query().Get("includeMergedParties") == "true"})
 		distribution.Respond(w, r, out, err, http.StatusOK)
 	})
 
@@ -127,7 +139,7 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/orders/orders", func(w http.ResponseWriter, r *http.Request) {
 		s, n := query(r)
 		out, err := svc.SearchOrders.Handle(r.Context(), oapp.SearchOrders{Company: s("company"), Customer: s("customer"), Status: s("status"),
-			Page: n("page"), Size: n("size")})
+			IncludeMergedParties: s("includeMergedParties") == "true", Page: n("page"), Size: n("size")})
 		distribution.Respond(w, r, out, err, http.StatusOK)
 	})
 	mux.HandleFunc("GET /api/orders/orders/{id}", func(w http.ResponseWriter, r *http.Request) {
@@ -154,7 +166,7 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/orders/quotes", func(w http.ResponseWriter, r *http.Request) {
 		s, n := query(r)
 		out, err := svc.SearchQuotes.Handle(r.Context(), oapp.SearchQuotes{Company: s("company"), Customer: s("customer"), Status: s("status"),
-			Page: n("page"), Size: n("size")})
+			IncludeMergedParties: s("includeMergedParties") == "true", Page: n("page"), Size: n("size")})
 		distribution.Respond(w, r, out, err, http.StatusOK)
 	})
 	mux.HandleFunc("GET /api/orders/quotes/{id}", func(w http.ResponseWriter, r *http.Request) {
@@ -177,7 +189,7 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/orders/deliveries", func(w http.ResponseWriter, r *http.Request) {
 		s, n := query(r)
 		out, err := svc.SearchDeliveries.Handle(r.Context(), oapp.SearchDeliveries{Company: s("company"), Customer: s("customer"), Order: s("order"),
-			Uninvoiced: s("invoiced") == "false", Page: n("page"), Size: n("size")})
+			Uninvoiced: s("invoiced") == "false", IncludeMergedParties: s("includeMergedParties") == "true", Page: n("page"), Size: n("size")})
 		distribution.Respond(w, r, out, err, http.StatusOK)
 	})
 	mux.HandleFunc("GET /api/orders/deliveries/{id}", func(w http.ResponseWriter, r *http.Request) {

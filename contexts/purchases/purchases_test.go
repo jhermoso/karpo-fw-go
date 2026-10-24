@@ -62,12 +62,12 @@ type host struct {
 	adminCtx context.Context
 }
 
-func compose(t *testing.T) *host {
+func compose(t *testing.T, opts ...purchases.Option) *host {
 	ctx := context.Background()
 	sw := hotswap.New(memory.NewStore("memory"))
 	pm := parties.Compose(sw, nil)
 	fm := fiscal.Compose(sw, finfra.PartiesIdentities{TaxIdentities: pm.TaxIdentities})
-	um := purchases.Compose(sw, uinfra.FiscalTaxes{Engine: fm.TaxEngine})
+	um := purchases.Compose(sw, uinfra.FiscalTaxes{Engine: fm.TaxEngine}, opts...)
 	ym := payments.Compose(sw, nil)
 	am := accounting.Compose(sw)
 	broker := inprocess.NewBroker()

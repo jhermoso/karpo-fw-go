@@ -29,20 +29,33 @@ type Module struct {
 	Audit             application.AuditLog
 }
 
+// Option configura la composición.
+type Option func(*papp.Deps)
+
+// WithMergedParties dice qué parties están fusionadas en otra (Parties, en el anfitrión): los
+// listados dejan fuera sus registros salvo que se pidan con includeMergedParties (D-100).
+func WithMergedParties(m application.MergedParties) Option {
+	return func(d *papp.Deps) { d.Merged = m }
+}
+
 // Compose construye el contexto sobre sw. Payroll necesita HR: las relaciones laborales son su
 // puerto propio.
-func Compose(sw *hotswap.Switch, employments papp.Employments) *Module {
+func Compose(sw *hotswap.Switch, employments papp.Employments, opts ...Option) *Module {
 	payslips := hotswap.Repository(sw, infrastructure.PayslipRepositoryFactory)
 	profiles := hotswap.Repository(sw, infrastructure.ProfileRepositoryFactory)
 	accounts := hotswap.Repository(sw, infrastructure.AccountRepositoryFactory)
 	integration := hotswap.Outbox(sw, infrastructure.IntegrationOutboxFactory)
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
-	svc := papp.NewService(papp.Deps{
+	d := papp.Deps{
 		Payslips: payslips, Profiles: profiles, Accounts: accounts, Catalogs: catalogs{hotswap.Bind(sw, infrastructure.CatalogsFor)},
 		Employments: employments, UoW: sw, Audit: audit,
 		Recorder: outbox.Recorders(outbox.NewRecorder(hotswap.Outbox(sw, infrastructure.OutboxFactory)),
 			papp.Publications(messaging.NewRecorder(contracts.Source, integration))),
-	})
+	}
+	for _, o := range opts {
+		o(&d)
+	}
+	svc := papp.NewService(d)
 	return &Module{Service: svc, Remittance: papp.Remittance{Payslips: payslips, Profiles: profiles}, IntegrationOutbox: integration, Audit: audit}
 }
 
@@ -135,7 +148,7 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/payroll/payslips", func(w http.ResponseWriter, r *http.Request) {
 		s, n := query(r)
 		page, err := svc.SearchPayslips.Handle(r.Context(), papp.SearchPayslips{Employer: s("employer"), Person: s("person"), Status: s("status"),
-			From: s("from"), To: s("to"), Page: n("page"), Size: n("size")})
+			From: s("from"), To: s("to"), IncludeMergedParties: s("includeMergedParties") == "true", Page: n("page"), Size: n("size")})
 		distribution.Respond(w, r, page, err, http.StatusOK)
 	})
 	mux.HandleFunc("GET /api/payroll/payslips/{id}", get(pay, func(ctx context.Context, id domain.PayslipID) (papp.PayslipDTO, error) {
@@ -163,7 +176,8 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/payroll/profiles", create(svc.OpenProfile.Handle))
 	mux.HandleFunc("GET /api/payroll/profiles", func(w http.ResponseWriter, r *http.Request) {
 		s, n := query(r)
-		page, err := svc.SearchProfiles.Handle(r.Context(), papp.SearchProfiles{Employer: s("employer"), Person: s("person"), Page: n("page"), Size: n("size")})
+		page, err := svc.SearchProfiles.Handle(r.Context(), papp.SearchProfiles{Employer: s("employer"), Person: s("person"),
+			IncludeMergedParties: s("includeMergedParties") == "true", Page: n("page"), Size: n("size")})
 		distribution.Respond(w, r, page, err, http.StatusOK)
 	})
 	mux.HandleFunc("GET /api/payroll/profiles/{id}", get(prof, func(ctx context.Context, id domain.ProfileID) (papp.ProfileDTO, error) {

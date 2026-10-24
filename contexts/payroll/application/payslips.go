@@ -67,6 +67,7 @@ type GetPayslip struct{ ID domain.PayslipID }
 type SearchPayslips struct {
 	Employer, Person, Status string
 	From, To                 string // intervalo del inicio del periodo (fechas civiles)
+	IncludeMergedParties     bool   // también los de parties fusionadas en otra (D-100)
 	Page, Size               int
 }
 
@@ -329,6 +330,11 @@ func (s service) payslipUseCases(svc *Service) {
 		if err := v.Err(); err != nil {
 			return fw.Page[PayslipDTO]{}, err
 		}
+		merged, err := withoutMerged(ctx, s.Merged, q.IncludeMergedParties || q.Person != "", domain.PayFieldPerson)
+		if err != nil {
+			return fw.Page[PayslipDTO]{}, err
+		}
+		parts = append(parts, merged...)
 		page, err := s.Payslips.FindPage(ctx, spec.And(parts...), fw.NewPageRequest(q.Page, q.Size, domain.PayFieldStart.Desc()))
 		if err != nil {
 			return fw.Page[PayslipDTO]{}, err

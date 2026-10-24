@@ -64,6 +64,7 @@ type GetEmployment struct{ ID domain.EmploymentID }
 type SearchEmployments struct {
 	Employer, Person, Number string
 	ActiveOnly               bool
+	IncludeMergedParties     bool // también los de parties fusionadas en otra (D-100)
 	Page, Size               int
 }
 
@@ -306,6 +307,11 @@ func (s service) employmentUseCases(svc *Service) {
 		if err := v.Err(); err != nil {
 			return fw.Page[EmploymentDTO]{}, err
 		}
+		merged, err := withoutMerged(ctx, s.Merged, q.IncludeMergedParties || q.Person != "", domain.EmpFieldPerson)
+		if err != nil {
+			return fw.Page[EmploymentDTO]{}, err
+		}
+		parts = append(parts, merged...)
 		page, err := s.Employments.FindPage(ctx, spec.And(parts...), fw.NewPageRequest(q.Page, q.Size, domain.EmpFieldNumber.Asc()))
 		if err != nil {
 			return fw.Page[EmploymentDTO]{}, err

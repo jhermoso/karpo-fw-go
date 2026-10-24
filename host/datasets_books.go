@@ -80,7 +80,9 @@ type payableList struct {
 func (payableList) Key() string                  { return "payables" }
 func (payableList) Title() string                { return "Vencimientos de pago" }
 func (payableList) Permission() authz.Permission { return payapp.PermPayableRead }
-func (payableList) Filters() []string            { return []string{"company", "payee", "kind", "dueTo", "open"} }
+func (payableList) Filters() []string {
+	return []string{"company", "payee", "kind", "dueTo", "open", mergedFilter}
+}
 func (payableList) Columns() []expdomain.Column {
 	return []expdomain.Column{{Field: "document", Header: "Documento"}, {Field: "kind", Header: "Tipo"}, {Field: "payee", Header: "Acreedor"},
 		{Field: "description", Header: "Concepto"}, {Field: "issued", Header: "Fecha", Type: expdomain.Date},
@@ -91,7 +93,7 @@ func (payableList) Columns() []expdomain.Column {
 
 func (l payableList) Page(ctx context.Context, filters map[string]string, cursor string, limit int) ([]expdomain.Row, string, error) {
 	found, err := l.pay.Service.SearchPayables.Handle(ctx, payapp.SearchPayables{Company: filters["company"], Payee: filters["payee"], Kind: filters["kind"],
-		DueTo: filters["dueTo"], OpenOnly: filters["open"] == "true", Page: page(cursor), Size: limit})
+		DueTo: filters["dueTo"], OpenOnly: filters["open"] == "true", IncludeMergedParties: filters["includeMergedParties"] == "true", Page: page(cursor), Size: limit})
 	if err != nil {
 		return nil, "", err
 	}

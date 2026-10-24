@@ -54,11 +54,11 @@ type host struct {
 	adminCtx context.Context
 }
 
-func compose(t *testing.T) *host {
+func compose(t *testing.T, opts ...exchange.Option) *host {
 	ctx := context.Background()
 	sw := hotswap.New(memory.NewStore("memory"))
 	partner := domain.PartyID{UUID: fw.NewUUID()}
-	xm := exchange.Compose(sw, collaborators{"PROMO1": partner})
+	xm := exchange.Compose(sw, collaborators{"PROMO1": partner}, opts...)
 	jwt, _ := jwtauth.New(jwtauth.Config{Secret: []byte("exchange-test")})
 	dir := authorization.NewMemoryDirectory()
 	h := &host{t: t, sw: sw, dir: dir, ids: map[string]fw.UUID{}, tokens: map[string]string{}, exg: xm, partner: partner}

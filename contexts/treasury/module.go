@@ -28,20 +28,33 @@ type Module struct {
 	Audit             application.AuditLog
 }
 
+// Option configura la composición.
+type Option func(*tapp.Deps)
+
+// WithMergedParties dice qué parties están fusionadas en otra (Parties, en el anfitrión): los
+// listados dejan fuera sus registros salvo que se pidan con includeMergedParties (D-100).
+func WithMergedParties(m application.MergedParties) Option {
+	return func(d *tapp.Deps) { d.Merged = m }
+}
+
 // Compose construye el contexto sobre sw. Treasury necesita los vencimientos de Receivables, las
 // obligaciones de pago de Payments (nil: sin órdenes de transferencias) y las identidades de
 // Parties: todos son puertos propios.
-func Compose(sw *hotswap.Switch, receivables domain.Receivables, payables domain.Payables, identities domain.Identities) *Module {
+func Compose(sw *hotswap.Switch, receivables domain.Receivables, payables domain.Payables, identities domain.Identities, opts ...Option) *Module {
 	integration := hotswap.Outbox(sw, infrastructure.IntegrationOutboxFactory)
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
-	svc := tapp.NewService(tapp.Deps{
+	d := tapp.Deps{
 		Accounts: hotswap.Repository(sw, infrastructure.AccountRepositoryFactory), Mandates: hotswap.Repository(sw, infrastructure.MandateRepositoryFactory),
 		Remittances: hotswap.Repository(sw, infrastructure.RemittanceRepositoryFactory), Transfers: hotswap.Repository(sw, infrastructure.TransferOrderRepositoryFactory),
 		Statements: hotswap.Repository(sw, infrastructure.StatementRepositoryFactory), Receivables: receivables, Payables: payables, Identities: identities,
 		UoW: sw, Audit: audit,
 		Recorder: outbox.Recorders(outbox.NewRecorder(hotswap.Outbox(sw, infrastructure.OutboxFactory)),
 			tapp.Publications(messaging.NewRecorder(contracts.Source, integration))),
-	})
+	}
+	for _, o := range opts {
+		o(&d)
+	}
+	svc := tapp.NewService(d)
 	return &Module{Service: svc, IntegrationOutbox: integration, Audit: audit}
 }
 
@@ -112,7 +125,8 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/treasury/mandates", create(svc.RegisterMandate.Handle))
 	mux.HandleFunc("GET /api/treasury/mandates", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
-		out, err := svc.SearchMandates.Handle(r.Context(), tapp.SearchMandates{Creditor: q.Get("creditor"), Debtor: q.Get("debtor")})
+		out, err := svc.SearchMandates.Handle(r.Context(), tapp.SearchMandates{Creditor: q.Get("creditor"), Debtor: q.Get("debtor"),
+			IncludeMergedParties: q.Get("includeMergedParties") == "true"})
 		distribution.Respond(w, r, out, err, http.StatusOK)
 	})
 	mux.HandleFunc("POST /api/treasury/mandates/{id}/revoke", command(man, func(c *tapp.RevokeMandate, id domain.MandateID) { c.ID = id }, svc.RevokeMandate.Handle))

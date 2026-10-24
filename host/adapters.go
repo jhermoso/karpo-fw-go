@@ -170,7 +170,7 @@ func (CustomerAccounts) Permission() authz.Permission { return finapp.PermAccoun
 
 // Filters implementa Dataset de exports.
 func (CustomerAccounts) Filters() []string {
-	return []string{"company", "status", "currency", "name", "use", "party", "demo"}
+	return []string{"company", "status", "currency", "name", "use", "party", "demo", mergedFilter}
 }
 
 // Columns implementa Dataset de exports.
@@ -188,7 +188,8 @@ func (c CustomerAccounts) Page(ctx context.Context, filters map[string]string, c
 		number = 1
 	}
 	page, err := c.Financial.Service.Search.Handle(ctx, finapp.SearchAccounts{Company: filters["company"], Status: filters["status"],
-		Currency: filters["currency"], Name: filters["name"], Use: filters["use"], Party: filters["party"], Demo: filters["demo"], Page: number, Size: limit})
+		Currency: filters["currency"], Name: filters["name"], Use: filters["use"], Party: filters["party"], Demo: filters["demo"],
+		IncludeMergedParties: filters["includeMergedParties"] == "true", Page: number, Size: limit})
 	if err != nil {
 		return nil, "", err
 	}

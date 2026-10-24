@@ -40,6 +40,7 @@ type ApproveTime struct {
 type SearchTime struct {
 	Company, Work, Person, From, To string
 	Pending                         bool // aún no aprobado
+	IncludeMergedParties            bool // también los de parties fusionadas en otra (D-100)
 	Page, Size                      int
 }
 
@@ -200,7 +201,11 @@ func (s service) wireTime(svc *Service) {
 		if err := v.Err(); err != nil {
 			return fw.Page[TimeDTO]{}, err
 		}
-		page, err := d.Times.FindPage(ctx, sp, fw.NewPageRequest(q.Page, q.Size, domain.TimFieldDate.Asc()))
+		merged, err := withoutMerged(ctx, d.Merged, q.IncludeMergedParties || q.Person != "", domain.TimFieldPerson)
+		if err != nil {
+			return fw.Page[TimeDTO]{}, err
+		}
+		page, err := d.Times.FindPage(ctx, spec.And(append(merged, sp)...), fw.NewPageRequest(q.Page, q.Size, domain.TimFieldDate.Asc()))
 		if err != nil {
 			return fw.Page[TimeDTO]{}, err
 		}

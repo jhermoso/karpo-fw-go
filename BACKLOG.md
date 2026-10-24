@@ -71,6 +71,15 @@ tiempo de prueba, participación en el capital) y edición de persona.
   datos entre motores.
 - **Filtros HTTP → especificaciones** (lista blanca de campos) para búsquedas genéricas.
 - **CI en Linux** con `go test -race` (en Windows no hay compilador C) y `integration/run.ps1`.
+- **Listados sin fichas fusionadas (D-100) con muchas fusionadas.** Cada listado añade «party NOT
+  IN (ids fusionados)», un parámetro por ficha (`pkg/application/merged.go`). SQL Server admite 2100
+  parámetros por petición, no por lista, así que trocear no basta: con unas 2000 fusionadas los
+  listados fallarían allí. Salida: que el NOT IN sea una subconsulta o semi-join contra las parties
+  marcadas como duplicado (dentro de un proceso con una base) o contra una tabla de fusionadas que
+  cada contexto mantenga con el evento de Parties (procesos separados). Mientras tanto,
+  `MergedParties` (`contexts/parties/application/ports.go`) reconstruye las parties enteras sólo
+  para sacar sus ids: el repositorio genérico no tiene una lectura de identidades (`FindIDs`), que
+  habría que añadir a `sqlrepo` y a `memory`.
 
 ### 2b-bis. Observabilidad: siguientes pasos
 Hecho (ver [docs/OBSERVABILIDAD.md](docs/OBSERVABILIDAD.md), decisiones D1 a D8 aprobadas el

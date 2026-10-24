@@ -85,6 +85,7 @@ type GetQuote struct{ ID domain.QuoteID }
 // SearchQuotes busca presupuestos del ámbito de quien llama, los más recientes primero.
 type SearchQuotes struct {
 	Company, Customer, Status string
+	IncludeMergedParties      bool // también los de clientes fusionados en otra party (D-100)
 	Page, Size                int
 }
 
@@ -370,6 +371,11 @@ func (s service) quoteUseCases(svc *Service) {
 		if err := v.Err(); err != nil {
 			return fw.Page[QuoteDTO]{}, err
 		}
+		merged, err := withoutMerged(ctx, s.Merged, c.IncludeMergedParties || c.Customer != "", domain.QuoFieldCustomer)
+		if err != nil {
+			return fw.Page[QuoteDTO]{}, err
+		}
+		parts = append(parts, merged...)
 		page, err := s.Quotes.FindPage(ctx, spec.And(parts...), fw.NewPageRequest(c.Page, c.Size, domain.QuoFieldDate.Desc(), domain.QuoFieldNumber.Desc()))
 		if err != nil {
 			return fw.Page[QuoteDTO]{}, err

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/work/domain"
+	app "github.com/jhermoso/karpo-fw-go/pkg/application"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
@@ -77,6 +78,7 @@ type GetWork struct{ ID domain.WorkID }
 // SearchWorks busca los trabajos del ámbito de quien llama.
 type SearchWorks struct {
 	Company, Kind, Status, Parent, Customer string
+	IncludeMergedParties                    bool // también los de parties fusionadas en otra (D-100)
 	Page, Size                              int
 }
 
@@ -322,6 +324,12 @@ func (s service) wireWorks(svc *Service) {
 		if err := v.Err(); err != nil {
 			return fw.Page[WorkDTO]{}, err
 		}
+		merged, err := app.WithoutMergedOptional(ctx, d.Merged, q.IncludeMergedParties || q.Customer != "", workCustomer,
+			func(u fw.UUID) domain.PartyID { return domain.PartyID{UUID: u} })
+		if err != nil {
+			return fw.Page[WorkDTO]{}, err
+		}
+		parts = append(parts, merged...)
 		page, err := d.Works.FindPage(ctx, spec.And(parts...), fw.NewPageRequest(q.Page, q.Size, domain.WrkFieldCode.Asc()))
 		if err != nil {
 			return fw.Page[WorkDTO]{}, err

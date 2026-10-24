@@ -56,6 +56,7 @@ type GetInvoice struct{ ID domain.InvoiceID }
 // SearchInvoices busca en el registro del ámbito de quien llama.
 type SearchInvoices struct {
 	Company, Supplier, From, To string
+	IncludeMergedParties        bool // también los de parties fusionadas en otra (D-100)
 	Page, Size                  int
 }
 
@@ -291,6 +292,11 @@ func (s service) invoiceUseCases(svc *Service) {
 		if err := v.Err(); err != nil {
 			return fw.Page[InvoiceDTO]{}, err
 		}
+		merged, err := withoutMerged(ctx, s.Merged, q.IncludeMergedParties || q.Supplier != "", domain.InvFieldSupplier)
+		if err != nil {
+			return fw.Page[InvoiceDTO]{}, err
+		}
+		parts = append(parts, merged...)
 		page, err := s.Invoices.FindPage(ctx, spec.And(parts...), fw.NewPageRequest(q.Page, q.Size, domain.InvFieldRegister.Asc()))
 		if err != nil {
 			return fw.Page[InvoiceDTO]{}, err

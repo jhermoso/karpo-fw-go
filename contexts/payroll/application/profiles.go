@@ -64,8 +64,9 @@ type GetProfile struct{ ID domain.ProfileID }
 
 // SearchProfiles busca perfiles del ámbito de quien llama.
 type SearchProfiles struct {
-	Employer, Person string
-	Page, Size       int
+	Employer, Person     string
+	IncludeMergedParties bool // también los de parties fusionadas en otra (D-100)
+	Page, Size           int
 }
 
 // SplitDTO es la forma de transporte de un reparto.
@@ -250,6 +251,11 @@ func (s service) profileUseCases(svc *Service) {
 		if err := v.Err(); err != nil {
 			return fw.Page[ProfileDTO]{}, err
 		}
+		merged, err := withoutMerged(ctx, s.Merged, q.IncludeMergedParties || q.Person != "", domain.ProfFieldPerson)
+		if err != nil {
+			return fw.Page[ProfileDTO]{}, err
+		}
+		parts = append(parts, merged...)
 		page, err := s.Profiles.FindPage(ctx, spec.And(parts...), fw.NewPageRequest[*domain.Profile](q.Page, q.Size))
 		if err != nil {
 			return fw.Page[ProfileDTO]{}, err

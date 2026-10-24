@@ -59,13 +59,13 @@ type host struct {
 	adminCtx context.Context
 }
 
-func compose(t *testing.T) *host {
+func compose(t *testing.T, opts ...receivables.Option) *host {
 	ctx := context.Background()
 	sw := hotswap.New(memory.NewStore("memory"))
 	pm := parties.Compose(sw, nil)
 	fm := fiscal.Compose(sw, finfra.PartiesIdentities{TaxIdentities: pm.TaxIdentities})
 	bm := billing.Compose(sw, binfra.FiscalTaxes{Engine: fm.TaxEngine}, binfra.PartiesIdentities{TaxIdentities: pm.TaxIdentities})
-	rm := receivables.Compose(sw, nil)
+	rm := receivables.Compose(sw, nil, opts...)
 
 	jwt, _ := jwtauth.New(jwtauth.Config{Secret: []byte("receivables-test")})
 	dir := authorization.NewMemoryDirectory()

@@ -23,7 +23,10 @@ type SetSupplier struct {
 }
 
 // SearchSuppliers lista los perfiles de proveedor de una empresa.
-type SearchSuppliers struct{ Company string }
+type SearchSuppliers struct {
+	Company              string
+	IncludeMergedParties bool // también los de parties fusionadas en otra (D-100)
+}
 
 // SupplierDTO es la forma de transporte de un perfil de proveedor.
 type SupplierDTO struct {
@@ -92,7 +95,11 @@ func (s service) supplierUseCases(svc *Service) {
 		if err := scopeOf(ctx).check("parties.party", company, company, false); err != nil {
 			return nil, err
 		}
-		ps, err := s.Suppliers.Find(ctx, domain.SupFieldCompany.Eq(company))
+		merged, err := withoutMerged(ctx, s.Merged, q.IncludeMergedParties, domain.SupFieldSupplier)
+		if err != nil {
+			return nil, err
+		}
+		ps, err := s.Suppliers.Find(ctx, spec.And(append(merged, domain.SupFieldCompany.Eq(company))...))
 		if err != nil {
 			return nil, err
 		}
