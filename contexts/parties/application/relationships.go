@@ -128,7 +128,7 @@ func (s service) register(ctx context.Context, build func(domain.PartyID) (*doma
 		if !partyIsFrom {
 			from, to = org, p
 		}
-		if _, err := s.establish(ctx, rt, from, to, now, "", aff.RelationshipDetailsInput); err != nil {
+		if _, _, err := s.establish(ctx, rt, from, to, now, "", aff.RelationshipDetailsInput); err != nil {
 			return PartyDTO{}, err
 		}
 		if p, err = s.Parties.Get(ctx, p.ID()); err != nil {
@@ -142,76 +142,82 @@ func (s service) register(ctx context.Context, build func(domain.PartyID) (*doma
 // tipo se le da, y una party relacionada con una organización interna queda afiliada a ella
 // (visibilidad, pertenencia). Los tipos jerárquicos mantienen un padre por hijo y ningún ciclo.
 // Todo ocurre en la unidad de trabajo del llamante.
+//
+// Para una «Duplicate Of» devuelve además el instante en que se movieron las relaciones de negocio
+// (mergeMoment), que no es since: since es la fecha de la marca y el instante es el más tardío de
+// since y el reloj, de modo que, con since tomado del reloj un poco antes, las relaciones que pasan
+// empiezan después de since. Lo que hizo la fusión se cuenta en ese instante. Para los demás tipos
+// es el instante cero.
 func (s service) establish(ctx context.Context, rt domain.RelationshipType, from, to *domain.Party, since time.Time, remark string,
-	details RelationshipDetailsInput) (*domain.Relationship, error) {
+	details RelationshipDetailsInput) (*domain.Relationship, time.Time, error) {
 	cat, err := s.roleCatalog(ctx)
 	if err != nil {
-		return nil, err
+		return nil, time.Time{}, err
 	}
 	if rt.Hierarchical {
 		if err := s.checkHierarchy(ctx, rt, from.ID(), to.ID(), since); err != nil {
-			return nil, err
+			return nil, time.Time{}, err
 		}
 	}
 	for _, p := range []*domain.Party{from, to} {
 		if err := operable(p); err != nil {
-			return nil, err
+			return nil, time.Time{}, err
 		}
 	}
 	var moment time.Time // cuándo se mueven las relaciones de negocio de una fusión
 	if rt.ID == domain.RelDuplicateOf {
 		if err := canMarkDuplicate(ctx, s.scope(ctx), from, to); err != nil {
-			return nil, err
+			return nil, time.Time{}, err
 		}
 		if moment, err = mergeMoment(since); err != nil {
-			return nil, err
+			return nil, time.Time{}, err
 		}
 		// No se encadenan fusiones (D-97): la superviviente de otra no se fusiona en nadie.
 		if survives, err := s.Relationships.Exists(ctx, spec.And(domain.RelFieldType.Eq(domain.RelDuplicateOf), domain.RelFieldTo.Eq(from.ID()),
 			domain.NotEndedAt(since))); err != nil {
-			return nil, err
+			return nil, time.Time{}, err
 		} else if survives {
-			return nil, fw.Violation("parties.merge_chain", "the party is the survivor of another merge: merge that one directly into the new survivor")
+			return nil, time.Time{}, fw.Violation("parties.merge_chain", "the party is the survivor of another merge: merge that one directly into the new survivor")
 		}
 	}
 	if dup, err := s.Relationships.Exists(ctx, domain.SameRelationship(rt, from.ID(), to.ID(), since)); err != nil {
-		return nil, err
+		return nil, time.Time{}, err
 	} else if dup {
-		return nil, fw.Violation("parties.duplicate_relationship", "the parties already have this relationship in that period")
+		return nil, time.Time{}, fw.Violation("parties.duplicate_relationship", "the parties already have this relationship in that period")
 	}
 	if from, err = s.playing(ctx, cat, from, rt.FromRole, since); err != nil {
-		return nil, err
+		return nil, time.Time{}, err
 	}
 	if to, err = s.playing(ctx, cat, to, rt.ToRole, since); err != nil {
-		return nil, err
+		return nil, time.Time{}, err
 	}
 	r, err := domain.Establish(domain.NewRelationshipID(), rt, from, to, cat, since, remark)
 	if err != nil {
-		return nil, err
+		return nil, time.Time{}, err
 	}
 	// Una prueba que llega con la relación sigue siendo una prueba que se concede.
 	if details.Prospect != nil && details.Prospect.TrialUntil != nil {
 		if err := authz.Require(ctx, PermRelationshipSetTrial); err != nil {
-			return nil, err
+			return nil, time.Time{}, err
 		}
 	}
 	if err := details.apply(r, rt); err != nil {
-		return nil, err
+		return nil, time.Time{}, err
 	}
 	if err := s.relationships.Create(ctx, r); err != nil {
-		return nil, err
+		return nil, time.Time{}, err
 	}
 	if rt.ID == domain.RelDuplicateOf { // el duplicado se marca, no se afilia a nadie y cede sus relaciones de negocio (D-93)
 		if _, err := s.parties.Update(ctx, from.ID(), func(_ context.Context, p *domain.Party) error { return p.MarkDuplicate() }); err != nil {
-			return nil, err
+			return nil, time.Time{}, err
 		}
 		if err := s.transferBusiness(ctx, from.ID(), to.ID(), moment); err != nil {
-			return nil, err
+			return nil, time.Time{}, err
 		}
-		return r, nil
+		return r, moment, nil
 	}
 	if rt.ID == domain.RelFamily { // no es una relación de negocio: no se la enseña a nadie (D-67)
-		return r, nil
+		return r, time.Time{}, nil
 	}
 	for _, side := range [][2]*domain.Party{{from, to}, {to, from}} {
 		member, org := side[0], side[1]
@@ -221,10 +227,10 @@ func (s service) establish(ctx context.Context, rt domain.RelationshipType, from
 		if _, err := s.parties.Update(ctx, member.ID(), func(_ context.Context, p *domain.Party) error {
 			return p.Affiliate(org.ID(), r.ID(), since)
 		}); err != nil {
-			return nil, err
+			return nil, time.Time{}, err
 		}
 	}
-	return r, nil
+	return r, time.Time{}, nil
 }
 
 // playing devuelve la party que desempeña el rol que una relación le pide, y le da el rol si le

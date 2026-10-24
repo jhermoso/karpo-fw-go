@@ -460,13 +460,16 @@ func NewService(d Deps) *Service {
 		if rt.ID != domain.RelDuplicateOf && !sc.canRelate(from, to) {
 			return RelationshipDTO{}, fw.ErrForbidden
 		}
-		r, err := s.establish(ctx, rt, from, to, nowOr(c.Since), strings.TrimSpace(c.Remark), c.RelationshipDetailsInput)
+		r, moment, err := s.establish(ctx, rt, from, to, nowOr(c.Since), strings.TrimSpace(c.Remark), c.RelationshipDetailsInput)
 		if err != nil {
 			return RelationshipDTO{}, err
 		}
 		out := RelationshipToDTO(r, types)
 		if rt.ID == domain.RelDuplicateOf {
-			if out.Merge, err = s.mergeOf(ctx, r.From(), r.To(), r.Since()); err != nil {
+			// En el instante en que se movieron las relaciones, no en r.Since(): las que pasaron
+			// empiezan en ese instante, y en r.Since(), si el reloj avanzó entre uno y otro, todavía
+			// no habrían empezado y las que cedieron seguirían vigentes.
+			if out.Merge, err = s.mergeOf(ctx, r.From(), r.To(), moment); err != nil {
 				return RelationshipDTO{}, err
 			}
 		}

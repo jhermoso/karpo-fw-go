@@ -1279,6 +1279,41 @@ func (e *env) phase2(acme, ana papp.PartyDTO) {
 	}
 }
 
+// tickingClock es un reloj que avanza un milisegundo cada vez que se lee: dentro de una misma
+// petición, cada lectura del reloj da un instante posterior, como el reloj real cuando salta.
+type tickingClock struct{ *fake.FakeClock }
+
+func (c tickingClock) Now() time.Time {
+	c.Advance(time.Millisecond)
+	return c.FakeClock.Now()
+}
+
+// Lo que hizo una fusión se cuenta en el instante en que se movieron las relaciones, no en la
+// fecha de la marca. Sin fecha, la marca toma el reloj al llegar la petición y la fusión lo lee
+// otra vez después: si el reloj avanzó entre las dos lecturas, las relaciones que pasaron empiezan
+// después de la marca y, contadas en la marca, ni las nuevas habrían empezado ni las que cedieron
+// habrían terminado (salían todas en Kept; fallaba a veces en host/pairs_test.go).
+func TestParties_MergeReportsWhatMovedWhenTheClockAdvances(t *testing.T) {
+	e := compose(t, newMemoryDirectory)
+	var acme, cede, survivor papp.PartyDTO
+	e.must(e.do("POST", "/api/organizations", e.admin, map[string]any{"legalName": "Acme reloj",
+		"roles": []string{domain.RoleInternalOrganization.String()}}, &acme), 201, "a company")
+	e.must(e.do("POST", "/api/persons", e.admin, map[string]any{"givenName": "Cede", "firstSurname": "Reloj"}, &cede), 201, "the duplicate")
+	e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelCustomer.String(),
+		"fromParty": cede.ID, "toParty": acme.ID}, nil), 201, "it buys from acme")
+	e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelSupplier.String(),
+		"fromParty": acme.ID, "toParty": cede.ID}, nil), 201, "and acme buys from it")
+	e.must(e.do("POST", "/api/persons", e.admin, map[string]any{"givenName": "Superviviente", "firstSurname": "Reloj"}, &survivor), 201, "the survivor")
+
+	t.Cleanup(fw.SetClock(tickingClock{e.clock}))
+	var mark papp.RelationshipDTO
+	e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelDuplicateOf.String(),
+		"fromParty": cede.ID, "toParty": survivor.ID}, &mark), 201, "merge")
+	if m := mark.Merge; m == nil || len(m.Transferred) != 2 || len(m.Kept) != 0 {
+		t.Fatalf("what the merge did: %+v", mark.Merge)
+	}
+}
+
 // El escenario completo corre dos veces: sobre el directorio de seguridad en memoria del framework
 // y sobre el contexto delimitado Security. Nada de Parties cambia entre los dos: sus casos de uso
 // leen el contexto de autorización, no de dónde viene.
