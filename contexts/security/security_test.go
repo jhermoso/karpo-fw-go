@@ -457,6 +457,51 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("the five system roles remain: %+v", roles)
 	}
 
+	// --- D-98: lo que el global retira a un rol del sistema no vuelve al arrancar --------------
+	orgAdmin := "/api/security/roles/" + sdomain.RoleOrganizationAdmin.String()
+	var adminRole sapp.RoleDTO
+	h.must(h.do("GET", orgAdmin, root, nil, &adminRole), 200, "organization admin role")
+	if !slices.Contains(adminRole.Permissions, string(papp.PermPartyMerge)) || !h.context(m).HasPermission(papp.PermPartyMerge) {
+		t.Fatalf("the rule gives merge to the organization administrator: %v", adminRole.Permissions)
+	}
+	withoutMerge := slices.DeleteFunc(slices.Clone(adminRole.Permissions), func(p string) bool { return p == string(papp.PermPartyMerge) })
+	h.must(h.do("PUT", orgAdmin+"/permissions", m, map[string]any{"permissions": withoutMerge}, nil), 403, "only the global administrator changes a role")
+	h.must(h.do("PUT", orgAdmin+"/permissions", root, map[string]any{"permissions": append(slices.Clone(withoutMerge), string(sapp.PermRoleUpdate))}, nil),
+		422, "never a permission the standard rule does not give")
+	h.must(h.do("PUT", orgAdmin+"/permissions", root, map[string]any{"permissions": append(slices.Clone(withoutMerge), "Nowhere.Thing.Read")}, nil),
+		400, "nor one the catalog does not know")
+	h.must(h.do("PUT", "/api/security/roles/"+sdomain.RoleGlobalSuperAdmin.String()+"/permissions", root, map[string]any{"permissions": []string{}}, nil),
+		422, "GlobalSuperAdmin keeps the wildcard")
+	h.must(h.do("PUT", orgAdmin+"/permissions", root, map[string]any{"permissions": withoutMerge}, &adminRole), 200, "the global withdraws merge")
+	if slices.Contains(adminRole.Permissions, string(papp.PermPartyMerge)) || h.context(m).HasPermission(papp.PermPartyMerge) ||
+		!slices.Equal(adminRole.Withdrawn, []string{string(papp.PermPartyMerge)}) {
+		t.Fatalf("withdrawn: %v", adminRole.Permissions)
+	}
+	// Un arranque con un permiso nuevo declarado después: llega una vez; el retirado no vuelve.
+	const later authz.Permission = "Later.Thing.Approve"
+	if report, err := h.sec.SyncCatalog(ctx, append(slices.Clone(papp.Permissions()), later)...); err != nil || report.Added != 1 || report.RolesUpdated != 1 {
+		t.Fatalf("start with a new permission: %+v %v", report, err)
+	}
+	if again, err := h.sec.SyncCatalog(ctx, append(slices.Clone(papp.Permissions()), later)...); err != nil || again != (sapp.CatalogSync{}) {
+		t.Fatalf("a second start changes nothing: %+v %v", again, err)
+	}
+	if mc := h.context(m); mc.HasPermission(papp.PermPartyMerge) || !mc.HasPermission(later) {
+		t.Fatalf("after the start: merge %v, new permission %v", mc.HasPermission(papp.PermPartyMerge), mc.HasPermission(later))
+	}
+	h.must(h.do("GET", orgAdmin, root, nil, &adminRole), 200, "organization admin role")
+	h.must(h.do("PUT", orgAdmin+"/permissions", root, map[string]any{"permissions": append(adminRole.Permissions, string(papp.PermPartyMerge))}, &adminRole),
+		200, "the global gives merge back")
+	if !h.context(m).HasPermission(papp.PermPartyMerge) {
+		t.Fatal("merge is back")
+	}
+	if report, err := h.sec.SyncCatalog(ctx, papp.Permissions()...); err != nil || report.Deactivated != 1 {
+		t.Fatalf("the new permission goes away: %+v %v", report, err)
+	}
+	roleTrail, err := h.sec.Audit.Trail(ctx, sdomain.RoleKind, sdomain.RoleOrganizationAdmin.String())
+	if err != nil || !slices.ContainsFunc(roleTrail, func(r application.AuditRecord) bool { return r.Actor.Name == "root" }) {
+		t.Fatalf("changing a system role leaves the same trail as a custom role: %d records %v", len(roleTrail), err)
+	}
+
 	// --- Siempre queda un administrador global activo -----------------------------------------
 	h.must(h.do("POST", users("/"+rootTok.UserID+"/deactivate"), root, nil, nil), 403, "root does not deactivate itself")
 	h.must(h.do("PUT", users("/"+rootTok.UserID+"/organizations/"+acme.ID), root, map[string]any{"level": "Full"}, nil), 403, "nor grants itself organizations")

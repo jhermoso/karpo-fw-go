@@ -83,6 +83,54 @@ func userState(u *domain.User) string {
 
 func toString(v any) string { return fmt.Sprint(v) }
 
+// GrantedBackfill comprueba la migración 4 (D-98) sobre una base que ya tenía las tres primeras: lo
+// concedido a cada rol del sistema arranca como los permisos que llevaba entonces, no como lo que
+// calcula la regla, y un rol propio no recibe nada. Empieza borrando el esquema de Security de db y
+// lo deja migrado del todo.
+func GrantedBackfill(t *testing.T, db *sqlrepo.DB) {
+	t.Helper()
+	ctx := context.Background()
+	must := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	infrastructure.DropAll(ctx, db)
+	all := infrastructure.Migrations()
+	before := sqlrepo.MigrationSet{Context: all.Context, Migrations: all.Migrations[:3]}
+	m, err := sqlrepo.NewMigrator(db, []sqlrepo.MigrationSet{before})
+	must(err)
+	_, err = m.Migrate(ctx)
+	must(err)
+	// Datos de antes: OrganizationAdmin sin un permiso que la regla le da, y un rol propio.
+	_, err = db.Delete(ctx, "sec_role_permissions", sqlrepo.Values{"role_id": domain.RoleOrganizationAdmin, "code": string(domain.PermUserRead)})
+	must(err)
+	clerk := domain.NewRoleID()
+	must(db.Insert(ctx, "sec_roles", sqlrepo.Values{"id": clerk, "version": int64(1), "name": "Clerk", "name_key": "clerk", "system_role": false}))
+	must(db.Insert(ctx, "sec_role_permissions", sqlrepo.Values{"role_id": clerk, "code": string(domain.PermUserRead)}))
+
+	m, err = infrastructure.Migrator(db)
+	must(err)
+	_, err = m.Migrate(ctx)
+	must(err)
+	must(m.Verify(ctx))
+	roles := sqlrepo.MustRepository(db, infrastructure.RoleMapping())
+	for _, seed := range domain.SystemRoles() {
+		r, err := roles.Get(ctx, seed.ID)
+		must(err)
+		if !slices.Equal(r.Granted(), r.Permissions()) {
+			t.Errorf("%s: granted %v, holds %v", seed.Name, r.Granted(), r.Permissions())
+		}
+	}
+	if admin, err := roles.Get(ctx, domain.RoleOrganizationAdmin); err != nil || slices.Contains(admin.Granted(), domain.PermUserRead) {
+		t.Errorf("what the role held, not what the rule computes: %v", err)
+	}
+	if r, err := roles.Get(ctx, clerk); err != nil || len(r.Granted()) != 0 || len(r.Permissions()) != 1 {
+		t.Errorf("a custom role records no grants: %v", err)
+	}
+}
+
 // Run comprueba los mapeos sobre db, cuyo esquema de Security tiene que estar migrado y sin usuarios aún.
 func Run(t *testing.T, db *sqlrepo.DB) {
 	ctx := context.Background()
@@ -120,6 +168,10 @@ func Run(t *testing.T, db *sqlrepo.DB) {
 		stored, err := sqlRoles.Get(ctx, seed.ID)
 		if err != nil || stored.Name() != seed.Name || !stored.IsSystem() || !slices.Equal(stored.Permissions(), r.Permissions()) {
 			t.Fatalf("seeded role %s: %v", seed.Name, err)
+		}
+		// La migración 4 deja como concedido lo que cada rol del sistema llevaba (D-98).
+		if !slices.Equal(stored.Granted(), r.Granted()) {
+			t.Fatalf("granted to %s: %v, want %v", seed.Name, stored.Granted(), r.Granted())
 		}
 	}
 
@@ -292,6 +344,21 @@ func Run(t *testing.T, db *sqlrepo.DB) {
 		if a, b := userState(fromSQL), userState(fromMemory); a != b {
 			t.Errorf("user %s:\n sql    %s\n memory %s", name, a, b)
 		}
+	}
+	// Un rol del sistema al que el global retiró un permiso guarda lo retirado como concedido.
+	admin, err := sqlRoles.Get(ctx, domain.RoleOrganizationAdmin)
+	must(err)
+	granted := admin.Granted()
+	must(admin.SetPermissions([]domain.Permission{domain.PermUserRead}, catalog))
+	must(sqlRoles.Save(ctx, admin))
+	admin, err = sqlRoles.Get(ctx, domain.RoleOrganizationAdmin)
+	must(err)
+	if !slices.Equal(admin.Permissions(), []domain.Permission{domain.PermUserRead}) || !slices.Equal(admin.Granted(), granted) ||
+		admin.SystemSyncPending(catalog) {
+		t.Errorf("system role round trip: %v granted %v", admin.Permissions(), admin.Granted())
+	}
+	if clerk, err := sqlRoles.Get(ctx, roleIDs["clerk"]); err != nil || len(clerk.Granted()) != 0 {
+		t.Errorf("a custom role records no grants: %v", err)
 	}
 	rotated, err := sqlSessions.Get(ctx, sessionIDs[0])
 	must(err)

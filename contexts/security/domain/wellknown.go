@@ -4,7 +4,8 @@ package domain
 const Namespace = "Security"
 
 // Roles del sistema (WellKnownSecurityCatalog.Roles de C#, los mismos GUID). No se pueden
-// renombrar, editar ni retirar, y sus permisos los calcula StandardPermissions.
+// renombrar ni retirar. Sus permisos los concede StandardPermissions, una sola vez cada uno, y el
+// administrador global puede retirárselos y devolvérselos (D-98).
 var (
 	RoleGlobalSuperAdmin  = MustRoleID("20000000-0000-0000-0001-000000000001")
 	RoleOrganizationAdmin = MustRoleID("20000000-0000-0000-0001-000000000002")

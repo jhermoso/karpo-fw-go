@@ -177,8 +177,8 @@ reconoce las credenciales gana, y una caída del origen nunca se disfraza de tok
 función `Permissions()` en la capa de aplicación de cada uno de los veinticinco contextos de negocio.
 
 Tablas: `sec_users` (+ `sec_user_roles`, `sec_user_accesses`, `sec_user_identities`), `sec_roles`
-(+ `sec_role_permissions`), `sec_permissions`, `sec_sessions`, más las bandejas de salida y la
-auditoría.
+(+ `sec_role_permissions` y, desde D-98, `sec_role_granted_permissions`; véase la sección 10),
+`sec_permissions`, `sec_sessions`, más las bandejas de salida y la auditoría.
 
 ```text
 Authorization: Bearer …
@@ -333,6 +333,8 @@ se publican (mucho volumen y ningún contexto reacciona a ellos).
    que los administrativos registren facturas, creas el rol «Administrativo de compras» con ese
    permiso. Nada de lo que edites en un rol a medida lo pisa el arranque.
    *Recomiendo: sí.*
+   *Desde D-98* los roles de sistema sí se editan, sólo para quitarles permisos o devolverles
+   alguno de los que la regla les da, y la regla concede cada permiso una sola vez: sección 10.
 
 5. **Administración delegada: tres reglas con nombre** (concretan P3, que ya aprobaste).
    - **No se concede lo que no se tiene:** para asignar un rol hay que tener todos sus permisos;
@@ -442,3 +444,72 @@ integración del contexto pasan en los cinco motores.
 - El front de Angular debe leer permisos y accesos de `GET /api/auth/context` (decisión 2).
 - Importar los usuarios de C# (`infrastructure.FromCSharp` convierte sus hashes).
 - Faceta `security` de Theros: contrastarla con este contexto (decisión A4 de la fase A).
+
+## 10. Permisos de los roles del sistema: se conceden una vez (D-98)
+
+Javier decidió (D-98) que un permiso que el administrador global retira al administrador de
+organización, como `Parties.Party.Merge` o `Parties.Party.UpdateRelated`, no vuelve en el
+siguiente arranque. Vale para todos los permisos de los cinco roles del sistema.
+
+**Lo concedido.** Cada rol del sistema recuerda los permisos que la regla estándar ya le ha dado
+alguna vez (`Role.Granted`, tabla `sec_role_granted_permissions`, con la misma forma que
+`sec_role_permissions`: rol y código). Lo que lleva está siempre dentro de lo concedido (si una
+restauración parcial o una fila a mano deja un permiso fuera, al leer el rol cuenta como
+concedido); la diferencia son los permisos retirados, que la API enseña en `withdrawn` de cada rol
+(`GET /api/security/roles` y `…/{id}`) para que un front ofrezca devolverlos. Puede incluir uno que
+el catálogo desactivó después; devolverlo da 400 mientras siga desactivado.
+
+**Por qué una tabla que no tienen Trench ni Karpo C#.** En Karpo C# los permisos de un rol son
+una sola tabla de parejas rol-permiso (sección 1; Trench no tiene otra que guarde lo concedido), y
+el sembrador de C# vuelve a añadir lo que falte en cada
+arranque, que es justo lo que D-98 prohíbe. Con una sola tabla no se distingue «la regla nunca se
+lo dio» (hay que dárselo) de «se lo dio y el global se lo quitó» (no hay que dárselo), y para
+conceder una sola vez hace falta saberlo. La tabla nueva es esa memoria y nada más: no cambia
+`sec_role_permissions`, que sigue diciendo lo que el rol concede, y quien lea el esquema de Trench
+encuentra los permisos donde los espera. Una columna «retirado» en `sec_role_permissions` habría
+obligado a filtrarla en cada lectura de permisos y cambiado el significado de la tabla común.
+
+**A quién afecta.** Editar un rol del sistema cambia lo que pueden hacer todos los usuarios que lo
+tienen: quitar `Merge` a `OrganizationAdmin` se lo quita a todos los administradores de
+organización de la instalación. Para quitárselo a uno solo, el global le retira
+`OrganizationAdmin` y le asigna un rol propio con los permisos que sí deba tener.
+
+**La sincronización** (`Catalog.Sync`, en cada arranque) ya no recalcula el rol entero. Con la
+regla sobre el catálogo en vigor:
+
+- un permiso que la regla da y el rol nunca había recibido (por ejemplo, el de un contexto nuevo)
+  se le da y pasa a concedido;
+- uno que ya se le dio y el global le retiró no vuelve;
+- uno que lleva y la regla ya no le da (el catálogo lo desactivó porque nadie lo declara) se le
+  quita, como antes, y deja de contar como concedido: si el catálogo lo reactiva, vuelve. Uno
+  retirado que pasa por una desactivación sigue retirado.
+
+En una base nueva el resultado es el mismo que antes: cada rol del sistema lleva lo que da la regla.
+
+*Ejemplo:* el global quita `Parties.Party.Merge` a `OrganizationAdmin`. En el siguiente arranque
+sigue sin él; si ese arranque trae un permiso nuevo de algún contexto, `OrganizationAdmin` lo
+recibe (si la regla se lo da).
+
+**Lo que puede hacer el global.** `PUT /api/security/roles/{id}/permissions` (la misma ruta y el
+mismo permiso reservado, `Security.Role.Update`, que para un rol propio) acepta ahora un rol del
+sistema: le quita permisos o le devuelve alguno de los que la regla le da. Un código que el
+catálogo no conoce es 400, como siempre; uno que la regla no da a ese rol (por ejemplo,
+`Security.Role.Update` a `OrganizationAdmin`), 422 `security.not_standard_permission`.
+`GlobalSuperAdmin` no se edita (422): sin el comodín no quedaría administrador global. Renombrar o
+retirar un rol del sistema sigue siendo 422, y quien no es el global, 403.
+
+**Rastro.** El cambio pasa por el mismo caso de uso que el de un rol propio: misma auditoría
+(`security.role`, campo `permissions`), mismo evento `security.role_permissions_changed` y mismo
+lenguaje publicado `RolePermissionsChangedV1`.
+
+**Migración 4 de Security** (cinco motores, sentencias portables): crea
+`sec_role_granted_permissions` y la llena con los permisos que cada rol del sistema lleva en ese
+momento, no con lo que calcula la regla. En una base existente, lo concedido arranca como lo que
+tiene cada rol; un rol propio no recibe nada.
+
+**Pruebas**: dominio (`TestSystemRole_GrantedOnce`: conceder una vez, retirar, devolver, nada fuera
+de la regla, desactivación y reactivación, `GlobalSuperAdmin`); HTTP en memoria y en SQLite (el
+global retira `Merge` a `OrganizationAdmin`, un arranque con un permiso nuevo se lo da y no le
+devuelve `Merge`, el global se lo devuelve, un no global recibe 403, auditoría); conformidad de los
+mapeos (lo concedido de la semilla e ida y vuelta) y `GrantedBackfill` (la migración 4 sobre una
+base con las tres primeras), que el módulo de integración ejecuta en los cinco motores.

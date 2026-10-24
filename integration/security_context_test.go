@@ -35,6 +35,7 @@ func TestSecurityConformance(t *testing.T) {
 		t.Run(e.name, func(t *testing.T) {
 			db := open(t, e)
 			ctx := context.Background()
+			securityconformance.GrantedBackfill(t, db) // la migración 4 sobre una base con las tres primeras
 			sinfra.DropAll(ctx, db)
 			m, err := sinfra.Migrator(db)
 			if err != nil {
