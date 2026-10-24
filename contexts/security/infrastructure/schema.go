@@ -96,7 +96,18 @@ func Migrations() sqlrepo.MigrationSet {
 		{Version: 1, Name: "users, roles, permission catalog and sessions", Up: sqlrepo.RenderDDLAll(schemaDDL...)},
 		{Version: 2, Name: "outboxes and audit log", Up: technical},
 		{Version: 3, Name: "own permissions and system roles", Run: seedCatalog},
+		{Version: 4, Name: "permissions the standard rule gave each system role", Up: sqlrepo.RenderDDLAll(grantedDDL...)},
 	}}
+}
+
+// grantedDDL guarda lo que la regla estándar ya ha dado a cada rol del sistema, para concederlo una
+// sola vez (D-98). En una base existente, lo concedido arranca como los permisos que cada rol del
+// sistema lleva ahora; en una nueva, como lo que sembró la migración 3.
+var grantedDDL = []string{
+	`CREATE TABLE sec_role_granted_permissions (role_id {uuid} NOT NULL, code {str:200} NOT NULL, PRIMARY KEY (role_id, code),
+	FOREIGN KEY (role_id) REFERENCES sec_roles (id))`,
+	`INSERT INTO sec_role_granted_permissions (role_id, code) SELECT p.role_id, p.code FROM sec_role_permissions p
+	WHERE p.role_id IN (SELECT r.id FROM sec_roles r WHERE r.system_role <> {false})`,
 }
 
 func seedCatalog(ctx context.Context, db *sqlrepo.DB) error {
@@ -133,7 +144,7 @@ func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 // DropAll quita las tablas del contexto y su historial de migraciones (sólo pruebas).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
 	for _, t := range []string{"sec_sessions", "sec_user_identities", "sec_user_accesses", "sec_user_roles", "sec_users",
-		"sec_role_permissions", "sec_roles", "sec_permissions", TableOutbox, TableIntegrationOutbox, TableAuditLog} {
+		"sec_role_permissions", "sec_role_granted_permissions", "sec_roles", "sec_permissions", TableOutbox, TableIntegrationOutbox, TableAuditLog} {
 		_, _ = db.ExecContext(ctx, "DROP TABLE "+t)
 	}
 	_, _ = db.ExecContext(ctx, "DELETE FROM "+sqlrepo.DefaultMigrationsTable+" WHERE context = '"+Context+"'")

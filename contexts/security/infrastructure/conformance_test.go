@@ -35,3 +35,14 @@ func TestSecurityConformance_SQLite(t *testing.T) {
 	}
 	securityconformance.Run(t, db)
 }
+
+// La migración 4 sobre una base que ya tenía las tres primeras (también en el módulo de integración).
+func TestSecurityGrantedBackfill_SQLite(t *testing.T) {
+	raw, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "backfill.db")+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw.SetMaxOpenConns(1)
+	t.Cleanup(func() { _ = raw.Close() })
+	securityconformance.GrantedBackfill(t, sqlite.Open(raw))
+}

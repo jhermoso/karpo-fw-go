@@ -859,7 +859,9 @@ func (e *env) prospects(acme, ana papp.PartyDTO) {
 	e.must(e.do("POST", "/api/party-relationships", e.seller, map[string]any{"type": domain.RelDuplicateOf.String(),
 		"fromParty": mine.ID, "toParty": third.ID}, nil), 403, "merging has its own permission: the seller cannot, though it changes both")
 	e.must(e.do("POST", "/api/party-relationships", e.clerk, map[string]any{"type": domain.RelDuplicateOf.String(),
-		"fromParty": acme.ID, "toParty": other.ID}, nil), 403, "nor a clerk its own company")
+		"fromParty": acme.ID, "toParty": other.ID}, nil), 422, "an internal organization does not cede in a merge (D-99)")
+	e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelDuplicateOf.String(),
+		"fromParty": acme.ID, "toParty": other.ID}, nil), 422, "not even for the global administrator")
 	e.must(e.do("POST", "/api/party-relationships", e.clerk, map[string]any{"type": domain.RelDuplicateOf.String(),
 		"fromParty": mine.ID, "toParty": other.ID}, nil), 403, "nor into a survivor the clerk cannot change")
 	var dupMark papp.RelationshipDTO
@@ -1035,8 +1037,7 @@ func (e *env) merges(acme papp.PartyDTO) {
 	}
 	e.must(e.do("GET", "/api/parties/"+gone.ID, e.seller, nil, nil), 404, "acme no longer sees the party that left")
 
-	// Una empresa del grupo que se fusiona no pasa a nadie sus clientes: es la empresa, no el
-	// tercero.
+	// Una empresa del grupo no cede en una fusión (D-99): ni siquiera el administrador global.
 	var branch, branchHeir, client papp.PartyDTO
 	e.must(e.do("POST", "/api/organizations", e.admin, map[string]any{"legalName": "Sucursal " + tag,
 		"roles": []string{domain.RoleInternalOrganization.String()}}, &branch), 201, "a company of the group")
@@ -1044,9 +1045,8 @@ func (e *env) merges(acme papp.PartyDTO) {
 		"roles": []string{domain.RoleInternalOrganization.String()}}, &branchHeir), 201, "the company it is merged into")
 	e.must(e.do("POST", "/api/persons", e.admin, map[string]any{"givenName": "Clienta", "firstSurname": tag,
 		"affiliation": map[string]any{"organization": branch.ID, "relationshipType": domain.RelCustomer.String()}}, &client), 201, "its customer")
-	if m := merge(branch.ID, branchHeir.ID); len(m.Merge.Transferred) != 0 || len(m.Merge.Kept) != 1 || m.Merge.Kept[0].Counterparty != client.ID {
-		e.t.Fatalf("merging a company of the group: %+v", m.Merge)
-	}
+	e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelDuplicateOf.String(),
+		"fromParty": branch.ID, "toParty": branchHeir.ID}, nil), 422, "a company of the group does not cede in a merge (D-99)")
 
 	// Quien fusiona sólo mueve las relaciones con empresas en las que escribe: el clerk de Acme
 	// fusiona dos fichas que puede cambiar, y la relación con Bilbao se queda en la que cede.
@@ -1086,32 +1086,6 @@ func (e *env) merges(acme papp.PartyDTO) {
 		e.t.Fatalf("a refused undo changed nothing: %+v", p)
 	}
 	undo(m)
-
-	// Una empresa marcada como duplicado no recibe relaciones: las que tiene con ella se quedan,
-	// al fusionar y al deshacer, y nada falla.
-	var old, fresh, buyer, heir2, heir3 papp.PartyDTO
-	for _, x := range []struct {
-		name string
-		out  *papp.PartyDTO
-	}{{"Vieja " + tag, &old}, {"Nueva " + tag, &fresh}} {
-		e.must(e.do("POST", "/api/organizations", e.admin, map[string]any{"legalName": x.name,
-			"roles": []string{domain.RoleInternalOrganization.String()}}, x.out), 201, "a company of the group")
-	}
-	e.must(e.do("POST", "/api/persons", e.admin, map[string]any{"givenName": "Compradora", "firstSurname": tag,
-		"affiliation": map[string]any{"organization": old.ID, "relationshipType": domain.RelCustomer.String()}}, &buyer), 201, "the old company's customer")
-	e.must(e.do("POST", "/api/persons", e.admin, map[string]any{"givenName": "Heredera", "firstSurname": tag}, &heir2), 201, "a survivor")
-	e.must(e.do("POST", "/api/persons", e.admin, map[string]any{"givenName": "Otra Heredera", "firstSurname": tag}, &heir3), 201, "another")
-	first := merge(buyer.ID, heir2.ID)
-	if len(first.Merge.Transferred) != 1 {
-		e.t.Fatalf("the customer of the old company moves: %+v", first.Merge)
-	}
-	merge(old.ID, fresh.ID)
-	if back = undo(first); len(back.Merge.Transferred) != 0 || len(back.Merge.Kept) != 1 || back.Merge.Kept[0].Counterparty != old.ID {
-		e.t.Fatalf("undoing with the company now a duplicate: %+v", back.Merge)
-	}
-	if m = merge(heir2.ID, heir3.ID); len(m.Merge.Transferred) != 0 || len(m.Merge.Kept) != 1 {
-		e.t.Fatalf("merging with the company a duplicate: %+v", m.Merge)
-	}
 }
 
 // party lee una party como el administrador.
