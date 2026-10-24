@@ -490,7 +490,7 @@ Lo que Go no cumple todavía de lo decidido. Cada sesión lleva la suya en su re
 | D-95, D-96 | **Hecho** (rama `feat/parties-permiso-fusion`): fusionar es establecer una relación «Duplicate Of», y marcarla o deshacerla pide el permiso propio `Parties.Party.Merge` (lo tiene el administrador de organización, no el usuario estándar) y poder cambiar las dos parties, la que cede y la superviviente; si no, 403 | — |
 | D-97 | Cumple: una party marcada como duplicado no es operable, así que no puede ser superviviente ni marcarse otra vez (422) | — |
 | D-98 | No: en Go el permiso llega al administrador de organización por la regla estándar, que se recalcula para los roles del sistema en cada sincronización del catálogo; una retirada no se conserva | Conceder una sola vez (y lo mismo para `UpdateRelated`, que tiene el mismo problema) |
-| D-99 | A medias: sólo el administrador global puede marcar como duplicado una empresa interna | Rechazarlo también para el global |
+| D-99 | **Hecho** (rama `feat/parties-empresa-interna-no-cede`): marcar como duplicado una empresa interna es 422 `parties.merge_internal_organization`, también para el administrador global | — |
 | D-100 | Sólo en la búsqueda de parties y en la vista por pareja (`includeMergedParties`) | Los demás listados (pedidos, facturas, envíos, cobros…) |
 | D-101 | Por comprobar qué ve hoy de una empresa interna un usuario de otra | El catálogo público entre empresas, sin diseñar |
 | D-102 | No aplica: Go no tiene una autorización propia de la instancia financiera | — |
