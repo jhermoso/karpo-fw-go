@@ -22,6 +22,7 @@ type Role struct {
 	description string
 	system      bool
 	permissions []Permission // ordenados, sin duplicados
+	granted     []Permission // de un rol del sistema: lo que la regla estándar le ha dado alguna vez (D-98)
 }
 
 // RoleState es el estado persistido de un rol.
@@ -30,7 +31,10 @@ type RoleState struct {
 	Description string
 	System      bool
 	Permissions []Permission
-	Audit       traits.AuditStamp
+	// Granted son los permisos que la regla estándar ya ha dado a un rol del sistema. Un rol propio
+	// no lleva ninguno.
+	Granted []Permission
+	Audit   traits.AuditStamp
 }
 
 func cleanText(s string) string { return strings.Join(strings.Fields(s), " ") }
@@ -50,11 +54,18 @@ func ReconstituteRole(id RoleID, s RoleState) (*Role, error) {
 	v.Merge("", err)
 	v.Require(!slices.Contains(perms, Wildcard) || id == RoleGlobalSuperAdmin, "permissions", "wildcard",
 		"only the GlobalSuperAdmin role carries the wildcard")
+	granted, err := normalizePermissions(s.Granted)
+	v.Merge("", err)
+	v.Require(s.System || len(granted) == 0, "granted", "custom", "only a system role records what the standard rule gave it")
 	if err := v.Err(); err != nil {
 		return nil, err
 	}
+	if s.System {
+		// Lo que lleva cuenta como concedido aunque falte (restauración parcial, filas a mano).
+		granted = union(granted, perms)
+	}
 	return &Role{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), name: name, description: description,
-		system: s.System, permissions: perms}, nil
+		system: s.System, permissions: perms, granted: granted}, nil
 }
 
 // DefineRole crea un rol propio.
@@ -67,10 +78,12 @@ func DefineRole(id RoleID, name, description string, perms []Permission) (*Role,
 	return r, nil
 }
 
-// NewSystemRole construye un rol del sistema con los permisos que le da la regla estándar.
+// NewSystemRole construye un rol del sistema con los permisos que le da la regla estándar, que
+// quedan como concedidos.
 func NewSystemRole(seed SystemRole, c Catalog) (*Role, error) {
+	perms := StandardPermissions(seed.ID, c)
 	return ReconstituteRole(seed.ID, RoleState{Name: seed.Name, Description: seed.Description, System: true,
-		Permissions: StandardPermissions(seed.ID, c)})
+		Permissions: perms, Granted: perms})
 }
 
 // Name devuelve el nombre.
@@ -87,6 +100,22 @@ func (r *Role) IsSystem() bool { return r.system }
 
 // Permissions devuelve los permisos que lleva el rol, ordenados.
 func (r *Role) Permissions() []Permission { return slices.Clone(r.permissions) }
+
+// Granted devuelve, de un rol del sistema, los permisos que la regla estándar le ha dado alguna vez,
+// ordenados: los que lleva y los que el administrador global le retiró.
+func (r *Role) Granted() []Permission { return slices.Clone(r.granted) }
+
+// Withdrawn devuelve, de un rol del sistema, lo concedido que ya no lleva: lo que el administrador
+// global le retiró, ordenado.
+func (r *Role) Withdrawn() []Permission {
+	var out []Permission
+	for _, p := range r.granted {
+		if !slices.Contains(r.permissions, p) {
+			out = append(out, p)
+		}
+	}
+	return out
+}
 
 // IsGlobalAdmin dice si el rol hace a sus usuarios administradores globales.
 func (r *Role) IsGlobalAdmin() bool { return slices.Contains(r.permissions, Wildcard) }
@@ -108,7 +137,7 @@ func (r *Role) requireCustom(action string) error {
 
 // Describe cambia el nombre y la descripción de un rol propio.
 func (r *Role) Describe(name, description string) error {
-	if err := r.requireCustom("edited"); err != nil {
+	if err := r.requireCustom("renamed"); err != nil {
 		return err
 	}
 	n, err := ReconstituteRole(r.ID(), RoleState{Name: name, Description: description, Permissions: r.permissions})
@@ -123,27 +152,86 @@ func (r *Role) Describe(name, description string) error {
 	return nil
 }
 
-// SetPermissions sustituye los permisos de un rol propio. Quien llama los comprueba contra el
-// catálogo; un rol propio nunca lleva el comodín.
-func (r *Role) SetPermissions(perms []Permission) error {
-	if err := r.requireCustom("edited"); err != nil {
-		return err
+// SetPermissions sustituye los permisos de un rol. Quien llama los comprueba contra el catálogo c,
+// el que está en vigor; un rol propio nunca lleva el comodín. A un rol del sistema el administrador
+// global le quita permisos o le devuelve alguno de los que la regla estándar le da, nunca uno que la
+// regla no le da (D-98); GlobalSuperAdmin no se edita: sin el comodín no quedaría administrador
+// global.
+func (r *Role) SetPermissions(perms []Permission, c Catalog) error {
+	if r.ID() == RoleGlobalSuperAdmin {
+		return fw.Violation("security.system_role", "the GlobalSuperAdmin role keeps the wildcard")
 	}
-	n, err := ReconstituteRole(r.ID(), RoleState{Name: r.name, Permissions: perms})
+	n, err := ReconstituteRole(r.ID(), RoleState{Name: r.name, System: r.system, Permissions: perms})
 	if err != nil {
 		return err
+	}
+	if r.system {
+		standard := StandardPermissions(r.ID(), c)
+		for _, p := range n.permissions {
+			if !slices.Contains(standard, p) {
+				return fw.Violation("security.not_standard_permission",
+					"the standard rule does not give "+string(p)+" to the "+r.name+" role")
+			}
+		}
+		r.granted = union(r.granted, n.permissions)
 	}
 	r.replacePermissions(n.permissions)
 	return nil
 }
 
-// SyncSystemPermissions da a un rol del sistema los permisos que la regla estándar calcula a partir
-// del catálogo. Dice si cambiaron.
+// SyncSystemPermissions pone un rol del sistema al paso del catálogo con la regla estándar,
+// concediendo una sola vez (D-98): recibe los permisos que la regla le da y nunca le había dado; uno
+// que ya le dio y el administrador global le retiró no vuelve; uno que lleva y la regla ya no le da
+// (porque el catálogo lo desactivó) se le quita y deja de contar como concedido, así que vuelve si
+// el catálogo lo reactiva. Dice si cambió.
 func (r *Role) SyncSystemPermissions(c Catalog) bool {
 	if !r.system {
 		return false
 	}
-	return r.replacePermissions(StandardPermissions(r.ID(), c))
+	perms, granted := r.systemSync(c)
+	changed := !slices.Equal(granted, r.granted)
+	r.granted = granted
+	return r.replacePermissions(perms) || changed
+}
+
+// SystemSyncPending dice si SyncSystemPermissions cambiaría el rol.
+func (r *Role) SystemSyncPending(c Catalog) bool {
+	if !r.system {
+		return false
+	}
+	perms, granted := r.systemSync(c)
+	return !slices.Equal(perms, r.permissions) || !slices.Equal(granted, r.granted)
+}
+
+// systemSync calcula los permisos y lo concedido de un rol del sistema tras una sincronización.
+func (r *Role) systemSync(c Catalog) (perms, granted []Permission) {
+	standard := StandardPermissions(r.ID(), c)
+	for _, p := range r.permissions {
+		if slices.Contains(standard, p) {
+			perms = append(perms, p)
+		}
+	}
+	for _, p := range r.granted {
+		if slices.Contains(standard, p) || !slices.Contains(r.permissions, p) { // en vigor, o retirado
+			granted = append(granted, p)
+		}
+	}
+	for _, p := range standard {
+		if !slices.Contains(r.granted, p) && !slices.Contains(r.permissions, p) { // nuevo para este rol
+			perms = append(perms, p)
+			granted = append(granted, p)
+		}
+	}
+	slices.Sort(perms)
+	slices.Sort(granted)
+	return perms, granted
+}
+
+// union devuelve, ordenados y sin duplicados, los permisos de a y de b, sin tocar ninguno de los dos.
+func union(a, b []Permission) []Permission {
+	out := slices.Concat(a, b)
+	slices.Sort(out)
+	return slices.Compact(out)
 }
 
 func (r *Role) replacePermissions(perms []Permission) bool {

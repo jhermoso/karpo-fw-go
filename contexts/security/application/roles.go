@@ -24,7 +24,8 @@ type DescribeRole struct {
 	Description string        `json:"description,omitempty"`
 }
 
-// SetRolePermissions sustituye los permisos de un rol propio.
+// SetRolePermissions sustituye los permisos de un rol. A un rol del sistema sólo se le dejan
+// permisos que le da la regla estándar (D-98).
 type SetRolePermissions struct {
 	ID          domain.RoleID `json:"-"`
 	Permissions []string      `json:"permissions"`
@@ -49,7 +50,11 @@ type RoleDTO struct {
 	Description string   `json:"description,omitempty"`
 	System      bool     `json:"system"`
 	Permissions []string `json:"permissions"`
-	Version     int64    `json:"version"`
+	// Withdrawn son, de un rol del sistema, los permisos que la regla estándar le dio y el
+	// administrador global le retiró (D-98): los que se le pueden devolver. Puede incluir uno que el
+	// catálogo desactivó después; devolverlo da 400 mientras siga desactivado.
+	Withdrawn []string `json:"withdrawn"`
+	Version   int64    `json:"version"`
 }
 
 // PermissionDTO es una entrada del catálogo de permisos.
@@ -64,9 +69,12 @@ type PermissionDTO struct {
 
 func roleDTO(r *domain.Role) RoleDTO {
 	d := RoleDTO{ID: r.ID().String(), Name: r.Name(), Description: r.Description(), System: r.IsSystem(),
-		Permissions: []string{}, Version: r.Version()}
+		Permissions: []string{}, Withdrawn: []string{}, Version: r.Version()}
 	for _, p := range r.Permissions() {
 		d.Permissions = append(d.Permissions, string(p))
+	}
+	for _, p := range r.Withdrawn() {
+		d.Withdrawn = append(d.Withdrawn, string(p))
 	}
 	return d
 }
@@ -114,17 +122,17 @@ func (s *service) catalog(ctx context.Context) (domain.Catalog, error) {
 	return domain.NewCatalog(codes...), nil
 }
 
-// rolePermissions comprueba los permisos de un comando contra el catálogo.
-func (s *service) rolePermissions(ctx context.Context, codes []string) ([]domain.Permission, error) {
+// rolePermissions comprueba los permisos de un comando contra el catálogo, que devuelve.
+func (s *service) rolePermissions(ctx context.Context, codes []string) ([]domain.Permission, domain.Catalog, error) {
 	c, err := s.catalog(ctx)
 	if err != nil {
-		return nil, err
+		return nil, c, err
 	}
 	perms := make([]domain.Permission, len(codes))
 	for i, code := range codes {
 		perms[i] = domain.Permission(code)
 	}
-	return perms, c.Check(perms)
+	return perms, c, c.Check(perms)
 }
 
 func (s *service) roleNameFree(ctx context.Context, name string, except domain.RoleID) error {
@@ -142,7 +150,7 @@ func (s *service) defineRole(ctx context.Context, c DefineRole) (RoleDTO, error)
 	if err := requireGlobal(ctx); err != nil {
 		return RoleDTO{}, err
 	}
-	perms, err := s.rolePermissions(ctx, c.Permissions)
+	perms, _, err := s.rolePermissions(ctx, c.Permissions)
 	if err != nil {
 		return RoleDTO{}, err
 	}
@@ -182,11 +190,11 @@ func (s *service) setRolePermissions(ctx context.Context, c SetRolePermissions) 
 	if err := requireGlobal(ctx); err != nil {
 		return RoleDTO{}, err
 	}
-	perms, err := s.rolePermissions(ctx, c.Permissions)
+	perms, catalog, err := s.rolePermissions(ctx, c.Permissions)
 	if err != nil {
 		return RoleDTO{}, err
 	}
-	r, err := s.roles.Update(ctx, c.ID, func(_ context.Context, r *domain.Role) error { return r.SetPermissions(perms) })
+	r, err := s.roles.Update(ctx, c.ID, func(_ context.Context, r *domain.Role) error { return r.SetPermissions(perms, catalog) })
 	if err != nil {
 		return RoleDTO{}, err
 	}
@@ -220,9 +228,10 @@ type CatalogSync struct {
 
 // Sync declara los permisos de cada contexto (los propios siempre se incluyen): los códigos nuevos
 // entran en el catálogo, los que ya nadie declara se desactivan y dejan de conceder, y los roles
-// del sistema reciben los permisos que calcula la regla estándar. Los roles propios nunca se tocan,
-// a diferencia del sembrador de C#, que volvía a añadir lo que un administrador hubiera quitado. Es
-// idempotente.
+// del sistema reciben, una sola vez, los permisos que les da la regla estándar: lo que el
+// administrador global retiró a un rol del sistema no vuelve (D-98). Los roles propios nunca se
+// tocan, a diferencia del sembrador de C#, que volvía a añadir lo que un administrador hubiera
+// quitado. Es idempotente.
 func (c Catalog) Sync(ctx context.Context, declared ...authz.Permission) (CatalogSync, error) {
 	s := c.s
 	decls := domain.OwnPermissions()
@@ -287,7 +296,7 @@ func (c Catalog) Sync(ctx context.Context, declared ...authz.Permission) (Catalo
 				report.RolesUpdated++
 				continue
 			}
-			if !slices.Equal(r.Permissions(), domain.StandardPermissions(seed.ID, catalog)) {
+			if r.SystemSyncPending(catalog) {
 				if _, err := s.roles.Update(ctx, seed.ID, func(_ context.Context, r *domain.Role) error {
 					r.SyncSystemPermissions(catalog)
 					return nil

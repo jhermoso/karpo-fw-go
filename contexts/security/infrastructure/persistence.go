@@ -94,7 +94,8 @@ func UserMapping() sqlrepo.Mapping[domain.UserID, *domain.User] {
 	}
 }
 
-// RoleMapping asocia Role con sec_roles y sec_role_permissions.
+// RoleMapping asocia Role con sec_roles, sec_role_permissions y sec_role_granted_permissions (lo
+// que la regla estándar ya dio a un rol del sistema, D-98).
 func RoleMapping() sqlrepo.Mapping[domain.RoleID, *domain.Role] {
 	return sqlrepo.Mapping[domain.RoleID, *domain.Role]{
 		Table:   "sec_roles",
@@ -112,6 +113,12 @@ func RoleMapping() sqlrepo.Mapping[domain.RoleID, *domain.Role] {
 					return nil, err
 				}
 			}
+			for _, c := range children.Of("granted") {
+				s.Granted = append(s.Granted, domain.Permission(c.String("code")))
+				if err := c.Err(); err != nil {
+					return nil, err
+				}
+			}
 			if err := r.Err(); err != nil {
 				return nil, err
 			}
@@ -119,15 +126,20 @@ func RoleMapping() sqlrepo.Mapping[domain.RoleID, *domain.Role] {
 		},
 		Children: []sqlrepo.Child[*domain.Role]{{
 			Name: "permissions", Table: "sec_role_permissions", ForeignKey: "role_id", Columns: []string{"code"},
-			Dehydrate: func(r *domain.Role) ([]sqlrepo.Values, error) {
-				var out []sqlrepo.Values
-				for _, p := range r.Permissions() {
-					out = append(out, sqlrepo.Values{"code": string(p)})
-				}
-				return out, nil
-			},
+			Dehydrate: func(r *domain.Role) ([]sqlrepo.Values, error) { return codeRows(r.Permissions()), nil },
+		}, {
+			Name: "granted", Table: "sec_role_granted_permissions", ForeignKey: "role_id", Columns: []string{"code"},
+			Dehydrate: func(r *domain.Role) ([]sqlrepo.Values, error) { return codeRows(r.Granted()), nil },
 		}},
 	}
+}
+
+func codeRows(perms []domain.Permission) []sqlrepo.Values {
+	var out []sqlrepo.Values
+	for _, p := range perms {
+		out = append(out, sqlrepo.Values{"code": string(p)})
+	}
+	return out
 }
 
 // PermissionMapping asocia las entradas del catálogo con sec_permissions.
