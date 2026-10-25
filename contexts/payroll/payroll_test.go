@@ -61,14 +61,14 @@ type host struct {
 	adminCtx context.Context
 }
 
-func compose(t *testing.T) *host {
+func compose(t *testing.T, opts ...payroll.Option) *host {
 	ctx := context.Background()
 	sw := hotswap.New(memory.NewStore("memory"))
 	fac := facilities.Compose(sw)
 	pm := parties.Compose(sw, nil)
 	hm := hr.Compose(sw, hr.WithOrganizations(hinfra.PartiesOrganizations{Hierarchy: pm.Organizations, Membership: pm.Organizations}),
 		hr.WithFacilities(hinfra.FacilitiesDirectory{Directory: fac.Directory}))
-	ym := payroll.Compose(sw, yinfra.HRStaff{Staff: hm.Staff})
+	ym := payroll.Compose(sw, yinfra.HRStaff{Staff: hm.Staff}, opts...)
 
 	jwt, _ := jwtauth.New(jwtauth.Config{Secret: []byte("payroll-test")})
 	dir := authorization.NewMemoryDirectory()

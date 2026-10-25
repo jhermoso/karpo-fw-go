@@ -31,9 +31,18 @@ type Module struct {
 	Consumer *messaging.Consumer
 }
 
+// Option configura la composición.
+type Option func(*uapp.Deps)
+
+// WithMergedParties dice qué parties están fusionadas en otra (Parties, en el anfitrión): los
+// listados dejan fuera sus registros salvo que se pidan con includeMergedParties (D-100).
+func WithMergedParties(m application.MergedParties) Option {
+	return func(d *uapp.Deps) { d.Merged = m }
+}
+
 // Compose construye el contexto sobre sw. Purchases necesita el motor de impuestos de Fiscal, un
 // puerto propio.
-func Compose(sw *hotswap.Switch, taxes domain.Taxes) *Module {
+func Compose(sw *hotswap.Switch, taxes domain.Taxes, opts ...Option) *Module {
 	integration := hotswap.Outbox(sw, infrastructure.IntegrationOutboxFactory)
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
 	d := uapp.Deps{
@@ -41,6 +50,9 @@ func Compose(sw *hotswap.Switch, taxes domain.Taxes) *Module {
 		Counters: hotswap.Repository(sw, infrastructure.CounterRepositoryFactory), Taxes: taxes, UoW: sw, Audit: audit,
 		Recorder: outbox.Recorders(outbox.NewRecorder(hotswap.Outbox(sw, infrastructure.OutboxFactory)),
 			uapp.Publications(messaging.NewRecorder(contracts.Source, integration))),
+	}
+	for _, o := range opts {
+		o(&d)
 	}
 	consumer := messaging.NewConsumer(contracts.Source, hotswap.Inbox(sw, infrastructure.InboxFactory), sw)
 	uapp.Subscribe(consumer, d)
@@ -109,7 +121,7 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 		q := r.URL.Query()
 		atoi := func(k string) int { n, _ := strconv.Atoi(q.Get(k)); return n }
 		out, err := svc.SearchInvoices.Handle(r.Context(), uapp.SearchInvoices{Company: q.Get("company"), Supplier: q.Get("supplier"), From: q.Get("from"),
-			To: q.Get("to"), Page: atoi("page"), Size: atoi("size")})
+			To: q.Get("to"), IncludeMergedParties: q.Get("includeMergedParties") == "true", Page: atoi("page"), Size: atoi("size")})
 		distribution.Respond(w, r, out, err, http.StatusOK)
 	})
 	mux.HandleFunc("GET /api/purchases/invoices/{id}", func(w http.ResponseWriter, r *http.Request) {
@@ -125,7 +137,8 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 
 	mux.HandleFunc("PUT /api/purchases/suppliers", create(http.StatusOK, svc.SetSupplier.Handle))
 	mux.HandleFunc("GET /api/purchases/suppliers", func(w http.ResponseWriter, r *http.Request) {
-		out, err := svc.SearchSuppliers.Handle(r.Context(), uapp.SearchSuppliers{Company: r.URL.Query().Get("company")})
+		out, err := svc.SearchSuppliers.Handle(r.Context(), uapp.SearchSuppliers{Company: r.URL.Query().Get("company"),
+			IncludeMergedParties: r.URL.Query().Get("includeMergedParties") == "true"})
 		distribution.Respond(w, r, out, err, http.StatusOK)
 	})
 }

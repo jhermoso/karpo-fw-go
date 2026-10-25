@@ -191,19 +191,20 @@ func (p Pairs) rows(ctx context.Context, code string, f pairFilter, id string) (
 		return nil, err
 	}
 	key := func(org, party string) string { return org + "/" + party }
+	// Los perfiles se piden con las fusionadas: la vista ya las ha dejado fuera, o se le han pedido.
 	credit, terms, suppliers := map[string]receivables.CreditDTO{}, map[string]orders.TermsDTO{}, map[string]purchases.SupplierDTO{}
 	// Qué empresas deja leer cada contexto a quien llama: de las otras, el dato no se enseña.
 	readCredit, readTerms, readSuppliers := map[string]bool{}, map[string]bool{}, map[string]bool{}
 	for _, org := range orgs {
 		if code == "customer" {
-			cs, err := p.h.Receivables.Service.SearchCredit.Handle(ctx, receivables.SearchCredit{Seller: org})
+			cs, err := p.h.Receivables.Service.SearchCredit.Handle(ctx, receivables.SearchCredit{Seller: org, IncludeMergedParties: true})
 			if readCredit[org], err = readable(err); err != nil {
 				return nil, err
 			}
 			for _, c := range cs {
 				credit[key(c.Seller, c.Customer)] = c
 			}
-			ts, err := p.h.Orders.Service.SearchTerms.Handle(ctx, orders.SearchTerms{Company: org})
+			ts, err := p.h.Orders.Service.SearchTerms.Handle(ctx, orders.SearchTerms{Company: org, IncludeMergedParties: true})
 			if readTerms[org], err = readable(err); err != nil {
 				return nil, err
 			}
@@ -211,7 +212,7 @@ func (p Pairs) rows(ctx context.Context, code string, f pairFilter, id string) (
 				terms[key(t.Company, t.Customer)] = t
 			}
 		} else {
-			ss, err := p.h.Purchases.Service.SearchSuppliers.Handle(ctx, purchases.SearchSuppliers{Company: org})
+			ss, err := p.h.Purchases.Service.SearchSuppliers.Handle(ctx, purchases.SearchSuppliers{Company: org, IncludeMergedParties: true})
 			if readSuppliers[org], err = readable(err); err != nil {
 				return nil, err
 			}

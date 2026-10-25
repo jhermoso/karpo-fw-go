@@ -32,8 +32,17 @@ type Module struct {
 	Consumer *messaging.Consumer
 }
 
+// Option configura la composición.
+type Option func(*papp.Deps)
+
+// WithMergedParties dice qué parties están fusionadas en otra (Parties, en el anfitrión): los
+// listados dejan fuera sus registros salvo que se pidan con includeMergedParties (D-100).
+func WithMergedParties(m application.MergedParties) Option {
+	return func(d *papp.Deps) { d.Merged = m }
+}
+
 // Compose construye el contexto sobre sw. netPay puede ser nil (obligaciones de nómina sin cuentas).
-func Compose(sw *hotswap.Switch, netPay domain.NetPaySplits) *Module {
+func Compose(sw *hotswap.Switch, netPay domain.NetPaySplits, opts ...Option) *Module {
 	integration := hotswap.Outbox(sw, infrastructure.IntegrationOutboxFactory)
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
 	d := papp.Deps{
@@ -41,6 +50,9 @@ func Compose(sw *hotswap.Switch, netPay domain.NetPaySplits) *Module {
 		NetPay: netPay, UoW: sw, Audit: audit,
 		Recorder: outbox.Recorders(outbox.NewRecorder(hotswap.Outbox(sw, infrastructure.OutboxFactory)),
 			papp.Publications(messaging.NewRecorder(contracts.Source, integration))),
+	}
+	for _, o := range opts {
+		o(&d)
 	}
 	consumer := messaging.NewConsumer(contracts.Source, hotswap.Inbox(sw, infrastructure.InboxFactory), sw)
 	papp.Subscribe(consumer, d)
@@ -112,7 +124,7 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/payments/payables", func(w http.ResponseWriter, r *http.Request) {
 		s, n := query(r)
 		out, err := svc.SearchPayables.Handle(r.Context(), papp.SearchPayables{Company: s("company"), Payee: s("payee"), Kind: s("kind"), DueTo: s("dueTo"),
-			OpenOnly: s("open") == "true", Page: n("page"), Size: n("size")})
+			OpenOnly: s("open") == "true", IncludeMergedParties: s("includeMergedParties") == "true", Page: n("page"), Size: n("size")})
 		distribution.Respond(w, r, out, err, http.StatusOK)
 	})
 	mux.HandleFunc("GET /api/payments/payables/{id}", func(w http.ResponseWriter, r *http.Request) {
@@ -130,7 +142,8 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/payments/payments", create(http.StatusCreated, svc.RegisterPayment.Handle))
 	mux.HandleFunc("GET /api/payments/payments", func(w http.ResponseWriter, r *http.Request) {
 		s, n := query(r)
-		out, err := svc.SearchPayments.Handle(r.Context(), papp.SearchPayments{Company: s("company"), Payee: s("payee"), Page: n("page"), Size: n("size")})
+		out, err := svc.SearchPayments.Handle(r.Context(), papp.SearchPayments{Company: s("company"), Payee: s("payee"),
+			IncludeMergedParties: s("includeMergedParties") == "true", Page: n("page"), Size: n("size")})
 		distribution.Respond(w, r, out, err, http.StatusOK)
 	})
 	mux.HandleFunc("GET /api/payments/payments/{id}", func(w http.ResponseWriter, r *http.Request) {

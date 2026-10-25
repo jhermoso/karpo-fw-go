@@ -32,6 +32,7 @@ type Deps struct {
 	UoW       fw.UnitOfWork
 	Recorder  app.EventRecorder
 	Audit     app.AuditLog
+	Merged    app.MergedParties // opcional: las parties fusionadas, que los listados dejan fuera (D-100)
 }
 
 // Service expone los casos de uso.

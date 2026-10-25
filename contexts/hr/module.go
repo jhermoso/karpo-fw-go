@@ -41,6 +41,12 @@ func WithOrganizations(o happ.Organizations) Option {
 // WithFacilities comprueba las instalaciones de los centros de trabajo con el contexto Facilities.
 func WithFacilities(f happ.Facilities) Option { return func(d *happ.Deps) { d.Facilities = f } }
 
+// WithMergedParties dice qué parties están fusionadas en otra (Parties, en el anfitrión): los
+// listados dejan fuera sus registros salvo que se pidan con includeMergedParties (D-100).
+func WithMergedParties(m application.MergedParties) Option {
+	return func(d *happ.Deps) { d.Merged = m }
+}
+
 // Compose construye el contexto sobre sw.
 func Compose(sw *hotswap.Switch, opts ...Option) *Module {
 	positions := hotswap.Repository(sw, infrastructure.PositionRepositoryFactory)
@@ -190,7 +196,7 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/hr/employments", func(w http.ResponseWriter, r *http.Request) {
 		s, n := query(r)
 		page, err := svc.SearchEmployments.Handle(r.Context(), happ.SearchEmployments{Employer: s("employer"), Person: s("person"),
-			Number: s("number"), ActiveOnly: s("active") == "true", Page: n("page"), Size: n("size")})
+			Number: s("number"), ActiveOnly: s("active") == "true", IncludeMergedParties: s("includeMergedParties") == "true", Page: n("page"), Size: n("size")})
 		distribution.Respond(w, r, page, err, http.StatusOK)
 	})
 	mux.HandleFunc("GET /api/hr/employments/{id}", get(emp, func(ctx context.Context, id domain.EmploymentID) (happ.EmploymentDTO, error) {

@@ -47,6 +47,7 @@ type Deps struct {
 	UoW         fw.UnitOfWork
 	Recorder    app.EventRecorder
 	Audit       app.AuditLog
+	Merged      app.MergedParties // opcional: las parties fusionadas, que los listados dejan fuera (D-100)
 }
 
 // Service expone los casos de uso.
@@ -247,7 +248,16 @@ type RevokeMandate struct {
 }
 
 // SearchMandates enumera los mandatos de un acreedor, de un solo deudor si se pide.
-type SearchMandates struct{ Creditor, Debtor string }
+type SearchMandates struct {
+	Creditor, Debtor     string
+	IncludeMergedParties bool // también los de parties fusionadas en otra (D-100)
+}
+
+// withoutMerged deja fuera de un listado los registros cuya party (deudor) es una party fusionada,
+// salvo que se pidan con includeMergedParties (docs/DECISIONES-COMUNES.md, D-100).
+func withoutMerged[T any](ctx context.Context, m app.MergedParties, include bool, f spec.Field[T, domain.PartyID]) ([]spec.Specification[T], error) {
+	return app.WithoutMerged(ctx, m, include, f, func(u fw.UUID) domain.PartyID { return domain.PartyID{UUID: u} })
+}
 
 // MandateDTO es la forma de transporte de un mandato.
 type MandateDTO struct {
@@ -389,6 +399,11 @@ func (s service) accountUseCases(svc *Service) {
 		if err := v.Err(); err != nil {
 			return nil, err
 		}
+		merged, err := withoutMerged(ctx, s.Merged, q.IncludeMergedParties || q.Debtor != "", domain.ManFieldDebtor)
+		if err != nil {
+			return nil, err
+		}
+		parts = append(parts, merged...)
 		ms, err := s.Mandates.Find(ctx, spec.And(parts...), domain.ManFieldReference.Asc())
 		if err != nil {
 			return nil, err

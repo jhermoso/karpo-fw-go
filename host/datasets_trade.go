@@ -68,7 +68,9 @@ type invoiceList struct {
 func (invoiceList) Key() string                  { return "invoices" }
 func (invoiceList) Title() string                { return "Facturas" }
 func (invoiceList) Permission() authz.Permission { return bilapp.PermInvoiceRead }
-func (invoiceList) Filters() []string            { return []string{"seller", "customer", "status", "from", "to"} }
+func (invoiceList) Filters() []string {
+	return []string{"seller", "customer", "status", "from", "to", mergedFilter}
+}
 func (invoiceList) Columns() []expdomain.Column {
 	return []expdomain.Column{{Field: "number", Header: "Número"}, {Field: "kind", Header: "Tipo"}, {Field: "status", Header: "Estado"},
 		{Field: "issued", Header: "Fecha", Type: expdomain.Date}, {Field: "due", Header: "Vencimiento", Type: expdomain.Date},
@@ -78,7 +80,7 @@ func (invoiceList) Columns() []expdomain.Column {
 
 func (l invoiceList) Page(ctx context.Context, filters map[string]string, cursor string, limit int) ([]expdomain.Row, string, error) {
 	found, err := l.b.Service.SearchInvoices.Handle(ctx, bilapp.SearchInvoices{Seller: filters["seller"], Customer: filters["customer"], Status: filters["status"],
-		From: filters["from"], To: filters["to"], Page: page(cursor), Size: limit})
+		From: filters["from"], To: filters["to"], IncludeMergedParties: filters["includeMergedParties"] == "true", Page: page(cursor), Size: limit})
 	if err != nil {
 		return nil, "", err
 	}
@@ -116,7 +118,7 @@ type orderList struct {
 func (orderList) Key() string                  { return "orders" }
 func (orderList) Title() string                { return "Pedidos" }
 func (orderList) Permission() authz.Permission { return ordapp.PermOrderRead }
-func (orderList) Filters() []string            { return []string{"company", "customer", "status"} }
+func (orderList) Filters() []string            { return []string{"company", "customer", "status", mergedFilter} }
 func (orderList) Columns() []expdomain.Column {
 	return []expdomain.Column{{Field: "number", Header: "Número"}, {Field: "date", Header: "Fecha", Type: expdomain.Date}, {Field: "customer", Header: "Cliente"},
 		{Field: "reference", Header: "Referencia"}, {Field: "status", Header: "Estado"}, {Field: "total", Header: "Total", Type: expdomain.Number},
@@ -125,7 +127,7 @@ func (orderList) Columns() []expdomain.Column {
 
 func (l orderList) Page(ctx context.Context, filters map[string]string, cursor string, limit int) ([]expdomain.Row, string, error) {
 	found, err := l.o.Service.SearchOrders.Handle(ctx, ordapp.SearchOrders{Company: filters["company"], Customer: filters["customer"], Status: filters["status"],
-		Page: page(cursor), Size: limit})
+		IncludeMergedParties: filters["includeMergedParties"] == "true", Page: page(cursor), Size: limit})
 	if err != nil {
 		return nil, "", err
 	}
@@ -154,7 +156,7 @@ type receivableList struct {
 func (receivableList) Key() string                  { return "receivables" }
 func (receivableList) Title() string                { return "Vencimientos de cobro" }
 func (receivableList) Permission() authz.Permission { return recapp.PermReceivableRead }
-func (receivableList) Filters() []string            { return []string{"seller", "customer", "open"} }
+func (receivableList) Filters() []string            { return []string{"seller", "customer", "open", mergedFilter} }
 func (receivableList) Columns() []expdomain.Column {
 	return []expdomain.Column{{Field: "invoice", Header: "Factura"}, {Field: "customer", Header: "Cliente"},
 		{Field: "issued", Header: "Fecha factura", Type: expdomain.Date}, {Field: "no", Header: "Plazo", Type: expdomain.Number},
@@ -164,7 +166,7 @@ func (receivableList) Columns() []expdomain.Column {
 
 func (l receivableList) Page(ctx context.Context, filters map[string]string, cursor string, limit int) ([]expdomain.Row, string, error) {
 	found, err := l.r.Service.SearchReceivables.Handle(ctx, recapp.SearchReceivables{Seller: filters["seller"], Customer: filters["customer"],
-		OpenOnly: filters["open"] == "true", Page: page(cursor), Size: limit})
+		OpenOnly: filters["open"] == "true", IncludeMergedParties: filters["includeMergedParties"] == "true", Page: page(cursor), Size: limit})
 	if err != nil {
 		return nil, "", err
 	}
@@ -195,7 +197,9 @@ type purchaseInvoiceList struct {
 func (purchaseInvoiceList) Key() string                  { return "purchase-invoices" }
 func (purchaseInvoiceList) Title() string                { return "Facturas de proveedor" }
 func (purchaseInvoiceList) Permission() authz.Permission { return purapp.PermInvoiceRead }
-func (purchaseInvoiceList) Filters() []string            { return []string{"company", "supplier", "from", "to"} }
+func (purchaseInvoiceList) Filters() []string {
+	return []string{"company", "supplier", "from", "to", mergedFilter}
+}
 func (purchaseInvoiceList) Columns() []expdomain.Column {
 	return []expdomain.Column{{Field: "register", Header: "Registro"}, {Field: "number", Header: "Nº proveedor"}, {Field: "supplier", Header: "Proveedor"},
 		{Field: "issued", Header: "Fecha", Type: expdomain.Date}, {Field: "received", Header: "Recepción", Type: expdomain.Date},
@@ -207,7 +211,7 @@ func (purchaseInvoiceList) Columns() []expdomain.Column {
 
 func (l purchaseInvoiceList) Page(ctx context.Context, filters map[string]string, cursor string, limit int) ([]expdomain.Row, string, error) {
 	found, err := l.pu.Service.SearchInvoices.Handle(ctx, purapp.SearchInvoices{Company: filters["company"], Supplier: filters["supplier"],
-		From: filters["from"], To: filters["to"], Page: page(cursor), Size: limit})
+		From: filters["from"], To: filters["to"], IncludeMergedParties: filters["includeMergedParties"] == "true", Page: page(cursor), Size: limit})
 	if err != nil {
 		return nil, "", err
 	}

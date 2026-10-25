@@ -188,6 +188,25 @@ func (o Organizations) All(ctx context.Context) ([]contracts.PartyRef, error) {
 	return out, nil
 }
 
+// MergedParties implementa contracts.MergedParties sobre la marca de duplicado de las parties
+// (una consulta; sirve a contextos, no a usuarios: no mira los permisos de quien llama, D-103).
+type MergedParties struct{ Parties domain.PartyRepository }
+
+var _ contracts.MergedParties = MergedParties{}
+
+// MergedParties implementa contracts.MergedParties.
+func (m MergedParties) MergedParties(ctx context.Context) ([]string, error) {
+	ps, err := m.Parties.Find(ctx, domain.FieldDuplicate.Eq(true))
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, len(ps))
+	for i, p := range ps {
+		out[i] = p.ID().String()
+	}
+	return out, nil
+}
+
 // TaxIdentities implementa contracts.TaxIdentities sobre las identificaciones y los contactos
 // postales de las parties (una consulta por lote; sirve a contextos, no a usuarios).
 type TaxIdentities struct{ Parties domain.PartyRepository }

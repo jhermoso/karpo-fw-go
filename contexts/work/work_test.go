@@ -47,11 +47,11 @@ type host struct {
 	adminCtx context.Context
 }
 
-func compose(t *testing.T) *host {
+func compose(t *testing.T, opts ...work.Option) *host {
 	ctx := context.Background()
 	sw := hotswap.New(memory.NewStore("memory"))
 	pm := parties.Compose(sw, nil)
-	wm := work.Compose(sw)
+	wm := work.Compose(sw, opts...)
 
 	jwt, _ := jwtauth.New(jwtauth.Config{Secret: []byte("work-test")})
 	dir := authorization.NewMemoryDirectory()

@@ -48,6 +48,30 @@ type Deps struct {
 	UoW          fw.UnitOfWork
 	Recorder     app.EventRecorder
 	Audit        app.AuditLog
+	Merged       app.MergedParties // opcional: las parties fusionadas, que los listados dejan fuera (D-100)
+}
+
+// withoutMerged deja fuera de un listado los registros cuya party (cliente) es una party fusionada,
+// salvo que se pidan con includeMergedParties (docs/DECISIONES-COMUNES.md, D-100).
+func withoutMerged[T any](ctx context.Context, m app.MergedParties, include bool, f spec.Field[T, domain.PartyID]) ([]spec.Specification[T], error) {
+	return app.WithoutMerged(ctx, m, include, f, func(u fw.UUID) domain.PartyID { return domain.PartyID{UUID: u} })
+}
+
+// holderRole es el papel de una relación con la cuenta (titular, autorizado, beneficiario).
+var holderRole = spec.Comparable("role_name", func(h domain.Holder) string { return h.Role })
+
+// withoutMergedHolders deja fuera de un listado las cuentas cuyos titulares vigentes son todos
+// parties fusionadas, salvo que se pidan (D-100). Una cuenta con algún titular vigente que no lo
+// es se queda: sigue siendo de alguien con quien se opera. Los autorizados y los beneficiarios no
+// cuentan: la ficha de la cuenta es su titular.
+func withoutMergedHolders(ctx context.Context, m app.MergedParties, include bool) ([]spec.Specification[*domain.Account], error) {
+	ids, err := app.MergedIDs(ctx, m, include, func(u fw.UUID) domain.PartyID { return domain.PartyID{UUID: u} })
+	if err != nil || len(ids) == 0 {
+		return nil, err
+	}
+	current := spec.And(domain.HolFieldCurrent.Eq(true), holderRole.Eq(domain.RoleHolder))
+	return []spec.Specification[*domain.Account]{spec.Or(spec.Not(domain.AccFieldHolders.Any(current)),
+		domain.AccFieldHolders.Any(spec.And(current, domain.HolFieldParty.NotIn(ids...))))}, nil
 }
 
 // Comandos y consultas.
@@ -116,6 +140,7 @@ type (
 	// SearchAccounts busca las cuentas del alcance del llamante, por número.
 	SearchAccounts struct {
 		Company, Status, Party, Use, Currency, Name, Demo, Product, Agreement string
+		IncludeMergedParties                                                  bool // también las de titulares fusionados (D-100)
 		Page, Size                                                            int
 	}
 	// GetStats cuenta las cuentas de una empresa.
@@ -532,6 +557,11 @@ func NewService(d Deps) *Service {
 		if err := v.Err(); err != nil {
 			return fw.Page[AccountDTO]{}, err
 		}
+		merged, err := withoutMergedHolders(ctx, d.Merged, q.IncludeMergedParties || q.Party != "")
+		if err != nil {
+			return fw.Page[AccountDTO]{}, err
+		}
+		parts = append(parts, merged...)
 		page, err := d.Accounts.FindPage(ctx, spec.And(parts...), fw.NewPageRequest(q.Page, q.Size, domain.AccFieldNumber.Asc()))
 		if err != nil {
 			return fw.Page[AccountDTO]{}, err

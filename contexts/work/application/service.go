@@ -27,7 +27,23 @@ type Deps struct {
 	UoW      fw.UnitOfWork
 	Recorder app.EventRecorder
 	Audit    app.AuditLog
+	Merged   app.MergedParties // opcional: las parties fusionadas, que los listados dejan fuera (D-100)
 }
+
+// withoutMerged deja fuera de un listado los registros cuya party (persona que imputa) es una party fusionada,
+// salvo que se pidan con includeMergedParties (docs/DECISIONES-COMUNES.md, D-100).
+func withoutMerged[T any](ctx context.Context, m app.MergedParties, include bool, f spec.Field[T, domain.PartyID]) ([]spec.Specification[T], error) {
+	return app.WithoutMerged(ctx, m, include, f, func(u fw.UUID) domain.PartyID { return domain.PartyID{UUID: u} })
+}
+
+// workCustomer es el cliente del trabajo como campo que admite nulo: un trabajo interno no tiene
+// cliente y su columna es nula; esos trabajos no se dejan fuera.
+var workCustomer = spec.Optional("customer", func(w *domain.Work) *domain.PartyID {
+	if c := w.State().Customer; !c.IsZero() {
+		return &c
+	}
+	return nil
+})
 
 // Service expone los casos de uso.
 type Service struct {

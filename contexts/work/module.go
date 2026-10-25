@@ -28,16 +28,29 @@ type Module struct {
 	Audit             application.AuditLog
 }
 
+// Option configura la composición.
+type Option func(*wapp.Deps)
+
+// WithMergedParties dice qué parties están fusionadas en otra (Parties, en el anfitrión): los
+// listados dejan fuera sus registros salvo que se pidan con includeMergedParties (D-100).
+func WithMergedParties(m application.MergedParties) Option {
+	return func(d *wapp.Deps) { d.Merged = m }
+}
+
 // Compose construye el contexto sobre sw.
-func Compose(sw *hotswap.Switch) *Module {
+func Compose(sw *hotswap.Switch, opts ...Option) *Module {
 	integration := hotswap.Outbox(sw, infrastructure.IntegrationOutboxFactory)
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
-	svc := wapp.NewService(wapp.Deps{
+	d := wapp.Deps{
 		Works: hotswap.Repository(sw, infrastructure.WorkRepositoryFactory), Times: hotswap.Repository(sw, infrastructure.TimeEntryRepositoryFactory),
 		UoW: sw, Audit: audit,
 		Recorder: outbox.Recorders(outbox.NewRecorder(hotswap.Outbox(sw, infrastructure.OutboxFactory)),
 			wapp.Publications(messaging.NewRecorder(contracts.Source, integration))),
-	})
+	}
+	for _, o := range opts {
+		o(&d)
+	}
+	svc := wapp.NewService(d)
 	return &Module{Service: svc, IntegrationOutbox: integration, Audit: audit}
 }
 
@@ -103,7 +116,8 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/work", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		out, err := svc.SearchWorks.Handle(r.Context(), wapp.SearchWorks{Company: q.Get("company"), Kind: q.Get("kind"), Status: q.Get("status"),
-			Parent: q.Get("parent"), Customer: q.Get("customer"), Page: atoi(r, "page"), Size: atoi(r, "size")})
+			Parent: q.Get("parent"), Customer: q.Get("customer"),
+			IncludeMergedParties: q.Get("includeMergedParties") == "true", Page: atoi(r, "page"), Size: atoi(r, "size")})
 		distribution.Respond(w, r, out, err, http.StatusOK)
 	})
 	mux.HandleFunc("GET /api/work/{id}", func(w http.ResponseWriter, r *http.Request) {
@@ -124,7 +138,8 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/time", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		out, err := svc.SearchTime.Handle(r.Context(), wapp.SearchTime{Company: q.Get("company"), Work: q.Get("work"), Person: q.Get("person"),
-			From: q.Get("from"), To: q.Get("to"), Pending: q.Get("pending") == "true", Page: atoi(r, "page"), Size: atoi(r, "size")})
+			From: q.Get("from"), To: q.Get("to"), Pending: q.Get("pending") == "true", IncludeMergedParties: q.Get("includeMergedParties") == "true",
+			Page: atoi(r, "page"), Size: atoi(r, "size")})
 		distribution.Respond(w, r, out, err, http.StatusOK)
 	})
 	mux.HandleFunc("GET /api/time/sheet", func(w http.ResponseWriter, r *http.Request) {

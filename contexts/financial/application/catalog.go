@@ -84,6 +84,7 @@ type (
 	// SearchAgreements lista los acuerdos del alcance del llamante, por número.
 	SearchAgreements struct {
 		Company, Customer, Product, Status string
+		IncludeMergedParties               bool // también los de clientes fusionados (D-100)
 		Page, Size                         int
 	}
 )
@@ -398,6 +399,11 @@ func (s service) catalogUseCases(svc *Service) {
 		if err := v.Err(); err != nil {
 			return fw.Page[AgreementDTO]{}, err
 		}
+		merged, err := withoutMerged(ctx, d.Merged, q.IncludeMergedParties || q.Customer != "", domain.AgrFieldCustomer)
+		if err != nil {
+			return fw.Page[AgreementDTO]{}, err
+		}
+		parts = append(parts, merged...)
 		page, err := d.Agreements.FindPage(ctx, spec.And(parts...), fw.NewPageRequest(q.Page, q.Size, domain.AgrFieldNumber.Asc()))
 		if err != nil {
 			return fw.Page[AgreementDTO]{}, err

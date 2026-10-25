@@ -19,8 +19,12 @@ type SetTerms struct {
 	BlockDelivery bool   `json:"blockDelivery,omitempty"`
 }
 
-// SearchTerms enumera las condiciones de cliente de una empresa.
-type SearchTerms struct{ Company string }
+// SearchTerms enumera las condiciones de cliente de una empresa; las de una party fusionada, sólo
+// con IncludeMergedParties (D-100).
+type SearchTerms struct {
+	Company              string
+	IncludeMergedParties bool
+}
 
 // TermsDTO es la forma de transporte de las condiciones de un cliente.
 type TermsDTO struct {
@@ -100,6 +104,7 @@ type GetOrder struct{ ID domain.OrderID }
 // SearchOrders busca pedidos del ámbito de quien llama.
 type SearchOrders struct {
 	Company, Customer, Status string
+	IncludeMergedParties      bool // también los de clientes fusionados en otra party (D-100)
 	Page, Size                int
 }
 
@@ -110,6 +115,7 @@ type GetDelivery struct{ ID domain.DeliveryID }
 type SearchDeliveries struct {
 	Company, Customer, Order string
 	Uninvoiced               bool // sólo los que aún no están en ninguna factura
+	IncludeMergedParties     bool // también los de clientes fusionados en otra party (D-100)
 	Page, Size               int
 }
 
@@ -255,7 +261,11 @@ func (s service) termsUseCases(svc *Service) {
 		if err := scopeOf(ctx).check("parties.party", company, company, false); err != nil {
 			return nil, err
 		}
-		ts, err := s.Terms.Find(ctx, domain.TrmFieldCompany.Eq(company))
+		merged, err := withoutMerged(ctx, s.Merged, q.IncludeMergedParties, domain.TrmFieldCustomer)
+		if err != nil {
+			return nil, err
+		}
+		ts, err := s.Terms.Find(ctx, spec.And(append(merged, domain.TrmFieldCompany.Eq(company))...))
 		if err != nil {
 			return nil, err
 		}
@@ -478,6 +488,11 @@ func (s service) orderUseCases(svc *Service) {
 		if err := v.Err(); err != nil {
 			return fw.Page[OrderDTO]{}, err
 		}
+		merged, err := withoutMerged(ctx, s.Merged, q.IncludeMergedParties || q.Customer != "", domain.OrdFieldCustomer)
+		if err != nil {
+			return fw.Page[OrderDTO]{}, err
+		}
+		parts = append(parts, merged...)
 		page, err := s.Orders.FindPage(ctx, spec.And(parts...), fw.NewPageRequest(q.Page, q.Size, domain.OrdFieldDate.Asc(), domain.OrdFieldNumber.Asc()))
 		if err != nil {
 			return fw.Page[OrderDTO]{}, err
@@ -514,6 +529,11 @@ func (s service) orderUseCases(svc *Service) {
 		if err := v.Err(); err != nil {
 			return fw.Page[DeliveryDTO]{}, err
 		}
+		merged, err := withoutMerged(ctx, s.Merged, q.IncludeMergedParties || q.Customer != "", domain.DelFieldCustomer)
+		if err != nil {
+			return fw.Page[DeliveryDTO]{}, err
+		}
+		parts = append(parts, merged...)
 		page, err := s.Deliveries.FindPage(ctx, spec.And(parts...), fw.NewPageRequest(q.Page, q.Size, domain.DelFieldNumber.Asc()))
 		if err != nil {
 			return fw.Page[DeliveryDTO]{}, err

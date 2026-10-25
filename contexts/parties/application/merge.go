@@ -251,7 +251,7 @@ func (s service) continueRelationship(ctx context.Context, rt domain.Relationshi
 	if err != nil {
 		return nil, err
 	}
-	r, err := s.establish(ctx, rt, f, t, at, prev.Remark(), RelationshipDetailsInput{continues: prev, returning: back})
+	r, _, err := s.establish(ctx, rt, f, t, at, prev.Remark(), RelationshipDetailsInput{continues: prev, returning: back})
 	if err != nil || until == nil {
 		return r, err
 	}

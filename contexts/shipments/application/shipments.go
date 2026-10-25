@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/shipments/domain"
+	app "github.com/jhermoso/karpo-fw-go/pkg/application"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
@@ -71,6 +72,7 @@ type GetShipment struct{ ID domain.ShipmentID }
 // SearchShipments busca los envíos del ámbito de quien llama.
 type SearchShipments struct {
 	Company, Customer, Status, Carrier, Tracking, Delivery string
+	IncludeMergedParties                                   bool // también los de parties fusionadas en otra (D-100)
 	Page, Size                                             int
 }
 
@@ -290,6 +292,11 @@ func (s service) wireShipments(svc *Service) {
 		if err := v.Err(); err != nil {
 			return fw.Page[ShipmentDTO]{}, err
 		}
+		merged, err := withoutMerged(ctx, d.Merged, q.IncludeMergedParties || q.Customer != "", domain.ShpFieldCustomer)
+		if err != nil {
+			return fw.Page[ShipmentDTO]{}, err
+		}
+		parts = append(parts, merged...)
 		page, err := d.Shipments.FindPage(ctx, spec.And(parts...), fw.NewPageRequest(q.Page, q.Size, domain.ShpFieldPlanned.Asc()))
 		if err != nil {
 			return fw.Page[ShipmentDTO]{}, err
@@ -314,6 +321,12 @@ type ChangeCarrier struct {
 	Party       string           `json:"party,omitempty"`
 	TrackingURL string           `json:"trackingUrl,omitempty"`
 	Blocked     bool             `json:"blocked,omitempty"`
+}
+
+// withoutMerged deja fuera de un listado los registros cuya party (cliente) es una party fusionada,
+// salvo que se pidan con includeMergedParties (docs/DECISIONES-COMUNES.md, D-100).
+func withoutMerged[T any](ctx context.Context, m app.MergedParties, include bool, f spec.Field[T, domain.PartyID]) ([]spec.Specification[T], error) {
+	return app.WithoutMerged(ctx, m, include, f, func(u fw.UUID) domain.PartyID { return domain.PartyID{UUID: u} })
 }
 
 // SearchCarriers lista los transportistas de una empresa.

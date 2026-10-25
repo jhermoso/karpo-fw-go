@@ -100,3 +100,11 @@ type TaxIdentity struct {
 type TaxIdentities interface {
 	TaxIdentities(ctx context.Context, partyIDs []string) (map[string]TaxIdentity, error)
 }
+
+// MergedParties dice qué parties están ahora fusionadas en otra (marcadas como «Duplicate Of»),
+// para que los listados de los demás contextos dejen fuera sus registros salvo que se pidan con
+// includeMergedParties (docs/DECISIONES-COMUNES.md, D-100). Son pocas: se piden todas de una vez,
+// sin los permisos del usuario (D-103), y cada listado añade «party NOT IN (…)» a su consulta.
+type MergedParties interface {
+	MergedParties(ctx context.Context) ([]string, error)
+}

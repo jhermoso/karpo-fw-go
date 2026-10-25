@@ -65,7 +65,7 @@ func composeChain(t *testing.T) *chain {
 	im := inventory.Compose(sw, iinfra.ProductsCatalog{Catalog: dm.Catalog})
 	rm := receivables.Compose(sw, nil)
 	om := orders.Compose(sw, oinfra.ProductsCatalog{Catalog: dm.Catalog, Pricing: dm.Pricing}, oinfra.ReceivablesCredit{Exposure: rm.Credit},
-		oinfra.PartiesBlocks{TaxIdentities: pm.TaxIdentities})
+		orders.WithBlocks(oinfra.PartiesBlocks{TaxIdentities: pm.TaxIdentities}))
 	bm := billing.Compose(sw, binfra.FiscalTaxes{Engine: fm.TaxEngine}, binfra.PartiesIdentities{TaxIdentities: pm.TaxIdentities})
 	broker := inprocess.NewBroker()
 	broker.Subscribe("inventory", im.Consumer)

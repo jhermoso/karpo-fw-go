@@ -80,10 +80,10 @@ type host struct {
 	broker *inprocess.Broker
 }
 
-func compose(t *testing.T) *host {
+func compose(t *testing.T, opts ...documents.Option) *host {
 	ctx := context.Background()
 	sw := hotswap.New(memory.NewStore("memory"))
-	dm := documents.Compose(sw)
+	dm := documents.Compose(sw, opts...)
 	broker := inprocess.NewBroker()
 	broker.Subscribe("documents", dm.Consumer)
 

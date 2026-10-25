@@ -28,10 +28,22 @@ type Module struct {
 	Register contracts.Register
 }
 
+// Option configura la composición.
+type Option func(*dapp.Deps)
+
+// WithMergedParties dice qué parties están fusionadas en otra (Parties, en el anfitrión): los
+// listados dejan fuera sus registros salvo que se pidan con includeMergedParties (D-100).
+func WithMergedParties(m application.MergedParties) Option {
+	return func(d *dapp.Deps) { d.Merged = m }
+}
+
 // Compose construye el contexto sobre sw.
-func Compose(sw *hotswap.Switch) *Module {
+func Compose(sw *hotswap.Switch, opts ...Option) *Module {
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
 	d := dapp.Deps{Documents: hotswap.Repository(sw, infrastructure.DocumentRepositoryFactory), UoW: sw, Audit: audit}
+	for _, o := range opts {
+		o(&d)
+	}
 	consumer := messaging.NewConsumer(contracts.Source, hotswap.Inbox(sw, infrastructure.InboxFactory), sw)
 	dapp.Subscribe(consumer, d)
 	return &Module{Service: dapp.NewService(d), Audit: audit, Consumer: consumer, Register: dapp.Register{Documents: d.Documents}}
@@ -49,7 +61,8 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 		q := r.URL.Query()
 		atoi := func(k string) int { n, _ := strconv.Atoi(q.Get(k)); return n }
 		out, err := svc.Search.Handle(r.Context(), dapp.SearchDocuments{Company: q.Get("company"), Type: q.Get("type"), Party: q.Get("party"),
-			Number: q.Get("number"), From: q.Get("from"), To: q.Get("to"), Live: q.Get("live") == "true", Page: atoi("page"), Size: atoi("size")})
+			Number: q.Get("number"), From: q.Get("from"), To: q.Get("to"), Live: q.Get("live") == "true",
+			IncludeMergedParties: q.Get("includeMergedParties") == "true", Page: atoi("page"), Size: atoi("size")})
 		distribution.Respond(w, r, out, err, http.StatusOK)
 	})
 	mux.HandleFunc("GET /api/documents/by-fact/{type}/{factId}", func(w http.ResponseWriter, r *http.Request) {

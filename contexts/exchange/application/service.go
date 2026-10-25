@@ -30,6 +30,13 @@ type Deps struct {
 	UoW           fw.UnitOfWork
 	Recorder      app.EventRecorder
 	Audit         app.AuditLog
+	Merged        app.MergedParties // opcional: las parties fusionadas, que los listados dejan fuera (D-100)
+}
+
+// withoutMerged deja fuera de un listado los registros cuya party (cliente) es una party fusionada,
+// salvo que se pidan con includeMergedParties (docs/DECISIONES-COMUNES.md, D-100).
+func withoutMerged[T any](ctx context.Context, m app.MergedParties, include bool, f spec.Field[T, domain.PartyID]) ([]spec.Specification[T], error) {
+	return app.WithoutMerged(ctx, m, include, f, func(u fw.UUID) domain.PartyID { return domain.PartyID{UUID: u} })
 }
 
 // Service expone los casos de uso.

@@ -62,6 +62,7 @@ type GetReservation struct {
 type SearchReservations struct {
 	Company, Status, Customer, Facility, Currency string
 	CreatedFrom, CreatedTo, PickupFrom, PickupTo  string
+	IncludeMergedParties                          bool // también los de parties fusionadas en otra (D-100)
 	Page, Size                                    int
 }
 
@@ -364,6 +365,11 @@ func (s service) wireReservations(svc *Service) {
 		if err := v.Err(); err != nil {
 			return fw.Page[ReservationDTO]{}, err
 		}
+		merged, err := withoutMerged(ctx, d.Merged, q.IncludeMergedParties || q.Customer != "", domain.ResFieldCustomer)
+		if err != nil {
+			return fw.Page[ReservationDTO]{}, err
+		}
+		parts = append(parts, merged...)
 		page, err := d.Reservations.FindPage(ctx, spec.And(parts...), fw.NewPageRequest(q.Page, q.Size, domain.ResFieldCreated.Desc(), domain.ResFieldReference.Asc()))
 		if err != nil {
 			return fw.Page[ReservationDTO]{}, err

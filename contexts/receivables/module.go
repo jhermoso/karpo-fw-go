@@ -33,8 +33,17 @@ type Module struct {
 	Consumer *messaging.Consumer
 }
 
+// Option configura la composición.
+type Option func(*rapp.Deps)
+
+// WithMergedParties dice qué parties están fusionadas en otra (Parties, en el anfitrión): los
+// listados dejan fuera sus registros salvo que se pidan con includeMergedParties (D-100).
+func WithMergedParties(m application.MergedParties) Option {
+	return func(d *rapp.Deps) { d.Merged = m }
+}
+
 // Compose construye el contexto sobre sw. cal puede ser nil (sin festivos).
-func Compose(sw *hotswap.Switch, cal domain.Calendar) *Module {
+func Compose(sw *hotswap.Switch, cal domain.Calendar, opts ...Option) *Module {
 	integration := hotswap.Outbox(sw, infrastructure.IntegrationOutboxFactory)
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
 	d := rapp.Deps{
@@ -43,6 +52,9 @@ func Compose(sw *hotswap.Switch, cal domain.Calendar) *Module {
 		Calendar: cal, UoW: sw, Audit: audit,
 		Recorder: outbox.Recorders(outbox.NewRecorder(hotswap.Outbox(sw, infrastructure.OutboxFactory)),
 			rapp.Publications(messaging.NewRecorder(contracts.Source, integration))),
+	}
+	for _, o := range opts {
+		o(&d)
 	}
 	consumer := messaging.NewConsumer(contracts.Source, hotswap.Inbox(sw, infrastructure.InboxFactory), sw)
 	rapp.Subscribe(consumer, d)
@@ -142,7 +154,7 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/receivables/invoices", func(w http.ResponseWriter, r *http.Request) {
 		s, n := query(r)
 		out, err := svc.SearchReceivables.Handle(r.Context(), rapp.SearchReceivables{Seller: s("seller"), Customer: s("customer"),
-			OpenOnly: s("open") == "true", Page: n("page"), Size: n("size")})
+			OpenOnly: s("open") == "true", IncludeMergedParties: s("includeMergedParties") == "true", Page: n("page"), Size: n("size")})
 		distribution.Respond(w, r, out, err, http.StatusOK)
 	})
 	mux.HandleFunc("GET /api/receivables/invoices/{id}", func(w http.ResponseWriter, r *http.Request) {
@@ -159,7 +171,8 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/receivables/offsets", create(http.StatusCreated, svc.Offset.Handle))
 	mux.HandleFunc("GET /api/receivables/collections", func(w http.ResponseWriter, r *http.Request) {
 		s, n := query(r)
-		out, err := svc.SearchCollections.Handle(r.Context(), rapp.SearchCollections{Seller: s("seller"), Payer: s("payer"), Page: n("page"), Size: n("size")})
+		out, err := svc.SearchCollections.Handle(r.Context(), rapp.SearchCollections{Seller: s("seller"), Payer: s("payer"),
+			IncludeMergedParties: s("includeMergedParties") == "true", Page: n("page"), Size: n("size")})
 		distribution.Respond(w, r, out, err, http.StatusOK)
 	})
 	mux.HandleFunc("GET /api/receivables/collections/{id}", func(w http.ResponseWriter, r *http.Request) {

@@ -28,18 +28,31 @@ type Module struct {
 	Audit             application.AuditLog
 }
 
+// Option configura la composición.
+type Option func(*xapp.Deps)
+
+// WithMergedParties dice qué parties están fusionadas en otra (Parties, en el anfitrión): los
+// listados dejan fuera sus registros salvo que se pidan con includeMergedParties (D-100).
+func WithMergedParties(m application.MergedParties) Option {
+	return func(d *xapp.Deps) { d.Merged = m }
+}
+
 // Compose construye el contexto sobre sw. collaborators resuelve los códigos de promoción (nil: no
 // se puede validar ningún código).
-func Compose(sw *hotswap.Switch, collaborators domain.Collaborators) *Module {
+func Compose(sw *hotswap.Switch, collaborators domain.Collaborators, opts ...Option) *Module {
 	integration := hotswap.Outbox(sw, infrastructure.IntegrationOutboxFactory)
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
-	svc := xapp.NewService(xapp.Deps{
+	d := xapp.Deps{
 		Currencies: hotswap.Repository(sw, infrastructure.CurrencyRepositoryFactory), Margins: hotswap.Repository(sw, infrastructure.MarginRepositoryFactory),
 		Settings: hotswap.Repository(sw, infrastructure.SettingsRepositoryFactory), Reservations: hotswap.Repository(sw, infrastructure.ReservationRepositoryFactory),
 		Collaborators: collaborators, UoW: sw, Audit: audit,
 		Recorder: outbox.Recorders(outbox.NewRecorder(hotswap.Outbox(sw, infrastructure.OutboxFactory)),
 			xapp.Publications(messaging.NewRecorder(contracts.Source, integration))),
-	})
+	}
+	for _, o := range opts {
+		o(&d)
+	}
+	svc := xapp.NewService(d)
 	return &Module{Service: svc, IntegrationOutbox: integration, Audit: audit}
 }
 
@@ -130,7 +143,8 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 		atoi := func(k string) int { n, _ := strconv.Atoi(q.Get(k)); return n }
 		return svc.Search.Handle(r.Context(), xapp.SearchReservations{Company: q.Get("company"), Status: q.Get("status"), Customer: q.Get("customer"),
 			Facility: q.Get("facility"), Currency: q.Get("currency"), CreatedFrom: q.Get("createdFrom"), CreatedTo: q.Get("createdTo"),
-			PickupFrom: q.Get("pickupFrom"), PickupTo: q.Get("pickupTo"), Page: atoi("page"), Size: atoi("size")})
+			PickupFrom: q.Get("pickupFrom"), PickupTo: q.Get("pickupTo"),
+			IncludeMergedParties: q.Get("includeMergedParties") == "true", Page: atoi("page"), Size: atoi("size")})
 	}))
 	mux.HandleFunc("GET /api/exchange/reservations/by-reference/{reference}", query(func(r *http.Request) (any, error) {
 		return svc.Get.Handle(r.Context(), xapp.GetReservation{Reference: r.PathValue("reference")})

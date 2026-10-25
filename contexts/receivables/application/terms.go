@@ -99,7 +99,10 @@ type GetExposure struct {
 // SearchCredit lista los perfiles de crédito de las empresas que ve quien llama; con Seller, sólo
 // los de esa empresa. Es lo que la vista por pareja necesita para enseñar el límite y el bloqueo de
 // cada cliente (docs/DECISIONES-COMUNES.md, D-73).
-type SearchCredit struct{ Seller string }
+type SearchCredit struct {
+	Seller               string
+	IncludeMergedParties bool // también los de parties fusionadas en otra (D-100)
+}
 
 // CreditDTO es la forma de transporte de un perfil de crédito.
 type CreditDTO struct {
@@ -227,6 +230,11 @@ func (s service) termsUseCases(svc *Service) {
 		if err := v.Err(); err != nil {
 			return nil, err
 		}
+		merged, err := withoutMerged(ctx, s.Merged, q.IncludeMergedParties, domain.CredFieldCustomer)
+		if err != nil {
+			return nil, err
+		}
+		parts = append(parts, merged...)
 		ps, err := s.Credit.Find(ctx, spec.And(parts...))
 		if err != nil {
 			return nil, err

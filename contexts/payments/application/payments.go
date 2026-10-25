@@ -51,8 +51,9 @@ type GetPayment struct{ ID domain.PaymentID }
 
 // SearchPayments busca pagos del ámbito de quien llama.
 type SearchPayments struct {
-	Company, Payee string
-	Page, Size     int
+	Company, Payee       string
+	IncludeMergedParties bool // también los de parties fusionadas en otra (D-100)
+	Page, Size           int
 }
 
 // AllocationDTO es la forma de transporte de una aplicación.
@@ -242,6 +243,11 @@ func (s service) paymentUseCases(svc *Service) {
 		if err := v.Err(); err != nil {
 			return fw.Page[PaymentDTO]{}, err
 		}
+		merged, err := withoutMerged(ctx, s.Merged, q.IncludeMergedParties || q.Payee != "", paymentPayee)
+		if err != nil {
+			return fw.Page[PaymentDTO]{}, err
+		}
+		parts = append(parts, merged...)
 		page, err := s.Payments.FindPage(ctx, spec.And(parts...), fw.NewPageRequest(q.Page, q.Size, domain.PmtFieldDate.Asc()))
 		if err != nil {
 			return fw.Page[PaymentDTO]{}, err

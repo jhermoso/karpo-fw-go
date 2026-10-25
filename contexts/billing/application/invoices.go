@@ -75,6 +75,7 @@ type GetInvoice struct{ ID domain.InvoiceID }
 type SearchInvoices struct {
 	Seller, Customer, Status string
 	From, To                 string // rango de fechas de emisión
+	IncludeMergedParties     bool   // también las de clientes fusionados en otra party (D-100)
 	Page, Size               int
 }
 
@@ -384,6 +385,11 @@ func (s service) invoiceUseCases(svc *Service) {
 		if err := v.Err(); err != nil {
 			return fw.Page[InvoiceDTO]{}, err
 		}
+		merged, err := withoutMerged(ctx, s.Merged, q.IncludeMergedParties || q.Customer != "", domain.InvFieldCustomer)
+		if err != nil {
+			return fw.Page[InvoiceDTO]{}, err
+		}
+		parts = append(parts, merged...)
 		page, err := s.Invoices.FindPage(ctx, spec.And(parts...), fw.NewPageRequest(q.Page, q.Size, domain.InvFieldNumber.Asc()))
 		if err != nil {
 			return fw.Page[InvoiceDTO]{}, err

@@ -35,6 +35,7 @@ type GetPayable struct{ ID domain.PayableID }
 type SearchPayables struct {
 	Company, Payee, Kind, DueTo string
 	OpenOnly                    bool
+	IncludeMergedParties        bool // también los de parties fusionadas en otra (D-100)
 	Page, Size                  int
 }
 
@@ -147,6 +148,11 @@ func (s service) payableUseCases(svc *Service) {
 		if err := v.Err(); err != nil {
 			return fw.Page[PayableDTO]{}, err
 		}
+		merged, err := withoutMerged(ctx, s.Merged, q.IncludeMergedParties || q.Payee != "", payablePayee)
+		if err != nil {
+			return fw.Page[PayableDTO]{}, err
+		}
+		parts = append(parts, merged...)
 		page, err := s.Payables.FindPage(ctx, spec.And(parts...), fw.NewPageRequest(q.Page, q.Size, domain.PayFieldDue.Asc()))
 		if err != nil {
 			return fw.Page[PayableDTO]{}, err

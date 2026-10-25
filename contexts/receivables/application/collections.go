@@ -18,9 +18,10 @@ type GetReceivable struct{ ID domain.ReceivableID }
 
 // SearchReceivables busca cobros pendientes del ámbito de quien llama.
 type SearchReceivables struct {
-	Seller, Customer string
-	OpenOnly         bool
-	Page, Size       int
+	Seller, Customer     string
+	OpenOnly             bool
+	IncludeMergedParties bool // también los de parties fusionadas en otra (D-100)
+	Page, Size           int
 }
 
 // InstallmentDTO es la forma de transporte de un vencimiento.
@@ -107,8 +108,9 @@ type GetCollection struct{ ID domain.CollectionID }
 
 // SearchCollections busca cobros del ámbito de quien llama.
 type SearchCollections struct {
-	Seller, Payer string
-	Page, Size    int
+	Seller, Payer        string
+	IncludeMergedParties bool // también los de parties fusionadas en otra (D-100)
+	Page, Size           int
 }
 
 // AllocationDTO es la forma de transporte de una aplicación.
@@ -213,6 +215,11 @@ func (s service) receivableUseCases(svc *Service) {
 		if err := v.Err(); err != nil {
 			return fw.Page[ReceivableDTO]{}, err
 		}
+		merged, err := withoutMerged(ctx, s.Merged, q.IncludeMergedParties || q.Customer != "", domain.RecFieldCustomer)
+		if err != nil {
+			return fw.Page[ReceivableDTO]{}, err
+		}
+		parts = append(parts, merged...)
 		page, err := s.Receivables.FindPage(ctx, spec.And(parts...), fw.NewPageRequest(q.Page, q.Size, domain.RecFieldIssued.Asc()))
 		if err != nil {
 			return fw.Page[ReceivableDTO]{}, err
@@ -368,6 +375,11 @@ func (s service) collectionUseCases(svc *Service) {
 		if err := v.Err(); err != nil {
 			return fw.Page[CollectionDTO]{}, err
 		}
+		merged, err := withoutMerged(ctx, s.Merged, q.IncludeMergedParties || q.Payer != "", domain.ColFieldPayer)
+		if err != nil {
+			return fw.Page[CollectionDTO]{}, err
+		}
+		parts = append(parts, merged...)
 		page, err := s.Collections.FindPage(ctx, spec.And(parts...), fw.NewPageRequest(q.Page, q.Size, domain.ColFieldDate.Asc()))
 		if err != nil {
 			return fw.Page[CollectionDTO]{}, err

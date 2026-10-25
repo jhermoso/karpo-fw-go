@@ -62,7 +62,7 @@ func status(active bool) string {
 // search ejecuta la búsqueda de Parties con los filtros de una exportación.
 func search(ctx context.Context, p *parties.Module, kind, role string, filters map[string]string, cursor string, limit int) (int, int, []parapp.PartyDTO, error) {
 	q := parapp.SearchParties{Text: filters["name"], Kind: kind, Role: role, Document: filters["document"], Organization: filters["organization"],
-		ActiveOnly: filters["active"] == "true", Page: page(cursor), Size: limit}
+		ActiveOnly: filters["active"] == "true", IncludeMergedParties: filters["includeMergedParties"] == "true", Page: page(cursor), Size: limit}
 	if q.Role == "" {
 		q.Role = filters["role"]
 	}
@@ -70,7 +70,11 @@ func search(ctx context.Context, p *parties.Module, kind, role string, filters m
 	return found.Number, found.TotalPages, found.Items, err
 }
 
-var partyFilters = []string{"name", "document", "organization", "active", "role"}
+// mergedFilter es el filtro de las exportaciones que trae también los registros de las parties
+// fusionadas, que por defecto quedan fuera (docs/DECISIONES-COMUNES.md, D-100).
+const mergedFilter = "includeMergedParties"
+
+var partyFilters = []string{"name", "document", "organization", "active", "role", mergedFilter}
 
 // partyList es una lista de parties: nombre, clase y si está activa (las columnas de C#), y para
 // los clientes su número fiscal, que la columna de C# tenía y siempre dejaba vacío.
@@ -227,7 +231,9 @@ type employees struct {
 func (employees) Key() string                  { return "employees" }
 func (employees) Title() string                { return "Empleados" }
 func (employees) Permission() authz.Permission { return hrapp.PermEmploymentRead }
-func (employees) Filters() []string            { return []string{"organization", "number", "active"} }
+func (employees) Filters() []string {
+	return []string{"organization", "number", "active", mergedFilter}
+}
 func (employees) Columns() []expdomain.Column {
 	return []expdomain.Column{{Field: "name", Header: "Nombre"}, {Field: "number", Header: "Número empleado"},
 		{Field: "hired", Header: "Fecha contratación", Type: expdomain.Date}, {Field: "terminated", Header: "Fecha baja", Type: expdomain.Date},
@@ -236,7 +242,7 @@ func (employees) Columns() []expdomain.Column {
 
 func (l employees) Page(ctx context.Context, filters map[string]string, cursor string, limit int) ([]expdomain.Row, string, error) {
 	found, err := l.h.Service.SearchEmployments.Handle(ctx, hrapp.SearchEmployments{Employer: filters["organization"], Number: filters["number"],
-		ActiveOnly: filters["active"] == "true", Page: page(cursor), Size: limit})
+		ActiveOnly: filters["active"] == "true", IncludeMergedParties: filters["includeMergedParties"] == "true", Page: page(cursor), Size: limit})
 	if err != nil {
 		return nil, "", err
 	}
