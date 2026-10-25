@@ -205,8 +205,11 @@ func TestCatalogAndSystemRoles(t *testing.T) {
 		if !slices.Equal(r.Permissions(), want[seed.ID]) {
 			t.Errorf("%s: %v", seed.Name, r.Permissions())
 		}
-		if r.Describe("Other", "") == nil || r.SetPermissions(nil) == nil || r.Retire() == nil {
-			t.Errorf("%s: a system role cannot be edited nor retired", seed.Name)
+		if r.Describe("Other", "") == nil || r.Retire() == nil {
+			t.Errorf("%s: a system role cannot be renamed nor retired", seed.Name)
+		}
+		if !slices.Equal(r.Granted(), want[seed.ID]) {
+			t.Errorf("%s: what the rule gives is recorded as granted: %v", seed.Name, r.Granted())
 		}
 		if r.IsGlobalAdmin() != (seed.ID == domain.RoleGlobalSuperAdmin) {
 			t.Errorf("%s: global admin", seed.Name)
@@ -243,6 +246,104 @@ func TestCatalogAndSystemRoles(t *testing.T) {
 	}
 }
 
+// D-98: la regla estándar concede cada permiso a un rol del sistema una sola vez; el administrador
+// global se lo retira y se lo devuelve, pero nunca le da uno que la regla no le da.
+func TestSystemRole_GrantedOnce(t *testing.T) {
+	const merge, related, read domain.Permission = "Parties.Party.Merge", "Parties.Party.UpdateRelated", "Parties.Party.Read"
+	codes := []domain.Permission{domain.Wildcard, domain.PermRoleUpdate, merge, related, read}
+	c := domain.NewCatalog(codes...)
+	admin, err := domain.NewSystemRole(domain.SystemRoles()[1], c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	all := []domain.Permission{merge, read, related}
+	if !slices.Equal(admin.Permissions(), all) || admin.SystemSyncPending(c) || admin.SyncSystemPermissions(c) {
+		t.Fatalf("a fresh system role holds what the rule gives: %v", admin.Permissions())
+	}
+
+	// Retirar: el permiso se va y sigue contando como concedido.
+	if err := admin.SetPermissions([]domain.Permission{read, related}, c); err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(admin.Permissions(), merge) || !slices.Equal(admin.Granted(), all) {
+		t.Fatalf("withdrawn: %v granted %v", admin.Permissions(), admin.Granted())
+	}
+	// Sincronizar (un arranque): no vuelve; un permiso nuevo del catálogo sí llega, una vez.
+	if admin.SystemSyncPending(c) || admin.SyncSystemPermissions(c) || slices.Contains(admin.Permissions(), merge) {
+		t.Fatalf("a withdrawn permission does not come back: %v", admin.Permissions())
+	}
+	const approve domain.Permission = "Parties.Party.Approve"
+	grown := domain.NewCatalog(append(codes, approve)...)
+	if !admin.SystemSyncPending(grown) || !admin.SyncSystemPermissions(grown) || admin.SyncSystemPermissions(grown) ||
+		!slices.Equal(admin.Permissions(), []domain.Permission{approve, read, related}) || !slices.Contains(admin.Granted(), approve) {
+		t.Fatalf("a new permission reaches the role once: %v granted %v", admin.Permissions(), admin.Granted())
+	}
+
+	// Devolver lo que la regla da; nunca lo que no da (la regla no da Security.Role.Update a OrganizationAdmin).
+	if err := admin.SetPermissions([]domain.Permission{read, merge}, grown); err != nil || !slices.Contains(admin.Permissions(), merge) {
+		t.Fatalf("give back: %v %v", admin.Permissions(), err)
+	}
+	if err := admin.SetPermissions([]domain.Permission{read, domain.PermRoleUpdate}, grown); !errors.Is(err, fw.ErrRuleViolation) {
+		t.Fatalf("outside the rule: %v", err)
+	}
+	if err := admin.SetPermissions([]domain.Permission{read, "Parties.Party.Purge"}, grown); !errors.Is(err, fw.ErrRuleViolation) {
+		t.Fatalf("outside the catalog: %v", err)
+	}
+	if !slices.Equal(admin.Permissions(), []domain.Permission{merge, read}) {
+		t.Fatalf("a rejected change leaves the role as it was: %v", admin.Permissions())
+	}
+
+	// Desactivar: lo que lleva se quita y deja de contar como concedido, así que vuelve si se
+	// reactiva; lo retirado sigue retirado aunque pase por una desactivación.
+	shrunk := domain.NewCatalog(domain.Wildcard, domain.PermRoleUpdate, approve)
+	if !admin.SyncSystemPermissions(shrunk) || len(admin.Permissions()) != 0 {
+		t.Fatalf("deactivated codes grant nothing: %v", admin.Permissions())
+	}
+	if !admin.SyncSystemPermissions(grown) || !slices.Equal(admin.Permissions(), []domain.Permission{merge, read}) {
+		t.Fatalf("reactivated: what it held comes back, what was withdrawn (Approve, UpdateRelated) does not: %v", admin.Permissions())
+	}
+	if !slices.Equal(admin.Withdrawn(), []domain.Permission{approve, related}) {
+		t.Fatalf("withdrawn: %v", admin.Withdrawn())
+	}
+
+	// GlobalSuperAdmin conserva el comodín.
+	super, _ := domain.NewSystemRole(domain.SystemRoles()[0], c)
+	if err := super.SetPermissions(nil, c); !errors.Is(err, fw.ErrRuleViolation) {
+		t.Fatalf("GlobalSuperAdmin is not edited: %v", err)
+	}
+	if got := eventTypes(admin.PendingEvents()); got != strings.Repeat("role_permissions_changed,", 4)+"role_permissions_changed" {
+		t.Fatalf("every change raises the same event as a custom role: %s", got)
+	}
+	if _, err := domain.ReconstituteRole(domain.NewRoleID(), domain.RoleState{Name: "Mine", Granted: []domain.Permission{read}}); !errors.Is(err, fw.ErrValidation) {
+		t.Fatalf("a custom role records no grants: %v", err)
+	}
+
+	// Un rol del sistema que lleva un permiso sin constar como concedido (restauración parcial,
+	// filas a mano): cuenta como concedido y la sincronización no lo duplica.
+	partial, err := domain.ReconstituteRole(domain.RoleOrganizationAdmin, domain.RoleState{Name: "OrganizationAdmin", System: true,
+		Permissions: []domain.Permission{merge, read}, Granted: []domain.Permission{read}})
+	if err != nil || !slices.Equal(partial.Granted(), []domain.Permission{merge, read}) {
+		t.Fatalf("what a system role holds is granted: %v %v", partial.Granted(), err)
+	}
+	if !partial.SyncSystemPermissions(c) || !slices.Equal(partial.Permissions(), all) || !slices.Equal(partial.Granted(), all) {
+		t.Fatalf("no duplicates after the synchronization: %v granted %v", partial.Permissions(), partial.Granted())
+	}
+
+	// La regla no da Approve a StandardUser ni nada a Customer: el global no se lo añade.
+	wide := domain.NewCatalog(read, "Parties.Party.Approve")
+	std, _ := domain.NewSystemRole(domain.SystemRoles()[2], wide)
+	if err := std.SetPermissions([]domain.Permission{read, "Parties.Party.Approve"}, wide); !errors.Is(err, fw.ErrRuleViolation) {
+		t.Fatalf("StandardUser does not approve: %v", err)
+	}
+	customer, _ := domain.NewSystemRole(domain.SystemRoles()[4], wide)
+	if err := customer.SetPermissions([]domain.Permission{read}, wide); !errors.Is(err, fw.ErrRuleViolation) {
+		t.Fatalf("Customer gets nothing: %v", err)
+	}
+	if err := customer.SetPermissions(nil, wide); err != nil {
+		t.Fatalf("Customer keeps nothing: %v", err)
+	}
+}
+
 func TestCustomRole(t *testing.T) {
 	r, err := domain.DefineRole(domain.NewRoleID(), "  Purchasing   clerk ", "Registers supplier invoices",
 		[]domain.Permission{"Purchases.Invoice.Register", "Purchases.Invoice.Read", "Purchases.Invoice.Read"})
@@ -255,16 +356,19 @@ func TestCustomRole(t *testing.T) {
 	}
 	// Sólo el rol del sistema GlobalSuperAdmin lleva el comodín: un rol propio con él era la forma
 	// de saltarse la comprobación de C# por nombre de rol.
-	if err := r.SetPermissions([]domain.Permission{domain.Wildcard}); !errors.Is(err, fw.ErrValidation) {
+	if err := r.SetPermissions([]domain.Permission{domain.Wildcard}, domain.Catalog{}); !errors.Is(err, fw.ErrValidation) {
 		t.Fatalf("wildcard: %v", err)
 	}
 	if _, err := domain.DefineRole(domain.NewRoleID(), "Super", "", []domain.Permission{domain.Wildcard}); !errors.Is(err, fw.ErrValidation) {
 		t.Fatalf("wildcard on define: %v", err)
 	}
-	if err := r.SetPermissions([]domain.Permission{"Purchases.Invoice.Read"}); err != nil {
+	if err := r.SetPermissions([]domain.Permission{"Purchases.Invoice.Read"}, domain.Catalog{}); err != nil {
 		t.Fatal(err)
 	}
-	_ = r.SetPermissions([]domain.Permission{"Purchases.Invoice.Read"})
+	_ = r.SetPermissions([]domain.Permission{"Purchases.Invoice.Read"}, domain.Catalog{})
+	if len(r.Granted()) != 0 || r.SyncSystemPermissions(domain.NewCatalog("Purchases.Invoice.Read")) {
+		t.Fatal("a custom role records no grants and the rule never touches it")
+	}
 	if err := r.Describe("Purchasing", ""); err != nil {
 		t.Fatal(err)
 	}
