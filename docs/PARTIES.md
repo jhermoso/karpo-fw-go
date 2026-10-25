@@ -570,8 +570,8 @@ sea de consulta. Marcarla es fusionarla: sus relaciones de negocio pasan a la su
 | Lo que se permite | Leerla y terminar sus relaciones, la de duplicado incluida |
 | Esquema | Migración 24: `parties.duplicate`; migración 27: `party_relationships.transferred_from` (D-93) |
 
-- **Quién marca y desmarca:** quien puede modificar el duplicado (§18); la superviviente sólo
-  tiene que verse. Una empresa interna sólo la marca el administrador global. Desmarcar pide lo
+- **Quién marca y desmarca:** quien tiene el permiso `Parties.Party.Merge` (D-95) y puede
+  modificar el duplicado y la superviviente (§18, D-96). Una empresa interna no se marca nunca, ni siquiera el administrador global (D-99, 422). Desmarcar pide lo
   mismo, aunque la relación sea entre dos terceros.
 - Un duplicado lo es de una sola party, y una party marcada no puede ser la superviviente de otra.
 - **No es desactivar:** la party sigue activa y conserva sus relaciones, así que no choca con D-4.
