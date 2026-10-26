@@ -1184,6 +1184,19 @@ func (e *env) phase3(acme, ana papp.PartyDTO) {
 	if len(internal) != 1 || internal[0].ID != acme.ID {
 		e.t.Fatalf("the clerk's internal organizations: %+v", internal)
 	}
+	// Los nombres de las empresas del grupo son públicos en la instalación (D-101): el clerk ve el
+	// nombre de una empresa que no es suya, pero no su ficha.
+	var foreign papp.PartyDTO
+	e.must(e.do("POST", "/api/organizations", e.admin, map[string]any{"legalName": "Grupo Ajeno " + acme.ID[:8],
+		"roles": []string{domain.RoleInternalOrganization.String()}}, &foreign), 201, "a company of the group the clerk does not see")
+	var names []papp.InternalOrganizationName
+	e.must(e.do("GET", "/api/internal-organizations/names", e.clerk, nil, &names), 200, "the names of the companies of the group")
+	if !slices.ContainsFunc(names, func(n papp.InternalOrganizationName) bool { return n.ID == foreign.ID && n.Name == foreign.Name }) ||
+		!slices.ContainsFunc(names, func(n papp.InternalOrganizationName) bool { return n.ID == acme.ID }) {
+		e.t.Fatalf("the clerk sees the name of every company of the group: %+v", names)
+	}
+	e.must(e.do("GET", "/api/parties/"+foreign.ID, e.clerk, nil, nil), 404, "but not the record of a company that is not its own")
+	e.must(e.do("GET", "/api/internal-organizations/names", "", nil, nil), 401, "anonymous callers do not")
 
 	// Una unidad se da de alta bajo su empresa con el rollup: «una organización» es lo que es
 	// Acme, desempeñe los roles que desempeñe (D-53).
@@ -1538,7 +1551,7 @@ func endToEnd(t *testing.T, newDirectory func(*testing.T) directory) {
 	if _, err := e.mod.Relay(broker).RelayOnce(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if len(seen) != 20 || roles != 6 {
+	if len(seen) != 21 || roles != 6 {
 		t.Fatalf("published: %v, roles %d", seen, roles)
 	}
 	if len(shares) != 3 || shares[0] != "30.00" || shares[1] != "45.50" || shares[2] != "" {

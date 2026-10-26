@@ -126,6 +126,18 @@ type ClearDocumentIssue struct {
 // ListInternalOrganizations lista las organizaciones internas del ámbito del llamante.
 type ListInternalOrganizations struct{}
 
+// ListInternalOrganizationNames lista el nombre de todas las organizaciones internas de la
+// instalación, también las de otras empresas: los nombres de las empresas del grupo son públicos
+// dentro de la instalación (docs/DECISIONES-COMUNES.md, D-101). Sólo el identificador y el nombre;
+// el resto de la ficha sigue el ámbito de quien llama.
+type ListInternalOrganizationNames struct{}
+
+// InternalOrganizationName es una empresa del grupo tal como la ve cualquiera de la instalación.
+type InternalOrganizationName struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
 // IdempotencyKey implementa application.IdempotencyKeyed.
 func (c RegisterOrganization) IdempotencyKey() string { return c.RequestID }
 
