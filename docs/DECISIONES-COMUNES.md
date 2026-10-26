@@ -294,6 +294,8 @@ La lectura es de esa sesión.
 | D-111 | **Al llevar el crédito a la relación, un límite que hoy está en el rol cliente se copia a todas las parejas vigentes de ese cliente.** Transmitida. En Go: no aplica (el crédito ya es de la pareja, D-7) | «sí» |
 | D-112 | **Ningún permiso que el administrador global retire a un rol del sistema vuelve en el siguiente arranque**, no sólo Merge y UpdateRelated. Generaliza D-98. Transmitida. En Go: cumple (D-98 ya vale para todos los permisos) | «sí» |
 | D-113 | **El panel de filtros del front arranca desplegado, sin recordar su estado.** Decisión de interfaz, informativa. Transmitida. En Go: no aplica (no tiene front) | «sí» |
+| D-114 | **El 422 de la regla de clase de documento se llama `parties.document_not_for_kind` en los tres proyectos** (Trench usaba `PARTY-DOCUMENT-NOT-FOR-KIND`). Transmitida por la sesión de Trench (2026-10-26; su PR 78, sin fusionar). En Go: es el código de origen | Decisión de Javier transmitida |
+| D-115 | **Una persona con un TXID sin país emisor se rechaza con 422**, como en Karpo C#: sin país se toma por español y sería un CIF. Transmitida por la sesión de Trench (su PR 78). En Go: no se da, porque el país emisor es obligatorio (400) | Decisión de Javier transmitida |
 
 **D-85 y D-93 en Trench** (su sesión, 2026-10-18; en su `main`, commit c6b3c233). D-85, hecho en
 parte (PR 53): las importaciones crean una persona con el rol «Self Employed» cuando el NIF es un
@@ -309,6 +311,12 @@ con el CIF repetido: 35 relaciones de negocio pasaron a la superviviente y 3 se 
 las tenía; no se perdió ninguna. Quedan 6 CIF repetidos a propósito: parecen empresas distintas con
 el CIF mal dado de alta en Sage y se corrigen allí. En Trench, «un documento, una party» (D-50) se
 cumple salvo en esos 6 casos, identificados.
+
+**Trabajo abierto en Trench** (su sesión, 2026-10-26; PR sin fusionar): D-104, direcciones por
+defecto al fusionar (PR 70); D-105, perfil del autónomo en `party_role` (PR 71); D-100 y D-108,
+listados sin fichas fusionadas (PR 73 y 76); D-114 y D-115 (PR 78). D-107: el informe de sólo
+lectura da 55 organizaciones con NIF de persona, 13 de ellas duplicadas de una persona; pendiente de
+que Javier lo apruebe.
 
 **D-92 en Trench** (su sesión, 2026-10-26; en su `main`, PR 66 y 67, merge 8e47595cc). El
 documento de identidad sigue la regla de clase de Karpo Go (una organización sólo TXID u OTHR; una
