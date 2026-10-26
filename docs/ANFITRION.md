@@ -153,6 +153,25 @@ macroservicios** (decisión 1).
     `subject`: la misma factura, el mismo pedido) se ponen detrás sin intentarse. Lo que trata de
     otra cosa pasa con normalidad.
   - Un mensaje reenviado que ya está guardado no se guarda dos veces.
+  - **De uno en uno.** La ronda del planificador, el reintento pedido por HTTP y el descarte
+    esperan su turno (un candado por oficina, dentro del proceso): dos recorridos a la vez
+    leerían las mismas entregas y el oyente recibiría dos veces el mismo mensaje. Se eligió el
+    candado y no reclamar cada entrega en la base con una actualización condicional porque hoy
+    hay un solo proceso y no cuesta escrituras; con varios procesos sobre la misma base (los
+    macroservicios) habrá que reclamarla en la base. Consecuencia: mientras dura un
+    `POST /api/deliveries/retry` largo, la ronda de tareas espera su turno y el bucle `Run` del
+    anfitrión (entregas y tareas) se queda parado hasta que acaba.
+  - **Sobre que no cabe.** Un mensaje con el tipo vacío o de más de 100 bytes, o la identidad
+    vacía o de más de 64, no pasaría la validación al guardarlo y volvería al emisor una y otra
+    vez. Se guarda **descartado**, con el código `mailbox.oversized`, el tipo recortado sin partir
+    caracteres, la huella SHA-256 de la identidad (64 caracteres hexadecimales) y ambos de verdad
+    en la nota. No se recorta para entregarlo después: con otro tipo u otra identidad el oyente
+    recibiría otro mensaje. Reenviado, se reconoce por la huella; descartado, no retiene a los
+    que vienen detrás sobre lo mismo. Si llega detrás de otro que espera sobre lo mismo, se
+    guarda descartado **sin intentarse** nunca. Un mensaje **sin identidad** recibe una nueva
+    cada vez (`no-id:` y un UUID) y no se busca como repetido: dos mensajes distintos sin
+    identidad no se confunden, a cambio de que el mismo reenviado se guarde dos veces. Las
+    entregas llevan ahora `envelopeId` en su forma de transporte.
 - **Para quien administra** (solo administrador global, como el historial):
   - `GET /api/deliveries?consumer=&status=` — lo guardado, lo más antiguo primero.
   - `POST /api/deliveries/retry` — vuelve a intentar ya todo lo que espera, y lo dado por
@@ -246,7 +265,10 @@ Decisiones (aprobadas por Javier el 2026-10-10):
   recibe; el emisor no se entera; reenvío sin duplicar; lo que llega detrás sobre lo mismo
   espera y lo demás pasa; reintento en orden; diez intentos y se da por imposible; descartar
   con nota libera lo que esperaba; reintentar uno o todos; solo administrador global; el aviso
-  sale una vez por mensaje y el resumen cuenta por oyente.
+  sale una vez por mensaje y el resumen cuenta por oyente. En memoria: el reintento pedido espera a la ronda
+  en marcha y el oyente recibe el mensaje una vez (la prueba falla sin el candado), y quien
+  cancela mientras espera se va sin tocar nada; un sobre que no cabe se guarda una vez,
+  descartado, con su huella, y no se vuelve a intentar.
 - **`host/serve`**: el aviso sin webhook solo va al registro; con webhook lleva oyente, tipo,
   intentos y motivo y nunca el contenido; un webhook que falla o no existe se anota y no detiene
   nada; se envía aunque la ronda esté parando; la dirección mal escrita impide arrancar.

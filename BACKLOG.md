@@ -145,26 +145,9 @@ Hallazgos menores de la revisión independiente (G-6) que no se arreglaron en la
   comprueba con una lectura antes de escribir y no hay índice único sobre `promotion_code`
   (`contexts/parties/infrastructure/schema.go:189`); dos altas simultáneas en relaciones distintas
   pueden dejar el mismo código a dos colaboradores.
-- **`mailbox.Retry` en paralelo** — `host/mailbox/mailbox.go:332` (y `Redeliver`, `:148`): nada
-  impide que el reintento pedido por HTTP y la ronda del planificador recorran a la vez las
-  mismas entregas y el oyente reciba un mensaje dos veces.
-- **Tamaños del sobre** — `host/mailbox/delivery.go:97` y `contexts/accounting/domain/parked.go:91`:
-  origen, asunto y correlación se recortan, pero un tipo de más de 100 bytes o un identificador de
-  más de 64 hacen fallar la validación al guardar, y el mensaje vuelve al emisor una y otra vez.
-- **Hechos sin empresa** — `contexts/accounting/application/parking.go:179`: todos los hechos
-  aparcados que no nombran empresa comparten la clave vacía, así que uno que no se puede asentar
-  detiene a todos los demás; además solo los ve un administrador global.
 - **Comentario de `cmd/karpo-postgres`** — `cmd/karpo-postgres/main.go:1`: la revisión señaló el
   comentario de cabecera; el detalle no venía en el encargo de los arreglos, hay que recuperarlo
   del informe de la revisión.
-- **Espera creciente y tope en el reintento de lo aparcado** — `contexts/accounting/application/parking.go:169`:
-  tras H-3 un rechazo repetido ya no se escribe, pero el hecho se sigue **intentando** en cada
-  ronda. El patrón de `host/mailbox/delivery.go:144` (`NextAttempt`, `MaxAttempts`) exige una
-  columna nueva en `acc_parked_facts` (migración en los motores y paridad con Trench).
-- **El reintento por HTTP pierde los contadores cuando algo falla** — `contexts/accounting/application/parking.go:302`:
-  tras H-2, `RetryParked` devuelve el error acumulado junto con lo asentado y lo que espera, pero
-  la ruta `POST /api/accounting/parked/retry` solo responde el error. El anfitrión, además, lo
-  anota en el registro en cada ronda mientras el hecho siga fallando.
 
 ### 3. PoC Frontend: Evaluación de Stack Ligero (Svelte 5 / SolidJS)
 - Prototipar la interfaz de listado y ficha de `Parties`.

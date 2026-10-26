@@ -7,6 +7,7 @@ package mailbox
 
 import (
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -86,6 +87,31 @@ func clip(s string, n int) string {
 	return string([]rune(s)[:n])
 }
 
+// OversizedCode es por qué se guarda descartada una entrega cuyo sobre no cabe: un tipo vacío o de
+// más de 100 bytes, o una identidad vacía o de más de 64. Guardarla como espera haría fallar la
+// validación cada vez, y el emisor la enviaría una y otra vez; recortarla cambiaría el mensaje que
+// recibiría el oyente. Así se guarda una vez, no se vuelve a intentar y alguien la ve en la lista.
+const OversizedCode = "mailbox.oversized"
+
+// fits dice si el tipo y la identidad de un mensaje caben en una entrega.
+func fits(eventType, envelopeID string) bool {
+	return eventType != "" && len(eventType) <= 100 && envelopeID != "" && len(envelopeID) <= fw.MaxEnvelopeKey
+}
+
+// oversized guarda descartada una entrega cuyo sobre no cabe, con el tipo y la identidad de verdad
+// en la nota, hasta donde caben. La identidad guardada es fw.EnvelopeKey: la huella de la que no
+// cabe, o una nueva si no tenía.
+func oversized(id ID, s State, now time.Time) (*Delivery, error) {
+	note := "the message does not fit in a mailbox: type " + s.EventType + " (" + strconv.Itoa(len(s.EventType)) + " bytes), identity " +
+		s.EnvelopeID + " (" + strconv.Itoa(len(s.EnvelopeID)) + " bytes)"
+	s.EventType, s.EnvelopeID = fw.ClipBytes(s.EventType, 100), fw.EnvelopeKey(s.EnvelopeID)
+	if s.EventType == "" {
+		s.EventType = "-"
+	}
+	s.Status, s.Code, s.NextAttempt, s.ResolvedAt, s.Note = Discarded, OversizedCode, time.Time{}, now.UTC(), clip(note, 500)
+	return Reconstitute(id, s)
+}
+
 // Reconstitute reconstruye una entrega.
 func Reconstitute(id ID, s State) (*Delivery, error) {
 	base, err := fw.NewBaseAggregateRoot(Kind, id)
@@ -130,6 +156,9 @@ func Queue(id ID, s State, now time.Time) (*Delivery, error) {
 
 func normalized(id ID, s State) (*Delivery, error) {
 	s.Source, s.Subject, s.CorrelationID, s.CausationID = clip(s.Source, 50), clip(s.Subject, 100), clip(s.CorrelationID, 100), clip(s.CausationID, 100)
+	if !fits(s.EventType, s.EnvelopeID) {
+		return oversized(id, s, s.ReceivedAt)
+	}
 	return Reconstitute(id, s)
 }
 

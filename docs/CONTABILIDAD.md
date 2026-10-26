@@ -171,44 +171,87 @@ Ahora lo **aparca**: guarda el hecho tal como llegó, con el motivo, y lo asient
   mientras uno espera, los que llegan después de esa empresa esperan detrás (motivo
   `accounting.waiting`), aunque por sí solos se pudieran asentar. Un hecho que no nombra empresa
   (la anulación de una nómina) sigue al hecho del que trata.
+- **Colas.** Cada hecho va en una cola: la de su empresa; si no nombra empresa (ni sigue a uno
+  que la nombre), la de aquello de lo que trata (su `subject`); y si tampoco trata de nada, una
+  suya. El primero de una cola que no se puede asentar detiene sólo esa cola. Antes todos los
+  hechos sin empresa compartían una cola, y uno atascado detenía a todos los demás.
 - **Reintento** (`RetryParked`): por empresa o para todas las del ámbito. Prueba en orden; el
-  primero de una empresa que siga sin poder asentarse la detiene, y los demás se quedan detrás.
-  El anfitrión lo llama en cada ronda de tareas, así que abrir el libro o completar el perfil
-  basta para que lo aparcado se asiente solo.
-  - **Un rechazo repetido no se escribe.** Si el reintento acaba con el mismo código y el mismo
-    motivo que el intento anterior, el hecho no se toca: ni escritura ni fila de auditoría (el
-    anfitrión reintenta cada minuto; una empresa sin libro producía unas 1.440 al día). Por eso
-    `attempts` ya no cuenta todos los intentos: cuenta el primero, cada rechazo por un motivo
-    **distinto** y el intento que lo asentó. No hay espera creciente ni tope de intentos (ver
-    `BACKLOG.md`).
+  primero de una cola que siga sin poder asentarse la detiene, y los demás se quedan detrás.
+  Sólo un reintento o un descarte a la vez dentro del proceso: el del planificador y el pedido
+  por HTTP no prueban a la vez el mismo hecho, y no se descarta uno que se está asentando. Un
+  reintento largo pedido por HTTP detiene mientras dura la ronda de tareas del anfitrión (y con
+  ella su bucle `Run`). Un reintento que se interrumpe (el proceso se para) no anota nada.
+  - **El anfitrión** lo llama en cada ronda de tareas con `due`: sólo prueba lo que ya toca.
+    Abrir el libro o completar el perfil basta para que lo aparcado se asiente solo, como mucho
+    una hora más el intervalo del planificador después (o al momento, pidiéndolo).
+  - **Espera creciente con tope.** Cada intento que no lo asienta se escribe (`attempts`, el
+    motivo y `next_attempt`) y alarga la espera: 1, 2, 4… minutos, hasta **una hora**. Un hecho
+    atascado días se escribe unas 24 veces al día, no 1.440. **No hay tope de intentos**: un
+    hecho aparcado nunca se abandona solo, porque se resuelve solo al abrir el libro y nadie
+    recibe aviso de lo que espera (decisión 7 de «Aviso cuando un mensaje se da por imposible»,
+    en [ANFITRION.md](ANFITRION.md)). `attempts` vuelve a contar todos los intentos: el primero,
+    cada reintento que no lo asentó y el que lo asentó.
+  - **Pedido por HTTP** (`POST /api/accounting/parked/retry`, sin `due`): lo prueba todo en el
+    acto, aunque no toque; si falla, cuenta el intento y espera como cualquier otro.
   - Si un hecho aparcado falla con algo que **no es una regla** (una validación, un fallo
     técnico), se anota en el hecho con el motivo `accounting.failed`, detiene **solo a su
-    empresa** y el reintento sigue con las demás. El error se devuelve al final, con el tipo y el
-    identificador del mensaje.
+    cola** y el reintento sigue con las demás. La respuesta lleva lo asentado (`posted`), lo que
+    espera (`waiting`) y lo que falló (`failed`, con el tipo y el identificador del mensaje), y
+    responde 200: el reintento acabó. Sólo es error lo que impide acabarlo (no poder escribir).
+    El anfitrión anota `failed` en el registro en la ronda que prueba el hecho, es decir, con la
+    misma espera creciente, y no en cada ronda.
+- **Sobre que no cabe.** Un mensaje con el tipo vacío o de más de 100 bytes, o la identidad vacía
+  o de más de 64, haría fallar la validación al guardarlo y volvería al emisor una y otra vez. Se
+  guarda **descartado** con el motivo `accounting.oversized`, el tipo recortado sin partir
+  caracteres, la huella SHA-256 de la identidad (64 caracteres hexadecimales) en vez de la
+  identidad, y ambos de verdad en la nota. No se recorta para seguir intentándolo: un hecho con
+  otro tipo u otra identidad ya no es el mismo hecho. Reenviado, se reconoce por la huella. Si
+  llega detrás de otro que espera, se guarda descartado **sin intentarse** nunca. Un hecho **sin
+  identidad** recibe una nueva cada vez (`no-id:` y un UUID) y no se busca como repetido: dos
+  hechos distintos sin identidad se guardan los dos.
 - **Descartar** (`DiscardParked`): un hecho que nunca se podrá asentar (mal formado, de prueba)
   bloquea a su empresa hasta que alguien lo descarta, diciendo por qué. No se borra.
 - **Repetidos:** un mensaje que vuelve a llegar no se aparca ni se asienta dos veces, esté
   esperando, asentado o descartado.
 - **Permisos:** `Accounting.Parked.Read` y `Accounting.Parked.Resolve` (reintentar y descartar).
-  Cada uno ve lo de sus empresas; un hecho sin empresa, solo un administrador global.
-- **Rutas:** `GET /api/accounting/parked`, `POST /api/accounting/parked/retry` y
-  `POST /api/accounting/parked/{id}/discard`.
-- **Almacenamiento:** `acc_parked_facts` (migración 3).
+  Cada uno ve lo de sus empresas. Un hecho sin empresa sólo lo ven, reintentan y descartan los
+  administradores globales: no hay empresa con la que comprobar el ámbito de nadie más. Se
+  queda así a propósito; si hiciera falta, el siguiente paso sería deducir la empresa del
+  sujeto del hecho (la nómina que anula).
+- **Rutas:** `GET /api/accounting/parked`, `POST /api/accounting/parked/retry` (con
+  `{"company":…,"due":true}` opcionales) y `POST /api/accounting/parked/{id}/discard`.
+- **Almacenamiento:** `acc_parked_facts` (migración 3), con `next_attempt` desde la migración 5
+  (`ALTER TABLE … ADD`, en los cinco motores; las filas de antes quedan con `NULL`, que es «toca
+  ya»).
+- **Trench no tiene tabla equivalente**: no aparca hechos contables. Lo más parecido es su
+  registro de consumo del outbox (`outbox_event_consumption`: `attempts`, `last_error`,
+  `next_attempt_at_utc`, estado `Dead` tras el tope). Se sigue el patrón y el nombre de esta
+  casa (`host_deliveries.next_attempt`), no `next_attempt_at_utc`: todas las columnas de tiempo
+  de Karpo Go son UTC sin sufijo.
 
 Validación:
 
 - **Extremo a extremo** (en memoria y en SQLite migrada): el consumidor directo rechaza; el
   aparcamiento guarda; reenviado no se duplica; el siguiente hecho de la empresa espera detrás; el
   que no nombra empresa sigue a su asunto; lo que Contabilidad no asienta se ignora; otra empresa
-  con libro asienta al momento; reintentar sin libro no cambia nada y solo prueba el primero; con
+  con libro asienta al momento; reintentar sin libro no asienta nada y solo prueba el primero; con
   libro pero sin cuenta de caja se asienta la factura y se detiene en el cobro; un hecho nuevo no
   adelanta a lo que espera; completado el perfil se asienta todo, en orden; después nada se
   asienta dos veces; un hecho mal formado bloquea hasta que se descarta (sin motivo 422, dos
   veces 422) y descartado no vuelve a aparcarse; ámbito por empresa, sin permiso 403.
+- **Espera y respuesta** (en memoria, con un reloj de prueba): antes de que toque, 25 rondas no
+  prueban ni escriben nada; un día de rondas, una por minuto, prueba y escribe 29 veces (minutos
+  1, 3, 7, 15, 31, 63 y luego cada hora); pedido a mano, se prueba en el acto; un fallo que no es
+  regla sale en `failed` sólo en las rondas que lo prueban (3 en tres horas); un fallo de una
+  empresa no detiene a otra y la respuesta lleva lo asentado, lo que espera y lo que falló; dos
+  hechos sin empresa no se detienen entre sí, pero el que va detrás del atascado sobre lo mismo
+  sí espera, y un contable con empresas no los ve; una identidad de 80 bytes se guarda una vez,
+  descartada, con su huella.
 - **Integración** en PostgreSQL, SQL Server, Oracle y MySQL: el rechazo deshace la unidad de
   trabajo del consumidor (su bandeja de entrada no lo recuerda); el hecho guardado tal como llegó
   (JSON de más de 7.000 bytes con acentos, instantes); dos facturas que llegan desordenadas se
-  asientan en el orden en que ocurrieron; reenvíos sin efecto.
+  asientan en el orden en que ocurrieron; reenvíos sin efecto; `next_attempt` (migración 5) se
+  guarda y se lee, y queda vacío al asentarse.
 
 ## Pendiente
 
