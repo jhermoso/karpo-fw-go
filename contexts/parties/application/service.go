@@ -73,18 +73,21 @@ type Service struct {
 	AssignFacilityRole    app.CommandHandler[AssignFacilityRole, PartyDTO]
 	EndFacilityRole       app.CommandHandler[EndFacilityRole, PartyDTO]
 
-	Get                     app.QueryHandler[GetParty, PartyDTO]
-	Search                  app.QueryHandler[SearchParties, fw.Page[PartyDTO]]
-	Relationships           app.QueryHandler[PartyRelationships, []RelationshipDTO]
-	Pairs                   app.QueryHandler[SearchPairs, []PairDTO]
-	InternalOrganizations   app.QueryHandler[ListInternalOrganizations, []PartyDTO]
-	ListRoleTypes           app.QueryHandler[ListRoleTypes, []RoleTypeDTO]
-	DefineRoleType          app.CommandHandler[DefineRoleType, RoleTypeDTO]
-	DefineRelationshipType  app.CommandHandler[DefineRelationshipType, RelationshipTypeDTO]
-	ListRelationshipTypes   app.QueryHandler[ListRelationshipTypes, []RelationshipTypeDTO]
-	DocumentOptions         app.QueryHandler[DocumentOptions, []DocumentOptionDTO]
-	ListClassificationTypes app.QueryHandler[ListClassificationTypes, []ClassificationTypeDTO]
-	ListFacilityRoleTypes   app.QueryHandler[ListFacilityRoleTypes, []domain.FacilityRoleType]
+	Get                   app.QueryHandler[GetParty, PartyDTO]
+	Search                app.QueryHandler[SearchParties, fw.Page[PartyDTO]]
+	Relationships         app.QueryHandler[PartyRelationships, []RelationshipDTO]
+	Pairs                 app.QueryHandler[SearchPairs, []PairDTO]
+	InternalOrganizations app.QueryHandler[ListInternalOrganizations, []PartyDTO]
+	// InternalOrganizationNames enseña a cualquiera que lee parties el nombre de todas las
+	// empresas del grupo (D-101).
+	InternalOrganizationNames app.QueryHandler[ListInternalOrganizationNames, []InternalOrganizationName]
+	ListRoleTypes             app.QueryHandler[ListRoleTypes, []RoleTypeDTO]
+	DefineRoleType            app.CommandHandler[DefineRoleType, RoleTypeDTO]
+	DefineRelationshipType    app.CommandHandler[DefineRelationshipType, RelationshipTypeDTO]
+	ListRelationshipTypes     app.QueryHandler[ListRelationshipTypes, []RelationshipTypeDTO]
+	DocumentOptions           app.QueryHandler[DocumentOptions, []DocumentOptionDTO]
+	ListClassificationTypes   app.QueryHandler[ListClassificationTypes, []ClassificationTypeDTO]
+	ListFacilityRoleTypes     app.QueryHandler[ListFacilityRoleTypes, []domain.FacilityRoleType]
 }
 
 type (
@@ -564,6 +567,18 @@ func NewService(d Deps) *Service {
 		out := make([]PartyDTO, len(ps))
 		for i, p := range ps {
 			out[i] = n.dto(p)
+		}
+		return out, nil
+	})
+
+	svc.InternalOrganizationNames = chain(PermPartyRead, func(ctx context.Context, _ ListInternalOrganizationNames) ([]InternalOrganizationName, error) {
+		ps, err := d.Parties.Find(ctx, domain.PlaysAt(fw.Now(), domain.RoleInternalOrganization), domain.FieldName.Asc())
+		if err != nil {
+			return nil, err
+		}
+		out := make([]InternalOrganizationName, len(ps))
+		for i, p := range ps {
+			out[i] = InternalOrganizationName{ID: p.ID().String(), Name: p.Name()}
 		}
 		return out, nil
 	})

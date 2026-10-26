@@ -14,6 +14,7 @@ func (m *Module) registerPhase3(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/parties/{id}/document-issue", m.flagDocumentIssue)
 	mux.HandleFunc("DELETE /api/parties/{id}/document-issue", m.clearDocumentIssue)
 	mux.HandleFunc("GET /api/internal-organizations", m.internalOrganizations)
+	mux.HandleFunc("GET /api/internal-organizations/names", m.internalOrganizationNames)
 	mux.HandleFunc("POST /api/parties/{id}/facility-roles", m.assignFacilityRole)
 	mux.HandleFunc("POST /api/parties/{id}/facility-roles/{roleId}/end", m.endFacilityRole)
 	mux.HandleFunc("GET /api/catalogs/facility-role-types", m.facilityRoleTypes)
@@ -106,5 +107,10 @@ func (m *Module) setShared(w http.ResponseWriter, r *http.Request) {
 
 func (m *Module) internalOrganizations(w http.ResponseWriter, r *http.Request) {
 	out, err := m.svc.InternalOrganizations.Handle(r.Context(), papp.ListInternalOrganizations{})
+	distribution.Respond(w, r, out, err, http.StatusOK)
+}
+
+func (m *Module) internalOrganizationNames(w http.ResponseWriter, r *http.Request) {
+	out, err := m.svc.InternalOrganizationNames.Handle(r.Context(), papp.ListInternalOrganizationNames{})
 	distribution.Respond(w, r, out, err, http.StatusOK)
 }
