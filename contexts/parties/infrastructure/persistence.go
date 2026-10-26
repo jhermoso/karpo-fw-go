@@ -95,6 +95,15 @@ func PartyMapping() sqlrepo.Mapping[domain.PartyID, *domain.Party] {
 				}
 				s.Contacts = append(s.Contacts, contact)
 			}
+			for _, c := range children.Of("data_quality_issues") {
+				issue := domain.DataQualityIssue{ID: c.UUID("id"), Field: c.String("field"), Code: c.String("code"),
+					Severity: domain.IssueSeverity(c.String("severity")), Message: c.String("message"), Value: c.String("issue_value"),
+					Since: c.Time("raised_at")}
+				if !c.IsNull("subject_id") { // una incidencia de la ficha entera no tiene objeto
+					issue.Subject = c.UUID("subject_id")
+				}
+				s.Quality = append(s.Quality, issue) // Reconstitute las ordena igual que el dominio
+			}
 			for _, c := range children.Of("facility_roles") {
 				period, err := vocab.NewValidPeriod(c.Time("valid_from"), c.NullTime("valid_to"))
 				if err != nil {
@@ -156,6 +165,20 @@ func PartyMapping() sqlrepo.Mapping[domain.PartyID, *domain.Party] {
 			return domain.Reconstitute(domain.PartyID{UUID: row.UUID("id")}, s)
 		},
 		Children: []sqlrepo.Child[*domain.Party]{{
+			Name:       "data_quality_issues",
+			Table:      "party_data_quality_issues",
+			ForeignKey: "party_id",
+			Columns:    []string{"id", "subject_id", "field", "code", "severity", "message", "issue_value", "raised_at"},
+			OrderBy:    []string{"raised_at", "id"},
+			Dehydrate: func(p *domain.Party) ([]sqlrepo.Values, error) {
+				out := []sqlrepo.Values{}
+				for _, i := range p.DataQualityIssues() {
+					out = append(out, sqlrepo.Values{"id": i.ID, "subject_id": optUUID(i.Subject), "field": i.Field, "code": i.Code,
+						"severity": string(i.Severity), "message": i.Message, "issue_value": nullable(i.Value), "raised_at": i.Since})
+				}
+				return out, nil
+			},
+		}, {
 			Name:       "facility_roles",
 			Table:      "party_facility_roles",
 			ForeignKey: "party_id",

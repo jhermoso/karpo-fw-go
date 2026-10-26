@@ -65,7 +65,7 @@ type Service struct {
 	SetCustomerNumber     app.CommandHandler[SetCustomerNumber, RelationshipDTO]
 	AddIdentification     app.CommandHandler[AddIdentification, PartyDTO]
 	RemoveIdentification  app.CommandHandler[RemoveIdentification, PartyDTO]
-	AddContact            app.CommandHandler[AddContact, PartyDTO]
+	AddContact            app.CommandHandler[AddContact, ContactResult]
 	SetContactPurposes    app.CommandHandler[SetContactPurposes, PartyDTO]
 	EndContact            app.CommandHandler[EndContact, PartyDTO]
 	Classify              app.CommandHandler[Classify, PartyDTO]
@@ -758,6 +758,9 @@ func (s service) partyFilter(ctx context.Context, n Names, q SearchParties) (spe
 	}
 	if q.DocumentIssue {
 		parts = append(parts, domain.FieldDocumentIssue.Eq(true))
+	}
+	if q.WithDataQualityIssues {
+		parts = append(parts, domain.WithDataQualityIssues())
 	}
 	if !q.IncludeMergedParties {
 		parts = append(parts, domain.FieldDuplicate.Eq(false))

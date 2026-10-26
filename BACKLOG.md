@@ -46,6 +46,12 @@ tiempo de prueba, participación en el capital) y edición de persona.
   contexto de interacciones.
 - **Contexto `subscriptions`** (Theros): consumirá `parties.prospect-trial-changed.v1` y el
   puerto `Trials`.
+- **Incidencias de calidad de datos (D-92, [docs/PARTIES.md](docs/PARTIES.md) §21):** el IBAN
+  sigue rechazándose (cuentas de Nóminas, Compras, Tesorería, Pagos y cuentas financieras, que
+  alimentan remesas SEPA): pendiente de que Javier diga si pasa a aviso. La marca de documento
+  rechazado (`parties.doc_issue`, §10) podría pasar a la tabla genérica
+  `party_data_quality_issues` como `INVALID_DOCUMENT` con severidad de error: migración de datos y
+  cambio del filtro `documentIssue`, aparte.
 - **Prueba intermitente:** `TestParties_EndToEnd_MemoryThenSQLite` falla a veces en Windows al
   terminar un contacto en el mismo tic de reloj en que se creó.
 

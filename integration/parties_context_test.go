@@ -243,6 +243,33 @@ func TestPartiesContext(t *testing.T) {
 			if err != nil || byClass.Total != 1 || byClass.Items[0].ID != acme.ID {
 				t.Fatalf("search by classification: %+v %v", byClass, err)
 			}
+			// Migración 28: un e-mail con formato erróneo se guarda con su incidencia, que se relee, se
+			// encuentra con el filtro y se va al terminar el contacto (D-92).
+			sloppy, err := svc.RegisterOrganization.Handle(ctx, papp.RegisterOrganization{LegalName: "Datos Sucios SL"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			sloppyID, _ := domain.ParsePartyID(sloppy.ID)
+			bad, err := svc.AddContact.Handle(ctx, papp.AddContact{PartyID: sloppyID, Kind: "email", Value: " info@sucios "})
+			if err != nil || len(bad.Warnings) != 1 || bad.Warnings[0].Code != domain.IssueInvalidEmail {
+				t.Fatalf("a badly formed e-mail: %+v %v", bad.Warnings, err)
+			}
+			got, err = svc.Get.Handle(ctx, papp.GetParty{ID: sloppyID})
+			if err != nil || len(got.DataQualityIssues) != 1 || got.DataQualityIssues[0].Value != "info@sucios" ||
+				got.DataQualityIssues[0].Subject != got.Contacts[0].ID || got.DataQualityIssues[0].Since.IsZero() {
+				t.Fatalf("the issue read back: %+v %v", got.DataQualityIssues, err)
+			}
+			withIssues, err := svc.Search.Handle(ctx, papp.SearchParties{WithDataQualityIssues: true})
+			if err != nil || withIssues.Total != 1 || withIssues.Items[0].ID != sloppy.ID {
+				t.Fatalf("search with data quality issues: %+v %v", withIssues, err)
+			}
+			badMail, _ := domain.ParseContactID(got.Contacts[0].ID)
+			if got, err = svc.EndContact.Handle(ctx, papp.EndContact{PartyID: sloppyID, ContactID: badMail}); err != nil || len(got.DataQualityIssues) != 0 {
+				t.Fatalf("ending the contact clears its issue: %+v %v", got.DataQualityIssues, err)
+			}
+			if withIssues, err = svc.Search.Handle(ctx, papp.SearchParties{WithDataQualityIssues: true}); err != nil || withIssues.Total != 0 {
+				t.Fatalf("nobody with issues: %+v %v", withIssues, err)
+			}
 
 			// Fase 3: ámbito de organización (P1), alta dentro del ámbito, jerarquía y puertos.
 			clerk, _ := authz.NewContext(authz.Context{Subject: fw.NewUUID(), SubjectName: "clerk", Kind: authz.Service,
@@ -450,7 +477,8 @@ func TestPartiesContext(t *testing.T) {
 			if _, err := svc.AssignRole.Handle(ctx, papp.AssignRole{PartyID: evaID, RoleType: domain.RoleCustomer.String()}); err != nil {
 				t.Fatal(err)
 			}
-			eva, err = svc.AddContact.Handle(ctx, papp.AddContact{PartyID: evaID, Kind: "email", Value: "eva@example.com", Purposes: []string{"default"}})
+			withMail, err := svc.AddContact.Handle(ctx, papp.AddContact{PartyID: evaID, Kind: "email", Value: "eva@example.com", Purposes: []string{"default"}})
+			eva = withMail.PartyDTO
 			if err != nil || len(eva.Roles) != 2 || eva.Roles[1].RoleType != domain.RoleCustomer.String() || len(eva.Contacts) != 1 {
 				t.Fatalf("eva: %+v %v", eva, err)
 			}

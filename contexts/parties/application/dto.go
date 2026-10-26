@@ -56,22 +56,50 @@ type PartyDTO struct {
 	Shared       bool             `json:"shared,omitempty"`
 	Duplicate    bool             `json:"duplicate,omitempty"` // el duplicado de otra party: sólo participa en consultas
 	// DocumentIssue está presente cuando el documento de identidad de la party se rechazó.
-	DocumentIssue   *DocumentIssueDTO   `json:"documentIssue,omitempty"`
-	Organizations   []string            `json:"organizations"` // organizaciones internas a las que está afiliada ahora
-	Roles           []RoleDTO           `json:"roles"`
-	Identifications []IdentificationDTO `json:"identifications"`
-	Contacts        []ContactDTO        `json:"contacts"`
-	Classifications []ClassificationDTO `json:"classifications"`
-	FacilityRoles   []FacilityRoleDTO   `json:"facilityRoles"`
-	Version         int64               `json:"version"`
-	CreatedBy       string              `json:"createdBy,omitempty"`
-	ModifiedBy      string              `json:"modifiedBy,omitempty"`
+	DocumentIssue *DocumentIssueDTO `json:"documentIssue,omitempty"`
+	// DataQualityIssues son los datos de la ficha guardados con formato erróneo (D-92); vacía si no hay.
+	DataQualityIssues []DataQualityIssueDTO `json:"dataQualityIssues"`
+	Organizations     []string              `json:"organizations"` // organizaciones internas a las que está afiliada ahora
+	Roles             []RoleDTO             `json:"roles"`
+	Identifications   []IdentificationDTO   `json:"identifications"`
+	Contacts          []ContactDTO          `json:"contacts"`
+	Classifications   []ClassificationDTO   `json:"classifications"`
+	FacilityRoles     []FacilityRoleDTO     `json:"facilityRoles"`
+	Version           int64                 `json:"version"`
+	CreatedBy         string                `json:"createdBy,omitempty"`
+	ModifiedBy        string                `json:"modifiedBy,omitempty"`
 }
 
 // DocumentIssueDTO es la marca de un documento de identidad rechazado.
 type DocumentIssueDTO struct {
 	Number string `json:"number,omitempty"`
 	Reason string `json:"reason"`
+}
+
+// DataQualityIssueDTO es un dato de la ficha guardado con formato erróneo (D-92).
+type DataQualityIssueDTO struct {
+	ID       string    `json:"id"`
+	Subject  string    `json:"subject,omitempty"` // el contacto
+	Field    string    `json:"field"`
+	Code     string    `json:"code"`     // INVALID_EMAIL, INVALID_PHONE
+	Severity string    `json:"severity"` // warning
+	Message  string    `json:"message"`
+	Value    string    `json:"value,omitempty"` // tal como se guardó
+	Since    time.Time `json:"since"`
+}
+
+// WarningDTO es un aviso de la respuesta: el dato se guardó, pero algo en él está mal (D-92).
+type WarningDTO struct {
+	Field   string `json:"field"`
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+// ContactResult es la respuesta al añadir un contacto: la party y los avisos del contacto nuevo,
+// vacíos si su valor está bien.
+type ContactResult struct {
+	PartyDTO
+	Warnings []WarningDTO `json:"warnings"`
 }
 
 // IdentificationDTO es un documento de identidad de una party.
@@ -138,6 +166,15 @@ func ToDTO(p *domain.Party, names Names) PartyDTO {
 	d.Shared, d.Duplicate, d.Organizations = p.IsShared(), p.IsDuplicate(), []string{}
 	if issue := p.DocumentIssue(); !issue.IsZero() {
 		d.DocumentIssue = &DocumentIssueDTO{Number: issue.Number, Reason: issue.Reason}
+	}
+	d.DataQualityIssues = []DataQualityIssueDTO{}
+	for _, i := range p.DataQualityIssues() {
+		di := DataQualityIssueDTO{ID: i.ID.String(), Field: i.Field, Code: i.Code, Severity: string(i.Severity), Message: i.Message,
+			Value: i.Value, Since: i.Since}
+		if !i.Subject.IsZero() {
+			di.Subject = i.Subject.String()
+		}
+		d.DataQualityIssues = append(d.DataQualityIssues, di)
 	}
 	for _, o := range p.OrganizationsAt(now) {
 		d.Organizations = append(d.Organizations, o.String())

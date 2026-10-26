@@ -289,6 +289,7 @@ func resetParties(t *testing.T, db *sqlrepo.DB) {
 // (comparten nombres en las bases de datos de integración), primero las hijas.
 func dropPartiesTables(ctx context.Context, db *sqlrepo.DB) {
 	for _, t := range []string{"party_relationships", "party_roles", "party_contacts", "party_identifications", "party_affiliations", "party_facility_roles", "facility_role_types", "parties_inbox",
+		"party_data_quality_issues",
 		"party_classifications", "parties", "relationship_types", "role_types", "country_document_rules", "document_types",
 		"classification_types", "outbox_messages", "parties_integration_outbox", "parties_outbox", "audit_log", "parties_audit_log",
 		"schema_migrations", "schema_migrations_lock"} {

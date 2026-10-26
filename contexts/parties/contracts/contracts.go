@@ -163,7 +163,10 @@ func (PartyIdentificationRemovedV1) IntegrationEventType() string {
 	return "parties.party-identification-removed.v1"
 }
 
-// PartyContactAddedV1 se publica cuando una party recibe un contacto.
+// PartyContactAddedV1 se publica cuando una party recibe un contacto. Un e-mail o un teléfono
+// llega tal como se guardó, y puede tener el formato erróneo (D-92: se guarda con una incidencia en
+// la ficha). Quien lo use para escribir o llamar lo valida antes (vocab.NewEmail, vocab.NewPhone) y,
+// si no vale, lo trata como si no hubiera contacto.
 type PartyContactAddedV1 struct {
 	PartyID   string    `json:"partyId"`
 	ContactID string    `json:"contactId"`
