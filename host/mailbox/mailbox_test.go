@@ -7,8 +7,10 @@ import (
 	"errors"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jhermoso/karpo-fw-go/host/mailbox"
 	app "github.com/jhermoso/karpo-fw-go/pkg/application"
@@ -236,6 +238,139 @@ func TestMailbox_OnSQLite(t *testing.T) {
 		t.Fatal(err)
 	}
 	scenario(t, hotswap.New(db))
+}
+
+// blocking es un oyente que se queda dentro del primer mensaje hasta que la prueba lo suelta, y
+// avisa de cada llamada que le llega mientras tanto.
+type blocking struct {
+	calls   int
+	entered chan struct{}
+	again   chan struct{}
+	release chan struct{}
+}
+
+func (*blocking) Name() string { return "accounting" }
+
+func (b *blocking) HandleMessage(context.Context, app.Envelope) error {
+	b.calls++
+	if b.calls == 1 {
+		close(b.entered)
+		<-b.release
+		return nil
+	}
+	b.again <- struct{}{}
+	return nil
+}
+
+// El reintento que pide alguien y la ronda del planificador no recorren a la vez las mismas
+// entregas: el oyente recibe el mensaje una vez.
+func TestMailbox_RetryWaitsForTheRoundInCourse(t *testing.T) {
+	ctx := context.Background()
+	sw := hotswap.New(memory.NewStore("memory"))
+	t.Cleanup(func() { _ = sw.Close(ctx) })
+	office := mailbox.New(sw)
+	refusing := &listener{name: "accounting", refuse: errors.New("down")}
+	if err := office.For(refusing).HandleMessage(ctx, message("m1", "inv-1", 1)); err != nil {
+		t.Fatal(err)
+	}
+	l := &blocking{entered: make(chan struct{}), again: make(chan struct{}, 4), release: make(chan struct{})}
+	office.For(l)
+	root, _ := authz.NewContext(authz.Context{Subject: fw.NewUUID(), SubjectName: "root", Kind: authz.Service, Permissions: []authz.Permission{authz.Wildcard}})
+	root.GlobalAdmin = true
+	admin := authz.WithContext(ctx, root)
+
+	round, asked := make(chan mailbox.Redelivered, 1), make(chan mailbox.Redelivered, 1)
+	go func() { r, _ := office.Redeliver(ctx, true); round <- r }()
+	<-l.entered // la ronda está entregando m1
+	go func() { r, _ := office.Retry(admin, mailbox.Retry{}); asked <- r }()
+	select {
+	case <-l.again:
+		t.Fatal("the retry delivered the message while the round was delivering it")
+	case <-time.After(200 * time.Millisecond):
+	}
+	close(l.release)
+	if r := <-round; r != (mailbox.Redelivered{Delivered: 1}) {
+		t.Fatalf("round: %+v", r)
+	}
+	if r := <-asked; r != (mailbox.Redelivered{}) || l.calls != 1 {
+		t.Fatalf("retry: %+v, the listener got %d calls", r, l.calls)
+	}
+	// Quien se cansa de esperar su turno se va sin tocar nada.
+	gone, cancel := context.WithCancel(admin)
+	cancel()
+	if _, err := office.Retry(gone, mailbox.Retry{}); !errors.Is(err, context.Canceled) {
+		t.Fatalf("a cancelled retry: %v", err)
+	}
+}
+
+// Un mensaje cuyo tipo o identidad no caben en una entrega se guarda una vez, descartado y con su
+// motivo, en vez de hacer fallar la validación (y volver al emisor) cada vez.
+func TestMailbox_AnEnvelopeThatDoesNotFitIsKeptDiscarded(t *testing.T) {
+	ctx := context.Background()
+	sw := hotswap.New(memory.NewStore("memory"))
+	t.Cleanup(func() { _ = sw.Close(ctx) })
+	office := mailbox.New(sw)
+	l := &listener{name: "accounting", refuse: errors.New("down")}
+	box := office.For(l)
+	root, _ := authz.NewContext(authz.Context{Subject: fw.NewUUID(), SubjectName: "root", Kind: authz.Service, Permissions: []authz.Permission{authz.Wildcard}})
+	root.GlobalAdmin = true
+	admin := authz.WithContext(ctx, root)
+
+	long := message(strings.Repeat("x", 80), "inv-1", 1)
+	long.Type = strings.Repeat("é", 60) // 120 bytes: el recorte no puede partir una «é»
+	// Lo descartado no retiene a nadie: el siguiente sobre lo mismo se intenta (y tampoco cabe).
+	next := message("m2", "inv-1", 2)
+	next.Type = long.Type
+	for _, env := range []app.Envelope{long, long, next} {
+		if err := box.HandleMessage(ctx, env); err != nil {
+			t.Fatalf("the publisher is told it failed: %v", err)
+		}
+	}
+	p, err := office.Search(admin, mailbox.Search{Size: 10})
+	if err != nil || len(p.Items) != 2 {
+		t.Fatalf("kept: %+v %v", p.Items, err)
+	}
+	for _, d := range p.Items {
+		if d.Status != "discarded" || d.Code != mailbox.OversizedCode || !utf8.ValidString(d.EventType) || len(d.EventType) > 100 || len(d.EventType) < 99 ||
+			!strings.Contains(d.Note, "120 bytes") || d.ResolvedAt == "" {
+			t.Fatalf("discarded with its reason: %+v", d)
+		}
+	}
+	if k := p.Items[0]; k.EnvelopeID != fw.EnvelopeKey(long.ID) || len(k.EnvelopeID) != 64 || k.Reason != "down" {
+		t.Fatalf("the identity that does not fit is kept as its digest: %+v", k)
+	}
+	if l.tried != 2 {
+		t.Fatalf("sent again, it is known: tried %d", l.tried)
+	}
+	l.refuse = nil
+	if r, err := office.Redeliver(ctx, true); err != nil || r != (mailbox.Redelivered{}) || l.tried != 2 {
+		t.Fatalf("what was discarded is not tried: %+v %v", r, err)
+	}
+	if fw.EnvelopeKey("m1") != "m1" || fw.EnvelopeKey(long.ID) == fw.EnvelopeKey(long.ID+"y") || fw.EnvelopeKey("") == fw.EnvelopeKey("") {
+		t.Fatal("EnvelopeKey")
+	}
+}
+
+// Dos mensajes distintos sin identidad no se toman por el mismo: el oyente recibe los dos, y se
+// guardan los dos.
+func TestMailbox_TwoMessagesWithoutIdentityAreBothTried(t *testing.T) {
+	ctx := context.Background()
+	sw := hotswap.New(memory.NewStore("memory"))
+	t.Cleanup(func() { _ = sw.Close(ctx) })
+	office := mailbox.New(sw)
+	l := &listener{name: "accounting", refuse: errors.New("down")}
+	box := office.For(l)
+	root, _ := authz.NewContext(authz.Context{Subject: fw.NewUUID(), SubjectName: "root", Kind: authz.Service, Permissions: []authz.Permission{authz.Wildcard}})
+	root.GlobalAdmin = true
+	for _, env := range []app.Envelope{message("", "inv-1", 1), message("", "inv-2", 2)} {
+		if err := box.HandleMessage(ctx, env); err != nil {
+			t.Fatal(err)
+		}
+	}
+	p, err := office.Search(authz.WithContext(ctx, root), mailbox.Search{Size: 10})
+	if err != nil || len(p.Items) != 2 || l.tried != 2 || p.Items[0].EnvelopeID == p.Items[1].EnvelopeID || p.Items[0].Code != mailbox.OversizedCode {
+		t.Fatalf("kept: %+v %v, tried %d", p.Items, err, l.tried)
+	}
 }
 
 func TestBackoff(t *testing.T) {

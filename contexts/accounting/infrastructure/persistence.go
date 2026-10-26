@@ -91,6 +91,8 @@ func Migrations() sqlrepo.MigrationSet {
 		{Version: 2, Name: "outboxes, audit log and inbox", Up: technical},
 		{Version: 3, Name: "facts that wait to be posted", Up: sqlrepo.RenderDDLAll(parkedDDL...)},
 		{Version: 4, Name: "decimal columns", Run: decimalColumnsV4.Run},
+		// Cuándo toca otro intento de un hecho aparcado. Nula (las filas de antes) es «toca ya».
+		{Version: 5, Name: "next attempt of a parked fact", Up: sqlrepo.RenderDDLAll(`ALTER TABLE acc_parked_facts {add:next_attempt} {ts}{addEnd}`)},
 	}}
 }
 
@@ -383,7 +385,7 @@ func ParkedMapping() sqlrepo.Mapping[domain.ParkedID, *domain.ParkedFact] {
 	return sqlrepo.Mapping[domain.ParkedID, *domain.ParkedFact]{
 		Table: "acc_parked_facts",
 		Columns: sqlrepo.WithAuditColumns("company", "event_type", "envelope_id", "source_name", "subject_id", "occurred_at", "correlation_id",
-			"causation_id", "payload", "code", "reason", "received_at", "attempts", "status", "resolved_at", "note"),
+			"causation_id", "payload", "code", "reason", "received_at", "attempts", "next_attempt", "status", "resolved_at", "note"),
 		Dehydrate: func(p *domain.ParkedFact) (sqlrepo.Values, error) {
 			s := p.State()
 			var company any
@@ -393,13 +395,14 @@ func ParkedMapping() sqlrepo.Mapping[domain.ParkedID, *domain.ParkedFact] {
 			return sqlrepo.AuditStampValues(sqlrepo.Values{"company": company, "event_type": s.EventType, "envelope_id": s.EnvelopeID,
 				"source_name": text(s.Source), "subject_id": text(s.Subject), "occurred_at": moment(s.OccurredAt), "correlation_id": text(s.CorrelationID),
 				"causation_id": text(s.CausationID), "payload": s.Data, "code": text(s.Code), "reason": text(s.Reason), "received_at": s.ReceivedAt,
-				"attempts": int64(s.Attempts), "status": string(s.Status), "resolved_at": moment(s.ResolvedAt), "note": text(s.Note)}, p.AuditStamp()), nil
+				"attempts": int64(s.Attempts), "next_attempt": moment(s.NextAttempt), "status": string(s.Status), "resolved_at": moment(s.ResolvedAt),
+				"note": text(s.Note)}, p.AuditStamp()), nil
 		},
 		Hydrate: func(r *sqlrepo.Row, _ sqlrepo.ChildRows) (*domain.ParkedFact, error) {
 			s := domain.ParkedState{Company: domain.OrganizationID{UUID: r.UUID("company")}, EventType: r.String("event_type"), EnvelopeID: r.String("envelope_id"),
 				Source: r.String("source_name"), Subject: r.String("subject_id"), OccurredAt: at(r, "occurred_at"), CorrelationID: r.String("correlation_id"),
 				CausationID: r.String("causation_id"), Data: r.String("payload"), Code: r.String("code"), Reason: r.String("reason"),
-				ReceivedAt: r.Time("received_at").UTC(), Attempts: int(r.Int64("attempts")), Status: domain.ParkedStatus(r.String("status")),
+				ReceivedAt: r.Time("received_at").UTC(), Attempts: int(r.Int64("attempts")), NextAttempt: at(r, "next_attempt"), Status: domain.ParkedStatus(r.String("status")),
 				ResolvedAt: at(r, "resolved_at"), Note: r.String("note"), Audit: r.AuditStamp()}
 			if err := r.Err(); err != nil {
 				return nil, err
