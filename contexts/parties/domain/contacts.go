@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
@@ -136,17 +137,34 @@ type ContactData struct {
 	NonSolicitation bool
 }
 
-func (d ContactData) normalized() (ContactData, error) {
+// MaxContactValue es lo que cabe en la columna del valor de un contacto.
+const MaxContactValue = 320
+
+// Lo que dice la incidencia de un valor con formato erróneo.
+const (
+	invalidEmailMessage = "the e-mail is not well formed; it was saved as written"
+	invalidPhoneMessage = "the phone number is not well formed (it needs + or 00, a country code and 4 to 15 digits); it was saved as written"
+)
+
+// normalized valida y normaliza el contacto. Un e-mail o un teléfono (también el fax, que es un
+// número de teléfono) con formato erróneo no se rechaza: se guarda tal cual, recortado, y se
+// devuelve la incidencia que deja (D-92). Vacío o más largo de lo que cabe sigue siendo un error.
+func (d ContactData) normalized() (ContactData, *formatIssue, error) {
 	var v fw.Validation
+	var issue *formatIssue
 	switch d.Kind {
 	case ContactEmail:
-		e, err := vocab.NewEmail(d.Value)
-		v.Merge("value", err)
-		d.Value = e.String()
+		if e, err := vocab.NewEmail(d.Value); err == nil {
+			d.Value = e.String()
+		} else {
+			d.Value, issue = keepAsWritten(&v, d.Value, formatIssue{IssueInvalidEmail, invalidEmailMessage})
+		}
 	case ContactPhone, ContactFax:
-		ph, err := vocab.NewPhone(d.Value)
-		v.Merge("value", err)
-		d.Value = ph.String()
+		if ph, err := vocab.NewPhone(d.Value); err == nil {
+			d.Value = ph.String()
+		} else {
+			d.Value, issue = keepAsWritten(&v, d.Value, formatIssue{IssueInvalidPhone, invalidPhoneMessage})
+		}
 	case ContactWeb:
 		u, err := vocab.NewURL(d.Value)
 		v.Merge("value", err)
@@ -160,7 +178,23 @@ func (d ContactData) normalized() (ContactData, error) {
 	}
 	slices.Sort(d.Purposes)
 	d.Purposes = slices.Compact(d.Purposes)
-	return d, v.Err()
+	if err := v.Err(); err != nil {
+		return d, nil, err
+	}
+	return d, issue, nil
+}
+
+// keepAsWritten deja un valor con formato erróneo tal como llegó, recortado, si no está vacío,
+// cabe y no lleva caracteres de control (un NUL, un salto de línea o un tabulador no son un dato
+// que corregir, sino basura que algunos motores ni guardan); si no, lo apunta como error.
+func keepAsWritten(v *fw.Validation, value string, f formatIssue) (string, *formatIssue) {
+	value = strings.TrimSpace(value)
+	if !v.Require(value != "", "value", "required", "the contact needs a value") ||
+		!v.Require(utf8.RuneCountInString(value) <= MaxContactValue, "value", "length", "value must have at most 320 characters") ||
+		!v.Require(!strings.ContainsFunc(value, unicode.IsControl), "value", "format", "value must not contain control characters") {
+		return value, nil
+	}
+	return value, &f
 }
 
 func (d ContactData) sameMechanism(c Contact) bool {
@@ -175,12 +209,14 @@ func (d ContactData) sameMechanism(c Contact) bool {
 
 // AddContact añade un contacto a partir de un instante. Invariantes: un valor válido para su
 // clase, nunca el mismo medio dos veces mientras esté vigente, y cada propósito en un solo
-// contacto vigente de la clase (el nuevo titular le quita el propósito al anterior).
+// contacto vigente de la clase (el nuevo titular le quita el propósito al anterior). Un e-mail o
+// un teléfono con formato erróneo se guarda y deja una incidencia de calidad de datos del contacto
+// (D-92), que se lee con DataQualityIssuesOf.
 func (p *Party) AddContact(d ContactData, from time.Time) (ContactID, error) {
 	if err := p.requireActive("get contacts"); err != nil {
 		return ContactID{}, err
 	}
-	d, err := d.normalized()
+	d, issue, err := d.normalized()
 	if err != nil {
 		return ContactID{}, err
 	}
@@ -197,6 +233,9 @@ func (p *Party) AddContact(d ContactData, from time.Time) (ContactID, error) {
 	p.contacts = append(slices.Clone(p.contacts), c)
 	p.assignPurposes(len(p.contacts)-1, d.Purposes)
 	c = p.contacts[len(p.contacts)-1]
+	if issue != nil {
+		p.raiseIssue(c.ID.UUID, issueFieldContactValue, *issue, c.Value)
+	}
 	p.Raise(ContactAdded{EventMeta: p.NewEventMeta(), ContactID: c.ID.String(), Kind: string(c.Kind), Value: c.Value,
 		Address: c.Address.String(), Purposes: purposesOf(c.Purposes), From: period.From()})
 	return c.ID, nil
@@ -232,7 +271,9 @@ func (p *Party) assignPurposes(k int, purposes []Purpose) {
 	p.contacts[k].Purposes = purposes
 }
 
-// EndContact deja de usar un contacto en un instante (no antes de que empezara). Pierde sus propósitos.
+// EndContact deja de usar un contacto en un instante (no antes de que empezara). Pierde sus
+// propósitos y sus incidencias de calidad de datos: el dato erróneo deja de usarse, y corregirlo es
+// terminar este contacto y añadir otro.
 func (p *Party) EndContact(id ContactID, at time.Time) error {
 	k := slices.IndexFunc(p.contacts, func(c Contact) bool { return c.ID == id })
 	if k < 0 {
@@ -248,6 +289,7 @@ func (p *Party) EndContact(id ContactID, at time.Time) error {
 	}
 	p.contacts = slices.Clone(p.contacts)
 	p.contacts[k].Period, p.contacts[k].Purposes = period, nil
+	p.clearIssuesOf(id.UUID)
 	p.Raise(ContactEnded{EventMeta: p.NewEventMeta(), ContactID: id.String(), At: at.UTC()})
 	return nil
 }

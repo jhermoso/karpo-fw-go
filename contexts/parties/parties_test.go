@@ -416,6 +416,7 @@ func (e *env) scenario(prefix string) (acme, ana papp.PartyDTO) {
 	e.phase3(acme, ana)
 	e.prospects(acme, ana)
 	e.selfEmployed(acme)
+	e.dataQuality(prefix)
 	return acme, ana
 }
 

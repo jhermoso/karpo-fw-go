@@ -53,7 +53,7 @@ func TestParties_AddressesCheckedByGeography(t *testing.T) {
 		t.Fatal(err)
 	}
 	id, _ := domain.ParsePartyID(ana.ID)
-	add := func(code, boundary string) (papp.PartyDTO, error) {
+	add := func(code, boundary string) (papp.ContactResult, error) {
 		return mod.Service.AddContact.Handle(ctx, papp.AddContact{PartyID: id, Kind: "postal", Purposes: []string{"home"},
 			Address: &papp.AddressDTO{Line1: "Mayor 1", PostalCode: code, Locality: "Madrid", Country: "ES", GeoBoundary: boundary}})
 	}

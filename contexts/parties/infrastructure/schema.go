@@ -245,6 +245,14 @@ func Migrations() sqlrepo.MigrationSet {
 		{Version: 27, Name: "business relationships transferred by a merge", Up: sqlrepo.RenderDDLAll(
 			`ALTER TABLE party_relationships {add:transferred_from} {uuid}{addEnd}`,
 			`CREATE INDEX ix_party_rel_transferred ON party_relationships (transferred_from)`)},
+		// Las incidencias de calidad de datos de una ficha: un dato guardado con formato erróneo, que
+		// avisa sin impedir guardar (docs/DECISIONES-COMUNES.md, D-92). Una tabla genérica por ficha,
+		// como la party_data_quality_issue de Trench; subject_id es el objeto de la ficha (hoy, el
+		// contacto) y field, su campo. El filtro de la búsqueda entra por la clave (party_id).
+		{Version: 28, Name: "data quality issues of a party", Up: sqlrepo.RenderDDLAll(
+			`CREATE TABLE party_data_quality_issues (party_id {uuid} NOT NULL, id {uuid} NOT NULL, subject_id {uuid},
+	field {str:60} NOT NULL, code {str:40} NOT NULL, severity {str:10} NOT NULL, message {str:200} NOT NULL,
+	issue_value {str:320}, raised_at {ts} NOT NULL, PRIMARY KEY (party_id, id), FOREIGN KEY (party_id) REFERENCES parties (id))`)},
 	}}
 }
 
@@ -515,7 +523,7 @@ func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 // DropAll elimina todas las tablas del contexto (sólo para pruebas).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
 	for _, t := range []string{"party_relationships", "party_roles", "party_identifications", "party_contacts", "party_affiliations",
-		"party_facility_roles", "facility_role_types",
+		"party_facility_roles", "facility_role_types", "party_data_quality_issues",
 		"party_classifications", "parties", "relationship_types", "role_types", "country_document_rules",
 		"document_types", "classification_types",
 		TablePartiesOutbox, TableIntegrationOutbox, TableAuditLog, sqlrepo.DefaultMigrationsTable, sqlrepo.DefaultMigrationsLock} {

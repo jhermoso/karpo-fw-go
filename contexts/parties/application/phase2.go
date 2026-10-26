@@ -257,21 +257,35 @@ func addPhase2(svc *Service, s service) {
 		return updateParty(ctx, c.PartyID, func(p *domain.Party, _ *domain.Catalog) error { return p.RemoveIdentification(c.ID) })
 	}, pipeline.RetryOnConflict[RemoveIdentification, PartyDTO](retry, backoff))
 
-	svc.AddContact = chain(PermPartyUpdate, func(ctx context.Context, c AddContact) (PartyDTO, error) {
+	// Un e-mail o un teléfono con formato erróneo se guarda: la respuesta lo avisa en warnings, con
+	// el campo del cuerpo (value), y la ficha queda con la incidencia (D-92).
+	svc.AddContact = chain(PermPartyUpdate, func(ctx context.Context, c AddContact) (ContactResult, error) {
 		d, err := c.data()
 		if err != nil {
-			return PartyDTO{}, err
+			return ContactResult{}, err
 		}
 		if d.Kind == domain.ContactPostal && s.Addresses != nil {
 			if d.Address, err = s.Addresses.CheckAddress(ctx, d.Address); err != nil {
-				return PartyDTO{}, err
+				return ContactResult{}, err
 			}
 		}
-		return updateParty(ctx, c.PartyID, func(p *domain.Party, _ *domain.Catalog) error {
-			_, err := p.AddContact(d, nowOr(c.From))
-			return err
+		warnings := []WarningDTO{}
+		dto, err := updateParty(ctx, c.PartyID, func(p *domain.Party, _ *domain.Catalog) error {
+			id, err := p.AddContact(d, nowOr(c.From))
+			if err != nil {
+				return err
+			}
+			warnings = []WarningDTO{} // otro intento tras un conflicto empieza de cero
+			for _, i := range p.DataQualityIssuesOf(id.UUID) {
+				warnings = append(warnings, WarningDTO{Field: "value", Code: i.Code, Message: i.Message})
+			}
+			return nil
 		})
-	}, pipeline.RetryOnConflict[AddContact, PartyDTO](retry, backoff))
+		if err != nil {
+			return ContactResult{}, err
+		}
+		return ContactResult{PartyDTO: dto, Warnings: warnings}, nil
+	}, pipeline.RetryOnConflict[AddContact, ContactResult](retry, backoff))
 
 	svc.SetContactPurposes = chain(PermPartyUpdate, func(ctx context.Context, c SetContactPurposes) (PartyDTO, error) {
 		ps, err := parsePurposes(c.Purposes)

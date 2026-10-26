@@ -56,10 +56,12 @@ var (
 	FieldDuplicate = spec.Comparable("duplicate", (*Party).IsDuplicate)
 	// FieldDocumentIssue distingue las parties marcadas con un documento de identidad rechazado.
 	FieldDocumentIssue = spec.Comparable("doc_issue", (*Party).HasDocumentIssue)
-	FieldAffiliations  = spec.Collection("affiliations", (*Party).Affiliations)
-	AffFieldOrg        = spec.Comparable("organization", func(a Affiliation) PartyID { return a.Organization })
-	AffFieldFrom       = spec.Time("valid_from", func(a Affiliation) time.Time { return a.Period.From() })
-	AffFieldUntil      = spec.OptionalTime("valid_to", func(a Affiliation) *time.Time {
+	// FieldDataQualityIssues son las incidencias de calidad de datos de la ficha (D-92).
+	FieldDataQualityIssues = spec.Collection("data_quality_issues", (*Party).DataQualityIssues)
+	FieldAffiliations      = spec.Collection("affiliations", (*Party).Affiliations)
+	AffFieldOrg            = spec.Comparable("organization", func(a Affiliation) PartyID { return a.Organization })
+	AffFieldFrom           = spec.Time("valid_from", func(a Affiliation) time.Time { return a.Period.From() })
+	AffFieldUntil          = spec.OptionalTime("valid_to", func(a Affiliation) *time.Time {
 		if t, ok := a.Period.To(); ok {
 			return &t
 		}
@@ -122,6 +124,9 @@ func HoldsDocument(t DocumentTypeID, country string, number string) spec.Spec[*P
 func WithDocumentNumber(number string) spec.Spec[*Party] {
 	return FieldIdentifications.Any(IdFieldNumber.Eq(number))
 }
+
+// WithDataQualityIssues selecciona las parties con alguna incidencia de calidad de datos (D-92).
+func WithDataQualityIssues() spec.Spec[*Party] { return FieldDataQualityIssues.Any(nil) }
 
 // ClassifiedAt selecciona las parties con alguna de las clasificaciones en t.
 func ClassifiedAt(t time.Time, types ...ClassificationTypeID) spec.Spec[*Party] {

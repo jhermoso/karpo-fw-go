@@ -66,7 +66,7 @@ func (m *Module) addContact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	c := papp.AddContact{}
-	handle(w, r, &c, true, http.StatusOK, func(c papp.AddContact) (papp.PartyDTO, error) {
+	handle(w, r, &c, true, http.StatusOK, func(c papp.AddContact) (papp.ContactResult, error) {
 		c.PartyID = id
 		return m.svc.AddContact.Handle(r.Context(), c)
 	})

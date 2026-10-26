@@ -822,3 +822,48 @@ ya no enseña los pedidos de Talleres Perez; `…&includeMergedParties=true` sí
 | Cuentas de tesorería, extractos, cuentas de cotización, declaraciones y contribuyentes fiscales, instalaciones, centros de trabajo, puestos, módulos | la empresa del grupo | No aplica: la party es la propia empresa (una empresa interna sólo la fusiona el global, D-99) |
 | Catálogos y configuración (series, tarifas, productos, categorías, unidades, almacenes, reservas y movimientos de inventario, tipos, divisas, márgenes, condiciones de pago, roles, permisos, cuentas contables, libros, exportaciones hechas, entregas del buzón, auditoría) | — | No aplica: sin party |
 
+
+## 21. Un e-mail o un teléfono mal escrito se guarda, con una incidencia
+
+D-92 ([DECISIONES-COMUNES.md](DECISIONES-COMUNES.md)): un dato con formato erróneo **avisa y se
+guarda como incidencia, sin impedir guardar**; el documento de identidad inválido se sigue
+rechazando (D-5, §10). Javier precisó después, en la sesión de Trench (2026-10-24), que las
+incidencias van en **una tabla genérica por ficha**, con severidad. Aquí está hecho para el
+e-mail y el teléfono de los contactos de una party; el IBAN, no (abajo).
+
+*Ejemplo:* se añade a Ana el e-mail `ana.garcia@` (le falta el dominio). Antes era un 400; ahora
+la respuesta es 200, el contacto queda guardado como `ana.garcia@` y la respuesta trae
+`warnings: [{field: "value", code: "INVALID_EMAIL", message: "…"}]`. La ficha enseña la
+incidencia, y `GET /api/parties?withDataQualityIssues=true` lista a Ana hasta que alguien termine
+ese contacto.
+
+| Qué | Cómo |
+|---|---|
+| Qué se guarda así | `POST /api/parties/{id}/contacts` con `kind` `email`, `phone` o `fax` (un fax es un número de teléfono). Si `vocab.NewEmail` o `vocab.NewPhone` no lo aceptan, el valor se guarda **tal como llegó, recortado**, sin normalizar |
+| Qué sigue siendo 400 | El valor vacío, el que no cabe en la columna (320 caracteres) y el que lleva caracteres de control por dentro (un NUL, un salto de línea, un tabulador: no es un dato que corregir, y PostgreSQL ni siquiera guarda el NUL); los de los extremos se recortan. Ninguno deja incidencia. La web y la dirección postal se siguen validando como antes |
+| La respuesta | La party (los mismos campos de siempre) más `warnings`: `[{field, code, message}]`, vacía si el valor está bien. `field` es el campo del cuerpo (`value`); `code`, `INVALID_EMAIL` o `INVALID_PHONE`, los códigos de Trench |
+| La incidencia | En la ficha, `dataQualityIssues`: `{id, subject, field, code, severity, message, value, since}`. `subject` es el id del contacto, `field` es `contact.value`, `severity` es `warning` y `value`, lo que se guardó. Vacía si no hay |
+| Cuándo nace | Al guardar el valor erróneo, en el mismo cambio que el contacto |
+| Cuándo se va | Al terminar ese contacto (`POST …/contacts/{contactId}/end`). **Con una fecha futura también se va en el acto**, aunque el contacto siga en vigor (sin sus propósitos) hasta esa fecha: decidido en esta sesión, porque un contacto que ya tiene fin nadie lo va a corregir. Si después vuelve el mismo valor erróneo, vuelve con una incidencia nueva. Un contacto no cambia de valor: corregirlo es terminarlo y añadir el bueno |
+| Orden | Por contacto, campo y código, no por el instante: así coincide la ficha en memoria con la releída de cualquier motor |
+| Buscar las fichas con incidencias | `GET /api/parties?withDataQualityIssues=true` (`SearchParties.WithDataQualityIssues`). No mira la marca de documento rechazado, que tiene su filtro `documentIssue=true` |
+| Lo que no hace | No bloquea nada: el contacto sirve para sus propósitos (puede ser el e-mail por defecto). Dos veces el mismo valor erróneo sigue siendo un duplicado (422) |
+| Esquema | Migración 28: tabla `party_data_quality_issues` (`party_id`, `id`, `subject_id`, `field`, `code`, `severity`, `message`, `issue_value`, `raised_at`), hija de la party: se guarda y se lee con ella |
+
+- **Una tabla genérica.** Cada fila es un dato de la ficha que está mal: de qué objeto
+  (`subject_id`, hoy siempre un contacto), qué campo, qué código y con qué severidad. Otros datos
+  (el IBAN, si Javier lo decide así, o los campos personalizados cuando existan) añaden códigos,
+  no columnas.
+- **La marca de documento rechazado (§10) no se ha movido a esta tabla.** Convive con ella: tiene
+  su propio filtro, sus propias rutas para ponerla y quitarla y la pone la importación. Pasarla
+  aquí (código `INVALID_DOCUMENT`, severidad de error, sin objeto) sería una migración de datos
+  aparte, con su propia decisión; queda anotado en [BACKLOG.md](../BACKLOG.md).
+- **Los demás contextos.** Ninguno lee hoy el e-mail ni el teléfono de una party: Facturación no
+  envía facturas por correo, el anfitrión sólo mira las direcciones postales (para el calendario
+  del vendedor) y las identidades fiscales no llevan contactos. El único que sale fuera es el
+  evento `parties.party-contact-added.v1`, que lleva el valor tal como se guardó; su contrato dice
+  que quien lo use para escribir o llamar lo valide antes y, si no vale, lo trate como si no
+  hubiera contacto. Instalaciones tiene su propio teléfono y e-mail, y los sigue validando (no es
+  un contacto de una party).
+- **El registro de auditoría** dice `dataQualityIssues` sólo cuando la ficha tiene alguna, para
+  no cambiar el de las demás.

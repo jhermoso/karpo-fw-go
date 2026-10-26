@@ -114,8 +114,8 @@ func TestParty_Contacts(t *testing.T) {
 	if _, err := ana.AddContact(domain.ContactData{Kind: domain.ContactEmail, Value: "ana@example.com"}, t0); !isViolation(err, "parties.duplicate_contact") {
 		t.Fatalf("duplicate e-mail: %v", err)
 	}
-	if _, err := ana.AddContact(domain.ContactData{Kind: domain.ContactEmail, Value: "not-an-email"}, t0); !errors.Is(err, fw.ErrValidation) {
-		t.Fatal("invalid e-mail")
+	if _, err := ana.AddContact(domain.ContactData{Kind: domain.ContactEmail, Value: "  "}, t0); !errors.Is(err, fw.ErrValidation) {
+		t.Fatal("an empty e-mail") // uno con formato erróneo se guarda (D-92): quality_test.go
 	}
 	e2, _ := ana.AddContact(domain.ContactData{Kind: domain.ContactEmail, Value: "work@acme.test", Purposes: []domain.Purpose{domain.PurposeDefault, domain.PurposeWork}}, t0)
 	if c, ok := ana.ContactFor(domain.ContactEmail, domain.PurposeDefault); !ok || c.ID != e2 {

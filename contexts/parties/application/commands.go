@@ -308,6 +308,10 @@ type SearchParties struct {
 	Classification    string // id del tipo de clasificación: parties clasificadas así ahora
 	ActiveOnly        bool
 	DocumentIssue     bool // sólo las parties marcadas con un documento de identidad rechazado
+	// WithDataQualityIssues deja sólo las parties con alguna incidencia de calidad de datos: un
+	// e-mail o un teléfono guardado con formato erróneo (D-92). No mira la marca de documento
+	// rechazado, que tiene su propio filtro (DocumentIssue).
+	WithDataQualityIssues bool
 	// IncludeMergedParties trae también las parties marcadas como duplicado de otra, que una
 	// búsqueda deja fuera por omisión (docs/DECISIONES-COMUNES.md, D-64).
 	IncludeMergedParties bool

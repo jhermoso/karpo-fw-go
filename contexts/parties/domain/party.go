@@ -84,6 +84,7 @@ type Party struct {
 	shared          bool
 	documentIssue   DocumentIssue
 	duplicate       bool
+	qualityIssues   []DataQualityIssue
 }
 
 // DocumentIssue marca una party cuyo documento de identidad se rechazó: el número tal como llegó y
@@ -156,6 +157,7 @@ type PartyState struct {
 	Shared       bool
 	Issue        DocumentIssue
 	Duplicate    bool
+	Quality      []DataQualityIssue
 	Active       bool
 	Test         bool
 	Audit        traits.AuditStamp
@@ -186,6 +188,7 @@ func Reconstitute(id PartyID, s PartyState) (*Party, error) {
 	p.shared = s.Shared
 	p.documentIssue = s.Issue
 	p.duplicate = s.Duplicate
+	p.qualityIssues = slices.SortedFunc(slices.Values(s.Quality), compareIssues)
 	p.Activation = traits.RestoredActivation(s.Active)
 	p.Audited = traits.RestoredAudit(s.Audit)
 	p.TestFlag = traits.RestoredTestFlag(s.Test)
@@ -469,6 +472,9 @@ func (p *Party) AuditSnapshot() map[string]any {
 	}
 	if len(selfEmployed) > 0 { // sólo si hay alguno: no cambia el registro de quien no es autónomo
 		s["selfEmployed"] = strings.Join(selfEmployed, ",")
+	}
+	if p.HasDataQualityIssues() { // igual: sólo si hay alguna
+		s["dataQualityIssues"] = p.issuesSnapshot()
 	}
 	for _, c := range p.classifications {
 		if c.Period.IsActiveAt(now) {
