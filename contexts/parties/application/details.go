@@ -69,7 +69,8 @@ func addRelationshipDetails(svc *Service, s service) {
 		if code != "" {
 			// Un código distingue a un colaborador de la organización de los demás. Se pregunta
 			// antes del cambio, con su propia lectura: a quien no puede ver la relación se le dice
-			// más abajo.
+			// más abajo. Dos cambios a la vez que pasen los dos esta lectura los detiene en SQL el
+			// índice único de la migración 29, con la misma violación (docs/PARTIES.md §22).
 			if r, err := s.relationships.Repository().Get(ctx, c.ID); err == nil {
 				same, err := s.relationships.Repository().Find(ctx, spec.And(domain.RelFieldType.Eq(r.Type()), domain.RelFieldTo.Eq(r.To()),
 					domain.RelFieldPromotionCode.Eq(code), domain.ActiveAt(fw.Now())))

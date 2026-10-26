@@ -421,6 +421,9 @@ func (r *Repository[ID, T]) Save(ctx context.Context, agg T) error {
 			query := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
 				r.q(r.m.Table), strings.Join(cols, ", "), strings.Join(append([]string{idPh, verPh}, phs...), ", "))
 			if _, err := ex.ExecContext(ctx, query, b.args...); err != nil {
+				if u := r.uniqueError(err); u != nil {
+					return u
+				}
 				if r.db.d.IsUniqueViolation(err) {
 					return domain.Conflict(r.kind, id, v, "identity already exists")
 				}
@@ -446,6 +449,9 @@ func (r *Repository[ID, T]) Save(ctx context.Context, agg T) error {
 				r.q(r.m.Table), strings.Join(sets, ", "), r.q(r.m.IDColumn), idPh, r.q(r.m.VersionColumn), oldPh)
 			res, err := ex.ExecContext(ctx, query, b.args...)
 			if err != nil {
+				if u := r.uniqueError(err); u != nil {
+					return u
+				}
 				return fmt.Errorf("sqlrepo: update %s: %w", r.kind, err)
 			}
 			if n, err := res.RowsAffected(); err != nil {
@@ -462,6 +468,17 @@ func (r *Repository[ID, T]) Save(ctx context.Context, agg T) error {
 		r.db.onRollback(ctx, func() { domain.MarkPersisted(agg, v) })
 		return nil
 	})
+}
+
+// uniqueError devuelve el error declarado del índice único de Mapping.Unique con el que choca err,
+// o nil si err no es el choque con ninguno de ellos.
+func (r *Repository[ID, T]) uniqueError(err error) error {
+	for _, u := range r.m.Unique {
+		if r.db.ViolatesUnique(err, r.m.Table, u.Name, u.Columns...) {
+			return u.Err
+		}
+	}
+	return nil
 }
 
 func (r *Repository[ID, T]) concurrencyError(ctx context.Context, id ID, v int64) error {

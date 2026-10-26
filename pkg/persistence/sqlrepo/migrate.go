@@ -36,6 +36,12 @@ type Migration struct {
 	// dialecto, como los UUID en Oracle). Su código no forma parte del checksum: nunca se cambia
 	// un Run aplicado, se añade una migración.
 	Run func(ctx context.Context, db *DB) error
+	// Check es código Go opcional que comprueba, antes de tocar nada, que la migración se puede
+	// aplicar (que no hay valores repetidos antes de crear un índice único, por ejemplo). Si
+	// devuelve un error, la migración no se aplica ni queda sucia, también en los motores sin DDL
+	// transaccional: se corrigen los datos y se migra de nuevo. Sólo lee; como Run, no forma parte
+	// del checksum.
+	Check func(ctx context.Context, db *DB) error
 }
 
 // Portable construye las sentencias de una migración válidas en todos los motores.
@@ -388,6 +394,11 @@ func (m *Migrator) apply(ctx context.Context, bc string, mg Migration) error {
 	sum, err := m.checksumOf(mg)
 	if err != nil {
 		return err
+	}
+	if mg.Check != nil {
+		if err := mg.Check(ctx, m.db); err != nil {
+			return fmt.Errorf("sqlrepo: %s v%d %s cannot be applied: %w", bc, mg.Version, mg.Name, err)
+		}
 	}
 	run := func(ctx context.Context) error {
 		for i, s := range stmts {

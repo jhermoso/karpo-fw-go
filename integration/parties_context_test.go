@@ -565,12 +565,76 @@ func TestPartiesContext(t *testing.T) {
 				t.Fatal("the clock moved")
 			}
 
+			// Migración 29: los índices únicos detienen el código repetido que no ve la comprobación
+			// del caso de uso (otro proceso que da de alta lo mismo a la vez), con la misma violación
+			// de regla (422); varios tipos sin código conviven.
+			catalogs, err := infrastructure.CatalogsFor(db)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, rt := range []struct{ name, code string }{{"Avalista", "guarantor"}, {"Fiador", ""}, {"Garante", ""}} {
+				typ, err := domain.NewRoleType(domain.RoleTypeID{UUID: fw.NewUUID()}, rt.name, "", rt.code, domain.RolePersonCategory)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := catalogs.AddRoleType(ctx, typ); (rt.code == "" && err != nil) || (rt.code != "" && !errors.Is(err, fw.ErrRuleViolation)) {
+					t.Fatalf("role type %s with code %q: %v", rt.name, rt.code, err)
+				}
+			}
+			aval, err := domain.NewRelationshipType(domain.RelationshipTypeID{UUID: fw.NewUUID()}, "Aval", "", "guarantee", domain.RoleEmployee, domain.RoleCustomer)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := catalogs.AddRelationshipType(ctx, aval); !errors.Is(err, fw.ErrRuleViolation) {
+				t.Fatalf("a relationship type code already taken: %v", err)
+			}
+			var promoted [2]domain.RelationshipID
+			for i, name := range []string{"Agencia Sol", "Agencia Luna"} {
+				agency, err := svc.RegisterOrganization.Handle(ctx, papp.RegisterOrganization{LegalName: name})
+				if err != nil {
+					t.Fatal(err)
+				}
+				rel, err := svc.EstablishRelationship.Handle(ctx, papp.EstablishRelationship{Type: domain.RelCollaborator.String(), From: agency.ID, To: acme.ID})
+				if err != nil {
+					t.Fatalf("collaborators without a code: %v", err)
+				}
+				promoted[i], _ = domain.ParseRelationshipID(rel.ID)
+			}
+			if _, err := svc.SetPromotionCode.Handle(ctx, papp.SetPromotionCode{ID: promoted[0], PromotionCode: "SOL-1"}); err != nil {
+				t.Fatal(err)
+			}
+			relRepo, err := infrastructure.RelationshipRepositoryFactory(db)
+			if err != nil {
+				t.Fatal(err)
+			}
+			second, err := relRepo.Get(ctx, promoted[1])
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := second.SetPromotionCode(wellKnownRelationshipType(t, domain.RelCollaborator), "SOL-1"); err != nil {
+				t.Fatal(err)
+			}
+			if err := relRepo.Save(ctx, second); !errors.Is(err, fw.ErrRuleViolation) {
+				t.Fatalf("the promotion code of another open collaborator: %v", err)
+			}
+
 			pending, err := mod.IntegrationOutbox.Pending(ctx, 100, 10)
 			if err != nil || len(pending) < 8 {
 				t.Fatalf("published language: %d %v", len(pending), err)
 			}
 		})
 	}
+}
+
+func wellKnownRelationshipType(t *testing.T, id domain.RelationshipTypeID) domain.RelationshipType {
+	t.Helper()
+	for _, rt := range domain.WellKnownRelationshipTypes() {
+		if rt.ID == id {
+			return rt
+		}
+	}
+	t.Fatalf("no well-known relationship type %s", id)
+	return domain.RelationshipType{}
 }
 
 func mustParty(t *testing.T, id string) domain.PartyID {

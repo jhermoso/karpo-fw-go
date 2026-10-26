@@ -12,15 +12,17 @@ var Dialects = []string{"sqlite", "postgres", "sqlserver", "oracle", "mysql"}
 
 var logicalTypes = map[string]map[string]string{
 	"sqlite": {"uuid": "TEXT", "str": "TEXT", "text": "TEXT", "bool": "INTEGER", "ts": "TEXT", "date": "TEXT", "int": "INTEGER",
-		"bigint": "INTEGER", "dec": "TEXT", "false": "0", "add": "ADD COLUMN %s", "addEnd": ""},
+		"bigint": "INTEGER", "dec": "TEXT", "false": "0", "add": "ADD COLUMN %s", "addEnd": "", "whereNotNull": ""},
 	"postgres": {"uuid": "UUID", "str": "VARCHAR(%s)", "text": "TEXT", "bool": "BOOLEAN", "ts": "TIMESTAMPTZ", "date": "DATE",
-		"int": "INTEGER", "bigint": "BIGINT", "dec": "NUMERIC(%s)", "false": "FALSE", "add": "ADD COLUMN %s", "addEnd": ""},
+		"int": "INTEGER", "bigint": "BIGINT", "dec": "NUMERIC(%s)", "false": "FALSE", "add": "ADD COLUMN %s", "addEnd": "", "whereNotNull": ""},
 	"sqlserver": {"uuid": "UNIQUEIDENTIFIER", "str": "NVARCHAR(%s)", "text": "NVARCHAR(MAX)", "bool": "BIT", "ts": "DATETIME2(7)",
-		"date": "DATE", "int": "INT", "bigint": "BIGINT", "dec": "DECIMAL(%s)", "false": "0", "add": "ADD %s", "addEnd": ""},
+		"date": "DATE", "int": "INT", "bigint": "BIGINT", "dec": "DECIMAL(%s)", "false": "0", "add": "ADD %s", "addEnd": "",
+		"whereNotNull": " WHERE %s IS NOT NULL"},
 	"oracle": {"uuid": "RAW(16)", "str": "VARCHAR2(%s CHAR)", "text": "CLOB", "bool": "NUMBER(1)", "ts": "TIMESTAMP(6) WITH TIME ZONE",
-		"date": "DATE", "int": "NUMBER(10)", "bigint": "NUMBER(19)", "dec": "NUMBER(%s)", "false": "0", "add": "ADD (%s", "addEnd": ")"},
+		"date": "DATE", "int": "NUMBER(10)", "bigint": "NUMBER(19)", "dec": "NUMBER(%s)", "false": "0", "add": "ADD (%s", "addEnd": ")",
+		"whereNotNull": ""},
 	"mysql": {"uuid": "CHAR(36)", "str": "VARCHAR(%s)", "text": "LONGTEXT", "bool": "BOOLEAN", "ts": "DATETIME(6)", "date": "DATE",
-		"int": "INT", "bigint": "BIGINT", "dec": "DECIMAL(%s)", "false": "FALSE", "add": "ADD COLUMN %s", "addEnd": ""},
+		"int": "INT", "bigint": "BIGINT", "dec": "DECIMAL(%s)", "false": "FALSE", "add": "ADD COLUMN %s", "addEnd": "", "whereNotNull": ""},
 }
 
 var ddlPlaceholder = regexp.MustCompile(`\{(\w+)(?::([^{}]*))?\}`)
@@ -46,6 +48,11 @@ const MaxDecimalPrecision = 28
 // NUMERIC(p,s) en PostgreSQL, DECIMAL(p,s) en SQL Server y MySQL, NUMBER(p,s) en Oracle y TEXT en
 // SQLite, porque el NUMERIC de SQLite convierte a coma flotante y pierde cifras. Las columnas
 // decimales se declaran también en Mapping.Decimals, para que se comparen y ordenen por valor.
+//
+// {whereNotNull:column} cierra un CREATE UNIQUE INDEX de una sola columna anulable para que admita
+// varias filas sin valor: en SQL Server, que trata los NULL como iguales en un índice único, es el
+// filtro WHERE column IS NOT NULL; en los demás no escribe nada, porque PostgreSQL, MySQL y SQLite
+// ya admiten varios NULL y Oracle no indexa las filas cuyas columnas son todas NULL.
 //
 // RenderDDL entra en pánico ante un marcador mal formado (como regexp.MustCompile: el DDL es una
 // constante del programa); RenderDDLChecked devuelve el error.

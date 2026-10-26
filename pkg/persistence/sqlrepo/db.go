@@ -51,6 +51,49 @@ func (db *DB) Name() string { return db.name }
 // Dialect devuelve el dialecto SQL.
 func (db *DB) Dialect() Dialect { return db.d }
 
+// ViolatesUnique dice si err es el choque con el índice único index de table, sobre columns. Los
+// motores nombran el índice en el mensaje (Oracle, en mayúsculas), salvo SQLite, que nombra sus
+// columnas: «UNIQUE constraint failed: tabla.columna».
+func (db *DB) ViolatesUnique(err error, table, index string, columns ...string) bool {
+	if err == nil || !db.d.IsUniqueViolation(err) {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	if index != "" && namesIndex(msg, strings.ToLower(index)) {
+		return true
+	}
+	const failed = "unique constraint failed: "
+	at := strings.Index(msg, failed)
+	if at < 0 || len(columns) == 0 {
+		return false
+	}
+	got, _, _ := strings.Cut(msg[at+len(failed):], " (")
+	want := make([]string, len(columns))
+	for i, c := range columns {
+		want[i] = strings.ToLower(table + "." + c)
+	}
+	return strings.TrimSpace(got) == strings.Join(want, ", ")
+}
+
+// namesIndex dice si msg nombra el índice index entero, delimitado por comillas, paréntesis, un
+// punto (esquema.índice, tabla.índice) o el principio o el fin del texto: así uq_t_code no se
+// confunde con uq_t_code_2.
+func namesIndex(msg, index string) bool {
+	const before, after = "\"'`([. ", "\"'`)]. "
+	for from := 0; ; {
+		at := strings.Index(msg[from:], index)
+		if at < 0 {
+			return false
+		}
+		at += from
+		end := at + len(index)
+		if (at == 0 || strings.IndexByte(before, msg[at-1]) >= 0) && (end == len(msg) || strings.IndexByte(after, msg[end]) >= 0) {
+			return true
+		}
+		from = at + 1
+	}
+}
+
 // SQL expone el *sql.DB subyacente (ajuste del pool, migraciones).
 func (db *DB) SQL() *sql.DB { return db.sqlDB }
 

@@ -342,11 +342,11 @@ POST /api/catalogs/party-role-types
 - **Lo que no hay todavía:** cambiar o retirar un tipo añadido; y los tipos **con** datos
   propios, que son el resto de la extensibilidad.
 - **Decisiones técnicas tomadas** (reversibles): la unicidad del nombre y del código se comprueba
-  antes de escribir y no con un índice único (un índice único sobre una columna que admite vacíos
-  no se comporta igual en todos los motores). Para que dos altas simultáneas con el mismo código
-  no entren las dos —un catálogo con un código repetido no se puede cargar, y dejaría fallando
-  a todo Parties— las altas de catálogo pasan **de una en una** dentro del proceso. Vale mientras
-  haya un solo proceso; con varios hará falta el índice único (`BACKLOG.md` §2d). En el almacén
+  antes de escribir. Para que dos altas simultáneas con el mismo código no entren las dos —un
+  catálogo con un código repetido no se puede cargar, y dejaría fallando a todo Parties— las altas
+  de catálogo pasan **de una en una** dentro del proceso, y desde la migración 29 un **índice
+  único** sobre el código lo asegura también entre procesos (§22). El nombre no tiene índice: se
+  compara sin distinguir mayúsculas, y eso no se indexa igual en los cinco motores. En el almacén
   de memoria los tipos añadidos no sobreviven a un cambio de almacén.
 
 ## 9. Número de cliente (2026-10-13)
@@ -379,8 +379,8 @@ PUT /api/party-relationships/{id}/customer-number
   emitidas. Impedirlo exige guardar el historial de números; no está hecho.
 - **Lo que no hay:** numeración automática (el número lo da quien da de alta); que el alta de la
   party o de la relación lo traiga ya puesto; un evento cuando cambia; y un puerto para que
-  Facturación o Pedidos lo lean. Tampoco se comprueba con un índice único, como el código de
-  promoción (`BACKLOG.md` §2d).
+  Facturación o Pedidos lo lean. Tampoco se comprueba con un índice único (el código de
+  promoción sí lo tiene desde la migración 29, §22).
 
 ## 10. Marca de documento identificativo erróneo (2026-10-13)
 
@@ -867,3 +867,54 @@ ese contacto.
   un contacto de una party).
 - **El registro de auditoría** dice `dataQualityIssues` sólo cuando la ficha tiene alguna, para
   no cambiar el de las demás.
+
+## 22. Los códigos no se repiten, aunque haya más de un proceso
+
+Hasta ahora el código de un tipo de rol o de relación (§8) y el código de promoción de un
+colaborador se comprobaban leyendo antes de escribir: dos altas a la vez con el mismo código, en
+dos procesos, entraban las dos. Desde la migración 29 lo impide también la base de datos, con
+**índices únicos**. Lo que ve quien llama no cambia: el mismo 422 con el mismo código de error
+(`parties.role_type_code_taken`, `parties.relationship_type_code_taken`,
+`parties.duplicate_promotion_code`), lo dé la comprobación previa o el índice.
+
+*Ejemplo:* dos administradores dan de alta a la vez, cada uno en su proceso, el tipo de rol
+`guarantor`. El primero recibe 201; el segundo, 422 `parties.role_type_code_taken`, y no un 500.
+
+| Qué | Cómo |
+|---|---|
+| Tipos de rol y de relación | `uq_role_types_code` sobre `role_types (code)` y `uq_relationship_types_code` sobre `relationship_types (code)`. Equivalentes a los de Trench (`uq_role_type_code`, `uq_party_relationship_type_code`): las mismas columnas, con los nombres de tabla de aquí |
+| Código de promoción | `uq_party_rel_promotion_key` sobre una columna nueva, `party_relationships.promotion_key`: la organización y el código (`<id de la organización>/<CÓDIGO>`) mientras la relación **no tiene fin**, y NULL si no tiene código o ya tiene fin. La escribe el mapeo al guardar la relación |
+| Sin código | Varios tipos sin código, y varios colaboradores sin código, conviven en los cinco motores: en SQL Server el índice se filtra (`WHERE … IS NOT NULL`, que se escribe en el DDL portable con el marcador `{whereNotNull:columna}`); PostgreSQL, MySQL y SQLite ya admiten varios NULL, y Oracle no indexa las filas sin valor |
+| Al migrar | Un código vacío (`''`) de una base antigua pasa a NULL. Si ya hay códigos repetidos, la migración **se detiene antes de tocar nada** y dice cuáles y en qué filas; no borra nada. Se da a cada uno el suyo y se migra de nuevo. Las relaciones vigentes con código reciben su `promotion_key` |
+| El choque con el índice | `sqlrepo.DB.ViolatesUnique` reconoce el error de cada motor por el nombre del índice (SQLite nombra la columna). Los catálogos lo traducen al dar de alta; para la relación lo declara el mapeo (`Mapping.Unique`) |
+
+- **El código de promoción, igual que antes:** no se repite entre los colaboradores **vigentes**
+  de una misma organización, y queda libre al terminar la relación. Por eso el índice no va sobre
+  `promotion_code` a secas, como en Trench, donde el código es único en toda la instalación y para
+  siempre: aquí un código es de la numeración de cada organización (`ByPromotionCode` pide la
+  organización), y la relación que termina tiene que soltar el código. La diferencia de
+  estructura con Trench se justifica por esas dos reglas. Una fusión no pasa hoy la relación del
+  colaborador a la superviviente (§17, D-93 pasa clientes y proveedores): se queda en la que cede,
+  con su código, y el índice no estorba ni al fusionar ni al deshacer; si un día la pasa, la que
+  termina suelta el código antes de que lo tome la que la continúa.
+- **Lo que el índice ve distinto que la comprobación del caso de uso.** Un índice que dependa del
+  reloj («vigente ahora») no existe en ningún motor, así que el índice mira si la relación tiene
+  fin, no si está en vigor:
+  - la relación cuyo fin está puesto en el futuro ya no retiene el código en el índice, aunque la
+    comprobación del caso de uso lo sigue reteniendo hasta ese fin;
+  - un colaborador que **aún no empieza** sí lo retiene en el índice (la comprobación sólo mira
+    los que están en vigor): en SQL, darle su código a otro choca con el índice, con el mismo 422
+    `parties.duplicate_promotion_code`; en el almacén de memoria, que no tiene índice, se admite.
+- **Parar todo antes de migrar a la 29.** Un proceso anterior a la 29 que siga en marcha no
+  escribe `promotion_key`: un código que dé o retire, o una relación que termine, dejaría la
+  clave sin poner o colgada (un código que ya no lleva la relación seguiría ocupado en el índice).
+  Se paran todos los procesos, se migra y se arrancan los nuevos.
+- **Se conserva el paso de una en una** de las altas de catálogo dentro del proceso: evita la
+  carrera sin llegar a la base de datos.
+- **Lo que no hay:** un prefijo reservado para los códigos que añade un administrador. Si una
+  versión futura siembra un tipo con un código que un administrador ya usó, la migración de esa
+  siembra se detiene y dice cuál (como la 21, §13); reservar un prefijo es una decisión de
+  producto y queda en [BACKLOG.md](../BACKLOG.md) §2d.
+- **Esquema y marco:** migración 29. Para no dejarla a medias en los motores sin DDL
+  transaccional (Oracle, MySQL), `sqlrepo.Migration` tiene un `Check` que se ejecuta antes de
+  tocar nada: si falla, la migración no se aplica ni queda sucia.

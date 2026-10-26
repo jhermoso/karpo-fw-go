@@ -46,6 +46,10 @@ func TestMigratorConformance(t *testing.T) {
 	sqlconformance.RunMigrations(t, openTemp(t))
 }
 
+func TestUniqueIndexesConformance(t *testing.T) {
+	sqlconformance.RunUniqueIndexes(t, openTemp(t))
+}
+
 func TestDecimalsConformance(t *testing.T) {
 	sqlconformance.RunDecimals(t, openTemp(t))
 }

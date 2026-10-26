@@ -153,6 +153,17 @@ func TestInbox(t *testing.T) {
 	}
 }
 
+// TestUniqueIndexes comprueba en cada motor el índice único de una columna anulable (varios NULL,
+// filtrado en SQL Server), el reconocimiento de su choque y el Check de una migración.
+func TestUniqueIndexes(t *testing.T) {
+	for _, e := range engines {
+		if e.name == "oracle-dotnet-guids" {
+			continue
+		}
+		t.Run(e.name, func(t *testing.T) { sqlconformance.RunUniqueIndexes(t, open(t, e)) })
+	}
+}
+
 // TestParties ejecuta el mapeo de Parties (tabla hija, especificación COUNT propia) en cada motor.
 func TestParties(t *testing.T) {
 	for _, e := range engines {
