@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -126,9 +127,11 @@ func parkingScenario(t *testing.T, sw *hotswap.Switch) {
 		t.Fatal("the company with books posts at once")
 	}
 
-	// Volver a intentarlo no cambia nada mientras siga el motivo, ni siquiera la cuenta de intentos.
+	// Volver a intentarlo no contabiliza nada mientras siga el motivo: sólo prueba el primero, que
+	// cuenta el intento y espera más; los de detrás no se tocan.
 	retry(shop, 0, 3)
-	if w := parked(aapp.SearchParked{Company: shop}); w[0].Attempts != 1 || w[1].Attempts != 1 || w[0].Version != 1 {
+	if w := parked(aapp.SearchParked{Company: shop}); w[0].Attempts != 2 || w[1].Attempts != 1 || w[0].Version != 2 || w[0].NextAttempt == "" ||
+		w[0].Code != "accounting.no_ledger" {
 		t.Fatalf("attempts: %+v", w)
 	}
 
@@ -310,12 +313,13 @@ func TestParking_AFailureThatIsNoRuleStopsItsCompanyAlone(t *testing.T) {
 		}
 		return nil
 	}
+	// La respuesta lleva lo contabilizado, lo que espera y lo que falló: el reintento acabó.
 	r, err := svc.RetryParked.Handle(actx, aapp.RetryParked{})
-	if r.Posted != 1 || r.Waiting != 2 {
-		t.Fatalf("retry: %+v, want 1 posted and 2 waiting", r)
+	if err != nil || r.Posted != 1 || r.Waiting != 2 {
+		t.Fatalf("retry: %+v %v, want 1 posted and 2 waiting", r, err)
 	}
-	if !errors.Is(err, fw.ErrValidation) || !strings.Contains(err.Error(), bad.ID) {
-		t.Fatalf("what failed is not given at the end: %v", err)
+	if len(r.Failed) != 1 || !strings.Contains(r.Failed[0], bad.ID) || !strings.Contains(r.Failed[0], "issueDate") {
+		t.Fatalf("what failed is not given back: %+v", r.Failed)
 	}
 	if len(tried) != 2 || tried[0] != bad.ID || tried[1] != good.ID {
 		t.Fatalf("tried: %v, want the bad one and that of the other company", tried)
@@ -338,9 +342,22 @@ func TestParking_AFailureThatIsNoRuleStopsItsCompanyAlone(t *testing.T) {
 	}
 }
 
-// El planificador reintenta cada vuelta. Un hecho rechazado otra vez por el mismo motivo se escribe
-// una vez, cuando se guarda, y no una por vuelta; cuando cambia el motivo, una vez más.
-func TestParking_TheSameRefusalIsNotWrittenAgain(t *testing.T) {
+// clockAt es un reloj que la prueba adelanta a mano.
+type clockAt struct{ now time.Time }
+
+func (c *clockAt) Now() time.Time { return c.now }
+
+func stopTheClock(t *testing.T) *clockAt {
+	c := &clockAt{now: time.Date(2026, 10, 26, 9, 0, 0, 0, time.UTC)}
+	t.Cleanup(fw.SetClock(c))
+	return c
+}
+
+// El planificador vuelve cada minuto, pero un hecho que sigue sin poder contabilizarse se intenta, y
+// se escribe, cada vez más espaciado: un minuto, dos, cuatro... hasta una hora. Lo que se pide a mano
+// se intenta en el acto.
+func TestParking_TheSchedulerWaitsLongerEachTime(t *testing.T) {
+	clock := stopTheClock(t)
 	refusal := fw.Violation("accounting.no_ledger", "the company has no ledger")
 	tries := 0
 	inner := &stubInner{answer: func(app.Envelope) error { tries++; return refusal }}
@@ -349,36 +366,139 @@ func TestParking_TheSameRefusalIsNotWrittenAgain(t *testing.T) {
 	if err := parking.HandleMessage(context.Background(), invoice(company, 1)); err != nil {
 		t.Fatal(err)
 	}
-	rounds := func(n int) aapp.ParkedDTO {
+	kept := func() aapp.ParkedDTO {
 		t.Helper()
-		for range n {
-			if r, err := svc.RetryParked.Handle(actx, aapp.RetryParked{}); err != nil || r.Posted != 0 || r.Waiting != 1 {
-				t.Fatalf("retry: %+v %v", r, err)
-			}
-		}
 		p, err := svc.SearchParked.Handle(actx, aapp.SearchParked{Company: company})
 		if err != nil || len(p.Items) != 1 {
 			t.Fatalf("kept: %+v %v", p.Items, err)
 		}
 		return p.Items[0]
 	}
-	const n = 25
-	if f := rounds(n); tries != 1+n || parked.saves != 1 || f.Attempts != 1 || f.Version != 1 || f.Code != "accounting.no_ledger" {
-		t.Fatalf("%d rounds for the same reason: %d tries, %d writes, %+v; want one write", n, tries, parked.saves, f)
+	round := func() aapp.RetriedDTO {
+		t.Helper()
+		r, err := svc.RetryParked.Handle(actx, aapp.RetryParked{Due: true})
+		if err != nil || r.Posted != 0 || r.Waiting != 1 {
+			t.Fatalf("round: %+v %v", r, err)
+		}
+		return r
 	}
-	// Otro motivo es una novedad: se escribe, una vez.
-	refusal = fw.Violation("accounting.role_undefined", "the profile has no account for cash")
-	if f := rounds(n); parked.saves != 2 || f.Attempts != 2 || f.Version != 2 || f.Code != "accounting.role_undefined" {
-		t.Fatalf("%d rounds for another reason: %d writes, %+v; want two writes", n, parked.saves, f)
+	if f := kept(); f.NextAttempt != "2026-10-26T09:01:00Z" || f.Attempts != 1 {
+		t.Fatalf("parked: %+v", f)
 	}
-	// Y también lo es un fallo que no es una regla (se devuelve cada vuelta, y se escribe una vez).
+	// Antes de que toque, una ronda no lo intenta ni lo escribe.
+	for range 25 {
+		round()
+	}
+	if tries != 1 || parked.saves != 1 {
+		t.Fatalf("not due: %d tries, %d writes", tries, parked.saves)
+	}
+	// Un día de rondas, una por minuto: se intenta en los minutos 1, 3, 7, 15, 31 y 63, y desde ahí
+	// una vez por hora. Cada intento se escribe una vez.
+	for range 24 * 60 {
+		clock.now = clock.now.Add(time.Minute)
+		round()
+	}
+	f := kept()
+	next, _ := time.Parse(time.RFC3339, f.NextAttempt)
+	if tries != 29 || parked.saves != 29 || f.Attempts != 29 || next.Sub(clock.now) > domain.MaxParkedWait || !next.After(clock.now) {
+		t.Fatalf("a day of rounds: %d tries, %d writes, %+v; want 29", tries, parked.saves, f)
+	}
+	// Quien lo pide no espera: se intenta ahora.
+	if r, err := svc.RetryParked.Handle(actx, aapp.RetryParked{Company: company}); err != nil || r.Waiting != 1 || tries != 30 {
+		t.Fatalf("asked for: %+v %v, %d tries", r, err, tries)
+	}
+	// Un fallo que no es una regla se devuelve en la ronda que lo intenta, y sólo en ésa: el
+	// anfitrión no lo anota cada minuto.
 	refusal = errors.New("the database is down")
-	for range n {
-		if _, err := svc.RetryParked.Handle(actx, aapp.RetryParked{}); err == nil {
-			t.Fatal("the failure is not given back")
+	reported, before := 0, tries
+	for range 3 * 60 {
+		clock.now = clock.now.Add(time.Minute)
+		if r := round(); len(r.Failed) > 0 {
+			reported++
+			if !strings.Contains(r.Failed[0], "the database is down") {
+				t.Fatalf("failed: %+v", r.Failed)
+			}
 		}
 	}
-	if parked.saves != 3 {
-		t.Fatalf("%d rounds failing the same way: %d writes, want three", n, parked.saves)
+	if reported != tries-before || reported != 3 {
+		t.Fatalf("three hours failing: reported %d times, tried %d", reported, tries-before)
+	}
+	if f := kept(); f.Code != domain.FailedCode {
+		t.Fatalf("the failure is written in the fact: %+v", f)
+	}
+}
+
+func TestParkedBackoff(t *testing.T) {
+	waits := []time.Duration{}
+	for n := range 9 {
+		waits = append(waits, domain.ParkedBackoff(n+1))
+	}
+	if want := []time.Duration{time.Minute, 2 * time.Minute, 4 * time.Minute, 8 * time.Minute, 16 * time.Minute, 32 * time.Minute, time.Hour, time.Hour,
+		time.Hour}; !slices.Equal(waits, want) {
+		t.Fatalf("waits: %v", waits)
+	}
+}
+
+// Los hechos que no nombran empresa no comparten cola: uno que no se puede contabilizar sólo detiene
+// lo que viene detrás de él sobre lo mismo.
+func TestParking_FactsWithoutCompanyDoNotStopEachOther(t *testing.T) {
+	refused := map[string]bool{}
+	inner := &stubInner{answer: func(env app.Envelope) error {
+		if refused[env.Subject] {
+			return fw.Violation("accounting.no_ledger", "the company has no ledger")
+		}
+		return nil
+	}}
+	svc, parking, actx, invoice, _ := parkingOver(t, inner)
+	stuck, free := invoice("", 1), invoice("", 2)
+	behind := invoice("", 3)
+	behind.Subject = stuck.Subject
+	refused[stuck.Subject], refused[free.Subject] = true, true
+	for _, env := range []app.Envelope{stuck, free, behind} {
+		if err := parking.HandleMessage(context.Background(), env); err != nil {
+			t.Fatal(err)
+		}
+	}
+	refused[free.Subject] = false
+	r, err := svc.RetryParked.Handle(actx, aapp.RetryParked{})
+	if err != nil || r.Posted != 1 || r.Waiting != 2 {
+		t.Fatalf("retry: %+v %v, want the free one posted and two waiting", r, err)
+	}
+	p, err := svc.SearchParked.Handle(actx, aapp.SearchParked{Status: "posted"})
+	if err != nil || len(p.Items) != 1 || p.Items[0].Subject != free.Subject || p.Items[0].Company != "" {
+		t.Fatalf("posted: %+v %v", p.Items, err)
+	}
+	// Sólo los ve un administrador global: no hay empresa con la que mirar el ámbito de nadie más.
+	ac, _ := authz.NewContext(authz.Context{Subject: fw.NewUUID(), SubjectName: "accountant", Kind: authz.Service,
+		Permissions: []authz.Permission{aapp.PermParkedRead}, Grants: []authz.Grant{{OrganizationID: fw.NewUUID(), Level: authz.Full}}})
+	if p, err := svc.SearchParked.Handle(authz.WithContext(context.Background(), ac), aapp.SearchParked{}); err != nil || p.Total != 0 {
+		t.Fatalf("an accountant sees them: %+v %v", p, err)
+	}
+}
+
+// Un hecho cuya identidad no cabe se guarda una vez, descartado y con su motivo, en vez de hacer
+// fallar la validación (y volver al emisor) cada vez que llega.
+func TestParking_AFactThatDoesNotFitIsKeptDiscarded(t *testing.T) {
+	tries := 0
+	refusal := fw.Violation("accounting.no_ledger", "the company has no ledger")
+	inner := &stubInner{answer: func(app.Envelope) error { tries++; return refusal }}
+	svc, parking, actx, invoice, _ := parkingOver(t, inner)
+	env := invoice(fw.NewUUID().String(), 1)
+	env.ID = strings.Repeat("ñ", 40) // 80 bytes
+	for range 2 {
+		if err := parking.HandleMessage(context.Background(), env); err != nil {
+			t.Fatalf("the publisher is told it failed: %v", err)
+		}
+	}
+	p, err := svc.SearchParked.Handle(actx, aapp.SearchParked{})
+	if err != nil || len(p.Items) != 1 || tries != 1 {
+		t.Fatalf("kept: %+v %v, %d tries", p.Items, err, tries)
+	}
+	if k := p.Items[0]; k.Status != "discarded" || k.Code != domain.OversizedCode || !strings.Contains(k.Note, "80 bytes") || k.ResolvedAt == "" ||
+		k.NextAttempt != "" {
+		t.Fatalf("discarded with its reason: %+v", k)
+	}
+	if fw.EnvelopeKey(env.ID) == env.ID || len(fw.EnvelopeKey(env.ID)) != 64 || fw.EnvelopeKey("e-1") != "e-1" {
+		t.Fatal("EnvelopeKey")
 	}
 }

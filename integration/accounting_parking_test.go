@@ -84,6 +84,20 @@ func TestAccountingParking(t *testing.T) {
 			if back["notes"] != sent["notes"] || back["number"] != "F-2" || len(kept.Items[0].Data) < 7000 {
 				t.Fatalf("the fact as it came: %d bytes", len(kept.Items[0].Data))
 			}
+			// Cuándo toca el siguiente intento (migración 5): el rechazado, tras un minuto; el que
+			// espera detrás, en cuanto pase el de delante.
+			moment := func(s string) time.Time {
+				t.Helper()
+				v, err := time.Parse(time.RFC3339, s)
+				if err != nil {
+					t.Fatalf("%q: %v", s, err)
+				}
+				return v
+			}
+			if moment(kept.Items[0].NextAttempt).Sub(moment(kept.Items[0].ReceivedAt)) != adomain.ParkedBackoff(1) ||
+				!moment(kept.Items[1].NextAttempt).Equal(moment(kept.Items[1].ReceivedAt)) {
+				t.Fatalf("next attempts: %+v", kept.Items)
+			}
 
 			for code, name := range map[string]string{"4300": "Clientes", "7000": "Ventas", "4770": "HP IVA repercutido"} {
 				_, err := svc.CreateAccount.Handle(actx, aapp.CreateAccount{Company: shop, Code: code, Name: name, Postable: true})
@@ -109,7 +123,8 @@ func TestAccountingParking(t *testing.T) {
 				t.Fatalf("both invoices: %v", numbers)
 			}
 			posted, err := svc.SearchParked.Handle(actx, aapp.SearchParked{Company: shop, Status: "posted"})
-			if err != nil || posted.Total != 2 || posted.Items[0].Attempts != 2 || posted.Items[0].ResolvedAt == "" || posted.Items[0].Code != "" {
+			if err != nil || posted.Total != 2 || posted.Items[0].Attempts != 2 || posted.Items[0].ResolvedAt == "" || posted.Items[0].Code != "" ||
+				posted.Items[0].NextAttempt != "" {
 				t.Fatalf("posted: %+v %v", posted.Items, err)
 			}
 			// Enviados otra vez después de todo eso: nada se contabiliza dos veces, nada se vuelve a guardar.

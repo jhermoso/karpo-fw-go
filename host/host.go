@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/accounting"
@@ -377,8 +378,13 @@ func (h *Host) RunChores(ctx context.Context) (Chores, error) {
 		note("quotes of "+c.Name, err)
 		out.Quotes += len(quotes.Numbers)
 	}
-	retried, err := h.Accounting.Service.RetryParked.Handle(ctx, accapp.RetryParked{})
+	// Sólo lo que ya toca: un hecho que sigue sin poder contabilizarse se intenta, y se anota aquí,
+	// cada vez más espaciado (ver accounting/domain.ParkedBackoff), y no en cada ronda.
+	retried, err := h.Accounting.Service.RetryParked.Handle(ctx, accapp.RetryParked{Due: true})
 	note("accounting", err)
+	if len(retried.Failed) > 0 {
+		note("accounting", errors.New(strings.Join(retried.Failed, "; ")))
+	}
 	out.Postings = retried.Posted
 	return out, failed
 }

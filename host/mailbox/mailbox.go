@@ -32,6 +32,25 @@ type Office struct {
 	orch       *orchestration.Orchestrator[ID, *Delivery]
 	listeners  map[string]Listener
 	givenUp    func(context.Context, DTO)
+	// turn deja pasar de uno en uno lo que recorre o cambia las entregas guardadas: la ronda del
+	// planificador, el reintento que pide alguien por HTTP y el descarte. Sin él, dos recorridos a
+	// la vez leerían las mismas entregas y el oyente recibiría dos veces el mismo mensaje. Vale para
+	// un proceso, que es como se despliega hoy; con varios procesos sobre la misma base habrá que
+	// reclamar cada entrega en la base antes de entregarla.
+	turn chan struct{}
+}
+
+// take espera su turno, o a que se acabe ctx.
+func (o *Office) take(ctx context.Context) (release func(), err error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	select {
+	case o.turn <- struct{}{}:
+		return func() { <-o.turn }, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 // OnGivenUp fija a quién se avisa cuando se abandona una entrega: el único momento en que alguien
@@ -42,7 +61,7 @@ func (o *Office) OnGivenUp(fn func(context.Context, DTO)) { o.givenUp = fn }
 // New construye la oficina sobre sw.
 func New(sw *hotswap.Switch) *Office {
 	repo := hotswap.Repository(sw, RepositoryFactory)
-	return &Office{deliveries: repo, orch: orchestration.New[ID, *Delivery](repo, sw), listeners: map[string]Listener{}}
+	return &Office{deliveries: repo, orch: orchestration.New[ID, *Delivery](repo, sw), listeners: map[string]Listener{}, turn: make(chan struct{}, 1)}
 }
 
 // Box es el buzón de un oyente: a lo que entrega el transporte en vez de al oyente.
@@ -89,9 +108,12 @@ func stateOf(consumer string, env app.Envelope) State {
 // peligro. Se ha de llamar fuera de toda unidad de trabajo, como el propio oyente.
 func (b *Box) HandleMessage(ctx context.Context, env app.Envelope) error {
 	o, name := b.office, b.listener.Name()
-	// Enviado otra vez después de guardarlo: ya está aquí.
-	if known, err := o.deliveries.Exists(ctx, spec.And(FieldConsumer.Eq(name), FieldEnvelope.Eq(env.ID))); err != nil || known {
-		return err
+	// Enviado otra vez después de guardarlo: ya está aquí (con su identidad, o con su huella si no
+	// cabía). Uno sin identidad no se puede reconocer: no se busca.
+	if env.ID != "" {
+		if known, err := o.deliveries.Exists(ctx, spec.And(FieldConsumer.Eq(name), FieldEnvelope.Eq(fw.EnvelopeKey(env.ID)))); err != nil || known {
+			return err
+		}
 	}
 	// Detrás de lo que espera sobre lo mismo: un oyente recibe en orden los mensajes de una cosa.
 	if env.Subject != "" {
@@ -145,8 +167,19 @@ type Redelivered struct {
 
 // Redeliver vuelve a intentar lo que espera y ya toca, en el orden en que pasó. Para cada oyente,
 // un mensaje que aún no se puede entregar (o que se abandonó) retiene a los que vinieron después
-// sobre lo mismo. Con force, también se intenta lo que aún no toca.
+// sobre lo mismo. Con force, también se intenta lo que aún no toca. Si otro recorrido está en
+// marcha, espera a que acabe.
 func (o *Office) Redeliver(ctx context.Context, force bool) (Redelivered, error) {
+	release, err := o.take(ctx)
+	if err != nil {
+		return Redelivered{}, err
+	}
+	defer release()
+	return o.redeliver(ctx, force)
+}
+
+// redeliver es Redeliver sin pedir turno: quien la llama ya lo tiene.
+func (o *Office) redeliver(ctx context.Context, force bool) (Redelivered, error) {
 	var out Redelivered
 	all, err := o.open(ctx)
 	if err != nil {
@@ -225,6 +258,7 @@ type DTO struct {
 	ID          string          `json:"id"`
 	Consumer    string          `json:"consumer"`
 	EventType   string          `json:"eventType"`
+	EnvelopeID  string          `json:"envelopeId"`
 	Source      string          `json:"source,omitempty"`
 	Subject     string          `json:"subject,omitempty"`
 	OccurredAt  string          `json:"occurredAt,omitempty"`
@@ -249,7 +283,7 @@ func rfc3339(t time.Time) string {
 
 func dto(d *Delivery) DTO {
 	s := d.State()
-	return DTO{ID: d.ID().String(), Consumer: s.Consumer, EventType: s.EventType, Source: s.Source, Subject: s.Subject, OccurredAt: rfc3339(s.OccurredAt),
+	return DTO{ID: d.ID().String(), Consumer: s.Consumer, EventType: s.EventType, EnvelopeID: s.EnvelopeID, Source: s.Source, Subject: s.Subject, OccurredAt: rfc3339(s.OccurredAt),
 		ReceivedAt: rfc3339(s.ReceivedAt), Status: string(s.Status), Code: s.Code, Reason: s.Reason, Attempts: s.Attempts,
 		NextAttempt: rfc3339(s.NextAttempt), ResolvedAt: rfc3339(s.ResolvedAt), Note: s.Note, Data: json.RawMessage(s.Data), Version: d.Version()}
 }
@@ -334,6 +368,11 @@ func (o *Office) Retry(ctx context.Context, c Retry) (Redelivered, error) {
 	if err := admin(ctx); err != nil {
 		return Redelivered{}, err
 	}
+	release, err := o.take(ctx)
+	if err != nil {
+		return Redelivered{}, err
+	}
+	defer release()
 	again := func(_ context.Context, d *Delivery) error { d.Again(fw.Now()); return nil }
 	if c.ID != "" {
 		id, err := ParseID(c.ID)
@@ -356,14 +395,20 @@ func (o *Office) Retry(ctx context.Context, c Retry) (Redelivered, error) {
 			}
 		}
 	}
-	return o.Redeliver(ctx, true)
+	return o.redeliver(ctx, true)
 }
 
-// Discard abandona una entrega para siempre.
+// Discard abandona una entrega para siempre. Espera a que acabe el recorrido en marcha, para no
+// descartar lo que se está entregando.
 func (o *Office) Discard(ctx context.Context, c Discard) (DTO, error) {
 	if err := admin(ctx); err != nil {
 		return DTO{}, err
 	}
+	release, err := o.take(ctx)
+	if err != nil {
+		return DTO{}, err
+	}
+	defer release()
 	d, err := o.orch.Update(ctx, c.ID, func(_ context.Context, d *Delivery) error { return d.Discard(c.Note, fw.Now()) })
 	if err != nil {
 		return DTO{}, err

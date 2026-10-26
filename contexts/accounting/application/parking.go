@@ -67,6 +67,10 @@ type Parking struct {
 	inner  Inner
 	parked domain.ParkedRepository
 	orch   *orchestration.Orchestrator[domain.ParkedID, *domain.ParkedFact]
+	// turn deja pasar de uno en uno los reintentos (el del planificador y el que pide alguien por
+	// HTTP) y los descartes, para que dos no intenten a la vez el mismo hecho ni se descarte uno
+	// que se está contabilizando. Vale para un proceso.
+	turn chan struct{}
 }
 
 // Inner es el consumidor que contabiliza: toma un mensaje una vez, en su propia unidad de trabajo.
@@ -82,11 +86,25 @@ func NewParking(inner Inner, d Deps) *Parking {
 	if d.Audit != nil {
 		opts = append(opts, orchestration.WithAuditLog(d.Audit))
 	}
-	return &Parking{inner: inner, parked: d.Parked, orch: orchestration.New[domain.ParkedID, *domain.ParkedFact](d.Parked, d.UoW, opts...)}
+	return &Parking{inner: inner, parked: d.Parked, orch: orchestration.New[domain.ParkedID, *domain.ParkedFact](d.Parked, d.UoW, opts...),
+		turn: make(chan struct{}, 1)}
 }
 
 // Name es el nombre por el que el transporte conoce al consumidor.
 func (p *Parking) Name() string { return p.inner.Name() }
+
+// take espera el turno de los reintentos y descartes, o a que se acabe ctx.
+func (p *Parking) take(ctx context.Context) (release func(), err error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	select {
+	case p.turn <- struct{}{}:
+		return func() { <-p.turn }, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
 
 func (p *Parking) waiting(ctx context.Context, more spec.Specification[*domain.ParkedFact]) ([]*domain.ParkedFact, error) {
 	return p.parked.Find(ctx, spec.And(domain.ParFieldStatus.Eq(string(domain.Parked)), more))
@@ -109,9 +127,12 @@ func (p *Parking) HandleMessage(ctx context.Context, env app.Envelope) error {
 	if !slices.Contains(p.inner.Types(), env.Type) {
 		return nil // no es un hecho que contabilice Accounting
 	}
-	// Enviado otra vez después de guardarse: ya está aquí.
-	if known, err := p.parked.Exists(ctx, domain.ParFieldEnvelope.Eq(env.ID)); err != nil || known {
-		return err
+	// Enviado otra vez después de guardarse: ya está aquí (con su identidad, o con su huella si no
+	// cabía). Uno sin identidad no se puede reconocer: no se busca.
+	if env.ID != "" {
+		if known, err := p.parked.Exists(ctx, domain.ParFieldEnvelope.Eq(fw.EnvelopeKey(env.ID))); err != nil || known {
+			return err
+		}
 	}
 	company := companyOf(env)
 	// Detrás de lo que espera: de su empresa, o sobre lo mismo.
@@ -160,33 +181,65 @@ func inOrder(fs []*domain.ParkedFact) {
 	})
 }
 
+// queueOf es la cola de un hecho: la de su empresa; si no nombra empresa, la de aquello de lo que
+// trata; y si tampoco trata de nada, una suya. Un hecho sin empresa que no se puede contabilizar
+// detiene así sólo lo que viene detrás de él, y no a todos los demás hechos sin empresa.
+func queueOf(f *domain.ParkedFact) string {
+	st := f.State()
+	switch {
+	case !st.Company.IsZero():
+		return "company:" + st.Company.String()
+	case st.Subject != "":
+		return "subject:" + st.Subject
+	}
+	return "fact:" + f.ID().String()
+}
+
+// retried es lo que hizo un reintento: lo contabilizado, lo que sigue esperando y lo que falló sin
+// ser una regla (con el tipo y la identidad del mensaje).
+type retried struct {
+	posted, waiting int
+	failed          []string
+}
+
 // retry vuelve a intentar los hechos que esperan, en el orden en que ocurrieron. El primero de una
-// empresa que todavía no puede contabilizarse detiene esa empresa: el resto se queda detrás. Lo que
-// detiene un hecho sin ser una regla (una validación, un fallo) detiene también su empresa, y
-// ninguna otra: se anota en el hecho y se devuelve al final, cuando todas las empresas han tenido su
-// turno. Un hecho rechazado otra vez por el mismo código y motivo no se vuelve a escribir: el
-// planificador reintenta cada vuelta, y una empresa que tarda días en abrir sus libros llenaría, si
-// no, la pista de auditoría de nada.
-func (p *Parking) retry(ctx context.Context, only spec.Specification[*domain.ParkedFact]) (posted, waiting int, err error) {
+// cola (queueOf) que todavía no puede contabilizarse la detiene: el resto se queda detrás. Lo que
+// detiene un hecho sin ser una regla (una validación, un fallo) detiene también su cola, y ninguna
+// otra: se anota en el hecho y se devuelve en failed. Con due, como hace el planificador, sólo se
+// intenta lo que ya toca (ParkedFact.Due), y lo que aún no toca retiene su cola; sin due, como
+// cuando lo pide alguien, se intenta todo. Cada intento que no lo contabiliza se escribe y alarga la
+// espera, así que un hecho que no se puede contabilizar en días no se escribe en cada vuelta. El
+// error es sólo de lo que impidió acabar el reintento (no poder escribir).
+func (p *Parking) retry(ctx context.Context, only spec.Specification[*domain.ParkedFact], due bool) (retried, error) {
+	var out retried
+	release, err := p.take(ctx)
+	if err != nil {
+		return out, err
+	}
+	defer release()
 	all, err := p.waiting(ctx, only)
 	if err != nil {
-		return 0, 0, err
+		return out, err
 	}
 	inOrder(all)
-	stopped := map[domain.OrganizationID]bool{}
-	var failed error
+	now := fw.Now()
+	stopped := map[string]bool{}
 	for _, f := range all {
-		st := f.State()
-		if stopped[st.Company] {
-			waiting++
+		st, queue := f.State(), queueOf(f)
+		if stopped[queue] || (due && !f.Due(now)) {
+			stopped[queue] = true
+			out.waiting++
 			continue
 		}
 		herr := p.inner.HandleMessage(ctx, envelopeOf(st))
+		if err := ctx.Err(); err != nil {
+			return out, err // un proceso que se está parando no anota nada: el hecho sigue como estaba
+		}
 		if herr == nil {
 			if _, err := p.orch.Update(ctx, f.ID(), func(_ context.Context, x *domain.ParkedFact) error { x.MarkPosted(fw.Now()); return nil }); err != nil {
-				return posted, waiting, errors.Join(failed, err)
+				return out, err
 			}
-			posted++
+			out.posted++
 			continue
 		}
 		code, reason := domain.FailedCode, herr.Error()
@@ -194,25 +247,25 @@ func (p *Parking) retry(ctx context.Context, only spec.Specification[*domain.Par
 		if errors.As(herr, &rule) {
 			code, reason = rule.Code, rule.Error()
 		} else {
-			failed = errors.Join(failed, fmt.Errorf("accounting: %s %s: %w", st.EventType, st.EnvelopeID, herr))
+			out.failed = append(out.failed, fmt.Sprintf("%s %s: %v", st.EventType, st.EnvelopeID, herr))
 		}
-		if !f.SameRefusal(code, reason) {
-			if _, err := p.orch.Update(ctx, f.ID(), func(_ context.Context, x *domain.ParkedFact) error { x.Refused(code, reason); return nil }); err != nil {
-				return posted, waiting, errors.Join(failed, err)
-			}
+		if _, err := p.orch.Update(ctx, f.ID(), func(_ context.Context, x *domain.ParkedFact) error { x.Refused(code, reason, fw.Now()); return nil }); err != nil {
+			return out, err
 		}
-		stopped[st.Company] = true
-		waiting++
+		stopped[queue] = true
+		out.waiting++
 	}
-	return posted, waiting, failed
+	return out, nil
 }
 
 // Órdenes y consultas de lo que espera.
 type (
 	// RetryParked vuelve a intentar los hechos que esperan: los de una empresa, o los de todas las
-	// empresas del ámbito de quien llama cuando no se da ninguna.
+	// empresas del ámbito de quien llama cuando no se da ninguna. Con Due, sólo lo que ya toca, como
+	// hace el planificador; sin él, todo, aunque aún no toque.
 	RetryParked struct {
 		Company string `json:"company,omitempty"`
+		Due     bool   `json:"due,omitempty"`
 	}
 	// DiscardParked renuncia a un hecho que espera, diciendo por qué.
 	DiscardParked struct {
@@ -228,26 +281,33 @@ type (
 
 // DTOs.
 type (
+	// ParkedDTO es la forma de transporte de un hecho aparcado. NextAttempt es cuándo lo intenta
+	// otra vez el planificador; vacío cuando ya no espera.
 	ParkedDTO struct {
-		ID         string          `json:"id"`
-		Company    string          `json:"company,omitempty"`
-		EventType  string          `json:"eventType"`
-		Source     string          `json:"source,omitempty"`
-		Subject    string          `json:"subject,omitempty"`
-		OccurredAt string          `json:"occurredAt,omitempty"`
-		ReceivedAt string          `json:"receivedAt"`
-		Status     string          `json:"status"`
-		Code       string          `json:"code,omitempty"`
-		Reason     string          `json:"reason,omitempty"`
-		Attempts   int             `json:"attempts"`
-		ResolvedAt string          `json:"resolvedAt,omitempty"`
-		Note       string          `json:"note,omitempty"`
-		Data       json.RawMessage `json:"data"`
-		Version    int64           `json:"version"`
+		ID          string          `json:"id"`
+		Company     string          `json:"company,omitempty"`
+		EventType   string          `json:"eventType"`
+		Source      string          `json:"source,omitempty"`
+		Subject     string          `json:"subject,omitempty"`
+		OccurredAt  string          `json:"occurredAt,omitempty"`
+		ReceivedAt  string          `json:"receivedAt"`
+		Status      string          `json:"status"`
+		Code        string          `json:"code,omitempty"`
+		Reason      string          `json:"reason,omitempty"`
+		Attempts    int             `json:"attempts"`
+		NextAttempt string          `json:"nextAttempt,omitempty"`
+		ResolvedAt  string          `json:"resolvedAt,omitempty"`
+		Note        string          `json:"note,omitempty"`
+		Data        json.RawMessage `json:"data"`
+		Version     int64           `json:"version"`
 	}
+	// RetriedDTO es lo que hizo un reintento. Failed lista, con el tipo y la identidad del mensaje,
+	// lo que no se contabilizó por algo que no es una regla (una validación, un fallo): el reintento
+	// acabó, y la respuesta lo dice junto con lo contabilizado y lo que espera.
 	RetriedDTO struct {
-		Posted  int `json:"posted"`
-		Waiting int `json:"waiting"`
+		Posted  int      `json:"posted"`
+		Waiting int      `json:"waiting"`
+		Failed  []string `json:"failed,omitempty"`
 	}
 )
 
@@ -265,12 +325,13 @@ func parkedDTO(f *domain.ParkedFact) ParkedDTO {
 		company = s.Company.String()
 	}
 	return ParkedDTO{ID: f.ID().String(), Company: company, EventType: s.EventType, Source: s.Source, Subject: s.Subject, OccurredAt: rfc3339(s.OccurredAt),
-		ReceivedAt: rfc3339(s.ReceivedAt), Status: string(s.Status), Code: s.Code, Reason: s.Reason, Attempts: s.Attempts, ResolvedAt: rfc3339(s.ResolvedAt),
-		Note: s.Note, Data: json.RawMessage(s.Data), Version: f.Version()}
+		ReceivedAt: rfc3339(s.ReceivedAt), Status: string(s.Status), Code: s.Code, Reason: s.Reason, Attempts: s.Attempts, NextAttempt: rfc3339(s.NextAttempt),
+		ResolvedAt: rfc3339(s.ResolvedAt), Note: s.Note, Data: json.RawMessage(s.Data), Version: f.Version()}
 }
 
-// companies restringe los hechos al ámbito de quien llama. Un hecho que no nombra empresa es sólo
-// para un administrador global.
+// companies restringe los hechos al ámbito de quien llama. Un hecho que no nombra empresa (ni
+// sigue a otro que la nombre) es sólo para un administrador global: no hay empresa con la que
+// comprobar el ámbito de nadie más.
 func companies(sc scope) spec.Specification[*domain.ParkedFact] {
 	switch {
 	case sc.global:
@@ -300,8 +361,8 @@ func (s service) parkedUseCases(svc *Service) {
 			}
 			only = domain.ParFieldCompany.Eq(company)
 		}
-		posted, waiting, err := d.Parking.retry(ctx, only)
-		return RetriedDTO{Posted: posted, Waiting: waiting}, err
+		r, err := d.Parking.retry(ctx, only, c.Due)
+		return RetriedDTO{Posted: r.posted, Waiting: r.waiting, Failed: r.failed}, err
 	})
 
 	svc.DiscardParked = guard(PermParkedResolve, func(ctx context.Context, c DiscardParked) (ParkedDTO, error) {
@@ -309,6 +370,12 @@ func (s service) parkedUseCases(svc *Service) {
 			return ParkedDTO{}, fw.NotFound(domain.ParkedKind, c.ID)
 		}
 		sc := scopeOf(ctx)
+		// Espera al reintento en marcha: si no, descartaría un hecho que se está contabilizando.
+		release, err := d.Parking.take(ctx)
+		if err != nil {
+			return ParkedDTO{}, err
+		}
+		defer release()
 		f, err := d.Parking.orch.Update(ctx, c.ID, func(_ context.Context, f *domain.ParkedFact) error {
 			st := f.State()
 			if st.Company.IsZero() && !sc.global {
