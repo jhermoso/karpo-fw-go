@@ -127,6 +127,12 @@ Pendiente:
 - Desactivar al usuario al recibir `hr.employee-terminated.v1`.
 - Principales de servicio en base de datos, el día que haya que administrarlos sin desplegar.
 - Vigencia de las asignaciones de rol e `IncludeSubsidiaries` (P2).
+- **Sincronizar el catálogo con varios procesos** (macroservicios): hoy cada proceso declara los
+  permisos de los contextos que aloja y desactiva los que no declara. Con dos procesos que alojan
+  contextos distintos, cada arranque desactivaría los permisos del otro, y con D-98 (se conceden
+  una sola vez) cada vaivén los quitaría y volvería a dar a los roles del sistema. Antes de partir
+  el monolito: que cada proceso sólo gestione los permisos de sus contextos (por espacio de
+  nombres), o un catálogo declarado por despliegue. Lo señaló la revisión de D-98.
 
 ### 2d. Revisión de la integración del 2026-10-11: lo que queda
 Hallazgos menores de la revisión independiente (G-6) que no se arreglaron en la rama

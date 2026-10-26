@@ -305,6 +305,19 @@ las tenía; no se perdió ninguna. Quedan 6 CIF repetidos a propósito: parecen 
 el CIF mal dado de alta en Sage y se corrigen allí. En Trench, «un documento, una party» (D-50) se
 cumple salvo en esos 6 casos, identificados.
 
+**D-92 en Trench** (su sesión, 2026-10-26; en su `main`, PR 66 y 67, merge 8e47595cc). El
+documento de identidad sigue la regla de clase de Karpo Go (una organización sólo TXID u OTHR; una
+persona todo salvo el TXID español; 422 `PARTY-DOCUMENT-NOT-FOR-KIND`; formato, luego clase, luego
+duplicado) en toda alta y edición manual; en la importación (D-9) el inválido entra marcado. Javier
+decidió allí el 2026-10-24 que en el alta rápida un documento inválido rechaza el alta entera, y que
+las incidencias van en una tabla genérica por ficha. Correo, teléfono e IBAN con formato erróneo se
+guardan tal cual, con `warnings` `{field, code, message}` en la respuesta y una incidencia Warning
+(`INVALID_EMAIL`, `INVALID_PHONE`, `INVALID_IBAN`); vacío o demasiado largo sigue siendo 400. Queda
+abierto en Trench: permiso propio de las rutas `/import`, validar el documento en el auto-registro
+y la incidencia de una cuenta bancaria sin titular. **En Karpo Go el IBAN no está en la party** sino
+en cuentas de Nóminas, Compras y Tesorería que alimentan remesas SEPA: sigue rechazándose hasta que
+Javier diga qué operaciones deben negarse con un IBAN marcado.
+
 ### 1.1 septies Decimales (sesión de Theros)
 
 Propuesta por la sesión de Theros y decidida en esta sesión el 2026-10-20.
