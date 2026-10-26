@@ -136,6 +136,7 @@ en lugar de `organization`. Es la forma que Go devuelve hoy; `code` en cada rol 
 | 12 | `POST /api/party-relationships/{id}/terminate` | Terminarla | `DELETE /party-relationships/{id}` |
 | 13 | `GET /api/catalogs/party-role-types` · `…/party-relationship-types` · `…/party-classifications` · `…/document-types?country=ES` | Catálogos | Los dos primeros, igual; los otros, `GET /catalogs/party-types` y los tipos de documento escritos a mano en el front |
 | 14 | `GET /api/internal-organizations` | Las empresas del grupo que ve quien llama | Igual |
+| 14 bis | `GET /api/internal-organizations/names` | Identificador y nombre de todas las empresas del grupo de la instalación (D-101) | Sólo en Go por ahora |
 | 15 | `GET /api/reference/countries` | Países | `GET /catalogs/geographic-boundaries?type=Country` |
 
 Todas menos la 1, la 2 y la 7 existen ya en Go con esta forma.

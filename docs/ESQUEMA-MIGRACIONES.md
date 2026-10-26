@@ -184,7 +184,10 @@ SET ANSI_NULLS ON;` al principio.
 `NUMBER(p,s)` en Oracle y `TEXT` en SQLite (su `NUMERIC` pierde cifras). Exige 1 ≤ p ≤ 28 y
 0 ≤ s ≤ p; un marcador mal formado (`{dec}`, `{dec:18}`, `{dec:29,2}`, `{dec:5,6}`) hace que
 `RenderDDL` y `RenderDDLAll` entren en pánico, como `regexp.MustCompile`, porque el DDL es una
-constante del programa; `RenderDDLChecked` devuelve el error. Cómo se escriben, leen y consultan
+constante del programa; `RenderDDLChecked` devuelve el error. **Un `DEFAULT` en una columna
+`{dec}` va entre comillas** (`DEFAULT '0.00'`): en SQLite la columna es `TEXT` y un número sin
+comillas se guarda como REAL, que pierde cifras pasadas las quince significativas (lo avisó
+Theros). Hoy ningún contexto pone `DEFAULT` a una columna decimal. Cómo se escriben, leen y consultan
 los decimales: [ARQUITECTURA.md](ARQUITECTURA.md) §4, «Decimales».
 
 **Pasar una columna de texto a decimal.** El DDL portable no cambiaba tipos de columna.
