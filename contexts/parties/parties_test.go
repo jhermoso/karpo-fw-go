@@ -1466,6 +1466,15 @@ func (e *env) roleTypes(tag string) {
 	if !slices.ContainsFunc(debtor.Roles, func(r papp.RoleDTO) bool { return r.RoleType == added.ID }) {
 		t.Fatalf("the relationship did not give the role of the new type: %+v", debtor.Roles)
 	}
+
+	// El código es opcional: varios tipos sin código conviven (en SQL, el índice único los admite).
+	for _, n := range []string{"1", "2"} {
+		var rt papp.RoleTypeDTO
+		e.must(e.do("POST", "/api/catalogs/party-role-types", e.admin, map[string]any{"name": "Fiador " + tag + " " + n,
+			"parent": domain.RolePersonCategory.String()}, &rt), 201, "a role type without a code")
+		e.must(e.do("POST", "/api/catalogs/party-relationship-types", e.admin, map[string]any{"name": "Fianza " + tag + " " + n,
+			"fromRole": rt.ID, "toRole": domain.RoleCustomer.String()}, nil), 201, "a relationship type without a code")
+	}
 }
 
 func endToEnd(t *testing.T, newDirectory func(*testing.T) directory) {
@@ -1580,4 +1589,124 @@ func TestParties_LayersRespectTheArchitecture(t *testing.T) {
 		m+"/contexts/parties/domain", m+"/contexts/parties/contracts")
 	archtest.AssertTreeDoesNotImport(t, "application", []string{"/pkg/persistence", "/pkg/distribution", "database/sql", "net/http"})
 	archtest.AssertTreeDoesNotImport(t, "distribution", []string{"/pkg/persistence", "/contexts/parties/infrastructure"})
+}
+
+// Dos colaboradores vigentes de una empresa no comparten código de promoción; los que no tienen
+// conviven. En SQL lo asegura además un índice único (infrastructure, migración 29).
+func TestParties_PromotionCodeIsUniqueAmongCollaborators(t *testing.T) {
+	e := compose(t, newMemoryDirectory)
+	acme, _ := e.scenario("promo")
+	var refers [2]papp.RelationshipDTO
+	for i := range refers {
+		var agency papp.PartyDTO
+		e.must(e.do("POST", "/api/organizations", e.admin, map[string]any{"legalName": "Agencia promo " + string(rune('A'+i)),
+			"roles": []string{domain.RoleCollaborator.String()}}, &agency), 201, "an agency")
+		e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelCollaborator.String(), "fromParty": agency.ID,
+			"toParty": acme.ID}, &refers[i]), 201, "a collaborator without a code")
+	}
+	code := func(i int) string { return "/api/party-relationships/" + refers[i].ID + "/promotion-code" }
+	e.must(e.do("PUT", code(0), e.admin, map[string]any{"promotionCode": "SOL-1"}, nil), 200, "a code")
+	e.mustProblem(e.problem("PUT", code(1), e.admin, map[string]any{"promotionCode": "sol-1"}), 422, "parties.duplicate_promotion_code",
+		"the code of another collaborator")
+	e.must(e.do("PUT", code(1), e.admin, map[string]any{"promotionCode": "SOL-2"}, nil), 200, "another code")
+}
+
+// El código de promoción y su índice único (migración 29) a través de una fusión y de su vuelta,
+// sobre SQLite. Una fusión sólo pasa a la superviviente las relaciones de cliente y de proveedor
+// (D-93): la del colaborador se queda en la que cede, con su código, y el índice no estorba ni al
+// fusionar ni al deshacer. Una relación con el fin puesto en el futuro deja la clave del índice a
+// NULL; el código lo sigue reteniendo la comprobación del caso de uso hasta ese fin.
+func TestParties_PromotionCodeThroughAMerge_SQLite(t *testing.T) {
+	e := compose(t, newMemoryDirectory)
+	ctx := context.Background()
+	raw, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "merge.db")+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw.SetMaxOpenConns(1)
+	t.Cleanup(func() { _ = raw.Close() })
+	db := sqlite.Open(raw, sqlrepo.WithName("sqlite"))
+	m, _ := infrastructure.Migrator(db)
+	if _, err := m.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.sw.Swap(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	keys := func(code string) (n int) {
+		t.Helper()
+		if err := raw.QueryRow(`SELECT COUNT(*) FROM party_relationships WHERE promotion_key LIKE ?`, "%/"+code).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	org := func(name string, roles ...string) papp.PartyDTO {
+		t.Helper()
+		var p papp.PartyDTO
+		e.must(e.do("POST", "/api/organizations", e.admin, map[string]any{"legalName": name, "roles": roles}, &p), 201, name)
+		return p
+	}
+	collaborator := func(agency, company papp.PartyDTO, code string) papp.RelationshipDTO {
+		t.Helper()
+		var r papp.RelationshipDTO
+		e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelCollaborator.String(), "fromParty": agency.ID,
+			"toParty": company.ID}, &r), 201, "a collaborator")
+		e.must(e.do("PUT", "/api/party-relationships/"+r.ID+"/promotion-code", e.admin, map[string]any{"promotionCode": code}, &r), 200, "its code")
+		return r
+	}
+	codeOf := func(p papp.PartyDTO, company papp.PartyDTO) []string {
+		t.Helper()
+		var rs []papp.RelationshipDTO
+		e.must(e.do("GET", "/api/parties/"+p.ID+"/relationships", e.admin, nil, &rs), 200, "relationships")
+		var out []string
+		for _, r := range rs {
+			if r.Type == domain.RelCollaborator.String() && r.ToParty == company.ID && r.Active && r.Collaborator != nil {
+				out = append(out, r.Collaborator.PromotionCode)
+			}
+		}
+		return out
+	}
+	merge := func(from, to, company papp.PartyDTO) {
+		t.Helper()
+		var mark papp.RelationshipDTO
+		e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelDuplicateOf.String(), "fromParty": from.ID,
+			"toParty": to.ID}, &mark), 201, "merge")
+		if got := codeOf(from, company); len(got) != 1 {
+			t.Fatalf("the collaborator stays with the merged party: %v", got)
+		}
+		e.must(e.do("POST", "/api/party-relationships/"+mark.ID+"/terminate", e.admin, nil, nil), 200, "undo the merge")
+	}
+	acme := org("Acme fusiones", domain.RoleInternalOrganization.String())
+
+	// Sin fin: la clave está puesta, y sigue una sola tras fusionar y deshacer.
+	sol := org("Agencia Sol")
+	collaborator(sol, acme, "SOL-9")
+	e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelCustomer.String(), "fromParty": sol.ID,
+		"toParty": acme.ID}, nil), 201, "the agency also buys from acme")
+	if keys("SOL-9") != 1 {
+		t.Fatalf("the key of an open collaborator: %d", keys("SOL-9"))
+	}
+	merge(sol, org("Sol superviviente"), acme)
+	if got := codeOf(sol, acme); len(got) != 1 || got[0] != "SOL-9" || keys("SOL-9") != 1 {
+		t.Fatalf("after a merge and its undoing: %v, %d keys", got, keys("SOL-9"))
+	}
+
+	// Con fin futuro: la clave pasa a NULL, pero el código sigue siendo suyo hasta el fin.
+	luna := org("Agencia Luna")
+	r := collaborator(luna, acme, "LUNA-1")
+	e.must(e.do("POST", "/api/party-relationships/"+r.ID+"/terminate", e.admin, map[string]any{"at": time.Now().Add(48 * time.Hour)}, nil), 200,
+		"it stops referring business in two days")
+	var n int
+	if err := raw.QueryRow(`SELECT COUNT(*) FROM party_relationships WHERE promotion_code = 'LUNA-1' AND promotion_key IS NULL`).Scan(&n); err != nil || n != 1 {
+		t.Fatalf("a relationship with an end ahead keeps its code and no key: %d %v", n, err)
+	}
+	var other papp.RelationshipDTO
+	e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelCollaborator.String(), "fromParty": org("Agencia Estrella").ID,
+		"toParty": acme.ID}, &other), 201, "another collaborator")
+	e.mustProblem(e.problem("PUT", "/api/party-relationships/"+other.ID+"/promotion-code", e.admin, map[string]any{"promotionCode": "LUNA-1"}), 422,
+		"parties.duplicate_promotion_code", "the code is still Luna's until its end")
+	merge(luna, org("Luna superviviente"), acme)
+	if got := codeOf(luna, acme); len(got) != 1 || got[0] != "LUNA-1" || keys("LUNA-1") != 0 {
+		t.Fatalf("after a merge and its undoing, with an end ahead: %v, %d keys", got, keys("LUNA-1"))
+	}
 }

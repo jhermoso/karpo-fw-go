@@ -5,10 +5,13 @@ package infrastructure
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/parties/domain"
+	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/mysql"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/oracle"
@@ -253,7 +256,132 @@ func Migrations() sqlrepo.MigrationSet {
 			`CREATE TABLE party_data_quality_issues (party_id {uuid} NOT NULL, id {uuid} NOT NULL, subject_id {uuid},
 	field {str:60} NOT NULL, code {str:40} NOT NULL, severity {str:10} NOT NULL, message {str:200} NOT NULL,
 	issue_value {str:320}, raised_at {ts} NOT NULL, PRIMARY KEY (party_id, id), FOREIGN KEY (party_id) REFERENCES parties (id))`)},
+		// Los códigos no se repiten aunque haya más de un proceso (BACKLOG.md §2d, docs/PARTIES.md
+		// §22): un índice único sobre el código de los tipos de rol y de relación, como los
+		// uq_role_type_code y uq_party_relationship_type_code de Trench, y otro sobre el código de
+		// promoción de los colaboradores vigentes de cada organización (promotionKey). Varios tipos
+		// sin código conviven en los cinco motores ({whereNotNull}); un código vacío de una base
+		// antigua pasa a NULL. Si ya hay códigos repetidos, repeatedCodes detiene la migración antes
+		// de tocar nada y dice cuáles.
+		{Version: 29, Name: "unique codes of role types, relationship types and promotions", Check: repeatedCodes,
+			Up: sqlrepo.RenderDDLAll(
+				`UPDATE role_types SET code = NULL WHERE code = ''`,
+				`UPDATE relationship_types SET code = NULL WHERE code = ''`,
+				`UPDATE party_relationships SET promotion_code = NULL WHERE promotion_code = ''`,
+				`ALTER TABLE party_relationships {add:promotion_key} {str:52}{addEnd}`,
+				`CREATE UNIQUE INDEX `+uniqueRoleTypeCode+` ON role_types (code){whereNotNull:code}`,
+				`CREATE UNIQUE INDEX `+uniqueRelationshipTypeCode+` ON relationship_types (code){whereNotNull:code}`,
+				`CREATE UNIQUE INDEX `+uniquePromotionKey+` ON party_relationships (promotion_key){whereNotNull:promotion_key}`),
+			Run: fillPromotionKeys},
 	}}
+}
+
+// openPromotion es una relación sin fin que lleva código de promoción.
+type openPromotion struct {
+	id, to fw.UUID
+	code   string
+}
+
+// openPromotions lee las relaciones sin fin que llevan código de promoción.
+func openPromotions(ctx context.Context, db *sqlrepo.DB) ([]openPromotion, error) {
+	rows, err := db.QueryContext(ctx, `SELECT id, to_party, promotion_code FROM party_relationships
+	WHERE promotion_code IS NOT NULL AND valid_to IS NULL ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var out []openPromotion
+	for rows.Next() {
+		var id, to any
+		var code sql.NullString
+		if err := rows.Scan(&id, &to, &code); err != nil {
+			return nil, err
+		}
+		p := openPromotion{code: code.String}
+		if p.id, err = db.Dialect().ParseUUID(id); err != nil {
+			return nil, err
+		}
+		if p.to, err = db.Dialect().ParseUUID(to); err != nil {
+			return nil, err
+		}
+		if p.code != "" {
+			out = append(out, p)
+		}
+	}
+	return out, rows.Err()
+}
+
+// sameCode es la forma en que se comparan dos códigos al buscar repetidos: sin espacios en los
+// extremos y sin distinguir mayúsculas, como los comparan las intercalaciones habituales de SQL
+// Server y MySQL ("Sol-1" y "SOL-1", "abc" y "abc "), que el índice único rechazaría. En
+// PostgreSQL, SQLite y Oracle la comprobación es así algo más estricta que el índice.
+func sameCode(code string) string { return strings.ToUpper(strings.TrimSpace(code)) }
+
+// repeatedCodes se niega a crear los índices únicos de la migración 29 si ya hay códigos
+// repetidos, y dice cuáles y en qué filas: hay que dar a cada uno el suyo (no se borra nada) y
+// migrar de nuevo.
+func repeatedCodes(ctx context.Context, db *sqlrepo.DB) error {
+	var found []string
+	report := func(what string, ids map[string][]string) {
+		keys := make([]string, 0, len(ids))
+		for k, v := range ids {
+			if len(v) > 1 {
+				keys = append(keys, k)
+			}
+		}
+		slices.Sort(keys)
+		for _, k := range keys {
+			found = append(found, fmt.Sprintf("%s %s: %s", what, k, strings.Join(ids[k], ", ")))
+		}
+	}
+	for _, table := range []string{"role_types", "relationship_types"} {
+		rows, err := db.Select(ctx, table, []string{"id", "code"}, "id")
+		if err != nil {
+			return err
+		}
+		ids := map[string][]string{}
+		for _, r := range rows {
+			if code := r.String("code"); sameCode(code) != "" {
+				k := fmt.Sprintf("%q", sameCode(code))
+				ids[k] = append(ids[k], fmt.Sprintf("%s (%q)", r.UUID("id"), code))
+			}
+		}
+		report(table+" code", ids)
+	}
+	open, err := openPromotions(ctx, db)
+	if err != nil {
+		return err
+	}
+	ids := map[string][]string{}
+	for _, p := range open {
+		if sameCode(p.code) == "" {
+			continue
+		}
+		k := fmt.Sprintf("%q of the organization %s", sameCode(p.code), p.to)
+		ids[k] = append(ids[k], fmt.Sprintf("%s (%q)", p.id, p.code))
+	}
+	report("promotion code", ids)
+	if len(found) == 0 {
+		return nil
+	}
+	return fmt.Errorf("these codes must be unique and are repeated (give each its own and migrate again; nothing was changed): %s",
+		strings.Join(found, "; "))
+}
+
+// fillPromotionKeys da su promotion_key a las relaciones sin fin que ya tenían código de
+// promoción.
+func fillPromotionKeys(ctx context.Context, db *sqlrepo.DB) error {
+	open, err := openPromotions(ctx, db)
+	if err != nil {
+		return err
+	}
+	for _, p := range open {
+		if _, err := db.Update(ctx, "party_relationships", sqlrepo.Values{"promotion_key": promotionKey(p.to, p.code, true)},
+			sqlrepo.Values{"id": p.id}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // seedCommonCatalog añade los tipos conocidos que no tiene una base sembrada antes, y cuelga Team
@@ -333,7 +461,7 @@ func moveProspect(ctx context.Context, db *sqlrepo.DB) error {
 		}
 		if err := db.Insert(ctx, "relationship_types", sqlrepo.Values{"id": domain.RelProspect, "name": r.String("name"),
 			"description": r.String("description"), "from_role": r.UUID("from_role"), "to_role": r.UUID("to_role"),
-			"hierarchical": r.Bool("hierarchical"), "code": domain.CodeProspect}); err != nil {
+			"hierarchical": r.Bool("hierarchical")}); err != nil {
 			return fmt.Errorf("moving the prospect relationship type: %w", err)
 		}
 		old, err := domain.ParseRelationshipTypeID(oldProspect)
@@ -345,6 +473,14 @@ func moveProspect(ctx context.Context, db *sqlrepo.DB) error {
 		}
 		if _, err := db.Delete(ctx, "relationship_types", sqlrepo.Values{"id": old}); err != nil {
 			return fmt.Errorf("removing the old prospect relationship type: %w", err)
+		}
+		// El código pasa al tipo nuevo cuando el viejo ya no está, porque con el índice único de
+		// la migración 29 los dos no pueden tenerlo a la vez. Sólo lo nota la prueba que vuelve a
+		// sembrar sobre una base ya migrada (TestSeedCommonCatalog_CompletesAnEarlierSeed): en las
+		// bases reales este Run ya se aplicó antes de la 29, no se repite y no entra en la suma de
+		// control, así que el cambio no altera nada.
+		if _, err := db.Update(ctx, "relationship_types", sqlrepo.Values{"code": domain.CodeProspect}, sqlrepo.Values{"id": domain.RelProspect}); err != nil {
+			return fmt.Errorf("moving the prospect relationship type code: %w", err)
 		}
 	}
 	return nil

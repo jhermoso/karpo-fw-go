@@ -47,6 +47,19 @@ type Mapping[ID domain.Identifier, T domain.AggregateRoot[ID]] struct {
 	Children []Child[T]
 	// Custom traduce las especificaciones propias (spec.Custom) por nombre.
 	Custom map[string]CustomSQL
+	// Unique declara los índices únicos de la tabla raíz, además de la clave primaria, con el
+	// error que devuelve Save cuando el agregado choca con uno de ellos (normalmente una
+	// domain.Violation, que se responde como 422). Sin declararlo, el choque al insertar se
+	// confunde con una identidad repetida (domain.Conflict).
+	Unique []UniqueIndex
+}
+
+// UniqueIndex es un índice único de la tabla raíz de un Mapping: su nombre, sus columnas y el
+// error que devuelve Save cuando un agregado choca con él (DB.ViolatesUnique).
+type UniqueIndex struct {
+	Name    string
+	Columns []string
+	Err     error
 }
 
 // ChildRows guarda las filas cargadas de cada colección hija de un agregado, por Name del hijo.

@@ -145,18 +145,15 @@ Hallazgos menores de la revisión independiente (G-6) que no se arreglaron en la
 `integra/2026-10-11`, más lo que dejaron pendiente los arreglos que sí se hicieron (ver
 [docs/integracion-2026-10-11.md](docs/integracion-2026-10-11.md), «Arreglos tras la revisión»).
 
-- **Unicidad del código de un tipo de rol o de relación** — `contexts/parties/application/service.go`
-  (`catalogMu`): las altas de catálogo pasan de una en una dentro del proceso, porque un catálogo
-  con un código repetido no se puede cargar y deja fallando a todo Parties. Con más de un proceso
-  hace falta un índice único sobre `role_types.code` y `relationship_types.code` (filtrado en SQL
-  Server, que trata los vacíos como iguales). Lo mismo si una versión futura siembra un tipo con
-  un código que un administrador ya usó: conviene reservar un prefijo para los añadidos.
+- **Prefijo reservado para los códigos de catálogo que añade un administrador** (decisión de
+  producto, pendiente): la unicidad del código ya la asegura un índice único (migración 29,
+  `docs/PARTIES.md` §22), pero si una versión futura siembra un tipo con un código que un
+  administrador ya usó, la migración de esa siembra se detiene y dice cuál (`codeTaken`). Reservar
+  un prefijo para los añadidos (por ejemplo `x-`) lo evitaría; cambia la API (`code` de
+  `POST /api/catalogs/party-role-types` y `.../party-relationship-types`) y los tipos ya
+  añadidos.
 - **Historial de números de cliente** — `contexts/parties/application/details.go`: un número que
   se cambia o se retira a un cliente vigente queda libre para otro (`docs/PARTIES.md` §9).
-- **Unicidad del código de promoción** — `contexts/parties/application/details.go:40`: se
-  comprueba con una lectura antes de escribir y no hay índice único sobre `promotion_code`
-  (`contexts/parties/infrastructure/schema.go:189`); dos altas simultáneas en relaciones distintas
-  pueden dejar el mismo código a dos colaboradores.
 - **Comentario de `cmd/karpo-postgres`** — `cmd/karpo-postgres/main.go:1`: la revisión señaló el
   comentario de cabecera; el detalle no venía en el encargo de los arreglos, hay que recuperarlo
   del informe de la revisión.

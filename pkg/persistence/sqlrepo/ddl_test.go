@@ -33,6 +33,21 @@ func TestRenderDDL_Decimal(t *testing.T) {
 	}
 }
 
+// Un índice único de una columna anulable admite varias filas sin valor en todos los motores: en
+// SQL Server, con el filtro; en los demás, tal cual.
+func TestRenderDDL_UniqueIndexOfANullableColumn(t *testing.T) {
+	ddl := `CREATE UNIQUE INDEX uq_t_code ON t (code){whereNotNull:code}`
+	for _, d := range sqlrepo.Dialects {
+		want := `CREATE UNIQUE INDEX uq_t_code ON t (code)`
+		if d == "sqlserver" {
+			want += ` WHERE code IS NOT NULL`
+		}
+		if got := sqlrepo.RenderDDL(d, ddl); got != want {
+			t.Errorf("%s:\nwant %s\ngot  %s", d, want, got)
+		}
+	}
+}
+
 func TestRenderDDL_DecimalLimits(t *testing.T) {
 	for _, ok := range []string{"{dec:1,0}", "{dec:1,1}", "{dec:28,0}", "{dec:28,28}"} {
 		if _, err := sqlrepo.RenderDDLChecked("postgres", ok); err != nil {

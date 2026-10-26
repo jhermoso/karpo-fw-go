@@ -112,8 +112,8 @@ func (s service) roleCatalog(ctx context.Context) (*domain.Catalog, error) {
 // catalogMu deja pasar una sola alta en un catálogo cada vez. Que un nombre y un código estén
 // libres se lee antes de escribir, y un catálogo con un código repetido no se puede cargar: dos
 // altas a la vez con el mismo código cabrían las dos y dejarían fallando todos los casos de uso
-// del contexto. Vale mientras haya un solo proceso (docs/ANFITRION.md); con varios hace falta un
-// índice único (BACKLOG.md).
+// del contexto. Entre procesos lo impide el índice único sobre el código (migración 29), cuyo
+// choque el adaptador del catálogo devuelve como la misma violación de regla (docs/PARTIES.md §22).
 var catalogMu sync.Mutex
 
 // catalogAdded deja en el registro de auditoría, en la unidad de trabajo de ctx, que alguien

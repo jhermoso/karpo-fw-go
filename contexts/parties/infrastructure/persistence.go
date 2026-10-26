@@ -300,6 +300,32 @@ func PartyMapping() sqlrepo.Mapping[domain.PartyID, *domain.Party] {
 	}
 }
 
+// Índices únicos de los códigos (migración 29), con el error que da quien choca con ellos: el mismo
+// que da la comprobación previa del caso de uso, que es la que responde casi siempre.
+const (
+	uniqueRoleTypeCode         = "uq_role_types_code"
+	uniqueRelationshipTypeCode = "uq_relationship_types_code"
+	uniquePromotionKey         = "uq_party_rel_promotion_key"
+)
+
+var errDuplicatePromotionCode = fw.Violation("parties.duplicate_promotion_code",
+	"another collaborator of the organization already has that promotion code")
+
+// promotionKey es el valor de party_relationships.promotion_key, la columna del índice único del
+// código de promoción: la organización y el código mientras la relación no tiene fin, y nada si no
+// tiene código o ya tiene fin. Así un código no se repite entre los colaboradores vigentes de una
+// organización y queda libre al terminar la relación. Una fusión no pasa hoy la relación del
+// colaborador (D-93 pasa clientes y proveedores); si un día la pasa, la que termina suelta el
+// código antes de que lo tome la que la continúa. Una relación con el fin puesto en el futuro ya
+// no lo retiene en el índice: eso lo sigue cuidando la comprobación del caso de uso. Una que aún
+// no ha empezado sí lo retiene.
+func promotionKey(to fw.UUID, code string, open bool) any {
+	if code == "" || !open {
+		return nil
+	}
+	return to.String() + "/" + code
+}
+
 // RelationshipMapping mapea Relationship a party_relationships.
 func RelationshipMapping() sqlrepo.Mapping[domain.RelationshipID, *domain.Relationship] {
 	return sqlrepo.Mapping[domain.RelationshipID, *domain.Relationship]{
@@ -307,13 +333,15 @@ func RelationshipMapping() sqlrepo.Mapping[domain.RelationshipID, *domain.Relati
 		Decimals: decimalColumns.Of("party_relationships"),
 		Columns: sqlrepo.WithAuditColumns("rel_type", "from_party", "to_party", "from_role", "to_role",
 			"valid_from", "valid_to", "remark", "trial_until", "share_percent", "promotion_code", "customer_number",
-			"transferred_from"),
+			"transferred_from", "promotion_key"),
 		Fields: map[string]string{"type": "rel_type"},
+		Unique: []sqlrepo.UniqueIndex{{Name: uniquePromotionKey, Columns: []string{"promotion_key"}, Err: errDuplicatePromotionCode}},
 		Dehydrate: func(r *domain.Relationship) (sqlrepo.Values, error) {
 			v := sqlrepo.Values{"rel_type": r.Type(), "from_party": r.From(), "to_party": r.To(),
 				"from_role": r.FromRole(), "to_role": r.ToRole(), "valid_from": r.Since(), "valid_to": r.Until(),
 				"remark": nullable(r.Remark()), "trial_until": r.TrialUntil(), "share_percent": nil, "promotion_code": nullable(r.PromotionCode()),
-				"customer_number": nullable(r.CustomerNumber()), "transferred_from": nil}
+				"customer_number": nullable(r.CustomerNumber()), "transferred_from": nil,
+				"promotion_key": promotionKey(r.To().UUID, r.PromotionCode(), r.Until() == nil)}
 			if id := r.TransferredFrom(); !id.IsZero() {
 				v["transferred_from"] = id
 			}
@@ -451,8 +479,13 @@ func (c SQLCatalogs) AddRoleType(ctx context.Context, t domain.RoleType) error {
 	if t.Parent != nil {
 		parent = *t.Parent
 	}
-	return c.db.Insert(ctx, "role_types", sqlrepo.Values{"id": t.ID, "name": t.Name.String(), "description": nullable(t.Description),
+	err := c.db.Insert(ctx, "role_types", sqlrepo.Values{"id": t.ID, "name": t.Name.String(), "description": nullable(t.Description),
 		"parent_id": parent, "category": t.Category, "code": nullable(t.Code)})
+	if c.db.ViolatesUnique(err, "role_types", uniqueRoleTypeCode, "code") {
+		// Otro proceso añadió a la vez un tipo con el mismo código.
+		return fw.Violation("parties.role_type_code_taken", "there is already a role type with the code "+t.Code)
+	}
+	return err
 }
 
 // RelationshipTypes implementa domain.Catalogs.
@@ -480,8 +513,13 @@ func (c SQLCatalogs) RelationshipTypes(ctx context.Context) ([]domain.Relationsh
 
 // AddRelationshipType implementa domain.Catalogs.
 func (c SQLCatalogs) AddRelationshipType(ctx context.Context, t domain.RelationshipType) error {
-	return c.db.Insert(ctx, "relationship_types", sqlrepo.Values{"id": t.ID, "name": t.Name.String(), "description": nullable(t.Description),
+	err := c.db.Insert(ctx, "relationship_types", sqlrepo.Values{"id": t.ID, "name": t.Name.String(), "description": nullable(t.Description),
 		"from_role": t.FromRole, "to_role": t.ToRole, "hierarchical": t.Hierarchical, "code": nullable(t.Code)})
+	if c.db.ViolatesUnique(err, "relationship_types", uniqueRelationshipTypeCode, "code") {
+		// Otro proceso añadió a la vez un tipo con el mismo código.
+		return fw.Violation("parties.relationship_type_code_taken", "there is already a relationship type with the code "+t.Code)
+	}
+	return err
 }
 
 // DocumentTypes implementa domain.Catalogs.

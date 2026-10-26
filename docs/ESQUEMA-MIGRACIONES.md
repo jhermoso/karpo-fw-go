@@ -93,6 +93,13 @@ m.Verify(ctx)  // al arrancar y antes de hotswap.Switch.Swap: nunca sobre un esq
   commit implícito, así que la migración se registra como `dirty` antes de ejecutarse y como
   limpia al terminar. Si falla a medias, `Migrate` y `Verify` se niegan hasta que alguien repare
   la base y llame a `Force`.
+- **Comprobar antes de tocar nada.** `Migration.Check` es Go que se ejecuta antes de registrar
+  la migración y de ejecutar nada (por ejemplo, que no hay valores repetidos antes de crear un
+  índice único). Si falla, la migración sigue pendiente y no queda `dirty`, también en Oracle y
+  MySQL: se corrigen los datos y se migra de nuevo. Como `Run`, no entra en el checksum. **No es
+  atómico con el DDL:** si otro proceso escribe entre la comprobación y las sentencias (un código
+  repetido justo entonces), en Oracle y MySQL la migración puede fallar a medias y quedar `dirty`.
+  Por eso se paran los procesos que escriben antes de migrar.
 - **Inmutabilidad.** Si cambian las sentencias de una migración ya aplicada, pasa a `modified` y
   `Migrate` se niega.
 - **Base por delante del código.** Una migración aplicada que el código no declara queda como
@@ -143,6 +150,33 @@ que estaban escritas a mano con `VARCHAR2(N)`. Los demás motores no cambian.
   (emoji) ocupan dos.
 - Una columna declarada más ancha para esquivar el problema (por ejemplo `{str:4000}` para 1000
   caracteres) solo puede volver a su tamaño con una migración nueva, no editando la aplicada.
+
+## Índice único de una columna anulable: `{whereNotNull:columna}`
+
+Un índice único sobre una columna que puede ir vacía tiene que admitir varias filas sin valor.
+PostgreSQL, MySQL y SQLite ya lo hacen, y Oracle no indexa las filas cuyas columnas son todas
+NULL; SQL Server, en cambio, trata los NULL como iguales. El marcador cierra la sentencia con el
+filtro sólo allí:
+
+```
+CREATE UNIQUE INDEX uq_role_types_code ON role_types (code){whereNotNull:code}
+-- SQL Server: ... ON role_types (code) WHERE code IS NOT NULL
+-- los demás:  ... ON role_types (code)
+```
+
+Vale para índices de **una** columna: en uno de varias, Oracle sí compara las filas con alguna
+columna NULL (Parties junta organización y código en una sola columna, `promotion_key`, por eso).
+Oracle guarda `''` como NULL; en los demás motores, normalice los vacíos a NULL antes de crear el
+índice. El choque con el índice lo reconoce `DB.ViolatesUnique(err, tabla, índice, columnas...)`
+(por el nombre del índice; en SQLite, por las columnas), y un repositorio lo traduce si el mapeo
+lo declara en `Mapping.Unique` (si no, el choque al insertar se toma por una identidad repetida).
+Lo prueban en cada motor `sqlconformance.RunUniqueIndexes` y `integration.TestUniqueIndexes`.
+
+En SQL Server, un índice filtrado exige que la sesión que escribe en la tabla tenga
+`QUOTED_IDENTIFIER` y `ANSI_NULLS` activados; si no, el `INSERT` o el `UPDATE` falla. El driver
+de Go los activa por defecto, pero un script hecho a mano con `sqlcmd` los tiene desactivados
+(`QUOTED_IDENTIFIER`) salvo que se le pase `-I`: en esos scripts, `SET QUOTED_IDENTIFIER ON;
+SET ANSI_NULLS ON;` al principio.
 
 ## Decimales: `{dec:p,s}` y el paso de texto a decimal (D-94)
 
