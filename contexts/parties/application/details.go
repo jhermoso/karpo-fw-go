@@ -150,7 +150,7 @@ func (s service) changeDetails(ctx context.Context, id domain.RelationshipID, fn
 	if err != nil {
 		return RelationshipDTO{}, err
 	}
-	return RelationshipToDTO(r, types), nil
+	return s.relationshipDTO(ctx, r, types), nil
 }
 
 // Trials implementa contracts.Trials sobre las relaciones de prospecto (una consulta por lote).

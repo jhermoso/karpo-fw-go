@@ -267,7 +267,8 @@ func (t TaxIdentities) TaxIdentities(ctx context.Context, partyIDs []string) (ma
 			}
 			for _, c := range p.Contacts() {
 				a := c.Address
-				if c.Kind == domain.ContactPostal && c.IsActiveAt(now) && a.Country.String() == "ES" && len(a.PostalCode) == 5 &&
+				// Sólo los contactos de todos: el domicilio fiscal es identidad; los de una empresa son de su perfil (D-122).
+				if c.Kind == domain.ContactPostal && c.IsActiveAt(now) && !c.IsOwned() && a.Country.String() == "ES" && len(a.PostalCode) == 5 &&
 					(purpose == "" || c.Has(purpose)) {
 					ti.Province = a.PostalCode[:2]
 					break

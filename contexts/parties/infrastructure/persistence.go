@@ -24,11 +24,11 @@ func PartyMapping() sqlrepo.Mapping[domain.PartyID, *domain.Party] {
 		Table: "parties",
 		Columns: sqlrepo.WithAuditColumns("kind", "name", "given_name", "first_surname", "second_surname", "gender",
 			"birth_date", "marital_status", "legal_name", "trade_name", "legal_form", "active", "test", "shared",
-			"doc_issue", "doc_issue_number", "doc_issue_reason", "duplicate"),
+			"doc_issue", "doc_issue_number", "doc_issue_reason", "duplicate", "preferred_language"),
 		Dehydrate: func(p *domain.Party) (sqlrepo.Values, error) {
 			v := sqlrepo.Values{"kind": p.Kind(), "name": p.Name(), "active": p.IsActive(), "test": p.IsTest(),
 				"shared": p.IsShared(), "legal_form": nil, "doc_issue": p.HasDocumentIssue(), "duplicate": p.IsDuplicate(),
-				"doc_issue_number": nullable(p.DocumentIssue().Number), "doc_issue_reason": nullable(p.DocumentIssue().Reason),
+				"doc_issue_number": nullable(p.DocumentIssue().Number), "doc_issue_reason": nullable(p.DocumentIssue().Reason), "preferred_language": nullable(p.Language().String()),
 				"given_name": nil, "first_surname": nil, "second_surname": nil, "gender": nil, "birth_date": nil,
 				"marital_status": nil, "legal_name": nil, "trade_name": nil}
 			if p.Kind() == domain.KindPerson {
@@ -49,6 +49,13 @@ func PartyMapping() sqlrepo.Mapping[domain.PartyID, *domain.Party] {
 			s := domain.PartyState{Kind: domain.Kind(row.String("kind")), Active: row.Bool("active"),
 				Test: row.Bool("test"), Shared: row.Bool("shared"), Duplicate: row.Bool("duplicate"), Audit: row.AuditStamp(),
 				Issue: domain.DocumentIssue{Number: row.String("doc_issue_number"), Reason: row.String("doc_issue_reason")}}
+			if l := row.String("preferred_language"); l != "" {
+				lang, err := vocab.NewLanguageCode(l)
+				if err != nil {
+					return nil, err
+				}
+				s.Language = lang
+			}
 			switch s.Kind {
 			case domain.KindPerson:
 				n, err := domain.NewPersonalName(row.String("given_name"), row.String("first_surname"), row.String("second_surname"))
@@ -101,6 +108,9 @@ func PartyMapping() sqlrepo.Mapping[domain.PartyID, *domain.Party] {
 					Since: c.Time("raised_at")}
 				if !c.IsNull("subject_id") { // una incidencia de la ficha entera no tiene objeto
 					issue.Subject = c.UUID("subject_id")
+				}
+				if !c.IsNull("owner_id") {
+					issue.Owner = domain.PartyID{UUID: c.UUID("owner_id")}
 				}
 				s.Quality = append(s.Quality, issue) // Reconstitute las ordena igual que el dominio
 			}
@@ -168,13 +178,13 @@ func PartyMapping() sqlrepo.Mapping[domain.PartyID, *domain.Party] {
 			Name:       "data_quality_issues",
 			Table:      "party_data_quality_issues",
 			ForeignKey: "party_id",
-			Columns:    []string{"id", "subject_id", "field", "code", "severity", "message", "issue_value", "raised_at"},
+			Columns:    []string{"id", "subject_id", "field", "code", "severity", "message", "issue_value", "raised_at", "owner_id"},
 			OrderBy:    []string{"raised_at", "id"},
 			Dehydrate: func(p *domain.Party) ([]sqlrepo.Values, error) {
 				out := []sqlrepo.Values{}
 				for _, i := range p.DataQualityIssues() {
 					out = append(out, sqlrepo.Values{"id": i.ID, "subject_id": optUUID(i.Subject), "field": i.Field, "code": i.Code,
-						"severity": string(i.Severity), "message": i.Message, "issue_value": nullable(i.Value), "raised_at": i.Since})
+						"severity": string(i.Severity), "message": i.Message, "issue_value": nullable(i.Value), "raised_at": i.Since, "owner_id": optUUID(i.Owner.UUID)})
 				}
 				return out, nil
 			},
@@ -236,7 +246,7 @@ func PartyMapping() sqlrepo.Mapping[domain.PartyID, *domain.Party] {
 			ForeignKey: "party_id",
 			Columns: []string{"id", "kind", "contact_value", "street_type", "line1", "line2", "directions", "postal_code",
 				"locality", "region", "country", "geo_postal_code", "geo_boundary", "purposes", "non_solicitation", "valid_from", "valid_to",
-				"addr_number", "addr_qualifier", "addr_block", "addr_portal", "addr_staircase", "addr_floor", "addr_door"},
+				"addr_number", "addr_qualifier", "addr_block", "addr_portal", "addr_staircase", "addr_floor", "addr_door", "owner_id"},
 			Fields:  map[string]string{"value": "contact_value"},
 			OrderBy: []string{"valid_from", "id"},
 			Dehydrate: func(p *domain.Party) ([]sqlrepo.Values, error) {
@@ -251,7 +261,8 @@ func PartyMapping() sqlrepo.Mapping[domain.PartyID, *domain.Party] {
 						"non_solicitation": c.NonSolicitation, "valid_from": c.Period.From(), "valid_to": nil,
 						"addr_number": nullable(a.Premises.Number), "addr_qualifier": nullable(a.Premises.Qualifier),
 						"addr_block": nullable(a.Premises.Block), "addr_portal": nullable(a.Premises.Portal),
-						"addr_staircase": nullable(a.Premises.Staircase), "addr_floor": nullable(a.Premises.Floor), "addr_door": nullable(a.Premises.Door)}
+						"addr_staircase": nullable(a.Premises.Staircase), "addr_floor": nullable(a.Premises.Floor), "addr_door": nullable(a.Premises.Door),
+						"owner_id": optUUID(c.Owner.UUID)}
 					if t, ok := c.Period.To(); ok {
 						v["valid_to"] = t
 					}
@@ -333,7 +344,7 @@ func RelationshipMapping() sqlrepo.Mapping[domain.RelationshipID, *domain.Relati
 		Decimals: decimalColumns.Of("party_relationships"),
 		Columns: sqlrepo.WithAuditColumns("rel_type", "from_party", "to_party", "from_role", "to_role",
 			"valid_from", "valid_to", "remark", "trial_until", "share_percent", "promotion_code", "customer_number",
-			"transferred_from", "promotion_key"),
+			"transferred_from", "promotion_key", "supplier_number", "sage_code", "apiscore_code"),
 		Fields: map[string]string{"type": "rel_type"},
 		Unique: []sqlrepo.UniqueIndex{{Name: uniquePromotionKey, Columns: []string{"promotion_key"}, Err: errDuplicatePromotionCode}},
 		Dehydrate: func(r *domain.Relationship) (sqlrepo.Values, error) {
@@ -341,7 +352,9 @@ func RelationshipMapping() sqlrepo.Mapping[domain.RelationshipID, *domain.Relati
 				"from_role": r.FromRole(), "to_role": r.ToRole(), "valid_from": r.Since(), "valid_to": r.Until(),
 				"remark": nullable(r.Remark()), "trial_until": r.TrialUntil(), "share_percent": nil, "promotion_code": nullable(r.PromotionCode()),
 				"customer_number": nullable(r.CustomerNumber()), "transferred_from": nil,
-				"promotion_key": promotionKey(r.To().UUID, r.PromotionCode(), r.Until() == nil)}
+				"promotion_key":   promotionKey(r.To().UUID, r.PromotionCode(), r.Until() == nil),
+				"supplier_number": nullable(r.SupplierNumber()), "sage_code": nullable(r.ExternalCodes().Sage),
+				"apiscore_code": nullable(r.ExternalCodes().Apiscore)}
 			if id := r.TransferredFrom(); !id.IsZero() {
 				v["transferred_from"] = id
 			}
@@ -350,7 +363,7 @@ func RelationshipMapping() sqlrepo.Mapping[domain.RelationshipID, *domain.Relati
 			}
 			return sqlrepo.AuditStampValues(v, r.AuditStamp()), nil
 		},
-		Hydrate: func(row *sqlrepo.Row, _ sqlrepo.ChildRows) (*domain.Relationship, error) {
+		Hydrate: func(row *sqlrepo.Row, children sqlrepo.ChildRows) (*domain.Relationship, error) {
 			period, err := vocab.NewValidPeriod(row.Time("valid_from"), row.NullTime("valid_to"))
 			if err != nil {
 				return nil, err
@@ -362,20 +375,63 @@ func RelationshipMapping() sqlrepo.Mapping[domain.RelationshipID, *domain.Relati
 				Period: period, Remark: row.String("remark"), Audit: row.AuditStamp(),
 				Details: domain.RelationshipDetails{Prospect: domain.ProspectDetails{TrialUntil: row.NullTime("trial_until")},
 					Collaborator: domain.CollaboratorDetails{PromotionCode: row.String("promotion_code")},
-					Customer:     domain.CustomerDetails{Number: row.String("customer_number")}},
+					Customer:     domain.CustomerDetails{Number: row.String("customer_number")},
+					Supplier:     domain.SupplierDetails{Number: row.String("supplier_number")},
+					External:     domain.ExternalCodes{Sage: row.String("sage_code"), Apiscore: row.String("apiscore_code")}},
 				TransferredFrom: domain.RelationshipID{UUID: row.UUID("transferred_from")},
 			}
 			if !row.IsNull("share_percent") {
 				share := vocab.NewPercentage(row.Decimal("share_percent"))
 				s.Details.Ownership.Share = &share
 			}
+			for _, c := range children.Of("consents") {
+				consent := domain.DataProtectionConsent{ID: domain.ConsentID{UUID: c.UUID("id")}, LegalBasis: domain.LegalBasis(c.String("legal_basis")),
+					Purpose: c.String("purpose"), GrantedAt: c.Time("granted_at"), WithdrawnAt: c.NullTime("withdrawn_at"),
+					RetentionMonths: int(c.Int64("retention_months")), Objection: c.Bool("objection"), Notes: c.String("notes")}
+				if err := c.Err(); err != nil {
+					return nil, err
+				}
+				s.Consents = append(s.Consents, consent)
+			}
+			// Por el instante del otorgamiento y la identidad, no por el orden de la base (SQL Server
+			// ordena los UNIQUEIDENTIFIER a su manera).
+			slices.SortFunc(s.Consents, func(a, b domain.DataProtectionConsent) int {
+				if c := a.GrantedAt.Compare(b.GrantedAt); c != 0 {
+					return c
+				}
+				return bytes.Compare(a.ID.Bytes(), b.ID.Bytes())
+			})
 			if err := row.Err(); err != nil {
 				return nil, err
 			}
 			return domain.ReconstituteRelationship(domain.RelationshipID{UUID: row.UUID("id")}, s)
 		},
+		// Los consentimientos de protección de datos de la pareja (D-122), hijos de la relación.
+		Children: []sqlrepo.Child[*domain.Relationship]{{
+			Name:       "consents",
+			Table:      TableConsents,
+			ForeignKey: "relationship_id",
+			Columns:    []string{"id", "legal_basis", "purpose", "granted_at", "withdrawn_at", "retention_months", "objection", "notes"},
+			OrderBy:    []string{"granted_at", "id"},
+			Dehydrate: func(r *domain.Relationship) ([]sqlrepo.Values, error) {
+				out := []sqlrepo.Values{}
+				for _, c := range r.Consents() {
+					var retention any
+					if c.RetentionMonths > 0 {
+						retention = c.RetentionMonths
+					}
+					out = append(out, sqlrepo.Values{"id": c.ID, "legal_basis": string(c.LegalBasis), "purpose": c.Purpose,
+						"granted_at": c.GrantedAt, "withdrawn_at": c.WithdrawnAt, "retention_months": retention, "objection": c.Objection,
+						"notes": nullable(c.Notes)})
+				}
+				return out, nil
+			},
+		}},
 	}
 }
+
+// TableConsents es la tabla de los consentimientos de protección de datos de las parejas (D-122).
+const TableConsents = "party_data_protection_consents"
 
 func hydrateContact(c *sqlrepo.Row) (domain.Contact, error) {
 	period, err := vocab.NewValidPeriod(c.Time("valid_from"), c.NullTime("valid_to"))
@@ -400,6 +456,9 @@ func hydrateContact(c *sqlrepo.Row) (domain.Contact, error) {
 		if !c.IsNull("geo_boundary") {
 			out.Address.Geo.Boundary = c.UUID("geo_boundary")
 		}
+	}
+	if !c.IsNull("owner_id") {
+		out.Owner = domain.PartyID{UUID: c.UUID("owner_id")}
 	}
 	if p := c.String("purposes"); p != "" {
 		for _, x := range strings.Split(p, ",") {

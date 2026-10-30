@@ -92,6 +92,9 @@ func Migrations() sqlrepo.MigrationSet {
 		{Version: 1, Name: "terms, credit profiles, receivables and collections", Up: sqlrepo.RenderDDLAll(schemaDDL...)},
 		{Version: 2, Name: "outboxes, audit log and inbox", Up: technical},
 		{Version: 3, Name: "decimal columns", Run: decimalColumnsV3.Run},
+		// El motivo del bloqueo de crédito de la pareja (docs/DECISIONES-COMUNES.md, D-122; el BlockReason
+		// de 200 de Trench): se guarda con el bloqueo y se borra al desbloquear.
+		{Version: 4, Name: "block reason", Up: sqlrepo.RenderDDLAll(`ALTER TABLE rec_credit_profiles {add:block_reason} {str:200}{addEnd}`)},
 	}}
 }
 
@@ -186,10 +189,10 @@ func CreditMapping() sqlrepo.Mapping[domain.CreditProfileID, *domain.CreditProfi
 	return sqlrepo.Mapping[domain.CreditProfileID, *domain.CreditProfile]{
 		Table:    "rec_credit_profiles",
 		Decimals: decimalColumns.Of("rec_credit_profiles"),
-		Columns:  sqlrepo.WithAuditColumns("seller", "customer", "terms_id", "limited", "credit_limit", "blocked"),
+		Columns:  sqlrepo.WithAuditColumns("seller", "customer", "terms_id", "limited", "credit_limit", "blocked", "block_reason"),
 		Dehydrate: func(p *domain.CreditProfile) (sqlrepo.Values, error) {
 			s := p.State()
-			v := sqlrepo.Values{"seller": s.Seller, "customer": s.Customer, "terms_id": nil, "limited": s.Limited, "credit_limit": nil, "blocked": s.Blocked}
+			v := sqlrepo.Values{"seller": s.Seller, "customer": s.Customer, "terms_id": nil, "limited": s.Limited, "credit_limit": nil, "blocked": s.Blocked, "block_reason": nullString(s.BlockReason)}
 			if !s.Terms.IsZero() {
 				v["terms_id"] = s.Terms
 			}
@@ -200,7 +203,7 @@ func CreditMapping() sqlrepo.Mapping[domain.CreditProfileID, *domain.CreditProfi
 		},
 		Hydrate: func(r *sqlrepo.Row, _ sqlrepo.ChildRows) (*domain.CreditProfile, error) {
 			s := domain.CreditProfileState{Seller: domain.OrganizationID{UUID: r.UUID("seller")}, Customer: domain.PartyID{UUID: r.UUID("customer")},
-				Terms: domain.TermsID{UUID: r.UUID("terms_id")}, Limited: r.Bool("limited"), Limit: r.Decimal("credit_limit"), Blocked: r.Bool("blocked"),
+				Terms: domain.TermsID{UUID: r.UUID("terms_id")}, Limited: r.Bool("limited"), Limit: r.Decimal("credit_limit"), Blocked: r.Bool("blocked"), BlockReason: r.String("block_reason"),
 				Audit: r.AuditStamp()}
 			if err := r.Err(); err != nil {
 				return nil, err
@@ -377,4 +380,12 @@ func InboxFactory(b hotswap.Backend) (application.InboxStore, error) {
 		return memory.NewInbox(db), nil
 	}
 	return nil, unsupported(b)
+}
+
+// nullString guarda una cadena vacía como NULL.
+func nullString(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
 }

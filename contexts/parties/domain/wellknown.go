@@ -87,6 +87,7 @@ const (
 	CodeOwnership    = "ownership"
 	CodeCollaborator = "collaborator"
 	CodeCustomer     = "customer"
+	CodeSupplier     = "supplier"
 )
 
 func parent(id RoleTypeID) *RoleTypeID { return &id }
@@ -181,7 +182,7 @@ func WellKnownRelationshipTypes() []RelationshipType {
 	return []RelationshipType{
 		{ID: RelEmployment, Code: "employment", Name: vocab.MustName("Employment"), Description: "Employee works for an internal organization", FromRole: RoleEmployee, ToRole: RoleInternalOrganization},
 		{ID: RelCustomer, Code: CodeCustomer, Name: vocab.MustName("Customer Relationship"), Description: "Customer buys from an internal organization", FromRole: RoleCustomer, ToRole: RoleInternalOrganization},
-		{ID: RelSupplier, Code: "supplier", Name: vocab.MustName("Supplier Relationship"), Description: "Internal organization buys from a supplier", FromRole: RoleInternalOrganization, ToRole: RoleSupplier},
+		{ID: RelSupplier, Code: CodeSupplier, Name: vocab.MustName("Supplier Relationship"), Description: "Internal organization buys from a supplier", FromRole: RoleInternalOrganization, ToRole: RoleSupplier},
 		{ID: RelPartnership, Code: "partnership", Name: vocab.MustName("Partnership"), Description: "Symmetric partnership between organizations", FromRole: RolePartner, ToRole: RolePartner},
 		{ID: RelOrganizationRollup, Code: "organization-rollup", Name: vocab.MustName("Organization Rollup"), Description: "An organization unit belongs to its parent organization",
 			FromRole: RoleOrganizationUnitCategory, ToRole: RoleOrganizationCategory, Hierarchical: true},

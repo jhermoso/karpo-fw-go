@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
@@ -544,7 +545,10 @@ type TermsState struct {
 	Discount      vocab.Decimal // porcentaje sobre cada línea
 	BlockOrders   bool
 	BlockDelivery bool
-	Audit         traits.AuditStamp
+	// BlockReason dice por qué están bloqueados los pedidos o las entregas (D-122); se borra al
+	// desbloquear los dos.
+	BlockReason string
+	Audit       traits.AuditStamp
 }
 
 // Terms son las condiciones de venta que una empresa da a un cliente (la parte de ventas del
@@ -557,6 +561,9 @@ type Terms struct {
 	s TermsState
 }
 
+// MaxBlockReason es lo que cabe en el motivo de un bloqueo (el BlockReason de Trench).
+const MaxBlockReason = 200
+
 // ReconstituteTerms reconstruye las condiciones de un cliente.
 func ReconstituteTerms(id TermsID, s TermsState) (*Terms, error) {
 	base, err := fw.NewBaseAggregateRoot(TermsKind, id)
@@ -566,6 +573,12 @@ func ReconstituteTerms(id TermsID, s TermsState) (*Terms, error) {
 	var v fw.Validation
 	v.Require(!s.Company.IsZero() && !s.Customer.IsZero(), "customer", "required", "company and customer are required")
 	v.Require(percent(s.Discount), "discount", "range", "a percentage from 0 to 100")
+	if !s.BlockOrders && !s.BlockDelivery {
+		s.BlockReason = ""
+	}
+	s.BlockReason = strings.TrimSpace(s.BlockReason)
+	v.Require(utf8.RuneCountInString(s.BlockReason) <= MaxBlockReason, "blockReason", "length", "the block reason has at most 200 characters")
+	v.Require(!strings.ContainsFunc(s.BlockReason, unicode.IsControl), "blockReason", "format", "no control characters")
 	if err := v.Err(); err != nil {
 		return nil, err
 	}
@@ -578,16 +591,21 @@ func (t *Terms) State() TermsState { return t.s }
 // Change sustituye las condiciones (empresa y cliente se quedan).
 func (t *Terms) Change(s TermsState) error {
 	s.Company, s.Customer, s.Audit = t.s.Company, t.s.Customer, t.s.Audit
-	if _, err := ReconstituteTerms(t.ID(), s); err != nil {
+	n, err := ReconstituteTerms(t.ID(), s)
+	if err != nil {
 		return err
 	}
-	t.s = s
+	t.s = n.s
 	return nil
 }
 
 // AuditSnapshot implementa traits.Snapshotter.
 func (t *Terms) AuditSnapshot() map[string]any {
-	return map[string]any{"discount": t.s.Discount.String(), "blockOrders": t.s.BlockOrders, "blockDelivery": t.s.BlockDelivery}
+	s := map[string]any{"discount": t.s.Discount.String(), "blockOrders": t.s.BlockOrders, "blockDelivery": t.s.BlockDelivery}
+	if t.s.BlockReason != "" {
+		s["blockReason"] = t.s.BlockReason
+	}
+	return s
 }
 
 // Campos de las condiciones.

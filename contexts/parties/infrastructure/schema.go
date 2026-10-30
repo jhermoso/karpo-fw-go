@@ -273,6 +273,26 @@ func Migrations() sqlrepo.MigrationSet {
 				`CREATE UNIQUE INDEX `+uniqueRelationshipTypeCode+` ON relationship_types (code){whereNotNull:code}`,
 				`CREATE UNIQUE INDEX `+uniquePromotionKey+` ON party_relationships (promotion_key){whereNotNull:promotion_key}`),
 			Run: fillPromotionKeys},
+		// Identidad y perfil de cada empresa (docs/DECISIONES-COMUNES.md, D-122; docs/PARTIES.md §23):
+		//   - un contacto puede tener una organización dueña (owner_id; nulo, de todos), y sus
+		//     incidencias de calidad de datos la llevan también, para que la búsqueda las filtre;
+		//   - el idioma preferido de la party (ISO 639-1; como el PreferredLanguage de Trench);
+		//   - en la pareja, el número de proveedor (como el de cliente) y los códigos de Sage y de
+		//     Apiscore (D-29; las longitudes de Trench: 15 y 50);
+		//   - los consentimientos de protección de datos de la pareja, hijos de la relación.
+		{Version: 30, Name: "identity and pair profile: contact owner, language, supplier number, external codes, consents",
+			Up: sqlrepo.RenderDDLAll(
+				`ALTER TABLE party_contacts {add:owner_id} {uuid}{addEnd}`,
+				`CREATE INDEX ix_party_contacts_owner ON party_contacts (owner_id)`,
+				`ALTER TABLE party_data_quality_issues {add:owner_id} {uuid}{addEnd}`,
+				`ALTER TABLE parties {add:preferred_language} {str:2}{addEnd}`,
+				`ALTER TABLE party_relationships {add:supplier_number} {str:20}{addEnd}`,
+				`ALTER TABLE party_relationships {add:sage_code} {str:15}{addEnd}`,
+				`ALTER TABLE party_relationships {add:apiscore_code} {str:50}{addEnd}`,
+				`CREATE INDEX ix_party_rel_supplier_no ON party_relationships (from_party, supplier_number)`,
+				`CREATE TABLE `+TableConsents+` (relationship_id {uuid} NOT NULL, id {uuid} NOT NULL, legal_basis {str:30} NOT NULL,
+	purpose {str:50} NOT NULL, granted_at {ts} NOT NULL, withdrawn_at {ts}, retention_months {int}, objection {bool} NOT NULL,
+	notes {str:500}, PRIMARY KEY (relationship_id, id), FOREIGN KEY (relationship_id) REFERENCES party_relationships (id))`)},
 	}}
 }
 
@@ -658,7 +678,7 @@ func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 
 // DropAll elimina todas las tablas del contexto (sólo para pruebas).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
-	for _, t := range []string{"party_relationships", "party_roles", "party_identifications", "party_contacts", "party_affiliations",
+	for _, t := range []string{TableConsents, "party_relationships", "party_roles", "party_identifications", "party_contacts", "party_affiliations",
 		"party_facility_roles", "facility_role_types", "party_data_quality_issues",
 		"party_classifications", "parties", "relationship_types", "role_types", "country_document_rules",
 		"document_types", "classification_types",

@@ -89,6 +89,8 @@ type SetCredit struct {
 	Terms    string  `json:"terms,omitempty"`
 	Limit    *string `json:"limit,omitempty"` // ausente: sin límite
 	Blocked  bool    `json:"blocked,omitempty"`
+	// BlockReason dice por qué se bloquea (D-122); sin bloqueo no se guarda.
+	BlockReason string `json:"blockReason,omitempty"`
 }
 
 // GetExposure devuelve la situación de crédito de un cliente.
@@ -106,18 +108,19 @@ type SearchCredit struct {
 
 // CreditDTO es la forma de transporte de un perfil de crédito.
 type CreditDTO struct {
-	ID       string `json:"id"`
-	Seller   string `json:"seller"`
-	Customer string `json:"customer"`
-	Terms    string `json:"terms,omitempty"`
-	Limited  bool   `json:"limited"`
-	Limit    string `json:"limit,omitempty"`
-	Blocked  bool   `json:"blocked"`
+	ID          string `json:"id"`
+	Seller      string `json:"seller"`
+	Customer    string `json:"customer"`
+	Terms       string `json:"terms,omitempty"`
+	Limited     bool   `json:"limited"`
+	Limit       string `json:"limit,omitempty"`
+	Blocked     bool   `json:"blocked"`
+	BlockReason string `json:"blockReason,omitempty"` // D-122
 }
 
 func creditDTO(p *domain.CreditProfile) CreditDTO {
 	s := p.State()
-	d := CreditDTO{ID: p.ID().String(), Seller: s.Seller.String(), Customer: s.Customer.String(), Limited: s.Limited, Blocked: s.Blocked}
+	d := CreditDTO{ID: p.ID().String(), Seller: s.Seller.String(), Customer: s.Customer.String(), Limited: s.Limited, Blocked: s.Blocked, BlockReason: s.BlockReason}
 	if !s.Terms.IsZero() {
 		d.Terms = s.Terms.String()
 	}
@@ -279,7 +282,7 @@ func (s service) termsUseCases(svc *Service) {
 		}
 		if len(ps) == 0 {
 			p, err := domain.ReconstituteCreditProfile(domain.NewCreditProfileID(), domain.CreditProfileState{Seller: seller, Customer: customer,
-				Terms: terms, Limited: limited, Limit: limit, Blocked: c.Blocked})
+				Terms: terms, Limited: limited, Limit: limit, Blocked: c.Blocked, BlockReason: c.BlockReason})
 			if err != nil {
 				return CreditDTO{}, err
 			}
@@ -289,7 +292,7 @@ func (s service) termsUseCases(svc *Service) {
 			return creditDTO(p), nil
 		}
 		p, err := s.credit.Update(ctx, ps[0].ID(), func(_ context.Context, p *domain.CreditProfile) error {
-			return p.Set(terms, limited, limit, c.Blocked)
+			return p.Set(terms, limited, limit, c.Blocked, c.BlockReason)
 		})
 		if err != nil {
 			return CreditDTO{}, err

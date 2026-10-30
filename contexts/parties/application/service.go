@@ -63,6 +63,12 @@ type Service struct {
 	SetOwnershipShare     app.CommandHandler[SetOwnershipShare, RelationshipDTO]
 	SetPromotionCode      app.CommandHandler[SetPromotionCode, RelationshipDTO]
 	SetCustomerNumber     app.CommandHandler[SetCustomerNumber, RelationshipDTO]
+	SetSupplierNumber     app.CommandHandler[SetSupplierNumber, RelationshipDTO]
+	SetExternalCodes      app.CommandHandler[SetExternalCodes, RelationshipDTO]
+	RecordConsent         app.CommandHandler[RecordConsent, RelationshipDTO]
+	WithdrawConsent       app.CommandHandler[WithdrawConsent, RelationshipDTO]
+	SetLanguage           app.CommandHandler[SetPreferredLanguage, PartyDTO]
+	MarkPrimary           app.CommandHandler[MarkPrimaryIdentification, PartyDTO]
 	AddIdentification     app.CommandHandler[AddIdentification, PartyDTO]
 	RemoveIdentification  app.CommandHandler[RemoveIdentification, PartyDTO]
 	AddContact            app.CommandHandler[AddContact, ContactResult]
@@ -139,19 +145,32 @@ func (s service) relationshipTypes(ctx context.Context) (map[domain.Relationship
 // updateParty carga una party del ámbito, comprueba que el llamante puede escribirla, le aplica fn
 // y la guarda.
 func (s service) updateParty(ctx context.Context, id domain.PartyID, fn func(*domain.Party, *domain.Catalog) error) (PartyDTO, error) {
+	return s.changeParty(ctx, id, func(sc scope, p *domain.Party) error { return sc.writable(p) }, fn)
+}
+
+// changeParty carga una party, comprueba con allowed que el llamante puede hacer el cambio, le
+// aplica fn y la guarda. Si el cambio corrige algo de la identidad de la party, la party lo publica
+// (IdentityCorrected, D-122): así se avisa a las empresas que se relacionan con ella.
+func (s service) changeParty(ctx context.Context, id domain.PartyID, allowed func(scope, *domain.Party) error,
+	fn func(*domain.Party, *domain.Catalog) error) (PartyDTO, error) {
 	n, err := s.names(ctx)
 	if err != nil {
 		return PartyDTO{}, err
 	}
 	p, err := s.parties.Update(ctx, id, func(ctx context.Context, p *domain.Party) error {
 		// El ámbito lee el registro de auditoría dentro de la unidad de trabajo en la que está (D-74).
-		if err := s.scope(ctx).writable(p); err != nil {
+		if err := allowed(s.scope(ctx), p); err != nil {
 			return err
 		}
 		if err := operable(p); err != nil {
 			return err
 		}
-		return fn(p, n.Roles)
+		before := p.IdentityFields()
+		if err := fn(p, n.Roles); err != nil {
+			return err
+		}
+		p.NoteIdentityCorrections(before)
+		return nil
 	})
 	if err != nil {
 		return PartyDTO{}, err
@@ -258,7 +277,11 @@ func NewService(d Deps) *Service {
 		if err != nil {
 			return PartyDTO{}, err
 		}
-		return s.register(ctx, func(id domain.PartyID) (*domain.Party, error) { return domain.RegisterPerson(id, details) }, c.Roles, c.Affiliation)
+		lang, err := parseLanguage(c.Language)
+		if err != nil {
+			return PartyDTO{}, err
+		}
+		return s.register(ctx, withLanguage(lang, func(id domain.PartyID) (*domain.Party, error) { return domain.RegisterPerson(id, details) }), c.Roles, c.Affiliation)
 	}, idempotent[RegisterPerson, PartyDTO](d.Idempotency), pipeline.Transactional[RegisterPerson, PartyDTO](d.UoW))
 
 	svc.RegisterOrganization = chain(PermPartyCreate, func(ctx context.Context, c RegisterOrganization) (PartyDTO, error) {
@@ -270,23 +293,40 @@ func NewService(d Deps) *Service {
 		if err != nil {
 			return PartyDTO{}, err
 		}
-		return s.register(ctx, func(id domain.PartyID) (*domain.Party, error) {
+		lang, err := parseLanguage(c.Language)
+		if err != nil {
+			return PartyDTO{}, err
+		}
+		return s.register(ctx, withLanguage(lang, func(id domain.PartyID) (*domain.Party, error) {
 			return domain.RegisterOrganization(id, domain.OrganizationDetails{Name: name, LegalForm: form})
-		}, c.Roles, c.Affiliation)
+		}), c.Roles, c.Affiliation)
 	}, idempotent[RegisterOrganization, PartyDTO](d.Idempotency), pipeline.Transactional[RegisterOrganization, PartyDTO](d.UoW))
 
 	svc.Rename = chain(PermPartyUpdate, func(ctx context.Context, c RenameParty) (PartyDTO, error) {
 		return s.updateParty(ctx, c.ID, func(p *domain.Party, _ *domain.Catalog) error {
+			// El nombre de una persona y la razón social de una organización sólo los corrige quien
+			// puede corregir la identidad (D-122, regla 3); el nombre comercial, quien puede cambiar
+			// la party.
 			if p.Kind() == domain.KindPerson {
 				n, err := domain.NewPersonalName(c.GivenName, c.FirstSurname, c.SecondSurname)
 				if err != nil {
 					return err
+				}
+				if n != p.Person().Name {
+					if err := s.scope(ctx).mayCorrectIdentity(p); err != nil {
+						return err
+					}
 				}
 				return p.RenamePerson(n)
 			}
 			n, err := domain.NewOrganizationName(c.LegalName, c.TradeName)
 			if err != nil {
 				return err
+			}
+			if n.Legal() != p.Organization().Name.Legal() {
+				if err := s.scope(ctx).mayCorrectIdentity(p); err != nil {
+					return err
+				}
 			}
 			return p.RenameOrganization(n)
 		})
@@ -348,11 +388,22 @@ func NewService(d Deps) *Service {
 	}, pipeline.RetryOnConflict[SetLegalForm, PartyDTO](retry, backoff))
 
 	svc.FlagDocumentIssue = chain(PermPartyUpdate, func(ctx context.Context, c FlagDocumentIssue) (PartyDTO, error) {
-		return s.updateParty(ctx, c.ID, func(p *domain.Party, _ *domain.Catalog) error { return p.FlagDocumentIssue(c.Number, c.Reason) })
+		return s.updateParty(ctx, c.ID, func(p *domain.Party, _ *domain.Catalog) error {
+			if err := s.scope(ctx).mayCorrectIdentity(p); err != nil { // la marca es del documento: identidad (D-122)
+				return err
+			}
+			return p.FlagDocumentIssue(c.Number, c.Reason)
+		})
 	}, pipeline.RetryOnConflict[FlagDocumentIssue, PartyDTO](retry, backoff))
 
 	svc.ClearDocumentIssue = chain(PermPartyUpdate, func(ctx context.Context, c ClearDocumentIssue) (PartyDTO, error) {
-		return s.updateParty(ctx, c.ID, func(p *domain.Party, _ *domain.Catalog) error { p.ClearDocumentIssue(); return nil })
+		return s.updateParty(ctx, c.ID, func(p *domain.Party, _ *domain.Catalog) error {
+			if err := s.scope(ctx).mayCorrectIdentity(p); err != nil { // D-122
+				return err
+			}
+			p.ClearDocumentIssue()
+			return nil
+		})
 	}, pipeline.RetryOnConflict[ClearDocumentIssue, PartyDTO](retry, backoff))
 
 	// Sólo los administradores globales deciden qué parties ven todas las organizaciones.
@@ -467,7 +518,7 @@ func NewService(d Deps) *Service {
 		if err != nil {
 			return RelationshipDTO{}, err
 		}
-		out := RelationshipToDTO(r, types)
+		out := s.relationshipDTO(ctx, r, types)
 		if rt.ID == domain.RelDuplicateOf {
 			// En el instante en que se movieron las relaciones, no en r.Since(): las que pasaron
 			// empiezan en ese instante, y en r.Since(), si el reloj avanzó entre uno y otro, todavía
@@ -488,7 +539,7 @@ func NewService(d Deps) *Service {
 		if err != nil {
 			return RelationshipDTO{}, err
 		}
-		out := RelationshipToDTO(r, types)
+		out := s.relationshipDTO(ctx, r, types)
 		out.Merge = merge
 		return out, nil
 	}, pipeline.Transactional[TerminateRelationship, RelationshipDTO](d.UoW))
@@ -544,7 +595,7 @@ func NewService(d Deps) *Service {
 		}
 		out := make([]RelationshipDTO, len(rs))
 		for i, r := range rs {
-			out[i] = RelationshipToDTO(r, types)
+			out[i] = s.relationshipDTO(ctx, r, types)
 		}
 		return out, nil
 	})
@@ -688,9 +739,19 @@ func NewService(d Deps) *Service {
 		return out, nil
 	})
 
+	// El idioma preferido es identidad (D-122), sin más reglas: lo cambia quien puede cambiar la party.
+	svc.SetLanguage = chain(PermPartyUpdate, func(ctx context.Context, c SetPreferredLanguage) (PartyDTO, error) {
+		lang, err := parseLanguage(c.Language)
+		if err != nil {
+			return PartyDTO{}, err
+		}
+		return s.updateParty(ctx, c.ID, func(p *domain.Party, _ *domain.Catalog) error { return p.SetPreferredLanguage(lang) })
+	}, pipeline.RetryOnConflict[SetPreferredLanguage, PartyDTO](retry, backoff))
+
 	addPhase2(svc, s)
 	addFacilityRoles(svc, s)
 	addRelationshipDetails(svc, s)
+	addIdentityAndProfile(svc, s)
 	return svc
 }
 
@@ -708,7 +769,7 @@ func (s service) names(ctx context.Context) (Names, error) {
 	if err != nil {
 		return Names{}, err
 	}
-	return Names{Roles: cat, Documents: docs, Classifications: classes}, nil
+	return Names{Roles: cat, Documents: docs, Classifications: classes, Visible: s.scope(ctx).seesOwned}, nil
 }
 
 func (n Names) dto(p *domain.Party) PartyDTO { return ToDTO(p, n) }
@@ -760,7 +821,13 @@ func (s service) partyFilter(ctx context.Context, n Names, q SearchParties) (spe
 		parts = append(parts, domain.FieldDocumentIssue.Eq(true))
 	}
 	if q.WithDataQualityIssues {
-		parts = append(parts, domain.WithDataQualityIssues())
+		// Sólo cuentan las incidencias que quien busca ve: las de los contactos de todos y las de
+		// los suyos (D-122).
+		if sc := s.scope(ctx); sc.global {
+			parts = append(parts, domain.WithDataQualityIssues())
+		} else {
+			parts = append(parts, domain.WithDataQualityIssuesSeenBy(sc.orgs))
+		}
 	}
 	if !q.IncludeMergedParties {
 		parts = append(parts, domain.FieldDuplicate.Eq(false))

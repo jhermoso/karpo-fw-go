@@ -501,12 +501,12 @@ hecha: hoy una pareja se crea con el alta de la party con su afiliación o con
 
 | Qué | En Go |
 |---|---|
-| Filtro | `text`, `kinds`, `document`, `role` (identificador), `includeEndedRoles`, `includeMergedParties`, `active`, `internalOrganizationIds`, `includeEnded` (relaciones terminadas), `customerNumber`, `blocked`. Uno desconocido, 400 |
-| Orden | `name` (por defecto), `customerNumber`, `creditLimit`, `blocked`, `internalOrganization`, `since`. Otro, 400 que los enumera |
+| Filtro | `text`, `kinds`, `document`, `role` (identificador), `includeEndedRoles`, `includeMergedParties`, `active`, `internalOrganizationIds`, `includeEnded` (relaciones terminadas), `customerNumber`, `supplierNumber` (D-122), `blocked`. Uno desconocido, 400 |
+| Orden | `name` (por defecto), `customerNumber`, `supplierNumber`, `creditLimit`, `blocked`, `internalOrganization`, `since`. Otro, 400 que los enumera |
 | Fila común | `id` (la relación), `partyId`, `name`, `kind`, `taxId`, `country`, `active`, `test`, `roles` (nombres de los vigentes), `internalOrganizationId`, `internalOrganizationName`, `since`, `until` |
-| De cliente | `customerNumber` (Parties); `creditLimit` (Cobros; nulo: sin límite); `blockOrders` (bloqueo por crédito de Cobros o de pedidos de Pedidos); `blockDelivery` (Pedidos) |
-| De proveedor | `blockInvoices` (Compras: no se registran facturas nuevas) |
-| Sin datos | `externalCode`, `branch` y `blockReason` no existen en Go |
+| De cliente | `customerNumber` (Parties); `creditLimit` (Cobros; nulo: sin límite); `blockOrders` (bloqueo por crédito de Cobros o de pedidos de Pedidos); `blockDelivery` (Pedidos); `sageCode` y `apiscoreCode` (Parties, D-29); `blockReason` (D-122: los motivos de los bloqueos en vigor de Cobros y de Pedidos que quien llama puede leer, separados por «; ») |
+| De proveedor | `supplierNumber`, `sageCode` y `apiscoreCode` (Parties, D-122 y D-29); `blockInvoices` (Compras: no se registran facturas nuevas) y su `blockReason` |
+| Sin datos | `branch` no existe en Go; `externalCode` es `sageCode` (desde D-122, 2026-10-30) |
 | Permisos | Leer relaciones de Parties. Lo que quien llama no puede leer de Cobros, Pedidos o Compras queda sin rellenar, sin error |
 
 Diferencias con el borrador de arriba: el filtro por rol va por identificador y no por código

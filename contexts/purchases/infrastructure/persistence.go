@@ -106,6 +106,9 @@ func Migrations() sqlrepo.MigrationSet {
 		// El inbox de los eventos de Parties: los proveedores que pasan a otra ficha al fusionar
 		// (docs/DECISIONES-COMUNES.md, D-93).
 		{Version: 4, Name: "inbox", Up: inbox},
+		// El motivo del bloqueo del proveedor en la pareja (docs/DECISIONES-COMUNES.md, D-122; el
+		// BlockReason de 200 de Trench): se guarda con el bloqueo y se borra al desbloquear.
+		{Version: 5, Name: "block reason", Up: sqlrepo.RenderDDLAll(`ALTER TABLE pur_suppliers {add:block_reason} {str:200}{addEnd}`)},
 	}}
 }
 
@@ -236,17 +239,17 @@ func SupplierMapping() sqlrepo.Mapping[domain.SupplierID, *domain.SupplierProfil
 	return sqlrepo.Mapping[domain.SupplierID, *domain.SupplierProfile]{
 		Table:    "pur_suppliers",
 		Decimals: decimalColumns.Of("pur_suppliers"),
-		Columns:  sqlrepo.WithAuditColumns("company", "supplier", "category", "withholding_rate", "payment_days", "iban", "blocked"),
+		Columns:  sqlrepo.WithAuditColumns("company", "supplier", "category", "withholding_rate", "payment_days", "iban", "blocked", "block_reason"),
 		Dehydrate: func(p *domain.SupplierProfile) (sqlrepo.Values, error) {
 			s := p.State()
 			return sqlrepo.AuditStampValues(sqlrepo.Values{"company": s.Company, "supplier": s.Supplier, "category": opt(string(s.Category)),
 				"withholding_rate": s.WithholdingRate, "payment_days": int64(s.PaymentDays), "iban": opt(s.IBAN.String()),
-				"blocked": s.Blocked}, p.AuditStamp()), nil
+				"blocked": s.Blocked, "block_reason": opt(s.BlockReason)}, p.AuditStamp()), nil
 		},
 		Hydrate: func(r *sqlrepo.Row, _ sqlrepo.ChildRows) (*domain.SupplierProfile, error) {
 			s := domain.SupplierState{Company: domain.OrganizationID{UUID: r.UUID("company")}, Supplier: domain.PartyID{UUID: r.UUID("supplier")},
 				Category: domain.Category(r.String("category")), WithholdingRate: r.Decimal("withholding_rate"), PaymentDays: int(r.Int64("payment_days")),
-				Blocked: r.Bool("blocked"), Audit: r.AuditStamp()}
+				Blocked: r.Bool("blocked"), BlockReason: r.String("block_reason"), Audit: r.AuditStamp()}
 			if t := r.String("iban"); t != "" {
 				iban, err := vocab.NewIBAN(t)
 				if err != nil {
