@@ -121,6 +121,16 @@ func TestOrdersContext(t *testing.T) {
 			if err != nil || terms.Version != 2 || terms.PriceList != list.ID || terms.Discount != "10.00" {
 				t.Fatalf("terms round trip: %+v %v", terms, err)
 			}
+			// Migración 6: el motivo del bloqueo va y vuelve, y se borra al desbloquear (D-122).
+			_, err = svc.SetTerms.Handle(actx, oapp.SetTerms{Company: acme.ID, Customer: ana.ID, PriceList: list.ID, Discount: "10", BlockOrders: true, BlockReason: "impagos"})
+			must(err)
+			if ts, err := svc.SearchTerms.Handle(actx, oapp.SearchTerms{Company: acme.ID}); err != nil || len(ts) != 1 || ts[0].BlockReason != "impagos" {
+				t.Fatalf("block reason read back: %+v %v", ts, err)
+			}
+			terms, err = svc.SetTerms.Handle(actx, oapp.SetTerms{Company: acme.ID, Customer: ana.ID, PriceList: list.ID, Discount: "10"})
+			if err != nil || terms.BlockReason != "" {
+				t.Fatalf("unblocked: %+v %v", terms, err)
+			}
 
 			o, err := svc.DraftOrder.Handle(actx, oapp.DraftOrder{Company: acme.ID, Customer: ana.ID, Date: vocab.MustDate(2026, 10, 4), Warehouse: wh.ID,
 				Reference: "Su pedido 77", Notes: "Entregar por la mañana"})

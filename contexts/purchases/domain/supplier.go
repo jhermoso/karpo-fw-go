@@ -1,6 +1,10 @@
 package domain
 
 import (
+	"strings"
+	"unicode"
+	"unicode/utf8"
+
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/traits"
@@ -19,7 +23,9 @@ type SupplierState struct {
 	PaymentDays     int           // vencimiento = fecha de emisión + días, por defecto
 	IBAN            vocab.IBAN    // cuenta por defecto a la que pagar
 	Blocked         bool          // no se registran facturas nuevas
-	Audit           traits.AuditStamp
+	// BlockReason dice por qué está bloqueado (D-122); se borra al desbloquear.
+	BlockReason string
+	Audit       traits.AuditStamp
 }
 
 // SupplierProfile es lo que una empresa sabe de un proveedor para registrar sus facturas (la parte
@@ -32,6 +38,9 @@ type SupplierProfile struct {
 	s SupplierState
 }
 
+// MaxBlockReason es lo que cabe en el motivo de un bloqueo (el BlockReason de Trench).
+const MaxBlockReason = 200
+
 // ReconstituteSupplier reconstruye un perfil.
 func ReconstituteSupplier(id SupplierID, s SupplierState) (*SupplierProfile, error) {
 	base, err := fw.NewBaseAggregateRoot(SupplierKind, id)
@@ -43,6 +52,12 @@ func ReconstituteSupplier(id SupplierID, s SupplierState) (*SupplierProfile, err
 	v.Require(s.Category == "" || ValidCategory(s.Category), "category", "enum", "an expense category")
 	v.Require(!s.WithholdingRate.IsNegative() && !s.WithholdingRate.GreaterThan(vocab.DecimalFromInt(50)) && cents(s.WithholdingRate), "withholdingRate",
 		"range", "from 0 to 50, with two decimals")
+	if !s.Blocked {
+		s.BlockReason = ""
+	}
+	s.BlockReason = strings.TrimSpace(s.BlockReason)
+	v.Require(utf8.RuneCountInString(s.BlockReason) <= MaxBlockReason, "blockReason", "length", "the block reason has at most 200 characters")
+	v.Require(!strings.ContainsFunc(s.BlockReason, unicode.IsControl), "blockReason", "format", "no control characters")
 	v.Require(s.PaymentDays >= 0 && s.PaymentDays <= 365, "paymentDays", "range", "from 0 to 365 days")
 	if err := v.Err(); err != nil {
 		return nil, err
@@ -56,16 +71,21 @@ func (p *SupplierProfile) State() SupplierState { return p.s }
 // Change sustituye los valores por defecto (la empresa y el proveedor se mantienen).
 func (p *SupplierProfile) Change(s SupplierState) error {
 	s.Company, s.Supplier, s.Audit = p.s.Company, p.s.Supplier, p.s.Audit
-	if _, err := ReconstituteSupplier(p.ID(), s); err != nil {
+	n, err := ReconstituteSupplier(p.ID(), s)
+	if err != nil {
 		return err
 	}
-	p.s = s
+	p.s = n.s
 	return nil
 }
 
 // AuditSnapshot implementa traits.Snapshotter.
 func (p *SupplierProfile) AuditSnapshot() map[string]any {
-	return map[string]any{"category": string(p.s.Category), "withholdingRate": p.s.WithholdingRate.String(), "blocked": p.s.Blocked}
+	s := map[string]any{"category": string(p.s.Category), "withholdingRate": p.s.WithholdingRate.String(), "blocked": p.s.Blocked}
+	if p.s.BlockReason != "" {
+		s["blockReason"] = p.s.BlockReason
+	}
+	return s
 }
 
 // Campos del perfil de proveedor.

@@ -37,6 +37,18 @@ type DataQualityIssue struct {
 	Message  string
 	Value    string // el valor tal como se guardó
 	Since    time.Time
+	// Owner es la organización dueña del objeto (la del contacto, D-122): la incidencia se ve donde
+	// se ve el contacto. Cero: la ve quien ve la ficha.
+	Owner PartyID
+}
+
+// OwnerOf devuelve la dueña de una incidencia, o nil si no la tiene (para las especificaciones).
+func (i DataQualityIssue) OwnerOf() *PartyID {
+	if i.Owner.IsZero() {
+		return nil
+	}
+	o := i.Owner
+	return &o
 }
 
 // Campo de un contacto al que se refieren sus incidencias.
@@ -60,9 +72,9 @@ func (p *Party) DataQualityIssuesOf(subject fw.UUID) []DataQualityIssue {
 }
 
 // raiseIssue anota una incidencia nueva de un objeto de la ficha.
-func (p *Party) raiseIssue(subject fw.UUID, field string, f formatIssue, value string) {
+func (p *Party) raiseIssue(subject fw.UUID, owner PartyID, field string, f formatIssue, value string) {
 	p.qualityIssues = append(slices.Clone(p.qualityIssues), DataQualityIssue{ID: fw.NewUUID(), Subject: subject, Field: field,
-		Code: f.code, Severity: SeverityWarning, Message: f.message, Value: value, Since: fw.Now()})
+		Code: f.code, Severity: SeverityWarning, Message: f.message, Value: value, Since: fw.Now(), Owner: owner})
 	slices.SortFunc(p.qualityIssues, compareIssues)
 }
 

@@ -55,6 +55,7 @@ type PartyDTO struct {
 	Test         bool             `json:"test,omitempty"`
 	Shared       bool             `json:"shared,omitempty"`
 	Duplicate    bool             `json:"duplicate,omitempty"` // el duplicado de otra party: sólo participa en consultas
+	Language     string           `json:"language,omitempty"`  // idioma preferido, ISO 639-1 (D-122)
 	// DocumentIssue está presente cuando el documento de identidad de la party se rechazó.
 	DocumentIssue *DocumentIssueDTO `json:"documentIssue,omitempty"`
 	// DataQualityIssues son los datos de la ficha guardados con formato erróneo (D-92); vacía si no hay.
@@ -126,6 +127,8 @@ type ContactDTO struct {
 	From            time.Time   `json:"from"`
 	Until           *time.Time  `json:"until,omitempty"`
 	Active          bool        `json:"active"`
+	// Owner es la organización dueña del contacto (D-122); ausente si es de todos.
+	Owner string `json:"owner,omitempty"`
 }
 
 // ClassificationDTO es una clasificación de una party.
@@ -143,6 +146,9 @@ type Names struct {
 	Roles           *domain.Catalog
 	Documents       *domain.DocumentPolicy
 	Classifications *domain.ClassificationCatalog
+	// Visible dice si quien lee ve lo que es de una organización (un contacto con dueña y sus
+	// incidencias, D-122); nil: lo ve todo.
+	Visible func(owner domain.PartyID) bool
 }
 
 // ToDTO traduce una party, y nombra sus roles, documentos y clasificaciones con los catálogos.
@@ -164,11 +170,15 @@ func ToDTO(p *domain.Party, names Names) PartyDTO {
 	}
 	now := fw.Now()
 	d.Shared, d.Duplicate, d.Organizations = p.IsShared(), p.IsDuplicate(), []string{}
+	d.Language = p.Language().String()
 	if issue := p.DocumentIssue(); !issue.IsZero() {
 		d.DocumentIssue = &DocumentIssueDTO{Number: issue.Number, Reason: issue.Reason}
 	}
 	d.DataQualityIssues = []DataQualityIssueDTO{}
 	for _, i := range p.DataQualityIssues() {
+		if !names.sees(i.Owner) {
+			continue
+		}
 		di := DataQualityIssueDTO{ID: i.ID.String(), Field: i.Field, Code: i.Code, Severity: string(i.Severity), Message: i.Message,
 			Value: i.Value, Since: i.Since}
 		if !i.Subject.IsZero() {
@@ -211,10 +221,16 @@ func ToDTO(p *domain.Party, names Names) PartyDTO {
 		d.Identifications = append(d.Identifications, id)
 	}
 	for _, c := range p.Contacts() {
+		if !names.sees(c.Owner) {
+			continue // de una organización que quien lee no ve: para él no existe
+		}
 		cd := ContactDTO{ID: c.ID.String(), Kind: string(c.Kind), Value: c.Value, NonSolicitation: c.NonSolicitation,
 			From: c.Period.From(), Active: c.IsActiveAt(now), Purposes: []string{}}
 		for _, pp := range c.Purposes {
 			cd.Purposes = append(cd.Purposes, string(pp))
+		}
+		if c.IsOwned() {
+			cd.Owner = c.Owner.String()
 		}
 		if t, ok := c.Period.To(); ok {
 			cd.Until = &t
@@ -271,6 +287,11 @@ type RelationshipDTO struct {
 	Collaborator *CollaboratorDTO `json:"collaborator,omitempty"`
 	// Customer sólo está presente en las relaciones de cliente.
 	Customer *CustomerDTO `json:"customer,omitempty"`
+	// Supplier sólo está presente en las relaciones de proveedor.
+	Supplier *SupplierDTO `json:"supplier,omitempty"`
+	// DataProtectionConsents son los consentimientos de protección de datos de la pareja (D-122);
+	// ausente si no tiene.
+	DataProtectionConsents []ConsentDTO `json:"dataProtectionConsents,omitempty"`
 	// TransferredFrom es la relación de otra party a la que ésta continúa: la que pasó a la
 	// superviviente al fusionar o volvió al deshacer la fusión (D-93).
 	TransferredFrom string `json:"transferredFrom,omitempty"`
@@ -303,6 +324,9 @@ type MergedRelationshipDTO struct {
 // CustomerDTO son los datos de una relación de cliente.
 type CustomerDTO struct {
 	Number string `json:"number,omitempty"`
+	// Los códigos con que Sage y Apiscore conocen a la pareja (D-29).
+	SageCode     string `json:"sageCode,omitempty"`
+	ApiscoreCode string `json:"apiscoreCode,omitempty"`
 }
 
 // CollaboratorDTO son los datos de una relación de colaborador.
@@ -330,6 +354,7 @@ func RelationshipToDTO(r *domain.Relationship, types map[domain.RelationshipType
 	if id := r.TransferredFrom(); !id.IsZero() {
 		d.TransferredFrom = id.String()
 	}
+	d.DataProtectionConsents = consentDTOs(r)
 	if t, ok := types[r.Type()]; ok {
 		d.TypeName = t.Name.String()
 		switch t.Code {
@@ -343,7 +368,11 @@ func RelationshipToDTO(r *domain.Relationship, types map[domain.RelationshipType
 		case domain.CodeCollaborator:
 			d.Collaborator = &CollaboratorDTO{PromotionCode: r.PromotionCode()}
 		case domain.CodeCustomer:
-			d.Customer = &CustomerDTO{Number: r.CustomerNumber()}
+			x := r.ExternalCodes()
+			d.Customer = &CustomerDTO{Number: r.CustomerNumber(), SageCode: x.Sage, ApiscoreCode: x.Apiscore}
+		case domain.CodeSupplier:
+			x := r.ExternalCodes()
+			d.Supplier = &SupplierDTO{Number: r.SupplierNumber(), SageCode: x.Sage, ApiscoreCode: x.Apiscore}
 		}
 	}
 	return d
@@ -388,4 +417,9 @@ func relationshipTypeDTO(t domain.RelationshipType) RelationshipTypeDTO {
 	return RelationshipTypeDTO{ID: t.ID.String(), Code: t.Code, Name: t.Name.String(), Description: t.Description,
 		FromRole: t.FromRole.String(), ToRole: t.ToRole.String(), Hierarchical: t.Hierarchical,
 		WellKnown: domain.IsWellKnownRelationshipType(t.ID)}
+}
+
+// sees dice si quien lee ve lo que es de una organización (dueña cero: de todos).
+func (n Names) sees(owner domain.PartyID) bool {
+	return owner.IsZero() || n.Visible == nil || n.Visible(owner)
 }

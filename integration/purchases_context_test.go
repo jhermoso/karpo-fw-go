@@ -151,6 +151,18 @@ func TestPurchasesContext(t *testing.T) {
 			if err != nil || prof.WithholdingRate != "7.00" || prof.Version != 2 {
 				t.Fatalf("supplier profile upsert: %+v %v", prof, err)
 			}
+			// Migración 5: el motivo del bloqueo va y vuelve, y se borra al desbloquear (D-122).
+			_, err = svc.SetSupplier.Handle(actx, uapp.SetSupplier{Company: acme.ID, Supplier: asesor.ID, Category: "professional-services",
+				WithholdingRate: "7", PaymentDays: 30, IBAN: "ES7921000813610123456789", Blocked: true, BlockReason: "calidad"})
+			must(err)
+			if ss, err := svc.SearchSuppliers.Handle(actx, uapp.SearchSuppliers{Company: acme.ID}); err != nil || len(ss) != 1 || ss[0].BlockReason != "calidad" {
+				t.Fatalf("block reason read back: %+v %v", ss, err)
+			}
+			prof, err = svc.SetSupplier.Handle(actx, uapp.SetSupplier{Company: acme.ID, Supplier: asesor.ID, Category: "professional-services",
+				WithholdingRate: "7", PaymentDays: 30, IBAN: "ES7921000813610123456789"})
+			if err != nil || prof.BlockReason != "" {
+				t.Fatalf("unblocked: %+v %v", prof, err)
+			}
 
 			// 333.33 de asesoría al 21 % (70.00) con un 7 % retenido (23.33), pagados a la cuenta del perfil.
 			a, err := svc.RegisterInvoice.Handle(actx, uapp.RegisterInvoice{Company: acme.ID, Supplier: asesor.ID, SupplierNumber: "2026/0042",

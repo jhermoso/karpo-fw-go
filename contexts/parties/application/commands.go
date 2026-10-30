@@ -62,6 +62,7 @@ type RegisterPerson struct {
 	Gender        string          `json:"gender,omitempty"`
 	BirthDate     string          `json:"birthDate,omitempty"` // YYYY-MM-DD
 	MaritalStatus string          `json:"maritalStatus,omitempty"`
+	Language      string          `json:"language,omitempty"` // idioma preferido, ISO 639-1 (D-122)
 	Roles         []string        `json:"roles,omitempty"`
 	Affiliation   *NewAffiliation `json:"affiliation,omitempty"` // obligatoria salvo para el administrador global
 	RequestID     string          `json:"-"`                     // Idempotency-Key
@@ -92,6 +93,7 @@ type RegisterOrganization struct {
 	LegalName   string          `json:"legalName"`
 	TradeName   string          `json:"tradeName,omitempty"`
 	LegalForm   string          `json:"legalForm,omitempty"`
+	Language    string          `json:"language,omitempty"` // idioma preferido, ISO 639-1 (D-122)
 	Roles       []string        `json:"roles,omitempty"`
 	Affiliation *NewAffiliation `json:"affiliation,omitempty"`
 	RequestID   string          `json:"-"`

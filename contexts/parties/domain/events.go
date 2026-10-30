@@ -228,10 +228,75 @@ type ContactAdded struct {
 	Address   string    `json:"address,omitempty"`
 	Purposes  []string  `json:"purposes"`
 	From      time.Time `json:"from"`
+	Owner     string    `json:"owner,omitempty"` // la organización dueña (D-122); vacío, de todos
 }
 
 // EventType implementa domain.Event.
 func (ContactAdded) EventType() string { return "parties.contact_added" }
+
+// IdentityCorrected se lanza cuando cambia algo de la identidad de una party (lo que es verdad para
+// todas las empresas, docs/DECISIONES-COMUNES.md, D-122): Fields son los datos que cambiaron.
+type IdentityCorrected struct {
+	fw.EventMeta
+	Fields        []string `json:"fields"`
+	Organizations []string `json:"organizations"` // las empresas a las que la party está afiliada ahora
+}
+
+// EventType implementa domain.Event.
+func (IdentityCorrected) EventType() string { return "parties.identity_corrected" }
+
+// PreferredLanguageChanged se lanza cuando cambia el idioma preferido de una party ("" si se quita).
+type PreferredLanguageChanged struct {
+	fw.EventMeta
+	Language string `json:"language,omitempty"`
+}
+
+// EventType implementa domain.Event.
+func (PreferredLanguageChanged) EventType() string { return "parties.preferred_language_changed" }
+
+// PrimaryIdentificationChanged se lanza cuando otro documento pasa a ser el principal.
+type PrimaryIdentificationChanged struct {
+	fw.EventMeta
+	IdentificationID string `json:"identificationId"`
+}
+
+// EventType implementa domain.Event.
+func (PrimaryIdentificationChanged) EventType() string {
+	return "parties.primary_identification_changed"
+}
+
+// DataProtectionConsentRecorded se lanza cuando una pareja registra un consentimiento de protección
+// de datos (D-122): la empresa, como responsable del tratamiento, y el tercero.
+type DataProtectionConsentRecorded struct {
+	fw.EventMeta
+	ConsentID    string    `json:"consentId"`
+	Organization string    `json:"organization"`
+	Party        string    `json:"party"`
+	LegalBasis   string    `json:"legalBasis"`
+	Purpose      string    `json:"purpose"`
+	GrantedAt    time.Time `json:"grantedAt"`
+	Objection    bool      `json:"objection"`
+}
+
+// EventType implementa domain.Event.
+func (DataProtectionConsentRecorded) EventType() string {
+	return "parties.data_protection_consent_recorded"
+}
+
+// DataProtectionConsentWithdrawn se lanza cuando se retira un consentimiento.
+type DataProtectionConsentWithdrawn struct {
+	fw.EventMeta
+	ConsentID    string    `json:"consentId"`
+	Organization string    `json:"organization"`
+	Party        string    `json:"party"`
+	Purpose      string    `json:"purpose"`
+	WithdrawnAt  time.Time `json:"withdrawnAt"`
+}
+
+// EventType implementa domain.Event.
+func (DataProtectionConsentWithdrawn) EventType() string {
+	return "parties.data_protection_consent_withdrawn"
+}
 
 // ContactPurposesChanged se lanza cuando cambian los propósitos de un contacto.
 type ContactPurposesChanged struct {

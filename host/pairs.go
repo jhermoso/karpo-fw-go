@@ -55,7 +55,13 @@ type PairRow struct {
 	BlockOrders    *bool   `json:"blockOrders,omitempty"`
 	BlockDelivery  *bool   `json:"blockDelivery,omitempty"`
 	// De proveedor.
-	BlockInvoices *bool `json:"blockInvoices,omitempty"`
+	SupplierNumber string `json:"supplierNumber,omitempty"`
+	BlockInvoices  *bool  `json:"blockInvoices,omitempty"`
+	// De los dos: los códigos de Sage y de Apiscore (D-29) y por qué está bloqueada la pareja
+	// (D-122): los motivos de los bloqueos en vigor que quien llama puede leer, separados por «; ».
+	SageCode     string `json:"sageCode,omitempty"`
+	ApiscoreCode string `json:"apiscoreCode,omitempty"`
+	BlockReason  string `json:"blockReason,omitempty"`
 }
 
 // pairFilter es el filtro de la búsqueda: el del tercero, como en la búsqueda de parties, y el de
@@ -71,6 +77,7 @@ type pairFilter struct {
 	InternalOrganizationIDs []string `json:"internalOrganizationIds"`
 	IncludeEnded            bool     `json:"includeEnded"`
 	CustomerNumber          string   `json:"customerNumber"`
+	SupplierNumber          string   `json:"supplierNumber"`
 	Blocked                 *bool    `json:"blocked"`
 }
 
@@ -87,7 +94,7 @@ type pairSearch struct {
 }
 
 // pairSorts son los campos por los que se puede ordenar la vista.
-var pairSorts = []string{"name", "customerNumber", "creditLimit", "blocked", "internalOrganization", "since"}
+var pairSorts = []string{"name", "customerNumber", "supplierNumber", "creditLimit", "blocked", "internalOrganization", "since"}
 
 // RegisterRoutes monta las rutas de la vista.
 func (p Pairs) RegisterRoutes(mux *http.ServeMux) {
@@ -225,7 +232,8 @@ func (p Pairs) rows(ctx context.Context, code string, f pairFilter, id string) (
 	for _, pr := range pairs {
 		row := PairRow{ID: pr.ID, PartyID: pr.Party.ID, Name: pr.Party.Name, Kind: pr.Party.Kind, Active: pr.Party.Active,
 			Test: pr.Party.Test, Roles: []string{}, InternalOrganizationID: pr.Organization, InternalOrganizationName: pr.OrganizationName,
-			Since: pr.Since, Until: pr.Until, CustomerNumber: pr.CustomerNumber}
+			Since: pr.Since, Until: pr.Until, CustomerNumber: pr.CustomerNumber, SupplierNumber: pr.SupplierNumber,
+			SageCode: pr.SageCode, ApiscoreCode: pr.ApiscoreCode}
 		for _, role := range pr.Party.Roles {
 			if role.Active {
 				row.Roles = append(row.Roles, role.Name)
@@ -250,11 +258,23 @@ func (p Pairs) rows(ctx context.Context, code string, f pairFilter, id string) (
 				blockDelivery := t.BlockDelivery
 				row.BlockDelivery = &blockDelivery
 			}
+			var reasons []string
+			if readCredit[org] && c.Blocked && c.BlockReason != "" {
+				reasons = append(reasons, c.BlockReason)
+			}
+			if readTerms[org] && (t.BlockOrders || t.BlockDelivery) && t.BlockReason != "" {
+				reasons = append(reasons, t.BlockReason)
+			}
+			row.BlockReason = strings.Join(reasons, "; ")
 		} else if readSuppliers[org] {
 			blocked := suppliers[k].Blocked
 			row.BlockInvoices = &blocked
+			row.BlockReason = suppliers[k].BlockReason
 		}
 		if f.CustomerNumber != "" && !strings.EqualFold(row.CustomerNumber, strings.TrimSpace(f.CustomerNumber)) {
+			continue
+		}
+		if f.SupplierNumber != "" && !strings.EqualFold(row.SupplierNumber, strings.TrimSpace(f.SupplierNumber)) {
 			continue
 		}
 		if f.Active != nil && row.Active != *f.Active {
@@ -322,6 +342,7 @@ func sortPairs(rows []PairRow, by string, ascending bool) {
 	field := map[string]func(a, b PairRow) int{
 		"name":                 func(a, b PairRow) int { return cmp.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)) },
 		"customerNumber":       func(a, b PairRow) int { return cmp.Compare(a.CustomerNumber, b.CustomerNumber) },
+		"supplierNumber":       func(a, b PairRow) int { return cmp.Compare(a.SupplierNumber, b.SupplierNumber) },
 		"creditLimit":          func(a, b PairRow) int { return cmp.Compare(limit(a), limit(b)) },
 		"blocked":              func(a, b PairRow) int { return boolCompare(a.blocked(), b.blocked()) },
 		"internalOrganization": func(a, b PairRow) int { return cmp.Compare(a.InternalOrganizationName, b.InternalOrganizationName) },

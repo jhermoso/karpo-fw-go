@@ -105,6 +105,10 @@ contexts/purchases/
   - `pur_suppliers`;
   - `pur_counters`;
   - las bandejas de salida, la auditoría y, desde la migración 4, `purchases_inbox`.
+- **Motivo del bloqueo** (D-122, migración 5): el perfil de proveedor lleva `blockReason` (hasta 200
+  caracteres, el `BlockReason` de Trench). Se guarda con el bloqueo y se borra al desbloquear: sin
+  bloqueo, el motivo que llegue se descarta. La vista por pareja lo enseña en `blockReason`.
+  `PUT` del perfil lo sustituye entero: reenviar `blocked: true` sin `blockReason` borra el motivo.
 - **Fusión de fichas** (D-93; [PARTIES.md](PARTIES.md) §17): Compras escucha
   `parties.relationship-transferred.v1`. Cuando la relación de proveedor de una empresa pasa de
   una ficha a otra, copia el perfil de proveedor (categoría, retención, días de pago, IBAN,

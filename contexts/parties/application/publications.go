@@ -66,7 +66,25 @@ func Publications(r *messaging.Recorder) *messaging.Recorder {
 	})
 	messaging.On(r, func(_ context.Context, e domain.ContactAdded) ([]app.IntegrationEvent, error) {
 		return one(contracts.PartyContactAddedV1{PartyID: e.AggregateID, ContactID: e.ContactID, Kind: e.Kind, Value: e.Value,
-			Address: e.Address, Purposes: e.Purposes, From: e.From})
+			Address: e.Address, Purposes: e.Purposes, From: e.From, Owner: e.Owner})
+	})
+	// Quién corrigió la identidad es quien hace la petición: la traducción corre en su unidad de trabajo.
+	messaging.On(r, func(ctx context.Context, e domain.IdentityCorrected) ([]app.IntegrationEvent, error) {
+		actor := app.ActorFrom(ctx)
+		ev := contracts.PartyIdentityCorrectedV1{PartyID: e.AggregateID, Fields: e.Fields, Organizations: e.Organizations,
+			CorrectedBy: actor.Name, CorrectedAt: e.OccurredAt}
+		if !actor.PartyID.IsZero() {
+			ev.CorrectedByID = actor.PartyID.String()
+		}
+		return one(ev)
+	})
+	messaging.On(r, func(_ context.Context, e domain.DataProtectionConsentRecorded) ([]app.IntegrationEvent, error) {
+		return one(contracts.DataProtectionConsentRecordedV1{RelationshipID: e.AggregateID, ConsentID: e.ConsentID, Organization: e.Organization,
+			PartyID: e.Party, LegalBasis: e.LegalBasis, Purpose: e.Purpose, GrantedAt: e.GrantedAt, Objection: e.Objection})
+	})
+	messaging.On(r, func(_ context.Context, e domain.DataProtectionConsentWithdrawn) ([]app.IntegrationEvent, error) {
+		return one(contracts.DataProtectionConsentWithdrawnV1{RelationshipID: e.AggregateID, ConsentID: e.ConsentID, Organization: e.Organization,
+			PartyID: e.Party, Purpose: e.Purpose, WithdrawnAt: e.WithdrawnAt})
 	})
 	messaging.On(r, func(_ context.Context, e domain.ContactPurposesChanged) ([]app.IntegrationEvent, error) {
 		return one(contracts.PartyContactPurposesChangedV1{PartyID: e.AggregateID, ContactID: e.ContactID, Purposes: e.Purposes})
