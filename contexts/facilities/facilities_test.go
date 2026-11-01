@@ -78,7 +78,7 @@ func compose(t *testing.T) *host {
 		h.ids[u] = fw.NewUUID()
 		s := authz.Subject{Active: true, Permissions: perms}
 		if u == "admin" {
-			s.Roles = []string{authorization.DefaultGlobalAdminRole}
+			s.Permissions = []authz.Permission{authz.Wildcard}
 		}
 		dir.Put(h.ids[u], s)
 		tok, _ := jwt.Issue(jwtauth.Claims{Subject: h.ids[u].String(), Username: u, PartyID: fw.NewUUID().String(), ExpiresAt: fw.Now().Add(time.Hour).Unix()})
