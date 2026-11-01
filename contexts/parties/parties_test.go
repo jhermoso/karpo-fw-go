@@ -95,7 +95,7 @@ func (d *memoryDirectory) register(_ *testing.T, profile, _ string) (fw.UUID, fw
 	s := authz.Subject{Active: true, Permissions: allPerms}
 	switch profile {
 	case "admin":
-		s = authz.Subject{Active: true, Roles: []string{authorization.DefaultGlobalAdminRole}}
+		s = authz.Subject{Active: true, Permissions: []authz.Permission{authz.Wildcard}}
 	case "reader":
 		s.Permissions = readerPerms
 	case "seller":

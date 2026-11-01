@@ -81,8 +81,10 @@ func NewContext(c Context) (*Context, error) {
 			return nil, fmt.Errorf("%w: effective organizations must be a subset of the grants (contract v1, invariant 2)", domain.ErrValidation)
 		}
 	}
-	c.Grants = slices.Clone(c.Grants)
-	c.Permissions = slices.Clone(c.Permissions)
+	// Las listas salen siempre como [] y nunca como null, como en Trench (D-123).
+	c.Grants = append([]Grant{}, c.Grants...)
+	c.Permissions = append([]Permission{}, c.Permissions...)
+	c.EffectiveOrganizations = append([]domain.UUID{}, c.EffectiveOrganizations...)
 	return &c, nil
 }
 

@@ -2,7 +2,9 @@ package authorization_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/jhermoso/karpo-fw-go/pkg/application/authorization"
@@ -17,7 +19,10 @@ func TestResolver(t *testing.T) {
 	ana, admin, inactive, locked, svc := domain.NewUUID(), domain.NewUUID(), domain.NewUUID(), domain.NewUUID(), domain.NewUUID()
 	dir.Put(ana, authz.Subject{Active: true, Permissions: []authz.Permission{"Parties.Party.Create"},
 		Grants: []authz.Grant{{OrganizationID: org, Level: authz.Full}}})
-	dir.Put(admin, authz.Subject{Active: true, Roles: []string{authorization.DefaultGlobalAdminRole}})
+	dir.Put(admin, authz.Subject{Active: true, Permissions: []authz.Permission{authz.Wildcard}})
+	// Un rol que se llama como el de administrador no basta: hace falta el comodín.
+	named := domain.NewUUID()
+	dir.Put(named, authz.Subject{Active: true, Roles: []string{"GlobalSuperAdmin"}})
 	dir.Put(inactive, authz.Subject{})
 	dir.Put(locked, authz.Subject{Active: true, Locked: true})
 	r := authorization.NewResolver(dir, authorization.Options{ServicePrincipals: []authz.ServicePrincipal{
@@ -53,7 +58,17 @@ func TestResolver(t *testing.T) {
 		t.Fatalf("user context: %+v", c)
 	}
 	if !r.Resolve(ctx, userP(admin), authz.Request{}).Context.GlobalAdmin {
-		t.Fatal("GlobalSuperAdmin role makes a global admin")
+		t.Fatal("the wildcard makes a global admin")
+	}
+	if r.Resolve(ctx, userP(named), authz.Request{}).Context.GlobalAdmin {
+		t.Fatal("a role named like the administrator's, without the wildcard, does not")
+	}
+	if j, _ := json.Marshal(r.Resolve(ctx, userP(inactive), authz.Request{}).Context); string(j) != "null" {
+		t.Fatalf("no context: %s", j)
+	}
+	if j, _ := json.Marshal(r.Resolve(ctx, userP(named), authz.Request{}).Context); !strings.Contains(string(j), `"grants":[]`) ||
+		!strings.Contains(string(j), `"permissions":[]`) || !strings.Contains(string(j), `"effectiveOrganizationIds":[]`) {
+		t.Fatalf("empty lists are [], never null: %s", j)
 	}
 	s := r.Resolve(ctx, authz.Principal{Subject: svc, Name: "billing", Kind: authz.Service}, authz.Request{}).Context
 	if s.HasPermission("Parties.Party.Create") || !s.HasPermission("Billing.Invoice.Read") {
