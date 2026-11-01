@@ -332,6 +332,13 @@ de visibilidad que esa sesión transmitió el 2026-10-29 queda retirado y lo sus
 plan de permisos y ámbito (su PR 88): el tramo 6 aplica D-120 y D-67, el tramo 5 exige relación
 vigente para editar, y D-121 y D-122 van en un tramo aparte, el 10.
 
+**D-123 y D-124 en Trench** (su sesión, 2026-11-01): D-124 confirmada con Javier y en su tramo 10
+(su PR 92). `GET /api/auth/context` ya está en su `main` (su PR 91) con la forma de Karpo Go y dos
+precisiones que Go adopta (rama `fix/contexto-auth-como-trench`): `isGlobalAdmin` es tener el
+permiso comodín `*.*.*`, no un rol por su nombre; y `grants`, `permissions` y
+`effectiveOrganizationIds` salen siempre como `[]`, nunca `null` (`requestedOrganizationIds` se
+omite si va vacío). Karpo C# las sigue al adoptar D-123.
+
 **D-92 en Trench** (su sesión, 2026-10-26; en su `main`, PR 66 y 67, merge 8e47595cc). El
 documento de identidad sigue la regla de clase de Karpo Go (una organización sólo TXID u OTHR; una
 persona todo salvo el TXID español; 422 `PARTY-DOCUMENT-NOT-FOR-KIND`; formato, luego clase, luego
