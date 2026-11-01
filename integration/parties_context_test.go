@@ -55,7 +55,7 @@ func TestPartiesContext(t *testing.T) {
 			t.Cleanup(fw.SetClock(clock))
 
 			sw := hotswap.New(db)
-			mod := parties.Compose(sw, nil)
+			mod := parties.Compose(sw)
 			svc := mod.Service
 
 			types, err := svc.ListRoleTypes.Handle(ctx, papp.ListRoleTypes{})
@@ -272,6 +272,7 @@ func TestPartiesContext(t *testing.T) {
 			}
 			// Migración 30: identidad y perfil de cada empresa (D-122).
 			partiesD122(ctx, t, svc, acme.ID)
+			partiesIdempotency(ctx, t, svc, mod.Ledger)
 
 			// Fase 3: ámbito de organización (P1), alta dentro del ámbito, jerarquía y puertos.
 			clerk, _ := authz.NewContext(authz.Context{Subject: fw.NewUUID(), SubjectName: "clerk", Kind: authz.Service,

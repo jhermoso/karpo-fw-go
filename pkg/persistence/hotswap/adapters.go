@@ -2,6 +2,7 @@ package hotswap
 
 import (
 	"context"
+	"time"
 
 	"github.com/jhermoso/karpo-fw-go/pkg/application"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain"
@@ -149,9 +150,45 @@ func (i *inbox) Claim(ctx context.Context, consumer, messageID string) (first bo
 	return first, err
 }
 
+// IdempotencyLedger envuelve un application.IdempotencyLedger con la conmutación en caliente.
+func IdempotencyLedger(s *Switch, factory func(Backend) (application.IdempotencyLedger, error)) application.IdempotencyLedger {
+	return &idempotencyLedger{b: Bind(s, factory)}
+}
+
+type idempotencyLedger struct {
+	b *Binding[application.IdempotencyLedger]
+}
+
+func (l *idempotencyLedger) Find(ctx context.Context, tenant string, subject domain.UUID, key string) (out application.IdempotencyEntry, found bool, err error) {
+	err = l.b.With(ctx, func(ctx context.Context, x application.IdempotencyLedger) error {
+		out, found, err = x.Find(ctx, tenant, subject, key)
+		return err
+	})
+	return out, found, err
+}
+
+func (l *idempotencyLedger) Reserve(ctx context.Context, e application.IdempotencyEntry) error {
+	return l.b.With(ctx, func(ctx context.Context, x application.IdempotencyLedger) error { return x.Reserve(ctx, e) })
+}
+
+func (l *idempotencyLedger) Remove(ctx context.Context, tenant string, subject domain.UUID, key string) error {
+	return l.b.With(ctx, func(ctx context.Context, x application.IdempotencyLedger) error {
+		return x.Remove(ctx, tenant, subject, key)
+	})
+}
+
+func (l *idempotencyLedger) Purge(ctx context.Context, before time.Time) (n int64, err error) {
+	err = l.b.With(ctx, func(ctx context.Context, x application.IdempotencyLedger) error {
+		n, err = x.Purge(ctx, before)
+		return err
+	})
+	return n, err
+}
+
 var (
-	_ application.InboxStore  = (*inbox)(nil)
-	_ application.AuditLog    = (*auditLog)(nil)
-	_ domain.UnitOfWork       = (*Switch)(nil)
-	_ application.OutboxStore = (*outbox)(nil)
+	_ application.IdempotencyLedger = (*idempotencyLedger)(nil)
+	_ application.InboxStore        = (*inbox)(nil)
+	_ application.AuditLog          = (*auditLog)(nil)
+	_ domain.UnitOfWork             = (*Switch)(nil)
+	_ application.OutboxStore       = (*outbox)(nil)
 )

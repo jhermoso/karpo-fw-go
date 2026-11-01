@@ -293,6 +293,12 @@ func Migrations() sqlrepo.MigrationSet {
 				`CREATE TABLE `+TableConsents+` (relationship_id {uuid} NOT NULL, id {uuid} NOT NULL, legal_basis {str:30} NOT NULL,
 	purpose {str:50} NOT NULL, granted_at {ts} NOT NULL, withdrawn_at {ts}, retention_months {int}, objection {bool} NOT NULL,
 	notes {str:500}, PRIMARY KEY (relationship_id, id), FOREIGN KEY (relationship_id) REFERENCES party_relationships (id))`)},
+		{Version: 31, Name: "idempotency keys of the registrations", Up: sqlrepo.RenderDDLAll(
+			`CREATE TABLE `+TableIdempotencyKeys+` (id {uuid} NOT NULL PRIMARY KEY, tenant_id {str:64} NOT NULL, subject_id {uuid} NOT NULL,
+	idempotency_key {str:128} NOT NULL, request_hash {str:64} NOT NULL, resource_id {uuid} NOT NULL, response_status {int} NOT NULL,
+	created_at {ts} NOT NULL, expires_at {ts} NOT NULL)`,
+			`CREATE UNIQUE INDEX uq_party_idempotency_keys ON `+TableIdempotencyKeys+` (tenant_id, subject_id, idempotency_key)`,
+			`CREATE INDEX ix_party_idempotency_keys_expires ON `+TableIdempotencyKeys+` (expires_at)`)},
 	}}
 }
 
@@ -678,7 +684,7 @@ func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 
 // DropAll elimina todas las tablas del contexto (sólo para pruebas).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
-	for _, t := range []string{TableConsents, "party_relationships", "party_roles", "party_identifications", "party_contacts", "party_affiliations",
+	for _, t := range []string{TableIdempotencyKeys, TableConsents, "party_relationships", "party_roles", "party_identifications", "party_contacts", "party_affiliations",
 		"party_facility_roles", "facility_role_types", "party_data_quality_issues",
 		"party_classifications", "parties", "relationship_types", "role_types", "country_document_rules",
 		"document_types", "classification_types",

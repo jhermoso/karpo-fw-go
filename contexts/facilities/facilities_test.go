@@ -66,7 +66,7 @@ func compose(t *testing.T) *host {
 	sw := hotswap.New(store)
 	geo := geography.Compose(sw)
 	fac := facilities.Compose(sw, facilities.WithAddressChecker(finfra.GeographyAddresses{Checker: geo.Ports}))
-	pm := parties.Compose(sw, nil, parties.WithAddressChecker(pinfra.GeographyAddresses{Checker: geo.Ports}),
+	pm := parties.Compose(sw, parties.WithAddressChecker(pinfra.GeographyAddresses{Checker: geo.Ports}),
 		parties.WithFacilityDirectory(pinfra.FacilitiesDirectory{Directory: fac.Directory}))
 
 	jwt, _ := jwtauth.New(jwtauth.Config{Secret: []byte("facilities-test")})

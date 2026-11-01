@@ -69,7 +69,7 @@ func compose(t *testing.T) *host {
 	ctx := context.Background()
 	sw := hotswap.New(memory.NewStore("memory"))
 	fac := facilities.Compose(sw)
-	pm := parties.Compose(sw, nil)
+	pm := parties.Compose(sw)
 	hm := hr.Compose(sw, hr.WithOrganizations(hinfra.PartiesOrganizations{Hierarchy: pm.Organizations, Membership: pm.Organizations}),
 		hr.WithFacilities(hinfra.FacilitiesDirectory{Directory: fac.Directory}))
 	ym := payroll.Compose(sw, yinfra.HRStaff{Staff: hm.Staff})

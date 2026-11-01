@@ -76,7 +76,7 @@ func TestSecurityContext(t *testing.T) {
 
 			sw := hotswap.New(db)
 			jwt, _ := jwtauth.New(jwtauth.Config{Secret: []byte("integration")})
-			pm := parties.Compose(sw, nil)
+			pm := parties.Compose(sw)
 			sec := security.Compose(sw, security.WithTokenIssuer(sdist.HS256Issuer{JWT: jwt}), security.WithPasswordHasher(sinfra.NewPBKDF2(1000)),
 				security.WithParties(sinfra.PartiesDirectory{Directory: pm.Directory, Organizations: pm.Organizations}),
 				security.WithLockout(sdomain.LockoutPolicy{MaxAttempts: 2, Duration: time.Hour}))

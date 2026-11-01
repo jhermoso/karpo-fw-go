@@ -35,7 +35,7 @@ func (s scope) canRelate(from, to *domain.Party) bool {
 
 // register crea una party, le da sus roles y, si se pide, su primera relación. Un llamante que no
 // es administrador global tiene que dar de alta la party dentro de su ámbito.
-func (s service) register(ctx context.Context, build func(domain.PartyID) (*domain.Party, error), roles []string, aff *NewAffiliation) (PartyDTO, error) {
+func (s service) register(ctx context.Context, id domain.PartyID, build func(domain.PartyID) (*domain.Party, error), roles []string, aff *NewAffiliation) (PartyDTO, error) {
 	// La party y su primera relación son una sola operación en el registro de auditoría: así se
 	// sabe después que la organización la dio de alta (D-74). Una llamada sin correlación propia
 	// recibe una.
@@ -52,7 +52,7 @@ func (s service) register(ctx context.Context, build func(domain.PartyID) (*doma
 	if err != nil {
 		return PartyDTO{}, err
 	}
-	p, err := build(domain.NewPartyID())
+	p, err := build(id)
 	if err != nil {
 		return PartyDTO{}, err
 	}

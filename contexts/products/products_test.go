@@ -49,7 +49,7 @@ type host struct {
 func compose(t *testing.T) *host {
 	ctx := context.Background()
 	sw := hotswap.New(memory.NewStore("memory"))
-	pm := parties.Compose(sw, nil)
+	pm := parties.Compose(sw)
 	dm := products.Compose(sw)
 
 	jwt, _ := jwtauth.New(jwtauth.Config{Secret: []byte("products-test")})

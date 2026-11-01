@@ -72,7 +72,7 @@ func TestPurchasesContext(t *testing.T) {
 				t.Fatal(err)
 			}
 			sw := hotswap.New(db)
-			pm := parties.Compose(sw, nil)
+			pm := parties.Compose(sw)
 			fm := fiscal.Compose(sw, finfra.PartiesIdentities{TaxIdentities: pm.TaxIdentities})
 			um := purchases.Compose(sw, uinfra.FiscalTaxes{Engine: fm.TaxEngine})
 			ym := payments.Compose(sw, nil)

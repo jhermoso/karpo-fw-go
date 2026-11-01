@@ -94,7 +94,7 @@ func compose(t *testing.T, opts ...payments.Option) *host {
 	ctx := context.Background()
 	sw := hotswap.New(memory.NewStore("memory"))
 	splits := netPay{}
-	pm := parties.Compose(sw, nil)
+	pm := parties.Compose(sw)
 	ym := payments.Compose(sw, splits, opts...)
 	tm := treasury.Compose(sw, nil, tinfra.PaymentsPayables{Payable: ym.Payable}, tinfra.PartiesIdentities{TaxIdentities: pm.TaxIdentities})
 	am := accounting.Compose(sw)

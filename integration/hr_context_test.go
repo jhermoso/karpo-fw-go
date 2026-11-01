@@ -52,7 +52,7 @@ func TestHRContext(t *testing.T) {
 
 			sw := hotswap.New(db)
 			fac := facilities.Compose(sw)
-			pm := parties.Compose(sw, nil)
+			pm := parties.Compose(sw)
 			hm := hr.Compose(sw, hr.WithOrganizations(hinfra.PartiesOrganizations{Hierarchy: pm.Organizations, Membership: pm.Organizations}),
 				hr.WithFacilities(hinfra.FacilitiesDirectory{Directory: fac.Directory}))
 			svc := hm.Service

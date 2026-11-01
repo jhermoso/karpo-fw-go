@@ -64,7 +64,7 @@ type host struct {
 func compose(t *testing.T) *host {
 	ctx := context.Background()
 	sw := hotswap.New(memory.NewStore("memory"))
-	pm := parties.Compose(sw, nil)
+	pm := parties.Compose(sw)
 	fm := fiscal.Compose(sw, finfra.PartiesIdentities{TaxIdentities: pm.TaxIdentities})
 	um := purchases.Compose(sw, uinfra.FiscalTaxes{Engine: fm.TaxEngine})
 	sm := assets.Compose(sw)

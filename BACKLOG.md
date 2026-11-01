@@ -67,12 +67,9 @@ tiempo de prueba, participación en el capital) y edición de persona.
 - ~~Lenguaje ubicuo común~~ ✅ `pkg/domain/vocab`.
 - **Outbox multi-instancia**: `SELECT ... FOR UPDATE SKIP LOCKED` (PostgreSQL/Oracle/MySQL) y
   `READPAST` (SQL Server) para varios relays en paralelo.
-- **Idempotencia persistente** (`sqlrepo` store) para despliegues con varias réplicas. Tiene que
-  escribir **dentro de la unidad de trabajo** del caso de uso: hoy `pipeline.Idempotent` guarda el
-  resultado después de confirmar, así que una caída entre la confirmación y el guardado, o dos
-  peticiones simultáneas con la misma clave, ejecutan dos veces (petición de Theros, 2026-10-11;
-  la clave ya incluye a quien llama y la huella de la petición). El único almacén que existe es
-  el de memoria, y el anfitrión no pasa ninguno a los contextos.
+- **Idempotencia del resto de órdenes.** Las altas de Parties ya la tienen en su transacción, con
+  `party_idempotency_keys` (D-125, [PARTIES.md](docs/PARTIES.md) §24). `pipeline.Idempotent` y su
+  almacén de memoria guardan después de confirmar y sólo los usa el ejemplo `examples/parties`.
 - **Herramienta de backfill/dual-write** para acompañar a `hotswap.Swap` cuando haya que mover
   datos entre motores.
 - **Filtros HTTP → especificaciones** (lista blanca de campos) para búsquedas genéricas.
