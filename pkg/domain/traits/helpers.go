@@ -49,3 +49,6 @@ func (t TestFlag) IsTest() bool { return t.test }
 
 // MarkAsTest marca el agregado como datos de prueba.
 func (t *TestFlag) MarkAsTest() { t.test = true }
+
+// UnmarkAsTest quita la marca: el agregado vuelve a ser un dato real.
+func (t *TestFlag) UnmarkAsTest() { t.test = false }

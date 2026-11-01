@@ -124,6 +124,28 @@ func scenario(t *testing.T, sw *hotswap.Switch) {
 		t.Fatalf("the first administrator is global: %+v", who)
 	}
 
+	// La misma alta enviada dos veces con la misma clave de idempotencia crea una sola party.
+	register := func() string {
+		req, _ := http.NewRequest("POST", srv.URL+"/api/persons", strings.NewReader(`{"givenName":"Repetida","firstSurname":"Dos Veces"}`))
+		req.Header.Set("Authorization", "Bearer "+root)
+		req.Header.Set("Idempotency-Key", "alta-repetida-1")
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		var p struct {
+			ID string `json:"id"`
+		}
+		if res.StatusCode != 201 || json.NewDecoder(res.Body).Decode(&p) != nil {
+			t.Fatalf("register: status %d", res.StatusCode)
+		}
+		return p.ID
+	}
+	if first, second := register(), register(); first != second {
+		t.Fatalf("the same request created two parties: %s and %s", first, second)
+	}
+
 	// Cada permiso de cada contexto está en el catálogo de Security.
 	var catalog []struct {
 		Code   string `json:"code"`

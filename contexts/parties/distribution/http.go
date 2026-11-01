@@ -38,6 +38,7 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/parties/{id}/name", m.rename)
 	mux.HandleFunc("PUT /api/parties/{id}/person", m.updatePerson)
 	mux.HandleFunc("PUT /api/parties/{id}/active", m.setActive)
+	mux.HandleFunc("PUT /api/parties/{id}/test", m.setTest)
 	mux.HandleFunc("POST /api/parties/{id}/roles", m.assignRole)
 	mux.HandleFunc("POST /api/parties/{id}/roles/{roleId}/end", m.endRole)
 	mux.HandleFunc("POST /api/parties/{id}/roles/{roleId}/annul", m.annulRole)
@@ -168,6 +169,19 @@ func (m *Module) setActive(w http.ResponseWriter, r *http.Request) {
 	handle(w, r, &c, true, http.StatusOK, func(c papp.SetPartyActive) (papp.PartyDTO, error) {
 		c.ID = id
 		return m.svc.SetActive.Handle(r.Context(), c)
+	})
+}
+
+func (m *Module) setTest(w http.ResponseWriter, r *http.Request) {
+	id, err := pathParty(r)
+	if err != nil {
+		distribution.WriteError(w, r, err)
+		return
+	}
+	c := papp.SetPartyTest{}
+	handle(w, r, &c, true, http.StatusOK, func(c papp.SetPartyTest) (papp.PartyDTO, error) {
+		c.ID = id
+		return m.svc.SetTest.Handle(r.Context(), c)
 	})
 }
 

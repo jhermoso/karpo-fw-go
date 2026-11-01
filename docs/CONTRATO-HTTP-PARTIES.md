@@ -62,7 +62,7 @@ la entiende) y `X-Client: web`.
 | 4 | `GET /parties/{id}/aggregate` | El detalle: la party con sus roles y relaciones | **Otra forma**: `GET /api/parties/{id}` |
 | 5 | `POST /parties/rename` `{id, name}` | Cambiar el nombre | **Otra forma**: `PUT /api/parties/{id}/name` con nombre y apellidos por separado |
 | 6 | `POST /parties/toggle` `{id, enable}` | Activar o desactivar | **Otra forma**: `PUT /api/parties/{id}/active` |
-| 7 | `PUT /parties/{id}/test-flag` | Marcar como de pruebas | **No existe** como ruta (el dato sí) |
+| 7 | `PUT /parties/{id}/test-flag` | Marcar como de pruebas | **Otra forma**: `PUT /api/parties/{id}/test` `{ "test": true }`; con `false` quita la marca |
 | 8 | `GET /parties/{id}/positions` | Los puestos de una persona | En otro contexto (`hr`), con otra ruta |
 | 9 | `GET /catalogs/party-classifications/by-party/{id}` | Sus clasificaciones | Vienen dentro de `GET /api/parties/{id}` |
 | 10 | `GET /catalogs/party-role-types` | Opciones de filtros y formularios | **Igual** |

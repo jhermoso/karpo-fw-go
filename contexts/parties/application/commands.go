@@ -105,6 +105,12 @@ type SetLegalForm struct {
 	LegalForm string         `json:"legalForm"`
 }
 
+// SetPartyTest marca una party como datos de prueba, o le quita la marca.
+type SetPartyTest struct {
+	ID   domain.PartyID `json:"-"`
+	Test bool           `json:"test"`
+}
+
 // SetShared hace de una party una entrada compartida del catálogo, visible para todas las
 // organizaciones (sólo administradores globales).
 type SetShared struct {

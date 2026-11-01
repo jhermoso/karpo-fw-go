@@ -389,6 +389,18 @@ func (e *env) scenario(prefix string) (acme, ana papp.PartyDTO) {
 		e.t.Fatalf("still active: %+v", loner)
 	}
 
+	// La marca de pruebas se pone y se quita; sin ella, la party no lleva el campo.
+	e.must(e.do("PUT", "/api/parties/"+loner.ID+"/test", e.admin, map[string]any{"test": true}, &loner), 200, "mark as test data")
+	if !loner.Test {
+		e.t.Fatalf("not marked as test: %+v", loner)
+	}
+	var raw map[string]any
+	e.must(e.do("PUT", "/api/parties/"+loner.ID+"/test", e.admin, map[string]any{"test": false}, &raw), 200, "real data again")
+	if _, ok := raw["test"]; ok {
+		e.t.Fatalf("a real party carries test: %v", raw)
+	}
+	e.must(e.do("PUT", "/api/parties/"+acme.ID+"/test", e.reader, map[string]any{"test": true}, nil), 403, "reader cannot mark")
+
 	// El reader puede leer pero no escribir.
 	e.must(e.do("PUT", "/api/parties/"+acme.ID+"/name", e.reader, map[string]any{"legalName": "Nope"}, nil), 403, "reader cannot rename")
 	e.must(e.do("GET", "/api/parties/"+acme.ID, "", nil, nil), 401, "anonymous")
