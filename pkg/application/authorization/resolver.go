@@ -12,13 +12,9 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
-// DefaultGlobalAdminRole es el rol que hace de un sujeto administrador global.
-const DefaultGlobalAdminRole = "GlobalSuperAdmin"
-
 // Options configuran un Resolver.
 type Options struct {
 	TenantID          string                   // por defecto "erp-security" (el emisor del JWT)
-	GlobalAdminRole   string                   // por defecto DefaultGlobalAdminRole
 	ServicePrincipals []authz.ServicePrincipal // llamantes técnicos (nunca administrador global, sin comodín)
 }
 
@@ -35,9 +31,6 @@ var _ authz.Resolver = (*Resolver)(nil)
 func NewResolver(dir authz.Directory, opts Options) *Resolver {
 	if opts.TenantID == "" {
 		opts.TenantID = "erp-security"
-	}
-	if opts.GlobalAdminRole == "" {
-		opts.GlobalAdminRole = DefaultGlobalAdminRole
 	}
 	return &Resolver{dir: dir, opts: opts}
 }
@@ -66,8 +59,10 @@ func (r *Resolver) Resolve(ctx context.Context, p authz.Principal, req authz.Req
 	c, err := authz.NewContext(authz.Context{
 		TenantID: r.opts.TenantID, Subject: p.Subject, SubjectName: p.Name, Kind: authz.Human,
 		ActorPartyID: p.PartyID,
-		GlobalAdmin:  slices.Contains(s.Roles, r.opts.GlobalAdminRole) || slices.Contains(s.Permissions, authz.Wildcard),
-		Grants:       s.Grants, Permissions: s.Permissions,
+		// Administrador global es quien tiene el permiso comodín, no un rol por su nombre: así lo
+		// decide también Trench (docs/DECISIONES-COMUNES.md, D-123).
+		GlobalAdmin: slices.Contains(s.Permissions, authz.Wildcard),
+		Grants:      s.Grants, Permissions: s.Permissions,
 		RequestedOrganizations: req.RequestedOrganizations,
 		PolicyVersion:          authz.PolicyVersion(s.Active, s.Roles, s.Permissions, s.Grants),
 		CorrelationID:          req.CorrelationID,
