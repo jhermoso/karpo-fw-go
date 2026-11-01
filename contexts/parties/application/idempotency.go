@@ -21,6 +21,8 @@ const (
 	maxIdempotencyKey = 128
 	// statusCreated es la respuesta HTTP de un alta.
 	statusCreated = 201
+	// noTenant es el tenant de un contexto sin él: Oracle guarda el texto vacío como NULL.
+	noTenant = "-"
 	// idempotencyTTL es lo que se recuerda una petición (docs/DECISIONES-COMUNES.md, D-125).
 	idempotencyTTL = 24 * time.Hour
 )
@@ -41,6 +43,10 @@ func (s service) once(ctx context.Context, c app.IdempotencyKeyed, create func(d
 		v.Add("idempotencyKey", "too_long", fmt.Sprintf("the idempotency key admits at most %d characters", maxIdempotencyKey))
 		return PartyDTO{}, v.Err()
 	}
+	tenant := ac.TenantID
+	if tenant == "" {
+		tenant = noTenant
+	}
 	body, err := json.Marshal(c)
 	if err != nil {
 		return PartyDTO{}, err
@@ -49,7 +55,7 @@ func (s service) once(ctx context.Context, c app.IdempotencyKeyed, create func(d
 	hash := hex.EncodeToString(sum[:])
 
 	now := fw.Now()
-	prior, found, err := s.Ledger.Find(ctx, ac.TenantID, ac.Subject, key)
+	prior, found, err := s.Ledger.Find(ctx, tenant, ac.Subject, key)
 	if err != nil {
 		return PartyDTO{}, err
 	}
@@ -68,12 +74,12 @@ func (s service) once(ctx context.Context, c app.IdempotencyKeyed, create func(d
 		return n.dto(p), nil
 	}
 	if found {
-		if err := s.Ledger.Remove(ctx, ac.TenantID, ac.Subject, key); err != nil {
+		if err := s.Ledger.Remove(ctx, tenant, ac.Subject, key); err != nil {
 			return PartyDTO{}, err
 		}
 	}
 	id := domain.NewPartyID()
-	if err := s.Ledger.Reserve(ctx, app.IdempotencyEntry{Tenant: ac.TenantID, Subject: ac.Subject, Key: key, RequestHash: hash,
+	if err := s.Ledger.Reserve(ctx, app.IdempotencyEntry{Tenant: tenant, Subject: ac.Subject, Key: key, RequestHash: hash,
 		ResourceID: id.UUID, Status: statusCreated, CreatedAt: now, ExpiresAt: now.Add(idempotencyTTL)}); err != nil {
 		return PartyDTO{}, err
 	}
