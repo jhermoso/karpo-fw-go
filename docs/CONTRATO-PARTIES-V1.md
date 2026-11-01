@@ -98,7 +98,7 @@ grupo— son **roles**, no tipos.
 ```json
 { "id": "…", "kind": "organization", "name": "Talleres Pérez",
   "organization": { "legalName": "Talleres Pérez, S.L.", "tradeName": "Talleres Pérez", "legalForm": "corporation" },
-  "active": true, "test": false, "shared": false,
+  "active": true,
   "organizations": ["<empresas del grupo a las que pertenece hoy>"],
   "roles":           [ { "id": "…", "roleType": "…", "code": "customer", "name": "Customer", "from": "…", "until": null, "active": true } ],
   "identifications": [ { "id": "…", "documentType": "…", "code": "TXID", "country": "ES", "number": "B12345674", "primary": true } ],
@@ -109,7 +109,8 @@ grupo— son **roles**, no tipos.
 ```
 
 Una persona lleva `person: { givenName, firstSurname, secondSurname, gender, birthDate, maritalStatus }`
-en lugar de `organization`. Es la forma que Go devuelve hoy; `code` en cada rol es nuevo.
+en lugar de `organization`. `test` y `shared` sólo vienen cuando valen `true`: si faltan, la party
+es real y no es del catálogo compartido. Es la forma que Go devuelve hoy; `code` en cada rol es nuevo.
 
 | Campo del front de hoy | En el contrato |
 |---|---|
@@ -229,7 +230,7 @@ Cada fila es un **resumen**, no la party entera:
 
 ```json
 { "items": [
-    { "id": "…", "kind": "person", "name": "Ana García López", "active": true, "test": false,
+    { "id": "…", "kind": "person", "name": "Ana García López", "active": true,
       "birthDate": "1990-04-12", "taxId": "12345678Z", "country": "ES",
       "roles": [ { "code": "customer", "name": "Customer" } ], "roleCount": 1,
       "relationships": [ { "typeCode": "customer", "typeName": "Customer Relationship",

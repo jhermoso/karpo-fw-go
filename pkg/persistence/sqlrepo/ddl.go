@@ -12,17 +12,17 @@ var Dialects = []string{"sqlite", "postgres", "sqlserver", "oracle", "mysql"}
 
 var logicalTypes = map[string]map[string]string{
 	"sqlite": {"uuid": "TEXT", "str": "TEXT", "text": "TEXT", "bool": "INTEGER", "ts": "TEXT", "date": "TEXT", "int": "INTEGER",
-		"bigint": "INTEGER", "dec": "TEXT", "false": "0", "add": "ADD COLUMN %s", "addEnd": "", "whereNotNull": ""},
+		"bigint": "INTEGER", "dec": "TEXT", "false": "0", "true": "1", "add": "ADD COLUMN %s", "addEnd": "", "whereNotNull": ""},
 	"postgres": {"uuid": "UUID", "str": "VARCHAR(%s)", "text": "TEXT", "bool": "BOOLEAN", "ts": "TIMESTAMPTZ", "date": "DATE",
-		"int": "INTEGER", "bigint": "BIGINT", "dec": "NUMERIC(%s)", "false": "FALSE", "add": "ADD COLUMN %s", "addEnd": "", "whereNotNull": ""},
+		"int": "INTEGER", "bigint": "BIGINT", "dec": "NUMERIC(%s)", "false": "FALSE", "true": "TRUE", "add": "ADD COLUMN %s", "addEnd": "", "whereNotNull": ""},
 	"sqlserver": {"uuid": "UNIQUEIDENTIFIER", "str": "NVARCHAR(%s)", "text": "NVARCHAR(MAX)", "bool": "BIT", "ts": "DATETIME2(7)",
-		"date": "DATE", "int": "INT", "bigint": "BIGINT", "dec": "DECIMAL(%s)", "false": "0", "add": "ADD %s", "addEnd": "",
+		"date": "DATE", "int": "INT", "bigint": "BIGINT", "dec": "DECIMAL(%s)", "false": "0", "true": "1", "add": "ADD %s", "addEnd": "",
 		"whereNotNull": " WHERE %s IS NOT NULL"},
 	"oracle": {"uuid": "RAW(16)", "str": "VARCHAR2(%s CHAR)", "text": "CLOB", "bool": "NUMBER(1)", "ts": "TIMESTAMP(6) WITH TIME ZONE",
-		"date": "DATE", "int": "NUMBER(10)", "bigint": "NUMBER(19)", "dec": "NUMBER(%s)", "false": "0", "add": "ADD (%s", "addEnd": ")",
+		"date": "DATE", "int": "NUMBER(10)", "bigint": "NUMBER(19)", "dec": "NUMBER(%s)", "false": "0", "true": "1", "add": "ADD (%s", "addEnd": ")",
 		"whereNotNull": ""},
 	"mysql": {"uuid": "CHAR(36)", "str": "VARCHAR(%s)", "text": "LONGTEXT", "bool": "BOOLEAN", "ts": "DATETIME(6)", "date": "DATE",
-		"int": "INT", "bigint": "BIGINT", "dec": "DECIMAL(%s)", "false": "FALSE", "add": "ADD COLUMN %s", "addEnd": "", "whereNotNull": ""},
+		"int": "INT", "bigint": "BIGINT", "dec": "DECIMAL(%s)", "false": "FALSE", "true": "TRUE", "add": "ADD COLUMN %s", "addEnd": "", "whereNotNull": ""},
 }
 
 var ddlPlaceholder = regexp.MustCompile(`\{(\w+)(?::([^{}]*))?\}`)
@@ -34,7 +34,7 @@ const MaxDecimalPrecision = 28
 // RenderDDL escribe DDL portable para un dialecto: {uuid}, {str:N}, {text}, {bool}, {ts},
 // {date}, {int}, {bigint} y {dec:p,s} se convierten en los tipos del motor (los que espera el
 // enlace de valores de cada dialecto: RAW(16) en Oracle, UNIQUEIDENTIFIER en SQL Server...),
-// {false} en su literal falso y {add:column} ... {addEnd} en su cláusula ALTER TABLE ADD. Las
+// {false} y {true} en sus literales falso y verdadero, y {add:column} ... {addEnd} en su cláusula ALTER TABLE ADD. Las
 // columnas de texto opcionales deben admitir nulos: Oracle guarda "" como NULL.
 //
 // {str:N} admite N caracteres, contados como los cuenta el dominio (runas), en todos los motores:

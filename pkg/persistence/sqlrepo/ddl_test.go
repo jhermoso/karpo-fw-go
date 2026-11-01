@@ -33,6 +33,27 @@ func TestRenderDDL_Decimal(t *testing.T) {
 	}
 }
 
+// Un bool NOT NULL lleva su valor por defecto, falso o verdadero, en todos los motores.
+func TestRenderDDL_BooleanDefaults(t *testing.T) {
+	ddl := `CREATE TABLE t (test {bool} DEFAULT {false} NOT NULL, active {bool} DEFAULT {true} NOT NULL)`
+	want := map[string]string{
+		"sqlite":    `CREATE TABLE t (test INTEGER DEFAULT 0 NOT NULL, active INTEGER DEFAULT 1 NOT NULL)`,
+		"postgres":  `CREATE TABLE t (test BOOLEAN DEFAULT FALSE NOT NULL, active BOOLEAN DEFAULT TRUE NOT NULL)`,
+		"sqlserver": `CREATE TABLE t (test BIT DEFAULT 0 NOT NULL, active BIT DEFAULT 1 NOT NULL)`,
+		"oracle":    `CREATE TABLE t (test NUMBER(1) DEFAULT 0 NOT NULL, active NUMBER(1) DEFAULT 1 NOT NULL)`,
+		"mysql":     `CREATE TABLE t (test BOOLEAN DEFAULT FALSE NOT NULL, active BOOLEAN DEFAULT TRUE NOT NULL)`,
+	}
+	for _, d := range sqlrepo.Dialects {
+		got, err := sqlrepo.RenderDDLChecked(d, ddl)
+		if err != nil {
+			t.Fatalf("%s: %v", d, err)
+		}
+		if got != want[d] {
+			t.Errorf("%s:\nwant %s\ngot  %s", d, want[d], got)
+		}
+	}
+}
+
 // Un índice único de una columna anulable admite varias filas sin valor en todos los motores: en
 // SQL Server, con el filtro; en los demás, tal cual.
 func TestRenderDDL_UniqueIndexOfANullableColumn(t *testing.T) {

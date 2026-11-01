@@ -98,6 +98,7 @@ import (
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/messaging/inprocess"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
+	"github.com/jhermoso/karpo-fw-go/pkg/persistence/memory"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 )
 
@@ -112,6 +113,9 @@ type Options struct {
 	// OnDeliveryGivenUp recibe aviso cuando se abandona un mensaje para un oyente tras demasiados
 	// intentos: desde entonces espera a una persona. Nil: no se avisa a nadie.
 	OnDeliveryGivenUp func(context.Context, mailbox.DTO)
+	// Idempotency recuerda las altas ya hechas por su clave de idempotencia, para que la misma
+	// petición enviada dos veces no cree dos parties (nil: en memoria, se pierde al reiniciar).
+	Idempotency application.IdempotencyStore
 }
 
 // Host es Karpo compuesto.
@@ -185,11 +189,14 @@ func Compose(sw *hotswap.Switch, o Options) (*Host, error) {
 	if o.Files == nil {
 		o.Files = expinfra.NewMemoryFiles()
 	}
+	if o.Idempotency == nil {
+		o.Idempotency = memory.NewIdempotencyStore()
+	}
 	h := &Host{Switch: sw, Broker: inprocess.NewBroker(), jwt: jwt}
 
 	h.Geography = geography.Compose(sw)
 	h.Facilities = facilities.Compose(sw, facilities.WithAddressChecker(facinfra.GeographyAddresses{Checker: h.Geography.Ports}))
-	h.Parties = parties.Compose(sw, nil, parties.WithAddressChecker(parinfra.GeographyAddresses{Checker: h.Geography.Ports}),
+	h.Parties = parties.Compose(sw, o.Idempotency, parties.WithAddressChecker(parinfra.GeographyAddresses{Checker: h.Geography.Ports}),
 		parties.WithFacilityDirectory(parinfra.FacilitiesDirectory{Directory: h.Facilities.Directory}))
 	h.Security = security.Compose(sw, security.WithTokenIssuer(secdist.HS256Issuer{JWT: jwt}),
 		security.WithParties(secinfra.PartiesDirectory{Directory: h.Parties.Directory, Organizations: h.Parties.Organizations}))
