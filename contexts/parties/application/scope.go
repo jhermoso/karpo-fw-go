@@ -96,6 +96,49 @@ func (s scope) canWrite(p *domain.Party, at time.Time) bool {
 	})
 }
 
+// seesOwned dice si el llamante ve lo que es de una organización (un contacto con dueña, D-122):
+// lo de todos (dueña cero), y lo de las organizaciones de su ámbito, con cualquier acceso.
+func (s scope) seesOwned(owner domain.PartyID) bool {
+	return owner.IsZero() || s.global || (s.ac != nil && s.ac.CanRead(owner.UUID))
+}
+
+// writableOrgs son las organizaciones del ámbito en las que el llamante escribe (acceso Full).
+func (s scope) writableOrgs() []domain.PartyID {
+	var out []domain.PartyID
+	for _, o := range s.orgs {
+		if s.canWriteOrg(o) {
+			out = append(out, o)
+		}
+	}
+	return out
+}
+
+// isInternalOrganization dice si la party es ahora una organización interna (por el tipo exacto,
+// como canWrite).
+func isInternalOrganization(p *domain.Party, at time.Time) bool {
+	return slices.ContainsFunc(p.Roles(), func(r domain.PartyRole) bool {
+		return r.RoleType == domain.RoleInternalOrganization && !r.Annulled && r.IsActiveAt(at)
+	})
+}
+
+// mayCorrectIdentity dice si el llamante, que ya puede escribir la party, puede además corregir su
+// documento de identidad o su nombre o razón social (docs/DECISIONES-COMUNES.md, D-122, regla 3):
+// el administrador global; los usuarios con acceso Full a la propia party, si es una organización
+// interna; y, si no lo es, quien tiene además PermPartyUpdateRelated (el administrador de
+// organización: así se lee «el administrador» de D-122 en Go).
+func (s scope) mayCorrectIdentity(p *domain.Party) error {
+	if s.global || s.canWriteOrg(p.ID()) {
+		return nil
+	}
+	if isInternalOrganization(p, fw.Now()) {
+		return fmt.Errorf("%w: only the users of the internal organization correct its identity", fw.ErrForbidden)
+	}
+	if !s.related {
+		return fmt.Errorf("%w: the identity document and the name are corrected by an administrator", fw.ErrForbidden)
+	}
+	return nil
+}
+
 // visible devuelve la party, o un error uniforme de no encontrada si está fuera del ámbito.
 func (s scope) visible(p *domain.Party, err error) (*domain.Party, error) {
 	if err != nil {

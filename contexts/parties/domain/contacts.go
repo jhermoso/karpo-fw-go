@@ -120,7 +120,14 @@ type Contact struct {
 	Purposes        []Purpose
 	NonSolicitation bool // la party no quiere que se la contacte aquí con fines comerciales
 	Period          vocab.ValidPeriod
+	// Owner es la organización interna dueña del contacto: sólo ella lo ve, lo cambia y lo usa
+	// (docs/DECISIONES-COMUNES.md, D-122, regla 1). Cero: el contacto es de todos, parte de la
+	// identidad de la party (el domicilio social o fiscal, el teléfono y el correo generales).
+	Owner PartyID
 }
+
+// IsOwned dice si el contacto tiene una organización dueña.
+func (c Contact) IsOwned() bool { return !c.Owner.IsZero() }
 
 // IsActiveAt dice si el contacto está vigente en t.
 func (c Contact) IsActiveAt(t time.Time) bool { return c.Period.IsActiveAt(t) }
@@ -135,6 +142,7 @@ type ContactData struct {
 	Address         PostalAddress
 	Purposes        []Purpose
 	NonSolicitation bool
+	Owner           PartyID // la organización dueña; cero, de todos
 }
 
 // MaxContactValue es lo que cabe en la columna del valor de un contacto.
@@ -212,6 +220,10 @@ func (d ContactData) sameMechanism(c Contact) bool {
 // contacto vigente de la clase (el nuevo titular le quita el propósito al anterior). Un e-mail o
 // un teléfono con formato erróneo se guarda y deja una incidencia de calidad de datos del contacto
 // (D-92), que se lee con DataQualityIssuesOf.
+//
+// Un contacto con dueña (D-122) sólo se compara con los de la misma dueña y con los de todos, y sus
+// propósitos sólo se los quita a los de su misma dueña: cada empresa elige su correo por defecto sin
+// tocar el de las demás ni el general. Que quien llama pueda dárselo a esa dueña es cosa suya.
 func (p *Party) AddContact(d ContactData, from time.Time) (ContactID, error) {
 	if err := p.requireActive("get contacts"); err != nil {
 		return ContactID{}, err
@@ -225,19 +237,25 @@ func (p *Party) AddContact(d ContactData, from time.Time) (ContactID, error) {
 		return ContactID{}, err
 	}
 	for _, c := range p.contacts {
-		if d.sameMechanism(c) && c.Period.Overlaps(period) {
+		// Uno de otra dueña no cuenta: quien añade no lo ve, y decirle que ya existe se lo enseñaría.
+		if d.sameMechanism(c) && c.Period.Overlaps(period) && (c.Owner == d.Owner || !c.IsOwned()) {
 			return ContactID{}, fw.Violation("parties.duplicate_contact", "the party already has this contact")
 		}
 	}
-	c := Contact{ID: NewContactID(), Kind: d.Kind, Value: d.Value, Address: d.Address, NonSolicitation: d.NonSolicitation, Period: period}
+	c := Contact{ID: NewContactID(), Kind: d.Kind, Value: d.Value, Address: d.Address, NonSolicitation: d.NonSolicitation, Period: period,
+		Owner: d.Owner}
 	p.contacts = append(slices.Clone(p.contacts), c)
 	p.assignPurposes(len(p.contacts)-1, d.Purposes)
 	c = p.contacts[len(p.contacts)-1]
 	if issue != nil {
-		p.raiseIssue(c.ID.UUID, issueFieldContactValue, *issue, c.Value)
+		p.raiseIssue(c.ID.UUID, c.Owner, issueFieldContactValue, *issue, c.Value)
 	}
-	p.Raise(ContactAdded{EventMeta: p.NewEventMeta(), ContactID: c.ID.String(), Kind: string(c.Kind), Value: c.Value,
-		Address: c.Address.String(), Purposes: purposesOf(c.Purposes), From: period.From()})
+	e := ContactAdded{EventMeta: p.NewEventMeta(), ContactID: c.ID.String(), Kind: string(c.Kind), Value: c.Value,
+		Address: c.Address.String(), Purposes: purposesOf(c.Purposes), From: period.From()}
+	if c.IsOwned() {
+		e.Owner = c.Owner.String()
+	}
+	p.Raise(e)
 	return c.ID, nil
 }
 
@@ -258,12 +276,12 @@ func (p *Party) SetContactPurposes(id ContactID, purposes []Purpose) error {
 }
 
 // assignPurposes da los propósitos al contacto k y se los quita a los demás contactos vigentes de
-// la misma clase. p.contacts ya tiene que ser una copia privada.
+// la misma clase y la misma dueña. p.contacts ya tiene que ser una copia privada.
 func (p *Party) assignPurposes(k int, purposes []Purpose) {
 	purposes = slices.Compact(slices.Sorted(slices.Values(purposes)))
 	now := fw.Now()
 	for i := range p.contacts {
-		if i == k || p.contacts[i].Kind != p.contacts[k].Kind || !p.contacts[i].IsActiveAt(now) {
+		if i == k || p.contacts[i].Kind != p.contacts[k].Kind || p.contacts[i].Owner != p.contacts[k].Owner || !p.contacts[i].IsActiveAt(now) {
 			continue
 		}
 		p.contacts[i].Purposes = slices.DeleteFunc(slices.Clone(p.contacts[i].Purposes), func(x Purpose) bool { return slices.Contains(purposes, x) })
@@ -303,11 +321,23 @@ func (p *Party) Contacts() []Contact {
 	return out
 }
 
-// ContactFor devuelve el contacto vigente de una clase que tiene un propósito (p. ej. el e-mail por defecto).
+// Contact devuelve un contacto por su identidad.
+func (p *Party) Contact(id ContactID) (Contact, bool) {
+	for _, c := range p.contacts {
+		if c.ID == id {
+			c.Purposes = slices.Clone(c.Purposes)
+			return c, true
+		}
+	}
+	return Contact{}, false
+}
+
+// ContactFor devuelve el contacto vigente de una clase que tiene un propósito (p. ej. el e-mail por
+// defecto) entre los de todos; los que tienen dueña son de una sola empresa (D-122).
 func (p *Party) ContactFor(kind ContactKind, purpose Purpose) (Contact, bool) {
 	now := fw.Now()
 	for _, c := range p.contacts {
-		if c.Kind == kind && c.IsActiveAt(now) && c.Has(purpose) {
+		if c.Kind == kind && !c.IsOwned() && c.IsActiveAt(now) && c.Has(purpose) {
 			return c, true
 		}
 	}

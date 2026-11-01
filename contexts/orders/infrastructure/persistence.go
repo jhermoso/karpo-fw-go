@@ -95,6 +95,9 @@ func Migrations() sqlrepo.MigrationSet {
 			`ALTER TABLE ord_deliveries {add:invoiced} {bool} DEFAULT {false} NOT NULL{addEnd}`)},
 		{Version: 4, Name: "quotes", Up: sqlrepo.RenderDDLAll(quotesDDL...)},
 		{Version: 5, Name: "decimal columns", Run: decimalColumnsV5.Run},
+		// El motivo del bloqueo de pedidos o de entregas de la pareja (docs/DECISIONES-COMUNES.md, D-122;
+		// el BlockReason de 200 de Trench): se guarda con el bloqueo y se borra al desbloquear.
+		{Version: 6, Name: "block reason", Up: sqlrepo.RenderDDLAll(`ALTER TABLE ord_terms {add:block_reason} {str:200}{addEnd}`)},
 	}}
 }
 
@@ -140,16 +143,16 @@ func TermsMapping() sqlrepo.Mapping[domain.TermsID, *domain.Terms] {
 	return sqlrepo.Mapping[domain.TermsID, *domain.Terms]{
 		Table:    "ord_terms",
 		Decimals: decimalColumns.Of("ord_terms"),
-		Columns:  sqlrepo.WithAuditColumns("company", "customer", "price_list", "discount", "block_orders", "block_delivery"),
+		Columns:  sqlrepo.WithAuditColumns("company", "customer", "price_list", "discount", "block_orders", "block_delivery", "block_reason"),
 		Dehydrate: func(t *domain.Terms) (sqlrepo.Values, error) {
 			s := t.State()
 			return sqlrepo.AuditStampValues(sqlrepo.Values{"company": s.Company, "customer": s.Customer, "price_list": optUUID(s.PriceList.UUID),
-				"discount": s.Discount.Round(2), "block_orders": s.BlockOrders, "block_delivery": s.BlockDelivery}, t.AuditStamp()), nil
+				"discount": s.Discount.Round(2), "block_orders": s.BlockOrders, "block_delivery": s.BlockDelivery, "block_reason": nullString(s.BlockReason)}, t.AuditStamp()), nil
 		},
 		Hydrate: func(r *sqlrepo.Row, _ sqlrepo.ChildRows) (*domain.Terms, error) {
 			s := domain.TermsState{Company: domain.OrganizationID{UUID: r.UUID("company")}, Customer: domain.PartyID{UUID: r.UUID("customer")},
 				PriceList: domain.PriceListID{UUID: r.UUID("price_list")}, Discount: r.Decimal("discount"), BlockOrders: r.Bool("block_orders"),
-				BlockDelivery: r.Bool("block_delivery"), Audit: r.AuditStamp()}
+				BlockDelivery: r.Bool("block_delivery"), BlockReason: r.String("block_reason"), Audit: r.AuditStamp()}
 			if err := r.Err(); err != nil {
 				return nil, err
 			}
@@ -426,4 +429,12 @@ func (r ReceivablesCredit) Credit(ctx context.Context, company domain.Organizati
 		}
 	}
 	return out, nil
+}
+
+// nullString guarda una cadena vacía como NULL.
+func nullString(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
 }

@@ -103,6 +103,12 @@ func TestReceivablesContext(t *testing.T) {
 				t.Fatalf("terms round trip: %+v %v", got, err)
 			}
 			limit := "1000"
+			// Migración 4: el motivo del bloqueo va y vuelve, y se borra al desbloquear (D-122).
+			_, err = rsvc.SetCredit.Handle(actx, rapp.SetCredit{Seller: acme.ID, Customer: ana.ID, Terms: terms.ID, Limit: &limit, Blocked: true, BlockReason: "impagos"})
+			must(err)
+			if cs, err := rsvc.SearchCredit.Handle(actx, rapp.SearchCredit{Seller: acme.ID}); err != nil || len(cs) != 1 || cs[0].BlockReason != "impagos" {
+				t.Fatalf("block reason read back: %+v %v", cs, err)
+			}
 			_, err = rsvc.SetCredit.Handle(actx, rapp.SetCredit{Seller: acme.ID, Customer: ana.ID, Terms: terms.ID, Limit: &limit})
 			must(err)
 

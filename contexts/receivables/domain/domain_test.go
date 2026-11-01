@@ -3,6 +3,7 @@ package domain_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -191,8 +192,18 @@ func TestCollectionAndCredit(t *testing.T) {
 	if _, limited := cp.Available(dec("1000")); limited {
 		t.Fatal("no limit")
 	}
-	_ = cp.Set(domain.TermsID{}, true, dec("0"), false)
+	_ = cp.Set(domain.TermsID{}, true, dec("0"), false, "")
 	if av, limited := cp.Available(dec("10")); !limited || !av.Equal(dec("-10")) {
 		t.Fatal("a limit of zero is a limit")
+	}
+	// El motivo del bloqueo se guarda con el bloqueo y se borra al desbloquear (D-122).
+	if err := cp.Set(domain.TermsID{}, false, dec("0"), true, "  impagos  "); err != nil || cp.State().BlockReason != "impagos" {
+		t.Fatalf("the block keeps its reason: %v %+v", err, cp.State())
+	}
+	if err := cp.Set(domain.TermsID{}, false, dec("0"), false, "impagos"); err != nil || cp.State().BlockReason != "" {
+		t.Fatalf("unblocking clears the reason: %v %+v", err, cp.State())
+	}
+	if err := cp.Set(domain.TermsID{}, false, dec("0"), true, strings.Repeat("x", 201)); err == nil {
+		t.Fatal("a reason longer than 200 is refused")
 	}
 }

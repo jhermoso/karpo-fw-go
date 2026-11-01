@@ -28,6 +28,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/application/authorization"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/messaging"
+	"github.com/jhermoso/karpo-fw-go/pkg/application/outbox"
 	"github.com/jhermoso/karpo-fw-go/pkg/distribution"
 	"github.com/jhermoso/karpo-fw-go/pkg/distribution/jwtauth"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
@@ -820,14 +821,18 @@ func (e *env) prospects(acme, ana papp.PartyDTO) {
 	e.must(e.do("POST", "/api/persons", e.admin, map[string]any{"givenName": "Tercera", "firstSurname": acme.ID[:8]}, &third), 201, "a party from elsewhere")
 	e.must(e.do("POST", "/api/party-relationships", e.admin, map[string]any{"type": domain.RelCustomer.String(),
 		"fromParty": third.ID, "toParty": acme.ID}, nil), 201, "which becomes a customer of acme")
+	// Un dato de la party que no es el nombre ni el documento: el nombre y el documento, además,
+	// sólo los corrige un administrador (D-122, regla 3; identity_test.go).
 	rename := func(who, id string) int {
-		return e.do("PUT", "/api/parties/"+id+"/name", who, map[string]any{"givenName": "Tercera", "firstSurname": acme.ID[:8] + " bis"}, nil)
+		return e.do("PUT", "/api/parties/"+id+"/person", who, map[string]any{"gender": "female"}, nil)
 	}
 	e.must(rename(e.seller, third.ID), 403, "a related party is only seen by who lacks the permission")
 	e.must(rename(e.clerk, third.ID), 200, "and changed by who has it")
 	e.must(e.do("POST", "/api/persons", e.seller, map[string]any{"givenName": "Mía", "firstSurname": acme.ID[:8],
 		"affiliation": map[string]any{"organization": acme.ID, "relationshipType": domain.RelCustomer.String()}}, &mine), 201, "registered from acme")
 	e.must(rename(e.seller, mine.ID), 200, "what acme registered, acme changes")
+	e.must(e.do("PUT", "/api/parties/"+mine.ID+"/name", e.seller, map[string]any{"givenName": "Mía", "firstSurname": acme.ID[:8] + " bis"}, nil), 403,
+		"but not its name: that is corrected by an administrator (D-122)")
 	// Salvo que se diera de alta antes de que existiera la regla (D-77).
 	since := papp.RegistrationRuleSince
 	papp.RegistrationRuleSince = time.Now().Add(time.Hour)
@@ -945,7 +950,7 @@ func (e *env) merges(acme papp.PartyDTO) {
 		e.t.Fatalf("the supplier relationship did not come back: %+v", relationships(cede))
 	}
 	e.must(e.do("GET", "/api/parties/"+survivor.ID, e.seller, nil, nil), 404, "acme no longer sees the survivor")
-	e.must(e.do("PUT", "/api/parties/"+cede.ID+"/name", e.seller, map[string]any{"givenName": "Cedida", "firstSurname": tag}, nil), 200,
+	e.must(e.do("PUT", "/api/parties/"+cede.ID+"/person", e.seller, map[string]any{"gender": "female"}, nil), 200,
 		"what acme registered, acme still changes after the merge is undone")
 
 	// Una fusión se deshace una sola vez: terminar otra vez la primera no desbloquea a la que cede
@@ -985,7 +990,7 @@ func (e *env) merges(acme papp.PartyDTO) {
 	for range 6 {
 		undo(merge(cede.ID, survivor.ID))
 	}
-	e.must(e.do("PUT", "/api/parties/"+cede.ID+"/name", e.seller, map[string]any{"givenName": "Cedida", "firstSurname": tag + " bis"}, nil), 200,
+	e.must(e.do("PUT", "/api/parties/"+cede.ID+"/person", e.seller, map[string]any{"gender": "male"}, nil), 200,
 		"after six merges undone")
 	if p, ok := e.party(cede.ID); !ok || len(p.Organizations) != 2 {
 		e.t.Fatalf("the party is affiliated to acme and bilbao: %+v", p)
@@ -1490,7 +1495,8 @@ func endToEnd(t *testing.T, newDirectory func(*testing.T) directory) {
 	e.roleTypes("mem")
 
 	// Se cambia a una base SQLite migrada mientras el servicio sigue funcionando.
-	raw, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "parties.db")+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)")
+	// synchronous(OFF): sin un fsync por escritura; la base es desechable y el outbox se vacía entero.
+	raw, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "parties.db")+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_pragma=synchronous(OFF)")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1558,10 +1564,11 @@ func endToEnd(t *testing.T, newDirectory func(*testing.T) directory) {
 		return nil
 	})
 	broker.Subscribe("crm", crm)
-	if _, err := e.mod.Relay(broker).RelayOnce(ctx); err != nil {
+	// Las correcciones de identidad (D-122) también se publican: se vacía el outbox, no sólo un lote.
+	if _, err := e.mod.Relay(broker, outbox.WithBatchSize(10000)).RelayOnce(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if len(seen) != 21 || roles != 6 {
+	if len(seen) != 44 || roles != 6 { // todas las altas de la fase SQL
 		t.Fatalf("published: %v, roles %d", seen, roles)
 	}
 	if len(shares) != 3 || shares[0] != "30.00" || shares[1] != "45.50" || shares[2] != "" {
@@ -1619,7 +1626,7 @@ func TestParties_PromotionCodeIsUniqueAmongCollaborators(t *testing.T) {
 func TestParties_PromotionCodeThroughAMerge_SQLite(t *testing.T) {
 	e := compose(t, newMemoryDirectory)
 	ctx := context.Background()
-	raw, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "merge.db")+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)")
+	raw, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "merge.db")+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_pragma=synchronous(OFF)")
 	if err != nil {
 		t.Fatal(err)
 	}

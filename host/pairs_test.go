@@ -79,9 +79,12 @@ func TestPairs_CustomerAndSupplierRelationships(t *testing.T) {
 	limit := "5000"
 	_, err = h.Receivables.Service.SetCredit.Handle(actx, reapp.SetCredit{Seller: acme.ID, Customer: talleres.ID, Limit: &limit})
 	ok(err)
-	_, err = h.Receivables.Service.SetCredit.Handle(actx, reapp.SetCredit{Seller: acme.ID, Customer: ferreteria.ID, Blocked: true})
+	_, err = h.Receivables.Service.SetCredit.Handle(actx, reapp.SetCredit{Seller: acme.ID, Customer: ferreteria.ID, Blocked: true, BlockReason: "impagos"})
 	ok(err)
-	_, err = h.Orders.Service.SetTerms.Handle(actx, orapp.SetTerms{Company: acme.ID, Customer: talleres.ID, BlockDelivery: true})
+	_, err = h.Orders.Service.SetTerms.Handle(actx, orapp.SetTerms{Company: acme.ID, Customer: talleres.ID, BlockDelivery: true, BlockReason: "dirección dudosa"})
+	ok(err)
+	// Sin bloqueo no hay motivo (D-122): se descarta.
+	_, err = h.Receivables.Service.SetCredit.Handle(actx, reapp.SetCredit{Seller: acme.ID, Customer: talleres.ID, Limit: &limit, BlockReason: "nada"})
 	ok(err)
 
 	type page struct {
@@ -104,10 +107,10 @@ func TestPairs_CustomerAndSupplierRelationships(t *testing.T) {
 		t.Fatalf("Acme's customers by number: %+v", byNumber)
 	}
 	tp := byNumber.Items[1]
-	if tp.CreditLimit == nil || *tp.CreditLimit != "5000.00" || tp.BlockDelivery == nil || !*tp.BlockDelivery || *tp.BlockOrders {
+	if tp.CreditLimit == nil || *tp.CreditLimit != "5000.00" || tp.BlockDelivery == nil || !*tp.BlockDelivery || *tp.BlockOrders || tp.BlockReason != "dirección dudosa" {
 		t.Fatalf("Talleres with Acme: %+v", tp)
 	}
-	if fs := byNumber.Items[0]; fs.CreditLimit != nil || fs.BlockOrders == nil || !*fs.BlockOrders {
+	if fs := byNumber.Items[0]; fs.CreditLimit != nil || fs.BlockOrders == nil || !*fs.BlockOrders || fs.BlockReason != "impagos" {
 		t.Fatalf("Ferretería, blocked for credit and without a limit: %+v", fs)
 	}
 	blocked := search("/api/customer-relationships/search", map[string]any{"filter": map[string]any{"blocked": true}})
@@ -129,11 +132,18 @@ func TestPairs_CustomerAndSupplierRelationships(t *testing.T) {
 	ok(err)
 	_, err = h.Parties.Service.EstablishRelationship.Handle(actx, parapp.EstablishRelationship{Type: pardomain.RelSupplier.String(), From: acme.ID, To: supplier.ID})
 	ok(err)
-	_, err = h.Purchases.Service.SetSupplier.Handle(actx, puapp.SetSupplier{Company: acme.ID, Supplier: supplier.ID, Blocked: true})
+	_, err = h.Purchases.Service.SetSupplier.Handle(actx, puapp.SetSupplier{Company: acme.ID, Supplier: supplier.ID, Blocked: true, BlockReason: "calidad"})
+	ok(err)
+	supRel, err := h.Parties.Service.Relationships.Handle(actx, parapp.PartyRelationships{PartyID: mustParty(t, supplier.ID)})
+	ok(err)
+	_, err = h.Parties.Service.SetSupplierNumber.Handle(actx, parapp.SetSupplierNumber{ID: mustRelationship(t, supRel[0].ID), SupplierNumber: "P-9"})
+	ok(err)
+	_, err = h.Parties.Service.SetExternalCodes.Handle(actx, parapp.SetExternalCodes{ID: mustRelationship(t, supRel[0].ID), SageCode: "400009", ApiscoreCode: "PR-9"})
 	ok(err)
 	sup := search("/api/supplier-relationships/search", map[string]any{})
 	if sup.Total != 1 || sup.Items[0].Name != "Papelera Norte" || sup.Items[0].BlockInvoices == nil || !*sup.Items[0].BlockInvoices ||
-		sup.Items[0].CustomerNumber != "" || sup.Items[0].BlockOrders != nil {
+		sup.Items[0].CustomerNumber != "" || sup.Items[0].BlockOrders != nil || sup.Items[0].BlockReason != "calidad" ||
+		sup.Items[0].SupplierNumber != "P-9" || sup.Items[0].SageCode != "400009" || sup.Items[0].ApiscoreCode != "PR-9" {
 		t.Fatalf("suppliers: %+v", sup)
 	}
 }
@@ -229,4 +239,22 @@ func TestPairs_MergeMovesThePairToTheSurvivor(t *testing.T) {
 	if row == nil || row.BlockInvoices == nil || !*row.BlockInvoices {
 		t.Fatalf("the survivor as acme's supplier after the merge: %+v", sp)
 	}
+}
+
+func mustParty(t *testing.T, id string) pardomain.PartyID {
+	t.Helper()
+	p, err := pardomain.ParsePartyID(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func mustRelationship(t *testing.T, id string) pardomain.RelationshipID {
+	t.Helper()
+	r, err := pardomain.ParseRelationshipID(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r
 }

@@ -90,6 +90,11 @@ contexts/receivables/
     consultas;
   - `rec_collections` (+ `rec_allocations`);
   - las bandejas de salida, la auditoría y `receivables_inbox`.
+- **Motivo del bloqueo** (D-122, migración 4): el perfil de crédito lleva `blockReason` (hasta 200
+  caracteres, el `BlockReason` de Trench) en `PUT /api/receivables/credit` y en su respuesta. Se guarda con el
+  bloqueo y se borra al desbloquear: sin bloqueo, el motivo que llegue se descarta. La vista por
+  pareja lo enseña en `blockReason` ([CONTRATO-PARTIES-V1.md](CONTRATO-PARTIES-V1.md) §7 quinquies).
+  Fijar el perfil lo sustituye entero: reenviar `blocked: true` sin `blockReason` borra el motivo.
 - **Fusión de fichas** (D-93; [PARTIES.md](PARTIES.md) §17): Cobros escucha
   `parties.relationship-transferred.v1`. Cuando la relación de cliente de un vendedor pasa de una
   ficha a otra, copia el perfil de crédito (condiciones, límite, bloqueo) de (vendedor, la que

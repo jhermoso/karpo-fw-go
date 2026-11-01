@@ -2,6 +2,9 @@ package application
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"slices"
 	"time"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/parties/domain"
@@ -61,6 +64,10 @@ type AddContact struct {
 	Purposes        []string       `json:"purposes,omitempty"`
 	NonSolicitation bool           `json:"nonSolicitation,omitempty"`
 	From            *time.Time     `json:"from,omitempty"`
+	// Owner es la organización interna dueña del contacto (D-122): sólo ella lo ve y lo cambia.
+	// Vacío: de todos si quien llama puede cambiar la party; si no, la única organización en la
+	// que escribe, y si escribe en varias, hay que decirla.
+	Owner string `json:"owner,omitempty"`
 }
 
 // SetContactPurposes sustituye los usos de un contacto.
@@ -234,6 +241,15 @@ func addPhase2(svc *Service, s service) {
 		if err := operable(p); err != nil {
 			return PartyDTO{}, err
 		}
+		// Añadir un documento a una party que ya tiene alguno es corregir su identidad (D-122, regla
+		// 3); darle el primero es completarla, y lo hace quien puede cambiarla (decidido en esta
+		// sesión: el alta no lleva documento, y si no, el usuario estándar no podría identificar a los
+		// clientes que da de alta).
+		if len(p.Identifications()) > 0 {
+			if err := sc.mayCorrectIdentity(p); err != nil {
+				return PartyDTO{}, err
+			}
+		}
 		if err := policy.CheckKind(p.Kind(), d); err != nil {
 			return PartyDTO{}, err
 		}
@@ -248,20 +264,39 @@ func addPhase2(svc *Service, s service) {
 			return PartyDTO{}, fw.Violation("parties.document_taken", "another party holds this document")
 		}
 		return updateParty(ctx, c.PartyID, func(p *domain.Party, _ *domain.Catalog) error {
+			if len(p.Identifications()) > 0 {
+				if err := s.scope(ctx).mayCorrectIdentity(p); err != nil {
+					return err
+				}
+			}
 			_, err := p.AddIdentification(policy, d, c.Primary)
 			return err
 		})
 	}, pipeline.Transactional[AddIdentification, PartyDTO](s.UoW))
 
 	svc.RemoveIdentification = chain(PermPartyUpdate, func(ctx context.Context, c RemoveIdentification) (PartyDTO, error) {
-		return updateParty(ctx, c.PartyID, func(p *domain.Party, _ *domain.Catalog) error { return p.RemoveIdentification(c.ID) })
+		return updateParty(ctx, c.PartyID, func(p *domain.Party, _ *domain.Catalog) error {
+			if err := s.scope(ctx).mayCorrectIdentity(p); err != nil { // D-122, regla 3
+				return err
+			}
+			return p.RemoveIdentification(c.ID)
+		})
 	}, pipeline.RetryOnConflict[RemoveIdentification, PartyDTO](retry, backoff))
 
 	// Un e-mail o un teléfono con formato erróneo se guarda: la respuesta lo avisa en warnings, con
-	// el campo del cuerpo (value), y la ficha queda con la incidencia (D-92).
+	// el campo del cuerpo (value), y la ficha queda con la incidencia (D-92). Un contacto con dueña
+	// (D-122) lo añade quien escribe en la dueña, aunque no pueda cambiar la party: es de su perfil.
 	svc.AddContact = chain(PermPartyUpdate, func(ctx context.Context, c AddContact) (ContactResult, error) {
 		d, err := c.data()
 		if err != nil {
+			return ContactResult{}, err
+		}
+		sc := s.scope(ctx)
+		p, err := sc.visible(s.Parties.Get(ctx, c.PartyID))
+		if err != nil {
+			return ContactResult{}, err
+		}
+		if d.Owner, err = s.contactOwner(ctx, sc, p, c.Owner); err != nil {
 			return ContactResult{}, err
 		}
 		if d.Kind == domain.ContactPostal && s.Addresses != nil {
@@ -270,7 +305,18 @@ func addPhase2(svc *Service, s service) {
 			}
 		}
 		warnings := []WarningDTO{}
-		dto, err := updateParty(ctx, c.PartyID, func(p *domain.Party, _ *domain.Catalog) error {
+		dto, err := s.changeParty(ctx, c.PartyID, func(sc scope, p *domain.Party) error {
+			if !sc.sees(p, fw.Now()) {
+				return fw.NotFound(domain.PartyKind, p.ID())
+			}
+			if d.Owner.IsZero() {
+				return sc.writable(p)
+			}
+			if !sc.canWriteOrg(d.Owner) {
+				return fmt.Errorf("%w: a contact of an organization is added by who writes in it", fw.ErrForbidden)
+			}
+			return ownedContactAllowed(sc, p)
+		}, func(p *domain.Party, _ *domain.Catalog) error {
 			id, err := p.AddContact(d, nowOr(c.From))
 			if err != nil {
 				return err
@@ -292,11 +338,15 @@ func addPhase2(svc *Service, s service) {
 		if err != nil {
 			return PartyDTO{}, err
 		}
-		return updateParty(ctx, c.PartyID, func(p *domain.Party, _ *domain.Catalog) error { return p.SetContactPurposes(c.ContactID, ps) })
+		return s.changeParty(ctx, c.PartyID, contactWritable(c.ContactID), func(p *domain.Party, _ *domain.Catalog) error {
+			return p.SetContactPurposes(c.ContactID, ps)
+		})
 	}, pipeline.RetryOnConflict[SetContactPurposes, PartyDTO](retry, backoff))
 
 	svc.EndContact = chain(PermPartyUpdate, func(ctx context.Context, c EndContact) (PartyDTO, error) {
-		return updateParty(ctx, c.PartyID, func(p *domain.Party, _ *domain.Catalog) error { return p.EndContact(c.ContactID, nowOr(c.At)) })
+		return s.changeParty(ctx, c.PartyID, contactWritable(c.ContactID), func(p *domain.Party, _ *domain.Catalog) error {
+			return p.EndContact(c.ContactID, nowOr(c.At))
+		})
 	}, pipeline.RetryOnConflict[EndContact, PartyDTO](retry, backoff))
 
 	svc.Classify = chain(PermPartyUpdate, func(ctx context.Context, c Classify) (PartyDTO, error) {
@@ -361,4 +411,100 @@ func addPhase2(svc *Service, s service) {
 		}
 		return out, nil
 	})
+}
+
+// contactWritable comprueba que el llamante puede cambiar un contacto (sus propósitos, su fin). Uno
+// con dueña (D-122) sólo existe para quien ve a la dueña (si no, 404, como si no estuviera) y lo
+// cambia quien escribe en ella, pueda o no cambiar la party; uno de todos, quien puede cambiar la
+// party.
+func contactWritable(id domain.ContactID) func(scope, *domain.Party) error {
+	return func(sc scope, p *domain.Party) error {
+		if !sc.sees(p, fw.Now()) {
+			return fw.NotFound(domain.PartyKind, p.ID())
+		}
+		c, ok := p.Contact(id)
+		if !ok || !c.IsOwned() {
+			return sc.writable(p)
+		}
+		if !sc.seesOwned(c.Owner) {
+			return fw.NotFound("parties.contact", id)
+		}
+		if !sc.canWriteOrg(c.Owner) {
+			return fmt.Errorf("%w: a contact of an organization is changed by who writes in it", fw.ErrForbidden)
+		}
+		return nil
+	}
+}
+
+// contactOwner decide la dueña de un contacto nuevo (D-122). Pedida: una organización interna en la
+// que el llamante escribe. Sin pedir: ninguna (de todos) para el administrador global y para quien
+// puede cambiar la party; para quien sólo se relaciona con ella, la única organización en la que
+// escribe y a la que la party está afiliada (si ninguna lo está, la única en la que escribe); si hay
+// varias, tiene que decirla (decidido en esta sesión).
+func (s service) contactOwner(ctx context.Context, sc scope, p *domain.Party, requested string) (domain.PartyID, error) {
+	if requested == "" {
+		if sc.global || sc.canWrite(p, fw.Now()) {
+			return domain.PartyID{}, nil
+		}
+		orgs := sc.writableOrgs()
+		if len(orgs) == 0 {
+			return domain.PartyID{}, sc.writable(p) // ni la party ni una organización: el 403 de siempre
+		}
+		// Entre las suyas, las que se relacionan con la party; si ninguna, todas las suyas.
+		related := slices.DeleteFunc(slices.Clone(orgs), func(o domain.PartyID) bool { return !slices.Contains(p.OrganizationsAt(fw.Now()), o) })
+		switch {
+		case len(related) == 1:
+			return s.checkOwner(ctx, sc, p, related[0])
+		case len(related) == 0 && len(orgs) == 1:
+			return s.checkOwner(ctx, sc, p, orgs[0])
+		}
+		var v fw.Validation
+		v.Add("owner", "required", "say which of your organizations owns the contact: you cannot change the party itself")
+		return domain.PartyID{}, v.Err()
+	}
+	owner, err := domain.ParsePartyID(requested)
+	if err != nil || owner.IsZero() {
+		var v fw.Validation
+		v.Add("owner", "format", "owner must be the id of an internal organization")
+		return domain.PartyID{}, v.Err()
+	}
+	return s.checkOwner(ctx, sc, p, owner)
+}
+
+// checkOwner comprueba la dueña de un contacto nuevo: una organización interna en la que el
+// llamante escribe, y una party que admite contactos de una empresa (ownedContactAllowed).
+func (s service) checkOwner(ctx context.Context, sc scope, p *domain.Party, owner domain.PartyID) (domain.PartyID, error) {
+	if !sc.canWriteOrg(owner) {
+		return domain.PartyID{}, fmt.Errorf("%w: a contact is owned by an organization you write in", fw.ErrForbidden)
+	}
+	if err := ownedContactAllowed(sc, p); err != nil {
+		return domain.PartyID{}, err
+	}
+	org, err := s.Parties.Get(ctx, owner)
+	if err != nil {
+		if errors.Is(err, fw.ErrNotFound) {
+			return domain.PartyID{}, fw.Violation("parties.contact_owner_not_internal", "the owner of a contact is an internal organization")
+		}
+		return domain.PartyID{}, err
+	}
+	if !isInternalOrganization(org, fw.Now()) {
+		return domain.PartyID{}, fw.Violation("parties.contact_owner_not_internal", "the owner of a contact is an internal organization")
+	}
+	return owner, nil
+}
+
+// ownedContactAllowed se niega a que una empresa añada un contacto suyo a una organización interna
+// de otros o a una entrada compartida del catálogo: su ficha la mantienen sus propios usuarios o el
+// administrador global (revisión de D-122). El global, sí.
+func ownedContactAllowed(sc scope, p *domain.Party) error {
+	if sc.global {
+		return nil
+	}
+	if p.IsShared() {
+		return fmt.Errorf("%w: a shared entry of the catalog takes no contacts of a company", fw.ErrForbidden)
+	}
+	if isInternalOrganization(p, fw.Now()) && !sc.canWriteOrg(p.ID()) {
+		return fmt.Errorf("%w: an internal organization of others takes no contacts of your company", fw.ErrForbidden)
+	}
+	return nil
 }

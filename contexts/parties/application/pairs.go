@@ -35,6 +35,9 @@ type PairDTO struct {
 	Organization     string     `json:"internalOrganizationId"`
 	OrganizationName string     `json:"internalOrganizationName"`
 	CustomerNumber   string     `json:"customerNumber,omitempty"`
+	SupplierNumber   string     `json:"supplierNumber,omitempty"`
+	SageCode         string     `json:"sageCode,omitempty"`     // D-29
+	ApiscoreCode     string     `json:"apiscoreCode,omitempty"` // D-29
 	Since            time.Time  `json:"since"`
 	Until            *time.Time `json:"until,omitempty"`
 }
@@ -46,7 +49,7 @@ func pairSide(code string) (domain.RelationshipTypeID, bool, error) {
 	switch code {
 	case domain.CodeCustomer:
 		return domain.RelCustomer, false, nil
-	case "supplier":
+	case domain.CodeSupplier:
 		return domain.RelSupplier, true, nil
 	}
 	var v fw.Validation
@@ -155,6 +158,8 @@ func (s service) pairs(ctx context.Context, q SearchPairs) ([]PairDTO, error) {
 			row.OrganizationName = o.Name()
 		}
 		row.CustomerNumber = r.Details().Customer.Number
+		row.SupplierNumber = r.SupplierNumber()
+		row.SageCode, row.ApiscoreCode = r.ExternalCodes().Sage, r.ExternalCodes().Apiscore
 		out = append(out, row)
 	}
 	return out, nil

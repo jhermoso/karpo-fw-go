@@ -20,6 +20,8 @@ type SetSupplier struct {
 	PaymentDays     int    `json:"paymentDays,omitempty"`
 	IBAN            string `json:"iban,omitempty"`
 	Blocked         bool   `json:"blocked,omitempty"`
+	// BlockReason dice por qué se bloquea (D-122); sin bloqueo no se guarda.
+	BlockReason string `json:"blockReason,omitempty"`
 }
 
 // SearchSuppliers lista los perfiles de proveedor de una empresa.
@@ -38,13 +40,14 @@ type SupplierDTO struct {
 	PaymentDays     int    `json:"paymentDays"`
 	IBAN            string `json:"iban,omitempty"`
 	Blocked         bool   `json:"blocked"`
+	BlockReason     string `json:"blockReason,omitempty"` // D-122
 	Version         int64  `json:"version"`
 }
 
 func supplierDTO(p *domain.SupplierProfile) SupplierDTO {
 	s := p.State()
 	return SupplierDTO{ID: p.ID().String(), Company: s.Company.String(), Supplier: s.Supplier.String(), Category: string(s.Category),
-		WithholdingRate: money(s.WithholdingRate), PaymentDays: s.PaymentDays, IBAN: s.IBAN.String(), Blocked: s.Blocked, Version: p.Version()}
+		WithholdingRate: money(s.WithholdingRate), PaymentDays: s.PaymentDays, IBAN: s.IBAN.String(), Blocked: s.Blocked, BlockReason: s.BlockReason, Version: p.Version()}
 }
 
 func (s service) supplierUseCases(svc *Service) {
@@ -53,7 +56,7 @@ func (s service) supplierUseCases(svc *Service) {
 		company := domain.OrganizationID{UUID: parseID(&v, "company", c.Company)}
 		supplier := domain.PartyID{UUID: parseID(&v, "supplier", c.Supplier)}
 		st := domain.SupplierState{Company: company, Supplier: supplier, Category: domain.Category(strings.TrimSpace(c.Category)),
-			WithholdingRate: parseDecimal(&v, "withholdingRate", c.WithholdingRate), PaymentDays: c.PaymentDays, Blocked: c.Blocked}
+			WithholdingRate: parseDecimal(&v, "withholdingRate", c.WithholdingRate), PaymentDays: c.PaymentDays, Blocked: c.Blocked, BlockReason: c.BlockReason}
 		if c.IBAN != "" {
 			iban, err := vocab.NewIBAN(c.IBAN)
 			v.Merge("iban", err)

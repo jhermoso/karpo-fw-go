@@ -202,6 +202,13 @@ func TestTermsAndCounter(t *testing.T) {
 	if err := tr.Change(domain.TermsState{Discount: dec("5"), BlockDelivery: true}); err != nil || tr.State().Customer != customer || !tr.State().BlockDelivery {
 		t.Fatalf("change: %v", err)
 	}
+	// El motivo del bloqueo se guarda con el bloqueo y se borra al desbloquear los dos (D-122).
+	if err := tr.Change(domain.TermsState{BlockOrders: true, BlockReason: " impagos "}); err != nil || tr.State().BlockReason != "impagos" {
+		t.Fatalf("reason: %v %+v", err, tr.State())
+	}
+	if err := tr.Change(domain.TermsState{BlockReason: "impagos"}); err != nil || tr.State().BlockReason != "" {
+		t.Fatalf("unblocked: %v %+v", err, tr.State())
+	}
 	c, err := domain.ReconstituteCounter(domain.NewCounterID(), company, "PED", 2026, 41)
 	if err != nil || c.Next() != "PED-2026-000042" {
 		t.Fatalf("counter: %v", err)

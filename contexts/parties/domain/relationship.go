@@ -2,6 +2,7 @@ package domain
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -112,6 +113,9 @@ type Relationship struct {
 	// transferredFrom es la relación a la que ésta continúa en otra party, por una fusión o por
 	// deshacerla (D-93); cero si nació por sí misma.
 	transferredFrom RelationshipID
+	// consents son los consentimientos de protección de datos de la pareja (D-122), vigentes o
+	// retirados.
+	consents []DataProtectionConsent
 }
 
 // RelationshipDetails son los datos que lleva una relación por su tipo (los subtipos UDM de PARTY
@@ -122,6 +126,10 @@ type RelationshipDetails struct {
 	Ownership    OwnershipDetails    // tipos con código CodeOwnership
 	Collaborator CollaboratorDetails // tipos con código CodeCollaborator
 	Customer     CustomerDetails     // tipos con código CodeCustomer
+	Supplier     SupplierDetails     // tipos con código CodeSupplier
+	// External son los códigos con que otros sistemas conocen a la pareja; los llevan los tipos con
+	// código CodeCustomer y CodeSupplier (docs/DECISIONES-COMUNES.md, D-29).
+	External ExternalCodes
 }
 
 // CustomerDetails son los datos de una relación de cliente: el número con el que la organización
@@ -226,6 +234,7 @@ type RelationshipState struct {
 	Remark           string
 	Details          RelationshipDetails
 	TransferredFrom  RelationshipID
+	Consents         []DataProtectionConsent
 	Audit            traits.AuditStamp
 }
 
@@ -245,7 +254,7 @@ func ReconstituteRelationship(id RelationshipID, s RelationshipState) (*Relation
 	}
 	return &Relationship{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), relType: s.Type,
 		from: s.From, to: s.To, fromRole: s.FromRole, toRole: s.ToRole, period: s.Period, remark: s.Remark, details: s.Details,
-		transferredFrom: s.TransferredFrom}, nil
+		transferredFrom: s.TransferredFrom, consents: slices.Clone(s.Consents)}, nil
 }
 
 // TransferredFrom devuelve la relación a la que ésta continúa en otra party (cero si ninguna).
@@ -271,6 +280,14 @@ func (r *Relationship) Continue(t RelationshipType, prev *Relationship, returnin
 	}
 	r.details = prev.details
 	r.transferredFrom = prev.ID()
+	// Los consentimientos vigentes pasan con ella: es la misma persona con la misma empresa, responsable
+	// del tratamiento (docs/PARTIES.md §23). Conservan su identidad; los retirados se quedan en prev.
+	r.consents = nil
+	for _, c := range prev.consents {
+		if c.IsActive() {
+			r.consents = append(r.consents, c)
+		}
+	}
 	r.Raise(RelationshipTransferred{EventMeta: r.NewEventMeta(), Previous: prev.ID().String(), Type: t.ID.String(), TypeCode: t.Code,
 		Organization: org.String(), Ceding: ceding.String(), Receiving: receiving.String(), Returning: returning, At: r.Since()})
 	return nil
@@ -472,10 +489,18 @@ func (r *Relationship) AuditSnapshot() map[string]any {
 		}
 		return t.Format(time.RFC3339)
 	}
-	return map[string]any{"type": r.relType.String(), "from": r.from.String(), "to": r.to.String(),
+	s := map[string]any{"type": r.relType.String(), "from": r.from.String(), "to": r.to.String(),
 		"since": r.Since().Format(time.RFC3339), "until": format(r.Until()), "remark": r.remark,
 		"trialUntil": format(r.TrialUntil()), "share": shareText(r.OwnershipShare()), "promotionCode": r.PromotionCode(),
 		"customerNumber": r.CustomerNumber(), "transferredFrom": transferredText(r.transferredFrom)}
+	// Los datos de D-122 sólo cuando los hay: el registro de las demás relaciones no cambia.
+	for k, v := range map[string]string{"supplierNumber": r.SupplierNumber(), "sageCode": r.details.External.Sage,
+		"apiscoreCode": r.details.External.Apiscore, "consents": consentsText(r.consents)} {
+		if v != "" {
+			s[k] = v
+		}
+	}
+	return s
 }
 
 // transferredText escribe la relación de la que viene otra ("" para ninguna).

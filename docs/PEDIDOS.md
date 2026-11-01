@@ -122,6 +122,11 @@ contexts/inventory/  # + suscripción a Pedidos (migración 3: inventory_inbox),
   - `ord_terms` (único por empresa y cliente);
   - `ord_counters`;
   - las bandejas de salida, la auditoría y `orders_inbox`.
+- **Motivo del bloqueo** (D-122, migración 6): las condiciones de venta llevan `blockReason` (hasta
+  200 caracteres, el `BlockReason` de Trench), uno para los dos bloqueos (pedidos y entregas). Se
+  guarda mientras alguno está puesto y se borra al quitar los dos. La vista por pareja lo enseña en
+  `blockReason`, junto al del crédito de Cobros.
+  Fijar las condiciones las sustituye enteras: reenviar un bloqueo sin `blockReason` borra el motivo.
 - **Fusión de fichas** (D-93; [PARTIES.md](PARTIES.md) §17): Pedidos escucha
   `parties.relationship-transferred.v1`. Cuando la relación de cliente de una empresa pasa de una
   ficha a otra, copia las condiciones de venta (tarifa, descuento, bloqueos) de (empresa, la que

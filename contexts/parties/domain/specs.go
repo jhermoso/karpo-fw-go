@@ -58,10 +58,12 @@ var (
 	FieldDocumentIssue = spec.Comparable("doc_issue", (*Party).HasDocumentIssue)
 	// FieldDataQualityIssues son las incidencias de calidad de datos de la ficha (D-92).
 	FieldDataQualityIssues = spec.Collection("data_quality_issues", (*Party).DataQualityIssues)
-	FieldAffiliations      = spec.Collection("affiliations", (*Party).Affiliations)
-	AffFieldOrg            = spec.Comparable("organization", func(a Affiliation) PartyID { return a.Organization })
-	AffFieldFrom           = spec.Time("valid_from", func(a Affiliation) time.Time { return a.Period.From() })
-	AffFieldUntil          = spec.OptionalTime("valid_to", func(a Affiliation) *time.Time {
+	// IssueFieldOwner es la organización dueña del contacto de una incidencia (D-122); nulo, de todos.
+	IssueFieldOwner   = spec.Optional("owner_id", DataQualityIssue.OwnerOf)
+	FieldAffiliations = spec.Collection("affiliations", (*Party).Affiliations)
+	AffFieldOrg       = spec.Comparable("organization", func(a Affiliation) PartyID { return a.Organization })
+	AffFieldFrom      = spec.Time("valid_from", func(a Affiliation) time.Time { return a.Period.From() })
+	AffFieldUntil     = spec.OptionalTime("valid_to", func(a Affiliation) *time.Time {
 		if t, ok := a.Period.To(); ok {
 			return &t
 		}
@@ -128,6 +130,16 @@ func WithDocumentNumber(number string) spec.Spec[*Party] {
 // WithDataQualityIssues selecciona las parties con alguna incidencia de calidad de datos (D-92).
 func WithDataQualityIssues() spec.Spec[*Party] { return FieldDataQualityIssues.Any(nil) }
 
+// WithDataQualityIssuesSeenBy selecciona las parties con alguna incidencia que ve un ámbito de
+// organizaciones: la de un contacto de todos o la de un contacto suyo (D-122).
+func WithDataQualityIssuesSeenBy(orgs []PartyID) spec.Spec[*Party] {
+	visible := IssueFieldOwner.IsNull()
+	if len(orgs) > 0 {
+		visible = visible.Or(IssueFieldOwner.In(orgs...))
+	}
+	return FieldDataQualityIssues.Any(visible)
+}
+
 // ClassifiedAt selecciona las parties con alguna de las clasificaciones en t.
 func ClassifiedAt(t time.Time, types ...ClassificationTypeID) spec.Spec[*Party] {
 	return FieldClassifications.Any(spec.And(
@@ -181,6 +193,8 @@ var (
 	RelFieldPromotionCode = spec.Comparable("promotion_code", (*Relationship).PromotionCode)
 
 	RelFieldCustomerNumber = spec.Comparable("customer_number", (*Relationship).CustomerNumber)
+
+	RelFieldSupplierNumber = spec.Comparable("supplier_number", (*Relationship).SupplierNumber)
 
 	RelFieldTransferredFrom = spec.Comparable("transferred_from", (*Relationship).TransferredFrom)
 )

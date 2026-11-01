@@ -1,6 +1,10 @@
 package domain
 
 import (
+	"strings"
+	"unicode"
+	"unicode/utf8"
+
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/traits"
@@ -18,7 +22,9 @@ type CreditProfileState struct {
 	Limit    vocab.Decimal // límite de riesgo; sólo tiene sentido cuando Limited
 	Limited  bool          // false: sin límite (el C# leía MaxRisk = 0 como «sin límite» en un sitio y como «límite 0» en otro)
 	Blocked  bool          // se rechazan los pedidos
-	Audit    traits.AuditStamp
+	// BlockReason dice por qué está bloqueado (D-122); se borra al desbloquear.
+	BlockReason string
+	Audit       traits.AuditStamp
 }
 
 // CreditProfile es la relación de crédito de un vendedor con un cliente: condiciones por defecto,
@@ -34,10 +40,13 @@ func (s CreditProfileState) check(v *fw.Validation) {
 	v.Require(!s.Seller.IsZero() && !s.Customer.IsZero(), "customer", "required", "seller and customer are required")
 	v.Require(!s.Limited || (!s.Limit.IsNegative() && s.Limit.Equal(s.Limit.Round(2))), "limit", "range", "a non-negative limit in cents")
 	v.Require(s.Limited || s.Limit.IsZero(), "limit", "unlimited", "an unlimited profile has no limit amount")
+	v.Require(utf8.RuneCountInString(s.BlockReason) <= MaxBlockReason, "blockReason", "length", "the block reason has at most 200 characters")
+	v.Require(!strings.ContainsFunc(s.BlockReason, unicode.IsControl), "blockReason", "format", "no control characters")
 }
 
 // ReconstituteCreditProfile reconstruye un perfil de crédito.
 func ReconstituteCreditProfile(id CreditProfileID, s CreditProfileState) (*CreditProfile, error) {
+	s.BlockReason = blockReason(s.Blocked, s.BlockReason)
 	base, err := fw.NewBaseAggregateRoot(CreditProfileKind, id)
 	if err != nil {
 		return nil, err
@@ -53,10 +62,10 @@ func ReconstituteCreditProfile(id CreditProfileID, s CreditProfileState) (*Credi
 // State devuelve el estado.
 func (p *CreditProfile) State() CreditProfileState { return p.s }
 
-// Set sustituye las condiciones, el límite y el bloqueo.
-func (p *CreditProfile) Set(terms TermsID, limited bool, limit vocab.Decimal, blocked bool) error {
+// Set sustituye las condiciones, el límite y el bloqueo con su motivo (que se borra al desbloquear).
+func (p *CreditProfile) Set(terms TermsID, limited bool, limit vocab.Decimal, blocked bool, reason string) error {
 	s := p.s
-	s.Terms, s.Limited, s.Limit, s.Blocked = terms, limited, limit, blocked
+	s.Terms, s.Limited, s.Limit, s.Blocked, s.BlockReason = terms, limited, limit, blocked, blockReason(blocked, reason)
 	var v fw.Validation
 	s.check(&v)
 	if err := v.Err(); err != nil {
@@ -77,7 +86,11 @@ func (p *CreditProfile) Available(exposure vocab.Decimal) (vocab.Decimal, bool) 
 
 // AuditSnapshot implementa traits.Snapshotter.
 func (p *CreditProfile) AuditSnapshot() map[string]any {
-	return map[string]any{"terms": p.s.Terms.String(), "limited": p.s.Limited, "limit": p.s.Limit.String(), "blocked": p.s.Blocked}
+	s := map[string]any{"terms": p.s.Terms.String(), "limited": p.s.Limited, "limit": p.s.Limit.String(), "blocked": p.s.Blocked}
+	if p.s.BlockReason != "" {
+		s["blockReason"] = p.s.BlockReason
+	}
+	return s
 }
 
 // Campos del perfil de crédito.
@@ -161,4 +174,15 @@ func ParseCollectionID(s string) (CollectionID, error) {
 func ParseCreditProfileID(s string) (CreditProfileID, error) {
 	u, err := fw.ParseUUID(s)
 	return CreditProfileID{u}, err
+}
+
+// MaxBlockReason es lo que cabe en el motivo de un bloqueo (el BlockReason de Trench).
+const MaxBlockReason = 200
+
+// blockReason recorta el motivo de un bloqueo, y lo borra si no hay bloqueo (D-122).
+func blockReason(blocked bool, reason string) string {
+	if !blocked {
+		return ""
+	}
+	return strings.TrimSpace(reason)
 }

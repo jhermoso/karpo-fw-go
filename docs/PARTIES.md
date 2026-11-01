@@ -918,3 +918,135 @@ dos procesos, entraban las dos. Desde la migración 29 lo impide también la bas
 - **Esquema y marco:** migración 29. Para no dejarla a medias en los motores sin DDL
   transaccional (Oracle, MySQL), `sqlrepo.Migration` tiene un `Check` que se ejecuta antes de
   tocar nada: si falla, la migración no se aplica ni queda sucia.
+
+## 23. Identidad y perfil de cada empresa (D-122)
+
+D-121 y D-122 ([DECISIONES-COMUNES.md](DECISIONES-COMUNES.md), 2026-10-30): una ficha que usan
+varias empresas tiene **una identidad compartida** (lo que es verdad para todas y lo acredita un
+documento o un registro público) y **un perfil por empresa** en su relación con la party (lo que
+cada empresa pacta, numera, decide o anota). Aquí está lo que Go hace de eso.
+
+*Ejemplo:* Talleres Comunes es cliente de Acme y de Beta. Su CIF, su razón social y su teléfono
+general son de todos. El correo de compras que usa Acme, el número de proveedor con que Acme lo
+conoce, el motivo por el que Acme le tiene bloqueados los pedidos y el consentimiento de marketing
+que le dio a Acme son de Acme: Beta no los ve.
+
+### Contactos con dueña (regla 1)
+
+| Qué | Cómo |
+|---|---|
+| Dato | `owner` en el contacto: la organización interna dueña. Sin dueña, el contacto es de todos (identidad: domicilio social o fiscal, teléfono y correo generales). Sigue D-3: el contacto es de una sola party |
+| Quién lo ve | Sin dueña, quien ve la party. Con dueña, quien tiene la dueña en su ámbito (cualquier acceso) y el administrador global. Para los demás no existe: no sale en la ficha, ni sus incidencias, ni cuenta en `withDataQualityIssues=true` |
+| Quién lo cambia | Sus propósitos (`PUT …/contacts/{id}/purposes`) y su fin (`POST …/contacts/{id}/end`): con dueña, quien tiene acceso Full a la dueña, **pueda o no cambiar la party** (es su perfil, D-121); quien no la ve recibe 404, quien sólo la lee, 403. Sin dueña, quien puede cambiar la party (§18), como antes |
+| Al añadirlo | `POST /api/parties/{id}/contacts` admite `owner`: una organización interna (si no, 422 `parties.contact_owner_not_internal`) en la que quien llama escribe (si no, 403). Sin `owner`: el administrador global y quien puede cambiar la party añaden un contacto de todos; quien sólo se relaciona con ella, uno de **su** organización: la única en la que escribe y a la que la party está afiliada (si ninguna lo está, la única en la que escribe); si hay varias, 400 pidiendo `owner` (decidido en esta sesión). En una organización interna de otros o en una entrada compartida del catálogo nadie salvo el global añade un contacto de su empresa (403): esa ficha la mantienen sus usuarios o el global |
+| Duplicados y propósitos | Un contacto con dueña sólo choca con los de su misma dueña y con los de todos (con los de otra empresa no: no los ve, y decirle que ya existe se los enseñaría). Cada dueña tiene sus propios titulares de cada propósito: el correo por defecto de Acme no le quita el suyo al general |
+| Incidencias (D-92) | La de un contacto con dueña lleva la dueña (`party_data_quality_issues.owner_id`) y se ve donde se ve el contacto |
+| Lo que lee el resto | `TaxIdentities` (la provincia para Fiscal) sólo mira los contactos de todos: el domicilio fiscal es identidad. El evento `parties.party-contact-added.v1` lleva `owner`, para que quien lo consuma lo respete |
+| Auditoría | El contacto con dueña sale en `contacts` con `@` y la dueña |
+
+**Pendiente:** el perfil de la pareja no tiene direcciones por defecto (envío, facturación,
+domiciliación: D-104). Cuando las tenga, elegirá entre los contactos de todos y los de su empresa.
+
+### Quién corrige la identidad (regla 3)
+
+El **documento de identidad** (añadir, quitar, marcar el principal) y el **nombre** de una persona o
+la **razón social** de una organización sólo los cambian:
+
+| Party | Quién |
+|---|---|
+| Organización interna | Sus usuarios con acceso Full, y el administrador global |
+| Cualquier otra | Quien puede cambiarla (§18) **y además** tiene `Parties.Party.UpdateRelated` (el administrador de organización), y el administrador global |
+
+Si no, 403. El resto de la identidad (nombre comercial, forma jurídica, nacimiento, sexo, estado
+civil, idioma, contactos de todos) lo cambia quien ya puede cambiar la party (D-66), como antes.
+
+- **«El administrador» de D-122, leído en Go** como el administrador de organización (el que tiene
+  `Parties.Party.UpdateRelated`), además del global. Es una interpretación técnica: **que Javier
+  la confirme.**
+- **El primer documento no es una corrección** (decidido en esta sesión): a una party sin ningún
+  documento se lo pone quien puede cambiarla. El alta de Go no lleva documento, y sin esto el
+  usuario estándar no podría identificar a los clientes que da de alta. El segundo, quitarlo o
+  cambiar el principal, ya sí.
+- Ruta nueva: `PUT /api/parties/{id}/identifications/{identId}/primary` hace principal un documento.
+- **La marca de documento rechazado** (`PUT` y `DELETE /api/parties/{id}/document-issue`) también es del documento: la ponen y la quitan los mismos (403 al resto).
+- **El aviso.** Toda corrección de identidad (lo restringido y lo que no) publica
+  `parties.identity-corrected.v1`: la party, los campos que cambiaron (`name`, `identifications`,
+  `tradeName`, `legalForm`, `gender`, `birthDate`, `maritalStatus`, `language`, `contacts`, `documentIssue`), las
+  empresas a las que está afiliada ahora (las que tienen relación vigente) y quién lo hizo
+  (`correctedBy`, `correctedById`). Se calcula comparando la identidad antes y después de cada
+  cambio de la party, así que un cambio que no cambia nada no avisa. No cuentan el alta, ni el
+  primer documento de una party que no tenía ninguno, ni los roles, ni las clasificaciones, ni los
+  contactos con dueña. Todavía no hay consumidor.
+- La auditoría ya registraba cada cambio; no hace falta nada más.
+
+### Idioma preferido
+
+`language` (ISO 639-1, sin distinguir mayúsculas; se guarda en minúsculas) en el alta de persona y
+de organización, en la ficha y en `PUT /api/parties/{id}/language` (`{"language": "ca"}`; vacío lo
+quita). Un código que no es ISO 639-1, 400. Es identidad: lo cambia quien puede cambiar la party.
+Columna `parties.preferred_language` (2), como el `PreferredLanguage` de Trench. El vocabulario
+nuevo es `vocab.LanguageCode`.
+
+### El perfil de la pareja en Parties
+
+| Dato | Ruta | Reglas |
+|---|---|---|
+| Número de proveedor (D-122) | `PUT /api/party-relationships/{id}/supplier-number` `{"supplierNumber": "P-17"}` | Las del número de cliente (§9): hasta 20 letras, cifras, guiones, puntos, barras y guiones bajos, en mayúsculas; vacío lo quita; no se da a otro proveedor de la empresa mientras una relación del primero, vigente o terminada, lo lleve (422 `parties.duplicate_supplier_number`). Sólo en una relación de proveedor (422 `parties.not_a_supplier_relationship`); lo da quien escribe en la empresa que compra (el origen de la relación). En la relación, `supplier: {number}` |
+| Códigos externos (D-29) | `PUT /api/party-relationships/{id}/external-codes` `{"sageCode": "…", "apiscoreCode": "…"}` | En relaciones de cliente y de proveedor (si no, 422 `parties.not_a_pair_relationship`). Se guardan tal como llegan, recortados; vacío quita. Sage hasta 15 y Apiscore hasta 50 (las columnas `CustomerCodeInTenant` y `CustomerNumber` del perfil de Trench); 400 si no caben. Sin unicidad: son de otros sistemas. Los cambia quien escribe en la empresa de la pareja. En la relación, `customer` o `supplier` con `sageCode` y `apiscoreCode` |
+
+Los tres pasan a la superviviente con la relación al fusionar (D-93), como el número de cliente.
+**El perfil es de la empresa de la pareja** (el destino en una relación de cliente, el origen en
+una de proveedor): en una relación entre dos empresas del grupo (Beta, cliente de Acme), los
+usuarios de Beta ven la relación pero no los números, los códigos ni los consentimientos que anota
+Acme. El global lo ve todo. La
+vista por pareja los enseña (`supplierNumber`, `sageCode`, `apiscoreCode`) y filtra y ordena por
+`supplierNumber`. Permiso `Parties.Relationship.Update`, como el número de cliente.
+
+**El motivo del bloqueo** (D-122) no está en Parties sino donde está cada bloqueo: Cobros
+(crédito), Pedidos (pedidos y entregas) y Compras (proveedor); véanse [COBROS.md](COBROS.md),
+[PEDIDOS.md](PEDIDOS.md) y [COMPRAS.md](COMPRAS.md). La vista por pareja lo enseña en `blockReason`.
+
+### Consentimiento de protección de datos
+
+Cada empresa es un responsable del tratamiento distinto, así que el consentimiento va **en la
+pareja**, como entidad hija de la relación (`party_data_protection_consents`).
+
+| Campo | Qué es | En Trench (`party_data_protection_consent`) |
+|---|---|---|
+| `legalBasis` | Base legal del RGPD, art. 6.1: `consent`, `contract`, `legal-obligation`, `vital-interests`, `public-task`, `legitimate-interests` | `LegalBasisCode` (30) |
+| `purpose` | Finalidad (hasta 50) | `PurposeCode` (50) |
+| `grantedAt` | Cuándo se otorgó; ahora si no se dice; no en el futuro | `ConsentDate` |
+| `withdrawnAt` | Cuándo se retiró; ausente mientras está en vigor | — (`IsActive`, `IsConsented`) |
+| `retentionMonths` | Plazo de conservación en meses (1 a 1200; ausente si no se dijo) | `RetentionPeriodMonths` |
+| `objection` | El tercero se opone al tratamiento (RGPD, art. 21) | `IsExcludedFromProcessing` |
+| `notes` | Notas (hasta 500) | `Notes` (500) |
+
+| Qué | Cómo |
+|---|---|
+| Registrar | `POST /api/party-relationships/{id}/data-protection-consents`. La relación tiene que estar en vigor y tener un lado que es organización interna (si no, 422 `parties.consent_needs_company`); no puede haber otro en vigor con la misma finalidad (422 `parties.consent_duplicate_purpose`) |
+| Retirar | `POST /api/party-relationships/{id}/data-protection-consents/{consentId}/withdraw` (`{"at": …}` opcional); no en el futuro (400). También con la relación terminada o el tercero fusionado: retirarlo es un derecho del tercero. Dos veces, 422 `parties.consent_withdrawn` |
+| Permiso | `Parties.Relationship.Update` y acceso Full a la empresa de la pareja (decidido en esta sesión: es un dato de la pareja más, como el número de cliente; no hace falta un permiso propio). Quien no ve la relación, 404 |
+| Respuesta | La relación, con `dataProtectionConsents` (los vigentes y los retirados, con `active`) |
+| Eventos | `parties.data-protection-consent-recorded.v1` y `parties.data-protection-consent-withdrawn.v1`, con la relación, la empresa, el tercero y la finalidad |
+| Al fusionar | Los consentimientos vigentes pasan, con su identidad, a la relación que continúa en la superviviente (D-93): es la misma persona con la misma empresa (decisión técnica de esta sesión). Los retirados se quedan en la relación que termina. Deshacer la fusión los devuelve igual |
+
+**Diferencias con Trench, a propósito:** (1) va por pareja y no por party (D-122: cada empresa es
+un responsable distinto), así que no hay una fila única por party; (2) varias filas por pareja,
+una por finalidad, y el histórico se guarda con la fecha de retirada en lugar de `IsActive` e
+`IsConsented`; (3) no hay `HasAcceptedTermsAndConditions`: aceptar unas condiciones es un contrato,
+no un consentimiento de tratamiento de datos.
+
+### Esquema
+
+Migración 30 de Parties: `party_contacts.owner_id` (con índice), `party_data_quality_issues.owner_id`,
+`parties.preferred_language`, `party_relationships.supplier_number` (con índice, como el número de
+cliente), `sage_code` y `apiscore_code`, y la tabla `party_data_protection_consents`. En Cobros
+(migración 4), Pedidos (6) y Compras (5), la columna `block_reason`. Todo aditivo y anulable.
+
+### Lo que falta
+
+- Las direcciones por defecto del perfil de la pareja (D-104), cuando existan.
+- Un consumidor de `parties.identity-corrected.v1` (aviso a las empresas).
+- La regla 2 (la cuenta bancaria que se usa con un tercero la decide cada empresa en su pareja): en
+  Go el IBAN ya no está en la party sino en los perfiles de cada contexto; no se ha tocado.
+- Que Javier confirme la lectura de «el administrador» y la excepción del primer documento.

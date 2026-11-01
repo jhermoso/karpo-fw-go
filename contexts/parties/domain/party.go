@@ -85,6 +85,8 @@ type Party struct {
 	documentIssue   DocumentIssue
 	duplicate       bool
 	qualityIssues   []DataQualityIssue
+	// language es el idioma preferido de la party (identidad, D-122); cero si no se sabe.
+	language vocab.LanguageCode
 }
 
 // DocumentIssue marca una party cuyo documento de identidad se rechazó: el número tal como llegó y
@@ -158,6 +160,7 @@ type PartyState struct {
 	Issue        DocumentIssue
 	Duplicate    bool
 	Quality      []DataQualityIssue
+	Language     vocab.LanguageCode
 	Active       bool
 	Test         bool
 	Audit        traits.AuditStamp
@@ -187,6 +190,7 @@ func Reconstitute(id PartyID, s PartyState) (*Party, error) {
 	p.facilityRoles = slices.Clone(s.Facilities)
 	p.shared = s.Shared
 	p.documentIssue = s.Issue
+	p.language = s.Language
 	p.duplicate = s.Duplicate
 	p.qualityIssues = slices.SortedFunc(slices.Values(s.Quality), compareIssues)
 	p.Activation = traits.RestoredActivation(s.Active)
@@ -453,7 +457,7 @@ func (p *Party) AuditSnapshot() map[string]any {
 	contacts := make([]string, 0, len(p.contacts))
 	for _, c := range p.contacts {
 		if c.IsActiveAt(fw.Now()) {
-			contacts = append(contacts, string(c.Kind)+":"+c.Value+c.Address.String())
+			contacts = append(contacts, string(c.Kind)+":"+c.Value+c.Address.String()+ownerSuffix(c))
 		}
 	}
 	now := fw.Now()
@@ -472,6 +476,9 @@ func (p *Party) AuditSnapshot() map[string]any {
 	}
 	if len(selfEmployed) > 0 { // sólo si hay alguno: no cambia el registro de quien no es autónomo
 		s["selfEmployed"] = strings.Join(selfEmployed, ",")
+	}
+	if !p.language.IsZero() { // igual: sólo si se sabe
+		s["language"] = p.language.String()
 	}
 	if p.HasDataQualityIssues() { // igual: sólo si hay alguna
 		s["dataQualityIssues"] = p.issuesSnapshot()

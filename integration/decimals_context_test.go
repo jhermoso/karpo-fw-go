@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -62,12 +63,14 @@ func TestContextDecimalColumns(t *testing.T) {
 			yinfra.DropAll(ctx, db)
 			sets := []sqlrepo.MigrationSet{oinfra.Migrations(), binfra.Migrations(), yinfra.Migrations()}
 			before := make([]sqlrepo.MigrationSet, len(sets))
+			// La base se deja justo antes de la migración de las columnas decimales, que se busca por
+			// su nombre: detrás puede haber otras (en Orders, la del motivo del bloqueo).
 			for i, s := range sets {
-				last := s.Migrations[len(s.Migrations)-1]
-				if last.Name != "decimal columns" {
-					t.Fatalf("%s: the last migration is %q, not the decimal columns", s.Context, last.Name)
+				at := slices.IndexFunc(s.Migrations, func(m sqlrepo.Migration) bool { return m.Name == "decimal columns" })
+				if at < 0 {
+					t.Fatalf("%s: no migration named decimal columns", s.Context)
 				}
-				before[i] = sqlrepo.MigrationSet{Context: s.Context, Migrations: s.Migrations[:len(s.Migrations)-1]}
+				before[i] = sqlrepo.MigrationSet{Context: s.Context, Migrations: s.Migrations[:at]}
 			}
 			migrate(t, ctx, db, before)
 

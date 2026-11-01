@@ -54,6 +54,7 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	m.registerPhase2(mux)
 	m.registerPhase3(mux)
 	m.registerDetails(mux)
+	m.registerIdentity(mux)
 }
 
 func decode(r *http.Request, v any) error {

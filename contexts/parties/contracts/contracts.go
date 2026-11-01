@@ -175,6 +175,8 @@ type PartyContactAddedV1 struct {
 	Address   string    `json:"address,omitempty"` // representación en una línea
 	Purposes  []string  `json:"purposes"`
 	From      time.Time `json:"from"`
+	// Owner es la organización interna dueña del contacto (D-122): sólo ella lo usa. Vacío: de todos.
+	Owner string `json:"owner,omitempty"`
 }
 
 // IntegrationEventType implementa application.IntegrationEvent.

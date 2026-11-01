@@ -17,6 +17,8 @@ type SetTerms struct {
 	Discount      string `json:"discount,omitempty"`
 	BlockOrders   bool   `json:"blockOrders,omitempty"`
 	BlockDelivery bool   `json:"blockDelivery,omitempty"`
+	// BlockReason dice por qué se bloquea (D-122); sin bloqueo no se guarda.
+	BlockReason string `json:"blockReason,omitempty"`
 }
 
 // SearchTerms enumera las condiciones de cliente de una empresa; las de una party fusionada, sólo
@@ -35,13 +37,14 @@ type TermsDTO struct {
 	Discount      string `json:"discount"`
 	BlockOrders   bool   `json:"blockOrders"`
 	BlockDelivery bool   `json:"blockDelivery"`
+	BlockReason   string `json:"blockReason,omitempty"` // D-122
 	Version       int64  `json:"version"`
 }
 
 func termsDTO(t *domain.Terms) TermsDTO {
 	s := t.State()
 	return TermsDTO{ID: t.ID().String(), Company: s.Company.String(), Customer: s.Customer.String(), PriceList: optID(s.PriceList.UUID),
-		Discount: money(s.Discount), BlockOrders: s.BlockOrders, BlockDelivery: s.BlockDelivery, Version: t.Version()}
+		Discount: money(s.Discount), BlockOrders: s.BlockOrders, BlockDelivery: s.BlockDelivery, BlockReason: s.BlockReason, Version: t.Version()}
 }
 
 // DraftOrder abre un pedido en borrador de un cliente, con la tarifa y el descuento de sus
@@ -221,7 +224,7 @@ func (s service) termsUseCases(svc *Service) {
 		company := domain.OrganizationID{UUID: parseID(&v, "company", c.Company)}
 		customer := domain.PartyID{UUID: parseID(&v, "customer", c.Customer)}
 		st := domain.TermsState{Company: company, Customer: customer, Discount: parseDecimal(&v, "discount", c.Discount), BlockOrders: c.BlockOrders,
-			BlockDelivery: c.BlockDelivery}
+			BlockDelivery: c.BlockDelivery, BlockReason: c.BlockReason}
 		if c.PriceList != "" {
 			st.PriceList = domain.PriceListID{UUID: parseID(&v, "priceList", c.PriceList)}
 		}

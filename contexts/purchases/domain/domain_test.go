@@ -160,6 +160,13 @@ func TestSupplierProfile(t *testing.T) {
 	if err := p.Change(domain.SupplierState{PaymentDays: 400}); !errors.Is(err, fw.ErrValidation) {
 		t.Fatalf("days: %v", err)
 	}
+	// El motivo del bloqueo se guarda con el bloqueo y se borra al desbloquear (D-122).
+	if err := p.Change(domain.SupplierState{Blocked: true, BlockReason: "calidad"}); err != nil || p.State().BlockReason != "calidad" {
+		t.Fatalf("reason: %v %+v", err, p.State())
+	}
+	if err := p.Change(domain.SupplierState{BlockReason: "calidad"}); err != nil || p.State().BlockReason != "" {
+		t.Fatalf("unblocked: %v %+v", err, p.State())
+	}
 	if err := p.Change(domain.SupplierState{Category: domain.ProfessionalServices, WithholdingRate: dec("15"), Blocked: true}); err != nil ||
 		p.State().Supplier != supplier || !p.State().Blocked {
 		t.Fatalf("change: %v %+v", err, p.State())

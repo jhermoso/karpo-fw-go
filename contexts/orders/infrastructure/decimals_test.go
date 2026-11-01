@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -32,9 +33,10 @@ func TestDecimalColumnsInSQLite(t *testing.T) {
 	t.Cleanup(func() { _ = raw.Close() })
 	db := sqlite.Open(raw, sqlrepo.WithName("sqlite"))
 	all := infrastructure.Migrations()
-	last := all.Migrations[len(all.Migrations)-1]
-	if last.Name != "decimal columns" {
-		t.Fatalf("the last migration is %q", last.Name)
+	// La de las columnas decimales ya no es la última (después llegó el motivo del bloqueo, D-122).
+	k := slices.IndexFunc(all.Migrations, func(m sqlrepo.Migration) bool { return m.Name == "decimal columns" })
+	if k < 0 {
+		t.Fatal("there is no decimal columns migration")
 	}
 	migrate := func(set sqlrepo.MigrationSet) {
 		t.Helper()
@@ -46,7 +48,7 @@ func TestDecimalColumnsInSQLite(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	migrate(sqlrepo.MigrationSet{Context: all.Context, Migrations: all.Migrations[:len(all.Migrations)-1]})
+	migrate(sqlrepo.MigrationSet{Context: all.Context, Migrations: all.Migrations[:k]})
 
 	// El texto de antes, como lo escribía OrderMapping.
 	id := fw.NewUUID()

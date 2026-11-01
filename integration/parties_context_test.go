@@ -270,6 +270,8 @@ func TestPartiesContext(t *testing.T) {
 			if withIssues, err = svc.Search.Handle(ctx, papp.SearchParties{WithDataQualityIssues: true}); err != nil || withIssues.Total != 0 {
 				t.Fatalf("nobody with issues: %+v %v", withIssues, err)
 			}
+			// Migración 30: identidad y perfil de cada empresa (D-122).
+			partiesD122(ctx, t, svc, acme.ID)
 
 			// Fase 3: ámbito de organización (P1), alta dentro del ámbito, jerarquía y puertos.
 			clerk, _ := authz.NewContext(authz.Context{Subject: fw.NewUUID(), SubjectName: "clerk", Kind: authz.Service,
