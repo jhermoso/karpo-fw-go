@@ -335,6 +335,13 @@ de visibilidad que esa sesión transmitió el 2026-10-29 queda retirado y lo sus
 plan de permisos y ámbito (su PR 88): el tramo 6 aplica D-120 y D-67, el tramo 5 exige relación
 vigente para editar, y D-121 y D-122 van en un tramo aparte, el 10.
 
+**D-125 y D-126 en Trench** (su sesión; confirmadas allí por Javier el 2026-11-02). En su plan (su PR
+92), aún sin implementar: D-125 es su tramo 11, después del 5, y D-126 entra en el 10. Igual que en
+los demás: `party_idempotency_keys`, 24 h, reserva al principio de la transacción y sin cuerpo de
+respuesta. Tres diferencias: (1) sin `tenant_id`, porque Trench no tiene tenants, así que la
+restricción es UNIQUE (`subject_id`, `idempotency_key`); (2) su error `Common.IdempotencyKeyReused`
+pasa de 409 a 422; (3) retira su decorador y su almacén en memoria, que no estaban conectados.
+
 **D-123 y D-124 en Trench** (su sesión, 2026-11-01): D-124 confirmada con Javier y en su tramo 10
 (su PR 92). `GET /api/auth/context` ya está en su `main` (su PR 91) con la forma de Karpo Go y dos
 precisiones que Go adopta (rama `fix/contexto-auth-como-trench`): `isGlobalAdmin` es tener el
