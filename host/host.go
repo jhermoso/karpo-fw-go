@@ -98,7 +98,6 @@ import (
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/messaging/inprocess"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
-	"github.com/jhermoso/karpo-fw-go/pkg/persistence/memory"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 )
 
@@ -113,9 +112,6 @@ type Options struct {
 	// OnDeliveryGivenUp recibe aviso cuando se abandona un mensaje para un oyente tras demasiados
 	// intentos: desde entonces espera a una persona. Nil: no se avisa a nadie.
 	OnDeliveryGivenUp func(context.Context, mailbox.DTO)
-	// Idempotency recuerda las altas ya hechas por su clave de idempotencia, para que la misma
-	// petición enviada dos veces no cree dos parties (nil: en memoria, se pierde al reiniciar).
-	Idempotency application.IdempotencyStore
 }
 
 // Host es Karpo compuesto.
@@ -189,14 +185,11 @@ func Compose(sw *hotswap.Switch, o Options) (*Host, error) {
 	if o.Files == nil {
 		o.Files = expinfra.NewMemoryFiles()
 	}
-	if o.Idempotency == nil {
-		o.Idempotency = memory.NewIdempotencyStore()
-	}
 	h := &Host{Switch: sw, Broker: inprocess.NewBroker(), jwt: jwt}
 
 	h.Geography = geography.Compose(sw)
 	h.Facilities = facilities.Compose(sw, facilities.WithAddressChecker(facinfra.GeographyAddresses{Checker: h.Geography.Ports}))
-	h.Parties = parties.Compose(sw, o.Idempotency, parties.WithAddressChecker(parinfra.GeographyAddresses{Checker: h.Geography.Ports}),
+	h.Parties = parties.Compose(sw, parties.WithAddressChecker(parinfra.GeographyAddresses{Checker: h.Geography.Ports}),
 		parties.WithFacilityDirectory(parinfra.FacilitiesDirectory{Directory: h.Facilities.Directory}))
 	h.Security = security.Compose(sw, security.WithTokenIssuer(secdist.HS256Issuer{JWT: jwt}),
 		security.WithParties(secinfra.PartiesDirectory{Directory: h.Parties.Directory, Organizations: h.Parties.Organizations}))
@@ -329,13 +322,14 @@ func (h *Host) Deliver(ctx context.Context) (int, error) {
 
 // Chores es lo que hizo una ronda del planificador.
 type Chores struct {
-	ExportsWritten int
-	ExportsExpired int
-	ExportsGivenUp int
-	Reservations   int // de divisa, que nadie recogió a tiempo
-	Quotes         int // que nadie contestó dentro de su validez
-	Postings       int // hechos que Accounting había guardado y ahora pudo contabilizar
-	Redelivered    int // mensajes que un oyente no pudo recoger antes y recogió ahora
+	ExportsWritten  int
+	ExportsExpired  int
+	ExportsGivenUp  int
+	Reservations    int   // de divisa, que nadie recogió a tiempo
+	Quotes          int   // que nadie contestó dentro de su validez
+	Postings        int   // hechos que Accounting había guardado y ahora pudo contabilizar
+	Redelivered     int   // mensajes que un oyente no pudo recoger antes y recogió ahora
+	IdempotencyKeys int64 // claves de idempotencia de altas de Parties ya caducadas
 }
 
 // MaxExportsPerRound limita cuántas exportaciones escribe una ronda, para que el resto de las
@@ -360,6 +354,9 @@ func (h *Host) RunChores(ctx context.Context) (Chores, error) {
 	note("deliveries", err)
 	out.Redelivered = again.Delivered
 	ctx = authz.WithContext(ctx, authzOf(h.system))
+
+	out.IdempotencyKeys, err = h.Parties.Ledger.Purge(ctx, fw.Now())
+	note("idempotency keys", err)
 
 	for range MaxExportsPerRound {
 		ran, err := h.Exports.Service.RunNext.Handle(ctx, expapp.RunNext{})

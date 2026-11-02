@@ -208,7 +208,7 @@ func compose(t *testing.T, newDirectory func(*testing.T) directory) *env {
 	}
 
 	sw := hotswap.New(memory.NewStore("memory"))
-	mod := parties.Compose(sw, memory.NewIdempotencyStore())
+	mod := parties.Compose(sw)
 	mux := http.NewServeMux()
 	mod.HTTP.RegisterRoutes(mux)
 	srv := httptest.NewServer(distribution.Chain(mux, distribution.Correlation(),

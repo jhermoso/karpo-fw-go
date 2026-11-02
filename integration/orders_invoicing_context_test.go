@@ -65,7 +65,7 @@ func TestOrdersInvoicing(t *testing.T) {
 				t.Fatal(err)
 			}
 			sw := hotswap.New(db)
-			pm := parties.Compose(sw, nil)
+			pm := parties.Compose(sw)
 			fm := fiscal.Compose(sw, finfra.PartiesIdentities{TaxIdentities: pm.TaxIdentities})
 			dm := products.Compose(sw)
 			im := inventory.Compose(sw, iinfra.ProductsCatalog{Catalog: dm.Catalog})

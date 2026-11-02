@@ -19,7 +19,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
-// Deps son los puertos que necesitan los casos de uso; Recorder, Audit e Idempotency son opcionales.
+// Deps son los puertos que necesitan los casos de uso; Recorder, Audit y Ledger son opcionales.
 type Deps struct {
 	Parties       domain.PartyRepository
 	Relationships domain.RelationshipRepository
@@ -27,7 +27,7 @@ type Deps struct {
 	UoW           fw.UnitOfWork
 	Recorder      app.EventRecorder
 	Audit         app.AuditLog
-	Idempotency   app.IdempotencyStore
+	Ledger        app.IdempotencyLedger
 	// Addresses valida las direcciones postales contra el contexto Geography (opcional).
 	Addresses AddressChecker
 	// FacilityDirectory resuelve instalaciones del contexto Facilities (opcional).
@@ -282,8 +282,10 @@ func NewService(d Deps) *Service {
 		if err != nil {
 			return PartyDTO{}, err
 		}
-		return s.register(ctx, withLanguage(lang, func(id domain.PartyID) (*domain.Party, error) { return domain.RegisterPerson(id, details) }), c.Roles, c.Affiliation)
-	}, idempotent[RegisterPerson, PartyDTO](d.Idempotency), pipeline.Transactional[RegisterPerson, PartyDTO](d.UoW))
+		return s.once(ctx, c, func(id domain.PartyID) (PartyDTO, error) {
+			return s.register(ctx, id, withLanguage(lang, func(id domain.PartyID) (*domain.Party, error) { return domain.RegisterPerson(id, details) }), c.Roles, c.Affiliation)
+		})
+	}, pipeline.RetryOnConflict[RegisterPerson, PartyDTO](retry, backoff), pipeline.Transactional[RegisterPerson, PartyDTO](d.UoW))
 
 	svc.RegisterOrganization = chain(PermPartyCreate, func(ctx context.Context, c RegisterOrganization) (PartyDTO, error) {
 		name, err := domain.NewOrganizationName(c.LegalName, c.TradeName)
@@ -298,10 +300,12 @@ func NewService(d Deps) *Service {
 		if err != nil {
 			return PartyDTO{}, err
 		}
-		return s.register(ctx, withLanguage(lang, func(id domain.PartyID) (*domain.Party, error) {
-			return domain.RegisterOrganization(id, domain.OrganizationDetails{Name: name, LegalForm: form})
-		}), c.Roles, c.Affiliation)
-	}, idempotent[RegisterOrganization, PartyDTO](d.Idempotency), pipeline.Transactional[RegisterOrganization, PartyDTO](d.UoW))
+		return s.once(ctx, c, func(id domain.PartyID) (PartyDTO, error) {
+			return s.register(ctx, id, withLanguage(lang, func(id domain.PartyID) (*domain.Party, error) {
+				return domain.RegisterOrganization(id, domain.OrganizationDetails{Name: name, LegalForm: form})
+			}), c.Roles, c.Affiliation)
+		})
+	}, pipeline.RetryOnConflict[RegisterOrganization, PartyDTO](retry, backoff), pipeline.Transactional[RegisterOrganization, PartyDTO](d.UoW))
 
 	svc.Rename = chain(PermPartyUpdate, func(ctx context.Context, c RenameParty) (PartyDTO, error) {
 		return s.updateParty(ctx, c.ID, func(p *domain.Party, _ *domain.Catalog) error {
@@ -797,13 +801,6 @@ func chain[In, Out any](p authz.Permission, fn func(context.Context, In) (Out, e
 		}
 	}
 	return app.Chain[In, Out](app.HandlerFunc[In, Out](fn), nonNil...)
-}
-
-func idempotent[In, Out any](store app.IdempotencyStore) app.Middleware[In, Out] {
-	if store == nil {
-		return nil
-	}
-	return pipeline.Idempotent[In, Out](store, 24*time.Hour)
 }
 
 func parseRoleType(s string) (domain.RoleTypeID, error) {

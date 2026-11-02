@@ -31,7 +31,7 @@ func TestParties_AddressesCheckedByGeography(t *testing.T) {
 	}
 	sw := hotswap.New(store)
 	geo := geography.Compose(sw)
-	mod := parties.Compose(sw, nil, parties.WithAddressChecker(pinfra.GeographyAddresses{Checker: geo.Ports}))
+	mod := parties.Compose(sw, parties.WithAddressChecker(pinfra.GeographyAddresses{Checker: geo.Ports}))
 
 	ac, _ := authz.NewContext(authz.Context{Subject: fw.NewUUID(), SubjectName: "admin", Kind: authz.Service,
 		Permissions: []authz.Permission{authz.Wildcard, gapp.PermBoundaryRead}})

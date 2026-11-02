@@ -48,7 +48,7 @@ func TestFacilitiesContext(t *testing.T) {
 			sw := hotswap.New(db)
 			geo := geography.Compose(sw)
 			fac := facilities.Compose(sw, facilities.WithAddressChecker(finfra.GeographyAddresses{Checker: geo.Ports}))
-			pm := parties.Compose(sw, nil, parties.WithFacilityDirectory(pinfra.FacilitiesDirectory{Directory: fac.Directory}))
+			pm := parties.Compose(sw, parties.WithFacilityDirectory(pinfra.FacilitiesDirectory{Directory: fac.Directory}))
 
 			admin, _ := authz.NewContext(authz.Context{Subject: fw.NewUUID(), SubjectName: "admin", Kind: authz.Service, Permissions: []authz.Permission{authz.Wildcard}})
 			admin.GlobalAdmin = true

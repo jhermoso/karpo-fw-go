@@ -98,7 +98,7 @@ const (
 func compose(t *testing.T) *host {
 	jwt, _ := jwtauth.New(jwtauth.Config{Secret: []byte("security-test")})
 	sw := hotswap.New(memory.NewStore("memory"))
-	pm := parties.Compose(sw, nil)
+	pm := parties.Compose(sw)
 	sec := security.Compose(sw,
 		security.WithTokenIssuer(sdist.HS256Issuer{JWT: jwt}),
 		security.WithPasswordHasher(sinfra.NewPBKDF2(1000)), // el coste real sólo haría más lenta la prueba

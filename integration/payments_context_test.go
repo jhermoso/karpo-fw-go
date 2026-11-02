@@ -76,7 +76,7 @@ func TestPaymentsContext(t *testing.T) {
 			// cumplan sea cual sea el día en que corre la prueba.
 			t.Cleanup(fw.SetClock(fake.New(time.Date(2026, 10, 5, 9, 0, 0, 0, time.UTC))))
 			sw := hotswap.New(db)
-			pm := parties.Compose(sw, nil)
+			pm := parties.Compose(sw)
 			ym := payments.Compose(sw, nil)
 			tm := treasury.Compose(sw, nil, tinfra.PaymentsPayables{Payable: ym.Payable}, tinfra.PartiesIdentities{TaxIdentities: pm.TaxIdentities})
 			am := accounting.Compose(sw)

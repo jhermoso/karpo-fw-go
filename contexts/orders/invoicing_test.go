@@ -59,7 +59,7 @@ type chain struct {
 
 func composeChain(t *testing.T) *chain {
 	sw := hotswap.New(memory.NewStore("memory"))
-	pm := parties.Compose(sw, nil)
+	pm := parties.Compose(sw)
 	fm := fiscal.Compose(sw, finfra.PartiesIdentities{TaxIdentities: pm.TaxIdentities})
 	dm := products.Compose(sw)
 	im := inventory.Compose(sw, iinfra.ProductsCatalog{Catalog: dm.Catalog})

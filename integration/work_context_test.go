@@ -68,7 +68,7 @@ func TestWorkContext(t *testing.T) {
 				t.Fatal(err)
 			}
 			sw := hotswap.New(db)
-			pm := parties.Compose(sw, nil)
+			pm := parties.Compose(sw)
 			wm := work.Compose(sw)
 			must := func(err error) {
 				t.Helper()

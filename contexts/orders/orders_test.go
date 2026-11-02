@@ -67,7 +67,7 @@ type host struct {
 func compose(t *testing.T, opts ...orders.Option) *host {
 	ctx := context.Background()
 	sw := hotswap.New(memory.NewStore("memory"))
-	pm := parties.Compose(sw, nil)
+	pm := parties.Compose(sw)
 	dm := products.Compose(sw)
 	im := inventory.Compose(sw, iinfra.ProductsCatalog{Catalog: dm.Catalog})
 	rm := receivables.Compose(sw, nil)

@@ -54,7 +54,7 @@ func TestBillingContext(t *testing.T) {
 				t.Fatal(err)
 			}
 			sw := hotswap.New(db)
-			pm := parties.Compose(sw, nil)
+			pm := parties.Compose(sw)
 			fm := fiscal.Compose(sw, finfra.PartiesIdentities{TaxIdentities: pm.TaxIdentities})
 			bm := billing.Compose(sw, binfra.FiscalTaxes{Engine: fm.TaxEngine}, binfra.PartiesIdentities{TaxIdentities: pm.TaxIdentities})
 			admin, _ := authz.NewContext(authz.Context{Subject: fw.NewUUID(), SubjectName: "admin", Kind: authz.Service, Permissions: []authz.Permission{authz.Wildcard}})

@@ -433,6 +433,9 @@ func RelationshipMapping() sqlrepo.Mapping[domain.RelationshipID, *domain.Relati
 // TableConsents es la tabla de los consentimientos de protección de datos de las parejas (D-122).
 const TableConsents = "party_data_protection_consents"
 
+// TableIdempotencyKeys es la tabla de las altas recordadas por su clave de idempotencia (D-125).
+const TableIdempotencyKeys = "party_idempotency_keys"
+
 func hydrateContact(c *sqlrepo.Row) (domain.Contact, error) {
 	period, err := vocab.NewValidPeriod(c.Time("valid_from"), c.NullTime("valid_to"))
 	if err != nil {
@@ -877,6 +880,17 @@ func InboxFactory(b hotswap.Backend) (application.InboxStore, error) {
 		return memory.NewInbox(db), nil
 	}
 	return nil, unsupported(b)
+}
+
+// IdempotencyLedgerFactory construye el registro de las altas por clave de idempotencia (D-125).
+func IdempotencyLedgerFactory(b hotswap.Backend) (application.IdempotencyLedger, error) {
+	switch db := b.(type) {
+	case *sqlrepo.DB:
+		return sqlrepo.NewIdempotencyLedger(db, TableIdempotencyKeys)
+	case *memory.Store:
+		return memory.NewIdempotencyLedger(db), nil
+	}
+	return nil, fmt.Errorf("parties: unsupported backend %T", b)
 }
 
 // AuditLogFactory construye el registro de auditoría.

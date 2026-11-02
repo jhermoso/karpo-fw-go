@@ -99,6 +99,34 @@ type IdempotencyStore interface {
 	Put(ctx context.Context, key string, value []byte, ttl time.Duration) error
 }
 
+// IdempotencyEntry es una petición recordada por su clave de idempotencia: quién la hizo, la huella
+// de la petición y lo que creó (docs/DECISIONES-COMUNES.md, D-125). No guarda la respuesta, para no
+// copiar datos personales.
+type IdempotencyEntry struct {
+	Tenant      string
+	Subject     domain.UUID
+	Key         string
+	RequestHash string
+	ResourceID  domain.UUID
+	Status      int
+	CreatedAt   time.Time
+	ExpiresAt   time.Time
+}
+
+// IdempotencyLedger recuerda las peticiones en la misma transacción que su caso de uso, a diferencia
+// de IdempotencyStore, que guarda después de confirmar.
+type IdempotencyLedger interface {
+	// Find busca una petición, caducada o no.
+	Find(ctx context.Context, tenant string, subject domain.UUID, key string) (IdempotencyEntry, bool, error)
+	// Reserve guarda una petición en la unidad de trabajo en curso. Devuelve domain.ErrConflict si
+	// otra reservó la misma clave a la vez: hay que hacer rollback y volver a buscar.
+	Reserve(ctx context.Context, e IdempotencyEntry) error
+	// Remove olvida una petición, para volver a usar una clave caducada.
+	Remove(ctx context.Context, tenant string, subject domain.UUID, key string) error
+	// Purge borra las peticiones que caducaron antes de before y dice cuántas eran.
+	Purge(ctx context.Context, before time.Time) (int64, error)
+}
+
 // IdempotencyKeyed lo implementan las órdenes que llevan una clave de idempotencia aportada por el
 // cliente (equivale a IIdempotentCommand de C#).
 type IdempotencyKeyed interface {

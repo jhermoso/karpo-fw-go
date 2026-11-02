@@ -125,26 +125,33 @@ func scenario(t *testing.T, sw *hotswap.Switch) {
 	}
 
 	// La misma alta enviada dos veces con la misma clave de idempotencia crea una sola party.
-	register := func() string {
-		req, _ := http.NewRequest("POST", srv.URL+"/api/persons", strings.NewReader(`{"givenName":"Repetida","firstSurname":"Dos Veces"}`))
+	register := func(key, surname string, want int) string {
+		body := `{"givenName":"Repetida","firstSurname":"` + surname + `"}`
+		req, _ := http.NewRequest("POST", srv.URL+"/api/persons", strings.NewReader(body))
 		req.Header.Set("Authorization", "Bearer "+root)
-		req.Header.Set("Idempotency-Key", "alta-repetida-1")
+		req.Header.Set("Idempotency-Key", key)
 		res, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatal(err)
 		}
 		defer res.Body.Close()
 		var p struct {
-			ID string `json:"id"`
+			ID   string `json:"id"`
+			Code string `json:"code"`
 		}
-		if res.StatusCode != 201 || json.NewDecoder(res.Body).Decode(&p) != nil {
-			t.Fatalf("register: status %d", res.StatusCode)
+		if res.StatusCode != want || json.NewDecoder(res.Body).Decode(&p) != nil {
+			t.Fatalf("register: status %d, want %d", res.StatusCode, want)
+		}
+		if want == 422 && p.Code != "idempotency.key_reused" {
+			t.Fatalf("code: %q", p.Code)
 		}
 		return p.ID
 	}
-	if first, second := register(), register(); first != second {
+	if first, second := register("alta-repetida-1", "Dos Veces", 201), register("alta-repetida-1", "Dos Veces", 201); first != second {
 		t.Fatalf("the same request created two parties: %s and %s", first, second)
 	}
+	register("alta-repetida-1", "Otra Persona", 422)
+	register(strings.Repeat("k", 129), "Dos Veces", 400)
 
 	// Cada permiso de cada contexto está en el catálogo de Security.
 	var catalog []struct {

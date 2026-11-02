@@ -1050,3 +1050,24 @@ cliente), `sage_code` y `apiscore_code`, y la tabla `party_data_protection_conse
 - La regla 2 (la cuenta bancaria que se usa con un tercero la decide cada empresa en su pareja): en
   Go el IBAN ya no está en la party sino en los perfiles de cada contexto; no se ha tocado.
 - Que Javier confirme la lectura de «el administrador» y la excepción del primer documento.
+
+## 24. Un alta repetida no crea dos parties (D-125)
+
+- **Identificador:** lo genera siempre el servidor, en aplicación (`domain.NewPartyID`). Sólo una
+  importación conserva el de origen (D-126).
+- **Reintentos:** `POST /api/persons` y `POST /api/organizations` admiten la cabecera opcional
+  `Idempotency-Key`, de hasta 128 caracteres; una más larga da 400. El front genera una clave por
+  cada intención del usuario.
+- **Dónde:** `party_idempotency_keys` (migración 31), en la misma transacción que el alta. La fila se
+  reserva antes de crear nada, así que un alta que falla deja la clave libre y dos peticiones
+  simultáneas no se ejecutan las dos: la segunda espera en el índice único, choca, y al reintentar
+  encuentra lo que dejó la primera.
+- **Ámbito:** una clave es de un tenant y un sujeto. La misma clave con otra petición da 422
+  `idempotency.key_reused`.
+- **La repetición** devuelve 201 con la party como está ahora: la tabla guarda `resource_id` y no la
+  respuesta, para no copiar datos personales.
+- **Caducidad:** 24 horas. Una clave caducada se puede volver a usar, y `Host.RunChores` borra las
+  filas caducadas.
+- **Decisión técnica de Go** (reversible): la huella es el SHA-256 del tipo de la orden y su JSON, no
+  de método, ruta y cuerpo, porque la aplicación no conoce HTTP. Lo que cuenta entre proyectos es
+  el resultado, y la huella no se compara con otro proyecto.

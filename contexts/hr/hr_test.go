@@ -69,7 +69,7 @@ func compose(t *testing.T, opts ...hr.Option) *host {
 	sw := hotswap.New(store)
 	geo := geography.Compose(sw)
 	fac := facilities.Compose(sw, facilities.WithAddressChecker(finfra.GeographyAddresses{Checker: geo.Ports}))
-	pm := parties.Compose(sw, nil, parties.WithAddressChecker(pinfra.GeographyAddresses{Checker: geo.Ports}),
+	pm := parties.Compose(sw, parties.WithAddressChecker(pinfra.GeographyAddresses{Checker: geo.Ports}),
 		parties.WithFacilityDirectory(pinfra.FacilitiesDirectory{Directory: fac.Directory}))
 	hm := hr.Compose(sw, append([]hr.Option{hr.WithOrganizations(hinfra.PartiesOrganizations{Hierarchy: pm.Organizations, Membership: pm.Organizations}),
 		hr.WithFacilities(hinfra.FacilitiesDirectory{Directory: fac.Directory})}, opts...)...)

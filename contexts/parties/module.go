@@ -27,6 +27,7 @@ type Module struct {
 	Outbox            application.OutboxStore // eventos de dominio, dentro de Parties
 	IntegrationOutbox application.OutboxStore // Published Language
 	Audit             application.AuditLog
+	Ledger            application.IdempotencyLedger
 	// Consumer recibe los eventos de integración a los que reacciona Parties
 	// (hr.employee-terminated.v1): hay que suscribirlo al transporte.
 	Consumer *messaging.Consumer
@@ -44,20 +45,21 @@ func WithFacilityDirectory(f papp.FacilityDirectory) Option {
 	return func(d *papp.Deps) { d.FacilityDirectory = f }
 }
 
-// Compose construye el contexto sobre sw. idem puede ser nil.
-func Compose(sw *hotswap.Switch, idem application.IdempotencyStore, opts ...Option) *Module {
+// Compose construye el contexto sobre sw.
+func Compose(sw *hotswap.Switch, opts ...Option) *Module {
 	parties := hotswap.Repository(sw, infrastructure.PartyRepositoryFactory)
 	relationships := hotswap.Repository(sw, infrastructure.RelationshipRepositoryFactory)
 	domainOutbox := hotswap.Outbox(sw, infrastructure.OutboxFactory)
 	integrationOutbox := hotswap.Outbox(sw, infrastructure.IntegrationOutboxFactory)
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
+	ledger := hotswap.IdempotencyLedger(sw, infrastructure.IdempotencyLedgerFactory)
 	recorder := outbox.Recorders(
 		outbox.NewRecorder(domainOutbox),
 		papp.Publications(messaging.NewRecorder(contracts.Source, integrationOutbox)),
 	)
 	deps := papp.Deps{
 		Parties: parties, Relationships: relationships, Catalogs: infrastructure.SwappableCatalogs(sw),
-		UoW: sw, Recorder: recorder, Audit: audit, Idempotency: idem,
+		UoW: sw, Recorder: recorder, Audit: audit, Ledger: ledger,
 	}
 	for _, o := range opts {
 		o(&deps)
@@ -71,7 +73,7 @@ func Compose(sw *hotswap.Switch, idem application.IdempotencyStore, opts ...Opti
 	return &Module{Service: svc, Directory: dir, Organizations: orgs, TaxIdentities: papp.TaxIdentities{Parties: parties},
 		MergedParties: papp.MergedParties{Parties: parties}, Trials: trials,
 		Collaborators: papp.Collaborators{Relationships: relationships, Catalogs: infrastructure.SwappableCatalogs(sw)}, HTTP: pdist.NewModule(svc, dir),
-		Outbox: domainOutbox, IntegrationOutbox: integrationOutbox, Audit: audit, Consumer: consumer}
+		Outbox: domainOutbox, IntegrationOutbox: integrationOutbox, Audit: audit, Ledger: ledger, Consumer: consumer}
 }
 
 // Relay reenvía el Published Language a un transporte (al menos una vez).
