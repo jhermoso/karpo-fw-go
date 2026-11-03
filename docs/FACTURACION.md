@@ -97,7 +97,8 @@ contexts/fiscal/
   causa, NIF de las partes, fechas, totales y desglose por tipo. Lo consumirán Fiscal (libros,
   303, SII y Verifactu), Contabilidad y Cobros.
 - **Tablas:**
-  - `bil_series`, con índice único por vendedor, código y año;
+  - `bil_series`, con índice único por vendedor, código y año, y la fecha de la última factura
+    emitida (`last_issue_date`, migración 7);
   - `bil_invoices` (FK a sí misma para la rectificada), con índice único por serie y número
     (migración 6), y con `bil_invoice_lines` y `bil_invoice_taxes`;
   - las bandejas de salida y la auditoría.
@@ -198,9 +199,9 @@ factura, sin que ningún contexto escriba en el otro.
   `billing_inbox`, origen de ida y vuelta, descarte rechazado, emisión, albarán facturado por
   `orders_inbox` y deuda abierta en Cobros.
 
-## Números que no se repiten (plan Sage, T0; añadido el 2026-11-03)
+## Números que no se repiten y fechas que no retroceden (plan Sage, T0; añadido el 2026-11-03)
 
-Tarea T0-G1 del plan de Karpo C# para incorporar lo aprendido de Sage (D-127), confirmada por
+Tareas T0-G1 y T0-G2 del plan de Karpo C# para incorporar lo aprendido de Sage (D-127), confirmada por
 Javier el 2026-11-03.
 
 - **Índice único** `ux_bil_invoices_number` sobre (`series_id`, `invoice_number`), migración 6.
@@ -215,6 +216,10 @@ Javier el 2026-11-03.
 - **Prueba:** `TestBillingContext` emite veinte borradores a la vez en una serie: se emiten todos,
   del 1 al 20, sin repetidos ni huecos; después, un número repetido escrito sin pasar por la serie
   choca con el índice. En MySQL esa parte tarda unos 30 segundos; en los demás, segundos.
+- **La fecha de emisión no retrocede en una serie** (T0-G2): la serie guarda la de su última
+  factura y rechaza una anterior con 422 `billing.series_date_backwards`, sin gastar número. La
+  misma fecha vale. La migración 7 añade `last_issue_date` y la rellena con la fecha de la última
+  factura emitida en cada serie.
 - **Bases existentes:** si una ya tuviera números repetidos en una serie, la migración 6 fallaría
   y habría que corregirlos antes. Karpo Go no tiene bases vivas.
 

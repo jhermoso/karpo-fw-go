@@ -76,6 +76,13 @@ var numberDDL = []string{
 	`CREATE UNIQUE INDEX ` + uniqueNumber + ` ON bil_invoices (series_id, invoice_number){whereNotNull:invoice_number}`,
 }
 
+// issueDateDDL guarda en la serie la fecha de su última factura, para que no retroceda, y la toma de
+// las facturas ya emitidas.
+var issueDateDDL = []string{
+	`ALTER TABLE bil_series {add:last_issue_date} {date}{addEnd}`,
+	`UPDATE bil_series SET last_issue_date = (SELECT MAX(issue_date) FROM bil_invoices WHERE bil_invoices.series_id = bil_series.id)`,
+}
+
 // errNumberTaken es un conflicto: la emisión se reintenta y toma otro número.
 var errNumberTaken = fmt.Errorf("%w: billing: the invoice number is already taken in its series", fw.ErrConflict)
 
@@ -109,6 +116,7 @@ func Migrations() sqlrepo.MigrationSet {
 			"sqlserver": sqlserver.InboxDDL(TableInbox), "oracle": oracle.InboxDDL(TableInbox), "mysql": mysql.InboxDDL(TableInbox)}},
 		{Version: 5, Name: "decimal columns", Run: decimalColumnsV5.Run},
 		{Version: 6, Name: "unique invoice number per series", Up: sqlrepo.RenderDDLAll(numberDDL...)},
+		{Version: 7, Name: "last issue date of a series", Up: sqlrepo.RenderDDLAll(issueDateDDL...)},
 	}}
 }
 
@@ -160,15 +168,15 @@ func optDecimal(d vocab.Decimal) any {
 func SeriesMapping() sqlrepo.Mapping[domain.SeriesID, *domain.Series] {
 	return sqlrepo.Mapping[domain.SeriesID, *domain.Series]{
 		Table:   "bil_series",
-		Columns: sqlrepo.WithAuditColumns("seller", "code", "series_year", "last_number", "corrective", "active"),
+		Columns: sqlrepo.WithAuditColumns("seller", "code", "series_year", "last_number", "last_issue_date", "corrective", "active"),
 		Dehydrate: func(s *domain.Series) (sqlrepo.Values, error) {
 			st := s.State()
 			return sqlrepo.AuditStampValues(sqlrepo.Values{"seller": st.Seller, "code": st.Code, "series_year": int64(st.Year), "last_number": st.Last,
-				"corrective": st.Corrective, "active": st.Active}, s.AuditStamp()), nil
+				"last_issue_date": optDate(st.LastIssueDate), "corrective": st.Corrective, "active": st.Active}, s.AuditStamp()), nil
 		},
 		Hydrate: func(r *sqlrepo.Row, _ sqlrepo.ChildRows) (*domain.Series, error) {
 			st := domain.SeriesState{Seller: domain.OrganizationID{UUID: r.UUID("seller")}, Code: r.String("code"), Year: int(r.Int64("series_year")),
-				Last: r.Int64("last_number"), Corrective: r.Bool("corrective"), Active: r.Bool("active"), Audit: r.AuditStamp()}
+				Last: r.Int64("last_number"), LastIssueDate: r.Date("last_issue_date"), Corrective: r.Bool("corrective"), Active: r.Bool("active"), Audit: r.AuditStamp()}
 			if err := r.Err(); err != nil {
 				return nil, err
 			}
