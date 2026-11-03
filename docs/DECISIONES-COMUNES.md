@@ -346,6 +346,16 @@ respuesta. Tres diferencias: (1) sin `tenant_id`, porque Trench no tiene tenants
 restricción es UNIQUE (`subject_id`, `idempotency_key`); (2) su error `Common.IdempotencyKeyReused`
 pasa de 409 a 422; (3) retira su decorador y su almacén en memoria, que no estaban conectados.
 
+**D-128 a D-130 en Trench** (su sesión, 2026-11-03). Nada de lo que está en producción choca;
+chocan tres fichas de diseño sin implementar, que esa sesión anota para ajustarlas. Redondeo: hoy
+no se redondea en facturas, pedidos ni presupuestos (la línea de factura es cantidad por precio, sin
+descuento; importes `decimal(18,4)`), y la ficha de factura fija un redondeo en dos pasos no
+configurable. Códigos: la serie admite guion y barra, pero `DocumentNumber` parte el número por el
+guion, así que el número de una serie con guion no se vuelve a leer (defecto); la ficha de
+numeración (REQ-NUM-014) fija `[A-Z0-9_./]`. Los demás códigos sólo validan la longitud.
+Vencimientos: la factura emitida no los genera todavía, y la ficha dice «en la misma transacción,
+no configurable».
+
 **D-123 y D-124 en Trench** (su sesión, 2026-11-01): D-124 confirmada con Javier y en su tramo 10
 (su PR 92). `GET /api/auth/context` ya está en su `main` (su PR 91) con la forma de Karpo Go y dos
 precisiones que Go adopta (rama `fix/contexto-auth-como-trench`): `isGlobalAdmin` es tener el
