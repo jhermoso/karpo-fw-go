@@ -3,6 +3,9 @@ package integration
 import (
 	"context"
 	"errors"
+	"fmt"
+	"slices"
+	"sync"
 	"testing"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/billing"
@@ -126,9 +129,61 @@ func TestBillingContext(t *testing.T) {
 			if err != nil || page.Total != 1 {
 				t.Fatalf("search by issue date in SQL: %+v %v", page, err)
 			}
+			billingConcurrentIssue(actx, t, db, svc, acme.ID, ana.ID)
 			if err := m.Verify(ctx); err != nil {
 				t.Fatal(err)
 			}
 		})
+	}
+}
+
+// billingConcurrentIssue emite veinte borradores a la vez en la misma serie (plan Sage, T0): todos
+// se emiten, sin números repetidos ni huecos. Después comprueba que el índice único rechaza un
+// número repetido aunque se escriba sin pasar por la serie.
+func billingConcurrentIssue(ctx context.Context, t *testing.T, db *sqlrepo.DB, svc *bapp.Service, seller, customer string) {
+	t.Helper()
+	sr, err := svc.OpenSeries.Handle(ctx, bapp.OpenSeries{Seller: seller, Code: "FC", Year: 2026})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const n = 20
+	ids := make([]bdomain.InvoiceID, n)
+	for i := range ids {
+		inv, err := svc.DraftInvoice.Handle(ctx, bapp.DraftInvoice{Seller: seller, Customer: customer})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids[i], _ = bdomain.ParseInvoiceID(inv.ID)
+		if _, err := svc.AddLine.Handle(ctx, bapp.AddLine{ID: ids[i], Description: "Cuota", Quantity: "1", UnitPrice: "10", TaxCode: "G21"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	numbers := make([]string, n)
+	errs := make([]error, n)
+	var wg sync.WaitGroup
+	for i := range ids {
+		wg.Go(func() {
+			inv, err := svc.Issue.Handle(ctx, bapp.IssueInvoice{ID: ids[i], Series: sr.ID, Date: vocab.MustDate(2026, 9, 30)})
+			numbers[i], errs[i] = inv.Number, err
+		})
+	}
+	wg.Wait()
+	if err := errors.Join(errs...); err != nil {
+		t.Fatalf("simultaneous issues: %v", err)
+	}
+	slices.Sort(numbers)
+	for i, got := range numbers {
+		if want := fmt.Sprintf("FC-2026-%06d", i+1); got != want {
+			t.Fatalf("numbers of the simultaneous issues: %v", numbers)
+		}
+	}
+
+	first, err := svc.GetInvoice.Handle(ctx, bapp.GetInvoice{ID: ids[0]})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Update(ctx, "bil_invoices", sqlrepo.Values{"invoice_number": first.Number}, sqlrepo.Values{"id": ids[1].UUID})
+	if !db.ViolatesUnique(err, "bil_invoices", "ux_bil_invoices_number", "series_id", "invoice_number") {
+		t.Fatalf("a repeated number in a series: %v", err)
 	}
 }

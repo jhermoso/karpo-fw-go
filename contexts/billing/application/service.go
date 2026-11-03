@@ -191,6 +191,15 @@ func retry[In, Out any]() app.Middleware[In, Out] {
 	return pipeline.RetryOnConflict[In, Out](5, 10*time.Millisecond)
 }
 
+// issueAttempts son los intentos de una emisión. Cada emisión toma el número de la serie, y de
+// varias a la vez sólo gana una por vuelta: con veinte emisores, la última pierde diecinueve veces
+// antes de ganar (plan Sage, T0).
+const issueAttempts = 30
+
+func issueRetry[In, Out any]() app.Middleware[In, Out] {
+	return pipeline.RetryOnConflict[In, Out](issueAttempts, 10*time.Millisecond)
+}
+
 // OpenSeries abre una serie de numeración de un vendedor para un año.
 type OpenSeries struct {
 	Seller     string `json:"seller"`

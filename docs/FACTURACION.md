@@ -98,8 +98,8 @@ contexts/fiscal/
   303, SII y Verifactu), Contabilidad y Cobros.
 - **Tablas:**
   - `bil_series`, con índice único por vendedor, código y año;
-  - `bil_invoices` (FK a sí misma para la rectificada) con `bil_invoice_lines` y
-    `bil_invoice_taxes`;
+  - `bil_invoices` (FK a sí misma para la rectificada), con índice único por serie y número
+    (migración 6), y con `bil_invoice_lines` y `bil_invoice_taxes`;
   - las bandejas de salida y la auditoría.
 
 ## Decisiones (aprobadas por Javier el 2026-09-28)
@@ -197,6 +197,26 @@ factura, sin que ningún contexto escriba en el otro.
   la misma base, incluidas las migraciones que añaden columnas: borrador desde el albarán por
   `billing_inbox`, origen de ida y vuelta, descarte rechazado, emisión, albarán facturado por
   `orders_inbox` y deuda abierta en Cobros.
+
+## Números que no se repiten (plan Sage, T0; añadido el 2026-11-03)
+
+Tarea T0-G1 del plan de Karpo C# para incorporar lo aprendido de Sage (D-127), confirmada por
+Javier el 2026-11-03.
+
+- **Índice único** `ux_bil_invoices_number` sobre (`series_id`, `invoice_number`), migración 6.
+  Los borradores no tienen serie ni número; en SQL Server, que trata los NULL como iguales, el
+  índice lleva el filtro `WHERE invoice_number IS NOT NULL` (`{whereNotNull}`). Es la segunda
+  barrera: la primera sigue siendo la versión de la serie.
+- **Un número repetido es un conflicto:** el mapeo declara el índice, el choque es
+  `fw.ErrConflict` y la emisión se reintenta con un número nuevo.
+- **La emisión se reintenta hasta 30 veces** (el resto de órdenes, 5). De varias emisiones a la
+  vez en una serie, cada vuelta sólo la gana una: con veinte emisores, la última pierde diecinueve
+  veces. Con 5 intentos, la prueba de veinte emisiones fallaba en los cuatro motores.
+- **Prueba:** `TestBillingContext` emite veinte borradores a la vez en una serie: se emiten todos,
+  del 1 al 20, sin repetidos ni huecos; después, un número repetido escrito sin pasar por la serie
+  choca con el índice. En MySQL esa parte tarda unos 30 segundos; en los demás, segundos.
+- **Bases existentes:** si una ya tuviera números repetidos en una serie, la migración 6 fallaría
+  y habría que corregirlos antes. Karpo Go no tiene bases vivas.
 
 ## Pendiente
 
