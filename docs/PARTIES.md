@@ -254,7 +254,9 @@ bandeja de entrada `parties_inbox` (migración 10) y de `Module.Consumer`.
 
 Contrato `TaxIdentities` (para Fiscal): documento fiscal (el principal, o TXID > NIDN > ARNU) y
 provincia del contacto postal español vigente (facturación primero), por lotes. Ver
-[FISCAL.md](FISCAL.md).
+[FISCAL.md](FISCAL.md). Desde el plan Sage (T1-G2), también el domicilio fiscal en `address`
+(calle en una línea, código postal, localidad, región y país), que Facturación congela al emitir:
+el contacto postal de todos de facturación, si no el de por defecto, si no cualquiera.
 
 ## 6. Siguientes fases
 

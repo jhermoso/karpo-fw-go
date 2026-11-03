@@ -231,7 +231,20 @@ Tareas de Go del tramo T1 del plan de Karpo C# (D-127). Karpo C# llega primero a
 - **G1, descripción de la operación obligatoria al emitir:** la exige el SII
   (`DescripcionOperacion`, REQ-FAC-029). Un borrador se prepara sin ella, pero no se emite: 422
   `billing.description_required`. El borrador de un albarán ya la trae («Albarán N (pedido M)»),
-  y el de una rectificativa sin descripción toma «Rectificación de la factura N».
+  y el de una rectificativa sin descripción toma «Rectificación de la factura N». Ojo: `PUT
+  …/details` sustituye la cabecera entera, así que cambiar sólo el vencimiento sin reenviar la
+  descripción la borra, y la emisión dará 422 hasta que se vuelva a poner.
+- **G2, domicilio fiscal de las dos partes:** se congela al emitir, como el NIF y el nombre
+  (migración 8: `seller_street`, `seller_postal_code`, `seller_locality`, `seller_region`,
+  `seller_address_country` y los mismos de `customer_`). Lo da el contrato `TaxIdentities` de
+  Parties en `address`: el contacto postal de todos con uso de facturación, si no el de por
+  defecto, si no cualquiera; los de una empresa no cuentan (D-122). La factura y
+  `billing.invoice-issued.v1` lo llevan en `sellerAddress` y `customerAddress`, que faltan si la
+  party no tiene ninguno. La provincia que el mismo contrato da a Fiscal se sigue eligiendo
+  aparte (el primer contacto español con código postal de cinco cifras), así que, si el de
+  facturación es extranjero, puede salir de otro contacto. **No se exige para emitir:** el reglamento pide el domicilio en la
+  factura completa, pero exigirlo es una regla fiscal que queda para quien valide lo fiscal (plan,
+  §7).
 
 ## Pendiente
 
@@ -241,5 +254,5 @@ Tareas de Go del tramo T1 del plan de Karpo C# (D-127). Karpo C# llega primero a
   varios albaranes en una factura y la rectificativa que reabra un albarán.
 - ~~Plazos de vencimiento y cobros~~: hechos en [COBROS.md](COBROS.md). Las remesas quedan para Tesorería.
 - Facturas recibidas (compras), con el mismo `TaxEngine` y la deducibilidad.
-- Dirección fiscal del cliente en la factura (hoy solo NIF, nombre y país).
+- ~~Dirección fiscal del cliente en la factura~~: hecha (T1-G2); falta decidir si se exige para emitir.
 - Importar las facturas de C# como emitidas, con sus números de Documents.

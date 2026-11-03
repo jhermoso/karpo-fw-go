@@ -79,6 +79,13 @@ func TestBillingContext(t *testing.T) {
 				_, err := pm.Service.AddIdentification.Handle(actx, papp.AddIdentification{PartyID: id, DocumentType: d[0], Country: "ES", Number: d[1], Primary: true})
 				must(err)
 			}
+			// Domicilio fiscal: el de facturación de Acme gana al de por defecto (plan Sage, T1-G2).
+			acmeID, _ := pdomain.ParsePartyID(acme.ID)
+			for purpose, line := range map[string]string{"default": "Gran Vía 1", "billing": "Mayor 2"} {
+				_, err = pm.Service.AddContact.Handle(actx, papp.AddContact{PartyID: acmeID, Kind: "postal", Purposes: []string{purpose},
+					Address: &papp.AddressDTO{StreetType: "CL", Line1: line, Floor: "3", Line2: "Edificio Norte", PostalCode: "28013", Locality: "Madrid", Region: "Madrid", Country: "ES"}})
+				must(err)
+			}
 			_, err = fm.Service.CreateRate.Handle(actx, fapp.CreateRate{Type: "vat", Territory: "common", Code: "G21", Description: "General", Rate: "21",
 				Surcharge: "5.2", From: vocab.MustDate(2012, 9, 1)})
 			must(err)
@@ -112,6 +119,10 @@ func TestBillingContext(t *testing.T) {
 				got.Taxes.Net != "123.84" || got.Taxes.Tax != "15.51" || got.Taxes.Surcharge != "3.84" || got.Taxes.Total != "143.19" ||
 				len(got.Taxes.Lines) != 2 || got.Taxes.Lines[0].SurchargeRate != "5.20" || got.OperationDate != "2026-09-15" || got.CustomerNIF != "12345678Z" {
 				t.Fatalf("round trip: %+v %+v %v", got, got.Taxes, err)
+			}
+			if a := got.SellerAddress; a == nil || a.Street != "CL Mayor 2 planta 3, Edificio Norte" || a.PostalCode != "28013" || a.Locality != "Madrid" ||
+				a.Region != "Madrid" || a.Country != "ES" || got.CustomerAddress != nil {
+				t.Fatalf("fiscal addresses: %+v %+v", got.SellerAddress, got.CustomerAddress)
 			}
 			if _, err := svc.AddLine.Handle(actx, bapp.AddLine{ID: id, Description: "X", Quantity: "1", UnitPrice: "1", TaxCode: "G21"}); !errors.Is(err, fw.ErrRuleViolation) {
 				t.Fatalf("immutable: %v", err)

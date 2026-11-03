@@ -93,6 +93,18 @@ type TaxIdentity struct {
 	// Blocked señala una party que no interviene más que en consultas: el duplicado de otra
 	// (docs/DECISIONES-COMUNES.md, D-64 y D-70). No se le factura ni se le vende.
 	Blocked bool `json:"blocked,omitempty"`
+	// Address es el domicilio fiscal: el contacto postal de todos con uso de facturación, si no el
+	// de uso por defecto, si no cualquiera. Nil si la party no tiene ninguno.
+	Address *FiscalAddress `json:"address,omitempty"`
+}
+
+// FiscalAddress es un domicilio tal como va en una factura.
+type FiscalAddress struct {
+	Street     string `json:"street"` // tipo de vía, vía, número y resto, en una línea
+	PostalCode string `json:"postalCode,omitempty"`
+	Locality   string `json:"locality,omitempty"`
+	Region     string `json:"region,omitempty"`
+	Country    string `json:"country,omitempty"`
 }
 
 // TaxIdentities resuelve identidades fiscales por lotes (como mucho MaxDirectoryBatch ids). Las

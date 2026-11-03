@@ -83,6 +83,21 @@ var issueDateDDL = []string{
 	`UPDATE bil_series SET last_issue_date = (SELECT MAX(issue_date) FROM bil_invoices WHERE bil_invoices.series_id = bil_series.id)`,
 }
 
+// addressDDL congela en la factura el domicilio fiscal de las dos partes (plan Sage, T1-G2). La calle
+// cabe entera: tipo de vía, línea 1, número y resto, y línea 2 de Parties suman como mucho unos 540.
+var addressDDL = []string{
+	`ALTER TABLE bil_invoices {add:seller_street} {str:600}{addEnd}`,
+	`ALTER TABLE bil_invoices {add:seller_postal_code} {str:20}{addEnd}`,
+	`ALTER TABLE bil_invoices {add:seller_locality} {str:100}{addEnd}`,
+	`ALTER TABLE bil_invoices {add:seller_region} {str:100}{addEnd}`,
+	`ALTER TABLE bil_invoices {add:seller_address_country} {str:2}{addEnd}`,
+	`ALTER TABLE bil_invoices {add:customer_street} {str:600}{addEnd}`,
+	`ALTER TABLE bil_invoices {add:customer_postal_code} {str:20}{addEnd}`,
+	`ALTER TABLE bil_invoices {add:customer_locality} {str:100}{addEnd}`,
+	`ALTER TABLE bil_invoices {add:customer_region} {str:100}{addEnd}`,
+	`ALTER TABLE bil_invoices {add:customer_address_country} {str:2}{addEnd}`,
+}
+
 // errNumberTaken es un conflicto: la emisión se reintenta y toma otro número.
 var errNumberTaken = fmt.Errorf("%w: billing: the invoice number is already taken in its series", fw.ErrConflict)
 
@@ -117,6 +132,7 @@ func Migrations() sqlrepo.MigrationSet {
 		{Version: 5, Name: "decimal columns", Run: decimalColumnsV5.Run},
 		{Version: 6, Name: "unique invoice number per series", Up: sqlrepo.RenderDDLAll(numberDDL...)},
 		{Version: 7, Name: "last issue date of a series", Up: sqlrepo.RenderDDLAll(issueDateDDL...)},
+		{Version: 8, Name: "fiscal addresses of an invoice", Up: sqlrepo.RenderDDLAll(addressDDL...)},
 	}}
 }
 
@@ -164,6 +180,11 @@ func optDecimal(d vocab.Decimal) any {
 	return d
 }
 
+func address(r *sqlrepo.Row, who string) domain.Address {
+	return domain.Address{Street: r.String(who + "_street"), PostalCode: r.String(who + "_postal_code"), Locality: r.String(who + "_locality"),
+		Region: r.String(who + "_region"), Country: r.String(who + "_address_country")}
+}
+
 // SeriesMapping mapea Series a bil_series.
 func SeriesMapping() sqlrepo.Mapping[domain.SeriesID, *domain.Series] {
 	return sqlrepo.Mapping[domain.SeriesID, *domain.Series]{
@@ -193,7 +214,9 @@ func InvoiceMapping() sqlrepo.Mapping[domain.InvoiceID, *domain.Invoice] {
 		Unique:   []sqlrepo.UniqueIndex{{Name: uniqueNumber, Columns: []string{"series_id", "invoice_number"}, Err: errNumberTaken}},
 		Columns: sqlrepo.WithAuditColumns("seller", "customer", "kind", "status", "currency", "description", "operation_date", "due_date",
 			"equivalence_surcharge", "corrects", "reason", "series_id", "invoice_number", "issue_date", "seller_nif", "seller_name", "seller_country",
-			"customer_nif", "customer_name", "customer_country", "tax_country", "net", "tax_amount", "surcharge", "source_type", "source_id", "source_ref"),
+			"customer_nif", "customer_name", "customer_country", "tax_country", "net", "tax_amount", "surcharge", "source_type", "source_id", "source_ref",
+			"seller_street", "seller_postal_code", "seller_locality", "seller_region", "seller_address_country",
+			"customer_street", "customer_postal_code", "customer_locality", "customer_region", "customer_address_country"),
 		Dehydrate: func(i *domain.Invoice) (sqlrepo.Values, error) {
 			s := i.State()
 			v := sqlrepo.Values{"seller": s.Seller, "customer": s.Customer, "kind": int64(s.Kind), "status": int64(s.Status), "currency": s.Currency.String(),
@@ -207,6 +230,10 @@ func InvoiceMapping() sqlrepo.Mapping[domain.InvoiceID, *domain.Invoice] {
 			if s.Status == domain.Issued {
 				v["tax_amount"], v["surcharge"] = s.Taxes.Tax.Round(2), s.Taxes.Surcharge.Round(2)
 			}
+			for who, a := range map[string]domain.Address{"seller": s.SellerIdentity.Address, "customer": s.CustomerIdentity.Address} {
+				v[who+"_street"], v[who+"_postal_code"], v[who+"_locality"] = opt(a.Street), opt(a.PostalCode), opt(a.Locality)
+				v[who+"_region"], v[who+"_address_country"] = opt(a.Region), opt(a.Country)
+			}
 			return sqlrepo.AuditStampValues(v, i.AuditStamp()), nil
 		},
 		Hydrate: func(r *sqlrepo.Row, children sqlrepo.ChildRows) (*domain.Invoice, error) {
@@ -219,9 +246,11 @@ func InvoiceMapping() sqlrepo.Mapping[domain.InvoiceID, *domain.Invoice] {
 				OperationDate: r.Date("operation_date"), DueDate: r.Date("due_date"), EquivalenceSurcharge: r.Bool("equivalence_surcharge"),
 				Corrects: domain.InvoiceID{UUID: r.UUID("corrects")}, Reason: r.String("reason"), Series: domain.SeriesID{UUID: r.UUID("series_id")},
 				Number: r.String("invoice_number"), IssueDate: r.Date("issue_date"), Audit: r.AuditStamp(),
-				Source:           domain.Source{Type: r.String("source_type"), ID: r.String("source_id"), Ref: r.String("source_ref")},
-				SellerIdentity:   domain.Identity{NIF: r.String("seller_nif"), Name: r.String("seller_name"), Country: r.String("seller_country")},
-				CustomerIdentity: domain.Identity{NIF: r.String("customer_nif"), Name: r.String("customer_name"), Country: r.String("customer_country")}}
+				Source: domain.Source{Type: r.String("source_type"), ID: r.String("source_id"), Ref: r.String("source_ref")},
+				SellerIdentity: domain.Identity{NIF: r.String("seller_nif"), Name: r.String("seller_name"), Country: r.String("seller_country"),
+					Address: address(r, "seller")},
+				CustomerIdentity: domain.Identity{NIF: r.String("customer_nif"), Name: r.String("customer_name"), Country: r.String("customer_country"),
+					Address: address(r, "customer")}}
 			for _, c := range children.Of("lines") {
 				s.Lines = append(s.Lines, domain.Line{ID: domain.LineID{UUID: c.UUID("id")}, Description: c.String("description"),
 					Quantity: c.Decimal("quantity"), UnitPrice: c.Decimal("unit_price"), Discount: c.Decimal("discount"), TaxCode: c.String("tax_code"),
@@ -402,7 +431,11 @@ func (p PartiesIdentities) Identities(ctx context.Context, ids []domain.PartyID)
 		if err != nil {
 			continue
 		}
-		out[domain.PartyID{UUID: u}] = domain.Identity{NIF: vocab.NormalizeDocumentNumber(ti.Number), Name: ti.Name, Country: ti.Country}
+		id := domain.Identity{NIF: vocab.NormalizeDocumentNumber(ti.Number), Name: ti.Name, Country: ti.Country}
+		if a := ti.Address; a != nil {
+			id.Address = domain.Address{Street: a.Street, PostalCode: a.PostalCode, Locality: a.Locality, Region: a.Region, Country: a.Country}
+		}
+		out[domain.PartyID{UUID: u}] = id
 	}
 	return out, nil
 }

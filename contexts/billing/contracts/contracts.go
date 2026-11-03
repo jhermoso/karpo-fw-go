@@ -22,29 +22,41 @@ type TaxLineV1 struct {
 // InvoiceIssuedV1 se publica cuando se emite una factura. Los importes son cadenas decimales en la
 // moneda de la factura con dos decimales; las fechas son fechas civiles.
 type InvoiceIssuedV1 struct {
-	InvoiceID     string      `json:"invoiceId"`
-	Number        string      `json:"number"`
-	Kind          string      `json:"kind"` // ordinary | corrective
-	Corrects      string      `json:"corrects,omitempty"`
-	SourceType    string      `json:"sourceType,omitempty"` // el documento del que se preparó (orders.delivery)
-	SourceID      string      `json:"sourceId,omitempty"`
-	Reason        string      `json:"reason,omitempty"` // R1–R5
-	Seller        string      `json:"seller"`
-	SellerNIF     string      `json:"sellerNif"`
-	Customer      string      `json:"customer"`
-	CustomerNIF   string      `json:"customerNif"`
-	CustomerName  string      `json:"customerName"`
-	IssueDate     string      `json:"issueDate"`
-	OperationDate string      `json:"operationDate,omitempty"`
-	DueDate       string      `json:"dueDate,omitempty"`
-	Currency      string      `json:"currency"`
-	Country       string      `json:"country"` // jurisdicción fiscal
-	Net           string      `json:"net"`
-	Tax           string      `json:"tax"`
-	Surcharge     string      `json:"surcharge"`
-	Total         string      `json:"total"`
-	Taxes         []TaxLineV1 `json:"taxes"`
+	InvoiceID    string `json:"invoiceId"`
+	Number       string `json:"number"`
+	Kind         string `json:"kind"` // ordinary | corrective
+	Corrects     string `json:"corrects,omitempty"`
+	SourceType   string `json:"sourceType,omitempty"` // el documento del que se preparó (orders.delivery)
+	SourceID     string `json:"sourceId,omitempty"`
+	Reason       string `json:"reason,omitempty"` // R1–R5
+	Seller       string `json:"seller"`
+	SellerNIF    string `json:"sellerNif"`
+	Customer     string `json:"customer"`
+	CustomerNIF  string `json:"customerNif"`
+	CustomerName string `json:"customerName"`
+	// Los domicilios fiscales congelados al emitir; nil si Parties no tenía ninguno.
+	SellerAddress   *AddressV1  `json:"sellerAddress,omitempty"`
+	CustomerAddress *AddressV1  `json:"customerAddress,omitempty"`
+	IssueDate       string      `json:"issueDate"`
+	OperationDate   string      `json:"operationDate,omitempty"`
+	DueDate         string      `json:"dueDate,omitempty"`
+	Currency        string      `json:"currency"`
+	Country         string      `json:"country"` // jurisdicción fiscal
+	Net             string      `json:"net"`
+	Tax             string      `json:"tax"`
+	Surcharge       string      `json:"surcharge"`
+	Total           string      `json:"total"`
+	Taxes           []TaxLineV1 `json:"taxes"`
 }
 
 // IntegrationEventType implementa application.IntegrationEvent.
 func (InvoiceIssuedV1) IntegrationEventType() string { return "billing.invoice-issued.v1" }
+
+// AddressV1 es un domicilio fiscal tal como se congela en la factura.
+type AddressV1 struct {
+	Street     string `json:"street"`
+	PostalCode string `json:"postalCode,omitempty"`
+	Locality   string `json:"locality,omitempty"`
+	Region     string `json:"region,omitempty"`
+	Country    string `json:"country,omitempty"`
+}

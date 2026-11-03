@@ -97,6 +97,16 @@ type Identity struct {
 	NIF     string
 	Name    string
 	Country string
+	Address Address // domicilio fiscal (plan Sage T1, art. 6 del reglamento de facturación); vacío si Parties no lo tiene
+}
+
+// Address es un domicilio tal como se congela en la factura.
+type Address struct {
+	Street     string
+	PostalCode string
+	Locality   string
+	Region     string
+	Country    string
 }
 
 // TaxLine es una línea del desglose de impuestos congelado al emitir.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/jhermoso/karpo-fw-go/contexts/billing/contracts"
 	"github.com/jhermoso/karpo-fw-go/contexts/billing/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/pipeline"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
@@ -117,31 +118,33 @@ type BreakdownDTO struct {
 
 // InvoiceDTO es la forma de transporte de una factura.
 type InvoiceDTO struct {
-	ID                   string        `json:"id"`
-	Number               string        `json:"number,omitempty"`
-	Kind                 string        `json:"kind"`
-	Status               string        `json:"status"`
-	Seller               string        `json:"seller"`
-	Customer             string        `json:"customer"`
-	Corrects             string        `json:"corrects,omitempty"`
-	Reason               string        `json:"reason,omitempty"`
-	Currency             string        `json:"currency"`
-	Description          string        `json:"description,omitempty"`
-	IssueDate            string        `json:"issueDate,omitempty"`
-	OperationDate        string        `json:"operationDate,omitempty"`
-	DueDate              string        `json:"dueDate,omitempty"`
-	EquivalenceSurcharge bool          `json:"equivalenceSurcharge"`
-	SellerNIF            string        `json:"sellerNif,omitempty"`
-	CustomerNIF          string        `json:"customerNif,omitempty"`
-	CustomerName         string        `json:"customerName,omitempty"`
-	Lines                []LineDTO     `json:"lines"`
-	Net                  string        `json:"net"`
-	Taxes                *BreakdownDTO `json:"taxes,omitempty"` // facturas emitidas
-	SourceType           string        `json:"sourceType,omitempty"`
-	SourceID             string        `json:"sourceId,omitempty"`
-	SourceRef            string        `json:"sourceRef,omitempty"`
-	Version              int64         `json:"version"`
-	ModifiedBy           string        `json:"modifiedBy,omitempty"`
+	ID                   string               `json:"id"`
+	Number               string               `json:"number,omitempty"`
+	Kind                 string               `json:"kind"`
+	Status               string               `json:"status"`
+	Seller               string               `json:"seller"`
+	Customer             string               `json:"customer"`
+	Corrects             string               `json:"corrects,omitempty"`
+	Reason               string               `json:"reason,omitempty"`
+	Currency             string               `json:"currency"`
+	Description          string               `json:"description,omitempty"`
+	IssueDate            string               `json:"issueDate,omitempty"`
+	OperationDate        string               `json:"operationDate,omitempty"`
+	DueDate              string               `json:"dueDate,omitempty"`
+	EquivalenceSurcharge bool                 `json:"equivalenceSurcharge"`
+	SellerNIF            string               `json:"sellerNif,omitempty"`
+	CustomerNIF          string               `json:"customerNif,omitempty"`
+	CustomerName         string               `json:"customerName,omitempty"`
+	SellerAddress        *contracts.AddressV1 `json:"sellerAddress,omitempty"`
+	CustomerAddress      *contracts.AddressV1 `json:"customerAddress,omitempty"`
+	Lines                []LineDTO            `json:"lines"`
+	Net                  string               `json:"net"`
+	Taxes                *BreakdownDTO        `json:"taxes,omitempty"` // facturas emitidas
+	SourceType           string               `json:"sourceType,omitempty"`
+	SourceID             string               `json:"sourceId,omitempty"`
+	SourceRef            string               `json:"sourceRef,omitempty"`
+	Version              int64                `json:"version"`
+	ModifiedBy           string               `json:"modifiedBy,omitempty"`
 }
 
 func breakdownDTO(b domain.Breakdown) BreakdownDTO {
@@ -159,6 +162,7 @@ func invoiceDTO(i *domain.Invoice) InvoiceDTO {
 		Customer: s.Customer.String(), Reason: s.Reason, Currency: s.Currency.String(), Description: s.Description, IssueDate: dateText(s.IssueDate),
 		OperationDate: dateText(s.OperationDate), DueDate: dateText(s.DueDate), EquivalenceSurcharge: s.EquivalenceSurcharge,
 		SellerNIF: s.SellerIdentity.NIF, CustomerNIF: s.CustomerIdentity.NIF, CustomerName: s.CustomerIdentity.Name, Lines: []LineDTO{},
+		SellerAddress: addressV1(s.SellerIdentity.Address), CustomerAddress: addressV1(s.CustomerIdentity.Address),
 		Net: money(i.Net()), Version: i.Version(), ModifiedBy: i.ModifiedBy().Name, SourceType: s.Source.Type, SourceID: s.Source.ID,
 		SourceRef: s.Source.Ref}
 	if !s.Corrects.IsZero() {
