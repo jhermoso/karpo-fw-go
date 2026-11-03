@@ -151,7 +151,7 @@ func relay(t *testing.T, r interface {
 // invoice redacta y emite una factura de una línea G21.
 func (h *host) invoice(seller, customer, series, amount string, qty string, due vocab.Date, corrects string) bapp.InvoiceDTO {
 	svc := h.billing.Service
-	d := bapp.DraftInvoice{Seller: seller, Customer: customer, DetailsInput: bapp.DetailsInput{DueDate: due}}
+	d := bapp.DraftInvoice{Seller: seller, Customer: customer, DetailsInput: bapp.DetailsInput{Description: "Servicios", DueDate: due}}
 	if corrects != "" {
 		d = bapp.DraftInvoice{Seller: seller, Corrects: corrects, Reason: "R1"}
 	}

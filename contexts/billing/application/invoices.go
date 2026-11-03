@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"strings"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/billing/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/pipeline"
@@ -222,6 +223,9 @@ func (s service) invoiceUseCases(svc *Service) {
 				return InvoiceDTO{}, fw.Violation("billing.correcting_draft", "only an issued invoice is corrected; a draft is edited")
 			}
 			st.Customer, st.EquivalenceSurcharge = os.Customer, os.EquivalenceSurcharge
+			if strings.TrimSpace(st.Description) == "" {
+				st.Description = "Rectificación de la factura " + os.Number
+			}
 		}
 		if st.Kind == domain.Ordinary {
 			if err := s.notBlocked(ctx, st.Customer); err != nil {

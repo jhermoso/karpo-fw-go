@@ -92,7 +92,7 @@ func TestBillingContext(t *testing.T) {
 			must(err)
 			rs, err := svc.OpenSeries.Handle(actx, bapp.OpenSeries{Seller: acme.ID, Code: "R", Year: 2026, Corrective: true})
 			must(err)
-			inv, err := svc.DraftInvoice.Handle(actx, bapp.DraftInvoice{Seller: acme.ID, Customer: ana.ID, DetailsInput: bapp.DetailsInput{
+			inv, err := svc.DraftInvoice.Handle(actx, bapp.DraftInvoice{Seller: acme.ID, Customer: ana.ID, DetailsInput: bapp.DetailsInput{Description: "Servicios de septiembre",
 				OperationDate: vocab.MustDate(2026, 9, 15), DueDate: vocab.MustDate(2026, 10, 31), EquivalenceSurcharge: true}})
 			must(err)
 			id, _ := bdomain.ParseInvoiceID(inv.ID)
@@ -154,7 +154,7 @@ func billingConcurrentIssue(ctx context.Context, t *testing.T, db *sqlrepo.DB, s
 	const n = 20
 	ids := make([]bdomain.InvoiceID, n)
 	for i := range ids {
-		inv, err := svc.DraftInvoice.Handle(ctx, bapp.DraftInvoice{Seller: seller, Customer: customer})
+		inv, err := svc.DraftInvoice.Handle(ctx, bapp.DraftInvoice{Seller: seller, Customer: customer, DetailsInput: bapp.DetailsInput{Description: "Cuota mensual"}})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -177,7 +177,7 @@ func billingConcurrentIssue(ctx context.Context, t *testing.T, db *sqlrepo.DB, s
 		t.Fatalf("simultaneous issues: %v", err)
 	}
 	// Una fecha anterior a la última de la serie se rechaza sin gastar número.
-	late, err := svc.DraftInvoice.Handle(ctx, bapp.DraftInvoice{Seller: seller, Customer: customer})
+	late, err := svc.DraftInvoice.Handle(ctx, bapp.DraftInvoice{Seller: seller, Customer: customer, DetailsInput: bapp.DetailsInput{Description: "Cuota mensual"}})
 	if err != nil {
 		t.Fatal(err)
 	}

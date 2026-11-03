@@ -61,7 +61,7 @@ func tradeDatasetsScenario(t *testing.T, sw *hotswap.Switch) {
 	draft := func(price string) bildomain.InvoiceID {
 		t.Helper()
 		inv, err := h.Billing.Service.DraftInvoice.Handle(actx, bilapp.DraftInvoice{Seller: acme, Customer: customer,
-			DetailsInput: bilapp.DetailsInput{DueDate: vocab.MustDate(2026, 10, 15)}})
+			DetailsInput: bilapp.DetailsInput{Description: "Servicios", DueDate: vocab.MustDate(2026, 10, 15)}})
 		must(err)
 		id, _ := bildomain.ParseInvoiceID(inv.ID)
 		_, err = h.Billing.Service.AddLine.Handle(actx, bilapp.AddLine{ID: id, Description: "Cuota", Quantity: "1", UnitPrice: price, TaxCode: "G21"})

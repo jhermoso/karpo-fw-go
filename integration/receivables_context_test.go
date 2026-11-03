@@ -122,7 +122,7 @@ func TestReceivablesContext(t *testing.T) {
 				must(err)
 				return inv
 			}
-			inv := issue(bapp.DraftInvoice{Seller: acme.ID, Customer: ana.ID}, fa.ID, "1", "100")
+			inv := issue(bapp.DraftInvoice{Seller: acme.ID, Customer: ana.ID, DetailsInput: bapp.DetailsInput{Description: "Servicios"}}, fa.ID, "1", "100")
 			credit := issue(bapp.DraftInvoice{Seller: acme.ID, Corrects: inv.ID, Reason: "R4"}, rs.ID, "-1", "10")
 			broker := inprocess.NewBroker()
 			broker.Subscribe("receivables", rm.Consumer)

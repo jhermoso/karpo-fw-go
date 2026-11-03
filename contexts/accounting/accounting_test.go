@@ -276,7 +276,7 @@ func (h *host) scenario(tag string) {
 	h.ok(err)
 	invoice := func(customer, price string) bapp.InvoiceDTO {
 		inv, err := h.billing.Service.DraftInvoice.Handle(ctx, bapp.DraftInvoice{Seller: acme.ID, Customer: customer,
-			DetailsInput: bapp.DetailsInput{DueDate: vocab.MustDate(2026, 10, 15)}})
+			DetailsInput: bapp.DetailsInput{Description: "Servicios", DueDate: vocab.MustDate(2026, 10, 15)}})
 		h.ok(err)
 		id, _ := bdomain.ParseInvoiceID(inv.ID)
 		_, err = h.billing.Service.AddLine.Handle(ctx, bapp.AddLine{ID: id, Description: "Cuota", Quantity: "1", UnitPrice: price, TaxCode: "G21"})

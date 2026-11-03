@@ -187,7 +187,7 @@ func (h *host) scenario(tag string) {
 
 	// Una factura con tres tipos: impuestos sobre la base agregada por tipo.
 	var inv bapp.InvoiceDTO
-	h.must(h.do("POST", "/api/billing/invoices", "clerk", map[string]any{"seller": acme.ID, "customer": ana.ID, "dueDate": "2026-10-28"}, &inv), 201, "draft")
+	h.must(h.do("POST", "/api/billing/invoices", "clerk", map[string]any{"seller": acme.ID, "customer": ana.ID, "dueDate": "2026-10-28", "description": "Consultoría"}, &inv), 201, "draft")
 	for _, l := range []map[string]any{
 		{"description": "Hora de consultoría", "quantity": "1", "unitPrice": "10.03", "taxCode": "G21"},
 		{"description": "Hora de consultoría", "quantity": "1", "unitPrice": "10.03", "taxCode": "G21"},
@@ -219,7 +219,7 @@ func (h *host) scenario(tag string) {
 
 	// Un minorista en el régimen de recargo de equivalencia.
 	var retail bapp.InvoiceDTO
-	h.must(h.do("POST", "/api/billing/invoices", "clerk", map[string]any{"seller": acme.ID, "customer": bea.ID, "equivalenceSurcharge": true}, &retail), 201, "retail")
+	h.must(h.do("POST", "/api/billing/invoices", "clerk", map[string]any{"seller": acme.ID, "customer": bea.ID, "equivalenceSurcharge": true, "description": "Mercancía"}, &retail), 201, "retail")
 	h.must(h.do("POST", "/api/billing/invoices/"+retail.ID+"/lines", "clerk", map[string]any{"description": "Mercancía", "quantity": "4", "unitPrice": "25", "taxCode": "G21"}, nil), 200, "line")
 	h.must(h.do("POST", "/api/billing/invoices/"+retail.ID+"/issue", "issuer", map[string]any{"series": fa.ID, "date": "2026-09-28"}, &retail), 200, "issue retail")
 	if retail.Number != "FA-2026-000002" || retail.Taxes.Surcharge != "5.20" || retail.Taxes.Total != "126.20" {
@@ -228,7 +228,7 @@ func (h *host) scenario(tag string) {
 
 	// Una emisión rechazada no consume número (sin huecos).
 	var late bapp.InvoiceDTO
-	h.must(h.do("POST", "/api/billing/invoices", "clerk", map[string]any{"seller": acme.ID, "customer": ana.ID}, &late), 201, "draft")
+	h.must(h.do("POST", "/api/billing/invoices", "clerk", map[string]any{"seller": acme.ID, "customer": ana.ID, "description": "Consultoría"}, &late), 201, "draft")
 	h.must(h.do("POST", "/api/billing/invoices/"+late.ID+"/lines", "clerk", map[string]any{"description": "X", "quantity": "1", "unitPrice": "1", "taxCode": "G21"}, nil), 200, "line")
 	h.must(h.do("POST", "/api/billing/invoices/"+late.ID+"/issue", "issuer", map[string]any{"series": fa.ID, "date": "2027-01-02"}, nil), 422, "series of another year")
 	h.must(h.do("DELETE", "/api/billing/invoices/"+late.ID, "clerk", nil, nil), 204, "discard the draft")

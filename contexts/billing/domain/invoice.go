@@ -319,7 +319,7 @@ type Issuance struct {
 }
 
 // Issue congela la factura con su número, las identidades de las partes y el desglose de
-// impuestos. Invariantes: al menos una línea; una factura ordinaria tiene un neto positivo y una
+// impuestos. Invariantes: una descripción de la operación (la exige el SII, plan Sage T1); al menos una línea; una factura ordinaria tiene un neto positivo y una
 // rectificativa un neto distinto de cero; el desglose cubre exactamente el neto de las líneas; el
 // vendedor tiene un NIF español válido y el cliente un número fiscal; el vencimiento no precede a la emisión.
 func (i *Invoice) Issue(x Issuance) error {
@@ -328,6 +328,8 @@ func (i *Invoice) Issue(x Issuance) error {
 	}
 	net := i.Net()
 	switch {
+	case i.s.Description == "":
+		return fw.Violation("billing.description_required", "an invoice describes its operation before it is issued")
 	case len(i.s.Lines) == 0:
 		return fw.Violation("billing.no_lines", "an invoice needs at least one line")
 	case i.s.Kind == Ordinary && !net.IsPositive():

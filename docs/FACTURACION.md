@@ -223,6 +223,16 @@ Javier el 2026-11-03.
 - **Bases existentes:** si una ya tuviera números repetidos en una serie, la migración 6 fallaría
   y habría que corregirlos antes. Karpo Go no tiene bases vivas.
 
+## Factura del plan Sage (T1; desde el 2026-11-03)
+
+Tareas de Go del tramo T1 del plan de Karpo C# (D-127). Karpo C# llega primero a la factura real
+(D-131); Go sigue las mismas reglas.
+
+- **G1, descripción de la operación obligatoria al emitir:** la exige el SII
+  (`DescripcionOperacion`, REQ-FAC-029). Un borrador se prepara sin ella, pero no se emite: 422
+  `billing.description_required`. El borrador de un albarán ya la trae («Albarán N (pedido M)»),
+  y el de una rectificativa sin descripción toma «Rectificación de la factura N».
+
 ## Pendiente
 
 - Todo el cálculo de impuestos que falta, por país y por sector: punto 6 de

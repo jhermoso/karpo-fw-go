@@ -51,7 +51,18 @@ func TestSeries(t *testing.T) {
 }
 
 func TestInvoice(t *testing.T) {
-	st := domain.InvoiceState{Seller: domain.OrganizationID{UUID: fw.NewUUID()}, Customer: domain.PartyID{UUID: fw.NewUUID()}, Kind: domain.Ordinary}
+	st := domain.InvoiceState{Seller: domain.OrganizationID{UUID: fw.NewUUID()}, Customer: domain.PartyID{UUID: fw.NewUUID()}, Kind: domain.Ordinary,
+		Description: "Servicios de septiembre"}
+	bare, err := domain.DraftInvoice(domain.NewInvoiceID(), domain.InvoiceState{Seller: st.Seller, Customer: st.Customer, Kind: domain.Ordinary})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := bare.AddLine(domain.LineInput{Description: "Hora", Quantity: dec("1"), UnitPrice: dec("10"), TaxCode: "G21"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := bare.Issue(domain.Issuance{Number: "FA-2026-000001", Date: vocab.MustDate(2026, 9, 28)}); !isViolation(err, "billing.description_required") {
+		t.Fatalf("an invoice without a description: %v", err)
+	}
 	inv, err := domain.DraftInvoice(domain.NewInvoiceID(), st)
 	if err != nil {
 		t.Fatal(err)
@@ -94,12 +105,12 @@ func TestInvoice(t *testing.T) {
 		Customer: customer, Taxes: taxes}); !isViolation(err, "billing.seller_nif") {
 		t.Fatalf("seller nif: %v", err)
 	}
-	_ = inv.SetDetails(domain.Details{DueDate: vocab.MustDate(2026, 9, 1)})
+	_ = inv.SetDetails(domain.Details{Description: "Servicios de septiembre", DueDate: vocab.MustDate(2026, 9, 1)})
 	if err := inv.Issue(domain.Issuance{Number: "FA-2026-000001", Date: vocab.MustDate(2026, 9, 28), Seller: seller, Customer: customer,
 		Taxes: taxes}); !isViolation(err, "billing.due_before_issue") {
 		t.Fatalf("due date: %v", err)
 	}
-	_ = inv.SetDetails(domain.Details{DueDate: vocab.MustDate(2026, 10, 28)})
+	_ = inv.SetDetails(domain.Details{Description: "Servicios de septiembre", DueDate: vocab.MustDate(2026, 10, 28)})
 	if err := inv.Issue(domain.Issuance{Number: "FA-2026-000001", Date: vocab.MustDate(2026, 9, 28), Seller: seller, Customer: customer,
 		Taxes: taxes}); err != nil {
 		t.Fatal(err)
@@ -119,7 +130,7 @@ func TestInvoice(t *testing.T) {
 		t.Fatal("reasons R1–R5")
 	}
 	fix, err := domain.DraftInvoice(domain.NewInvoiceID(), domain.InvoiceState{Seller: st.Seller, Customer: st.Customer, Kind: domain.Corrective,
-		Corrects: inv.ID(), Reason: "R1"})
+		Corrects: inv.ID(), Reason: "R1", Description: "Abono"})
 	if err != nil {
 		t.Fatal(err)
 	}
