@@ -117,6 +117,23 @@ func TestPairs_CustomerAndSupplierRelationships(t *testing.T) {
 	if blocked.Total != 2 {
 		t.Fatalf("blocked pairs: %+v", blocked)
 	}
+	// El filtro por límite (D-73, nombres de Trench): número o cadena, extremos incluidos; sin límite, fuera.
+	withLimit := 0
+	for _, r := range all.Items {
+		if r.CreditLimit != nil && *r.CreditLimit == "5000.00" {
+			withLimit++
+		}
+	}
+	for name, f := range map[string]map[string]any{"number": {"maxRiskFrom": 5000}, "string": {"maxRiskFrom": "4999.99", "maxRiskTo": "5000"}} {
+		if got := search("/api/customer-relationships/search", map[string]any{"filter": f}); got.Total != withLimit || withLimit == 0 {
+			t.Fatalf("maxRisk as a %s: %+v", name, got)
+		}
+	}
+	if got := search("/api/customer-relationships/search", map[string]any{"filter": map[string]any{"maxRiskFrom": 6000, "maxRiskTo": 1}}); got.Total != 0 {
+		t.Fatalf("maxRiskFrom over maxRiskTo is an empty list: %+v", got)
+	}
+	c.must(c.do("POST", "/api/customer-relationships/search", root, map[string]any{"filter": map[string]any{"maxRiskTo": "mucho"}}, nil), 400, "a limit that is not a number")
+	c.must(c.do("POST", "/api/customer-relationships/search", root, map[string]any{"filter": map[string]any{"maxRiskFrom": 1e300}}, nil), 400, "a limit with an exponent")
 	c.must(c.do("POST", "/api/customer-relationships/search", root, map[string]any{"sort": map[string]any{"by": "color"}}, nil), 400, "an unknown sort")
 	c.must(c.do("POST", "/api/customer-relationships/search", root, map[string]any{"filter": map[string]any{"color": "red"}}, nil), 400, "an unknown filter")
 	var one host.PairRow
