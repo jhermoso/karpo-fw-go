@@ -1,6 +1,7 @@
 package vocab
 
 import (
+	"regexp"
 	"strings"
 
 	"github.com/shopspring/decimal"
@@ -10,9 +11,18 @@ import (
 // Se compara con Equal/Cmp, nunca con ==.
 type Decimal = decimal.Decimal
 
-// ParseDecimal analiza un decimal escrito con '.' como separador decimal ("1234.56").
+// plainDecimal es la única forma que se admite: sin exponente. Con exponente, "1e100000000" cabe
+// en una petición y obliga a cada comparación a construir un entero de cien millones de cifras.
+var plainDecimal = regexp.MustCompile(`^[+-]?(\d+(\.\d*)?|\.\d+)$`)
+
+// ParseDecimal analiza un decimal escrito con '.' como separador decimal ("1234.56"), sin
+// exponente.
 func ParseDecimal(s string) (Decimal, error) {
-	d, err := decimal.NewFromString(strings.TrimSpace(s))
+	s = strings.TrimSpace(s)
+	if !plainDecimal.MatchString(s) {
+		return Decimal{}, invalid("", "decimal", "invalid decimal number "+quote(s))
+	}
+	d, err := decimal.NewFromString(s)
 	if err != nil {
 		return Decimal{}, invalid("", "decimal", "invalid decimal number "+quote(s))
 	}

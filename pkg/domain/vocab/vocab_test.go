@@ -442,3 +442,18 @@ func TestIBAN(t *testing.T) {
 		}
 	}
 }
+
+// Un decimal se escribe sin exponente: con él, una comparación podría construir un entero de
+// millones de cifras.
+func TestParseDecimal_WithoutExponent(t *testing.T) {
+	for _, ok := range []string{"5", " 5000.00 ", "-1.5", "+5", ".5", "5."} {
+		if _, err := vocab.ParseDecimal(ok); err != nil {
+			t.Errorf("%q: %v", ok, err)
+		}
+	}
+	for _, bad := range []string{"", "1e3", "1E-3", "5e50000000", "1,5", "abc", "--1", "."} {
+		if _, err := vocab.ParseDecimal(bad); err == nil {
+			t.Errorf("%q is not a plain decimal", bad)
+		}
+	}
+}
