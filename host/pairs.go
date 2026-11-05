@@ -18,6 +18,7 @@ import (
 	receivables "github.com/jhermoso/karpo-fw-go/contexts/receivables/application"
 	"github.com/jhermoso/karpo-fw-go/pkg/distribution"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
+	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
 // Pairs sirve la vista por pareja empresa–tercero: «Relaciones de clientes» y «Relaciones de
@@ -79,6 +80,40 @@ type pairFilter struct {
 	CustomerNumber          string   `json:"customerNumber"`
 	SupplierNumber          string   `json:"supplierNumber"`
 	Blocked                 *bool    `json:"blocked"`
+	// MaxRiskFrom y MaxRiskTo filtran por el límite de crédito, con los extremos incluidos y los
+	// nombres de Trench (D-73). Con cualquiera de los dos quedan fuera las parejas sin límite y las
+	// que quien llama no puede leer en Cobros.
+	MaxRiskFrom *riskBound `json:"maxRiskFrom"`
+	MaxRiskTo   *riskBound `json:"maxRiskTo"`
+}
+
+// riskBound es un extremo del filtro por límite: un número JSON o una cadena decimal, como en
+// Trench y en Karpo C#.
+type riskBound struct{ vocab.Decimal }
+
+func (b *riskBound) UnmarshalJSON(data []byte) error {
+	s := strings.Trim(string(data), `"`)
+	d, err := vocab.ParseDecimal(s)
+	if err != nil {
+		return fmt.Errorf("maxRisk: %q is not a decimal number", s)
+	}
+	b.Decimal = d
+	return nil
+}
+
+// inRisk dice si un límite cae en el rango del filtro.
+func (f pairFilter) inRisk(limit *string) bool {
+	if f.MaxRiskFrom == nil && f.MaxRiskTo == nil {
+		return true
+	}
+	if limit == nil {
+		return false
+	}
+	d, err := vocab.ParseDecimal(*limit)
+	if err != nil {
+		return false
+	}
+	return (f.MaxRiskFrom == nil || d.Cmp(f.MaxRiskFrom.Decimal) >= 0) && (f.MaxRiskTo == nil || d.Cmp(f.MaxRiskTo.Decimal) <= 0)
 }
 
 type pairSearch struct {
@@ -281,6 +316,9 @@ func (p Pairs) rows(ctx context.Context, code string, f pairFilter, id string) (
 			continue
 		}
 		if f.Blocked != nil && row.blocked() != *f.Blocked {
+			continue
+		}
+		if !f.inRisk(row.CreditLimit) {
 			continue
 		}
 		out = append(out, row)

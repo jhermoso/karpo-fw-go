@@ -502,7 +502,7 @@ hecha: hoy una pareja se crea con el alta de la party con su afiliación o con
 
 | Qué | En Go |
 |---|---|
-| Filtro | `text`, `kinds`, `document`, `role` (identificador), `includeEndedRoles`, `includeMergedParties`, `active`, `internalOrganizationIds`, `includeEnded` (relaciones terminadas), `customerNumber`, `supplierNumber` (D-122), `blocked`. Uno desconocido, 400 |
+| Filtro | `text`, `kinds`, `document`, `role` (identificador), `includeEndedRoles`, `includeMergedParties`, `active`, `internalOrganizationIds`, `includeEnded` (relaciones terminadas), `customerNumber`, `supplierNumber` (D-122), `blocked`, `maxRiskFrom` y `maxRiskTo` (límite de crédito entre los dos, incluidos; número o cadena decimal; con cualquiera, fuera las parejas sin límite o sin permiso para leerlo; si el primero supera al segundo, lista vacía; sin exponente; como Trench, D-73. En la vista de proveedores no hay límite: con el filtro, la lista sale vacía). Uno desconocido, 400 |
 | Orden | `name` (por defecto), `customerNumber`, `supplierNumber`, `creditLimit`, `blocked`, `internalOrganization`, `since`. Otro, 400 que los enumera |
 | Fila común | `id` (la relación), `partyId`, `name`, `kind`, `taxId`, `country`, `active`, `test`, `roles` (nombres de los vigentes), `internalOrganizationId`, `internalOrganizationName`, `since`, `until` |
 | De cliente | `customerNumber` (Parties); `creditLimit` (Cobros; nulo: sin límite); `blockOrders` (bloqueo por crédito de Cobros o de pedidos de Pedidos); `blockDelivery` (Pedidos); `sageCode` y `apiscoreCode` (Parties, D-29); `blockReason` (D-122: los motivos de los bloqueos en vigor de Cobros y de Pedidos que quien llama puede leer, separados por «; ») |
