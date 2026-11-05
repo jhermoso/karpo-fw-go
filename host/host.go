@@ -209,7 +209,7 @@ func Compose(sw *hotswap.Switch, o Options) (*Host, error) {
 		ordinfra.ReceivablesCredit{Exposure: h.Receivables.Credit}, orders.WithBlocks(ordinfra.PartiesBlocks{TaxIdentities: h.Parties.TaxIdentities}),
 		orders.WithMergedParties(merged))
 	h.Billing = billing.Compose(sw, bilinfra.FiscalTaxes{Engine: h.Fiscal.TaxEngine}, bilinfra.PartiesIdentities{TaxIdentities: h.Parties.TaxIdentities},
-		billing.WithMergedParties(merged))
+		billing.WithMergedParties(merged), billing.WithZones(&CountryZones{Geography: h.Geography}))
 	h.Purchases = purchases.Compose(sw, purinfra.FiscalTaxes{Engine: h.Fiscal.TaxEngine}, purchases.WithMergedParties(merged))
 	h.Payments = payments.Compose(sw, payinfra.PayrollNetPay{Remittance: h.Payroll.Remittance}, payments.WithMergedParties(merged))
 	h.Treasury = treasury.Compose(sw, treinfra.ReceivablesDueItems{Collectable: h.Receivables.Collectable},

@@ -38,6 +38,12 @@ func WithMergedParties(m application.MergedParties) Option {
 	return func(d *bapp.Deps) { d.Merged = m }
 }
 
+// WithZones da la zona horaria de cada empresa: la fecha de emisión por defecto es la de hoy
+// allí, no en UTC.
+func WithZones(z bapp.Zones) Option {
+	return func(d *bapp.Deps) { d.Zones = z }
+}
+
 // Compose construye el contexto sobre sw. Billing necesita el motor de impuestos de Fiscal y las
 // identidades de Parties: los dos son puertos propios.
 func Compose(sw *hotswap.Switch, taxes domain.Taxes, identities domain.Identities, opts ...Option) *Module {

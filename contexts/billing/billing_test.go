@@ -16,6 +16,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/contexts/billing"
 	bapp "github.com/jhermoso/karpo-fw-go/contexts/billing/application"
 	"github.com/jhermoso/karpo-fw-go/contexts/billing/contracts"
+	bdomain "github.com/jhermoso/karpo-fw-go/contexts/billing/domain"
 	binfra "github.com/jhermoso/karpo-fw-go/contexts/billing/infrastructure"
 	"github.com/jhermoso/karpo-fw-go/contexts/fiscal"
 	fapp "github.com/jhermoso/karpo-fw-go/contexts/fiscal/application"
@@ -38,6 +39,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlite"
 	"github.com/jhermoso/karpo-fw-go/pkg/testing/archtest"
+	"github.com/jhermoso/karpo-fw-go/pkg/time/fake"
 )
 
 // host compone Parties, Fiscal y Billing sobre un único backend intercambiable en caliente.
@@ -308,4 +310,52 @@ func TestBilling_LayersRespectTheArchitecture(t *testing.T) {
 	archtest.AssertOnlyImports(t, "domain", false, archtest.Std, m+"/pkg/domain/...", m+"/contexts/billing/domain")
 	archtest.AssertOnlyImports(t, "contracts", false, archtest.Std)
 	archtest.AssertTreeDoesNotImport(t, "application", []string{"/pkg/persistence", "/pkg/distribution", "database/sql", "net/http"})
+}
+
+// madrid es la zona de toda empresa en la prueba de la fecha de emisión.
+type madrid struct{}
+
+func (madrid) Location(context.Context, string) (*time.Location, error) {
+	return time.LoadLocation("Europe/Madrid")
+}
+
+// Sin fecha, una factura se emite con la de hoy en la zona de la empresa, no en UTC: a las 22:30
+// UTC del 14 de octubre ya es día 15 en Madrid (decisión de Javier, 2026-11-05).
+func TestBilling_IssueDateIsTodayInTheSellerZone(t *testing.T) {
+	for name, c := range map[string]struct {
+		opts []billing.Option
+		want vocab.Date
+	}{"in Madrid": {[]billing.Option{billing.WithZones(madrid{})}, vocab.MustDate(2026, 10, 15)}, "without zones, UTC": {nil, vocab.MustDate(2026, 10, 14)}} {
+		t.Run(name, func(t *testing.T) {
+			h := compose(t, c.opts...)
+			ctx, ps := h.adminCtx, h.parties.Service
+			acme, err := ps.RegisterOrganization.Handle(ctx, papp.RegisterOrganization{LegalName: "Acme", Roles: []string{pdomain.RoleInternalOrganization.String()}})
+			h.ok(err)
+			ana, err := ps.RegisterPerson.Handle(ctx, papp.RegisterPerson{GivenName: "Ana", FirstSurname: "Zona"})
+			h.ok(err)
+			for party, doc := range map[string][2]string{acme.ID: {"c0000000-0004-0000-0000-000000000003", "A58818501"}, ana.ID: {"c0000000-0004-0000-0000-000000000002", "12345678Z"}} {
+				id, _ := pdomain.ParsePartyID(party)
+				_, err := ps.AddIdentification.Handle(ctx, papp.AddIdentification{PartyID: id, DocumentType: doc[0], Country: "ES", Number: doc[1], Primary: true})
+				h.ok(err)
+			}
+			_, err = h.fiscal.Service.CreateRate.Handle(ctx, fapp.CreateRate{Type: "vat", Territory: "common", Code: "G21", Description: "General", Rate: "21", Surcharge: "5.2", From: vocab.MustDate(2012, 9, 1)})
+			h.ok(err)
+			_, err = h.fiscal.Service.RegisterTaxpayer.Handle(ctx, fapp.RegisterTaxpayer{Organization: acme.ID, TermsInput: fapp.TermsInput{Territory: "common", FiscalYearStartMonth: 1}})
+			h.ok(err)
+			sr, err := h.billing.Service.OpenSeries.Handle(ctx, bapp.OpenSeries{Seller: acme.ID, Code: "FZ", Year: 2026})
+			h.ok(err)
+			draft, err := h.billing.Service.DraftInvoice.Handle(ctx, bapp.DraftInvoice{Seller: acme.ID, Customer: ana.ID, DetailsInput: bapp.DetailsInput{Description: "Cuota"}})
+			h.ok(err)
+			id, _ := bdomain.ParseInvoiceID(draft.ID)
+			_, err = h.billing.Service.AddLine.Handle(ctx, bapp.AddLine{ID: id, Description: "Cuota", Quantity: "1", UnitPrice: "10", TaxCode: "G21"})
+			h.ok(err)
+
+			defer fw.SetClock(fake.New(time.Date(2026, 10, 14, 22, 30, 0, 0, time.UTC)))()
+			issued, err := h.billing.Service.Issue.Handle(ctx, bapp.IssueInvoice{ID: id, Series: sr.ID})
+			h.ok(err)
+			if issued.IssueDate != c.want.String() {
+				t.Fatalf("issue date: %s, want %s", issued.IssueDate, c.want)
+			}
+		})
+	}
 }
