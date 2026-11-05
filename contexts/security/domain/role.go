@@ -74,8 +74,21 @@ func DefineRole(id RoleID, name, description string, perms []Permission) (*Role,
 	if err != nil {
 		return nil, err
 	}
+	if err := checkNotMixed(r.permissions); err != nil {
+		return nil, err
+	}
 	r.Raise(RoleDefined{EventMeta: r.NewEventMeta(), Name: r.name, Permissions: r.permissionCodes()})
 	return r, nil
+}
+
+// checkNotMixed rechaza un rol que reparte roles y a la vez lleva un permiso que sólo se asigna
+// (D-141): quien lo recibiera se daría a sí mismo, o a otros como él, lo que ningún administrador
+// de organización puede tener.
+func checkNotMixed(perms []Permission) error {
+	if mixesAssignment(perms) {
+		return fw.Violation("security.mixed_role", "a role that hands out roles never carries a permission that is only assigned")
+	}
+	return nil
 }
 
 // NewSystemRole construye un rol del sistema con los permisos que le da la regla estándar, que
@@ -163,6 +176,9 @@ func (r *Role) SetPermissions(perms []Permission, c Catalog) error {
 	}
 	n, err := ReconstituteRole(r.ID(), RoleState{Name: r.name, System: r.system, Permissions: perms})
 	if err != nil {
+		return err
+	}
+	if err := checkNotMixed(n.permissions); err != nil {
 		return err
 	}
 	if r.system {

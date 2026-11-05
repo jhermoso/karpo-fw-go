@@ -63,7 +63,7 @@ de mando) y 28 pruebas de integración. Pero:
 | 11 | Prospecto → cliente al completar (guardado aparte, no atómico) | 3 | 2 | 2 | 3 | **51** | Sustituido → el evento `reservation-status-changed` con `completed`; Parties reaccionará |
 | 12 | Búsqueda y cuadro de mando | 4 | 3 | 3 | 3 | **68** | Modificar → mismos filtros esenciales; el cuadro de mando **no suma canceladas ni caducadas** (las cuenta aparte por estado) |
 | 13 | `ClientSegment` (solo `WEB`) | 2 | 3 | 2 | 3 | **48** | Modificar → código de segmento libre en el margen y en la reserva; `WEB` por defecto |
-| 14 | Endpoints sin permisos | — | — | — | — | — | Sustituido → `Exchange.Pricing.Read/Update` y `Exchange.Reservation.Read/Create/Progress` |
+| 14 | Endpoints sin permisos | — | — | — | — | — | Sustituido → `Exchange.Pricing.Read/Update`, `Exchange.Reservation.Read/Create/Progress` y, para cotizar, `Exchange.Quote.Read` (D-141) |
 
 ## Diseño
 
@@ -214,6 +214,21 @@ un guion y llenaba una carga masiva; Cambio de divisas la leía con SQL a mano y
 7. **No se publica evento** cuando cambia un código. Sugerencia: sí por ahora; nadie lo escucha.
 8. **El código no se pone al dar de alta la relación**, sino después, con su ruta: así la
    comprobación de duplicados está en un solo sitio. Sugerencia: sí.
+
+## Permiso para cotizar (D-137, D-141)
+
+`GET /api/exchange/quote` pide `Exchange.Quote.Read`. Antes pedía `Exchange.Reservation.Read`, así
+que bastaba con poder leer reservas para cotizar. D-137: cotizar divisa lleva un permiso propio,
+fuera del paquete de `StandardUser`, y lo asigna el administrador (atención al cliente, comerciales
+y otros autorizados). D-141 fija su nombre.
+
+Ningún rol del sistema lo recibe: está en `AssignedOnlyPermissions` de Security (ver
+[SEGURIDAD.md](SEGURIDAD.md), sección 11), así que la regla estándar no se lo da a
+`OrganizationAdmin`, `StandardUser` ni `ReadOnlyUser`. Va en un rol propio, que crea el global.
+
+Lo reparten los dos administradores (decisión de Javier del 2026-11-06): el global y el
+`OrganizationAdmin` de cada organización, éste a otros usuarios de su organización y aunque él no
+cotice. Quien reparte roles nunca cotiza, salvo el global, que cotiza por el comodín.
 
 ## Pendiente
 

@@ -97,6 +97,7 @@ func Migrations() sqlrepo.MigrationSet {
 		{Version: 2, Name: "outboxes and audit log", Up: technical},
 		{Version: 3, Name: "own permissions and system roles", Run: seedCatalog},
 		{Version: 4, Name: "permissions the standard rule gave each system role", Up: sqlrepo.RenderDDLAll(grantedDDL...)},
+		{Version: 5, Name: "Treasury permissions are Financial permissions", Run: renameTreasuryPermissions},
 	}}
 }
 
@@ -134,6 +135,78 @@ func seedCatalog(ctx context.Context, db *sqlrepo.DB) error {
 		return err
 	}
 	return db.InsertMany(ctx, "sec_role_permissions", []string{"role_id", "code"}, grants)
+}
+
+// treasuryRenames es el cambio de nombre de los permisos de Tesorería (D-135): el prefijo pasa a
+// ser Financial y se conservan los verbos; la cuenta de Tesorería es la BankAccount de C#, porque
+// Financial.Account es la cuenta del sector financiero.
+var treasuryRenames = map[string]string{
+	"Treasury.Account.Read":        "Financial.BankAccount.Read",
+	"Treasury.Account.Update":      "Financial.BankAccount.Update",
+	"Treasury.Mandate.Read":        "Financial.Mandate.Read",
+	"Treasury.Mandate.Update":      "Financial.Mandate.Update",
+	"Treasury.Remittance.Read":     "Financial.Remittance.Read",
+	"Treasury.Remittance.Update":   "Financial.Remittance.Update",
+	"Treasury.Remittance.Generate": "Financial.Remittance.Generate",
+	"Treasury.Remittance.Settle":   "Financial.Remittance.Settle",
+	"Treasury.Statement.Read":      "Financial.BankStatement.Read",
+	"Treasury.Statement.Import":    "Financial.BankStatement.Import",
+	"Treasury.Statement.Reconcile": "Financial.BankStatement.Reconcile",
+	"Treasury.Transfer.Read":       "Financial.Transfer.Read",
+	"Treasury.Transfer.Update":     "Financial.Transfer.Update",
+	"Treasury.Transfer.Generate":   "Financial.Transfer.Generate",
+	"Treasury.Transfer.Settle":     "Financial.Transfer.Settle",
+}
+
+// renameTreasuryPermissions lleva una base existente a los nombres de D-135. En el catálogo, la
+// entrada cambia de código y de id (el id se deriva del código); si la nueva ya existiera, la vieja
+// se queda y Catalog.Sync la desactiva al arrancar. En los permisos de cada rol y en lo concedido,
+// el código cambia sin duplicar filas: si el rol ya tenía el nuevo, la fila vieja sobra y se borra.
+func renameTreasuryPermissions(ctx context.Context, db *sqlrepo.DB) error {
+	rows, err := db.Select(ctx, "sec_permissions", []string{"code"})
+	if err != nil {
+		return err
+	}
+	known := map[string]bool{}
+	for _, r := range rows {
+		known[r.String("code")] = true
+	}
+	for old, code := range treasuryRenames {
+		if !known[old] || known[code] {
+			continue
+		}
+		if _, err := db.Update(ctx, "sec_permissions", sqlrepo.Values{"code": code, "id": domain.PermissionIDOf(domain.Permission(code))},
+			sqlrepo.Values{"code": old}); err != nil {
+			return err
+		}
+	}
+	for _, table := range []string{"sec_role_permissions", "sec_role_granted_permissions"} {
+		rows, err := db.Select(ctx, table, []string{"role_id", "code"})
+		if err != nil {
+			return err
+		}
+		held := map[[2]string]bool{}
+		for _, r := range rows {
+			held[[2]string{r.UUID("role_id").String(), r.String("code")}] = true
+		}
+		for _, r := range rows {
+			role, old := r.UUID("role_id"), r.String("code")
+			code, ok := treasuryRenames[old]
+			if !ok {
+				continue
+			}
+			where := sqlrepo.Values{"role_id": role, "code": old}
+			if held[[2]string{role.String(), code}] {
+				_, err = db.Delete(ctx, table, where)
+			} else {
+				_, err = db.Update(ctx, table, sqlrepo.Values{"code": code}, where)
+			}
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // Migrator devuelve el migrador del esquema del contexto.

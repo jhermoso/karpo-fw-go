@@ -74,7 +74,7 @@ Puntuación de 1 a 5 por criterio; nota ponderada sobre 100. **Mantener** ≥ 70
 | 7 | `Disbursement`, `Receipt`, `PaymentAccountingTransaction`, `IPayment`, referencias de RRHH | 1 | 1 | 2 | 2 | **30** | Retirar |
 | 8 | `AccountTransaction` (FinancialKernel) como segundo modelo de movimiento | 2 | 2 | 2 | 3 | **43** | Retirar aquí → el movimiento bancario lo contabiliza Contabilidad desde los eventos; los extractos quedan para la fase 2 de Tesorería |
 | 9 | Contabilización | — | — | — | — | — | Nuevo en **Contabilidad** → `payments.payment-allocated.v1`: debe en la cuenta de lo que se debía (proveedores, remuneraciones pendientes o retenciones, con el beneficiario en la línea) contra bancos o caja; `payments.allocation-reversed.v1` genera el contraasiento. Nuevo rol `suppliers` en el perfil |
-| 10 | Endpoints sin permisos | — | — | — | — | — | Sustituido → `Payments.Payable.Read/Update` (**registrar lo que se debe**) y `Payments.Payment.Read/Update` (**pagar**) separados. En Tesorería, `Treasury.Transfer.Update/Generate/Settle` separados, como en las remesas |
+| 10 | Endpoints sin permisos | — | — | — | — | — | Sustituido → `Payments.Payable.Read/Update` (**registrar lo que se debe**) y `Payments.Payment.Read/Update` (**pagar**) separados. En Tesorería, `Financial.Transfer.Update/Generate/Settle` separados, como en las remesas |
 
 ## Diseño
 

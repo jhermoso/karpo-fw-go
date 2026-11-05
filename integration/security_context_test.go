@@ -36,6 +36,11 @@ func TestSecurityConformance(t *testing.T) {
 			db := open(t, e)
 			ctx := context.Background()
 			securityconformance.GrantedBackfill(t, db) // la migración 4 sobre una base con las tres primeras
+			// La migración 5 (D-135) sobre una base con las cuatro primeras.
+			securityconformance.TreasuryRename(t, db, func(ctx context.Context, declared ...authz.Permission) error {
+				_, err := security.Compose(hotswap.New(db), security.WithPasswordHasher(sinfra.NewPBKDF2(1000))).SyncCatalog(ctx, declared...)
+				return err
+			})
 			sinfra.DropAll(ctx, db)
 			m, err := sinfra.Migrator(db)
 			if err != nil {

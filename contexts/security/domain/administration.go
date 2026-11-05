@@ -24,6 +24,9 @@ type Administrator struct {
 	Permissions   []Permission
 	Organizations []OrganizationID // ámbito efectivo: lo que ve el administrador
 	Full          []OrganizationID // organizaciones con acceso Full dentro del ámbito
+	// OrganizationAdmin dice si lleva el rol OrganizationAdmin: reparte también los permisos que
+	// sólo se asignan (AssignedOnlyPermissions), aunque no los tenga.
+	OrganizationAdmin bool
 }
 
 func forbidden(msg string) error { return fmt.Errorf("%w: %s", fw.ErrForbidden, msg) }
@@ -42,14 +45,37 @@ func (a Administrator) notSelf(u UserID) error {
 // CanAssign comprueba la regla 1 para los roles: para asignar o retirar un rol el administrador
 // tiene que tener cada permiso que lleva el rol. Sustituye la comprobación de C# por nombre de rol
 // y el nivel de jerarquía sin usar: un rol propio con más permisos que los del administrador queda
-// fuera de su alcance.
+// fuera de su alcance. La excepción son los permisos que sólo se asignan: los reparten el global y
+// el OrganizationAdmin, aunque éste no los tenga (decisión de Javier del 2026-11-06), en un rol que
+// crea el global. Que el destinatario sea otro usuario que el administrador abarca (CanAdminister)
+// lo comprueba quien llama, antes.
 func (a Administrator) CanAssign(r *Role) error {
 	for _, p := range r.Permissions() {
-		if !a.holds(p) {
-			return forbidden("the role carries permissions you do not have")
+		if a.holds(p) || (a.OrganizationAdmin && slices.Contains(AssignedOnlyPermissions, p)) {
+			continue
 		}
+		return forbidden("the role carries permissions you do not have")
 	}
 	return nil
+}
+
+// CanCombine comprueba, al asignar el rol r a un usuario que ya tiene los permisos held por sus otros
+// roles, que quien reparte roles (Security.User.Role) y quien tiene un permiso que sólo se asigna no
+// coinciden nunca en el mismo usuario: mira la unión de los permisos del rol y los que ya tiene. Si
+// no, dos OrganizationAdmin se darían el uno al otro lo que ninguno puede tener. El global no tiene
+// esta limitación.
+func (a Administrator) CanCombine(r *Role, held []Permission) error {
+	if !a.Global && mixesAssignment(slices.Concat(r.Permissions(), held)) {
+		return forbidden("who hands out roles never holds a permission that is only assigned")
+	}
+	return nil
+}
+
+// mixesAssignment dice si perms reparte roles (Security.User.Role) y a la vez lleva un permiso que
+// sólo se asigna. El comodín no cuenta: es sólo del global.
+func mixesAssignment(perms []Permission) bool {
+	return slices.Contains(perms, PermUserRole) &&
+		slices.ContainsFunc(perms, func(p Permission) bool { return slices.Contains(AssignedOnlyPermissions, p) })
 }
 
 // CanGrant comprueba la regla 1 para las organizaciones: para conceder, cambiar o retirar un acceso

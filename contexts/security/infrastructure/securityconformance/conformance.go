@@ -17,6 +17,7 @@ import (
 
 	"github.com/jhermoso/karpo-fw-go/contexts/security/domain"
 	"github.com/jhermoso/karpo-fw-go/contexts/security/infrastructure"
+	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/memory"
@@ -128,6 +129,122 @@ func GrantedBackfill(t *testing.T, db *sqlrepo.DB) {
 	}
 	if r, err := roles.Get(ctx, clerk); err != nil || len(r.Granted()) != 0 || len(r.Permissions()) != 1 {
 		t.Errorf("a custom role records no grants: %v", err)
+	}
+}
+
+// TreasuryRename comprueba la migración 5 (D-135) sobre una base que ya tenía las cuatro primeras:
+// las concesiones Treasury.* de un rol propio y de un rol del sistema pasan a Financial.*, sin
+// duplicar la que el rol ya tenía con el nombre nuevo, y la entrada del catálogo cambia de código y
+// de id. Cubre también el catálogo con el código viejo y el nuevo a la vez, un permiso que el global
+// había retirado a un rol del sistema y una segunda ejecución, que no cambia nada. sync es
+// Catalog.Sync del módulo compuesto sobre db (este paquete no importa el módulo).
+func TreasuryRename(t *testing.T, db *sqlrepo.DB, sync func(ctx context.Context, declared ...authz.Permission) error) {
+	t.Helper()
+	ctx := context.Background()
+	must := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	infrastructure.DropAll(ctx, db)
+	all := infrastructure.Migrations()
+	before := sqlrepo.MigrationSet{Context: all.Context, Migrations: all.Migrations[:4]}
+	m, err := sqlrepo.NewMigrator(db, []sqlrepo.MigrationSet{before})
+	must(err)
+	_, err = m.Migrate(ctx)
+	must(err)
+	old := domain.Permission("Treasury.Remittance.Settle")
+	must(db.Insert(ctx, "sec_permissions", sqlrepo.Values{"id": domain.PermissionIDOf(old), "version": int64(1), "code": string(old),
+		"description": "", "active": true}))
+	// El viejo y el nuevo a la vez en el catálogo: la migración deja los dos y Sync apaga el viejo.
+	for _, code := range []domain.Permission{"Treasury.Transfer.Read", "Financial.Transfer.Read"} {
+		must(db.Insert(ctx, "sec_permissions", sqlrepo.Values{"id": domain.PermissionIDOf(code), "version": int64(1), "code": string(code),
+			"description": "", "active": true}))
+	}
+	// Retirado: la regla se lo dio a StandardUser (está en lo concedido) y el global se lo quitó.
+	must(db.Insert(ctx, "sec_role_granted_permissions", sqlrepo.Values{"role_id": domain.RoleStandardUser, "code": "Treasury.Mandate.Update"}))
+	cashier := domain.NewRoleID()
+	must(db.Insert(ctx, "sec_roles", sqlrepo.Values{"id": cashier, "version": int64(1), "name": "Cashier", "name_key": "cashier", "system_role": false}))
+	for _, code := range []string{"Treasury.Remittance.Settle", "Treasury.Account.Read", "Treasury.Mandate.Read", "Financial.Mandate.Read"} {
+		must(db.Insert(ctx, "sec_role_permissions", sqlrepo.Values{"role_id": cashier, "code": code}))
+	}
+	must(db.Insert(ctx, "sec_role_permissions", sqlrepo.Values{"role_id": domain.RoleOrganizationAdmin, "code": "Treasury.Transfer.Settle"}))
+	must(db.Insert(ctx, "sec_role_granted_permissions", sqlrepo.Values{"role_id": domain.RoleOrganizationAdmin, "code": "Treasury.Transfer.Settle"}))
+
+	m, err = infrastructure.Migrator(db)
+	must(err)
+	_, err = m.Migrate(ctx)
+	must(err)
+	must(m.Verify(ctx))
+	// Una segunda ejecución de la migración 5 no cambia nada.
+	snapshot := func() []string {
+		t.Helper()
+		var out []string
+		for _, table := range []string{"sec_permissions", "sec_role_permissions", "sec_role_granted_permissions"} {
+			cols := []string{"role_id", "code"}
+			if table == "sec_permissions" {
+				cols = []string{"id", "code", "active"}
+			}
+			rows, err := db.Select(ctx, table, cols)
+			must(err)
+			for _, r := range rows {
+				out = append(out, fmt.Sprint(table, " ", r.UUID(cols[0]), " ", r.String("code"), " ", table == "sec_permissions" && r.Bool("active")))
+			}
+		}
+		slices.Sort(out)
+		return out
+	}
+	first := snapshot()
+	_, err = db.Delete(ctx, sqlrepo.DefaultMigrationsTable, sqlrepo.Values{"context": infrastructure.Context, "version": int64(5)})
+	must(err)
+	if applied, err := m.Migrate(ctx); err != nil || len(applied) != 1 {
+		t.Fatalf("migration 5 again: %v %v", applied, err)
+	}
+	if again := snapshot(); !slices.Equal(again, first) {
+		t.Errorf("the second run changed the data:\n%v\n%v", first, again)
+	}
+	roles := sqlrepo.MustRepository(db, infrastructure.RoleMapping())
+	r, err := roles.Get(ctx, cashier)
+	must(err)
+	if want := []domain.Permission{"Financial.BankAccount.Read", "Financial.Mandate.Read", "Financial.Remittance.Settle"}; !slices.Equal(r.Permissions(), want) {
+		t.Errorf("custom role: %v, want %v", r.Permissions(), want)
+	}
+	admin, err := roles.Get(ctx, domain.RoleOrganizationAdmin)
+	must(err)
+	if !slices.Contains(admin.Permissions(), "Financial.Transfer.Settle") || !slices.Contains(admin.Granted(), "Financial.Transfer.Settle") ||
+		slices.Contains(admin.Permissions(), "Treasury.Transfer.Settle") || slices.Contains(admin.Granted(), "Treasury.Transfer.Settle") {
+		t.Errorf("system role: holds %v, granted %v", admin.Permissions(), admin.Granted())
+	}
+	perms := sqlrepo.MustRepository(db, infrastructure.PermissionMapping())
+	if e, err := perms.Get(ctx, domain.PermissionIDOf("Financial.Remittance.Settle")); err != nil || e.Code() != "Financial.Remittance.Settle" {
+		t.Errorf("catalog entry: %v", err)
+	}
+	rows, err := db.Select(ctx, "sec_permissions", []string{"code"})
+	must(err)
+	for _, row := range rows {
+		if row.String("code") == string(old) {
+			t.Errorf("the old catalog entry is still there")
+		}
+	}
+
+	// El arranque declara los nombres nuevos: el viejo que convivía con el nuevo queda inactivo, y
+	// lo retirado a StandardUser sigue retirado.
+	must(sync(ctx, "Financial.BankAccount.Read", "Financial.BankAccount.Update", "Financial.Mandate.Read", "Financial.Mandate.Update",
+		"Financial.Remittance.Read", "Financial.Remittance.Update", "Financial.Remittance.Generate", "Financial.Remittance.Settle",
+		"Financial.BankStatement.Read", "Financial.BankStatement.Import", "Financial.BankStatement.Reconcile", "Financial.Transfer.Read",
+		"Financial.Transfer.Update", "Financial.Transfer.Generate", "Financial.Transfer.Settle"))
+	if e, err := perms.Get(ctx, domain.PermissionIDOf("Treasury.Transfer.Read")); err != nil || e.IsActive() {
+		t.Errorf("the old entry next to the new one is inactive: %v", err)
+	}
+	if e, err := perms.Get(ctx, domain.PermissionIDOf("Financial.Transfer.Read")); err != nil || !e.IsActive() {
+		t.Errorf("the new entry is active: %v", err)
+	}
+	std, err := roles.Get(ctx, domain.RoleStandardUser)
+	must(err)
+	if !slices.Equal(std.Withdrawn(), []domain.Permission{"Financial.Mandate.Update"}) || slices.Contains(std.Permissions(), "Financial.Mandate.Update") ||
+		!slices.Contains(std.Permissions(), "Financial.Mandate.Read") {
+		t.Errorf("standard user: holds %v, withdrawn %v", std.Permissions(), std.Withdrawn())
 	}
 }
 

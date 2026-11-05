@@ -405,6 +405,33 @@ func TestDelegatedAdministration(t *testing.T) {
 			t.Fatalf("%s carries permissions Marta does not have: %v", r.Name(), err)
 		}
 	}
+	// Lo que sólo se asigna lo reparte el OrganizationAdmin aunque no lo tenga; nadie más.
+	deskRole, _ := domain.DefineRole(domain.NewRoleID(), "Currency desk", "", []domain.Permission{"Exchange.Quote.Read", "Parties.Party.Read"})
+	if err := marta.CanAssign(deskRole); !errors.Is(err, fw.ErrForbidden) {
+		t.Fatalf("without the OrganizationAdmin role Marta does not hand out quoting: %v", err)
+	}
+	orgAdmin := marta
+	orgAdmin.OrganizationAdmin = true
+	if orgAdmin.CanAssign(deskRole) != nil || !errors.Is(orgAdmin.CanAssign(payrollRole), fw.ErrForbidden) {
+		t.Fatal("as OrganizationAdmin Marta hands out quoting, and still nothing else she does not have")
+	}
+	// Quien reparte roles y quien tiene lo que sólo se asigna no coinciden en un usuario.
+	adminRole, _ := domain.DefineRole(domain.NewRoleID(), "Admins", "", []domain.Permission{domain.PermUserRole})
+	if !errors.Is(orgAdmin.CanCombine(deskRole, []domain.Permission{domain.PermUserRole}), fw.ErrForbidden) ||
+		!errors.Is(orgAdmin.CanCombine(adminRole, []domain.Permission{"Exchange.Quote.Read"}), fw.ErrForbidden) ||
+		orgAdmin.CanCombine(deskRole, []domain.Permission{"Parties.Party.Read"}) != nil || global.CanCombine(deskRole, []domain.Permission{domain.PermUserRole}) != nil {
+		t.Fatal("CanCombine keeps them apart, except for the global")
+	}
+	mixed, err := domain.ReconstituteRole(domain.NewRoleID(), domain.RoleState{Name: "Mixed", Permissions: []domain.Permission{"Exchange.Quote.Read", domain.PermUserRole}})
+	if err != nil || !errors.Is(orgAdmin.CanCombine(mixed, nil), fw.ErrForbidden) {
+		t.Fatalf("a mixed role to a user without roles: %v", err)
+	}
+	if _, err := domain.DefineRole(domain.NewRoleID(), "Mixed", "", mixed.Permissions()); !errors.Is(err, fw.ErrRuleViolation) {
+		t.Fatalf("nobody defines a mixed role: %v", err)
+	}
+	if err := deskRole.SetPermissions(mixed.Permissions(), domain.NewCatalog(mixed.Permissions()...)); !errors.Is(err, fw.ErrRuleViolation) {
+		t.Fatalf("nor turns a role into one: %v", err)
+	}
 	if global.CanAssign(superRole) != nil || global.CanGrant(beta) != nil {
 		t.Fatal("the global administrator assigns any role and grants any organization")
 	}

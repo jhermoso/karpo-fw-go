@@ -141,7 +141,23 @@ func NewService(d Deps) *Service {
 			if err != nil {
 				return err
 			}
+			if a, err = s.withOrganizationAdmin(ctx, a); err != nil {
+				return err
+			}
 			if err := a.CanAssign(role); err != nil {
+				return err
+			}
+			var held []domain.Permission
+			if ids := u.Roles(); !a.Global && len(ids) > 0 {
+				others, err := d.Roles.Find(ctx, domain.RolesWithIDs(ids...))
+				if err != nil {
+					return err
+				}
+				for _, o := range others {
+					held = append(held, o.Permissions()...)
+				}
+			}
+			if err := a.CanCombine(role, held); err != nil {
 				return err
 			}
 			return u.AssignRole(role)
@@ -151,6 +167,9 @@ func NewService(d Deps) *Service {
 		return s.administer(ctx, c.ID, func(ctx context.Context, a domain.Administrator, u *domain.User) error {
 			role, err := d.Roles.Get(ctx, c.Role)
 			if err != nil {
+				return err
+			}
+			if a, err = s.withOrganizationAdmin(ctx, a); err != nil {
 				return err
 			}
 			if err := a.CanAssign(role); err != nil {
