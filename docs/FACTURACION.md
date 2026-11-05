@@ -220,6 +220,15 @@ Javier el 2026-11-03.
   factura y rechaza una anterior con 422 `billing.series_date_backwards`, sin gastar número. La
   misma fecha vale. La migración 7 añade `last_issue_date` y la rellena con la fecha de la última
   factura emitida en cada serie.
+- **Sin fecha, la de hoy en la zona de la empresa** (decisión de Javier, 2026-11-05): la emisión
+  sin fecha toma el día en la zona horaria del vendedor, no en UTC; a las 22:30 UTC del 14 de
+  octubre ya es día 15 en Madrid. La zona es la principal del país de su identidad fiscal en
+  Geography (`host.CountryZones`); un país desconocido es UTC. Una empresa de Canarias toma la de
+  Madrid hasta que la zona sea un ajuste de la empresa interna. Los demás «hoy» de Go (pedidos,
+  presupuestos, contabilidad…) siguen en UTC; la vista previa de impuestos sin fecha usa la misma
+  que la emisión. La zona de cada país se recuerda 5 minutos. Riesgo conocido: entre las 23:00 y
+  las 24:00 del 31 de diciembre en Canarias la factura sale con fecha del año siguiente y pide su
+  serie.
 - **Bases existentes:** si una ya tuviera números repetidos en una serie, la migración 6 fallaría
   y habría que corregirlos antes. Karpo Go no tiene bases vivas.
 

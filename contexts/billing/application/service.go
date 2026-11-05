@@ -41,9 +41,17 @@ type Deps struct {
 	Identities domain.Identities
 	Blocks     domain.Blocks     // opcional
 	Merged     app.MergedParties // opcional: las parties fusionadas, que los listados dejan fuera (D-100)
+	Zones      Zones             // opcional: sin él, la fecha de hoy es la de UTC
 	UoW        fw.UnitOfWork
 	Recorder   app.EventRecorder
 	Audit      app.AuditLog
+}
+
+// Zones dice la zona horaria de una empresa por el país de su identidad fiscal (en el anfitrión,
+// la principal del país en Geography). La fecha de emisión por defecto es la de hoy en esa zona,
+// no en UTC: a las 00:30 en Madrid ya es el día siguiente (decisión de Javier, 2026-11-05).
+type Zones interface {
+	Location(ctx context.Context, country string) (*time.Location, error)
 }
 
 // withoutMerged deja fuera de un listado los registros cuyo cliente es una party fusionada,

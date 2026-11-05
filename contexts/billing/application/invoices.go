@@ -116,6 +116,19 @@ type BreakdownDTO struct {
 	Total     string       `json:"total"`
 }
 
+// today es la fecha de hoy en la zona horaria de una empresa de ese país; en UTC sin Zones o sin
+// país.
+func (s *Deps) today(ctx context.Context, country string) (vocab.Date, error) {
+	if s.Zones == nil || country == "" {
+		return vocab.Today(nil), nil
+	}
+	loc, err := s.Zones.Location(ctx, country)
+	if err != nil {
+		return vocab.Date{}, err
+	}
+	return vocab.Today(loc), nil
+}
+
 // InvoiceDTO es la forma de transporte de una factura.
 type InvoiceDTO struct {
 	ID                   string               `json:"id"`
@@ -273,7 +286,7 @@ func (s service) invoiceUseCases(svc *Service) {
 	}, retry[SetDetails, InvoiceDTO]())
 
 	svc.PreviewTaxes = guard(PermInvoiceRead, func(ctx context.Context, q PreviewTaxes) (BreakdownDTO, error) {
-		on := vocab.DateOf(fw.Now())
+		var on vocab.Date
 		if q.On != "" {
 			d, err := vocab.ParseDate(q.On)
 			if err != nil {
@@ -294,6 +307,15 @@ func (s service) invoiceUseCases(svc *Service) {
 		if st.Status == domain.Issued {
 			return breakdownDTO(st.Taxes), nil
 		}
+		if on.IsZero() { // hoy en la zona del vendedor, como al emitir sin fecha
+			ids, err := s.Identities.Identities(ctx, []domain.PartyID{{UUID: st.Seller.UUID}})
+			if err != nil {
+				return BreakdownDTO{}, err
+			}
+			if on, err = s.today(ctx, ids[domain.PartyID{UUID: st.Seller.UUID}].Country); err != nil {
+				return BreakdownDTO{}, err
+			}
+		}
 		b, err := s.Taxes.Calculate(ctx, st.Seller, i.AccrualDate(on), st.EquivalenceSurcharge, i.TaxableLines())
 		if err != nil {
 			return BreakdownDTO{}, err
@@ -306,10 +328,6 @@ func (s service) invoiceUseCases(svc *Service) {
 		seriesID := domain.SeriesID{UUID: parseID(&v, "series", c.Series)}
 		if err := v.Err(); err != nil {
 			return InvoiceDTO{}, err
-		}
-		date := c.Date
-		if date.IsZero() {
-			date = vocab.DateOf(fw.Now())
 		}
 		return update(ctx, c.ID, func(ctx context.Context, i *domain.Invoice) error {
 			st := i.State()
@@ -324,6 +342,12 @@ func (s service) invoiceUseCases(svc *Service) {
 			ids, err := s.Identities.Identities(ctx, []domain.PartyID{{UUID: st.Seller.UUID}, st.Customer})
 			if err != nil {
 				return err
+			}
+			date := c.Date
+			if date.IsZero() { // hoy en la zona horaria del vendedor
+				if date, err = s.today(ctx, ids[domain.PartyID{UUID: st.Seller.UUID}].Country); err != nil {
+					return err
+				}
 			}
 			taxes, err := s.Taxes.Calculate(ctx, st.Seller, i.AccrualDate(date), st.EquivalenceSurcharge, i.TaxableLines())
 			if err != nil {
