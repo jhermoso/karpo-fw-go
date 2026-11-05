@@ -68,6 +68,17 @@ var sourceDDL = []string{
 	`CREATE INDEX ix_bil_invoices_source ON bil_invoices (seller, source_type, source_id)`,
 }
 
+// uniqueNumber impide que un número se repita en su serie aunque dos emisiones se crucen. Los
+// borradores no tienen serie ni número, y en SQL Server el filtro los deja fuera del índice.
+const uniqueNumber = "ux_bil_invoices_number"
+
+var numberDDL = []string{
+	`CREATE UNIQUE INDEX ` + uniqueNumber + ` ON bil_invoices (series_id, invoice_number){whereNotNull:invoice_number}`,
+}
+
+// errNumberTaken es un conflicto: la emisión se reintenta y toma otro número.
+var errNumberTaken = fmt.Errorf("%w: billing: the invoice number is already taken in its series", fw.ErrConflict)
+
 func technicalDDL(d string) []string {
 	switch d {
 	case "sqlite":
@@ -97,6 +108,7 @@ func Migrations() sqlrepo.MigrationSet {
 		{Version: 4, Name: "inbox of the Orders events", Up: map[string][]string{"sqlite": sqlite.InboxDDL(TableInbox), "postgres": postgres.InboxDDL(TableInbox),
 			"sqlserver": sqlserver.InboxDDL(TableInbox), "oracle": oracle.InboxDDL(TableInbox), "mysql": mysql.InboxDDL(TableInbox)}},
 		{Version: 5, Name: "decimal columns", Run: decimalColumnsV5.Run},
+		{Version: 6, Name: "unique invoice number per series", Up: sqlrepo.RenderDDLAll(numberDDL...)},
 	}}
 }
 
@@ -170,6 +182,7 @@ func InvoiceMapping() sqlrepo.Mapping[domain.InvoiceID, *domain.Invoice] {
 	return sqlrepo.Mapping[domain.InvoiceID, *domain.Invoice]{
 		Table:    "bil_invoices",
 		Decimals: decimalColumns.Of("bil_invoices"),
+		Unique:   []sqlrepo.UniqueIndex{{Name: uniqueNumber, Columns: []string{"series_id", "invoice_number"}, Err: errNumberTaken}},
 		Columns: sqlrepo.WithAuditColumns("seller", "customer", "kind", "status", "currency", "description", "operation_date", "due_date",
 			"equivalence_surcharge", "corrects", "reason", "series_id", "invoice_number", "issue_date", "seller_nif", "seller_name", "seller_country",
 			"customer_nif", "customer_name", "customer_country", "tax_country", "net", "tax_amount", "surcharge", "source_type", "source_id", "source_ref"),

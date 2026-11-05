@@ -333,7 +333,7 @@ func (s service) invoiceUseCases(svc *Service) {
 			return i.Issue(domain.Issuance{Series: seriesID, Number: number, Date: date, Seller: ids[domain.PartyID{UUID: st.Seller.UUID}],
 				Customer: ids[st.Customer], Taxes: taxes})
 		})
-	}, retry[IssueInvoice, InvoiceDTO](), pipeline.Transactional[IssueInvoice, InvoiceDTO](s.UoW))
+	}, issueRetry[IssueInvoice, InvoiceDTO](), pipeline.Transactional[IssueInvoice, InvoiceDTO](s.UoW))
 
 	svc.Discard = guard(PermInvoiceUpdate, func(ctx context.Context, c DiscardInvoice) (struct{}, error) {
 		sc := scopeOf(ctx)
