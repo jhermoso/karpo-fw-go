@@ -52,6 +52,14 @@ type InternalOrganizationCatalog interface {
 	All(ctx context.Context) ([]PartyRef, error)
 }
 
+// CompanyTimeZones dice la zona horaria que una empresa interna guarda en su perfil: un código
+// IANA, o "" si no guarda ninguna (entonces vale la zona principal del país de su documento
+// fiscal, y si no, UTC: docs/DECISIONES-COMUNES.md, D-133). Sirve a otros contextos, sin los
+// permisos del usuario.
+type CompanyTimeZones interface {
+	TimeZone(ctx context.Context, organization string) (string, error)
+}
+
 // PartyFacilityRoleAssignedV1 se publica cuando una party empieza a desempeñar un rol en una
 // instalación (RRHH: el centro de trabajo de un empleado).
 type PartyFacilityRoleAssignedV1 struct {

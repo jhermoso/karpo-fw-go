@@ -20,9 +20,10 @@ type Module struct {
 	Directory         contracts.Directory
 	Organizations     papp.Organizations // Membership, OrganizationHierarchy, InternalOrganizationCatalog
 	TaxIdentities     contracts.TaxIdentities
-	MergedParties     contracts.MergedParties // las fusionadas, que los listados de los demás dejan fuera (D-100)
-	Trials            contracts.Trials        // si la prueba de un prospect está en vigor
-	Collaborators     contracts.Collaborators // de quién es un código de promoción
+	MergedParties     contracts.MergedParties    // las fusionadas, que los listados de los demás dejan fuera (D-100)
+	Trials            contracts.Trials           // si la prueba de un prospect está en vigor
+	Collaborators     contracts.Collaborators    // de quién es un código de promoción
+	CompanyTimeZones  contracts.CompanyTimeZones // la zona horaria que guarda cada empresa interna (D-133)
 	HTTP              *pdist.Module
 	Outbox            application.OutboxStore // eventos de dominio, dentro de Parties
 	IntegrationOutbox application.OutboxStore // Published Language
@@ -53,13 +54,14 @@ func Compose(sw *hotswap.Switch, opts ...Option) *Module {
 	integrationOutbox := hotswap.Outbox(sw, infrastructure.IntegrationOutboxFactory)
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
 	ledger := hotswap.IdempotencyLedger(sw, infrastructure.IdempotencyLedgerFactory)
+	profiles := infrastructure.SwappableProfiles(sw)
 	recorder := outbox.Recorders(
 		outbox.NewRecorder(domainOutbox),
 		papp.Publications(messaging.NewRecorder(contracts.Source, integrationOutbox)),
 	)
 	deps := papp.Deps{
 		Parties: parties, Relationships: relationships, Catalogs: infrastructure.SwappableCatalogs(sw),
-		UoW: sw, Recorder: recorder, Audit: audit, Ledger: ledger,
+		UoW: sw, Recorder: recorder, Audit: audit, Ledger: ledger, Profiles: profiles,
 	}
 	for _, o := range opts {
 		o(&deps)
@@ -71,7 +73,7 @@ func Compose(sw *hotswap.Switch, opts ...Option) *Module {
 	papp.Subscribe(consumer, svc, relationships)
 	trials := papp.Trials{Relationships: relationships, Catalogs: infrastructure.SwappableCatalogs(sw)}
 	return &Module{Service: svc, Directory: dir, Organizations: orgs, TaxIdentities: papp.TaxIdentities{Parties: parties},
-		MergedParties: papp.MergedParties{Parties: parties}, Trials: trials,
+		MergedParties: papp.MergedParties{Parties: parties}, Trials: trials, CompanyTimeZones: papp.CompanyTimeZones{Profiles: profiles},
 		Collaborators: papp.Collaborators{Relationships: relationships, Catalogs: infrastructure.SwappableCatalogs(sw)}, HTTP: pdist.NewModule(svc, dir),
 		Outbox: domainOutbox, IntegrationOutbox: integrationOutbox, Audit: audit, Ledger: ledger, Consumer: consumer}
 }

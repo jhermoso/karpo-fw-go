@@ -299,6 +299,12 @@ func Migrations() sqlrepo.MigrationSet {
 	created_at {ts} NOT NULL, expires_at {ts} NOT NULL)`,
 			`CREATE UNIQUE INDEX uq_party_idempotency_keys ON `+TableIdempotencyKeys+` (tenant_id, subject_id, idempotency_key)`,
 			`CREATE INDEX ix_party_idempotency_keys_expires ON `+TableIdempotencyKeys+` (expires_at)`)},
+		// El perfil de cada empresa interna, con el nombre de la tabla de Karpo C# y de Trench: hoy
+		// sólo su zona horaria IANA, opcional (docs/DECISIONES-COMUNES.md, D-133; docs/PARTIES.md
+		// §25). Aquí irán los demás ajustes de la empresa (D-128 a D-130).
+		{Version: 32, Name: "internal organization profile: time zone", Up: sqlrepo.RenderDDLAll(
+			`CREATE TABLE ` + TableInternalOrganizationProfiles + ` (internal_organization_id {uuid} NOT NULL PRIMARY KEY,
+	time_zone {str:64}, FOREIGN KEY (internal_organization_id) REFERENCES parties (id))`)},
 	}}
 }
 
@@ -684,7 +690,7 @@ func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 
 // DropAll elimina todas las tablas del contexto (sólo para pruebas).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
-	for _, t := range []string{TableIdempotencyKeys, TableConsents, "party_relationships", "party_roles", "party_identifications", "party_contacts", "party_affiliations",
+	for _, t := range []string{TableInternalOrganizationProfiles, TableIdempotencyKeys, TableConsents, "party_relationships", "party_roles", "party_identifications", "party_contacts", "party_affiliations",
 		"party_facility_roles", "facility_role_types", "party_data_quality_issues",
 		"party_classifications", "parties", "relationship_types", "role_types", "country_document_rules",
 		"document_types", "classification_types",

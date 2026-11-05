@@ -23,6 +23,7 @@ import (
 	finfra "github.com/jhermoso/karpo-fw-go/contexts/fiscal/infrastructure"
 	"github.com/jhermoso/karpo-fw-go/contexts/parties"
 	papp "github.com/jhermoso/karpo-fw-go/contexts/parties/application"
+	pcontracts "github.com/jhermoso/karpo-fw-go/contexts/parties/contracts"
 	pdomain "github.com/jhermoso/karpo-fw-go/contexts/parties/domain"
 	pinfra "github.com/jhermoso/karpo-fw-go/contexts/parties/infrastructure"
 	"github.com/jhermoso/karpo-fw-go/pkg/application"
@@ -312,25 +313,53 @@ func TestBilling_LayersRespectTheArchitecture(t *testing.T) {
 	archtest.AssertTreeDoesNotImport(t, "application", []string{"/pkg/persistence", "/pkg/distribution", "database/sql", "net/http"})
 }
 
-// madrid es la zona de toda empresa en la prueba de la fecha de emisión.
-type madrid struct{}
+// storedOrMadrid es, como en el anfitrión, la zona que la empresa guarda en su perfil de Parties;
+// si no guarda ninguna, la de Madrid (la de toda empresa española en la prueba).
+type storedOrMadrid struct{ stored pcontracts.CompanyTimeZones }
 
-func (madrid) Location(context.Context, string) (*time.Location, error) {
+func (z *storedOrMadrid) Location(ctx context.Context, company, _ string) (*time.Location, error) {
+	if code, err := z.stored.TimeZone(ctx, company); err != nil || code != "" {
+		if err != nil {
+			return nil, err
+		}
+		return time.LoadLocation(code)
+	}
 	return time.LoadLocation("Europe/Madrid")
 }
 
 // Sin fecha, una factura se emite con la de hoy en la zona de la empresa, no en UTC: a las 22:30
-// UTC del 14 de octubre ya es día 15 en Madrid (decisión de Javier, 2026-11-05).
+// UTC del 14 de octubre ya es día 15 en Madrid (decisión de Javier, 2026-11-05). Una empresa de
+// Canarias que guarda Atlantic/Canary emite el 31 de diciembre a las 23:30, hora canaria (las
+// 00:30 del 1 de enero en Madrid), con fecha del 31 (D-133).
 func TestBilling_IssueDateIsTodayInTheSellerZone(t *testing.T) {
+	madridAt := time.Date(2026, 10, 14, 22, 30, 0, 0, time.UTC)
+	canaryAt := time.Date(2026, 12, 31, 23, 30, 0, 0, time.UTC) // en invierno, Canarias está en UTC
 	for name, c := range map[string]struct {
-		opts []billing.Option
-		want vocab.Date
-	}{"in Madrid": {[]billing.Option{billing.WithZones(madrid{})}, vocab.MustDate(2026, 10, 15)}, "without zones, UTC": {nil, vocab.MustDate(2026, 10, 14)}} {
+		zones bool
+		zone  string // la que guarda la empresa
+		at    time.Time
+		want  vocab.Date
+	}{
+		"in Madrid":                    {true, "", madridAt, vocab.MustDate(2026, 10, 15)},
+		"without zones, UTC":           {false, "", madridAt, vocab.MustDate(2026, 10, 14)},
+		"in the Canaries, stored zone": {true, "Atlantic/Canary", canaryAt, vocab.MustDate(2026, 12, 31)},
+	} {
 		t.Run(name, func(t *testing.T) {
-			h := compose(t, c.opts...)
+			zones := &storedOrMadrid{}
+			var opts []billing.Option
+			if c.zones {
+				opts = append(opts, billing.WithZones(zones))
+			}
+			h := compose(t, opts...)
+			zones.stored = h.parties.CompanyTimeZones
 			ctx, ps := h.adminCtx, h.parties.Service
 			acme, err := ps.RegisterOrganization.Handle(ctx, papp.RegisterOrganization{LegalName: "Acme", Roles: []string{pdomain.RoleInternalOrganization.String()}})
 			h.ok(err)
+			if c.zone != "" {
+				acmeID, _ := pdomain.ParsePartyID(acme.ID)
+				_, err = ps.SetInternalOrganizationProfile.Handle(ctx, papp.SetInternalOrganizationProfile{ID: acmeID, TimeZone: c.zone})
+				h.ok(err)
+			}
 			ana, err := ps.RegisterPerson.Handle(ctx, papp.RegisterPerson{GivenName: "Ana", FirstSurname: "Zona"})
 			h.ok(err)
 			for party, doc := range map[string][2]string{acme.ID: {"c0000000-0004-0000-0000-000000000003", "A58818501"}, ana.ID: {"c0000000-0004-0000-0000-000000000002", "12345678Z"}} {
@@ -350,7 +379,7 @@ func TestBilling_IssueDateIsTodayInTheSellerZone(t *testing.T) {
 			_, err = h.billing.Service.AddLine.Handle(ctx, bapp.AddLine{ID: id, Description: "Cuota", Quantity: "1", UnitPrice: "10", TaxCode: "G21"})
 			h.ok(err)
 
-			defer fw.SetClock(fake.New(time.Date(2026, 10, 14, 22, 30, 0, 0, time.UTC)))()
+			defer fw.SetClock(fake.New(c.at))()
 			issued, err := h.billing.Service.Issue.Handle(ctx, bapp.IssueInvoice{ID: id, Series: sr.ID})
 			h.ok(err)
 			if issued.IssueDate != c.want.String() {

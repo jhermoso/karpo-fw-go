@@ -32,6 +32,9 @@ type Deps struct {
 	Addresses AddressChecker
 	// FacilityDirectory resuelve instalaciones del contexto Facilities (opcional).
 	FacilityDirectory FacilityDirectory
+	// Profiles guarda los perfiles de las empresas internas (D-133); sin él, sus casos de uso
+	// responden que no están disponibles.
+	Profiles domain.InternalOrganizationProfiles
 }
 
 // AddressChecker valida la parte geográfica de una dirección postal y completa sus referencias a
@@ -95,6 +98,9 @@ type Service struct {
 	DocumentOptions           app.QueryHandler[DocumentOptions, []DocumentOptionDTO]
 	ListClassificationTypes   app.QueryHandler[ListClassificationTypes, []ClassificationTypeDTO]
 	ListFacilityRoleTypes     app.QueryHandler[ListFacilityRoleTypes, []domain.FacilityRoleType]
+	// El perfil de la empresa interna: hoy, su zona horaria (D-133).
+	InternalOrganizationProfile    app.QueryHandler[GetInternalOrganizationProfile, InternalOrganizationProfileDTO]
+	SetInternalOrganizationProfile app.CommandHandler[SetInternalOrganizationProfile, InternalOrganizationProfileDTO]
 }
 
 type (
@@ -764,6 +770,7 @@ func NewService(d Deps) *Service {
 	addPhase2(svc, s)
 	addFacilityRoles(svc, s)
 	addRelationshipDetails(svc, s)
+	addProfile(svc, s)
 	addIdentityAndProfile(svc, s)
 	return svc
 }
