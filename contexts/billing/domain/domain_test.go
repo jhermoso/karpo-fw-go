@@ -22,26 +22,30 @@ func TestSeries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n, err := s.Take(seller, 2026, false); err != nil || n != "FA-2026-000001" {
+	if n, err := s.Take(seller, vocab.MustDate(2026, 3, 10), false); err != nil || n != "FA-2026-000001" {
 		t.Fatal(n, err)
 	}
-	if n, _ := s.Take(seller, 2026, false); n != "FA-2026-000002" {
+	if n, _ := s.Take(seller, vocab.MustDate(2026, 3, 10), false); n != "FA-2026-000002" {
 		t.Fatal(n)
 	}
 	for code, try := range map[string]func() error{
-		"billing.series_other_seller": func() error { _, err := s.Take(domain.OrganizationID{UUID: fw.NewUUID()}, 2026, false); return err },
-		"billing.series_other_year":   func() error { _, err := s.Take(seller, 2027, false); return err },
-		"billing.series_kind":         func() error { _, err := s.Take(seller, 2026, true); return err },
+		"billing.series_other_seller": func() error {
+			_, err := s.Take(domain.OrganizationID{UUID: fw.NewUUID()}, vocab.MustDate(2026, 3, 10), false)
+			return err
+		},
+		"billing.series_other_year":     func() error { _, err := s.Take(seller, vocab.MustDate(2027, 1, 1), false); return err },
+		"billing.series_kind":           func() error { _, err := s.Take(seller, vocab.MustDate(2026, 3, 10), true); return err },
+		"billing.series_date_backwards": func() error { _, err := s.Take(seller, vocab.MustDate(2026, 3, 9), false); return err },
 	} {
 		if err := try(); !isViolation(err, code) {
 			t.Fatalf("%s: %v", code, err)
 		}
 	}
 	s.Close()
-	if _, err := s.Take(seller, 2026, false); !isViolation(err, "billing.series_closed") {
+	if _, err := s.Take(seller, vocab.MustDate(2026, 3, 10), false); !isViolation(err, "billing.series_closed") {
 		t.Fatal(err)
 	}
-	if s.State().Last != 2 {
+	if st := s.State(); st.Last != 2 || st.LastIssueDate != vocab.MustDate(2026, 3, 10) {
 		t.Fatal("a refused take does not consume a number")
 	}
 }

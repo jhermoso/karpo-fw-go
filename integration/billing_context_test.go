@@ -137,8 +137,13 @@ func TestBillingContext(t *testing.T) {
 	}
 }
 
+func isRuleViolation(err error, code string) bool {
+	var rv *fw.RuleViolationError
+	return errors.As(err, &rv) && rv.Code == code
+}
+
 // billingConcurrentIssue emite veinte borradores a la vez en la misma serie (plan Sage, T0): todos
-// se emiten, sin números repetidos ni huecos. Después comprueba que el índice único rechaza un
+// se emiten, sin números repetidos ni huecos, y una fecha anterior a la última se rechaza. Después comprueba que el índice único rechaza un
 // número repetido aunque se escriba sin pasar por la serie.
 func billingConcurrentIssue(ctx context.Context, t *testing.T, db *sqlrepo.DB, svc *bapp.Service, seller, customer string) {
 	t.Helper()
@@ -170,6 +175,21 @@ func billingConcurrentIssue(ctx context.Context, t *testing.T, db *sqlrepo.DB, s
 	wg.Wait()
 	if err := errors.Join(errs...); err != nil {
 		t.Fatalf("simultaneous issues: %v", err)
+	}
+	// Una fecha anterior a la última de la serie se rechaza sin gastar número.
+	late, err := svc.DraftInvoice.Handle(ctx, bapp.DraftInvoice{Seller: seller, Customer: customer})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lateID, _ := bdomain.ParseInvoiceID(late.ID)
+	if _, err := svc.AddLine.Handle(ctx, bapp.AddLine{ID: lateID, Description: "Cuota", Quantity: "1", UnitPrice: "10", TaxCode: "G21"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Issue.Handle(ctx, bapp.IssueInvoice{ID: lateID, Series: sr.ID, Date: vocab.MustDate(2026, 9, 29)}); !isRuleViolation(err, "billing.series_date_backwards") {
+		t.Fatalf("an issue date earlier than the last one of the series: %v", err)
+	}
+	if got, err := svc.Issue.Handle(ctx, bapp.IssueInvoice{ID: lateID, Series: sr.ID, Date: vocab.MustDate(2026, 10, 1)}); err != nil || got.Number != "FC-2026-000021" {
+		t.Fatalf("the next issue date: %+v %v", got, err)
 	}
 	slices.Sort(numbers)
 	for i, got := range numbers {

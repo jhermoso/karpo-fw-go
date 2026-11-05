@@ -324,7 +324,7 @@ func (s service) invoiceUseCases(svc *Service) {
 			// El número se toma en la misma unidad de trabajo: si algo falla, no se consume nada.
 			var number string
 			if _, err := s.series.Update(ctx, seriesID, func(_ context.Context, sr *domain.Series) error {
-				n, err := sr.Take(st.Seller, date.Year(), st.Kind == domain.Corrective)
+				n, err := sr.Take(st.Seller, date, st.Kind == domain.Corrective)
 				number = n
 				return err
 			}); err != nil {

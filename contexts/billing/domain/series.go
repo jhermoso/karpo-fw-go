@@ -12,6 +12,7 @@ import (
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/traits"
+	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
 type (
@@ -33,7 +34,8 @@ const SeriesKind = "billing.series"
 // Series numera las facturas de un vendedor para un año, sin huecos: un número sólo se toma en la
 // unidad de trabajo que emite la factura (el DocumentSeries del subdominio Documents del C#, cuyo
 // emisor no comprobaba ni la organización de una factura ni el año). Las facturas rectificativas
-// van en series propias, como exige el reglamento de facturación.
+// van en series propias, como exige el reglamento de facturación. Dentro de una serie, la fecha de
+// emisión no retrocede: el número sigue el orden de las fechas (plan Sage, T0).
 type Series struct {
 	fw.BaseAggregateRoot[SeriesID]
 	traits.Audited
@@ -42,13 +44,15 @@ type Series struct {
 
 // SeriesState es el estado persistido de una serie.
 type SeriesState struct {
-	Seller     OrganizationID
-	Code       string
-	Year       int
-	Last       int64
-	Corrective bool
-	Active     bool
-	Audit      traits.AuditStamp
+	Seller OrganizationID
+	Code   string
+	Year   int
+	Last   int64
+	// LastIssueDate es la fecha de la última factura emitida en la serie; vacía si no hay ninguna.
+	LastIssueDate vocab.Date
+	Corrective    bool
+	Active        bool
+	Audit         traits.AuditStamp
 }
 
 // ReconstituteSeries reconstruye una serie.
@@ -72,16 +76,17 @@ func ReconstituteSeries(id SeriesID, s SeriesState) (*Series, error) {
 
 // OpenSeries crea una serie activa.
 func OpenSeries(id SeriesID, s SeriesState) (*Series, error) {
-	s.Last, s.Active = 0, true
+	s.Last, s.LastIssueDate, s.Active = 0, vocab.Date{}, true
 	return ReconstituteSeries(id, s)
 }
 
 // State devuelve el estado.
 func (s *Series) State() SeriesState { return s.s }
 
-// Take devuelve el número siguiente (CODE-YYYY-NNNNNN) para una factura de un vendedor, un año y un tipo.
-func (s *Series) Take(seller OrganizationID, year int, corrective bool) (string, error) {
-	switch {
+// Take devuelve el número siguiente (CODE-YYYY-NNNNNN) para una factura de un vendedor, un tipo y
+// una fecha de emisión, que no puede ser anterior a la de la última factura de la serie.
+func (s *Series) Take(seller OrganizationID, date vocab.Date, corrective bool) (string, error) {
+	switch year := date.Year(); {
 	case !s.s.Active:
 		return "", fw.Violation("billing.series_closed", "the series is closed")
 	case s.s.Seller != seller:
@@ -90,8 +95,12 @@ func (s *Series) Take(seller OrganizationID, year int, corrective bool) (string,
 		return "", fw.Violation("billing.series_other_year", "the series is of another year")
 	case s.s.Corrective != corrective:
 		return "", fw.Violation("billing.series_kind", "corrective invoices go in corrective series, and only they")
+	case date.Before(s.s.LastIssueDate):
+		return "", fw.Violation("billing.series_date_backwards",
+			fmt.Sprintf("the series already has an invoice issued on %s, after this date", s.s.LastIssueDate))
 	}
 	s.s.Last++
+	s.s.LastIssueDate = date
 	return fmt.Sprintf("%s-%d-%06d", s.s.Code, s.s.Year, s.s.Last), nil
 }
 
@@ -100,7 +109,7 @@ func (s *Series) Close() { s.s.Active = false }
 
 // AuditSnapshot implementa traits.Snapshotter.
 func (s *Series) AuditSnapshot() map[string]any {
-	return map[string]any{"code": s.s.Code, "year": s.s.Year, "last": s.s.Last, "active": s.s.Active}
+	return map[string]any{"code": s.s.Code, "year": s.s.Year, "last": s.s.Last, "lastIssueDate": s.s.LastIssueDate.String(), "active": s.s.Active}
 }
 
 // Campos de la serie.
