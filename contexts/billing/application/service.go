@@ -301,6 +301,14 @@ func (s service) seriesUseCases(svc *Service) {
 	})
 }
 
+// addressV1 traduce un domicilio congelado; nil si está vacío.
+func addressV1(a domain.Address) *contracts.AddressV1 {
+	if a == (domain.Address{}) {
+		return nil
+	}
+	return &contracts.AddressV1{Street: a.Street, PostalCode: a.PostalCode, Locality: a.Locality, Region: a.Region, Country: a.Country}
+}
+
 // Publications traduce los eventos de dominio al Published Language.
 func Publications(r *messaging.Recorder) *messaging.Recorder {
 	messaging.On(r, func(_ context.Context, e domain.InvoiceIssued) ([]app.IntegrationEvent, error) {
@@ -309,7 +317,8 @@ func Publications(r *messaging.Recorder) *messaging.Recorder {
 			Seller: s.Seller.String(), SellerNIF: s.SellerIdentity.NIF, Customer: s.Customer.String(), CustomerNIF: s.CustomerIdentity.NIF,
 			CustomerName: s.CustomerIdentity.Name, IssueDate: s.IssueDate.String(), OperationDate: dateText(s.OperationDate),
 			DueDate: dateText(s.DueDate), Currency: s.Currency.String(), Country: s.Taxes.Country, Net: money(s.Taxes.Net),
-			Tax: money(s.Taxes.Tax), Surcharge: money(s.Taxes.Surcharge), Total: money(s.Taxes.Total()), Taxes: []contracts.TaxLineV1{}}
+			Tax: money(s.Taxes.Tax), Surcharge: money(s.Taxes.Surcharge), Total: money(s.Taxes.Total()), Taxes: []contracts.TaxLineV1{},
+			SellerAddress: addressV1(s.SellerIdentity.Address), CustomerAddress: addressV1(s.CustomerIdentity.Address)}
 		if !s.Corrects.IsZero() {
 			out.Corrects = s.Corrects.String()
 		}

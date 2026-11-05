@@ -115,7 +115,7 @@ func TestTreasuryContext(t *testing.T) {
 			must(err)
 			fa, err := bm.Service.OpenSeries.Handle(actx, bapp.OpenSeries{Seller: acme.ID, Code: "FA", Year: 2026})
 			must(err)
-			inv, err := bm.Service.DraftInvoice.Handle(actx, bapp.DraftInvoice{Seller: acme.ID, Customer: ana.ID, DetailsInput: bapp.DetailsInput{DueDate: vocab.MustDate(2026, 10, 15)}})
+			inv, err := bm.Service.DraftInvoice.Handle(actx, bapp.DraftInvoice{Seller: acme.ID, Customer: ana.ID, DetailsInput: bapp.DetailsInput{Description: "Servicios", DueDate: vocab.MustDate(2026, 10, 15)}})
 			must(err)
 			iid, _ := bdomain.ParseInvoiceID(inv.ID)
 			_, err = bm.Service.AddLine.Handle(actx, bapp.AddLine{ID: iid, Description: "Cuota", Quantity: "1", UnitPrice: "82.64", TaxCode: "G21"})

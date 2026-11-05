@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
+	"time"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/parties/contracts"
 	"github.com/jhermoso/karpo-fw-go/contexts/parties/domain"
@@ -275,7 +277,28 @@ func (t TaxIdentities) TaxIdentities(ctx context.Context, partyIDs []string) (ma
 				}
 			}
 		}
+		ti.Address = fiscalAddress(p, now)
 		out[ti.PartyID] = ti
 	}
 	return out, nil
+}
+
+// fiscalAddress elige el domicilio fiscal de una party entre sus contactos postales de todos (los
+// de una empresa son de su perfil, D-122): el de facturación, si no el de por defecto, si no
+// cualquiera.
+func fiscalAddress(p *domain.Party, now time.Time) *contracts.FiscalAddress {
+	for _, purpose := range []domain.Purpose{domain.PurposeBilling, domain.PurposeDefault, ""} {
+		for _, c := range p.Contacts() {
+			if c.Kind != domain.ContactPostal || !c.IsActiveAt(now) || c.IsOwned() || (purpose != "" && !c.Has(purpose)) {
+				continue
+			}
+			a := c.Address
+			street := strings.TrimSpace(a.StreetType + " " + a.Line1 + " " + a.Premises.String())
+			if a.Line2 != "" {
+				street += ", " + a.Line2
+			}
+			return &contracts.FiscalAddress{Street: street, PostalCode: a.PostalCode, Locality: a.Locality, Region: a.Region, Country: a.Country.String()}
+		}
+	}
+	return nil
 }

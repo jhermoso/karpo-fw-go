@@ -79,6 +79,13 @@ func TestBillingContext(t *testing.T) {
 				_, err := pm.Service.AddIdentification.Handle(actx, papp.AddIdentification{PartyID: id, DocumentType: d[0], Country: "ES", Number: d[1], Primary: true})
 				must(err)
 			}
+			// Domicilio fiscal: el de facturación de Acme gana al de por defecto (plan Sage, T1-G2).
+			acmeID, _ := pdomain.ParsePartyID(acme.ID)
+			for purpose, line := range map[string]string{"default": "Gran Vía 1", "billing": "Mayor 2"} {
+				_, err = pm.Service.AddContact.Handle(actx, papp.AddContact{PartyID: acmeID, Kind: "postal", Purposes: []string{purpose},
+					Address: &papp.AddressDTO{StreetType: "CL", Line1: line, Floor: "3", Line2: "Edificio Norte", PostalCode: "28013", Locality: "Madrid", Region: "Madrid", Country: "ES"}})
+				must(err)
+			}
 			_, err = fm.Service.CreateRate.Handle(actx, fapp.CreateRate{Type: "vat", Territory: "common", Code: "G21", Description: "General", Rate: "21",
 				Surcharge: "5.2", From: vocab.MustDate(2012, 9, 1)})
 			must(err)
@@ -92,7 +99,7 @@ func TestBillingContext(t *testing.T) {
 			must(err)
 			rs, err := svc.OpenSeries.Handle(actx, bapp.OpenSeries{Seller: acme.ID, Code: "R", Year: 2026, Corrective: true})
 			must(err)
-			inv, err := svc.DraftInvoice.Handle(actx, bapp.DraftInvoice{Seller: acme.ID, Customer: ana.ID, DetailsInput: bapp.DetailsInput{
+			inv, err := svc.DraftInvoice.Handle(actx, bapp.DraftInvoice{Seller: acme.ID, Customer: ana.ID, DetailsInput: bapp.DetailsInput{Description: "Servicios de septiembre",
 				OperationDate: vocab.MustDate(2026, 9, 15), DueDate: vocab.MustDate(2026, 10, 31), EquivalenceSurcharge: true}})
 			must(err)
 			id, _ := bdomain.ParseInvoiceID(inv.ID)
@@ -112,6 +119,10 @@ func TestBillingContext(t *testing.T) {
 				got.Taxes.Net != "123.84" || got.Taxes.Tax != "15.51" || got.Taxes.Surcharge != "3.84" || got.Taxes.Total != "143.19" ||
 				len(got.Taxes.Lines) != 2 || got.Taxes.Lines[0].SurchargeRate != "5.20" || got.OperationDate != "2026-09-15" || got.CustomerNIF != "12345678Z" {
 				t.Fatalf("round trip: %+v %+v %v", got, got.Taxes, err)
+			}
+			if a := got.SellerAddress; a == nil || a.Street != "CL Mayor 2 planta 3, Edificio Norte" || a.PostalCode != "28013" || a.Locality != "Madrid" ||
+				a.Region != "Madrid" || a.Country != "ES" || got.CustomerAddress != nil {
+				t.Fatalf("fiscal addresses: %+v %+v", got.SellerAddress, got.CustomerAddress)
 			}
 			if _, err := svc.AddLine.Handle(actx, bapp.AddLine{ID: id, Description: "X", Quantity: "1", UnitPrice: "1", TaxCode: "G21"}); !errors.Is(err, fw.ErrRuleViolation) {
 				t.Fatalf("immutable: %v", err)
@@ -154,7 +165,7 @@ func billingConcurrentIssue(ctx context.Context, t *testing.T, db *sqlrepo.DB, s
 	const n = 20
 	ids := make([]bdomain.InvoiceID, n)
 	for i := range ids {
-		inv, err := svc.DraftInvoice.Handle(ctx, bapp.DraftInvoice{Seller: seller, Customer: customer})
+		inv, err := svc.DraftInvoice.Handle(ctx, bapp.DraftInvoice{Seller: seller, Customer: customer, DetailsInput: bapp.DetailsInput{Description: "Cuota mensual"}})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -177,7 +188,7 @@ func billingConcurrentIssue(ctx context.Context, t *testing.T, db *sqlrepo.DB, s
 		t.Fatalf("simultaneous issues: %v", err)
 	}
 	// Una fecha anterior a la última de la serie se rechaza sin gastar número.
-	late, err := svc.DraftInvoice.Handle(ctx, bapp.DraftInvoice{Seller: seller, Customer: customer})
+	late, err := svc.DraftInvoice.Handle(ctx, bapp.DraftInvoice{Seller: seller, Customer: customer, DetailsInput: bapp.DetailsInput{Description: "Cuota mensual"}})
 	if err != nil {
 		t.Fatal(err)
 	}
