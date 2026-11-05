@@ -13,10 +13,11 @@
 //	       temporal nuevo)
 //	-seed  carga, si no hay nada, lo que pide el recorrido de docs/SMOKE-MANUAL.md: una empresa,
 //	       su cliente, un producto con existencias, los tipos de IVA, una serie, condiciones de
-//	       pago y un plan de cuentas
+//	       pago, un plan de cuentas y los usuarios de los perfiles reader y clerk
 //
-// No lee ningún secreto ni escribe ninguno: la clave que firma las sesiones y la contraseña del
-// perfil se crean al arrancar y desaparecen al parar.
+// No lee ningún secreto ni escribe ninguno: la clave que firma las sesiones y las contraseñas de
+// los perfiles se crean al arrancar y desaparecen al parar. Lo mismo sobre PostgreSQL es
+// cmd/karpo-smoke-postgres.
 package main
 
 import (
@@ -28,21 +29,15 @@ import (
 	"io"
 	"io/fs"
 	"net"
-	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"syscall"
-	"time"
 
 	_ "modernc.org/sqlite"
 
-	expinfra "github.com/jhermoso/karpo-fw-go/contexts/exports/infrastructure"
-	"github.com/jhermoso/karpo-fw-go/host"
 	"github.com/jhermoso/karpo-fw-go/host/smoke"
-	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlite"
 )
@@ -85,58 +80,8 @@ func run(ctx context.Context, args []string, env string, out io.Writer, listenin
 	}
 	defer raw.Close()
 	raw.SetMaxOpenConns(1) // SQLite admite un solo escritor; el anfitrión es su único cliente
-	db := sqlite.Open(raw, sqlrepo.WithName("sqlite"))
-	migrator, err := sqlrepo.NewMigrator(db, host.Migrations())
-	if err != nil {
-		return err
-	}
-	if _, err := migrator.Migrate(ctx); err != nil {
-		return err
-	}
-	if err := migrator.Verify(ctx); err != nil {
-		return err
-	}
-	files, err := expinfra.NewDiskFiles(filepath.Join(filepath.Dir(*path), "exports"))
-	if err != nil {
-		return err
-	}
-	p, err := smoke.New(ctx, env, hotswap.New(db), smoke.Options{Files: files, Ping: raw.PingContext})
-	if err != nil {
-		return err
-	}
-	if *seed {
-		_, said, err := p.Seed(ctx)
-		if err != nil {
-			return err
-		}
-		fmt.Fprintf(out, "seed: %s\n", strings.ReplaceAll(said, "\n", "\n  "))
-	}
-	listener, err := p.Listen(address)
-	if err != nil {
-		return err
-	}
-	fmt.Fprint(out, smoke.Banner(listener.Addr().String(), *path))
-
-	server := &http.Server{Handler: p, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second}
-	failed := make(chan error, 1)
-	go func() {
-		if err := server.Serve(listener); err != nil && err != http.ErrServerClosed {
-			failed <- err
-		}
-	}()
-	go p.Host.Run(ctx, 2*time.Second, time.Minute, func(err error) { fmt.Fprintf(out, "background work failed; it will be tried again: %v\n", err) })
-	if listening != nil {
-		listening <- listener.Addr().String()
-	}
-
-	select {
-	case err := <-failed:
-		return err
-	case <-ctx.Done():
-	}
-	stop, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-	return server.Shutdown(stop)
+	return smoke.Serve(ctx, env, address, smoke.Database{DB: sqlite.Open(raw, sqlrepo.WithName("sqlite")), Ping: raw.PingContext,
+		Name: *path, Exports: filepath.Join(filepath.Dir(*path), "exports")}, *seed, out, listening)
 }
 
 func main() {

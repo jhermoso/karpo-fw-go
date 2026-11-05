@@ -20,6 +20,7 @@ import (
 	accapp "github.com/jhermoso/karpo-fw-go/contexts/accounting/application"
 	bilapp "github.com/jhermoso/karpo-fw-go/contexts/billing/application"
 	geoinfra "github.com/jhermoso/karpo-fw-go/contexts/geography/infrastructure"
+	pardomain "github.com/jhermoso/karpo-fw-go/contexts/parties/domain"
 	recapp "github.com/jhermoso/karpo-fw-go/contexts/receivables/application"
 	"github.com/jhermoso/karpo-fw-go/contexts/security"
 	"github.com/jhermoso/karpo-fw-go/host"
@@ -451,6 +452,118 @@ func TestSeed_LoadsWhatTheWalkNeeds(t *testing.T) {
 	}
 }
 
+// Los perfiles de la empresa sembrada: sin semilla no existen y la puerta lo dice; con ella, el
+// lector lee y no escribe, el comercial vende y no administra, y ninguno sale de su empresa. Es
+// la sección «Probar permisos» de la guía.
+func TestProfiles_ReaderReadsAndClerkSells(t *testing.T) {
+	noCredentials(t)
+	p, err := smoke.New(context.Background(), smoke.Development, database(t), smoke.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, as := range []string{"reader", "clerk"} {
+		for _, door := range []struct {
+			method, path string
+			body         any
+		}{
+			{"GET", "/api/smoke/token?as=" + as, nil},
+			{"GET", "/api/smoke/enter?as=" + as, nil},
+			{"POST", "/api/auth/login", map[string]any{"username": as, "password": "x"}},
+		} {
+			status, raw, _ := do(t, p, door.method, door.path, "", door.body)
+			if status != http.StatusConflict || !strings.Contains(string(raw), "-seed") {
+				t.Fatalf("%s %s before the seed: %d %s, want 409 naming -seed", door.method, door.path, status, raw)
+			}
+		}
+	}
+	seeded, _, err := p.Seed(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	token := func(as string) string {
+		t.Helper()
+		status, raw, _ := do(t, p, "GET", "/api/smoke/token?as="+as, "", nil)
+		s := session(t, raw)
+		if status != http.StatusOK || s.Username != "smoke-"+as || s.MustChangePassword {
+			t.Fatalf("token of %s: %d %s", as, status, raw)
+		}
+		return s.AccessToken
+	}
+	reader, clerk := token("reader"), token("clerk")
+	call := func(who, method, path string, body any, want int, out any) {
+		t.Helper()
+		status, raw, _ := do(t, p, method, path, who, body)
+		if status != want {
+			t.Fatalf("%s %s: %d %s, want %d", method, path, status, raw, want)
+		}
+		if out != nil {
+			if err := json.Unmarshal(raw, out); err != nil {
+				t.Fatalf("%s %s: %v: %s", method, path, err, raw)
+			}
+		}
+	}
+	deliver := func() {
+		t.Helper()
+		if _, err := p.Host.Deliver(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Ninguno es administrador global.
+	for _, who := range []string{reader, clerk} {
+		var r authz.Resolution
+		call(who, "GET", "/api/auth/context", nil, 200, &r)
+		if r.Context == nil || r.Context.GlobalAdmin || len(r.Context.Grants) != 1 || r.Context.Grants[0].OrganizationID.String() != seeded.Company {
+			t.Fatalf("context: %+v", r.Context)
+		}
+	}
+	// El lector lee y no escribe.
+	call(reader, "GET", "/api/parties/"+seeded.Company, nil, 200, nil)
+	call(reader, "POST", "/api/orders/orders", map[string]any{"company": seeded.Company, "customer": seeded.Customer, "warehouse": seeded.Warehouse}, 403, nil)
+	// El comercial vende: pedido, albarán, factura emitida, cobro.
+	var order struct {
+		ID string `json:"id"`
+	}
+	call(clerk, "POST", "/api/orders/orders", map[string]any{"company": seeded.Company, "customer": seeded.Customer, "warehouse": seeded.Warehouse}, 201, &order)
+	call(clerk, "POST", "/api/orders/orders/"+order.ID+"/lines", map[string]any{"product": seeded.Product, "quantity": "10"}, 200, nil)
+	call(clerk, "POST", "/api/orders/orders/"+order.ID+"/confirm", map[string]any{}, 200, nil)
+	deliver()
+	call(clerk, "POST", "/api/orders/orders/"+order.ID+"/deliveries", map[string]any{}, 201, nil)
+	deliver()
+	var drafts struct {
+		Items []bilapp.InvoiceDTO `json:"items"`
+	}
+	call(reader, "GET", "/api/billing/invoices?seller="+seeded.Company+"&status=draft", nil, 200, &drafts)
+	if len(drafts.Items) != 1 {
+		t.Fatalf("drafts: %+v", drafts.Items)
+	}
+	call(reader, "POST", "/api/billing/invoices/"+drafts.Items[0].ID+"/issue", map[string]any{"series": seeded.Series}, 403, nil)
+	var invoice bilapp.InvoiceDTO
+	call(clerk, "POST", "/api/billing/invoices/"+drafts.Items[0].ID+"/issue", map[string]any{"series": seeded.Series}, 200, &invoice)
+	deliver()
+	call(clerk, "POST", "/api/receivables/collections", map[string]any{"seller": seeded.Company, "payer": seeded.Customer, "date": invoice.IssueDate,
+		"amount": "151.25", "method": "transfer", "allocations": []map[string]any{{"invoice": invoice.ID, "installment": 1, "amount": "151.25"}}}, 201, nil)
+	// El comercial no administra usuarios.
+	call(clerk, "GET", "/api/security/users", nil, 403, nil)
+	// Y ninguno sale de su empresa: otra empresa interna, que da de alta el administrador, no es suya.
+	_, raw, _ := do(t, p, "GET", "/api/smoke/token?as=admin", "", nil)
+	admin := session(t, raw).AccessToken
+	var other struct {
+		ID string `json:"id"`
+	}
+	call(admin, "POST", "/api/organizations", map[string]any{"legalName": "Otra de Humo, S.L.", "roles": []string{pardomain.RoleInternalOrganization.String()}}, 201, &other)
+	call(admin, "POST", "/api/billing/series", map[string]any{"seller": other.ID, "code": smoke.SeriesCode, "year": 2026}, 201, nil)
+	var series []bilapp.SeriesDTO
+	call(reader, "GET", "/api/billing/series?seller="+seeded.Company, nil, 200, &series)
+	if len(series) != 1 {
+		t.Fatalf("the series of its company: %+v", series)
+	}
+	call(reader, "GET", "/api/billing/series?seller="+other.ID, nil, 200, &series)
+	if len(series) != 0 {
+		t.Fatalf("the series of another company: %+v", series)
+	}
+	call(clerk, "POST", "/api/billing/series", map[string]any{"seller": other.ID, "code": "FB", "year": 2026}, 404, nil)
+}
+
 // invoiceDue es el vencimiento de una factura emitida en issued con las condiciones sembradas: 30
 // días después.
 func invoiceDue(t *testing.T, issued string) string {
@@ -465,9 +578,26 @@ func invoiceDue(t *testing.T, issued string) string {
 // Lo que dice al arrancar no se puede tomar por otra cosa.
 func TestBanner_SaysWhatItIs(t *testing.T) {
 	b := smoke.Banner("127.0.0.1:8092", "a file")
-	for _, piece := range []string{"NO AUTHENTICATION", "Never deploy it", "smoke-admin", "http://127.0.0.1:8092"} {
+	for _, piece := range []string{"NO AUTHENTICATION", "Never deploy it", "smoke-admin", "smoke-reader", "smoke-clerk", "http://127.0.0.1:8092"} {
 		if !strings.Contains(b, piece) {
 			t.Errorf("the banner has no %q", piece)
+		}
+	}
+}
+
+// Sobre una base que ya existe (PostgreSQL), el publicador sólo arranca si no tiene nada, y lo que
+// dice al negarse nombra la base y algunos de sus objetos.
+func TestCheckEmpty_OnlyADatabaseWithoutTables(t *testing.T) {
+	for _, none := range [][]string{nil, {}} {
+		if err := smoke.CheckEmpty("the database x", none); err != nil {
+			t.Fatalf("no tables: %v", err)
+		}
+	}
+	for says, objects := range map[string][]string{"has 1 object (": {"public.users"}, "has 4 objects (": {"a.one", "b.two", "c.three", "d.four"}} {
+		err := smoke.CheckEmpty("the database x", objects)
+		if err == nil || !strings.Contains(err.Error(), "the database x") || !strings.Contains(err.Error(), objects[0]) ||
+			!strings.Contains(err.Error(), says) || !strings.Contains(err.Error(), "never deletes anything") {
+			t.Fatalf("%v: %v, want it to say %q", objects, err, says)
 		}
 	}
 }

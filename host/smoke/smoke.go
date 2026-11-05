@@ -68,15 +68,39 @@ type Profile struct {
 	Username string
 	// Role, DisplayName y Position son lo que guarda el motor del front del usuario de una sesión.
 	Role, DisplayName, Position string
+	// Roles son los roles de Security que tiene, por nombre. Vacío es el administrador global de la
+	// instalación, que se crea al arrancar.
+	Roles []string
+	// Access es su nivel de acceso a la empresa sembrada (Full o ReadOnly). Un perfil con acceso
+	// sólo existe si se ha sembrado: lo crea Seed, justo después de la empresa.
+	Access string
+	// Can dice, para el aviso del arranque, qué puede hacer.
+	Can string
 }
 
+// SalesRole es el rol propio que define la semilla para el perfil clerk: lo que StandardUser no da
+// y el trabajo comercial necesita (StandardUser sólo da leer, crear y modificar).
+const SalesRole = "SmokeSales"
+
+// salesPermissions son los permisos de SalesRole.
+var salesPermissions = []string{"Orders.Order.Confirm", "Orders.Order.Deliver", "Orders.Order.Cancel", "Billing.Invoice.Issue"}
+
 // Profiles son las identidades del publicador. La primera es la que quiere decir ?as= cuando no
-// dice nada. Hay una: el administrador de la instalación, que puede hacerlo todo.
+// dice nada: el administrador de la instalación, que puede hacerlo todo. Las otras dos trabajan
+// en la empresa sembrada, con los roles de Security, y sólo existen con -seed.
 func Profiles() []Profile {
 	return []Profile{
-		{Name: "admin", Username: "smoke-admin", Role: "super", DisplayName: "Smoke Admin", Position: "Rol Técnico"},
+		{Name: "admin", Username: "smoke-admin", Role: "super", DisplayName: "Smoke Admin", Position: "Rol Técnico",
+			Can: "administrator of the installation: everything"},
+		{Name: "reader", Username: "smoke-reader", Role: "user", DisplayName: "Smoke Reader", Position: "Consulta",
+			Roles: []string{"ReadOnlyUser"}, Access: "ReadOnly", Can: "reads the seeded company, writes nothing (-seed)"},
+		{Name: "clerk", Username: "smoke-clerk", Role: "user", DisplayName: "Smoke Clerk", Position: "Comercial",
+			Roles: []string{"StandardUser", SalesRole}, Access: "Full", Can: "sells in the seeded company: orders, invoices, collections (-seed)"},
 	}
 }
+
+// ErrNotSeeded es lo que se responde al pedir un perfil de la empresa sembrada sin haber sembrado.
+var ErrNotSeeded = errors.New("this profile works in the seeded company and nothing was seeded: start the publisher with -seed")
 
 // profile busca un perfil por su nombre o por su username. Sin nombre es el primero.
 func profile(name string) (Profile, bool) {
@@ -169,6 +193,9 @@ func New(ctx context.Context, env string, sw *hotswap.Switch, o Options) (*Publi
 	}
 	p := &Publisher{Host: h, inner: h.Handler(), passwords: map[string]string{}}
 	for _, who := range Profiles() {
+		if who.Access != "" {
+			continue // los crea Seed, cuando hay empresa
+		}
 		if err := p.create(ctx, who); err != nil {
 			return nil, err
 		}
@@ -188,15 +215,9 @@ func New(ctx context.Context, env string, sw *hotswap.Switch, o Options) (*Publi
 	return p, nil
 }
 
-// create crea el usuario de un perfil: el primer administrador de la instalación, con una
-// contraseña que nadie ve, y ya cambiada una vez, para que el anfitrión no pida cambiarla antes
-// de nada.
+// create crea el usuario del administrador: el primer administrador de la instalación.
 func (p *Publisher) create(ctx context.Context, who Profile) error {
 	first, err := random(24)
-	if err != nil {
-		return err
-	}
-	kept, err := random(24)
 	if err != nil {
 		return err
 	}
@@ -206,6 +227,16 @@ func (p *Publisher) create(ctx context.Context, who Profile) error {
 	}
 	if outcome != secapp.BootstrapCreated {
 		return fmt.Errorf("smoke: %s was not created: %s", who.Username, outcome)
+	}
+	return p.keep(who, first)
+}
+
+// keep cambia una vez la contraseña con la que se creó un perfil por otra que nadie ve, para que
+// el anfitrión no pida cambiarla antes de nada, y la guarda.
+func (p *Publisher) keep(who Profile, first string) error {
+	kept, err := random(24)
+	if err != nil {
+		return err
 	}
 	var session secapp.Tokens
 	if status, body := p.call(p.inner, "POST", "/api/auth/login", "", secapp.Login{Username: who.Username, Password: first}, &session); status != http.StatusOK {
@@ -291,7 +322,7 @@ func Banner(address, database string) string {
 	fmt.Fprintf(&b, "  enter         GET /api/smoke/enter?as=<profile>\n")
 	fmt.Fprintf(&b, "  token         GET /api/smoke/token?as=<profile>\n")
 	for _, p := range Profiles() {
-		fmt.Fprintf(&b, "  profile       %-7s user %s, administrator of the installation\n", p.Name, p.Username)
+		fmt.Fprintf(&b, "  profile       %-7s user %-13s %s\n", p.Name, p.Username, p.Can)
 	}
 	return b.String()
 }
@@ -333,6 +364,9 @@ type failure struct {
 // cualquier otra: el anfitrión emitió sus tokens, y los refresca y los termina.
 func (p *Publisher) Open(who Profile) (Session, error) {
 	password, known := p.passwords[who.Username]
+	if !known && who.Access != "" {
+		return Session{}, fmt.Errorf("smoke: %s: %w", who.Name, ErrNotSeeded)
+	}
 	if !known {
 		return Session{}, fmt.Errorf("smoke: there is no profile %q", who.Name)
 	}
@@ -361,10 +395,18 @@ func (p *Publisher) token(w http.ResponseWriter, r *http.Request) {
 	}
 	s, err := p.Open(who)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, err.Error(), failed(err))
 		return
 	}
 	writeJSON(w, http.StatusOK, s)
+}
+
+// failed es el estado de una sesión que no se pudo abrir: 409 si falta la semilla, 500 si no.
+func failed(err error) int {
+	if errors.Is(err, ErrNotSeeded) {
+		return http.StatusConflict
+	}
+	return http.StatusInternalServerError
 }
 
 // login es el login del anfitrión con una diferencia: para los perfiles fijos (el usuario es el
@@ -387,6 +429,10 @@ func (p *Publisher) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s, err := p.Open(who)
+	if errors.Is(err, ErrNotSeeded) {
+		writeJSON(w, http.StatusConflict, failure{ErrorMessage: err.Error()})
+		return
+	}
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, failure{ErrorMessage: "the session could not be opened"})
 		return

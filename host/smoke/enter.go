@@ -89,7 +89,7 @@ func (p *Publisher) enter(w http.ResponseWriter, r *http.Request) {
 	}
 	s, err := p.Open(who)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, err.Error(), failed(err))
 		return
 	}
 	data, err := json.Marshal(entry{AccessToken: s.AccessToken, RefreshToken: s.RefreshToken, User: entryUser{

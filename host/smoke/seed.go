@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	pardomain "github.com/jhermoso/karpo-fw-go/contexts/parties/domain"
+	secdomain "github.com/jhermoso/karpo-fw-go/contexts/security/domain"
 	"github.com/jhermoso/karpo-fw-go/host"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
@@ -96,7 +97,8 @@ func (s *seeder) send(method, path string, want int, body any) string {
 //   - una serie de facturación del año en curso;
 //   - unas condiciones de pago a 30 días, que son las del cliente;
 //   - un plan de cuentas mínimo y el libro de la empresa, para que las facturas y los cobros se
-//     contabilicen.
+//     contabilicen;
+//   - los usuarios de los perfiles que trabajan en la empresa (reader y clerk, Profiles).
 //
 // Si ya hay alguna party no carga nada y lo dice (Seeded vacío).
 func (p *Publisher) Seed(ctx context.Context) (Seeded, string, error) {
@@ -181,13 +183,52 @@ func (p *Publisher) Seed(ctx context.Context) (Seeded, string, error) {
 		return Seeded{}, "", s.err
 	}
 
+	// Security: los perfiles que trabajan en la empresa (Profiles).
+	if err := p.companyProfiles(s, out.Company); err != nil {
+		return Seeded{}, "", err
+	}
+
 	// Lo que publicaron las altas llega a quienes lo escuchan antes de abrir la puerta.
 	if _, err := p.Host.Deliver(ctx); err != nil {
 		return Seeded{}, "", fmt.Errorf("smoke: seed: delivering: %w", err)
 	}
 	said := []string{"loaded a company and its customer, the Spanish VAT rates, a product with " +
 		"stock in a warehouse, the invoice series " + SeriesCode + " " + strconv.Itoa(year) + ", " + strconv.Itoa(TermsDays) +
-		"-day payment terms and a minimal chart of accounts with its ledger.",
+		"-day payment terms, a minimal chart of accounts with its ledger, and the users of the profiles reader and clerk.",
 		"Paste these lines into PowerShell (docs/SMOKE-MANUAL.md):"}
 	return out, strings.Join(append(said, out.Lines()...), "\n"), nil
+}
+
+// companyProfiles crea, como el administrador, los usuarios de los perfiles que trabajan en la
+// empresa: el rol propio SalesRole, y para cada perfil una persona, su usuario con acceso a la
+// empresa, sus roles y una contraseña que nadie ve.
+func (p *Publisher) companyProfiles(s *seeder, company string) error {
+	roles := map[string]string{}
+	for _, r := range secdomain.SystemRoles() {
+		roles[r.Name] = r.ID.String()
+	}
+	roles[SalesRole] = s.send("POST", "/api/security/roles", http.StatusCreated, map[string]any{"name": SalesRole,
+		"description": "Smoke: confirms and delivers orders and issues invoices", "permissions": salesPermissions})
+	for _, who := range Profiles() {
+		if who.Access == "" {
+			continue
+		}
+		first, err := random(24)
+		if err != nil {
+			return err
+		}
+		person := s.send("POST", "/api/persons", http.StatusCreated, map[string]any{"givenName": "Smoke", "firstSurname": who.Name})
+		user := s.send("POST", "/api/security/users", http.StatusCreated, map[string]any{"username": who.Username, "party": person, "password": first,
+			"access": map[string]any{"organization": company, "level": who.Access}})
+		for _, name := range who.Roles {
+			s.send("PUT", "/api/security/users/"+user+"/roles/"+roles[name], http.StatusOK, nil)
+		}
+		if s.err != nil {
+			return s.err
+		}
+		if err := p.keep(who, first); err != nil {
+			return err
+		}
+	}
+	return nil
 }
