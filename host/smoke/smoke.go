@@ -400,26 +400,3 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(body)
 }
-
-// Seed carga algo que mirar, por las rutas del anfitrión y como el perfil admin: una organización
-// en Parties. Si ya hay una party, no carga nada. Dice lo que hizo.
-func (p *Publisher) Seed() (string, error) {
-	admin, _ := profile("admin")
-	s, err := p.Open(admin)
-	if err != nil {
-		return "", err
-	}
-	var page struct {
-		Total int64 `json:"total"`
-	}
-	if status, body := p.call(p, "GET", "/api/parties?size=1", s.AccessToken, nil, &page); status != http.StatusOK {
-		return "", fmt.Errorf("smoke: GET /api/parties: %d %s", status, body)
-	}
-	if page.Total > 0 {
-		return "there is data already: nothing was loaded", nil
-	}
-	if status, body := p.call(p, "POST", "/api/organizations", s.AccessToken, map[string]any{"legalName": "Smoke Company"}, nil); status != http.StatusCreated {
-		return "", fmt.Errorf("smoke: POST /api/organizations: %d %s", status, body)
-	}
-	return "1 organization was loaded (Smoke Company)", nil
-}

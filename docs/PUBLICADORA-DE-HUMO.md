@@ -21,13 +21,15 @@ go run -tags smoke ./cmd/karpo-smoke -port 8092 -seed
 |---|---|
 | `-port` | Puerto de `127.0.0.1` (por defecto 8092). No se puede elegir otra dirección |
 | `-db` | Fichero SQLite, **que no exista**: si el fichero ya está, se niega antes de abrirlo y no lo toca (por defecto, uno en una carpeta temporal nueva; la ruta sale al arrancar) |
-| `-seed` | Carga una organización en Parties si no hay ninguna |
+| `-seed` | Si no hay ninguna party, carga lo que pide el recorrido de [SMOKE-MANUAL.md](SMOKE-MANUAL.md): una empresa interna y su cliente, los tipos de IVA, un producto con existencias, una serie de facturación, condiciones de pago y un plan de cuentas con su libro. Imprime sus identificadores como líneas de PowerShell |
 
 ```powershell
 curl.exe -s "http://127.0.0.1:8092/api/smoke/token?as=admin"        # la sesión en JSON
 # con el accessToken de esa respuesta:
 curl.exe -s http://127.0.0.1:8092/api/parties -H "Authorization: Bearer <accessToken>"
 ```
+
+El recorrido completo del ciclo de venta, paso a paso, está en [SMOKE-MANUAL.md](SMOKE-MANUAL.md).
 
 Debería verse: un aviso en mayúsculas de que no hay autenticación, la ruta de la base, y en la
 primera orden un JSON con `"success":true` y `"username":"smoke-admin"`.

@@ -78,7 +78,7 @@ func TestRun_ServesOnThisMachineAndLetsIn(t *testing.T) {
 		t.Fatalf("it listens on %s", address)
 	}
 	said := written.String()
-	for _, piece := range []string{"NO AUTHENTICATION", "1 organization was loaded", address} {
+	for _, piece := range []string{"NO AUTHENTICATION", "seed: loaded a company", "$company   = '", address} {
 		if !strings.Contains(said, piece) {
 			t.Errorf("it does not say %q:\n%s", piece, said)
 		}
