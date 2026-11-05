@@ -142,7 +142,7 @@ type PartyFacilityRoleAssigned struct {
 }
 
 // EventType implementa domain.Event.
-func (PartyFacilityRoleAssigned) EventType() string { return "parties.facility_role_assigned" }
+func (PartyFacilityRoleAssigned) EventType() string { return "parties.party_facility_role_assigned" }
 
 // PartyFacilityRoleEnded se lanza cuando termina un rol en una instalación.
 type PartyFacilityRoleEnded struct {
@@ -153,7 +153,7 @@ type PartyFacilityRoleEnded struct {
 }
 
 // EventType implementa domain.Event.
-func (PartyFacilityRoleEnded) EventType() string { return "parties.facility_role_ended" }
+func (PartyFacilityRoleEnded) EventType() string { return "parties.party_facility_role_ended" }
 
 // Campos de los roles en instalaciones.
 var (
