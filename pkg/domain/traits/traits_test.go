@@ -121,4 +121,10 @@ func TestTestFlag(t *testing.T) {
 	if !c.IsTest() || traits.RestoredTestFlag(false).IsTest() {
 		t.Fatal("test flag")
 	}
+	if c.SetTest(false); c.IsTest() {
+		t.Fatal("SetTest(false)")
+	}
+	if c.SetTest(true); !c.IsTest() {
+		t.Fatal("SetTest(true)")
+	}
 }

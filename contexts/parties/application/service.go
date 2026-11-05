@@ -387,11 +387,7 @@ func NewService(d Deps) *Service {
 	// La marca de pruebas es identidad (D-122): la cambia quien puede modificar la party.
 	svc.SetTest = chain(PermPartyUpdate, func(ctx context.Context, c SetPartyTest) (PartyDTO, error) {
 		return s.updateParty(ctx, c.ID, func(p *domain.Party, _ *domain.Catalog) error {
-			if c.Test {
-				p.MarkAsTest()
-			} else {
-				p.UnmarkAsTest()
-			}
+			p.SetTest(c.Test)
 			return nil
 		})
 	}, pipeline.RetryOnConflict[SetPartyTest, PartyDTO](retry, backoff))

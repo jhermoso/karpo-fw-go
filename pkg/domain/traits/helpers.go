@@ -52,3 +52,6 @@ func (t *TestFlag) MarkAsTest() { t.test = true }
 
 // UnmarkAsTest quita la marca: el agregado vuelve a ser un dato real.
 func (t *TestFlag) UnmarkAsTest() { t.test = false }
+
+// SetTest pone o quita la marca, como Party.SetTest de Karpo C#.
+func (t *TestFlag) SetTest(test bool) { t.test = test }
