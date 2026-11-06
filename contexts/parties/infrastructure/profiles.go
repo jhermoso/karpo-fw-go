@@ -18,27 +18,76 @@ import (
 // rol como en C# (docs/PARTIES.md §25).
 const TableInternalOrganizationProfiles = "internal_organization_profile"
 
+// TableInternalOrganizationCodePatterns es la tabla hija del perfil con el patrón de cada tipo de
+// código de la empresa (D-144): una fila por (internal_organization_id, code_kind).
+const TableInternalOrganizationCodePatterns = "internal_organization_code_pattern"
+
 // SQLProfiles guarda los perfiles en SQL.
 type SQLProfiles struct{ db *sqlrepo.DB }
 
 // Get implementa domain.InternalOrganizationProfiles: lee la fila de la organización.
 func (s SQLProfiles) Get(ctx context.Context, org domain.PartyID) (domain.InternalOrganizationProfile, error) {
 	d := s.db.Dialect()
-	rows, err := s.db.QueryContext(ctx, fmt.Sprintf("SELECT %s FROM %s WHERE %s = %s", d.Quote("time_zone"),
-		d.Quote(TableInternalOrganizationProfiles), d.Quote("internal_organization_id"), d.Placeholder(1)), d.UUIDValue(org.UUID))
+	rows, err := s.db.QueryContext(ctx, fmt.Sprintf("SELECT %s, %s, %s, %s FROM %s WHERE %s = %s", d.Quote("time_zone"), d.Quote("line_rounding"),
+		d.Quote("price_decimals"), d.Quote("installments_timing"), d.Quote(TableInternalOrganizationProfiles), d.Quote("internal_organization_id"),
+		d.Placeholder(1)), d.UUIDValue(org.UUID))
 	if err != nil {
 		return domain.InternalOrganizationProfile{}, err
 	}
 	defer func() { _ = rows.Close() }()
 	p := domain.InternalOrganizationProfile{Organization: org}
 	if rows.Next() {
-		var tz sql.NullString
-		if err := rows.Scan(&tz); err != nil {
+		var tz, rounding, timing sql.NullString
+		var decimals sql.NullInt64
+		if err := rows.Scan(&tz, &rounding, &decimals, &timing); err != nil {
 			return domain.InternalOrganizationProfile{}, err
 		}
-		p.TimeZone = tz.String
+		p.TimeZone, p.LineRounding, p.InstallmentsTiming = tz.String, rounding.String, timing.String
+		if decimals.Valid {
+			n := int(decimals.Int64)
+			p.PriceDecimals = &n
+		}
 	}
 	return p, rows.Err()
+}
+
+// CodePattern implementa domain.InternalOrganizationProfiles.
+func (s SQLProfiles) CodePattern(ctx context.Context, org domain.PartyID, kind string) (string, error) {
+	d := s.db.Dialect()
+	rows, err := s.db.QueryContext(ctx, fmt.Sprintf("SELECT %s FROM %s WHERE %s = %s AND %s = %s", d.Quote("pattern"),
+		d.Quote(TableInternalOrganizationCodePatterns), d.Quote("internal_organization_id"), d.Placeholder(1), d.Quote("code_kind"), d.Placeholder(2)),
+		d.UUIDValue(org.UUID), kind)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = rows.Close() }()
+	var pattern sql.NullString
+	if rows.Next() {
+		if err := rows.Scan(&pattern); err != nil {
+			return "", err
+		}
+	}
+	return pattern.String, rows.Err()
+}
+
+// SaveCodePattern implementa domain.InternalOrganizationProfiles: un patrón vacío borra la fila;
+// si no, se actualiza o se crea. Dos primeros guardados a la vez chocan con la clave primaria y
+// dan un conflicto, y el caso de uso se repite entero, como en Save.
+func (s SQLProfiles) SaveCodePattern(ctx context.Context, org domain.PartyID, kind, pattern string) error {
+	key := sqlrepo.Values{"internal_organization_id": org, "code_kind": kind}
+	if pattern == "" {
+		_, err := s.db.Delete(ctx, TableInternalOrganizationCodePatterns, key)
+		return err
+	}
+	n, err := s.db.Update(ctx, TableInternalOrganizationCodePatterns, sqlrepo.Values{"pattern": pattern}, key)
+	if err != nil || n > 0 {
+		return err
+	}
+	err = s.db.Insert(ctx, TableInternalOrganizationCodePatterns, sqlrepo.Values{"internal_organization_id": org, "code_kind": kind, "pattern": pattern})
+	if err != nil && s.db.Dialect().IsUniqueViolation(err) {
+		return fmt.Errorf("%w: the %s pattern of %s was created at the same time", fw.ErrConflict, kind, org)
+	}
+	return err
 }
 
 // Save implementa domain.InternalOrganizationProfiles: actualiza la fila, o la crea si no hay. Si
@@ -48,7 +97,12 @@ func (s SQLProfiles) Get(ctx context.Context, org domain.PartyID) (domain.Intern
 // choque. (MySQL cuenta 0 filas en un UPDATE al mismo valor; no llega aquí, porque el caso de uso no
 // guarda un perfil que no cambia.)
 func (s SQLProfiles) Save(ctx context.Context, p domain.InternalOrganizationProfile) error {
-	set := sqlrepo.Values{"time_zone": nullable(p.TimeZone)}
+	var decimals any
+	if p.PriceDecimals != nil {
+		decimals = int64(*p.PriceDecimals)
+	}
+	set := sqlrepo.Values{"time_zone": nullable(p.TimeZone), "line_rounding": nullable(p.LineRounding), "price_decimals": decimals,
+		"installments_timing": nullable(p.InstallmentsTiming)}
 	n, err := s.db.Update(ctx, TableInternalOrganizationProfiles, set, sqlrepo.Values{"internal_organization_id": p.Organization})
 	if err != nil || n > 0 {
 		return err
@@ -64,9 +118,15 @@ func (s SQLProfiles) Save(ctx context.Context, p domain.InternalOrganizationProf
 // memoryProfiles guarda los perfiles de un almacén en memoria; un cambio se deshace si la unidad
 // de trabajo falla, como en los repositorios en memoria.
 type memoryProfiles struct {
-	store *memory.Store
-	mu    sync.Mutex
-	byID  map[domain.PartyID]domain.InternalOrganizationProfile
+	store    *memory.Store
+	mu       sync.Mutex
+	byID     map[domain.PartyID]domain.InternalOrganizationProfile
+	patterns map[patternKey]string
+}
+
+type patternKey struct {
+	org  domain.PartyID
+	kind string
 }
 
 var memoryProfileStores sync.Map // *memory.Store -> *memoryProfiles
@@ -95,6 +155,37 @@ func (m *memoryProfiles) Save(ctx context.Context, p domain.InternalOrganization
 			m.byID[p.Organization] = before
 		} else {
 			delete(m.byID, p.Organization)
+		}
+	})
+	return nil
+}
+
+func (m *memoryProfiles) CodePattern(_ context.Context, org domain.PartyID, kind string) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.patterns[patternKey{org, kind}], nil
+}
+
+func (m *memoryProfiles) SaveCodePattern(ctx context.Context, org domain.PartyID, kind, pattern string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.patterns == nil {
+		m.patterns = map[patternKey]string{}
+	}
+	k := patternKey{org, kind}
+	before, existed := m.patterns[k]
+	if pattern == "" {
+		delete(m.patterns, k)
+	} else {
+		m.patterns[k] = pattern
+	}
+	m.store.OnRollback(ctx, func() {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		if existed {
+			m.patterns[k] = before
+		} else {
+			delete(m.patterns, k)
 		}
 	})
 	return nil
@@ -131,4 +222,18 @@ func (s swappableProfiles) Get(ctx context.Context, org domain.PartyID) (p domai
 
 func (s swappableProfiles) Save(ctx context.Context, p domain.InternalOrganizationProfile) error {
 	return s.b.With(ctx, func(ctx context.Context, x domain.InternalOrganizationProfiles) error { return x.Save(ctx, p) })
+}
+
+func (s swappableProfiles) CodePattern(ctx context.Context, org domain.PartyID, kind string) (p string, err error) {
+	err = s.b.With(ctx, func(ctx context.Context, x domain.InternalOrganizationProfiles) error {
+		p, err = x.CodePattern(ctx, org, kind)
+		return err
+	})
+	return p, err
+}
+
+func (s swappableProfiles) SaveCodePattern(ctx context.Context, org domain.PartyID, kind, pattern string) error {
+	return s.b.With(ctx, func(ctx context.Context, x domain.InternalOrganizationProfiles) error {
+		return x.SaveCodePattern(ctx, org, kind, pattern)
+	})
 }

@@ -659,6 +659,47 @@ func TestPartiesContext(t *testing.T) {
 				t.Fatalf("a party that is not an internal organization: %v", err)
 			}
 
+			// Migración 34: los ajustes de D-144 y el patrón de las series. Cero decimales es un valor
+			// (no nulo); un PUT sin ellos los limpia; el patrón se crea, se cambia y se quita.
+			zero := 0
+			if _, err := svc.SetInternalOrganizationProfile.Handle(ctx, papp.SetInternalOrganizationProfile{ID: acmeID, LineRounding: "gross_then_discount",
+				PriceDecimals: &zero, InstallmentsTiming: "with_issue"}); err != nil {
+				t.Fatalf("setting the billing settings: %v", err)
+			}
+			if p, err := profiles.Get(ctx, acmeID); err != nil || p.LineRounding != "gross_then_discount" || p.PriceDecimals == nil || *p.PriceDecimals != 0 ||
+				p.InstallmentsTiming != "with_issue" || p.TimeZone != "" {
+				t.Fatalf("the settings read back: %+v %v", p, err)
+			}
+			if _, err := svc.SetInternalOrganizationProfile.Handle(ctx, papp.SetInternalOrganizationProfile{ID: acmeID, PriceDecimals: &zero}); err != nil {
+				t.Fatal(err)
+			}
+			if st, err := mod.CompanyProfiles.Settings(ctx, acme.ID); err != nil || st.LineRounding != "" || st.InstallmentsTiming != "" ||
+				st.PriceDecimals == nil || *st.PriceDecimals != 0 {
+				t.Fatalf("the settings other contexts read: %+v %v", st, err)
+			}
+			setPattern := func(pattern string) error {
+				_, err := svc.SetInternalOrganizationCodePattern.Handle(ctx, papp.SetInternalOrganizationCodePattern{ID: acmeID,
+					Kind: domain.CodeKindInvoiceSeries, Pattern: pattern})
+				return err
+			}
+			for _, pattern := range []string{`F[A-Z]/[0-9]{2}`, `[A-Z]{1,3}`} {
+				if err := setPattern(pattern); err != nil {
+					t.Fatalf("pattern %s: %v", pattern, err)
+				}
+				if got, err := profiles.CodePattern(ctx, acmeID, domain.CodeKindInvoiceSeries); err != nil || got != pattern {
+					t.Fatalf("the pattern read back: %q %v", got, err)
+				}
+			}
+			if err := setPattern("[A-Z"); !errors.As(err, &rv) || rv.Code != domain.ErrInvalidCodePattern {
+				t.Fatalf("a pattern that does not compile: %v", err)
+			}
+			if err := setPattern(""); err != nil {
+				t.Fatal(err)
+			}
+			if got, err := mod.CompanyProfiles.CodePattern(ctx, acme.ID, domain.CodeKindInvoiceSeries); err != nil || got != "" {
+				t.Fatalf("the pattern removed: %q %v", got, err)
+			}
+
 			// Migración 33: la vigencia de las identificaciones (D-142). Los dos índices únicos muerden
 			// a las vigentes y dejan pasar a las históricas: se comprueba escribiendo las filas
 			// directamente. Ana tiene vigentes su DNI 12345678Z y su pasaporte, que es el principal.

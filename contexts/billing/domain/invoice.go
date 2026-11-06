@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"strings"
 	"unicode/utf8"
@@ -68,9 +69,57 @@ func ParseStatus(s string) (Status, bool) {
 // resto de causas; R5: facturas simplificadas).
 var CorrectionReasons = []string{"R1", "R2", "R3", "R4", "R5"}
 
+// LineRounding es cómo se redondea el neto de una línea con descuento (D-128, D-144). Los dos modos
+// redondean al céntimo alejándose de cero en el medio.
+type LineRounding string
+
+// Formas de redondear una línea.
+const (
+	// RoundOnce redondea una sola vez, al final: cantidad × precio − descuento.
+	RoundOnce LineRounding = "once"
+	// RoundGrossThenDiscount redondea primero el bruto (cantidad × precio) y después el neto, ya
+	// con el descuento, como la ficha de factura de Trench.
+	RoundGrossThenDiscount LineRounding = "gross_then_discount"
+)
+
+// Decimales del precio de una línea: como mucho 6 (la escala de bil_invoice_lines.unit_price); sin
+// ajuste de la empresa, 4.
+const (
+	MaxPriceDecimals     = 6
+	DefaultPriceDecimals = 4
+)
+
+// Calculation es cómo se calculan las líneas de una factura: la forma de redondear y los decimales
+// del precio. Se toma de los ajustes de la empresa vendedora al preparar el borrador y se queda en
+// la factura: no cambia aunque cambien los ajustes, ni antes ni después de emitirla (D-144).
+type Calculation struct {
+	Rounding      LineRounding
+	PriceDecimals int
+}
+
+// DefaultCalculation es el cálculo de siempre: una sola vez al final y el precio con 4 decimales.
+func DefaultCalculation() Calculation {
+	return Calculation{Rounding: RoundOnce, PriceDecimals: DefaultPriceDecimals}
+}
+
+func (c Calculation) valid() bool {
+	return (c.Rounding == RoundOnce || c.Rounding == RoundGrossThenDiscount) && c.PriceDecimals >= 0 && c.PriceDecimals <= MaxPriceDecimals
+}
+
+// Net es el importe neto de una línea: cantidad × precio menos el descuento (un porcentaje),
+// redondeado como diga el cálculo. Ejemplo: 1 × 0.125 con un 50 % da 0.06 redondeando una vez
+// (0.0625) y 0.07 redondeando el bruto antes (0.13, y 0.065).
+func (c Calculation) Net(quantity, unitPrice, discount vocab.Decimal) vocab.Decimal {
+	gross := quantity.Mul(unitPrice)
+	if c.Rounding == RoundGrossThenDiscount {
+		gross = gross.Round(2)
+	}
+	return gross.Sub(gross.Mul(discount).Div(hundred)).Round(2)
+}
+
 // Line es una línea de una factura. Su importe neto es cantidad × precio unitario menos el
-// descuento, redondeado al céntimo alejándose de cero en el medio (el C# guardaba el producto sin
-// redondear).
+// descuento, redondeado al céntimo alejándose de cero en el medio, una vez al final o el bruto
+// antes, según el cálculo de la factura (el C# guardaba el producto sin redondear).
 type Line struct {
 	ID          LineID
 	Description string
@@ -170,7 +219,9 @@ type InvoiceState struct {
 	CustomerIdentity     Identity
 	Taxes                Breakdown
 	Source               Source
-	Audit                traits.AuditStamp
+	// Calculation es cómo se calculan las líneas; vacío (sin Rounding), DefaultCalculation.
+	Calculation Calculation
+	Audit       traits.AuditStamp
 }
 
 // Details son los campos editables de la cabecera de un borrador.
@@ -205,6 +256,10 @@ func ReconstituteInvoice(id InvoiceID, s InvoiceState) (*Invoice, error) {
 	v.Require(len(s.Lines) <= MaxLines, "lines", "count", "too many lines")
 	v.Require((s.Source.Type == "") == (s.Source.ID == "") && len(s.Source.Type) <= 80 && len(s.Source.ID) <= 80 && len(s.Source.Ref) <= 40, "source",
 		"length", "a source type and id within limits")
+	if s.Calculation.Rounding == "" {
+		s.Calculation = DefaultCalculation()
+	}
+	v.Require(s.Calculation.valid(), "calculation", "enum", "a line rounding once or gross_then_discount and 0 to 6 price decimals")
 	d := Details{Description: s.Description, OperationDate: s.OperationDate, DueDate: s.DueDate, EquivalenceSurcharge: s.EquivalenceSurcharge}
 	checkDetails(&v, &d)
 	if err := v.Err(); err != nil {
@@ -262,11 +317,14 @@ func (i *Invoice) AddLine(in LineInput) (LineID, error) {
 	var v fw.Validation
 	desc := strings.TrimSpace(in.Description)
 	v.Require(desc != "" && utf8.RuneCountInString(desc) <= 500, "description", "length", "a description of 1 to 500 characters")
-	// Las escalas son las de las columnas (bil_invoice_lines: cantidad y precio (18,4), descuento
-	// (7,4)): un valor con más decimales es un error del campo, no de la base de datos.
+	// Las escalas de la cantidad y del descuento son las de sus columnas (bil_invoice_lines: (18,4) y
+	// (7,4)); la del precio, los decimales del cálculo de la factura (como mucho los 6 de su columna).
+	// Un valor con más decimales es un error del campo, no de la base de datos.
+	calc := i.s.Calculation
 	v.Require(!in.Quantity.IsZero() && (i.s.Kind == Corrective || in.Quantity.IsPositive()) && places(in.Quantity, 4), "quantity", "range",
 		"a positive quantity of up to 4 decimals (negative only in corrective invoices)")
-	v.Require(!in.UnitPrice.IsNegative() && places(in.UnitPrice, 4), "unitPrice", "range", "a non-negative unit price of up to 4 decimals")
+	v.Require(!in.UnitPrice.IsNegative() && places(in.UnitPrice, int32(calc.PriceDecimals)), "unitPrice", "range",
+		fmt.Sprintf("a non-negative unit price of up to %d decimals", calc.PriceDecimals))
 	v.Require(!in.Discount.IsNegative() && in.Discount.LessThanOrEqual(hundred) && places(in.Discount, 4), "discount", "range",
 		"a discount from 0 to 100 with up to 4 decimals")
 	code, treat := strings.ToUpper(strings.TrimSpace(in.TaxCode)), strings.ToUpper(strings.TrimSpace(in.Treatment))
@@ -275,8 +333,7 @@ func (i *Invoice) AddLine(in LineInput) (LineID, error) {
 	if err := v.Err(); err != nil {
 		return LineID{}, err
 	}
-	gross := in.Quantity.Mul(in.UnitPrice)
-	net := gross.Sub(gross.Mul(in.Discount).Div(hundred)).Round(2)
+	net := calc.Net(in.Quantity, in.UnitPrice, in.Discount)
 	l := Line{ID: LineID{fw.NewUUID()}, Description: desc, Quantity: in.Quantity, UnitPrice: in.UnitPrice, Discount: in.Discount,
 		TaxCode: code, Treatment: treat, Net: net}
 	i.s.Lines = append(slices.Clone(i.s.Lines), l)

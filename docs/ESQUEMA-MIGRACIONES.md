@@ -294,7 +294,7 @@ importes al céntimo (18,2), cantidades (18,4). Nunca es menor que la escala del
 | Accounting (v4) | `acc_entry_lines.debit`, `credit` | 18,4 | transaction_detail.Amount |
 | Assets (v3) | `ast_assets.cost`, `residual`, `proceeds`; `ast_asset_charges.amount` | 18,2 | dominio (Trench y Karpo C# no guardan importes del activo) |
 | Billing (v5) | `bil_invoices.net`, `tax_amount`, `surcharge` | 18,4 | invoicing_invoice.TotalAmount |
-| | `bil_invoice_lines.quantity`, `unit_price`, `net` | 18,4 | invoicing_invoice_item (Quantity, UnitPrice, LineTotal) |
+| | `bil_invoice_lines.quantity`, `unit_price`, `net` | 18,4 | invoicing_invoice_item (Quantity, UnitPrice, LineTotal). `unit_price` pasa a 20,6 en la migración 9 (D-144: hasta 6 decimales del precio, con las mismas 14 cifras enteras); Trench y Karpo C# siguen en 18,4 |
 | | `bil_invoice_lines.discount` | 7,4 | order_item.LineDiscountPercent (la línea de factura no tiene descuento) |
 | | `bil_invoice_taxes.rate`, `surcharge_rate` | 5,2 | vat_group.Rate, EquivalenceSurchargeRate |
 | | `bil_invoice_taxes.base`, `amount`, `surcharge_amount` | 18,2 | dominio (Fiscal calcula al céntimo) |

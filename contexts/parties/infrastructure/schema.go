@@ -311,6 +311,17 @@ func Migrations() sqlrepo.MigrationSet {
 		// dos principales, repeatedPrimaries detiene la migración antes de tocar nada.
 		{Version: 33, Name: "identification validity: only current identifications are unique", Check: repeatedPrimaries,
 			Up: identificationValidityDDL()},
+		// Los ajustes de la empresa de D-128 a D-130, con el esquema común de D-144
+		// (docs/PARTIES.md §25): todos opcionales, nulo es el comportamiento de siempre. El patrón de
+		// cada tipo de código va en una tabla hija, una fila por empresa y tipo.
+		{Version: 34, Name: "internal organization profile: line rounding, price decimals, installments timing and code patterns",
+			Up: sqlrepo.RenderDDLAll(
+				`ALTER TABLE `+TableInternalOrganizationProfiles+` {add:line_rounding} {str:20}{addEnd}`,
+				`ALTER TABLE `+TableInternalOrganizationProfiles+` {add:price_decimals} {int}{addEnd}`,
+				`ALTER TABLE `+TableInternalOrganizationProfiles+` {add:installments_timing} {str:20}{addEnd}`,
+				`CREATE TABLE `+TableInternalOrganizationCodePatterns+` (internal_organization_id {uuid} NOT NULL, code_kind {str:40} NOT NULL,
+	pattern {str:200} NOT NULL, PRIMARY KEY (internal_organization_id, code_kind),
+	FOREIGN KEY (internal_organization_id) REFERENCES parties (id))`)},
 	}}
 }
 
@@ -813,7 +824,7 @@ func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 
 // DropAll elimina todas las tablas del contexto (sólo para pruebas).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
-	for _, t := range []string{TableInternalOrganizationProfiles, TableIdempotencyKeys, TableConsents, "party_relationships", "party_roles", "party_identifications", "party_contacts", "party_affiliations",
+	for _, t := range []string{TableInternalOrganizationCodePatterns, TableInternalOrganizationProfiles, TableIdempotencyKeys, TableConsents, "party_relationships", "party_roles", "party_identifications", "party_contacts", "party_affiliations",
 		"party_facility_roles", "facility_role_types", "party_data_quality_issues",
 		"party_classifications", "parties", "relationship_types", "role_types", "country_document_rules",
 		"document_types", "classification_types",

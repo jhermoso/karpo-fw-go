@@ -209,7 +209,10 @@ func Compose(sw *hotswap.Switch, o Options) (*Host, error) {
 		ordinfra.ReceivablesCredit{Exposure: h.Receivables.Credit}, orders.WithBlocks(ordinfra.PartiesBlocks{TaxIdentities: h.Parties.TaxIdentities}),
 		orders.WithMergedParties(merged))
 	h.Billing = billing.Compose(sw, bilinfra.FiscalTaxes{Engine: h.Fiscal.TaxEngine}, bilinfra.PartiesIdentities{TaxIdentities: h.Parties.TaxIdentities},
-		billing.WithMergedParties(merged), billing.WithZones(&CompanyZones{Geography: h.Geography, Profiles: h.Parties.CompanyTimeZones}))
+		billing.WithMergedParties(merged), billing.WithZones(&CompanyZones{Geography: h.Geography, Profiles: h.Parties.CompanyTimeZones}),
+		// Los ajustes de la empresa (D-144); con with_issue, los vencimientos nacen en la transacción
+		// de la emisión: Receivables está sobre el mismo backend.
+		billing.WithSettings(BillingSettings{Profiles: h.Parties.CompanyProfiles}), billing.WithInstallmentsInTransaction(h.Receivables.Consumer, h.Receivables.Backend))
 	h.Purchases = purchases.Compose(sw, purinfra.FiscalTaxes{Engine: h.Fiscal.TaxEngine}, purchases.WithMergedParties(merged))
 	h.Payments = payments.Compose(sw, payinfra.PayrollNetPay{Remittance: h.Payroll.Remittance}, payments.WithMergedParties(merged))
 	h.Treasury = treasury.Compose(sw, treinfra.ReceivablesDueItems{Collectable: h.Receivables.Collectable},

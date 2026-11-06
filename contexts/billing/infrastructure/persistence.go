@@ -98,6 +98,28 @@ var addressDDL = []string{
 	`ALTER TABLE bil_invoices {add:customer_address_country} {str:2}{addEnd}`,
 }
 
+// calculationDDL guarda en cada factura cómo se calcularon sus líneas (D-144): la forma de redondear
+// y los decimales del precio. Las facturas que ya hay se calcularon como siempre: una vez al final y
+// con 4 decimales. El precio de la línea pasa de (18,4) a (20,6): hasta 6 decimales, con las mismas
+// 14 cifras enteras. En SQLite {dec} es texto y no cambia; en Oracle se puede ampliar la precisión y
+// la escala de una columna NUMBER con datos.
+func calculationDDL() map[string][]string {
+	out := sqlrepo.RenderDDLAll(
+		`ALTER TABLE bil_invoices {add:line_rounding} {str:20}{addEnd}`,
+		`ALTER TABLE bil_invoices {add:price_decimals} {int}{addEnd}`,
+		`UPDATE bil_invoices SET line_rounding = 'once', price_decimals = 4`)
+	widen := map[string]string{
+		"postgres":  `ALTER TABLE bil_invoice_lines ALTER COLUMN unit_price TYPE NUMERIC(20,6)`,
+		"sqlserver": `ALTER TABLE bil_invoice_lines ALTER COLUMN unit_price DECIMAL(20,6) NOT NULL`,
+		"mysql":     `ALTER TABLE bil_invoice_lines MODIFY COLUMN unit_price DECIMAL(20,6) NOT NULL`,
+		"oracle":    `ALTER TABLE bil_invoice_lines MODIFY (unit_price NUMBER(20,6))`,
+	}
+	for d, stmt := range widen {
+		out[d] = append(out[d], stmt)
+	}
+	return out
+}
+
 // errNumberTaken es un conflicto: la emisión se reintenta y toma otro número.
 var errNumberTaken = fmt.Errorf("%w: billing: the invoice number is already taken in its series", fw.ErrConflict)
 
@@ -133,6 +155,7 @@ func Migrations() sqlrepo.MigrationSet {
 		{Version: 6, Name: "unique invoice number per series", Up: sqlrepo.RenderDDLAll(numberDDL...)},
 		{Version: 7, Name: "last issue date of a series", Up: sqlrepo.RenderDDLAll(issueDateDDL...)},
 		{Version: 8, Name: "fiscal addresses of an invoice", Up: sqlrepo.RenderDDLAll(addressDDL...)},
+		{Version: 9, Name: "line calculation of an invoice: rounding and price decimals", Up: calculationDDL()},
 	}}
 }
 
@@ -216,7 +239,8 @@ func InvoiceMapping() sqlrepo.Mapping[domain.InvoiceID, *domain.Invoice] {
 			"equivalence_surcharge", "corrects", "reason", "series_id", "invoice_number", "issue_date", "seller_nif", "seller_name", "seller_country",
 			"customer_nif", "customer_name", "customer_country", "tax_country", "net", "tax_amount", "surcharge", "source_type", "source_id", "source_ref",
 			"seller_street", "seller_postal_code", "seller_locality", "seller_region", "seller_address_country",
-			"customer_street", "customer_postal_code", "customer_locality", "customer_region", "customer_address_country"),
+			"customer_street", "customer_postal_code", "customer_locality", "customer_region", "customer_address_country",
+			"line_rounding", "price_decimals"),
 		Dehydrate: func(i *domain.Invoice) (sqlrepo.Values, error) {
 			s := i.State()
 			v := sqlrepo.Values{"seller": s.Seller, "customer": s.Customer, "kind": int64(s.Kind), "status": int64(s.Status), "currency": s.Currency.String(),
@@ -226,7 +250,8 @@ func InvoiceMapping() sqlrepo.Mapping[domain.InvoiceID, *domain.Invoice] {
 				"seller_nif": opt(s.SellerIdentity.NIF), "seller_name": opt(s.SellerIdentity.Name), "seller_country": opt(s.SellerIdentity.Country),
 				"customer_nif": opt(s.CustomerIdentity.NIF), "customer_name": opt(s.CustomerIdentity.Name), "customer_country": opt(s.CustomerIdentity.Country),
 				"tax_country": opt(s.Taxes.Country), "net": i.Net().Round(2), "tax_amount": nil, "surcharge": nil,
-				"source_type": opt(s.Source.Type), "source_id": opt(s.Source.ID), "source_ref": opt(s.Source.Ref)}
+				"source_type": opt(s.Source.Type), "source_id": opt(s.Source.ID), "source_ref": opt(s.Source.Ref),
+				"line_rounding": string(s.Calculation.Rounding), "price_decimals": int64(s.Calculation.PriceDecimals)}
 			if s.Status == domain.Issued {
 				v["tax_amount"], v["surcharge"] = s.Taxes.Tax.Round(2), s.Taxes.Surcharge.Round(2)
 			}
@@ -251,6 +276,9 @@ func InvoiceMapping() sqlrepo.Mapping[domain.InvoiceID, *domain.Invoice] {
 					Address: address(r, "seller")},
 				CustomerIdentity: domain.Identity{NIF: r.String("customer_nif"), Name: r.String("customer_name"), Country: r.String("customer_country"),
 					Address: address(r, "customer")}}
+			if !r.IsNull("line_rounding") { // nulo sólo en una fila anterior a la migración 9: el cálculo de siempre
+				s.Calculation = domain.Calculation{Rounding: domain.LineRounding(r.String("line_rounding")), PriceDecimals: int(r.Int64("price_decimals"))}
+			}
 			for _, c := range children.Of("lines") {
 				s.Lines = append(s.Lines, domain.Line{ID: domain.LineID{UUID: c.UUID("id")}, Description: c.String("description"),
 					Quantity: c.Decimal("quantity"), UnitPrice: c.Decimal("unit_price"), Discount: c.Decimal("discount"), TaxCode: c.String("tax_code"),

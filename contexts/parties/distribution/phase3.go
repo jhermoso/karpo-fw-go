@@ -19,6 +19,8 @@ func (m *Module) registerPhase3(mux *http.ServeMux) {
 	// organización interna, el id que da GET /api/internal-organizations (docs/PARTIES.md §25).
 	mux.HandleFunc("GET /api/profiles/internal-organizations/{id}", m.internalOrganizationProfile)
 	mux.HandleFunc("PUT /api/profiles/internal-organizations/{id}", m.setInternalOrganizationProfile)
+	mux.HandleFunc("GET /api/profiles/internal-organizations/{id}/code-patterns/{codeKind}", m.internalOrganizationCodePattern)
+	mux.HandleFunc("PUT /api/profiles/internal-organizations/{id}/code-patterns/{codeKind}", m.setInternalOrganizationCodePattern)
 	mux.HandleFunc("POST /api/parties/{id}/facility-roles", m.assignFacilityRole)
 	mux.HandleFunc("POST /api/parties/{id}/facility-roles/{roleId}/end", m.endFacilityRole)
 	mux.HandleFunc("GET /api/catalogs/facility-role-types", m.facilityRoleTypes)
@@ -134,6 +136,29 @@ func (m *Module) setInternalOrganizationProfile(w http.ResponseWriter, r *http.R
 	handle(w, r, &c, true, http.StatusOK, func(c papp.SetInternalOrganizationProfile) (papp.InternalOrganizationProfileDTO, error) {
 		c.ID = id
 		return m.svc.SetInternalOrganizationProfile.Handle(r.Context(), c)
+	})
+}
+
+func (m *Module) internalOrganizationCodePattern(w http.ResponseWriter, r *http.Request) {
+	id, err := pathParty(r)
+	if err != nil {
+		distribution.WriteError(w, r, err)
+		return
+	}
+	out, err := m.svc.InternalOrganizationCodePattern.Handle(r.Context(), papp.GetInternalOrganizationCodePattern{ID: id, Kind: r.PathValue("codeKind")})
+	distribution.Respond(w, r, out, err, http.StatusOK)
+}
+
+func (m *Module) setInternalOrganizationCodePattern(w http.ResponseWriter, r *http.Request) {
+	id, err := pathParty(r)
+	if err != nil {
+		distribution.WriteError(w, r, err)
+		return
+	}
+	c := papp.SetInternalOrganizationCodePattern{}
+	handle(w, r, &c, true, http.StatusOK, func(c papp.SetInternalOrganizationCodePattern) (papp.CodePatternDTO, error) {
+		c.ID, c.Kind = id, r.PathValue("codeKind")
+		return m.svc.SetInternalOrganizationCodePattern.Handle(r.Context(), c)
 	})
 }
 

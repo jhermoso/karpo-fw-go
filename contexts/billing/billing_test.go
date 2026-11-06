@@ -58,11 +58,16 @@ type host struct {
 }
 
 func compose(t *testing.T, opts ...billing.Option) *host {
+	return composeOn(t, func(*hotswap.Switch) []billing.Option { return opts })
+}
+
+// composeOn es compose con opciones que necesitan el backend de Billing.
+func composeOn(t *testing.T, options func(sw *hotswap.Switch) []billing.Option) *host {
 	ctx := context.Background()
 	sw := hotswap.New(memory.NewStore("memory"))
 	pm := parties.Compose(sw)
 	fm := fiscal.Compose(sw, finfra.PartiesIdentities{TaxIdentities: pm.TaxIdentities})
-	bm := billing.Compose(sw, binfra.FiscalTaxes{Engine: fm.TaxEngine}, binfra.PartiesIdentities{TaxIdentities: pm.TaxIdentities}, opts...)
+	bm := billing.Compose(sw, binfra.FiscalTaxes{Engine: fm.TaxEngine}, binfra.PartiesIdentities{TaxIdentities: pm.TaxIdentities}, options(sw)...)
 
 	jwt, _ := jwtauth.New(jwtauth.Config{Secret: []byte("billing-test")})
 	dir := authorization.NewMemoryDirectory()

@@ -6,7 +6,9 @@ package domain
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
@@ -63,8 +65,7 @@ func ReconstituteSeries(id SeriesID, s SeriesState) (*Series, error) {
 	}
 	var v fw.Validation
 	s.Code = strings.ToUpper(strings.TrimSpace(s.Code))
-	v.Require(s.Code != "" && utf8.RuneCountInString(s.Code) <= 20 && !strings.ContainsAny(s.Code, " /"), "code", "format",
-		"a code of 1 to 20 characters without spaces or slashes")
+	v.Require(s.Code != "" && utf8.RuneCountInString(s.Code) <= 20, "code", "format", "a code of 1 to 20 characters")
 	v.Require(!s.Seller.IsZero(), "seller", "required", "a series belongs to a seller")
 	v.Require(s.Year >= 2000 && s.Year <= 9999, "year", "range", "a valid year")
 	v.Require(s.Last >= 0, "last", "range", "a non-negative number")
@@ -74,9 +75,36 @@ func ReconstituteSeries(id SeriesID, s SeriesState) (*Series, error) {
 	return &Series{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// OpenSeries crea una serie activa.
-func OpenSeries(id SeriesID, s SeriesState) (*Series, error) {
+// OpenSeries crea una serie activa. Su código, tal como se escribe (sin los espacios de los
+// extremos), cumple entero el patrón de series de la empresa vendedora (una expresión regular,
+// D-129 y D-144), y después se guarda en mayúsculas; sin patrón, la regla fija: sin barras. Siempre,
+// de 1 a 20 caracteres (los de la columna) y sin espacios ni caracteres de control, también con un
+// patrón que los admita.
+func OpenSeries(id SeriesID, s SeriesState, pattern string) (*Series, error) {
 	s.Last, s.LastIssueDate, s.Active = 0, vocab.Date{}, true
+	code := strings.TrimSpace(s.Code)
+	if strings.ContainsFunc(code, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) ||
+		(pattern == "" && strings.Contains(code, "/")) {
+		var v fw.Validation
+		v.Add("code", "format", "a code of 1 to 20 characters without spaces, control characters or (without a pattern) slashes")
+		return nil, v.Err()
+	}
+	if pattern == "" {
+		return ReconstituteSeries(id, s)
+	}
+	// El patrón se compila antes solo: unos paréntesis desequilibrados («A)|(.*») se saltarían el
+	// anclaje.
+	_, err := regexp.Compile(pattern)
+	var re *regexp.Regexp
+	if err == nil {
+		re, err = regexp.Compile(`^(?:` + pattern + `)$`)
+	}
+	if err != nil {
+		return nil, fw.Violation("billing.series_code_pattern", "the series pattern of the seller is not a valid regular expression")
+	}
+	if !re.MatchString(code) {
+		return nil, fw.Violation("billing.series_code_pattern", fmt.Sprintf("the series code %s does not match the pattern of the seller, %s", code, pattern))
+	}
 	return ReconstituteSeries(id, s)
 }
 

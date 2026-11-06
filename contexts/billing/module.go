@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -44,6 +45,21 @@ func WithZones(z bapp.Zones) Option {
 	return func(d *bapp.Deps) { d.Zones = z }
 }
 
+// WithSettings da los ajustes de facturación de cada empresa (D-144): cómo se calculan sus líneas,
+// el patrón de sus series y cuándo nacen sus vencimientos.
+func WithSettings(s bapp.Settings) Option {
+	return func(d *bapp.Deps) { d.Settings = s }
+}
+
+// WithInstallmentsInTransaction da quién recibe billing.invoice-issued.v1 en la transacción de la
+// emisión cuando la empresa quiere los vencimientos con la factura (with_issue, D-130), y sobre qué
+// backend trabaja: en el anfitrión, el consumidor de Receivables. Si su backend no es el de
+// Billing, no puede ser una sola transacción: Compose lo descarta, lo deja en el log y los
+// vencimientos nacen después, como con after_issue.
+func WithInstallmentsInTransaction(h application.MessageHandler, backend fw.UnitOfWork) Option {
+	return func(d *bapp.Deps) { d.InTransaction, d.InTransactionUoW = h, backend }
+}
+
 // Compose construye el contexto sobre sw. Billing necesita el motor de impuestos de Fiscal y las
 // identidades de Parties: los dos son puertos propios.
 func Compose(sw *hotswap.Switch, taxes domain.Taxes, identities domain.Identities, opts ...Option) *Module {
@@ -60,6 +76,10 @@ func Compose(sw *hotswap.Switch, taxes domain.Taxes, identities domain.Identitie
 	}
 	for _, o := range opts {
 		o(&d)
+	}
+	if d.InTransaction != nil && d.InTransactionUoW != fw.UnitOfWork(sw) {
+		slog.Warn("billing: the installments handler is on another backend; installments are created after the issue (after_issue)")
+		d.InTransaction, d.InTransactionUoW = nil, nil
 	}
 	consumer := messaging.NewConsumer(contracts.Source, hotswap.Inbox(sw, infrastructure.InboxFactory), sw)
 	bapp.Subscribe(consumer, d)

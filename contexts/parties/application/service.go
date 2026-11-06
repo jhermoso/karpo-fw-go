@@ -98,9 +98,12 @@ type Service struct {
 	DocumentOptions           app.QueryHandler[DocumentOptions, []DocumentOptionDTO]
 	ListClassificationTypes   app.QueryHandler[ListClassificationTypes, []ClassificationTypeDTO]
 	ListFacilityRoleTypes     app.QueryHandler[ListFacilityRoleTypes, []domain.FacilityRoleType]
-	// El perfil de la empresa interna: hoy, su zona horaria (D-133).
-	InternalOrganizationProfile    app.QueryHandler[GetInternalOrganizationProfile, InternalOrganizationProfileDTO]
-	SetInternalOrganizationProfile app.CommandHandler[SetInternalOrganizationProfile, InternalOrganizationProfileDTO]
+	// El perfil de la empresa interna: su zona horaria (D-133), sus ajustes de facturación y el
+	// patrón de cada tipo de código (D-144).
+	InternalOrganizationProfile        app.QueryHandler[GetInternalOrganizationProfile, InternalOrganizationProfileDTO]
+	SetInternalOrganizationProfile     app.CommandHandler[SetInternalOrganizationProfile, InternalOrganizationProfileDTO]
+	InternalOrganizationCodePattern    app.QueryHandler[GetInternalOrganizationCodePattern, CodePatternDTO]
+	SetInternalOrganizationCodePattern app.CommandHandler[SetInternalOrganizationCodePattern, CodePatternDTO]
 }
 
 type (

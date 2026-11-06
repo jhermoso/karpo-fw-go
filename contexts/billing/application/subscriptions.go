@@ -38,7 +38,8 @@ func (DeliveryIssued) IntegrationEventType() string { return "orders.delivery-is
 
 // Subscribe prepara el borrador de la factura de cada albarán (decisión aprobada 5 de
 // docs/PEDIDOS.md: Orders publica, Billing factura). El borrador toma las líneas del albarán con sus
-// precios netos y códigos de impuesto, con la fecha de entrega como fecha de la operación; una
+// precios netos (con al menos 4 decimales del precio, D-144) y códigos de impuesto, con la
+// fecha de entrega como fecha de la operación; una
 // persona lo revisa y lo emite en una serie. Un borrador por albarán: los mensajes entregados otra vez no hacen daño.
 func Subscribe(c *messaging.Consumer, d Deps) {
 	s := newService(d)
@@ -55,9 +56,18 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 		if err != nil || done {
 			return err
 		}
+		settings, err := s.settings(ctx, sid)
+		if err != nil {
+			return err
+		}
+		// El precio neto del albarán va con los decimales del pedido (4) o más, si la empresa pide
+		// más: con menos, redondearlo perdería dinero (1,2345 × 1000 daría 1230,00 y no 1234,50), y
+		// rechazarlo repetiría el evento sin fin.
+		calc := settings.Calculation
+		calc.PriceDecimals = max(calc.PriceDecimals, domain.DefaultPriceDecimals)
 		inv, err := domain.DraftInvoice(domain.NewInvoiceID(), domain.InvoiceState{Seller: sid, Customer: domain.PartyID{UUID: customer}, Kind: domain.Ordinary,
 			Description: "Albarán " + e.Number + " (pedido " + e.OrderNumber + ")", OperationDate: date,
-			Source: domain.Source{Type: DeliverySource, ID: e.DeliveryID, Ref: e.Number}})
+			Source: domain.Source{Type: DeliverySource, ID: e.DeliveryID, Ref: e.Number}, Calculation: calc})
 		if err != nil {
 			return err
 		}
@@ -67,6 +77,7 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 			if err := errors.Join(err1, err2); err != nil {
 				return fw.Violation("billing.invalid_event", "orders.delivery-issued.v1: "+err.Error())
 			}
+			price = price.Round(int32(calc.PriceDecimals)) // ya los tiene: Orders guarda 4
 			if _, err := inv.AddLine(domain.LineInput{Description: strings.TrimSpace(l.SKU + " " + l.Description), Quantity: q, UnitPrice: price,
 				TaxCode: l.TaxCode}); err != nil {
 				return err

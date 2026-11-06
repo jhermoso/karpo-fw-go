@@ -31,6 +31,9 @@ type Module struct {
 	// Consumer recibe billing.invoice-issued.v1, los eventos de adeudo directo de Treasury y las
 	// relaciones de cliente que Parties traslada al fusionar fichas: hay que suscribirlo al transporte.
 	Consumer *messaging.Consumer
+	// Backend es la unidad de trabajo sobre la que se compuso: Billing la compara con la suya antes
+	// de abrir cobros en la transacción de la emisión (with_issue, D-130).
+	Backend fw.UnitOfWork
 }
 
 // Option configura la composición.
@@ -62,7 +65,7 @@ func Compose(sw *hotswap.Switch, cal domain.Calendar, opts ...Option) *Module {
 	rapp.SubscribeParties(consumer, d)
 	return &Module{Service: rapp.NewService(d), Credit: rapp.CreditPort{Receivables: d.Receivables, Credit: d.Credit},
 		Collectable:       rapp.DueItemsPort{Receivables: d.Receivables},
-		IntegrationOutbox: integration, Audit: audit, Consumer: consumer}
+		IntegrationOutbox: integration, Audit: audit, Consumer: consumer, Backend: sw}
 }
 
 // Relay reenvía el Published Language a un transporte.
