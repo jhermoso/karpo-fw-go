@@ -7,7 +7,7 @@ navegador o con `curl` sin que nadie lea y teclee una credencial. **Sólo existe
 | Qué | Dónde |
 |---|---|
 | La puerta | `host/smoke/` |
-| El ejecutable | `cmd/karpo-smoke/` |
+| El ejecutable | `cmd/karpo-smoke/` (SQLite) y `cmd/karpo-smoke-postgres/` (PostgreSQL, módulo aparte como `cmd/karpo-postgres`, para que el driver no entre en el módulo del framework) |
 | La regla que la vigila | `pkg/testing/archtest/smoke_test.go` (reglas 10 y 11) |
 
 ## Arrancarla y entrar
@@ -21,7 +21,29 @@ go run -tags smoke ./cmd/karpo-smoke -port 8092 -seed
 |---|---|
 | `-port` | Puerto de `127.0.0.1` (por defecto 8092). No se puede elegir otra dirección |
 | `-db` | Fichero SQLite, **que no exista**: si el fichero ya está, se niega antes de abrirlo y no lo toca (por defecto, uno en una carpeta temporal nueva; la ruta sale al arrancar) |
-| `-seed` | Si no hay ninguna party, carga lo que pide el recorrido de [SMOKE-MANUAL.md](SMOKE-MANUAL.md): una empresa interna y su cliente, los tipos de IVA, un producto con existencias, una serie de facturación, condiciones de pago y un plan de cuentas con su libro. Imprime sus identificadores como líneas de PowerShell |
+| `-seed` | Si no hay ninguna party, carga lo que pide el recorrido de [SMOKE-MANUAL.md](SMOKE-MANUAL.md): una empresa interna y su cliente, los tipos de IVA, un producto con existencias, una serie de facturación, condiciones de pago, un plan de cuentas con su libro y los usuarios de los perfiles `reader` y `clerk`. Imprime sus identificadores como líneas de PowerShell |
+
+### Sobre PostgreSQL
+
+`cmd/karpo-smoke-postgres` sirve lo mismo sobre PostgreSQL, el destino de producción. Tiene
+`-port` y `-seed`; la base se da con `-postgres <cadena>` o, mejor, con la variable
+`KARPO_SMOKE_POSTGRES_URL`, que no deja la contraseña en la línea de órdenes. Nunca se escribe en
+un fichero.
+
+- **Sólo arranca sobre una base de esta máquina**: la cadena tiene que apuntar a `127.0.0.1`,
+  `::1`, `localhost` o un socket unix (también sus máquinas alternativas). Una cadena que apunte
+  por error a otra base, aunque sea una de producción recién creada y vacía, se rechaza sin abrirla.
+- **Sólo arranca sobre una base vacía.** Mira `pg_catalog` en todos los esquemas que no son de
+  PostgreSQL (fuera de `pg_catalog`, `information_schema`, `pg_toast` y los demás `pg_*`):
+  tablas, vistas, vistas materializadas, tablas foráneas, secuencias, funciones y tipos (sin los
+  que crea PostgreSQL solo para cada tabla y los de array). Con un solo objeto se niega antes de
+  migrar, dice cuántos hay y nombra algunos, y no toca nada. No mira otras bases del mismo
+  servidor, roles ni extensiones sin objetos en esos esquemas. Entre comprobar y migrar pasa un
+  instante sin cerrar: con una base local y desechable, nadie más escribe en ella.
+- **Nunca borra nada.** Cada arranque, una base nueva: lo más sencillo es un contenedor
+  desechable propio, como explica [SMOKE-MANUAL.md](SMOKE-MANUAL.md#arrancar-sobre-postgresql).
+- El aviso del arranque nombra la base como `PostgreSQL usuario@máquina:puerto/base`, sin la
+  contraseña. La carpeta de las exportaciones es temporal y se borra al parar.
 
 ```powershell
 curl.exe -s "http://127.0.0.1:8092/api/smoke/token?as=admin"        # la sesión en JSON
@@ -46,11 +68,21 @@ Todo lo demás es el anfitrión tal cual: sus rutas, sus permisos, `/api/auth/re
 
 ## Quién entra
 
-Un perfil, fijo en el código (`host/smoke/smoke.go`, `Profiles`):
+Tres perfiles, fijos en el código (`host/smoke/smoke.go`, `Profiles`). Los dos de la empresa
+sembrada usan los roles de Security y su acceso por organización, como cualquier usuario:
 
-| Perfil | Usuario | Qué puede |
-|---|---|---|
-| `admin` | `smoke-admin` | Es el administrador global de la instalación: todo |
+| Perfil | Usuario | Roles y acceso | Qué puede |
+|---|---|---|---|
+| `admin` | `smoke-admin` | `GlobalSuperAdmin` | Es el administrador global de la instalación: todo |
+| `reader` | `smoke-reader` | `ReadOnlyUser`; acceso `ReadOnly` a la empresa sembrada | Leer lo de la empresa (parties, pedidos, facturas, cobros, asientos). Toda escritura, 403 |
+| `clerk` | `smoke-clerk` | `StandardUser` y `SmokeSales`; acceso `Full` a la empresa sembrada | El trabajo comercial de la empresa: pedidos, albaranes, facturas (emitirlas también), cobros. No administra usuarios ni roles (403) ni ve otra empresa |
+
+`SmokeSales` es un rol propio que crea la semilla con lo que `StandardUser` no da (éste sólo da
+leer, crear y modificar): `Orders.Order.Confirm`, `Orders.Order.Deliver`, `Orders.Order.Cancel` y
+`Billing.Invoice.Issue`.
+
+`reader` y `clerk` **sólo existen con `-seed`**: los crea la semilla, justo después de la
+empresa. Sin semilla, pedirlos responde 409 con `start the publisher with -seed`.
 
 El nombre lleva «smoke» para que en la auditoría (`createdBy`) y en las trazas se vea que no es
 una persona.
@@ -59,7 +91,7 @@ una persona.
 
 - La **clave que firma las sesiones** se genera al arrancar (32 bytes aleatorios) y vive en la
   memoria del proceso. No se lee `KARPO_JWT_SECRET`.
-- La **contraseña de `smoke-admin`** también se genera al arrancar, no se imprime ni se guarda.
+- La **contraseña de cada perfil** también se genera al arrancar, no se imprime ni se guarda.
   La publicadora la cambia una vez ella misma, para que el anfitrión no exija cambiarla antes
   de nada (el 403 del primer inicio de sesión).
 - Se **niega a arrancar** si `KARPO_BOOTSTRAP_ADMIN_USER` o `KARPO_BOOTSTRAP_ADMIN_PASSWORD`
@@ -82,6 +114,7 @@ una persona.
 go test -count=1 ./pkg/testing/archtest/...                               # la regla, sin etiqueta
 go vet -tags smoke ./...
 go test -tags smoke -count=1 ./host/smoke/... ./cmd/karpo-smoke/...       # la publicadora
+go -C cmd/karpo-smoke-postgres test -tags smoke -count=1 ./...            # la de PostgreSQL, sin PostgreSQL
 ```
 
-Debería verse `ok` en las tres líneas de paquete. El CI ejecuta lo mismo (`.github/workflows/ci.yml`).
+Debería verse `ok` en cada línea de paquete. El CI ejecuta lo mismo (`.github/workflows/ci.yml`).

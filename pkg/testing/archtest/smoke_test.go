@@ -13,9 +13,9 @@ import (
 	"testing"
 )
 
-// La publicadora de humo (host/smoke y cmd/karpo-smoke) deja entrar a cualquiera sin
-// credenciales. Sólo existe con la etiqueta de compilación smoke, y este fichero, que no tiene
-// etiqueta y por eso se ejecuta siempre, es con lo que el pipeline lo comprueba.
+// La publicadora de humo (host/smoke, cmd/karpo-smoke y cmd/karpo-smoke-postgres) deja entrar a
+// cualquiera sin credenciales. Sólo existe con la etiqueta de compilación smoke, y este fichero,
+// que no tiene etiqueta y por eso se ejecuta siempre, es con lo que el pipeline lo comprueba.
 
 // smokeTag es la línea con la que empieza cada fichero de la publicadora de humo.
 const smokeTag = "//go:build smoke"
@@ -28,7 +28,7 @@ const (
 )
 
 // smokeTrees son los directorios en los que todo es de la publicadora de humo.
-var smokeTrees = []string{"host/smoke", "cmd/karpo-smoke"}
+var smokeTrees = []string{"host/smoke", "cmd/karpo-smoke", "cmd/karpo-smoke-postgres"}
 
 // importsSmoke es cómo termina una infracción de la regla 10.
 const importsSmoke = "imports the smoke publisher"
@@ -193,19 +193,20 @@ func TestSmoke_TheRuleBites(t *testing.T) {
 	}
 
 	wrong := map[string]string{
-		"host/smoke/extra.go":            "package smoke\n",                                 // un fichero del publicador sin la etiqueta
-		"cmd/karpo-smoke/other.go":       "//go:build !production\n\npackage main\n",        // otra etiqueta no es la etiqueta
-		"host/smoke/either.go":           "//go:build smoke || linux\n\npackage smoke\n",    // en linux no necesita etiqueta
-		"host/smoke/never.go":            "//go:build !smoke\n\npackage smoke\n",            // la etiqueta, al revés
-		"cmd/karpo/main.go":              "package main" + imported,                         // el programa real lo importa
-		"cmd/karpo/door.go":              smokeTag + "\n\npackage main" + imported,          // también con la etiqueta: compilado con ella, tiene la puerta
-		"cmd/another/main_test.go":       "package main" + imported,                         // una prueba, de un programa que nadie ha listado
-		"integration/enter_test.go":      smokeTag + "\n\npackage integration" + imported,   // una prueba con la etiqueta
-		"host/serve/serve.go":            "package serve" + named,                           // el programa real nombra la puerta
-		"contexts/security/door_test.go": "package security" + named,                        // una prueba sin la etiqueta
-		"pkg/late.go":                    "package pkg\n\n" + smokeTag + named,              // la etiqueta después de la cláusula package no es una etiqueta
-		"pkg/block.go":                   "/*\n" + smokeTag + "\n*/\n\npackage pkg" + named, // ni lo es dentro de un comentario de bloque
-		"pkg/old.go":                     "// +build smoke\n\npackage pkg" + named,          // ni en la forma antigua, que no se mira
+		"host/smoke/extra.go":              "package smoke\n",                                 // un fichero del publicador sin la etiqueta
+		"cmd/karpo-smoke/other.go":         "//go:build !production\n\npackage main\n",        // otra etiqueta no es la etiqueta
+		"cmd/karpo-smoke-postgres/main.go": "package main\n",                                  // el programa de PostgreSQL sin la etiqueta
+		"host/smoke/either.go":             "//go:build smoke || linux\n\npackage smoke\n",    // en linux no necesita etiqueta
+		"host/smoke/never.go":              "//go:build !smoke\n\npackage smoke\n",            // la etiqueta, al revés
+		"cmd/karpo/main.go":                "package main" + imported,                         // el programa real lo importa
+		"cmd/karpo/door.go":                smokeTag + "\n\npackage main" + imported,          // también con la etiqueta: compilado con ella, tiene la puerta
+		"cmd/another/main_test.go":         "package main" + imported,                         // una prueba, de un programa que nadie ha listado
+		"integration/enter_test.go":        smokeTag + "\n\npackage integration" + imported,   // una prueba con la etiqueta
+		"host/serve/serve.go":              "package serve" + named,                           // el programa real nombra la puerta
+		"contexts/security/door_test.go":   "package security" + named,                        // una prueba sin la etiqueta
+		"pkg/late.go":                      "package pkg\n\n" + smokeTag + named,              // la etiqueta después de la cláusula package no es una etiqueta
+		"pkg/block.go":                     "/*\n" + smokeTag + "\n*/\n\npackage pkg" + named, // ni lo es dentro de un comentario de bloque
+		"pkg/old.go":                       "// +build smoke\n\npackage pkg" + named,          // ni en la forma antigua, que no se mira
 	}
 	for rel, text := range wrong {
 		write(rel, text)

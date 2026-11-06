@@ -36,6 +36,40 @@ Cada arranque es una base nueva, con identificadores nuevos. La publicadora se q
 plano: el recorrido se hace **en otra ventana de PowerShell**, y para pararla basta `Ctrl+C` en
 ésta.
 
+### Arrancar sobre PostgreSQL
+
+Lo mismo sobre PostgreSQL, el destino de producción, con `cmd/karpo-smoke-postgres`. La
+publicadora **sólo arranca sobre una base sin ninguna tabla y nunca borra nada**, así que cada
+vez se levanta un PostgreSQL desechable propio: un contenedor de Docker con nombre único, que se
+borra solo al pararlo (`--rm`). Nunca se usa para esto un contenedor que ya exista.
+
+```powershell
+netstat -ano | findstr :55432                     # no debe salir nada: el puerto está libre
+$pg = "humo-pg-$(Get-Random)"                    # un nombre único
+$pw = [guid]::NewGuid().ToString('N')            # una contraseña nueva, sólo para este contenedor
+docker run --rm -d --name $pg -p 127.0.0.1:55432:5432 -e POSTGRES_PASSWORD=$pw postgres:17
+do { Start-Sleep 1; docker exec $pg pg_isready -U postgres -h 127.0.0.1 } until ($LASTEXITCODE -eq 0)
+
+$env:KARPO_ENV = 'development'
+$env:KARPO_SMOKE_POSTGRES_URL = "postgres://postgres:$pw@127.0.0.1:55432/postgres?sslmode=disable"
+go -C cmd/karpo-smoke-postgres run -tags smoke . -port 8092 -seed
+```
+
+Debería verse lo mismo que con SQLite, y en el aviso `on PostgreSQL postgres@127.0.0.1:55432/postgres`
+(sin la contraseña). El resto de la guía es igual. Para pararlo todo, en esta ventana:
+
+```powershell
+# Ctrl+C para la publicadora; después:
+docker stop $pg                                  # con --rm, el contenedor y sus datos desaparecen
+Remove-Item Env:KARPO_SMOKE_POSTGRES_URL
+docker ps -a --filter "name=$pg"                 # sólo la cabecera: ya no existe
+netstat -ano | findstr :55432                    # ninguna línea LISTENING
+```
+
+Si la cadena apunta a otra máquina se niega sin abrirla (`not on this machine`). Si la base ya
+tiene algo (una tabla, una secuencia, una función, un tipo...), se niega antes de migrar y no
+toca nada: `... already has N objects (...): the smoke publisher only starts on a new, empty database and never deletes anything`.
+
 ### Lo que carga la semilla
 
 | Contexto | Qué | Para qué |
@@ -262,7 +296,77 @@ Y nada esperando a asentarse:
 Debería verse `0`. Si se ve más, `k GET "/api/accounting/parked?company=$company"` dice por qué
 (por ejemplo `accounting.no_ledger` si la empresa no tuviera libro).
 
-## 10. Parar
+## 10. Probar permisos
+
+Además de `admin` hay dos perfiles de la empresa sembrada, con los roles de Security
+([PUBLICADORA-DE-HUMO.md](PUBLICADORA-DE-HUMO.md#quién-entra)): `reader` (sólo lee) y `clerk`
+(vende, pero no es administrador). `k` usa la sesión que haya en `$token`; un rechazo llega como
+un JSON con `status` y `title`.
+
+```powershell
+$admin  = $token
+$reader = (curl.exe -s "$base/api/smoke/token?as=reader" | ConvertFrom-Json).accessToken
+$clerk  = (curl.exe -s "$base/api/smoke/token?as=clerk"  | ConvertFrom-Json).accessToken
+$token = $reader; (k GET /api/auth/context).context | Format-List subjectName, isGlobalAdmin, grants
+```
+
+Debería verse `subjectName : smoke-reader`, `isGlobalAdmin : False` y un solo acceso, a `$company`,
+con `level=ReadOnly`.
+
+**1. El lector lee y no escribe:**
+
+```powershell
+$token = $reader
+(k GET "/api/billing/invoices?seller=$company").items | Format-Table number, status, net
+k POST /api/orders/orders @{ company = $company; customer = $customer; warehouse = $warehouse } | Format-List status, title
+```
+
+Debería verse la factura del recorrido (`FA-<año>-000001  issued  125.00`) y después
+`status : 403`, `title : Forbidden`.
+
+**2. El comercial vende; el lector no puede emitir:**
+
+```powershell
+$token = $clerk
+$order = k POST /api/orders/orders @{ company = $company; customer = $customer; warehouse = $warehouse }
+$order = k POST "/api/orders/orders/$($order.id)/lines" @{ product = $product; quantity = '2' }
+$order = k POST "/api/orders/orders/$($order.id)/confirm" @{}
+Start-Sleep 3
+$note  = k POST "/api/orders/orders/$($order.id)/deliveries" @{}
+Start-Sleep 3
+$draft = (k GET "/api/billing/invoices?seller=$company&status=draft").items[0]
+$token = $reader; k POST "/api/billing/invoices/$($draft.id)/issue" @{ series = $series } | Format-List status, title
+$token = $clerk;  k POST "/api/billing/invoices/$($draft.id)/issue" @{ series = $series } | Format-List number, status
+```
+
+Debería verse primero `status : 403` (el lector) y después `number : FA-<año>-000002`,
+`status : issued` (el comercial; `000001` si no se hizo antes el recorrido).
+
+**3. El comercial no administra:**
+
+```powershell
+$token = $clerk; k GET /api/security/users | Format-List status, title
+```
+
+Debería verse `status : 403`, `title : Forbidden`.
+
+**4. Ninguno ve otra empresa.** El administrador da de alta otra empresa interna con su serie:
+
+```powershell
+$token = $admin
+$other = k POST /api/organizations @{ legalName = 'Otra de Humo, S.L.'; roles = @('10000000-0000-0000-0001-000000000001') }
+k POST /api/billing/series @{ seller = $other.id; code = 'FA'; year = (Get-Date).Year } | Out-Null
+$token = $reader
+"propia: $((k GET "/api/billing/series?seller=$company").Count)  otra: $((k GET "/api/billing/series?seller=$($other.id)").Count)"
+$token = $clerk; k POST /api/billing/series @{ seller = $other.id; code = 'FB'; year = (Get-Date).Year } | Format-List status, title
+$token = $admin
+```
+
+Debería verse `propia: 1  otra: 0` (el lector no ve la serie de la otra empresa) y
+`status : 404`, `title : Resource Not Found` (para el comercial, la otra empresa no existe). El
+identificador del rol es el de «organización interna» de Parties.
+
+## 11. Parar
 
 `Ctrl+C` en la ventana de la publicadora. Para comprobar que el puerto queda libre:
 
@@ -282,3 +386,7 @@ arrancar; la publicadora no vuelve a arrancar sobre ella (cada arranque, base nu
 | `seed: there is data already` | La base no era nueva: arrancar sin `-db`, o con un fichero que no exista |
 | `the file ... already exists` al arrancar | `-db` apunta a un fichero que ya existe |
 | `Unable to connect` | La publicadora no está arrancada, o escucha en otro puerto |
+| `409` y `start the publisher with -seed` al pedir `reader` o `clerk` | Se arrancó sin `-seed`: esos perfiles los crea la semilla |
+| `already has N objects` al arrancar sobre PostgreSQL | La base no es nueva: levantar otro contenedor desechable |
+| `not on this machine` al arrancar sobre PostgreSQL | La cadena apunta a otra máquina: sólo vale un PostgreSQL de ésta (`127.0.0.1`) |
+| `the database does not answer` | El contenedor no está listo o la cadena de `KARPO_SMOKE_POSTGRES_URL` no es la suya |

@@ -42,6 +42,10 @@ jobs:
       - name: Smoke publisher (go vet and its tests, with the tag)
         run: go vet -tags smoke ./... && go test -tags smoke -count=1 ./host/smoke/... ./cmd/karpo-smoke/...
 
+      - name: Smoke publisher on PostgreSQL (its own module; go vet and its tests, with the tag)
+        working-directory: cmd/karpo-smoke-postgres
+        run: go vet -tags smoke ./... && go test -tags smoke -count=1 ./...
+
   integration:
     name: Integration (PostgreSQL, SQL Server, Oracle, MySQL)
     runs-on: ubuntu-latest
