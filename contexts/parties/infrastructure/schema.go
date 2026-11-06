@@ -6,6 +6,7 @@ package infrastructure
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -305,7 +306,105 @@ func Migrations() sqlrepo.MigrationSet {
 		{Version: 32, Name: "internal organization profile: time zone", Up: sqlrepo.RenderDDLAll(
 			`CREATE TABLE ` + TableInternalOrganizationProfiles + ` (internal_organization_id {uuid} NOT NULL PRIMARY KEY,
 	time_zone {str:64}, FOREIGN KEY (internal_organization_id) REFERENCES parties (id))`)},
+		// La vigencia de las identificaciones (docs/DECISIONES-COMUNES.md, D-142; docs/PARTIES.md
+		// §26): valid_to, y los dos índices únicos cuentan sólo las vigentes. Si alguna party tiene ya
+		// dos principales, repeatedPrimaries detiene la migración antes de tocar nada.
+		{Version: 33, Name: "identification validity: only current identifications are unique", Check: repeatedPrimaries,
+			Up: identificationValidityDDL()},
 	}}
+}
+
+// identificationValidityDDL añade valid_to a party_identifications y rehace sus índices únicos para
+// que cuenten sólo las filas vigentes (valid_to nulo): el del documento, (doc_type, country,
+// doc_number), y el nuevo de una sola principal vigente por party. Cada motor a su manera:
+//   - PostgreSQL y SQLite: índices parciales (WHERE valid_to IS NULL);
+//   - SQL Server: índices filtrados, con la misma cláusula;
+//   - Oracle: índices por función, cuya clave es NULL entera en las filas históricas, que Oracle no
+//     indexa;
+//   - MySQL, sin índices parciales: columnas generadas que valen NULL en las históricas (un índice
+//     único de MySQL admite varios NULL).
+//
+// Antes de quitar el índice del documento se crea ix_party_identifications_type sobre doc_type: en
+// MySQL una clave ajena necesita un índice que empiece por su columna, y el único que había era
+// ése. Se crea en los cinco motores para que el esquema sea el mismo.
+func identificationValidityDDL() map[string][]string {
+	const (
+		typeIndex = `CREATE INDEX ix_party_identifications_type ON party_identifications (doc_type)`
+		docIndex  = `CREATE UNIQUE INDEX ux_party_identifications_doc ON party_identifications `
+		primary   = `CREATE UNIQUE INDEX ux_party_identifications_primary ON party_identifications `
+		current   = ` WHERE valid_to IS NULL`
+	)
+	up := map[string][]string{}
+	for _, d := range Dialects {
+		up[d] = []string{render(d, `ALTER TABLE party_identifications {add:valid_to} {ts}{addEnd}`), typeIndex}
+	}
+	up["sqlite"] = append(up["sqlite"], `DROP INDEX ux_party_identifications_doc`,
+		docIndex+`(doc_type, country, doc_number)`+current,
+		primary+`(party_id)`+current+` AND is_primary = 1`)
+	up["postgres"] = append(up["postgres"], `DROP INDEX ux_party_identifications_doc`,
+		docIndex+`(doc_type, country, doc_number)`+current,
+		primary+`(party_id)`+current+` AND is_primary`)
+	up["sqlserver"] = append(up["sqlserver"], `DROP INDEX ux_party_identifications_doc ON party_identifications`,
+		docIndex+`(doc_type, country, doc_number)`+current,
+		primary+`(party_id)`+current+` AND is_primary = 1`)
+	up["oracle"] = append(up["oracle"], `DROP INDEX ux_party_identifications_doc`,
+		docIndex+`(CASE WHEN valid_to IS NULL THEN doc_type END, CASE WHEN valid_to IS NULL THEN country END,
+	CASE WHEN valid_to IS NULL THEN doc_number END)`,
+		primary+`(CASE WHEN valid_to IS NULL AND is_primary = 1 THEN party_id END)`)
+	// current_document cabe en VARCHAR(100) porque es doc_type (36) + "/" + country (2) + "/" +
+	// doc_number ({str:60}): si doc_number crece, esta columna tiene que crecer con él.
+	up["mysql"] = append(up["mysql"],
+		`ALTER TABLE party_identifications ADD COLUMN current_document VARCHAR(100)
+	AS (IF(valid_to IS NULL, CONCAT(doc_type, '/', country, '/', doc_number), NULL)) STORED`,
+		`ALTER TABLE party_identifications ADD COLUMN current_primary CHAR(36) AS (IF(valid_to IS NULL AND is_primary, party_id, NULL)) STORED`,
+		`DROP INDEX ux_party_identifications_doc ON party_identifications`,
+		docIndex+`(current_document)`,
+		primary+`(current_primary)`)
+	return up
+}
+
+// repeatedPrimaries se niega a crear el índice de una sola principal vigente por party (migración
+// 33) si alguna party tiene ya dos, y dice cuáles: hay que dejar una (no se cambia nada) y migrar de
+// nuevo. Antes de la migración no hay valid_to: todas las identificaciones son vigentes.
+// Sólo lee las parties con más de una principal (GROUP BY en la base) y, de ellas, sus principales.
+func repeatedPrimaries(ctx context.Context, db *sqlrepo.DB) error {
+	isPrimary := render(db.Dialect().Name(), `is_primary = {true}`)
+	rows, err := db.QueryContext(ctx, `SELECT party_id FROM party_identifications WHERE `+isPrimary+`
+	GROUP BY party_id HAVING COUNT(*) > 1`)
+	if err != nil {
+		return err
+	}
+	var parties []fw.UUID
+	for rows.Next() {
+		var raw any
+		if err := rows.Scan(&raw); err != nil {
+			_ = rows.Close()
+			return err
+		}
+		p, err := db.Dialect().ParseUUID(raw)
+		if err != nil {
+			_ = rows.Close()
+			return err
+		}
+		parties = append(parties, p)
+	}
+	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		return err
+	}
+	if len(parties) == 0 {
+		return nil
+	}
+	slices.SortFunc(parties, func(a, b fw.UUID) int { return strings.Compare(a.String(), b.String()) })
+	var found []string
+	for _, p := range parties {
+		ids, err := primariesOf(ctx, db, isPrimary, p)
+		if err != nil {
+			return err
+		}
+		found = append(found, fmt.Sprintf("party %s: %s", p, strings.Join(ids, ", ")))
+	}
+	return fmt.Errorf("these parties have more than one primary identification (leave one and migrate again; nothing was changed): %s",
+		strings.Join(found, "; "))
 }
 
 // openPromotion es una relación sin fin que lleva código de promoción.
@@ -398,6 +497,30 @@ func repeatedCodes(ctx context.Context, db *sqlrepo.DB) error {
 	}
 	return fmt.Errorf("these codes must be unique and are repeated (give each its own and migrate again; nothing was changed): %s",
 		strings.Join(found, "; "))
+}
+
+// primariesOf devuelve los ids de las identificaciones principales de una party, ordenados.
+func primariesOf(ctx context.Context, db *sqlrepo.DB, isPrimary string, party fw.UUID) ([]string, error) {
+	rows, err := db.QueryContext(ctx, `SELECT id FROM party_identifications WHERE party_id = `+db.Dialect().Placeholder(1)+
+		` AND `+isPrimary, db.Dialect().UUIDValue(party))
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var ids []string
+	for rows.Next() {
+		var raw any
+		if err := rows.Scan(&raw); err != nil {
+			return nil, err
+		}
+		id, err := db.Dialect().ParseUUID(raw)
+		if err != nil {
+			return nil, err
+		}
+		ids = append(ids, id.String())
+	}
+	slices.Sort(ids)
+	return ids, rows.Err()
 }
 
 // fillPromotionKeys da su promotion_key a las relaciones sin fin que ya tenían código de

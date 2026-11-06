@@ -108,6 +108,10 @@ grupo— son **roles**, no tipos.
   "version": 7 }
 ```
 
+Cada identificación lleva además `issuingAuthority`, `issuedOn` y `expiresOn` si los tiene, y
+`validTo` (fecha y hora) si es histórica: sin `validTo` es vigente, y las reglas de documento
+repetido y de principal sólo cuentan las vigentes (D-142; docs/PARTIES.md §26).
+
 Una persona lleva `person: { givenName, firstSurname, secondSurname, gender, birthDate, maritalStatus }`
 en lugar de `organization`. `test` y `shared` sólo vienen cuando valen `true`: si faltan, la party
 es real y no es del catálogo compartido. Es la forma que Go devuelve hoy; `code` en cada rol es nuevo.

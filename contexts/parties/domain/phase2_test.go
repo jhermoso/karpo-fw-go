@@ -105,6 +105,67 @@ func TestParty_Identifications(t *testing.T) {
 	}
 }
 
+// Una identificación histórica (con valid_to, D-142) no cuenta para el documento repetido ni para
+// la principal: el mismo documento se añade otra vez, la nueva vigente es la principal aunque la
+// histórica lo fuera, y la histórica se queda como estaba y no se puede hacer principal.
+func TestParty_HistoricalIdentificationsDoNotCount(t *testing.T) {
+	name, err := domain.NewPersonalName("Ana", "García", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	closed := domain.Identification{ID: domain.NewIdentificationID(), Type: domain.DocNationalID, Country: es, Number: "12345678Z",
+		Primary: true, ValidTo: t0}
+	ana, err := domain.Reconstitute(domain.NewPartyID(), domain.PartyState{Kind: domain.KindPerson, Person: domain.PersonDetails{Name: name},
+		Identities: []domain.Identification{closed}, Active: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := ana.PrimaryIdentification(); ok {
+		t.Fatal("a historical identification is not the primary one")
+	}
+	if domain.HoldsDocument(domain.DocNationalID, "ES", "12345678Z").IsSatisfiedBy(ana) {
+		t.Fatal("a historical identification does not hold the document")
+	}
+	again, err := ana.AddIdentification(policy, domain.IdentificationData{Type: domain.DocNationalID, Country: es, Number: "12345678-z"}, false)
+	if err != nil {
+		t.Fatalf("the document of a historical identification again: %v", err)
+	}
+	if p, ok := ana.PrimaryIdentification(); !ok || p.ID != again {
+		t.Fatal("the first current identification is the primary one")
+	}
+	if !domain.HoldsDocument(domain.DocNationalID, "ES", "12345678Z").IsSatisfiedBy(ana) {
+		t.Fatal("the current one holds the document")
+	}
+	if _, err := ana.AddIdentification(policy, domain.IdentificationData{Type: domain.DocNationalID, Country: es, Number: "12345678Z"}, false); !isViolation(err, domain.ErrDuplicateIdentification) {
+		t.Fatalf("the current one is repeated: %v", err)
+	}
+	for _, i := range ana.Identifications() {
+		if i.ID == closed.ID && (!i.Primary || i.Current() || !i.ValidTo.Equal(t0)) {
+			t.Fatalf("the historical identification is left as it was: %+v", i)
+		}
+	}
+	if err := ana.MarkPrimaryIdentification(closed.ID); !isViolation(err, domain.ErrIdentificationNotCurrent) {
+		t.Fatalf("a historical identification made primary: %v", err)
+	}
+	passport, err := ana.AddIdentification(policy, domain.IdentificationData{Type: domain.DocPassport, Country: es, Number: "PAA123456",
+		ExpiresOn: vocab.MustDate(2031, 2, 3), IssuingAuthority: "Policía Nacional"}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ana.MarkPrimaryIdentification(passport); err != nil {
+		t.Fatal(err)
+	}
+	primaries := 0
+	for _, i := range ana.Identifications() {
+		if i.Primary && i.Current() {
+			primaries++
+		}
+	}
+	if p, _ := ana.PrimaryIdentification(); p.ID != passport || primaries != 1 {
+		t.Fatalf("one current primary: %d", primaries)
+	}
+}
+
 func TestParty_Contacts(t *testing.T) {
 	ana := person(t, "Ana", "García", "")
 	e1, err := ana.AddContact(domain.ContactData{Kind: domain.ContactEmail, Value: "Ana@Example.COM", Purposes: []domain.Purpose{domain.PurposeDefault}}, t0)

@@ -177,7 +177,7 @@ contexts/parties/
 
 | Tema | C# | Go |
 |---|---|---|
-| Identificaciones | Agregado aparte; **solo marcaba** un «estado de formato» (válido, inválido, desconocido) después de guardar; sin control de duplicados entre parties; `RequiresIssuingAuthority` sin campo donde guardar la autoridad | Hijas de Party. `DocumentPolicy` (7 tipos + 31 reglas por país, mismos GUID) **rechaza** los números inválidos: longitud, patrón y dígito de control. Hay un único documento principal; la autoridad emisora y las fechas de expedición y caducidad se guardan; un documento identifica a una sola party (comprobación en la aplicación + índice único) |
+| Identificaciones | Agregado aparte; **solo marcaba** un «estado de formato» (válido, inválido, desconocido) después de guardar; sin control de duplicados entre parties; `RequiresIssuingAuthority` sin campo donde guardar la autoridad | Hijas de Party. `DocumentPolicy` (7 tipos + 31 reglas por país, mismos GUID) **rechaza** los números inválidos: longitud, patrón y dígito de control. Hay un único documento principal; la autoridad emisora y las fechas de expedición y caducidad se guardan; un documento vigente identifica a una sola party (comprobación en la aplicación + índice único; la vigencia, en §26) |
 | Dígitos de control | 11 algoritmos en la capa de aplicación | `vocab.ValidCheckDigit` (clave igual a la columna `ChecksumKey`): ES DNI, NIE y CIF, PT, IT, FR, DE, NL, BE, EL y HR, más NIF y NSS españoles. Un catálogo que nombre un algoritmo desconocido falla al cargarse |
 | Forma canónica | Recorte y mayúsculas | Sin espacios, y sin separadores salvo que el formato del país los exija (el signo de siglo finlandés): `12345678-z` es `12345678Z` |
 | Contactos | `ContactMechanism` (TPH) + `PartyContactMechanism` + `PartyContactMechanismPurpose` **sin enlazar entre sí**; tres modelos de teléfono coexistiendo | Contacto hijo de Party: correo electrónico, teléfono y fax (E.164), web y dirección postal como objeto valor con Ids de Geografía (decisión del mapa de contextos). Propósitos (`default`, `billing`, `shipping`, `home`, `work`) con un titular vigente por tipo; sin duplicados vigentes; vigencia; `nonSolicitation` |
@@ -1110,3 +1110,62 @@ de códigos y los vencimientos (D-128 a D-130).
 - **Esquema:** migración 32, con clave ajena a `parties`. Si dos primeros `PUT` de la misma
   empresa llegan a la vez, el segundo choca con la clave primaria y se repite entero, en otra
   transacción (como mucho tres veces).
+
+## 26. La vigencia de las identificaciones (D-142)
+
+El modelo de identificaciones es el mismo en Trench, Karpo C# y Go (docs/DECISIONES-COMUNES.md,
+D-142):
+
+- **Vigencia:** `party_identifications.valid_to` (fecha y hora, opcional). Sin ella, la
+  identificación es vigente; con ella, es **histórica**. En el dominio es `Identification.ValidTo`
+  (`Current()` dice si es vigente) y en la API, `validTo` en cada elemento de `identifications[]`,
+  que sólo viene en las históricas. Ejemplo: un DNI cerrado el 4 de marzo vuelve con
+  `"validTo": "2026-03-04T05:06:07Z"`.
+- **Quitar sigue borrando:** `DELETE /api/parties/{id}/identifications/{identId}` borra la fila.
+  `valid_to` sólo lo ponen los casos que cierran un documento (su caducidad, una migración que
+  cierra repetidos); hoy en Go no hay ninguno, así que una histórica sólo llega escrita en la base.
+- **Las reglas cuentan sólo las vigentes:** el documento repetido dentro de la party
+  (`parties.duplicate_identification`), el que ya tiene otra party (`parties.document_taken`, la
+  comprobación de la aplicación con `HoldsDocument`) y la principal. La primera identificación
+  vigente es la principal aunque una histórica lo fuera; una nueva principal degrada sólo a la
+  vigente que lo era; una histórica no puede hacerse principal
+  (`parties.identification_not_current`) y se queda como estaba. La identidad fiscal que leen los
+  demás contextos (`TaxIdentities`) usa sólo las vigentes. La búsqueda por número de documento
+  (`document=`) encuentra también las históricas. Dar el primer documento vigente a una party que
+  sólo tiene históricos es completar su identidad, no corregirla (§23, regla 3): lo hace quien
+  puede cambiar la party.
+- **Pendiente o por saber:**
+  - Quitar la principal deja la party sin principal vigente, como en Trench y Karpo C# (D-142):
+    no se asciende otra, porque elegirla sería adivinar.
+  - `IdentityFields` y `AuditSnapshot` aún no distinguen las históricas.
+  - Un `valid_to` futuro también la hace histórica: no se mira la fecha, sólo si la hay.
+- **También en la base (migración 33):** dos índices únicos que cuentan sólo las filas con
+  `valid_to` nulo. `ux_party_identifications_doc`, sobre (`doc_type`, `country`, `doc_number`): un
+  documento vigente en una sola party de la instalación. `ux_party_identifications_primary`, sobre
+  `party_id` de las filas principales: una sola principal vigente por party, que antes sólo
+  imponía la aplicación. Cada motor a su manera:
+
+| Motor | Cómo cuenta sólo las vigentes |
+|---|---|
+| PostgreSQL, SQLite | Índice parcial: `WHERE valid_to IS NULL` (`AND is_primary` en PostgreSQL, `AND is_primary = 1` en SQLite) |
+| SQL Server | Índice filtrado, con la misma cláusula (`AND is_primary = 1`) |
+| Oracle | Índice por función: `CASE WHEN valid_to IS NULL THEN … END` en cada columna; la clave de una histórica es NULL entera y Oracle no la indexa |
+| MySQL | Sin índices parciales: columnas generadas `current_document` (tipo/país/número, NULL en las históricas) y `current_primary` (`party_id`, NULL si no es principal vigente), con índice único; MySQL admite varios NULL |
+
+La migración crea antes `ix_party_identifications_type` sobre `doc_type` en los cinco motores:
+en MySQL la clave ajena de `doc_type` necesita un índice que empiece por esa columna, y el único
+que había era el del documento. Si alguna party tiene ya dos principales, la migración se
+detiene sin tocar nada y dice cuáles (lo busca con `GROUP BY party_id HAVING COUNT(*) > 1`, sin
+cargar la tabla); se deja una y se migra de nuevo. En MySQL, `current_document` es
+`VARCHAR(100)` porque `doc_number` es `{str:60}`: si crece, crece con él.
+
+- **Un choque con los índices** (otro proceso que guarda a la vez lo que la comprobación previa no
+  vio) es la violación de regla del caso de uso, 422, no un 500: el del documento,
+  `parties.document_taken`; el de la principal, `parties.duplicate_primary_identification`. El
+  framework lo permite ahora también en las tablas hijas (`sqlrepo.Child.Unique`, como
+  `Mapping.Unique`). El índice del documento abarca también la propia party, pero ahí responde
+  antes el dominio con `parties.duplicate_identification`.
+- **Diferencia con Karpo C#:** en C# el índice del documento es por party (`PartyId` entra en la
+  clave, `ux_party_identifications_document`); en Go un documento vigente identifica a una sola
+  party de toda la instalación (decisión de la fase 2, §4), así que el índice no lleva `party_id`
+  y conserva su nombre, `ux_party_identifications_doc`. C# no tiene MySQL ni SQLite.

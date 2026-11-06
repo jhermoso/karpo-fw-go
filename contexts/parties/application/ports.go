@@ -258,6 +258,9 @@ func (t TaxIdentities) TaxIdentities(ctx context.Context, partyIDs []string) (ma
 		}
 		best := -1
 		for _, i := range p.Identifications() {
+			if !i.Current() {
+				continue // una identificación histórica no identifica hoy (D-142)
+			}
 			if r := rank(i); r >= 0 && (best < 0 || r < best) {
 				best = r
 				ti.Country, ti.Number, ti.DocumentType = i.Country.String(), i.Number, taxDocuments[r%len(taxDocuments)].code

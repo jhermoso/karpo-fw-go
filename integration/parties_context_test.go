@@ -14,7 +14,9 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/application"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
+	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
+	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 	"github.com/jhermoso/karpo-fw-go/pkg/time/fake"
 )
 
@@ -655,6 +657,64 @@ func TestPartiesContext(t *testing.T) {
 			}
 			if _, err := svc.InternalOrganizationProfile.Handle(ctx, papp.GetInternalOrganizationProfile{ID: anaID}); !errors.Is(err, fw.ErrNotFound) {
 				t.Fatalf("a party that is not an internal organization: %v", err)
+			}
+
+			// Migración 33: la vigencia de las identificaciones (D-142). Los dos índices únicos muerden
+			// a las vigentes y dejan pasar a las históricas: se comprueba escribiendo las filas
+			// directamente. Ana tiene vigentes su DNI 12345678Z y su pasaporte, que es el principal.
+			closedAt := fw.Now().Add(-time.Hour)
+			row := func(party domain.PartyID, typ domain.DocumentTypeID, number string, primary bool, validTo any) error {
+				return db.Insert(ctx, "party_identifications", sqlrepo.Values{"party_id": party.UUID, "id": fw.NewUUID(), "doc_type": typ.UUID,
+					"country": "ES", "doc_number": number, "is_primary": primary, "valid_to": validTo})
+			}
+			const docIndex, primaryIndex = "ux_party_identifications_doc", "ux_party_identifications_primary"
+			if err := row(luisID, domain.DocNationalID, "12345678Z", false, nil); !db.ViolatesUnique(err, "party_identifications", docIndex,
+				"doc_type", "country", "doc_number") {
+				t.Fatalf("the current document of another party: %v", err)
+			}
+			if err := row(luisID, domain.DocNationalID, "12345678Z", true, closedAt); err != nil {
+				t.Fatalf("a historical identification with the document of another party: %v", err)
+			}
+			if err := row(anaID, domain.DocOther, "OTHER-1", true, nil); !db.ViolatesUnique(err, "party_identifications", primaryIndex, "party_id") {
+				t.Fatalf("a second current primary: %v", err)
+			}
+			if err := row(anaID, domain.DocOther, "OTHER-1", true, closedAt); err != nil {
+				t.Fatalf("a historical primary next to the current one: %v", err)
+			}
+			// valid_to se guarda y se relee: la fila histórica de Luis vuelve con su fin.
+			luisNow, err := svc.Get.Handle(ctx, papp.GetParty{ID: luisID})
+			if err != nil || len(luisNow.Identifications) != 1 || luisNow.Identifications[0].ValidTo == nil ||
+				!luisNow.Identifications[0].ValidTo.Equal(closedAt) {
+				t.Fatalf("valid_to read back: %+v %v", luisNow.Identifications, err)
+			}
+			// Quien choca con los índices al guardar recibe la violación de regla del caso de uso, no un
+			// error del servidor.
+			partyRepo, err := infrastructure.PartyRepositoryFactory(db)
+			if err != nil {
+				t.Fatal(err)
+			}
+			withDocs := func(docs ...domain.Identification) *domain.Party {
+				t.Helper()
+				name, err := domain.NewPersonalName("Eva", "Ruiz", "")
+				if err != nil {
+					t.Fatal(err)
+				}
+				p, err := domain.Reconstitute(domain.NewPartyID(), domain.PartyState{Kind: domain.KindPerson,
+					Person: domain.PersonDetails{Name: name}, Identities: docs, Active: true})
+				if err != nil {
+					t.Fatal(err)
+				}
+				return p
+			}
+			ident := func(typ domain.DocumentTypeID, number string, primary bool) domain.Identification {
+				return domain.Identification{ID: domain.NewIdentificationID(), Type: typ, Country: vocab.MustCountryCode("ES"), Number: number, Primary: primary}
+			}
+			if err := partyRepo.Save(ctx, withDocs(ident(domain.DocNationalID, "12345678Z", true))); !errors.As(err, &rv) || rv.Code != domain.ErrDocumentTaken {
+				t.Fatalf("saving the current document of another party: %v", err)
+			}
+			if err := partyRepo.Save(ctx, withDocs(ident(domain.DocNationalID, "87654321X", true), ident(domain.DocPassport, "PBB654321", true))); !errors.As(err, &rv) ||
+				rv.Code != domain.ErrDuplicatePrimary {
+				t.Fatalf("saving two current primaries: %v", err)
 			}
 
 			pending, err := mod.IntegrationOutbox.Pending(ctx, 100, 10)

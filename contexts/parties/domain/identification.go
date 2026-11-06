@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
@@ -217,6 +218,12 @@ func (p *DocumentPolicy) Validate(d IdentificationData) (string, error) {
 }
 
 // Identification es un documento de identidad de una party (entidad hija de Party).
+//
+// ValidTo es el fin de su vigencia (docs/DECISIONES-COMUNES.md, D-142): sin él la identificación
+// es vigente; con él es histórica y no cuenta para lo que mira los documentos vigentes (el
+// repetido dentro de la party, el que ya tiene otra party, la principal). Quitar una
+// identificación la borra; ValidTo sólo lo ponen los casos que cierran un documento (su
+// caducidad, una migración que cierra repetidos), y hoy no hay ninguno en Go.
 type Identification struct {
 	ID               IdentificationID
 	Type             DocumentTypeID
@@ -226,6 +233,33 @@ type Identification struct {
 	IssuedOn         vocab.Date
 	ExpiresOn        vocab.Date
 	Primary          bool
+	ValidTo          time.Time // cero: vigente
+}
+
+// Códigos de las violaciones de regla de las identificaciones que comparten el dominio, el caso de
+// uso y los índices únicos de la base.
+const (
+	ErrDuplicateIdentification  = "parties.duplicate_identification"
+	ErrDocumentTaken            = "parties.document_taken"
+	ErrDuplicatePrimary         = "parties.duplicate_primary_identification"
+	ErrIdentificationNotCurrent = "parties.identification_not_current"
+)
+
+// Current dice si la identificación es vigente (no tiene fin).
+func (i Identification) Current() bool { return i.ValidTo.IsZero() }
+
+// ValidToOf devuelve el fin de la vigencia, o nil si es vigente (el campo de las especificaciones).
+func (i Identification) ValidToOf() *time.Time {
+	if i.Current() {
+		return nil
+	}
+	t := i.ValidTo
+	return &t
+}
+
+// HasCurrentIdentification dice si la party tiene alguna identificación vigente.
+func (p *Party) HasCurrentIdentification() bool {
+	return slices.ContainsFunc(p.identifications, Identification.Current)
 }
 
 // Matches dice si la identificación es el mismo documento (tipo, país, número).
@@ -272,9 +306,10 @@ func (p *DocumentPolicy) CheckKind(kind Kind, d IdentificationData) error {
 }
 
 // AddIdentification valida y añade un documento de identidad. Invariantes: un número válido para
-// el tipo y el país, no registrado dos veces en la party, admitido por su clase (DocumentFitsKind),
-// y una sola identificación principal (la primera es la principal; una nueva principal degrada a
-// la anterior).
+// el tipo y el país, no registrado dos veces entre las vigentes de la party, admitido por su clase
+// (DocumentFitsKind), y una sola identificación principal entre las vigentes (la primera vigente
+// es la principal; una nueva principal degrada a la anterior). Las históricas no cuentan y no se
+// tocan.
 func (p *Party) AddIdentification(policy *DocumentPolicy, d IdentificationData, primary bool) (IdentificationID, error) {
 	if err := p.requireActive("get identifications"); err != nil {
 		return IdentificationID{}, err
@@ -287,17 +322,19 @@ func (p *Party) AddIdentification(policy *DocumentPolicy, d IdentificationData, 
 		return IdentificationID{}, err
 	}
 	for _, i := range p.identifications {
-		if i.Matches(d.Type, d.Country, number) {
-			return IdentificationID{}, fw.Violation("parties.duplicate_identification", "the party already has this document")
+		if i.Current() && i.Matches(d.Type, d.Country, number) {
+			return IdentificationID{}, fw.Violation(ErrDuplicateIdentification, "the party already has this document")
 		}
 	}
 	id := Identification{ID: NewIdentificationID(), Type: d.Type, Country: d.Country, Number: number,
 		IssuingAuthority: strings.TrimSpace(d.IssuingAuthority), IssuedOn: d.IssuedOn, ExpiresOn: d.ExpiresOn,
-		Primary: primary || len(p.identifications) == 0}
+		Primary: primary || !p.HasCurrentIdentification()}
 	ids := slices.Clone(p.identifications)
 	if id.Primary {
 		for k := range ids {
-			ids[k].Primary = false
+			if ids[k].Current() {
+				ids[k].Primary = false
+			}
 		}
 	}
 	p.identifications = append(ids, id)
@@ -328,10 +365,10 @@ func (p *Party) RemoveIdentification(id IdentificationID) error {
 // Identifications devuelve una copia de los documentos de identidad.
 func (p *Party) Identifications() []Identification { return slices.Clone(p.identifications) }
 
-// PrimaryIdentification devuelve el documento principal, si lo hay.
+// PrimaryIdentification devuelve el documento principal vigente, si lo hay.
 func (p *Party) PrimaryIdentification() (Identification, bool) {
 	for _, i := range p.identifications {
-		if i.Primary {
+		if i.Primary && i.Current() {
 			return i, true
 		}
 	}

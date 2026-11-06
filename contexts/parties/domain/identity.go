@@ -30,7 +30,8 @@ func (p *Party) SetPreferredLanguage(l vocab.LanguageCode) error {
 	return nil
 }
 
-// MarkPrimaryIdentification hace principal un documento de la party; el que lo era deja de serlo.
+// MarkPrimaryIdentification hace principal un documento vigente de la party; el vigente que lo
+// era deja de serlo. Uno histórico no puede ser el principal, y las históricas no se tocan.
 func (p *Party) MarkPrimaryIdentification(id IdentificationID) error {
 	k := slices.IndexFunc(p.identifications, func(i Identification) bool { return i.ID == id })
 	if k < 0 {
@@ -39,12 +40,17 @@ func (p *Party) MarkPrimaryIdentification(id IdentificationID) error {
 	if err := p.requireActive("change its identifications"); err != nil {
 		return err
 	}
+	if !p.identifications[k].Current() {
+		return fw.Violation(ErrIdentificationNotCurrent, "a document that is no longer current cannot be the primary one")
+	}
 	if p.identifications[k].Primary {
 		return nil
 	}
 	ids := slices.Clone(p.identifications)
 	for i := range ids {
-		ids[i].Primary = i == k
+		if ids[i].Current() {
+			ids[i].Primary = i == k
+		}
 	}
 	p.identifications = ids
 	p.Raise(PrimaryIdentificationChanged{EventMeta: p.NewEventMeta(), IdentificationID: id.String()})

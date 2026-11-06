@@ -90,7 +90,7 @@ func PartyMapping() sqlrepo.Mapping[domain.PartyID, *domain.Party] {
 				s.Identities = append(s.Identities, domain.Identification{ID: domain.IdentificationID{UUID: c.UUID("id")},
 					Type: domain.DocumentTypeID{UUID: c.UUID("doc_type")}, Country: country, Number: c.String("doc_number"),
 					IssuingAuthority: c.String("issuing_authority"), IssuedOn: c.Date("issued_on"), ExpiresOn: c.Date("expires_on"),
-					Primary: c.Bool("is_primary")})
+					Primary: c.Bool("is_primary"), ValidTo: c.Time("valid_to")})
 			}
 			// Los ids UUID v7 son cronológicos, pero SQL Server ordena UNIQUEIDENTIFIER por grupos
 			// de bytes: se ordena en Go para que todos los motores devuelvan el mismo orden.
@@ -228,15 +228,23 @@ func PartyMapping() sqlrepo.Mapping[domain.PartyID, *domain.Party] {
 			Name:       "identifications",
 			Table:      "party_identifications",
 			ForeignKey: "party_id",
-			Columns:    []string{"id", "doc_type", "country", "doc_number", "issuing_authority", "issued_on", "expires_on", "is_primary"},
-			Fields:     map[string]string{"number": "doc_number"},
-			OrderBy:    []string{"id"},
+			Columns: []string{"id", "doc_type", "country", "doc_number", "issuing_authority", "issued_on", "expires_on", "is_primary",
+				"valid_to"},
+			Fields:  map[string]string{"number": "doc_number"},
+			OrderBy: []string{"id"},
+			Unique: []sqlrepo.UniqueIndex{
+				{Name: uniqueIdentificationDocument, Columns: []string{"doc_type", "country", "doc_number"}, Err: errDocumentTaken},
+				{Name: uniquePrimaryIdentification, Columns: []string{"party_id"}, Err: errDuplicatePrimary}},
 			Dehydrate: func(p *domain.Party) ([]sqlrepo.Values, error) {
 				out := []sqlrepo.Values{}
 				for _, i := range p.Identifications() {
+					var to any
+					if !i.Current() {
+						to = i.ValidTo
+					}
 					out = append(out, sqlrepo.Values{"id": i.ID, "doc_type": i.Type, "country": i.Country.String(), "doc_number": i.Number,
 						"issuing_authority": nullable(i.IssuingAuthority), "issued_on": optDate(i.IssuedOn),
-						"expires_on": optDate(i.ExpiresOn), "is_primary": i.Primary})
+						"expires_on": optDate(i.ExpiresOn), "is_primary": i.Primary, "valid_to": to})
 				}
 				return out, nil
 			},
@@ -321,6 +329,22 @@ const (
 
 var errDuplicatePromotionCode = fw.Violation("parties.duplicate_promotion_code",
 	"another collaborator of the organization already has that promotion code")
+
+// Índices únicos de las identificaciones vigentes (migración 33, D-142): un documento vigente en
+// una sola party de la instalación, y una sola principal vigente por party. Las históricas
+// (valid_to) no cuentan. Quien choca con ellos recibe la violación del caso de uso y del dominio,
+// que son los que responden casi siempre: el índice sólo para lo que no ven (otro proceso a la
+// vez). El del documento abarca también la propia party, pero ahí el dominio
+// (parties.duplicate_identification) responde antes.
+const (
+	uniqueIdentificationDocument = "ux_party_identifications_doc"
+	uniquePrimaryIdentification  = "ux_party_identifications_primary"
+)
+
+var (
+	errDocumentTaken    = fw.Violation(domain.ErrDocumentTaken, "another party holds this document")
+	errDuplicatePrimary = fw.Violation(domain.ErrDuplicatePrimary, "the party already has a primary document")
+)
 
 // promotionKey es el valor de party_relationships.promotion_key, la columna del índice único del
 // código de promoción: la organización y el código mientras la relación no tiene fin, y nada si no
