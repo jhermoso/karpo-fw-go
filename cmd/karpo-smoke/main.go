@@ -11,7 +11,9 @@
 //	-db    el fichero SQLite, que todavía no debe existir: el publicador sólo trabaja sobre una
 //	       base de datos que crea él mismo (por defecto: un fichero nuevo en un directorio
 //	       temporal nuevo)
-//	-seed  carga algo que mirar, si no hay nada
+//	-seed  carga, si no hay nada, lo que pide el recorrido de docs/SMOKE-MANUAL.md: una empresa,
+//	       su cliente, un producto con existencias, los tipos de IVA, una serie, condiciones de
+//	       pago y un plan de cuentas
 //
 // No lee ningún secreto ni escribe ninguno: la clave que firma las sesiones y la contraseña del
 // perfil se crean al arrancar y desaparecen al parar.
@@ -31,6 +33,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -51,7 +54,7 @@ func run(ctx context.Context, args []string, env string, out io.Writer, listenin
 	flags.SetOutput(out)
 	port := flags.Int("port", 8092, "the port of 127.0.0.1 it listens on")
 	path := flags.String("db", "", "the SQLite file, which must not exist yet (default: a new one in a new temporary directory)")
-	seed := flags.Bool("seed", false, "loads something to look at, if there is nothing")
+	seed := flags.Bool("seed", false, "loads, if there is nothing, what the walk of docs/SMOKE-MANUAL.md needs")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
@@ -102,11 +105,11 @@ func run(ctx context.Context, args []string, env string, out io.Writer, listenin
 		return err
 	}
 	if *seed {
-		said, err := p.Seed()
+		_, said, err := p.Seed(ctx)
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(out, "seed: %s\n", said)
+		fmt.Fprintf(out, "seed: %s\n", strings.ReplaceAll(said, "\n", "\n  "))
 	}
 	listener, err := p.Listen(address)
 	if err != nil {

@@ -13,10 +13,14 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	_ "modernc.org/sqlite"
 
+	accapp "github.com/jhermoso/karpo-fw-go/contexts/accounting/application"
+	bilapp "github.com/jhermoso/karpo-fw-go/contexts/billing/application"
 	geoinfra "github.com/jhermoso/karpo-fw-go/contexts/geography/infrastructure"
+	recapp "github.com/jhermoso/karpo-fw-go/contexts/receivables/application"
 	"github.com/jhermoso/karpo-fw-go/contexts/security"
 	"github.com/jhermoso/karpo-fw-go/host"
 	"github.com/jhermoso/karpo-fw-go/host/smoke"
@@ -324,16 +328,138 @@ func TestKey_IsNewOnEveryStart(t *testing.T) {
 	}
 }
 
-// La semilla se carga una vez.
-func TestSeed_LoadsOnce(t *testing.T) {
-	p := publisher(t)
-	said, err := p.Seed()
-	if err != nil || !strings.Contains(said, "1 organization") {
-		t.Fatalf("seed: %q %v", said, err)
+// La semilla se carga una vez, sobre una base de datos como la de cmd/karpo-smoke, y lo que carga
+// basta para recorrer la guía (docs/SMOKE-MANUAL.md) de punta a punta por las rutas del anfitrión:
+// pedido, albarán, factura emitida desde él, su vencimiento, su cobro y los asientos.
+func TestSeed_LoadsWhatTheWalkNeeds(t *testing.T) {
+	noCredentials(t)
+	p, err := smoke.New(context.Background(), smoke.Development, database(t), smoke.Options{})
+	if err != nil {
+		t.Fatal(err)
 	}
-	if said, err = p.Seed(); err != nil || !strings.Contains(said, "nothing was loaded") {
-		t.Fatalf("seed again: %q %v", said, err)
+	seeded, said, err := p.Seed(context.Background())
+	if err != nil || seeded.Company == "" || seeded.Customer == "" || seeded.Product == "" || seeded.Warehouse == "" || seeded.Series == "" || seeded.Terms == "" ||
+		!strings.Contains(said, "$company   = '"+seeded.Company+"'") || !strings.Contains(said, "$series    = '"+seeded.Series+"'") {
+		t.Fatalf("seed: %+v %q %v", seeded, said, err)
 	}
+	if again, said, err := p.Seed(context.Background()); err != nil || again != (smoke.Seeded{}) || !strings.Contains(said, "nothing was loaded") {
+		t.Fatalf("seed again: %+v %q %v", again, said, err)
+	}
+
+	_, raw, _ := do(t, p, "GET", "/api/smoke/token", "", nil)
+	token := session(t, raw).AccessToken
+	call := func(method, path string, body any, want int, out any) {
+		t.Helper()
+		status, raw, _ := do(t, p, method, path, token, body)
+		if status != want {
+			t.Fatalf("%s %s: %d %s, want %d", method, path, status, raw, want)
+		}
+		if out != nil {
+			if err := json.Unmarshal(raw, out); err != nil {
+				t.Fatalf("%s %s: %v: %s", method, path, err, raw)
+			}
+		}
+	}
+	deliver := func() {
+		t.Helper()
+		if _, err := p.Host.Deliver(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// El pedido de 10 cajas, servido entero con un albarán.
+	var order struct {
+		ID string `json:"id"`
+	}
+	call("POST", "/api/orders/orders", map[string]any{"company": seeded.Company, "customer": seeded.Customer, "warehouse": seeded.Warehouse}, 201, &order)
+	call("POST", "/api/orders/orders/"+order.ID+"/lines", map[string]any{"product": seeded.Product, "quantity": "10"}, 200, nil)
+	call("POST", "/api/orders/orders/"+order.ID+"/confirm", map[string]any{}, 200, nil)
+	deliver()
+	// Inventory reservó las existencias del pedido.
+	var confirmed struct {
+		Lines []struct {
+			Reserved string `json:"reserved"`
+			Short    string `json:"short"`
+		} `json:"lines"`
+	}
+	call("GET", "/api/orders/orders/"+order.ID, nil, 200, &confirmed)
+	if len(confirmed.Lines) != 1 || confirmed.Lines[0].Reserved != "10" || confirmed.Lines[0].Short != "0" {
+		t.Fatalf("the reservation: %+v", confirmed.Lines)
+	}
+	var note struct {
+		ID string `json:"id"`
+	}
+	call("POST", "/api/orders/orders/"+order.ID+"/deliveries", map[string]any{}, 201, &note)
+	deliver()
+
+	// Billing preparó el borrador desde el albarán: se emite en la serie sembrada.
+	var drafts struct {
+		Items []bilapp.InvoiceDTO `json:"items"`
+	}
+	call("GET", "/api/billing/invoices?seller="+seeded.Company+"&status=draft", nil, 200, &drafts)
+	if len(drafts.Items) != 1 || drafts.Items[0].SourceType != "orders.delivery" || drafts.Items[0].Net != "125.00" {
+		t.Fatalf("the draft from the delivery note: %+v", drafts.Items)
+	}
+	var invoice bilapp.InvoiceDTO
+	call("POST", "/api/billing/invoices/"+drafts.Items[0].ID+"/issue", map[string]any{"series": seeded.Series}, 200, &invoice)
+	if invoice.Status != "issued" || len(invoice.IssueDate) < 4 || invoice.Number != smoke.SeriesCode+"-"+invoice.IssueDate[:4]+"-000001" ||
+		invoice.Taxes == nil || invoice.Taxes.Total != "151.25" || invoice.SellerNIF != smoke.CompanyTaxID || invoice.CustomerNIF != smoke.CustomerTaxID ||
+		invoice.CustomerAddress == nil {
+		t.Fatalf("issued: %+v", invoice)
+	}
+	deliver()
+	// El albarán queda facturado.
+	var invoiced struct {
+		InvoiceNumber string `json:"invoiceNumber"`
+	}
+	call("GET", "/api/orders/deliveries/"+note.ID, nil, 200, &invoiced)
+	if invoiced.InvoiceNumber != invoice.Number {
+		t.Fatalf("the invoiced delivery note: %+v, want %s", invoiced, invoice.Number)
+	}
+
+	// Su vencimiento, a 30 días, y su cobro por transferencia.
+	var receivables struct {
+		Items []recapp.ReceivableDTO `json:"items"`
+	}
+	call("GET", "/api/receivables/invoices?seller="+seeded.Company, nil, 200, &receivables)
+	if len(receivables.Items) != 1 || receivables.Items[0].Open != "151.25" || len(receivables.Items[0].Installments) != 1 ||
+		receivables.Items[0].Installments[0].Due != invoiceDue(t, invoice.IssueDate) {
+		t.Fatalf("receivable: %+v", receivables.Items)
+	}
+	call("POST", "/api/receivables/collections", map[string]any{"seller": seeded.Company, "payer": seeded.Customer, "date": invoice.IssueDate,
+		"amount": "151.25", "method": "transfer", "allocations": []map[string]any{{"invoice": invoice.ID, "installment": 1, "amount": "151.25"}}}, 201, nil)
+	deliver()
+
+	// Los dos asientos: la factura y el cobro.
+	var rows []accapp.BalanceRow
+	call("GET", "/api/accounting/trial-balance?company="+seeded.Company, nil, 200, &rows)
+	balances := map[string]string{}
+	for _, r := range rows {
+		balances[r.Account] = r.Balance
+	}
+	for account, want := range map[string]string{"4300": "0.00", "5720": "151.25", "7000": "-125.00", "4770": "-26.25"} {
+		if balances[account] != want {
+			t.Fatalf("balance of %s: %q, want %s (all: %v)", account, balances[account], want, balances)
+		}
+	}
+	// Y nada esperando a asentarse.
+	var parked struct {
+		Total int64 `json:"total"`
+	}
+	call("GET", "/api/accounting/parked?company="+seeded.Company, nil, 200, &parked)
+	if parked.Total != 0 {
+		t.Fatalf("parked: %d", parked.Total)
+	}
+}
+
+// invoiceDue es el vencimiento de una factura emitida en issued con las condiciones sembradas: 30
+// días después.
+func invoiceDue(t *testing.T, issued string) string {
+	t.Helper()
+	d, err := time.Parse("2006-01-02", issued)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return d.AddDate(0, 0, smoke.TermsDays).Format("2006-01-02")
 }
 
 // Lo que dice al arrancar no se puede tomar por otra cosa.
