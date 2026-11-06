@@ -47,11 +47,13 @@ type Deps struct {
 	Audit      app.AuditLog
 }
 
-// Zones dice la zona horaria de una empresa por el país de su identidad fiscal (en el anfitrión,
-// la principal del país en Geography). La fecha de emisión por defecto es la de hoy en esa zona,
+// Zones dice la zona horaria de una empresa, el vendedor: company es su party y country, el país
+// de su identidad fiscal (puede ir vacío). En el anfitrión, la zona que la empresa guarda en su
+// perfil de Parties; si no guarda ninguna, la principal del país en Geography; si no, UTC
+// (docs/DECISIONES-COMUNES.md, D-133). La fecha de emisión por defecto es la de hoy en esa zona,
 // no en UTC: a las 00:30 en Madrid ya es el día siguiente (decisión de Javier, 2026-11-05).
 type Zones interface {
-	Location(ctx context.Context, country string) (*time.Location, error)
+	Location(ctx context.Context, company, country string) (*time.Location, error)
 }
 
 // withoutMerged deja fuera de un listado los registros cuyo cliente es una party fusionada,

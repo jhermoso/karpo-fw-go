@@ -116,13 +116,12 @@ type BreakdownDTO struct {
 	Total     string       `json:"total"`
 }
 
-// today es la fecha de hoy en la zona horaria de una empresa de ese país; en UTC sin Zones o sin
-// país.
-func (s *Deps) today(ctx context.Context, country string) (vocab.Date, error) {
-	if s.Zones == nil || country == "" {
+// today es la fecha de hoy en la zona horaria de la empresa vendedora (Zones); en UTC sin Zones.
+func (s *Deps) today(ctx context.Context, seller domain.PartyID, country string) (vocab.Date, error) {
+	if s.Zones == nil {
 		return vocab.Today(nil), nil
 	}
-	loc, err := s.Zones.Location(ctx, country)
+	loc, err := s.Zones.Location(ctx, seller.String(), country)
 	if err != nil {
 		return vocab.Date{}, err
 	}
@@ -312,7 +311,7 @@ func (s service) invoiceUseCases(svc *Service) {
 			if err != nil {
 				return BreakdownDTO{}, err
 			}
-			if on, err = s.today(ctx, ids[domain.PartyID{UUID: st.Seller.UUID}].Country); err != nil {
+			if on, err = s.today(ctx, domain.PartyID{UUID: st.Seller.UUID}, ids[domain.PartyID{UUID: st.Seller.UUID}].Country); err != nil {
 				return BreakdownDTO{}, err
 			}
 		}
@@ -345,7 +344,7 @@ func (s service) invoiceUseCases(svc *Service) {
 			}
 			date := c.Date
 			if date.IsZero() { // hoy en la zona horaria del vendedor
-				if date, err = s.today(ctx, ids[domain.PartyID{UUID: st.Seller.UUID}].Country); err != nil {
+				if date, err = s.today(ctx, domain.PartyID{UUID: st.Seller.UUID}, ids[domain.PartyID{UUID: st.Seller.UUID}].Country); err != nil {
 					return err
 				}
 			}

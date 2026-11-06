@@ -87,6 +87,10 @@ func (s *Store) onRollback(ctx context.Context, undo func()) {
 	}
 }
 
+// OnRollback es onRollback para los adaptadores en memoria que viven fuera de este paquete (como
+// los perfiles de Parties): undo deshace su cambio si la unidad de trabajo de ctx falla.
+func (s *Store) OnRollback(ctx context.Context, undo func()) { s.onRollback(ctx, undo) }
+
 func (t *memTx) rollback() {
 	for i := len(t.undo) - 1; i >= 0; i-- {
 		t.undo[i]()

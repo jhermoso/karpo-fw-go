@@ -222,13 +222,18 @@ Javier el 2026-11-03.
   factura emitida en cada serie.
 - **Sin fecha, la de hoy en la zona de la empresa** (decisión de Javier, 2026-11-05): la emisión
   sin fecha toma el día en la zona horaria del vendedor, no en UTC; a las 22:30 UTC del 14 de
-  octubre ya es día 15 en Madrid. La zona es la principal del país de su identidad fiscal en
-  Geography (`host.CountryZones`); un país desconocido es UTC. Una empresa de Canarias toma la de
-  Madrid hasta que la zona sea un ajuste de la empresa interna. Los demás «hoy» de Go (pedidos,
-  presupuestos, contabilidad…) siguen en UTC; la vista previa de impuestos sin fecha usa la misma
-  que la emisión. La zona de cada país se recuerda 5 minutos. Riesgo conocido: entre las 23:00 y
-  las 24:00 del 31 de diciembre en Canarias la factura sale con fecha del año siguiente y pide su
-  serie.
+  octubre ya es día 15 en Madrid. La zona se pide por empresa (`Zones.Location(ctx, vendedor,
+  país)`, en el anfitrión `host.CompanyZones`), en este orden (D-133): la que la empresa guarda en
+  su perfil de Parties (`internal_organization_profile.time_zone`, docs/PARTIES.md §25); si no
+  guarda ninguna, la principal del país de su identidad fiscal en Geography; si no, UTC. Una
+  empresa de Canarias que guarda `Atlantic/Canary` emite el 31 de diciembre a las 23:30, hora
+  canaria, con fecha del 31: ya no sale con fecha del año siguiente ni pide la serie de ese año.
+  Una que no la guarda sigue tomando la de Madrid. Los demás «hoy» de Go (pedidos, presupuestos,
+  contabilidad…) siguen en UTC; la vista previa de impuestos sin fecha usa la misma que la
+  emisión. La zona del perfil se lee en cada emisión (una fila por su clave): quien la guarda a
+  las 23:28 del 31 de diciembre y factura a las 23:30 ya saca fecha del 31. Sólo la zona de cada
+  país se recuerda 5 minutos, como el lugar de una empresa en el calendario de cobros: un cambio
+  en Geography llega en ese tiempo, sin reiniciar.
 - **Bases existentes:** si una ya tuviera números repetidos en una serie, la migración 6 fallaría
   y habría que corregirlos antes. Karpo Go no tiene bases vivas.
 

@@ -15,6 +15,10 @@ func (m *Module) registerPhase3(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/parties/{id}/document-issue", m.clearDocumentIssue)
 	mux.HandleFunc("GET /api/internal-organizations", m.internalOrganizations)
 	mux.HandleFunc("GET /api/internal-organizations/names", m.internalOrganizationNames)
+	// El perfil de la empresa interna (D-133), en la ruta de Karpo C#; {id} es la party de la
+	// organización interna, el id que da GET /api/internal-organizations (docs/PARTIES.md §25).
+	mux.HandleFunc("GET /api/profiles/internal-organizations/{id}", m.internalOrganizationProfile)
+	mux.HandleFunc("PUT /api/profiles/internal-organizations/{id}", m.setInternalOrganizationProfile)
 	mux.HandleFunc("POST /api/parties/{id}/facility-roles", m.assignFacilityRole)
 	mux.HandleFunc("POST /api/parties/{id}/facility-roles/{roleId}/end", m.endFacilityRole)
 	mux.HandleFunc("GET /api/catalogs/facility-role-types", m.facilityRoleTypes)
@@ -108,6 +112,29 @@ func (m *Module) setShared(w http.ResponseWriter, r *http.Request) {
 func (m *Module) internalOrganizations(w http.ResponseWriter, r *http.Request) {
 	out, err := m.svc.InternalOrganizations.Handle(r.Context(), papp.ListInternalOrganizations{})
 	distribution.Respond(w, r, out, err, http.StatusOK)
+}
+
+func (m *Module) internalOrganizationProfile(w http.ResponseWriter, r *http.Request) {
+	id, err := pathParty(r)
+	if err != nil {
+		distribution.WriteError(w, r, err)
+		return
+	}
+	out, err := m.svc.InternalOrganizationProfile.Handle(r.Context(), papp.GetInternalOrganizationProfile{ID: id})
+	distribution.Respond(w, r, out, err, http.StatusOK)
+}
+
+func (m *Module) setInternalOrganizationProfile(w http.ResponseWriter, r *http.Request) {
+	id, err := pathParty(r)
+	if err != nil {
+		distribution.WriteError(w, r, err)
+		return
+	}
+	c := papp.SetInternalOrganizationProfile{}
+	handle(w, r, &c, true, http.StatusOK, func(c papp.SetInternalOrganizationProfile) (papp.InternalOrganizationProfileDTO, error) {
+		c.ID = id
+		return m.svc.SetInternalOrganizationProfile.Handle(r.Context(), c)
+	})
 }
 
 func (m *Module) internalOrganizationNames(w http.ResponseWriter, r *http.Request) {

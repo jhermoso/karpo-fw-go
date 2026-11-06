@@ -621,6 +621,42 @@ func TestPartiesContext(t *testing.T) {
 				t.Fatalf("the promotion code of another open collaborator: %v", err)
 			}
 
+			// Migración 32: el perfil de la empresa interna y su zona horaria (D-133), el caso de uso
+			// de GET/PUT /api/profiles/internal-organizations/{id}. Se crea la fila, se relee con
+			// otro adaptador, se rechaza un nombre de Windows y se limpia.
+			setZone := func(tz string) (papp.InternalOrganizationProfileDTO, error) {
+				return svc.SetInternalOrganizationProfile.Handle(ctx, papp.SetInternalOrganizationProfile{ID: acmeID, TimeZone: tz})
+			}
+			if p, err := setZone("Atlantic/Canary"); err != nil || p.TimeZone == nil || *p.TimeZone != "Atlantic/Canary" {
+				t.Fatalf("setting the zone: %+v %v", p, err)
+			}
+			if _, err := setZone("Europe/Madrid"); err != nil {
+				t.Fatalf("changing the zone: %v", err)
+			}
+			profiles, err := infrastructure.ProfilesFor(db)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if p, err := profiles.Get(ctx, acmeID); err != nil || p.TimeZone != "Europe/Madrid" {
+				t.Fatalf("the zone read back: %+v %v", p, err)
+			}
+			var rv *fw.RuleViolationError
+			if _, err := setZone("Romance Standard Time"); !errors.As(err, &rv) || rv.Code != domain.ErrInvalidTimeZone {
+				t.Fatalf("a Windows name: %v", err)
+			}
+			if tz, err := mod.CompanyTimeZones.TimeZone(ctx, acme.ID); err != nil || tz != "Europe/Madrid" {
+				t.Fatalf("the zone other contexts read: %q %v", tz, err)
+			}
+			if _, err := setZone(""); err != nil {
+				t.Fatalf("clearing the zone: %v", err)
+			}
+			if p, err := svc.InternalOrganizationProfile.Handle(ctx, papp.GetInternalOrganizationProfile{ID: acmeID}); err != nil || p.TimeZone != nil {
+				t.Fatalf("the cleared zone: %+v %v", p, err)
+			}
+			if _, err := svc.InternalOrganizationProfile.Handle(ctx, papp.GetInternalOrganizationProfile{ID: anaID}); !errors.Is(err, fw.ErrNotFound) {
+				t.Fatalf("a party that is not an internal organization: %v", err)
+			}
+
 			pending, err := mod.IntegrationOutbox.Pending(ctx, 100, 10)
 			if err != nil || len(pending) < 8 {
 				t.Fatalf("published language: %d %v", len(pending), err)

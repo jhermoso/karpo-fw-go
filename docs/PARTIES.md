@@ -1073,3 +1073,40 @@ cliente), `sage_code` y `apiscore_code`, y la tabla `party_data_protection_conse
 - **Decisión técnica de Go** (reversible): la huella es el SHA-256 del tipo de la orden y su JSON, no
   de método, ruta y cuerpo, porque la aplicación no conoce HTTP. Lo que cuenta entre proyectos es
   el resultado, y la huella no se compara con otro proyecto.
+
+## 25. El perfil de la empresa interna: su zona horaria (D-133)
+
+Cada empresa interna guarda sus propios ajustes en `internal_organization_profile`, el nombre de la
+tabla en Karpo C# y en Trench. Hoy sólo lleva la zona horaria; más adelante, el redondeo, el patrón
+de códigos y los vencimientos (D-128 a D-130).
+
+- **Zona horaria:** `time_zone`, opcional, 64 caracteres (`{str:64}`: `varchar(64)` en
+  PostgreSQL, `nvarchar(64)` en SQL Server, `NVARCHAR2(64)` en Oracle). Sólo códigos IANA que el
+  sistema conoce y con barra, o `UTC` (`Europe/Madrid`, `Atlantic/Canary`), en su forma canónica:
+  cada segmento empieza en mayúscula y el nombre es exactamente el que carga el sistema, así que
+  `europe/madrid` no vale ni en macOS, cuyo disco no distingue mayúsculas, ni tampoco las copias
+  `posix/…` y `right/…`. Un nombre de Windows (`Romance Standard Time`) o uno heredado (`EST5EDT`)
+  da 422 `Company.InvalidTimeZone`. Vacía o nula, se limpia; un `PUT` con `{}` también, porque el
+  `PUT` reemplaza el perfil entero. El código de error es el de Karpo C#, sin el prefijo
+  `parties.`, porque el contrato es común. Las zonas van con el binario (`time/tzdata`): Windows no
+  las trae.
+- **Para qué:** la fecha «hoy» de la empresa. Orden: la zona guardada; si no hay, la principal del
+  país de su documento fiscal en Geography; si no, UTC. Hoy la usa Facturación para la fecha de
+  emisión por defecto (docs/FACTURACION.md); los demás contextos la leen con
+  `contracts.CompanyTimeZones` (`Module.CompanyTimeZones`), sin los permisos del usuario. La zona
+  guardada no se recuerda en memoria: un cambio vale desde la factura siguiente.
+- **API:** `GET` y `PUT /api/profiles/internal-organizations/{id}`, con `{"timeZone": "..."}`;
+  la respuesta lleva `internalOrganizationId` y `timeZone` (null si no hay). Se lee con
+  `Parties.Party.Read` y se cambia con `Parties.Party.Update`, con el ámbito de siempre: fuera de
+  él, 404; con acceso de sólo lectura, 403. Una empresa interna sólo la cambian sus propios
+  usuarios con acceso Full y el administrador global (§18). Una party que no es ahora organización
+  interna da 404: para ella el recurso no existe (en C#, `Company.NotInternalOrganization`). Cada
+  cambio queda en el registro de auditoría (`parties.internal-organization-profile`).
+- **Diferencia con C#:** la clave. En C# la fila cuelga del rol de organización interna
+  (`InternalOrganizationId`, el id del `PartyRole`); en Go, de la party (`internal_organization_id`,
+  el mismo id que da `GET /api/internal-organizations` y que usan el ámbito y los demás contextos).
+  Go no expone los ids de los roles como identidad de la empresa. La ruta es la de C#; el `{id}`,
+  el de Go. La columna se llama en snake_case, como el resto de Go.
+- **Esquema:** migración 32, con clave ajena a `parties`. Si dos primeros `PUT` de la misma
+  empresa llegan a la vez, el segundo choca con la clave primaria y se repite entero, en otra
+  transacción (como mucho tres veces).
