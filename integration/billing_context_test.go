@@ -23,6 +23,7 @@ import (
 	pdomain "github.com/jhermoso/karpo-fw-go/contexts/parties/domain"
 	pinfra "github.com/jhermoso/karpo-fw-go/contexts/parties/infrastructure"
 	yinfra "github.com/jhermoso/karpo-fw-go/contexts/payroll/infrastructure"
+	"github.com/jhermoso/karpo-fw-go/host"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
@@ -59,7 +60,8 @@ func TestBillingContext(t *testing.T) {
 			sw := hotswap.New(db)
 			pm := parties.Compose(sw)
 			fm := fiscal.Compose(sw, finfra.PartiesIdentities{TaxIdentities: pm.TaxIdentities})
-			bm := billing.Compose(sw, binfra.FiscalTaxes{Engine: fm.TaxEngine}, binfra.PartiesIdentities{TaxIdentities: pm.TaxIdentities})
+			bm := billing.Compose(sw, binfra.FiscalTaxes{Engine: fm.TaxEngine}, binfra.PartiesIdentities{TaxIdentities: pm.TaxIdentities},
+				billing.WithSettings(host.BillingSettings{Profiles: pm.CompanyProfiles}))
 			admin, _ := authz.NewContext(authz.Context{Subject: fw.NewUUID(), SubjectName: "admin", Kind: authz.Service, Permissions: []authz.Permission{authz.Wildcard}})
 			admin.GlobalAdmin = true
 			actx := authz.WithContext(ctx, admin)
@@ -141,10 +143,61 @@ func TestBillingContext(t *testing.T) {
 				t.Fatalf("search by issue date in SQL: %+v %v", page, err)
 			}
 			billingConcurrentIssue(actx, t, db, svc, acme.ID, ana.ID)
+			billingCompanySettings(actx, t, pm, svc, acme.ID, ana.ID)
 			if err := m.Verify(ctx); err != nil {
 				t.Fatal(err)
 			}
 		})
+	}
+}
+
+// billingCompanySettings comprueba los ajustes de la empresa de D-144 en el motor: el patrón de las
+// series (con barra, que la regla fija no admite), el redondeo del bruto y un precio de 6 decimales
+// en la columna ampliada por la migración 9 de Billing; la factura emitida guarda su cálculo y no
+// cambia cuando la empresa cambia sus ajustes.
+func billingCompanySettings(ctx context.Context, t *testing.T, pm *parties.Module, svc *bapp.Service, seller, customer string) {
+	t.Helper()
+	sellerID, _ := pdomain.ParsePartyID(seller)
+	six := 6
+	if _, err := pm.Service.SetInternalOrganizationProfile.Handle(ctx, papp.SetInternalOrganizationProfile{ID: sellerID,
+		LineRounding: pdomain.LineRoundingGrossThenDiscount, PriceDecimals: &six}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pm.Service.SetInternalOrganizationCodePattern.Handle(ctx, papp.SetInternalOrganizationCodePattern{ID: sellerID,
+		Kind: pdomain.CodeKindInvoiceSeries, Pattern: `F[A-Z]/[0-9]{2}`}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.OpenSeries.Handle(ctx, bapp.OpenSeries{Seller: seller, Code: "FS", Year: 2026}); !isRuleViolation(err, "billing.series_code_pattern") {
+		t.Fatalf("a series that does not match the pattern: %v", err)
+	}
+	sr, err := svc.OpenSeries.Handle(ctx, bapp.OpenSeries{Seller: seller, Code: "FS/26", Year: 2026})
+	if err != nil {
+		t.Fatal(err)
+	}
+	inv, err := svc.DraftInvoice.Handle(ctx, bapp.DraftInvoice{Seller: seller, Customer: customer, DetailsInput: bapp.DetailsInput{Description: "Energía"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, _ := bdomain.ParseInvoiceID(inv.ID)
+	for _, l := range []bapp.AddLine{
+		{ID: id, Description: "Tornillo", Quantity: "1", UnitPrice: "0.125", Discount: "50", TaxCode: "G21"}, // 0.07 (0.06 una sola vez)
+		{ID: id, Description: "Kilovatio", Quantity: "1000", UnitPrice: "0.123456", TaxCode: "G21"},          // 123.46
+	} {
+		if _, err := svc.AddLine.Handle(ctx, l); err != nil {
+			t.Fatal(err)
+		}
+	}
+	issued, err := svc.Issue.Handle(ctx, bapp.IssueInvoice{ID: id, Series: sr.ID, Date: vocab.MustDate(2026, 9, 30)})
+	if err != nil || issued.Number != "FS/26-2026-000001" || issued.Net != "123.53" {
+		t.Fatalf("issued with the settings: %+v %v", issued, err)
+	}
+	if _, err := pm.Service.SetInternalOrganizationProfile.Handle(ctx, papp.SetInternalOrganizationProfile{ID: sellerID}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := svc.GetInvoice.Handle(ctx, bapp.GetInvoice{ID: id})
+	if err != nil || got.LineRounding != "gross_then_discount" || got.PriceDecimals != 6 || got.Lines[0].Net != "0.07" ||
+		got.Lines[1].UnitPrice != "0.123456" || got.Lines[1].Net != "123.46" || got.Taxes.Net != "123.53" {
+		t.Fatalf("an issued invoice keeps its calculation: %+v %v", got, err)
 	}
 }
 

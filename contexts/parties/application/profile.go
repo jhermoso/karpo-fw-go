@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -18,29 +19,70 @@ type GetInternalOrganizationProfile struct {
 	ID domain.PartyID `json:"-"`
 }
 
-// SetInternalOrganizationProfile reemplaza el perfil de una empresa interna. Una zona vacía o
-// nula la limpia.
+// SetInternalOrganizationProfile reemplaza el perfil de una empresa interna: un campo vacío,
+// nulo o ausente lo limpia, y vuelve el comportamiento de siempre (D-133, D-144).
 type SetInternalOrganizationProfile struct {
-	ID       domain.PartyID `json:"-"`
-	TimeZone string         `json:"timeZone"`
+	ID                 domain.PartyID `json:"-"`
+	TimeZone           string         `json:"timeZone"`
+	LineRounding       string         `json:"lineRounding"`
+	PriceDecimals      *int           `json:"priceDecimals"`
+	InstallmentsTiming string         `json:"installmentsTiming"`
 }
 
 // InternalOrganizationProfileDTO es la forma de transporte del perfil de una empresa interna.
 type InternalOrganizationProfileDTO struct {
 	InternalOrganizationID string  `json:"internalOrganizationId"`
 	TimeZone               *string `json:"timeZone"`
+	LineRounding           *string `json:"lineRounding"`
+	PriceDecimals          *int    `json:"priceDecimals"`
+	InstallmentsTiming     *string `json:"installmentsTiming"`
+}
+
+// GetInternalOrganizationCodePattern lee el patrón de un tipo de código de una empresa interna.
+type GetInternalOrganizationCodePattern struct {
+	ID   domain.PartyID `json:"-"`
+	Kind string         `json:"-"`
+}
+
+// SetInternalOrganizationCodePattern fija el patrón de un tipo de código de una empresa interna;
+// vacío o nulo, lo quita.
+type SetInternalOrganizationCodePattern struct {
+	ID      domain.PartyID `json:"-"`
+	Kind    string         `json:"-"`
+	Pattern string         `json:"pattern"`
+}
+
+// CodePatternDTO es la forma de transporte del patrón de un tipo de código.
+type CodePatternDTO struct {
+	InternalOrganizationID string  `json:"internalOrganizationId"`
+	CodeKind               string  `json:"codeKind"`
+	Pattern                *string `json:"pattern"`
+}
+
+func optional(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }
 
 func profileDTO(p domain.InternalOrganizationProfile) InternalOrganizationProfileDTO {
-	out := InternalOrganizationProfileDTO{InternalOrganizationID: p.Organization.String()}
-	if p.TimeZone != "" {
-		tz := p.TimeZone
-		out.TimeZone = &tz
-	}
-	return out
+	return InternalOrganizationProfileDTO{InternalOrganizationID: p.Organization.String(), TimeZone: optional(p.TimeZone),
+		LineRounding: optional(p.LineRounding), PriceDecimals: p.PriceDecimals, InstallmentsTiming: optional(p.InstallmentsTiming)}
 }
 
-// addProfile conecta los casos de uso del perfil de la empresa interna (D-133). Se lee con el
+// profileAudit son los campos del perfil tal como quedan en el registro de auditoría.
+func profileAudit(p domain.InternalOrganizationProfile) map[string]any {
+	var decimals any
+	if p.PriceDecimals != nil {
+		decimals = *p.PriceDecimals
+	}
+	return map[string]any{"timeZone": p.TimeZone, "lineRounding": p.LineRounding, "priceDecimals": decimals,
+		"installmentsTiming": p.InstallmentsTiming}
+}
+
+// addProfile conecta los casos de uso del perfil de la empresa interna (D-133, D-144) y de sus
+// patrones de código. Se lee con el
 // permiso de leer parties y se cambia con el de modificarlas, dentro del ámbito: fuera de él, o si
 // la party no es ahora una organización interna, no existe (404); escribirlo es escribir la
 // empresa, así que sólo pueden sus propios usuarios con acceso Full y el administrador global.
@@ -65,22 +107,78 @@ func addProfile(svc *Service, s service) {
 			return InternalOrganizationProfileDTO{}, err
 		}
 		before := p
-		if err := p.SetTimeZone(c.TimeZone); err != nil {
-			return InternalOrganizationProfileDTO{}, err
+		if err := errors.Join(p.SetTimeZone(c.TimeZone), p.SetLineRounding(c.LineRounding), p.SetPriceDecimals(c.PriceDecimals),
+			p.SetInstallmentsTiming(c.InstallmentsTiming)); err != nil {
+			return InternalOrganizationProfileDTO{}, firstError(err)
 		}
-		if p == before {
+		if p.Equal(before) {
 			return profileDTO(p), nil
 		}
 		if err := s.Profiles.Save(ctx, p); err != nil {
 			return InternalOrganizationProfileDTO{}, err
 		}
-		if err := s.profileChanged(ctx, before, p); err != nil {
+		if err := s.profileChanged(ctx, c.ID, profileAudit(before), profileAudit(p)); err != nil {
 			return InternalOrganizationProfileDTO{}, err
 		}
 		return profileDTO(p), nil
 	}, // dos primeros guardados a la vez: el segundo choca y se repite entero (infrastructure.SQLProfiles.Save)
 		pipeline.RetryOnConflict[SetInternalOrganizationProfile, InternalOrganizationProfileDTO](3, 10*time.Millisecond),
 		pipeline.Transactional[SetInternalOrganizationProfile, InternalOrganizationProfileDTO](s.UoW))
+
+	svc.InternalOrganizationCodePattern = chain(PermPartyRead, func(ctx context.Context, q GetInternalOrganizationCodePattern) (CodePatternDTO, error) {
+		if err := s.internalOrganization(ctx, q.ID, false); err != nil {
+			return CodePatternDTO{}, err
+		}
+		kind, err := domain.ParseCodeKind(q.Kind)
+		if err != nil {
+			return CodePatternDTO{}, err
+		}
+		pattern, err := s.Profiles.CodePattern(ctx, q.ID, kind)
+		if err != nil {
+			return CodePatternDTO{}, err
+		}
+		return CodePatternDTO{InternalOrganizationID: q.ID.String(), CodeKind: kind, Pattern: optional(pattern)}, nil
+	})
+
+	svc.SetInternalOrganizationCodePattern = chain(PermPartyUpdate, func(ctx context.Context, c SetInternalOrganizationCodePattern) (CodePatternDTO, error) {
+		if err := s.internalOrganization(ctx, c.ID, true); err != nil {
+			return CodePatternDTO{}, err
+		}
+		kind, err := domain.ParseCodeKind(c.Kind)
+		if err != nil {
+			return CodePatternDTO{}, err
+		}
+		pattern, err := domain.ParseCodePattern(c.Pattern)
+		if err != nil {
+			return CodePatternDTO{}, err
+		}
+		before, err := s.Profiles.CodePattern(ctx, c.ID, kind)
+		if err != nil {
+			return CodePatternDTO{}, err
+		}
+		out := CodePatternDTO{InternalOrganizationID: c.ID.String(), CodeKind: kind, Pattern: optional(pattern)}
+		if pattern == before {
+			return out, nil
+		}
+		if err := s.Profiles.SaveCodePattern(ctx, c.ID, kind, pattern); err != nil {
+			return CodePatternDTO{}, err
+		}
+		field := "codePatterns." + kind
+		if err := s.profileChanged(ctx, c.ID, map[string]any{field: before}, map[string]any{field: pattern}); err != nil {
+			return CodePatternDTO{}, err
+		}
+		return out, nil
+	}, pipeline.RetryOnConflict[SetInternalOrganizationCodePattern, CodePatternDTO](3, 10*time.Millisecond),
+		pipeline.Transactional[SetInternalOrganizationCodePattern, CodePatternDTO](s.UoW))
+}
+
+// firstError devuelve la primera violación de varias juntas (errors.Join): la respuesta lleva un
+// solo código.
+func firstError(err error) error {
+	if j, ok := err.(interface{ Unwrap() []error }); ok && len(j.Unwrap()) > 0 {
+		return j.Unwrap()[0]
+	}
+	return err
 }
 
 // internalOrganization comprueba que la party existe en el ámbito del llamante (y que puede
@@ -103,13 +201,14 @@ func (s service) internalOrganization(ctx context.Context, id domain.PartyID, wr
 	return nil
 }
 
-// profileChanged deja en el registro de auditoría el cambio del perfil, en la unidad de trabajo de
-// ctx. El perfil no es un agregado: su versión es el número de cambios registrados.
-func (s service) profileChanged(ctx context.Context, before, after domain.InternalOrganizationProfile) error {
+// profileChanged deja en el registro de auditoría el cambio del perfil o de uno de sus patrones,
+// en la unidad de trabajo de ctx. El perfil no es un agregado: su versión es el número de cambios
+// registrados.
+func (s service) profileChanged(ctx context.Context, org domain.PartyID, before, after map[string]any) error {
 	if s.Audit == nil {
 		return nil
 	}
-	id := after.Organization.String()
+	id := org.String()
 	trail, err := s.Audit.Trail(ctx, domain.InternalOrganizationProfileKind, id)
 	if err != nil {
 		return err
@@ -121,7 +220,7 @@ func (s service) profileChanged(ctx context.Context, before, after domain.Intern
 	return s.Audit.Append(ctx, app.AuditRecord{ID: fw.NewUUID().String(), AggregateType: domain.InternalOrganizationProfileKind,
 		AggregateID: id, AggregateVersion: int64(len(trail) + 1), Operation: op, Actor: app.ActorFrom(ctx), Channel: app.Channel(ctx),
 		CorrelationID: app.CorrelationID(ctx), At: fw.Now(),
-		Changes: traits.Diff(map[string]any{"timeZone": before.TimeZone}, map[string]any{"timeZone": after.TimeZone})})
+		Changes: traits.Diff(before, after)})
 }
 
 // CompanyTimeZones implementa contracts.CompanyTimeZones sobre los perfiles. Sirve a otros
@@ -143,4 +242,35 @@ func (c CompanyTimeZones) TimeZone(ctx context.Context, organization string) (st
 		return "", err
 	}
 	return p.TimeZone, nil
+}
+
+// CompanyProfiles implementa contracts.CompanyProfiles sobre los perfiles: los ajustes de
+// facturación de cada empresa interna (D-144). Sirve a otros contextos, sin los permisos del
+// usuario, como CompanyTimeZones.
+type CompanyProfiles struct {
+	Profiles domain.InternalOrganizationProfiles
+}
+
+var _ contracts.CompanyProfiles = CompanyProfiles{}
+
+// Settings implementa contracts.CompanyProfiles.
+func (c CompanyProfiles) Settings(ctx context.Context, organization string) (contracts.CompanySettings, error) {
+	id, err := domain.ParsePartyID(organization)
+	if err != nil || id.IsZero() || c.Profiles == nil {
+		return contracts.CompanySettings{}, nil
+	}
+	p, err := c.Profiles.Get(ctx, id)
+	if err != nil {
+		return contracts.CompanySettings{}, err
+	}
+	return contracts.CompanySettings{LineRounding: p.LineRounding, PriceDecimals: p.PriceDecimals, InstallmentsTiming: p.InstallmentsTiming}, nil
+}
+
+// CodePattern implementa contracts.CompanyProfiles.
+func (c CompanyProfiles) CodePattern(ctx context.Context, organization, codeKind string) (string, error) {
+	id, err := domain.ParsePartyID(organization)
+	if err != nil || id.IsZero() || c.Profiles == nil {
+		return "", nil
+	}
+	return c.Profiles.CodePattern(ctx, id, codeKind)
 }

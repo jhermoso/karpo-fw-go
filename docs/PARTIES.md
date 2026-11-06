@@ -1074,11 +1074,11 @@ cliente), `sage_code` y `apiscore_code`, y la tabla `party_data_protection_conse
   de método, ruta y cuerpo, porque la aplicación no conoce HTTP. Lo que cuenta entre proyectos es
   el resultado, y la huella no se compara con otro proyecto.
 
-## 25. El perfil de la empresa interna: su zona horaria (D-133)
+## 25. El perfil de la empresa interna: zona horaria y ajustes de facturación (D-133, D-144)
 
 Cada empresa interna guarda sus propios ajustes en `internal_organization_profile`, el nombre de la
-tabla en Karpo C# y en Trench. Hoy sólo lleva la zona horaria; más adelante, el redondeo, el patrón
-de códigos y los vencimientos (D-128 a D-130).
+tabla en Karpo C# y en Trench: la zona horaria (D-133) y los ajustes de facturación de D-128 a
+D-130, con el esquema común de D-144. Todos son opcionales: nulo es el comportamiento de siempre.
 
 - **Zona horaria:** `time_zone`, opcional, 64 caracteres (`{str:64}`: `varchar(64)` en
   PostgreSQL, `nvarchar(64)` en SQL Server, `NVARCHAR2(64)` en Oracle). Sólo códigos IANA que el
@@ -1110,6 +1110,48 @@ de códigos y los vencimientos (D-128 a D-130).
 - **Esquema:** migración 32, con clave ajena a `parties`. Si dos primeros `PUT` de la misma
   empresa llegan a la vez, el segundo choca con la clave primaria y se repite entero, en otra
   transacción (como mucho tres veces).
+
+### Los ajustes de facturación (D-144)
+
+En el mismo perfil y el mismo `PUT` (que reemplaza el perfil entero: lo que no se manda se limpia),
+con los mismos permisos, ámbito y auditoría que la zona:
+
+| Columna | JSON | Valores | Nulo (lo de siempre) | 422 |
+|---|---|---|---|---|
+| `line_rounding` `{str:20}` | `lineRounding` | `once`: una sola vez al final; `gross_then_discount`: el bruto de la línea al céntimo y después el neto con el descuento, como la ficha de Trench | `once` | `Company.InvalidLineRounding` |
+| `price_decimals` `{int}` | `priceDecimals` | 0 a 6 | 4 | `Company.InvalidPriceDecimals` |
+| `installments_timing` `{str:20}` | `installmentsTiming` | `after_issue`: los vencimientos nacen después, del evento; `with_issue`: en la misma transacción que la emisión | `after_issue` | `Company.InvalidInstallmentsTiming` |
+
+Ejemplo: `{"timeZone": "Europe/Madrid", "lineRounding": "gross_then_discount", "priceDecimals": 2}`.
+Los códigos son los del contrato común, sin el prefijo `parties.`, como `Company.InvalidTimeZone`.
+Las equivalencias con las fichas de Trench: `NetOnce` = `once`, `GrossThenDiscount` =
+`gross_then_discount`, `AfterIssueEvent` = `after_issue`, `InIssueTransaction` = `with_issue`. Qué
+hace cada uno, en docs/FACTURACION.md («Los ajustes de la empresa») y docs/COBROS.md.
+
+### El patrón de cada tipo de código (D-129, D-144)
+
+- **Tabla hija** `internal_organization_code_pattern`: `internal_organization_id` (clave ajena a
+  `parties`), `code_kind` `{str:40}` y `pattern` `{str:200}`, con clave
+  (`internal_organization_id`, `code_kind`). Una fila por empresa y tipo; sin fila, no hay patrón.
+- **Tipos:** hoy sólo `invoice_series` (el código de una serie de facturación). Otro da 422
+  `Company.InvalidCodeKind`, también al leer.
+- **El patrón** es una expresión regular de Go de hasta 200 caracteres que el código debe cumplir
+  **entero**: se compila primero solo y después se ancla con `^(?:…)$`, para que unos paréntesis
+  desequilibrados no se salten el anclaje (`A)|(.*` no compila y da 422). Go usa RE2, que no
+  retrocede: comprobar un código tarda lo que mide, sea cual sea el patrón, así que un patrón como
+  `(a+)+$` no puede colgar el servidor. RE2 no tiene *lookaround* ni retroreferencias; para que el
+  patrón valga igual en Karpo C# y en Trench, se usa el subconjunto común a .NET. Uno que no compila
+  o que mide más de 200 da 422 `Company.InvalidCodePattern`. Ejemplo: `F[A-Z]/[0-9]{2}` admite
+  `FA/26` y no `FA`. El código se compara tal como se escribe, antes de pasarlo a mayúsculas
+  (docs/FACTURACION.md).
+- **API:** `GET` y `PUT /api/profiles/internal-organizations/{id}/code-patterns/{codeKind}`, con
+  `{"pattern": "..."}`; vacío o nulo lo quita. La respuesta lleva `internalOrganizationId`,
+  `codeKind` y `pattern` (null si no hay). Mismos permisos y ámbito que el perfil; cada cambio queda
+  en el registro de auditoría del perfil, como `codePatterns.invoice_series`.
+- **Para los demás contextos:** `contracts.CompanyProfiles` (`Module.CompanyProfiles`) da los
+  ajustes (`Settings`) y el patrón de un tipo (`CodePattern`), sin los permisos del usuario, como
+  la zona.
+- **Esquema:** migración 34, que añade las tres columnas al perfil y crea la tabla hija.
 
 ## 26. La vigencia de las identificaciones (D-142)
 

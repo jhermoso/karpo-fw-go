@@ -142,7 +142,8 @@ es real y no es del catálogo compartido. Es la forma que Go devuelve hoy; `code
 | 13 | `GET /api/catalogs/party-role-types` · `…/party-relationship-types` · `…/party-classifications` · `…/document-types?country=ES` | Catálogos | Los dos primeros, igual; los otros, `GET /catalogs/party-types` y los tipos de documento escritos a mano en el front |
 | 14 | `GET /api/internal-organizations` | Las empresas del grupo que ve quien llama | Igual |
 | 14 bis | `GET /api/internal-organizations/names` | Identificador y nombre de todas las empresas del grupo de la instalación (D-101) | Sólo en Go por ahora |
-| 14 ter | `GET` · `PUT /api/profiles/internal-organizations/{id}` | El perfil de una empresa del grupo: hoy, su zona horaria IANA, `{ "timeZone": "Atlantic/Canary" }`; vacía, nula o ausente la limpia (D-133, docs/PARTIES.md §25). `{id}` es la party de la empresa, no el id de su rol como en Karpo C# | La misma ruta de Karpo C# |
+| 14 ter | `GET` · `PUT /api/profiles/internal-organizations/{id}` | El perfil de una empresa del grupo: su zona horaria IANA y sus ajustes de facturación, `{ "timeZone": "Atlantic/Canary", "lineRounding": "once", "priceDecimals": 4, "installmentsTiming": "after_issue" }`; un campo vacío, nulo o ausente lo limpia (D-133, D-144, docs/PARTIES.md §25). `{id}` es la party de la empresa, no el id de su rol como en Karpo C# | La misma ruta de Karpo C# |
+| 14 quater | `GET` · `PUT /api/profiles/internal-organizations/{id}/code-patterns/{codeKind}` | El patrón (expresión regular, hasta 200) que cumple un tipo de código de la empresa, hoy sólo `invoice_series`: `{ "pattern": "F[A-Z]/[0-9]{2}" }`; vacío o nulo lo quita (D-144) | La ruta acordada en D-144 |
 | 15 | `GET /api/reference/countries` | Países | `GET /catalogs/geographic-boundaries?type=Country` |
 
 Todas menos la 1, la 2 y la 7 existen ya en Go con esta forma.

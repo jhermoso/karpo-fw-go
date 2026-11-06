@@ -260,6 +260,62 @@ Tareas de Go del tramo T1 del plan de Karpo C# (D-127). Karpo C# llega primero a
   factura completa, pero exigirlo es una regla fiscal que queda para quien valide lo fiscal (plan,
   §7).
 
+## Los ajustes de la empresa (D-128 a D-130, D-144; desde el 2026-11-06)
+
+La empresa vendedora guarda sus ajustes en su perfil de Parties (docs/PARTIES.md §25). Billing no
+importa Parties: los pide por su puerto `Settings` (`billing.WithSettings`), que en el anfitrión es
+`host.BillingSettings`, sobre `contracts.CompanyProfiles`. Sin ajuste, lo de siempre.
+
+- **Redondeo de la línea** (`line_rounding`): `once`, una sola vez al final (cantidad × precio −
+  descuento, al céntimo); `gross_then_discount`, el bruto (cantidad × precio) al céntimo y después
+  el neto con el descuento, también al céntimo. Los dos redondean los medios hacia fuera de cero.
+  Ejemplo donde dan distinto: 1 × 0,125 con un 50 % da 0,06 una sola vez (0,0625) y 0,07 con el
+  bruto antes (0,13 y 0,065).
+- **Decimales del precio** (`price_decimals`, 0 a 6; sin ajuste, 4): un precio con más decimales
+  es un error del campo `unitPrice` (400), como antes con 4. El precio de la línea pasa de (18,4) a
+  (20,6) en la migración 9: caben 6 decimales y siguen cabiendo las mismas 14 cifras enteras. El
+  borrador de un albarán de Orders lleva al menos 4 decimales del precio, los del pedido, aunque la
+  empresa pida menos: redondear el precio neto perdería dinero (1,2345 × 1000 daría 1230,00 y no
+  1234,50) y rechazarlo repetiría el evento sin fin.
+- **Dónde se aplica y dónde se congela:** la forma de redondear y los decimales se toman de la
+  empresa **al preparar el borrador** (a mano o desde un albarán) y se quedan en la
+  factura: `bil_invoices.line_rounding` y `price_decimals` (migración 9; las facturas que ya había
+  se marcan `once` y 4, que es como se calcularon). Todas las líneas de una factura se calculan
+  igual, lo que se ve en el borrador es lo que se emite, y una factura emitida no cambia aunque la
+  empresa cambie después sus ajustes (el matiz de D-144). Por qué al preparar y no al emitir:
+  recalcular al emitir cambiaría importes que alguien ya revisó, y con menos decimales obligaría a
+  redondear precios escritos a mano o a rechazar la emisión. Consecuencia: un borrador preparado
+  antes del cambio se emite con el cálculo de antes; para el nuevo, se descarta y se prepara otro.
+  La factura los devuelve en `lineRounding` y `priceDecimals`. **Una rectificativa toma el cálculo
+  de la original**, no el de hoy: así anula exactamente sus importes y admite sus precios aunque la
+  empresa haya pasado a menos decimales.
+- **Patrón del código de serie** (`invoice_series`): si la empresa lo tiene, el código de una serie
+  nueva, **tal como se escribe** (sin los espacios de los extremos), debe cumplirlo entero; si no,
+  422 `billing.series_code_pattern`. Después se guarda en mayúsculas, como siempre: con
+  `F[A-Z]/[0-9]{2}`, `FA/26` vale y `fa/26` no; con `f[a-z]`, `fx` vale y se guarda `FX`. Así una
+  empresa puede admitir la barra (`FA/26`, y el número `FA/26-2026-000001`). Sin patrón, la regla
+  fija de siempre: sin barras. Siempre, con patrón o sin él, de 1 a 20 caracteres (los de la
+  columna) y sin espacios ni caracteres de control, aunque el patrón los admita. Las series que ya
+  existen no se revisan al cambiar el patrón.
+- **Qué patrones:** son expresiones regulares RE2 (las de Go): no hay *lookaround* (`(?=…)`,
+  `(?<!…)`) ni retroreferencias (`\1`). Para que el mismo patrón valga en Karpo C# y en Trench, hay
+  que usar el subconjunto común a .NET: clases, alternativas, grupos y repeticiones, como
+  `F[A-Z]{1,3}/[0-9]{2}`.
+- **Vencimientos** (`installments_timing`): con `with_issue`, la emisión entrega
+  `billing.invoice-issued.v1` a Receivables dentro de su propia transacción
+  (`billing.WithInstallmentsInTransaction`, en el anfitrión el consumidor de Receivables y su
+  backend). Si ese backend no es el de Billing, `Compose` lo descarta, lo deja en el log y los
+  vencimientos nacen después. Ver docs/COBROS.md.
+- **Prueba:** `TestBilling_CompanySettings` (memoria y SQLite; también la rectificativa después de
+  cambiar el ajuste), `TestBilling_DeliveryKeepsThePriceOfTheOrder`, `TestInvoice_Calculation`,
+  `TestSeries_CodePattern` y la migración 9 con datos en SQLite (`TestCalculationMigrationInSQLite`);
+  en los cuatro motores, `TestBillingContext` (precio de 6 decimales, serie con barra y factura
+  emitida que no cambia) y `TestBillingCalculationMigration` (la migración 9 conserva los precios,
+  también los de 14 cifras enteras); de punta a punta con el perfil de Parties,
+  `TestBillingSettings_FromThePartiesProfile` en `host`.
+- **Pendiente:** que el cliente sobrescriba redondeo y decimales (cascada cliente > empresa de
+  D-144), en BACKLOG.md.
+
 ## Pendiente
 
 - Todo el cálculo de impuestos que falta, por país y por sector: punto 6 de

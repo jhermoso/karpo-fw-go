@@ -60,6 +60,27 @@ type CompanyTimeZones interface {
 	TimeZone(ctx context.Context, organization string) (string, error)
 }
 
+// CompanySettings son los ajustes de facturación que una empresa interna guarda en su perfil
+// (docs/DECISIONES-COMUNES.md, D-144). Un valor vacío o nil es el comportamiento de siempre.
+type CompanySettings struct {
+	// LineRounding es "once" (una sola vez al final) o "gross_then_discount" (el bruto de la línea,
+	// y después el neto con el descuento).
+	LineRounding string
+	// PriceDecimals son los decimales del precio de una línea, de 0 a 6; nil, 4.
+	PriceDecimals *int
+	// InstallmentsTiming es "after_issue" (los vencimientos nacen después, del evento de la
+	// emisión) o "with_issue" (en la misma transacción que la emisión).
+	InstallmentsTiming string
+}
+
+// CompanyProfiles dice los ajustes de facturación de una empresa interna y el patrón (una
+// expresión regular de Go que el código debe cumplir entero) de cada tipo de código, como
+// "invoice_series"; "" si no tiene. Sirve a otros contextos, sin los permisos del usuario.
+type CompanyProfiles interface {
+	Settings(ctx context.Context, organization string) (CompanySettings, error)
+	CodePattern(ctx context.Context, organization, codeKind string) (string, error)
+}
+
 // PartyFacilityRoleAssignedV1 se publica cuando una party empieza a desempeñar un rol en una
 // instalación (RRHH: el centro de trabajo de un empleado).
 type PartyFacilityRoleAssignedV1 struct {

@@ -42,9 +42,17 @@ type Deps struct {
 	Blocks     domain.Blocks     // opcional
 	Merged     app.MergedParties // opcional: las parties fusionadas, que los listados dejan fuera (D-100)
 	Zones      Zones             // opcional: sin él, la fecha de hoy es la de UTC
-	UoW        fw.UnitOfWork
-	Recorder   app.EventRecorder
-	Audit      app.AuditLog
+	Settings   Settings          // opcional: sin él, los ajustes de siempre (D-144)
+	// InTransaction recibe billing.invoice-issued.v1 dentro de la transacción de la emisión cuando
+	// la empresa vendedora quiere que los vencimientos nazcan con la factura (with_issue, D-130).
+	// En el anfitrión, el consumidor de Receivables. Opcional: sin él, nacen siempre después.
+	InTransaction app.MessageHandler
+	// InTransactionUoW es el backend de InTransaction: si no es UoW, la emisión no puede ser una
+	// sola transacción con él, y Compose lo descarta (los vencimientos nacen después).
+	InTransactionUoW fw.UnitOfWork
+	UoW              fw.UnitOfWork
+	Recorder         app.EventRecorder
+	Audit            app.AuditLog
 }
 
 // Zones dice la zona horaria de una empresa, el vendedor: company es su party y country, el país
@@ -54,6 +62,39 @@ type Deps struct {
 // no en UTC: a las 00:30 en Madrid ya es el día siguiente (decisión de Javier, 2026-11-05).
 type Zones interface {
 	Location(ctx context.Context, company, country string) (*time.Location, error)
+}
+
+// Settings dice los ajustes de facturación de una empresa interna, el vendedor (D-144). En el
+// anfitrión, los que la empresa guarda en su perfil de Parties.
+type Settings interface {
+	Settings(ctx context.Context, company string) (CompanySettings, error)
+}
+
+// CompanySettings son los ajustes de la empresa que usa Billing.
+type CompanySettings struct {
+	// Calculation es cómo se calculan las líneas de sus facturas; vacío, domain.DefaultCalculation.
+	Calculation domain.Calculation
+	// SeriesPattern es el patrón (una expresión regular de Go) que cumple el código de sus series;
+	// vacío, la regla fija.
+	SeriesPattern string
+	// InstallmentsWithIssue dice si los vencimientos de sus facturas nacen en la misma transacción
+	// que la emisión, y no después, del evento.
+	InstallmentsWithIssue bool
+}
+
+// settings son los ajustes del vendedor; los de siempre sin Settings.
+func (s *Deps) settings(ctx context.Context, seller domain.OrganizationID) (CompanySettings, error) {
+	var out CompanySettings
+	if s.Settings != nil {
+		var err error
+		if out, err = s.Settings.Settings(ctx, seller.String()); err != nil {
+			return CompanySettings{}, err
+		}
+	}
+	if out.Calculation.Rounding == "" {
+		out.Calculation = domain.DefaultCalculation()
+	}
+	return out, nil
 }
 
 // withoutMerged deja fuera de un listado los registros cuyo cliente es una party fusionada,
@@ -255,7 +296,12 @@ func (s service) seriesUseCases(svc *Service) {
 		if err := scopeOf(ctx).check("parties.party", seller, seller, true); err != nil {
 			return SeriesDTO{}, err
 		}
-		sr, err := domain.OpenSeries(domain.NewSeriesID(), domain.SeriesState{Seller: seller, Code: c.Code, Year: c.Year, Corrective: c.Corrective})
+		settings, err := s.settings(ctx, seller)
+		if err != nil {
+			return SeriesDTO{}, err
+		}
+		sr, err := domain.OpenSeries(domain.NewSeriesID(), domain.SeriesState{Seller: seller, Code: c.Code, Year: c.Year, Corrective: c.Corrective},
+			settings.SeriesPattern)
 		if err != nil {
 			return SeriesDTO{}, err
 		}
@@ -322,25 +368,29 @@ func addressV1(a domain.Address) *contracts.AddressV1 {
 // Publications traduce los eventos de dominio al Published Language.
 func Publications(r *messaging.Recorder) *messaging.Recorder {
 	messaging.On(r, func(_ context.Context, e domain.InvoiceIssued) ([]app.IntegrationEvent, error) {
-		s := e.Invoice
-		out := contracts.InvoiceIssuedV1{InvoiceID: e.AggregateID, Number: s.Number, Kind: s.Kind.String(), Reason: s.Reason,
-			Seller: s.Seller.String(), SellerNIF: s.SellerIdentity.NIF, Customer: s.Customer.String(), CustomerNIF: s.CustomerIdentity.NIF,
-			CustomerName: s.CustomerIdentity.Name, IssueDate: s.IssueDate.String(), OperationDate: dateText(s.OperationDate),
-			DueDate: dateText(s.DueDate), Currency: s.Currency.String(), Country: s.Taxes.Country, Net: money(s.Taxes.Net),
-			Tax: money(s.Taxes.Tax), Surcharge: money(s.Taxes.Surcharge), Total: money(s.Taxes.Total()), Taxes: []contracts.TaxLineV1{},
-			SellerAddress: addressV1(s.SellerIdentity.Address), CustomerAddress: addressV1(s.CustomerIdentity.Address)}
-		if !s.Corrects.IsZero() {
-			out.Corrects = s.Corrects.String()
-		}
-		out.SourceType, out.SourceID = s.Source.Type, s.Source.ID
-		for _, l := range s.Taxes.Lines {
-			out.Taxes = append(out.Taxes, contracts.TaxLineV1{TaxType: l.TaxType, TaxCode: l.TaxCode, Treatment: l.Treatment,
-				TreatmentKind: l.TreatmentKind, Rate: money(l.Rate), Base: money(l.Base), Amount: money(l.Amount),
-				SurchargeRate: optMoney(l.SurchargeRate), SurchargeAmount: optMoney(l.SurchargeAmount)})
-		}
-		return []app.IntegrationEvent{out}, nil
+		return []app.IntegrationEvent{issuedV1(e.AggregateID, e.Invoice)}, nil
 	})
 	return r
+}
+
+// issuedV1 traduce una factura emitida a billing.invoice-issued.v1.
+func issuedV1(id string, s domain.InvoiceState) contracts.InvoiceIssuedV1 {
+	out := contracts.InvoiceIssuedV1{InvoiceID: id, Number: s.Number, Kind: s.Kind.String(), Reason: s.Reason,
+		Seller: s.Seller.String(), SellerNIF: s.SellerIdentity.NIF, Customer: s.Customer.String(), CustomerNIF: s.CustomerIdentity.NIF,
+		CustomerName: s.CustomerIdentity.Name, IssueDate: s.IssueDate.String(), OperationDate: dateText(s.OperationDate),
+		DueDate: dateText(s.DueDate), Currency: s.Currency.String(), Country: s.Taxes.Country, Net: money(s.Taxes.Net),
+		Tax: money(s.Taxes.Tax), Surcharge: money(s.Taxes.Surcharge), Total: money(s.Taxes.Total()), Taxes: []contracts.TaxLineV1{},
+		SellerAddress: addressV1(s.SellerIdentity.Address), CustomerAddress: addressV1(s.CustomerIdentity.Address)}
+	if !s.Corrects.IsZero() {
+		out.Corrects = s.Corrects.String()
+	}
+	out.SourceType, out.SourceID = s.Source.Type, s.Source.ID
+	for _, l := range s.Taxes.Lines {
+		out.Taxes = append(out.Taxes, contracts.TaxLineV1{TaxType: l.TaxType, TaxCode: l.TaxCode, Treatment: l.Treatment,
+			TreatmentKind: l.TreatmentKind, Rate: money(l.Rate), Base: money(l.Base), Amount: money(l.Amount),
+			SurchargeRate: optMoney(l.SurchargeRate), SurchargeAmount: optMoney(l.SurchargeAmount)})
+	}
+	return out
 }
 
 func upper(s string) string { return strings.ToUpper(strings.TrimSpace(s)) }

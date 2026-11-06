@@ -3,7 +3,9 @@ package parties_test
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	papp "github.com/jhermoso/karpo-fw-go/contexts/parties/application"
@@ -39,6 +41,7 @@ func TestParties_InternalOrganizationProfile(t *testing.T) {
 				}
 			}
 			e.profile()
+			e.profileSettings()
 		})
 	}
 }
@@ -109,4 +112,94 @@ func (e *env) badProfile(got papp.InternalOrganizationProfileDTO) {
 		tz = *got.TimeZone
 	}
 	e.t.Fatalf("profile: %s %s", got.InternalOrganizationID, tz)
+}
+
+// Los ajustes de facturación de D-144 en el mismo perfil, y el patrón de cada tipo de código en
+// su propio recurso: mismos permisos y ámbito que la zona; un valor fuera del enumerado o del rango,
+// o un patrón que no compila, da 422 con su código; null limpia.
+func (e *env) profileSettings() {
+	e.t.Helper()
+	var acme, globex papp.PartyDTO
+	e.must(e.do("POST", "/api/organizations", e.admin, map[string]any{"legalName": "Acme Ajustes",
+		"roles": []string{domain.RoleInternalOrganization.String()}}, &acme), 201, "register acme")
+	e.must(e.do("POST", "/api/organizations", e.admin, map[string]any{"legalName": "Globex Ajustes",
+		"roles": []string{domain.RoleInternalOrganization.String()}}, &globex), 201, "register globex")
+	e.grant("clerk", authz.Full, acme.ID)
+	e.grant("viewer", authz.ReadOnly, acme.ID)
+	e.grant("reader", authz.Full, acme.ID)
+	e.grant("outsider", authz.Full, globex.ID)
+
+	path := "/api/profiles/internal-organizations/" + acme.ID
+	var got papp.InternalOrganizationProfileDTO
+	e.must(e.do("GET", path, e.viewer, nil, &got), 200, "nothing saved yet")
+	if got.LineRounding != nil || got.PriceDecimals != nil || got.InstallmentsTiming != nil {
+		e.t.Fatalf("an empty profile: %+v", got)
+	}
+	e.must(e.do("PUT", path, e.clerk, map[string]any{"timeZone": "Europe/Madrid", "lineRounding": "gross_then_discount", "priceDecimals": 2,
+		"installmentsTiming": "with_issue"}, &got), 200, "the clerk sets them")
+	e.must(e.do("GET", path, e.reader, nil, &got), 200, "read them back")
+	if got.TimeZone == nil || *got.TimeZone != "Europe/Madrid" || got.LineRounding == nil || *got.LineRounding != "gross_then_discount" ||
+		got.PriceDecimals == nil || *got.PriceDecimals != 2 || got.InstallmentsTiming == nil || *got.InstallmentsTiming != "with_issue" {
+		e.t.Fatalf("the settings: %+v", got)
+	}
+	st, err := e.mod.CompanyProfiles.Settings(context.Background(), acme.ID)
+	if err != nil || st.LineRounding != "gross_then_discount" || st.PriceDecimals == nil || *st.PriceDecimals != 2 || st.InstallmentsTiming != "with_issue" {
+		e.t.Fatalf("the settings other contexts read: %+v %v", st, err)
+	}
+	for _, c := range []struct {
+		body map[string]any
+		code string
+	}{
+		{map[string]any{"lineRounding": "NetOnce"}, domain.ErrInvalidLineRounding},
+		{map[string]any{"priceDecimals": 7}, domain.ErrInvalidPriceDecimals},
+		{map[string]any{"priceDecimals": -1}, domain.ErrInvalidPriceDecimals},
+		{map[string]any{"installmentsTiming": "InIssueTransaction"}, domain.ErrInvalidInstallmentsTiming},
+	} {
+		e.mustProblem(e.problem("PUT", path, e.clerk, c.body), 422, c.code, fmt.Sprint(c.body))
+	}
+	e.must(e.do("PUT", path, e.viewer, map[string]any{"lineRounding": "once"}, nil), 403, "a read-only grant cannot change them")
+	e.must(e.do("PUT", path, e.reader, map[string]any{"lineRounding": "once"}, nil), 403, "nor can who lacks the update permission")
+	e.must(e.do("PUT", path, e.outsider, map[string]any{"lineRounding": "once"}, nil), 404, "nor another company")
+	e.must(e.do("PUT", path, e.clerk, map[string]any{"lineRounding": "once", "priceDecimals": 0}, &got), 200, "zero decimals")
+	if got.PriceDecimals == nil || *got.PriceDecimals != 0 || got.InstallmentsTiming != nil || got.TimeZone != nil {
+		e.t.Fatalf("the PUT replaces the whole profile: %+v", got)
+	}
+	e.must(e.do("PUT", path, e.clerk, map[string]any{"lineRounding": nil, "priceDecimals": nil}, &got), 200, "null clears them")
+	if got.LineRounding != nil || got.PriceDecimals != nil {
+		e.t.Fatalf("cleared: %+v", got)
+	}
+
+	// El patrón de las series de facturación.
+	pattern := path + "/code-patterns/invoice_series"
+	var cp papp.CodePatternDTO
+	e.must(e.do("GET", pattern, e.viewer, nil, &cp), 200, "no pattern yet")
+	if cp.Pattern != nil || cp.CodeKind != "invoice_series" || cp.InternalOrganizationID != acme.ID {
+		e.t.Fatalf("no pattern: %+v", cp)
+	}
+	e.must(e.do("PUT", pattern, e.clerk, map[string]any{"pattern": "F[A-Z]/[0-9]{2}"}, &cp), 200, "the clerk sets it")
+	e.must(e.do("GET", pattern, e.reader, nil, &cp), 200, "read it back")
+	if cp.Pattern == nil || *cp.Pattern != "F[A-Z]/[0-9]{2}" {
+		e.t.Fatalf("the pattern: %+v", cp)
+	}
+	if p, err := e.mod.CompanyProfiles.CodePattern(context.Background(), acme.ID, "invoice_series"); err != nil || p != "F[A-Z]/[0-9]{2}" {
+		e.t.Fatalf("the pattern other contexts read: %q %v", p, err)
+	}
+	e.mustProblem(e.problem("PUT", pattern, e.clerk, map[string]any{"pattern": "F[A-Z"}), 422, domain.ErrInvalidCodePattern, "it does not compile")
+	e.mustProblem(e.problem("PUT", pattern, e.clerk, map[string]any{"pattern": strings.Repeat("A", 201)}), 422, domain.ErrInvalidCodePattern, "too long")
+	e.mustProblem(e.problem("PUT", path+"/code-patterns/customer_number", e.clerk, map[string]any{"pattern": "C[0-9]+"}), 422, domain.ErrInvalidCodeKind,
+		"an unknown code kind")
+	e.mustProblem(e.problem("GET", path+"/code-patterns/customer_number", e.clerk, nil), 422, domain.ErrInvalidCodeKind, "nor read")
+	e.must(e.do("PUT", pattern, e.viewer, map[string]any{"pattern": "X"}, nil), 403, "a read-only grant cannot change it")
+	e.must(e.do("PUT", pattern, e.reader, map[string]any{"pattern": "X"}, nil), 403, "nor can who lacks the update permission")
+	e.must(e.do("GET", pattern, e.outsider, nil, nil), 404, "another company does not see it")
+	e.must(e.do("PUT", pattern, e.outsider, map[string]any{"pattern": "X"}, nil), 404, "nor change it")
+	e.must(e.do("GET", pattern, "", nil, nil), 401, "anonymous callers do not")
+	e.must(e.do("PUT", pattern, e.clerk, map[string]any{"pattern": nil}, &cp), 200, "null clears it")
+	if cp.Pattern != nil {
+		e.t.Fatalf("cleared: %+v", cp)
+	}
+	trail, err := e.mod.Audit.Trail(context.Background(), domain.InternalOrganizationProfileKind, acme.ID)
+	if err != nil || len(trail) != 5 {
+		e.t.Fatalf("audit of the settings and the pattern: %+v %v", trail, err)
+	}
 }

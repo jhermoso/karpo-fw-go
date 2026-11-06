@@ -18,7 +18,7 @@ func dec(s string) vocab.Decimal { return vocab.MustDecimal(s) }
 
 func TestSeries(t *testing.T) {
 	seller := domain.OrganizationID{UUID: fw.NewUUID()}
-	s, err := domain.OpenSeries(domain.NewSeriesID(), domain.SeriesState{Seller: seller, Code: " fa ", Year: 2026})
+	s, err := domain.OpenSeries(domain.NewSeriesID(), domain.SeriesState{Seller: seller, Code: " fa ", Year: 2026}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,5 +139,92 @@ func TestInvoice(t *testing.T) {
 	}
 	if !fix.Net().Equal(dec("-30")) {
 		t.Fatal("negative correction")
+	}
+}
+
+// El código de una serie: sin patrón de la empresa, la regla fija (sin espacios ni barras); con
+// patrón, el que diga el patrón, entero y en mayúsculas (D-129, D-144).
+func TestSeries_CodePattern(t *testing.T) {
+	seller := domain.OrganizationID{UUID: fw.NewUUID()}
+	open := func(code, pattern string) error {
+		_, err := domain.OpenSeries(domain.NewSeriesID(), domain.SeriesState{Seller: seller, Code: code, Year: 2026}, pattern)
+		return err
+	}
+	if err := open("F/A", ""); !errors.Is(err, fw.ErrValidation) {
+		t.Fatalf("no slash without a pattern: %v", err)
+	}
+	for code, pattern := range map[string]string{"FA/26": `F[A-Z]/[0-9]{2}`, "FA-1": `F[A-Z]-[0-9]`, "R": `R|FR`, " fx ": `f[a-z]`} {
+		if err := open(code, pattern); err != nil {
+			t.Fatalf("%s with %s: %v", code, pattern, err)
+		}
+	}
+	// El patrón se comprueba sobre el código tal como se escribe; después se guarda en mayúsculas.
+	if s, _ := domain.OpenSeries(domain.NewSeriesID(), domain.SeriesState{Seller: seller, Code: "fx", Year: 2026}, `f[a-z]`); s.State().Code != "FX" {
+		t.Fatalf("stored in capitals: %s", s.State().Code)
+	}
+	// Unos paréntesis desequilibrados no se saltan el anclaje: «A)|(.*» no compila solo.
+	for code, pattern := range map[string]string{"FA": `F[A-Z]/[0-9]{2}`, "XFR": `R|FR`, "FRX": `R|FR`, "fa/26": `F[A-Z]/[0-9]{2}`,
+		"ANYTHING": `A)|(.*`} {
+		if err := open(code, pattern); !isViolation(err, "billing.series_code_pattern") {
+			t.Fatalf("%s with %s: %v", code, pattern, err)
+		}
+	}
+	// Ni espacios ni caracteres de control, aunque el patrón los admita.
+	for _, code := range []string{"F A", "F\tA", "F\u00a0A", "F\x01A"} {
+		if err := open(code, `.+`); !errors.Is(err, fw.ErrValidation) {
+			t.Fatalf("%q: %v", code, err)
+		}
+	}
+	if err := open("ABCDEFGHIJKLMNOPQRSTU", `[A-Z]+`); !errors.Is(err, fw.ErrValidation) {
+		t.Fatalf("the column still has 20 characters: %v", err)
+	}
+}
+
+// Cómo se calcula una línea (D-128, D-144): una vez al final o el bruto antes, y el precio con los
+// decimales del cálculo de la factura, que es el de la empresa al preparar el borrador.
+func TestInvoice_Calculation(t *testing.T) {
+	draft := func(c domain.Calculation) *domain.Invoice {
+		t.Helper()
+		inv, err := domain.DraftInvoice(domain.NewInvoiceID(), domain.InvoiceState{Seller: domain.OrganizationID{UUID: fw.NewUUID()},
+			Customer: domain.PartyID{UUID: fw.NewUUID()}, Kind: domain.Ordinary, Calculation: c})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return inv
+	}
+	if c := draft(domain.Calculation{}).State().Calculation; c != domain.DefaultCalculation() {
+		t.Fatalf("without a calculation, the usual one: %+v", c)
+	}
+	// 1 × 0.125 con un 50 %: 0.0625 → 0.06 una vez; 0.125 → 0.13 y 0.065 → 0.07 redondeando el bruto.
+	line := domain.LineInput{Description: "Tornillo", Quantity: dec("1"), UnitPrice: dec("0.125"), Discount: dec("50"), TaxCode: "G21"}
+	for rounding, want := range map[domain.LineRounding]string{domain.RoundOnce: "0.06", domain.RoundGrossThenDiscount: "0.07"} {
+		inv := draft(domain.Calculation{Rounding: rounding, PriceDecimals: 4})
+		if _, err := inv.AddLine(line); err != nil {
+			t.Fatal(err)
+		}
+		if got := inv.State().Lines[0].Net; !got.Equal(dec(want)) {
+			t.Fatalf("%s: %s, want %s", rounding, got, want)
+		}
+	}
+	two := draft(domain.Calculation{Rounding: domain.RoundOnce, PriceDecimals: 2})
+	if _, err := two.AddLine(line); !errors.Is(err, fw.ErrValidation) {
+		t.Fatalf("3 decimals in a price of 2: %v", err)
+	}
+	six := draft(domain.Calculation{Rounding: domain.RoundOnce, PriceDecimals: 6})
+	if _, err := six.AddLine(domain.LineInput{Description: "Kilovatio", Quantity: dec("1000"), UnitPrice: dec("0.123456"), TaxCode: "G21"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := six.State().Lines[0].Net; !got.Equal(dec("123.46")) {
+		t.Fatalf("1000 × 0.123456: %s", got)
+	}
+	if _, err := six.AddLine(domain.LineInput{Description: "X", Quantity: dec("1"), UnitPrice: dec("0.1234567"), TaxCode: "G21"}); !errors.Is(err, fw.ErrValidation) {
+		t.Fatalf("7 decimals: %v", err)
+	}
+	for _, c := range []domain.Calculation{{Rounding: "half_even", PriceDecimals: 2}, {Rounding: domain.RoundOnce, PriceDecimals: 7},
+		{Rounding: domain.RoundOnce, PriceDecimals: -1}} {
+		if _, err := domain.DraftInvoice(domain.NewInvoiceID(), domain.InvoiceState{Seller: domain.OrganizationID{UUID: fw.NewUUID()},
+			Customer: domain.PartyID{UUID: fw.NewUUID()}, Kind: domain.Ordinary, Calculation: c}); !errors.Is(err, fw.ErrValidation) {
+			t.Fatalf("%+v: %v", c, err)
+		}
 	}
 }

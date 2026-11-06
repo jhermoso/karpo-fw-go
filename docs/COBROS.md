@@ -158,6 +158,30 @@ contexts/receivables/
   - anulación;
   - búsqueda por el indicador de saldada.
 
+## Vencimientos con la emisión (D-130, D-144; desde el 2026-11-06)
+
+Cuándo nace el cobro de una factura lo decide la empresa vendedora en su perfil
+(`installments_timing`, docs/PARTIES.md §25):
+
+- **`after_issue`** (o nada, lo de siempre): Billing guarda `billing.invoice-issued.v1` en su
+  outbox en la transacción de la emisión, y el cobro nace después, cuando el anfitrión lo entrega.
+- **`with_issue`**: en la misma transacción que la emisión. Todos los contextos del anfitrión
+  están sobre el mismo backend, y una unidad de trabajo dentro de otra se une a ella; así que
+  Billing, después de emitir y antes de confirmar, entrega el mismo hecho al consumidor de
+  Receivables (`billing.WithInstallmentsInTransaction(h.Receivables.Consumer)`). El consumidor
+  reclama su inbox y abre el cobro con las reglas de siempre, en esa transacción. Si falla, no se
+  emite la factura ni se gasta número. Cuando el outbox entrega el hecho después, Receivables ya
+  tiene un cobro con ese id y no hace nada.
+- **Límite:** sólo vale con Billing y Receivables en el mismo proceso y la misma base, como hoy.
+  El anfitrión pasa el backend de Receivables (`Module.Backend`) y Billing lo compara con el suyo:
+  si no es el mismo, descarta la entrega en la transacción, lo deja en el log y los vencimientos
+  nacen después, como con `after_issue`. Si algún día van en procesos distintos (macroservicios),
+  `with_issue` no podrá ser una sola transacción.
+- **Prueba:** `TestBilling_InstallmentsWithIssue` (si Receivables falla, la factura sigue en
+  borrador y la serie no gasta número), `TestBilling_InstallmentsWithIssueNeedTheSameBackend` y `TestBillingSettings_FromThePartiesProfile` en `host`
+  (memoria y SQLite): con `after_issue` el cobro aparece al entregar; con `with_issue`, al emitir,
+  y la entrega posterior no lo duplica.
+
 ## Pendiente
 
 - ~~Contexto Tesorería (decisión 5)~~: hecho en [TESORERIA.md](TESORERIA.md):

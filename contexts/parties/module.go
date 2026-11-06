@@ -24,6 +24,7 @@ type Module struct {
 	Trials            contracts.Trials           // si la prueba de un prospect está en vigor
 	Collaborators     contracts.Collaborators    // de quién es un código de promoción
 	CompanyTimeZones  contracts.CompanyTimeZones // la zona horaria que guarda cada empresa interna (D-133)
+	CompanyProfiles   contracts.CompanyProfiles  // sus ajustes de facturación y sus patrones de código (D-144)
 	HTTP              *pdist.Module
 	Outbox            application.OutboxStore // eventos de dominio, dentro de Parties
 	IntegrationOutbox application.OutboxStore // Published Language
@@ -74,7 +75,8 @@ func Compose(sw *hotswap.Switch, opts ...Option) *Module {
 	trials := papp.Trials{Relationships: relationships, Catalogs: infrastructure.SwappableCatalogs(sw)}
 	return &Module{Service: svc, Directory: dir, Organizations: orgs, TaxIdentities: papp.TaxIdentities{Parties: parties},
 		MergedParties: papp.MergedParties{Parties: parties}, Trials: trials, CompanyTimeZones: papp.CompanyTimeZones{Profiles: profiles},
-		Collaborators: papp.Collaborators{Relationships: relationships, Catalogs: infrastructure.SwappableCatalogs(sw)}, HTTP: pdist.NewModule(svc, dir),
+		CompanyProfiles: papp.CompanyProfiles{Profiles: profiles},
+		Collaborators:   papp.Collaborators{Relationships: relationships, Catalogs: infrastructure.SwappableCatalogs(sw)}, HTTP: pdist.NewModule(svc, dir),
 		Outbox: domainOutbox, IntegrationOutbox: integrationOutbox, Audit: audit, Ledger: ledger, Consumer: consumer}
 }
 

@@ -2,10 +2,12 @@ package application
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/billing/contracts"
 	"github.com/jhermoso/karpo-fw-go/contexts/billing/domain"
+	app "github.com/jhermoso/karpo-fw-go/pkg/application"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/pipeline"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
@@ -155,8 +157,12 @@ type InvoiceDTO struct {
 	SourceType           string               `json:"sourceType,omitempty"`
 	SourceID             string               `json:"sourceId,omitempty"`
 	SourceRef            string               `json:"sourceRef,omitempty"`
-	Version              int64                `json:"version"`
-	ModifiedBy           string               `json:"modifiedBy,omitempty"`
+	// LineRounding y PriceDecimals son cómo se calculan las líneas: los ajustes de la empresa al
+	// preparar el borrador, que se quedan en la factura (D-144).
+	LineRounding  string `json:"lineRounding"`
+	PriceDecimals int    `json:"priceDecimals"`
+	Version       int64  `json:"version"`
+	ModifiedBy    string `json:"modifiedBy,omitempty"`
 }
 
 func breakdownDTO(b domain.Breakdown) BreakdownDTO {
@@ -176,7 +182,7 @@ func invoiceDTO(i *domain.Invoice) InvoiceDTO {
 		SellerNIF: s.SellerIdentity.NIF, CustomerNIF: s.CustomerIdentity.NIF, CustomerName: s.CustomerIdentity.Name, Lines: []LineDTO{},
 		SellerAddress: addressV1(s.SellerIdentity.Address), CustomerAddress: addressV1(s.CustomerIdentity.Address),
 		Net: money(i.Net()), Version: i.Version(), ModifiedBy: i.ModifiedBy().Name, SourceType: s.Source.Type, SourceID: s.Source.ID,
-		SourceRef: s.Source.Ref}
+		SourceRef: s.Source.Ref, LineRounding: string(s.Calculation.Rounding), PriceDecimals: s.Calculation.PriceDecimals}
 	if !s.Corrects.IsZero() {
 		d.Corrects = s.Corrects.String()
 	}
@@ -189,6 +195,19 @@ func invoiceDTO(i *domain.Invoice) InvoiceDTO {
 		d.Taxes = &b
 	}
 	return d
+}
+
+// dispatchIssued entrega billing.invoice-issued.v1 de una factura recién emitida a InTransaction,
+// con el contexto (y la unidad de trabajo) de la emisión.
+func (s service) dispatchIssued(ctx context.Context, i *domain.Invoice) error {
+	id := i.ID().String()
+	e := issuedV1(id, i.State())
+	data, err := json.Marshal(e)
+	if err != nil {
+		return err
+	}
+	return s.InTransaction.HandleMessage(ctx, app.Envelope{ID: fw.NewUUID().String(), Type: e.IntegrationEventType(), Source: contracts.Source,
+		Subject: id, OccurredAt: fw.Now().UTC(), CorrelationID: app.CorrelationID(ctx), Data: data})
 }
 
 func (s service) invoiceUseCases(svc *Service) {
@@ -238,7 +257,9 @@ func (s service) invoiceUseCases(svc *Service) {
 			if os.Status != domain.Issued {
 				return InvoiceDTO{}, fw.Violation("billing.correcting_draft", "only an issued invoice is corrected; a draft is edited")
 			}
-			st.Customer, st.EquivalenceSurcharge = os.Customer, os.EquivalenceSurcharge
+			// La rectificativa se calcula como la original, aunque la empresa haya cambiado sus
+			// ajustes: así anula sus importes y admite sus precios (D-144).
+			st.Customer, st.EquivalenceSurcharge, st.Calculation = os.Customer, os.EquivalenceSurcharge, os.Calculation
 			if strings.TrimSpace(st.Description) == "" {
 				st.Description = "Rectificación de la factura " + os.Number
 			}
@@ -247,6 +268,13 @@ func (s service) invoiceUseCases(svc *Service) {
 			if err := s.notBlocked(ctx, st.Customer); err != nil {
 				return InvoiceDTO{}, err
 			}
+		}
+		if st.Kind == domain.Ordinary {
+			settings, err := s.settings(ctx, seller)
+			if err != nil {
+				return InvoiceDTO{}, err
+			}
+			st.Calculation = settings.Calculation
 		}
 		inv, err := domain.DraftInvoice(domain.NewInvoiceID(), st)
 		if err != nil {
@@ -328,11 +356,18 @@ func (s service) invoiceUseCases(svc *Service) {
 		if err := v.Err(); err != nil {
 			return InvoiceDTO{}, err
 		}
-		return update(ctx, c.ID, func(ctx context.Context, i *domain.Invoice) error {
+		var issued *domain.Invoice
+		var withIssue bool
+		out, err := update(ctx, c.ID, func(ctx context.Context, i *domain.Invoice) error {
 			st := i.State()
 			if st.Status != domain.Draft {
 				return i.Issue(domain.Issuance{}) // informa de que no es un borrador
 			}
+			settings, err := s.settings(ctx, st.Seller)
+			if err != nil {
+				return err
+			}
+			issued, withIssue = i, settings.InstallmentsWithIssue
 			if st.Kind == domain.Ordinary {
 				if err := s.notBlocked(ctx, st.Customer); err != nil {
 					return err
@@ -364,6 +399,13 @@ func (s service) invoiceUseCases(svc *Service) {
 			return i.Issue(domain.Issuance{Series: seriesID, Number: number, Date: date, Seller: ids[domain.PartyID{UUID: st.Seller.UUID}],
 				Customer: ids[st.Customer], Taxes: taxes})
 		})
+		if err != nil || !withIssue || s.InTransaction == nil {
+			return out, err
+		}
+		// Los vencimientos nacen con la factura (with_issue, D-130): Receivables recibe el mismo
+		// hecho que publicará el outbox, en esta misma transacción; si falla, no se emite nada. Cuando
+		// el outbox lo entregue después, Receivables ya tiene el cobro y no hace nada.
+		return out, s.dispatchIssued(ctx, issued)
 	}, issueRetry[IssueInvoice, InvoiceDTO](), pipeline.Transactional[IssueInvoice, InvoiceDTO](s.UoW))
 
 	svc.Discard = guard(PermInvoiceUpdate, func(ctx context.Context, c DiscardInvoice) (struct{}, error) {
