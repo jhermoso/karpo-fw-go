@@ -539,6 +539,11 @@ func (r *Repository[ID, T]) replaceChildren(ctx context.Context, ex executor, ag
 			query := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
 				r.q(c.Table), strings.Join(quoted, ", "), strings.Join(append([]string{fk}, phs...), ", "))
 			if _, err := ex.ExecContext(ctx, query, b.args...); err != nil {
+				for _, u := range c.Unique {
+					if r.db.ViolatesUnique(err, c.Table, u.Name, u.Columns...) {
+						return u.Err
+					}
+				}
 				return fmt.Errorf("sqlrepo: insert %s.%s: %w", r.kind, c.Name, err)
 			}
 		}

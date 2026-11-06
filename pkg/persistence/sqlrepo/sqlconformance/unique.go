@@ -142,4 +142,55 @@ func uniqueRepository(t *testing.T, db *sqlrepo.DB) {
 	if err := repo.Save(ctx, widget(first, &blue)); !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("a repeated identity: %v", err)
 	}
+	uniqueChildren(t, db)
+}
+
+// errPartTaken es el error que declara el hijo de uniqueChildren para su índice único.
+var errPartTaken = domain.Violation("widgets.part_taken", "another widget has that part")
+
+// uniqueChildren comprueba Child.Unique: el choque de un hijo con el índice único declarado de su
+// tabla es el error declarado, tanto con el hijo de otro agregado como con otro hijo del mismo.
+func uniqueChildren(t *testing.T, db *sqlrepo.DB) {
+	t.Helper()
+	ctx := context.Background()
+	_, _ = db.ExecContext(ctx, "DROP TABLE uq_child_parts")
+	execDDL(t, db, "DROP TABLE uq_child_widgets",
+		`CREATE TABLE uq_child_widgets (id {uuid} NOT NULL PRIMARY KEY, version {bigint} NOT NULL, name {str:200} NOT NULL,
+	price {bigint} NOT NULL, active {bool} NOT NULL, color {str:50}, created_at {ts} NOT NULL,
+	weight {dec:28,8} NOT NULL, launch {date} NOT NULL)`,
+		`CREATE TABLE uq_child_parts (widget_id {uuid} NOT NULL, pos {int} NOT NULL, name {str:50} NOT NULL, qty {bigint} NOT NULL,
+	PRIMARY KEY (widget_id, pos), FOREIGN KEY (widget_id) REFERENCES uq_child_widgets (id))`,
+		`CREATE UNIQUE INDEX uq_uq_child_parts_name ON uq_child_parts (name)`)
+	m := DecimalWidgetMapping()
+	m.Table = "uq_child_widgets"
+	parts := WidgetMapping().Children[0]
+	parts.Table = "uq_child_parts"
+	parts.Unique = []sqlrepo.UniqueIndex{{Name: "uq_uq_child_parts_name", Columns: []string{"name"}, Err: errPartTaken}}
+	m.Children = []sqlrepo.Child[*repotest.Widget]{parts}
+	repo := sqlrepo.MustRepository(db, m)
+	created := time.Date(2026, 11, 6, 12, 0, 0, 0, time.UTC)
+	widget := func(names ...string) *repotest.Widget {
+		t.Helper()
+		var ps []repotest.Part
+		for _, n := range names {
+			ps = append(ps, repotest.Part{Name: n, Qty: 1})
+		}
+		w, err := repotest.Reconstitute(repotest.NewWidgetID(), "w", 1, true, nil, created, vocab.MustDecimal("1"), vocab.DateOf(created), ps)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return w
+	}
+	if err := repo.Save(ctx, widget("bolt", "nut")); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.Save(ctx, widget("bolt")); !errors.Is(err, errPartTaken) {
+		t.Fatalf("the part of another widget: %v", err)
+	}
+	if err := repo.Save(ctx, widget("gear", "gear")); !errors.Is(err, errPartTaken) {
+		t.Fatalf("the same part twice in one widget: %v", err)
+	}
+	if err := repo.Save(ctx, widget("gear")); err != nil {
+		t.Fatalf("a part nobody has (the failed saves left nothing): %v", err)
+	}
 }

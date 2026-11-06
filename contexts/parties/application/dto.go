@@ -114,6 +114,8 @@ type IdentificationDTO struct {
 	IssuedOn         string `json:"issuedOn,omitempty"`
 	ExpiresOn        string `json:"expiresOn,omitempty"`
 	Primary          bool   `json:"primary"`
+	// ValidTo es el fin de la vigencia; sin él, la identificación es vigente (D-142).
+	ValidTo *time.Time `json:"validTo,omitempty"`
 }
 
 // ContactDTO es un contacto de una party.
@@ -213,6 +215,7 @@ func ToDTO(p *domain.Party, names Names) PartyDTO {
 		if !i.ExpiresOn.IsZero() {
 			id.ExpiresOn = i.ExpiresOn.String()
 		}
+		id.ValidTo = i.ValidToOf()
 		if names.Documents != nil {
 			if t, ok := names.Documents.DocumentType(i.Type); ok {
 				id.Code = t.Code

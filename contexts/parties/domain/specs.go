@@ -75,6 +75,8 @@ var (
 	IdFieldType    = spec.Comparable("doc_type", func(i Identification) DocumentTypeID { return i.Type })
 	IdFieldCountry = spec.Comparable("country", func(i Identification) string { return i.Country.String() })
 	IdFieldNumber  = spec.Comparable("number", func(i Identification) string { return i.Number })
+	// IdFieldValidTo es el fin de la vigencia de una identificación (D-142); nulo, vigente.
+	IdFieldValidTo = spec.OptionalTime("valid_to", Identification.ValidToOf)
 
 	ClassFieldType  = spec.Comparable("class_type", func(c Classification) ClassificationTypeID { return c.Type })
 	ClassFieldFrom  = spec.Time("valid_from", func(c Classification) time.Time { return c.Period.From() })
@@ -116,10 +118,11 @@ func OwnedBy(orgs []PartyID) spec.Spec[*Relationship] {
 	return RelFieldFrom.In(orgs...).Or(RelFieldTo.In(orgs...))
 }
 
-// HoldsDocument selecciona las parties que tienen el documento (la comprobación de duplicados
-// entre parties).
+// HoldsDocument selecciona las parties que tienen el documento vigente (la comprobación de
+// duplicados entre parties): una identificación histórica no lo retiene (D-142).
 func HoldsDocument(t DocumentTypeID, country string, number string) spec.Spec[*Party] {
-	return FieldIdentifications.Any(spec.And(IdFieldType.Eq(t), IdFieldCountry.Eq(country), IdFieldNumber.Eq(number)))
+	return FieldIdentifications.Any(spec.And(IdFieldType.Eq(t), IdFieldCountry.Eq(country), IdFieldNumber.Eq(number),
+		IdFieldValidTo.IsNull()))
 }
 
 // WithDocumentNumber selecciona las parties que tienen un documento con ese número canónico.

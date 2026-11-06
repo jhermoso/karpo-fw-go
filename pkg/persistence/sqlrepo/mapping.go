@@ -54,8 +54,8 @@ type Mapping[ID domain.Identifier, T domain.AggregateRoot[ID]] struct {
 	Unique []UniqueIndex
 }
 
-// UniqueIndex es un índice único de la tabla raíz de un Mapping: su nombre, sus columnas y el
-// error que devuelve Save cuando un agregado choca con él (DB.ViolatesUnique).
+// UniqueIndex es un índice único de la tabla raíz de un Mapping o de la de un hijo: su nombre, sus
+// columnas y el error que devuelve Save cuando un agregado choca con él (DB.ViolatesUnique).
 type UniqueIndex struct {
 	Name    string
 	Columns []string
@@ -88,6 +88,10 @@ type Child[T any] struct {
 	OrderBy []string
 	// Dehydrate devuelve un Values por cada elemento hijo.
 	Dehydrate func(root T) ([]Values, error)
+	// Unique declara los índices únicos de la tabla hija, además de su clave primaria, con el
+	// error que devuelve Save cuando un hijo choca con uno de ellos (como Mapping.Unique). Sin
+	// declararlo, el choque es un error del servidor.
+	Unique []UniqueIndex
 }
 
 var identRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)

@@ -1630,6 +1630,98 @@ func TestParties_PromotionCodeIsUniqueAmongCollaborators(t *testing.T) {
 	e.must(e.do("PUT", code(1), e.admin, map[string]any{"promotionCode": "SOL-2"}, nil), 200, "another code")
 }
 
+// Un documento vigente identifica a una sola party, pero una identificación histórica (valid_to,
+// D-142) no lo retiene: el mismo documento en otra party se rechaza mientras la primera lo tiene
+// vigente y se admite cuando ya es histórico. La histórica se devuelve con su validTo, y no cuenta
+// para la principal. Sobre SQLite: la histórica se siembra escribiendo la fila, porque hoy ningún
+// caso de uso cierra una identificación.
+func TestParties_HistoricalIdentificationDoesNotHoldTheDocument_SQLite(t *testing.T) {
+	e := compose(t, newMemoryDirectory)
+	ctx := context.Background()
+	raw, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "idents.db")+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_pragma=synchronous(OFF)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw.SetMaxOpenConns(1)
+	t.Cleanup(func() { _ = raw.Close() })
+	db := sqlite.Open(raw, sqlrepo.WithName("sqlite"))
+	m, _ := infrastructure.Migrator(db)
+	if _, err := m.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.sw.Swap(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	person := func(name string) papp.PartyDTO {
+		t.Helper()
+		var p papp.PartyDTO
+		e.must(e.do("POST", "/api/persons", e.admin, map[string]any{"givenName": name, "firstSurname": "Pérez"}, &p), 201, name)
+		return p
+	}
+	dni := map[string]any{"documentType": domain.DocNationalID.String(), "country": "ES", "number": "12345678Z"}
+	ana, luis := person("Ana"), person("Luis")
+	e.must(e.do("POST", "/api/parties/"+ana.ID+"/identifications", e.admin, dni, nil), 200, "ana's DNI")
+	e.mustProblem(e.problem("POST", "/api/parties/"+luis.ID+"/identifications", e.admin, dni), 422, domain.ErrDocumentTaken,
+		"the current document of another party")
+
+	closedAt := time.Date(2026, 3, 4, 5, 6, 7, 0, time.UTC)
+	if _, err := raw.Exec(`UPDATE party_identifications SET valid_to = ? WHERE party_id = ?`, db.Dialect().TimeValue(closedAt), ana.ID); err != nil {
+		t.Fatal(err)
+	}
+	var got papp.PartyDTO
+	e.must(e.do("POST", "/api/parties/"+luis.ID+"/identifications", e.admin, dni, &got), 200, "the document of a historical identification")
+	if len(got.Identifications) != 1 || got.Identifications[0].ValidTo != nil || !got.Identifications[0].Primary {
+		t.Fatalf("luis's current DNI: %+v", got.Identifications)
+	}
+	e.must(e.do("GET", "/api/parties/"+ana.ID, e.admin, nil, &got), 200, "ana")
+	if len(got.Identifications) != 1 || got.Identifications[0].ValidTo == nil || !got.Identifications[0].ValidTo.Equal(closedAt) {
+		t.Fatalf("ana's historical DNI: %+v", got.Identifications)
+	}
+	var body map[string]any
+	e.must(e.do("GET", "/api/parties/"+ana.ID, e.admin, nil, &body), 200, "ana as JSON")
+	if ids, _ := body["identifications"].([]any); len(ids) != 1 || ids[0].(map[string]any)["validTo"] != "2026-03-04T05:06:07Z" {
+		t.Fatalf("validTo in the JSON: %v", body["identifications"])
+	}
+	// La primera identificación vigente de Ana es su principal, aunque la histórica lo fuera: el
+	// índice de una sola principal vigente la deja pasar.
+	e.must(e.do("POST", "/api/parties/"+ana.ID+"/identifications", e.admin, map[string]any{"documentType": domain.DocPassport.String(),
+		"country": "ES", "number": "PAA123456", "expiresOn": "2031-02-03", "issuingAuthority": "Policía Nacional"}, &got), 200, "ana's passport")
+	if len(got.Identifications) != 2 {
+		t.Fatalf("ana's identifications: %+v", got.Identifications)
+	}
+	for _, i := range got.Identifications {
+		if !i.Primary {
+			t.Fatalf("the historical one keeps its mark and the first current one is primary: %+v", got.Identifications)
+		}
+	}
+	historical := got.Identifications[slices.IndexFunc(got.Identifications, func(i papp.IdentificationDTO) bool { return i.ValidTo != nil })]
+	e.mustProblem(e.problem("PUT", "/api/parties/"+ana.ID+"/identifications/"+historical.ID+"/primary", e.admin, nil), 422,
+		domain.ErrIdentificationNotCurrent, "a historical identification made primary")
+
+	// Dar el primer documento vigente es completar la identidad, no corregirla (D-122, regla 3):
+	// lo hace el usuario estándar que dio de alta la party aunque ésta tenga documentos históricos.
+	var acme, mia papp.PartyDTO
+	e.must(e.do("POST", "/api/organizations", e.admin, map[string]any{"legalName": "Acme Identidades",
+		"roles": []string{domain.RoleInternalOrganization.String()}}, &acme), 201, "acme")
+	e.grant("seller", authz.Full, acme.ID)
+	e.must(e.do("POST", "/api/persons", e.seller, map[string]any{"givenName": "Mía", "firstSurname": "Ruiz",
+		"affiliation": map[string]any{"organization": acme.ID, "relationshipType": domain.RelCustomer.String()}}, &mia), 201, "registered from acme")
+	add := func(doc map[string]any) int {
+		return e.do("POST", "/api/parties/"+mia.ID+"/identifications", e.seller, doc, nil)
+	}
+	e.must(add(map[string]any{"documentType": domain.DocNationalID.String(), "country": "ES", "number": "11111111H"}), 200,
+		"the first document completes the identity")
+	passport := map[string]any{"documentType": domain.DocPassport.String(), "country": "ES", "number": "PCC111111",
+		"expiresOn": "2031-02-03", "issuingAuthority": "Policía Nacional"}
+	e.must(add(passport), 403, "a second current document corrects it: an administrator does")
+	if _, err := raw.Exec(`UPDATE party_identifications SET valid_to = ? WHERE party_id = ?`, db.Dialect().TimeValue(closedAt), mia.ID); err != nil {
+		t.Fatal(err)
+	}
+	e.must(add(passport), 200, "with only historical documents, the first current one completes the identity again")
+	e.must(add(map[string]any{"documentType": domain.DocOther.String(), "country": "ES", "number": "OTRO-1"}), 403,
+		"and the next one corrects it")
+}
+
 // El código de promoción y su índice único (migración 29) a través de una fusión y de su vuelta,
 // sobre SQLite. Una fusión sólo pasa a la superviviente las relaciones de cliente y de proveedor
 // (D-93): la del colaborador se queda en la que cede, con su código, y el índice no estorba ni al

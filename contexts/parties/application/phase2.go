@@ -241,11 +241,11 @@ func addPhase2(svc *Service, s service) {
 		if err := operable(p); err != nil {
 			return PartyDTO{}, err
 		}
-		// Añadir un documento a una party que ya tiene alguno es corregir su identidad (D-122, regla
-		// 3); darle el primero es completarla, y lo hace quien puede cambiarla (decidido en esta
-		// sesión: el alta no lleva documento, y si no, el usuario estándar no podría identificar a los
-		// clientes que da de alta).
-		if len(p.Identifications()) > 0 {
+		// Añadir un documento a una party que ya tiene alguno vigente es corregir su identidad (D-122,
+		// regla 3); darle el primero vigente es completarla, y lo hace quien puede cambiarla (decidido
+		// en esta sesión: el alta no lleva documento, y si no, el usuario estándar no podría
+		// identificar a los clientes que da de alta). Las históricas no cuentan (D-142).
+		if p.HasCurrentIdentification() {
 			if err := sc.mayCorrectIdentity(p); err != nil {
 				return PartyDTO{}, err
 			}
@@ -253,18 +253,19 @@ func addPhase2(svc *Service, s service) {
 		if err := policy.CheckKind(p.Kind(), d); err != nil {
 			return PartyDTO{}, err
 		}
-		// Un documento identifica a una sola party: el C# sólo ofrecía una búsqueda por valor.
-		// Cuenta toda party, visible o no: un documento identifica a una sola party en toda la
-		// instalación (decisión P1: la identidad base es compartida).
+		// Un documento vigente identifica a una sola party: el C# sólo ofrecía una búsqueda por
+		// valor. Cuenta toda party, visible o no: un documento identifica a una sola party en toda
+		// la instalación (decisión P1: la identidad base es compartida). Una identificación
+		// histórica de otra party no lo retiene (D-142).
 		taken, err := s.Parties.Exists(ctx, spec.And(domain.HoldsDocument(d.Type, d.Country.String(), number), spec.Not(domain.WithIDs(c.PartyID))))
 		if err != nil {
 			return PartyDTO{}, err
 		}
 		if taken {
-			return PartyDTO{}, fw.Violation("parties.document_taken", "another party holds this document")
+			return PartyDTO{}, fw.Violation(domain.ErrDocumentTaken, "another party holds this document")
 		}
 		return updateParty(ctx, c.PartyID, func(p *domain.Party, _ *domain.Catalog) error {
-			if len(p.Identifications()) > 0 {
+			if p.HasCurrentIdentification() {
 				if err := s.scope(ctx).mayCorrectIdentity(p); err != nil {
 					return err
 				}
