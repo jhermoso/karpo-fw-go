@@ -15,9 +15,9 @@ import (
 
 // Permisos de los extractos: registrar lo que dice el banco y explicarlo van por separado.
 var (
-	PermStatementRead      = authz.MustPermission("Treasury.Statement.Read")
-	PermStatementImport    = authz.MustPermission("Treasury.Statement.Import")
-	PermStatementReconcile = authz.MustPermission("Treasury.Statement.Reconcile")
+	PermStatementRead      = authz.MustPermission("Financial.BankStatement.Read")
+	PermStatementImport    = authz.MustPermission("Financial.BankStatement.Import")
+	PermStatementReconcile = authz.MustPermission("Financial.BankStatement.Reconcile")
 )
 
 // MatchWindowDays es cuánto puede distar la fecha de un movimiento de la fecha de la remesa u

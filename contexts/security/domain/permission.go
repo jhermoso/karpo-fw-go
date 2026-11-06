@@ -184,7 +184,8 @@ func (c Catalog) Check(perms []Permission) error {
 // que Javier aprobó como P5): GlobalSuperAdmin, el comodín; OrganizationAdmin, todo menos lo
 // reservado al administrador global; StandardUser, Read, Create y Update fuera de Security;
 // ReadOnlyUser, todos los Read; Customer, nada. Cualquier otra acción (Approve, Issue, Submit...)
-// sólo llega a OrganizationAdmin o a un rol propio.
+// sólo llega a OrganizationAdmin o a un rol propio. Los de AssignedOnlyPermissions no llegan a
+// ninguno de los tres: sólo a un rol propio (D-141).
 func StandardPermissions(role RoleID, c Catalog) []Permission {
 	var out []Permission
 	for _, p := range c.Codes() {
@@ -192,6 +193,9 @@ func StandardPermissions(role RoleID, c Catalog) []Permission {
 			if role == RoleGlobalSuperAdmin {
 				out = append(out, p)
 			}
+			continue
+		}
+		if slices.Contains(AssignedOnlyPermissions, p) {
 			continue
 		}
 		switch role {

@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"strings"
 	"time"
@@ -252,6 +253,24 @@ func (s *service) administer(ctx context.Context, id domain.UserID, fn func(ctx 
 		return fn(ctx, a, u)
 	})
 	return s.userResult(ctx, u, err)
+}
+
+// withOrganizationAdmin marca si quien administra lleva el rol OrganizationAdmin, que el contexto de
+// autorización no trae: con él reparte los permisos que sólo se asignan (CanAssign). Quien no tiene
+// usuario (un servicio) no lo lleva.
+func (s *service) withOrganizationAdmin(ctx context.Context, a domain.Administrator) (domain.Administrator, error) {
+	if a.Global {
+		return a, nil
+	}
+	caller, err := s.Users.Get(ctx, a.User)
+	switch {
+	case errors.Is(err, fw.ErrNotFound):
+		return a, nil
+	case err != nil:
+		return a, err
+	}
+	a.OrganizationAdmin = caller.IsActive() && caller.HasRole(domain.RoleOrganizationAdmin)
+	return a, nil
 }
 
 // changeAccess carga un usuario y aplica fn si quien llama puede cambiar su acceso a org. El

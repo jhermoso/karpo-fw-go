@@ -317,7 +317,7 @@ func (s service) wirePricing(svc *Service) {
 		return settingsDTO(own.State(), own), nil
 	})
 
-	svc.Quote = guard(PermReservationRead, func(ctx context.Context, q GetQuote) (QuoteDTO, error) {
+	svc.Quote = guard(PermQuoteRead, func(ctx context.Context, q GetQuote) (QuoteDTO, error) {
 		var v fw.Validation
 		amount := parseDecimal(&v, "amount", q.Amount)
 		org, err := company(ctx, &v, q.Company, false)

@@ -53,7 +53,7 @@ Puntuación de 1 a 5 por criterio; nota ponderada sobre 100. **Mantener** ≥ 70
 | 5 | `BankStatementLine`, `AccountTransaction`, `FinancialAccount` y la conciliación manual | 3 | 1 | 2 | 3 | **49** | Aplazado → fase 2: extractos (Norma 43 / camt.053) y conciliación contra cobros, remesas y pagos |
 | 6 | `PartyBankAccount` (cuentas de terceros) | 3 | 3 | 3 | 3 | **60** | Se queda en Parties por ahora; la cuenta del deudor viaja en su mandato |
 | 7 | Tres validadores de IBAN | — | — | — | — | — | Sustituido → un único `vocab.IBAN` (MOD-97) |
-| 8 | Endpoints sin permisos | — | — | — | — | — | Sustituido → `Treasury.Account.*` y `Treasury.Mandate.*`; en las remesas, **preparar** (`Update`), **generar** (`Generate`) y **liquidar** (`Settle`) son permisos separados |
+| 8 | Endpoints sin permisos | — | — | — | — | — | Sustituido → `Financial.BankAccount.*` y `Financial.Mandate.*`; en las remesas, **preparar** (`Update`), **generar** (`Generate`) y **liquidar** (`Settle`) son permisos separados |
 
 ## Diseño
 
@@ -165,7 +165,7 @@ resultados, nota 49). No había lector de ficheros del banco.
 - **Conciliación automática:** a cada movimiento pendiente se le asigna la remesa o la orden de su
   cuenta con el mismo importe y fecha a **cinco días** como mucho, solo si hay **exactamente una**
   candidata libre. Si hay varias o ninguna, decide una persona.
-- **Permisos:** `Treasury.Statement.Read`, `Import` y `Reconcile` (**registrar lo que dice el banco
+- **Permisos:** `Financial.BankStatement.Read`, `Import` y `Reconcile` (**registrar lo que dice el banco
   y explicarlo están separados**).
 - **Tablas:** `trs_statements` (+ `trs_statement_lines`), migración 4.
 
@@ -212,6 +212,27 @@ resultados, nota 49). No había lector de ficheros del banco.
 - **Integración** en PostgreSQL, SQL Server, Oracle y MySQL: fichero Norma 43, solape, hueco de
   saldos, automática, «ya conciliado» buscado en las filas hijas, importe distinto, ida y vuelta
   de los movimientos en orden, liberar y reasignar, y búsqueda de extractos con pendientes.
+
+## Permisos: prefijo Financial (D-135)
+
+Javier decidió el 2026-11-05 (D-135) que los permisos de Tesorería lleven el prefijo `Financial`,
+como en C#, conservando los verbos: CRUD por recurso donde no hay casos de uso modelados, y los
+casos de uso (`Generate`, `Settle`, `Import`, `Reconcile`) donde los hay. El catálogo común
+(D-141) llama a los extractos `BankStatement`, como en C#.
+
+| Antes | Ahora |
+|---|---|
+| `Treasury.Account.Read` / `Update` | `Financial.BankAccount.Read` / `Update` |
+| `Treasury.Mandate.Read` / `Update` | `Financial.Mandate.Read` / `Update` |
+| `Treasury.Remittance.Read` / `Update` / `Generate` / `Settle` | `Financial.Remittance.Read` / `Update` / `Generate` / `Settle` |
+| `Treasury.Statement.Read` / `Import` / `Reconcile` | `Financial.BankStatement.Read` / `Import` / `Reconcile` |
+| `Treasury.Transfer.Read` / `Update` / `Generate` / `Settle` | `Financial.Transfer.Read` / `Update` / `Generate` / `Settle` |
+
+La cuenta de Tesorería es la `BankAccount` de C#: `Financial.Account.*` ya es la cuenta del sector
+financiero (contexto Financial). La migración 5 de Security renombra los códigos guardados
+(catálogo, permisos de cada rol y lo concedido), así que una base con concesiones `Treasury.*`
+sigue funcionando. Los roles del sistema reciben lo mismo que antes: la regla estándar mira la
+acción y si el permiso es de Security, no el prefijo.
 
 ## Pendiente
 

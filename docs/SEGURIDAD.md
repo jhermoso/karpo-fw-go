@@ -513,3 +513,91 @@ global retira `Merge` a `OrganizationAdmin`, un arranque con un permiso nuevo se
 devuelve `Merge`, el global se lo devuelve, un no global recibe 403, auditoría); conformidad de los
 mapeos (lo concedido de la semilla e ida y vuelta) y `GrantedBackfill` (la migración 4 sobre una
 base con las tres primeras), que el módulo de integración ejecuta en los cinco motores.
+
+**Migración 5 de Security** (D-135): los permisos de Tesorería pasan de `Treasury.*` a
+`Financial.*` (mapa en [TESORERIA.md](TESORERIA.md)). En `sec_permissions` la entrada cambia de
+código y de id, que se deriva del código; si la nueva ya existiera, la vieja se queda y la
+sincronización del catálogo la desactiva. En `sec_role_permissions` y
+`sec_role_granted_permissions` el código cambia sin duplicar filas: si el rol ya tenía el nombre
+nuevo, la fila vieja se borra. `TreasuryRename` la prueba sobre una base con las cuatro primeras,
+en SQLite y en los otros cuatro motores del módulo de integración.
+
+- **Casos que cubre la prueba:**
+  - el catálogo con el código viejo y el nuevo a la vez;
+  - un permiso que el global había retirado a un rol del sistema, que sigue retirado tras la
+    sincronización;
+  - una segunda ejecución, que no cambia nada.
+- **Sin rastro:** la migración cambia los permisos de los roles directamente en las tablas. No
+  publica `RolePermissionsChanged` ni deja registro de auditoría.
+- **Sin vuelta atrás:** con la migración 5 aplicada no se puede volver al binario anterior sin
+  restaurar la base. Su sincronización declararía otra vez `Treasury.*` y se lo daría a los roles
+  del sistema, incluido lo que el global les había retirado, porque en lo concedido ya sólo
+  figuran los nombres nuevos.
+
+## 11. Permisos que sólo se asignan (D-137, D-141)
+
+Hay permisos que ningún rol del sistema debe recibir por la regla estándar: los asigna el
+administrador a un rol propio (atención al cliente, comerciales y otros autorizados). Por ejemplo,
+cotizar divisa (`Exchange.Quote.Read`): por su verbo, `Read`, la regla se lo daría a
+`OrganizationAdmin`, `StandardUser` y `ReadOnlyUser`.
+
+- **La lista:** `domain.AssignedOnlyPermissions`, junto a `GlobalOnlyPermissions`.
+  `StandardPermissions` la salta para los tres roles. `GlobalSuperAdmin` sigue teniendo el comodín.
+- **Las capas:** la lista nombra los códigos como texto, igual que `GlobalOnlyPermissions`, así que
+  Security no importa el contexto que declara el permiso.
+- **Bases existentes:** el permiso entra en el catálogo con la sincronización al arrancar y ningún
+  rol del sistema lo recibe ni lo guarda como concedido (`sec_role_granted_permissions`), porque lo
+  concedido sólo crece con lo que da la regla. El global tampoco puede dárselo a un rol del sistema
+  (422, «la regla no lo da»); sí a un rol propio.
+- **Quién lo reparte** (decisión de Javier del 2026-11-06): el administrador global y el
+  administrador de cada organización. «Administrador de cada organización» quiere decir que lleva
+  el rol `OrganizationAdmin` y tiene acceso Full a todas las organizaciones del destinatario.
+  - `CanAssign` deja que quien lleva el rol `OrganizationAdmin` (y está activo) asigne o retire un
+    rol con los permisos que él tiene más los de `AssignedOnlyPermissions`, aunque él no los tenga.
+    Así, un `OrganizationAdmin` puede retirar «Currency desk» a otro usuario de su organización.
+  - Siguen valiendo las otras reglas: sólo a usuarios que abarca por completo (`CanAdminister`) y
+    nunca a sí mismo.
+  - El rol propio lo crea el global, como cualquier rol propio: el `OrganizationAdmin` no crea ni
+    edita roles.
+  - El contexto de autorización no dice qué roles lleva quien asigna: la aplicación lo lee de su
+    usuario al asignar o retirar un rol.
+  - Los roles valen en todas las organizaciones del usuario, no en una: quien recibe «Currency
+    desk» cotiza en todas sus organizaciones. Si los roles deben ser por organización está por
+    decidir (BACKLOG, 2c).
+- **Quien reparte roles nunca tiene lo que sólo se asigna** (`CanCombine`, al asignar). Si no, un
+  `OrganizationAdmin` daría de alta a otro, le haría `OrganizationAdmin` y recibiría de él
+  «Currency desk»; o dos `OrganizationAdmin` se lo darían el uno al otro, porque «nunca a sí mismo»
+  sólo compara usuarios. Para quien no es el global, una asignación se rechaza (403) si, sumando
+  los permisos del rol y los que el destinatario ya tiene por sus otros roles (aunque no tenga
+  ninguno), alguien acabaría con `Security.User.Role` y con un permiso que sólo se asigna:
+  - un rol con permisos que sólo se asignan, a quien ya reparte roles;
+  - un rol con `Security.User.Role`, empezando por `OrganizationAdmin`, a quien ya tiene alguno de
+    esos permisos.
+
+  Además, nadie define un rol propio que mezcle las dos cosas, ni convierte uno en mixto (422,
+  `security.mixed_role`). El comodín no cuenta: es sólo del global.
+- **Riesgo que queda:** una persona con dos cuentas, una de administrador y otra con «Currency
+  desk». Las reglas no lo ven, porque son dos usuarios distintos; sólo lo cubre la auditoría de las
+  asignaciones de rol. Un `OrganizationAdmin` también puede entrar como un usuario que ya cotiza,
+  restableciéndole la contraseña o vinculándole su identidad externa: la auditoría debe vigilar los
+  eventos de restablecimiento (`reset`) y de vinculación (`linked`).
+- **Prueba:** un arranque con `Exchange.Quote.Read` sobre roles ya sembrados no cambia ningún rol,
+  y el catálogo real de los contextos no se lo da a ninguno de los tres.
+  `TestSecurity_AssignedOnlyDistribution` cubre el reparto:
+  - el global crea «Currency desk» (Marta no puede) y Marta, `OrganizationAdmin` de Acme, se lo da
+    a Carlos, que entonces cotiza;
+  - todo esto se rechaza con 403:
+    - darlo un `StandardUser`, o alguien con `Security.User.Role` por un rol propio pero sin ser
+      `OrganizationAdmin`;
+    - darlo a un usuario de Beta, que Marta sólo lee, o a uno de Acme y de Beta;
+    - dárselo Marta a sí misma;
+    - un rol con `Exchange.Quote.Read` y `Security.Role.Update`;
+    - la cadena de dos `OrganizationAdmin`, en los dos sentidos;
+    - hacer `OrganizationAdmin` o repartidor de roles a quien cotiza, y dar «Currency desk» a quien
+      reparte roles;
+    - retirarlo quien no es `OrganizationAdmin`;
+    - devolver `OrganizationAdmin` a quien se lo retiraron y recibió después «Currency desk»;
+    - asignar un rol mixto, puesto a mano en la base, a un usuario sin roles (el global tampoco
+      puede definirlo: 422);
+  - otro `OrganizationAdmin` de Acme sí se lo retira a Carlos, y el global sí puede dárselo a
+    Marta.

@@ -79,3 +79,8 @@ func OwnPermissions() []PermissionDeclaration {
 // GlobalOnlyPermissions nunca se dan a OrganizationAdmin: los roles y el catálogo son del
 // administrador global (decisión P3).
 var GlobalOnlyPermissions = []Permission{PermRoleUpdate}
+
+// AssignedOnlyPermissions nunca los da la regla estándar a OrganizationAdmin, StandardUser ni
+// ReadOnlyUser: sólo los recibe un rol propio al que se los asigne el administrador (D-137,
+// D-141). Son códigos de otros contextos, nombrados como texto: Security no importa a nadie.
+var AssignedOnlyPermissions = []Permission{"Exchange.Quote.Read"}

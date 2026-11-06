@@ -497,6 +497,29 @@ func (h *host) scenario(tag string) {
 	if report, err := h.sec.SyncCatalog(ctx, papp.Permissions()...); err != nil || report.Deactivated != 1 {
 		t.Fatalf("the new permission goes away: %+v %v", report, err)
 	}
+	// D-141: un permiso que sólo se asigna (cotizar divisa) llega a una base existente y no lo
+	// recibe ningún rol del sistema, ni queda como concedido; el global tampoco puede dárselo a uno.
+	const quote authz.Permission = "Exchange.Quote.Read"
+	if report, err := h.sec.SyncCatalog(ctx, append(slices.Clone(papp.Permissions()), quote)...); err != nil || report.Added != 1 || report.RolesUpdated != 0 {
+		t.Fatalf("start with an assigned-only permission: %+v %v", report, err)
+	}
+	for _, seed := range sdomain.SystemRoles() {
+		var r sapp.RoleDTO
+		h.must(h.do("GET", "/api/security/roles/"+seed.ID.String(), root, nil, &r), 200, seed.Name)
+		if slices.Contains(r.Permissions, string(quote)) || slices.Contains(r.Withdrawn, string(quote)) {
+			t.Errorf("%s: holds %v, withdrawn %v", seed.Name, r.Permissions, r.Withdrawn)
+		}
+	}
+	if h.context(m).HasPermission(quote) {
+		t.Fatal("the organization administrator does not quote")
+	}
+	h.must(h.do("GET", orgAdmin, root, nil, &adminRole), 200, "organization admin role")
+	h.must(h.do("PUT", orgAdmin+"/permissions", root, map[string]any{"permissions": append(slices.Clone(adminRole.Permissions), string(quote))}, nil),
+		422, "an assigned-only permission never goes to a system role")
+	// Quién lo reparte y a quién: TestSecurity_AssignedOnlyDistribution.
+	if report, err := h.sec.SyncCatalog(ctx, papp.Permissions()...); err != nil || report.Deactivated != 1 || report.RolesUpdated != 0 {
+		t.Fatalf("the assigned-only permission goes away: %+v %v", report, err)
+	}
 	roleTrail, err := h.sec.Audit.Trail(ctx, sdomain.RoleKind, sdomain.RoleOrganizationAdmin.String())
 	if err != nil || !slices.ContainsFunc(roleTrail, func(r application.AuditRecord) bool { return r.Actor.Name == "root" }) {
 		t.Fatalf("changing a system role leaves the same trail as a custom role: %d records %v", len(roleTrail), err)
@@ -637,6 +660,135 @@ func TestSecurity_WithParties_MemoryThenSQLite(t *testing.T) {
 	h.scenario("sql")
 }
 
+// TestSecurity_AssignedOnlyDistribution: un permiso que sólo se asigna (cotizar divisa) va en un rol
+// propio que crea el global; lo reparten el global y el OrganizationAdmin a otros usuarios que
+// abarca (decisión de Javier del 2026-11-06), y quien reparte roles nunca lo tiene (D-141).
+func TestSecurity_AssignedOnlyDistribution(t *testing.T) {
+	h := compose(t)
+	ctx := context.Background()
+	// Sobre SQLite, para poder poner a mano las filas de un rol que nadie puede definir.
+	raw, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "assigned.db")+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw.SetMaxOpenConns(1)
+	t.Cleanup(func() { _ = raw.Close() })
+	db := sqlite.Open(raw, sqlrepo.WithName("sqlite"))
+	mg, err := sqlrepo.NewMigrator(db, []sqlrepo.MigrationSet{pinfra.Migrations(), sinfra.Migrations()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := mg.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.sw.Swap(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	const quote authz.Permission = "Exchange.Quote.Read"
+	if _, err := h.sec.SyncCatalog(ctx, append(slices.Clone(papp.Permissions()), quote)...); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.sec.Service.Bootstrap.Run(ctx, "root", bootPassword); err != nil {
+		t.Fatal(err)
+	}
+	root := bearer(h.signIn("root", bootPassword, rootPassword))
+
+	var acme, beta papp.PartyDTO
+	internal := []string{pdomain.RoleInternalOrganization.String()}
+	h.must(h.do("POST", "/api/organizations", root, map[string]any{"legalName": "Acme", "roles": internal}, &acme), 201, "acme")
+	h.must(h.do("POST", "/api/organizations", root, map[string]any{"legalName": "Beta", "roles": internal}, &beta), 201, "beta")
+	ids := map[string]string{}
+	user := func(name, org, level string, roles ...string) {
+		t.Helper()
+		var p papp.PartyDTO
+		h.must(h.do("POST", "/api/persons", root, map[string]any{"givenName": name, "firstSurname": "Test"}, &p), 201, name)
+		var u sapp.UserDTO
+		h.must(h.do("POST", users(""), root, map[string]any{"username": name, "party": p.ID, "password": name + "-initial-pass",
+			"access": map[string]any{"organization": org, "level": level}}, &u), 201, name)
+		ids[name] = u.ID
+		for _, r := range roles {
+			h.must(h.do("PUT", users("/"+u.ID+"/roles/"+r), root, nil, nil), 200, name+" role")
+		}
+	}
+	role := func(name string, perms ...string) string {
+		t.Helper()
+		var r sapp.RoleDTO
+		h.must(h.do("POST", "/api/security/roles", root, map[string]any{"name": name, "permissions": perms}, &r), 201, name)
+		return r.ID
+	}
+	orgAdmin, standard := sdomain.RoleOrganizationAdmin.String(), sdomain.RoleStandardUser.String()
+	roleAdmin := role("Role admin", string(sapp.PermUserRole))
+	user("marta", acme.ID, "Full", orgAdmin)
+	user("marta2", acme.ID, "Full", orgAdmin)
+	user("lola", acme.ID, "Full", roleAdmin)
+	user("carlos", acme.ID, "ReadOnly", standard)
+	user("pablo", acme.ID, "ReadOnly")
+	user("pedro", beta.ID, "Full", standard)
+	user("nora", acme.ID, "ReadOnly")
+	h.must(h.do("PUT", users("/"+ids["nora"]+"/organizations/"+beta.ID), root, map[string]any{"level": "ReadOnly"}, nil), 200, "nora also in beta")
+	h.must(h.do("PUT", users("/"+ids["marta"]+"/organizations/"+beta.ID), root, map[string]any{"level": "ReadOnly"}, nil), 200, "marta reads beta")
+	m := bearer(h.signIn("marta", "marta-initial-pass", "marta-password-01"))
+	m2 := bearer(h.signIn("marta2", "marta2-initial-pass", "marta2-password-01"))
+	lola := bearer(h.signIn("lola", "lola-initial-pass", "lola-password-01"))
+	assign := func(auth, who, role string, want int, what string) {
+		t.Helper()
+		h.must(h.do("PUT", users("/"+ids[who]+"/roles/"+role), auth, nil, nil), want, what)
+	}
+
+	// El rol lo crea el global; el OrganizationAdmin no crea roles.
+	h.must(h.do("POST", "/api/security/roles", m, map[string]any{"name": "Currency desk", "permissions": []string{string(quote)}}, nil), 403, "marta does not define roles")
+	desk := role("Currency desk", string(quote))
+	deskPlus := role("Currency desk plus", string(quote), string(sapp.PermRoleUpdate))
+
+	// Marta lo da a Carlos, de Acme, que entonces cotiza; ella no cotiza.
+	assign(m, "carlos", desk, 200, "marta gives the desk to carlos")
+	c := bearer(h.signIn("carlos", "carlos-initial-pass", "carlos-password-01"))
+	if !h.context(c).HasPermission(quote) || h.context(m).HasPermission(quote) {
+		t.Fatal("carlos quotes, marta does not")
+	}
+	// Abusos.
+	assign(c, "pablo", desk, 403, "a standard user does not hand it out")
+	assign(m, "pedro", desk, 403, "nor marta to pedro, of beta, which she only reads")
+	assign(m, "nora", desk, 403, "nor to nora, in acme and in beta, which marta only reads")
+	assign(m, "marta", desk, 403, "nor to herself")
+	assign(m, "pablo", deskPlus, 403, "nor a role that also carries what she does not have")
+	assign(lola, "pablo", desk, 403, "who hands out roles without being OrganizationAdmin does not hand it out")
+	assign(m2, "marta", desk, 403, "B1: an OrganizationAdmin does not give it to another")
+	assign(m, "marta2", desk, 403, "B1: nor the other way round")
+	assign(m, "carlos", orgAdmin, 403, "(b): who quotes does not become OrganizationAdmin")
+	assign(m, "carlos", roleAdmin, 403, "(b): nor hands out roles in any other way")
+	assign(m, "lola", desk, 403, "(a): who hands out roles does not quote")
+	h.must(h.do("DELETE", users("/"+ids["carlos"]+"/roles/"+desk), lola, nil, nil), 403, "who is not OrganizationAdmin does not take it back")
+	h.must(h.do("DELETE", users("/"+ids["carlos"]+"/roles/"+desk), m2, nil, nil), 200, "another OrganizationAdmin of acme takes it back")
+	if h.context(c).HasPermission(quote) {
+		t.Fatal("carlos no longer quotes")
+	}
+	// Retirar y volver a asignar: quien deja de repartir roles puede cotizar, pero ya no vuelve a
+	// repartirlos.
+	user("olga", acme.ID, "Full", orgAdmin)
+	h.must(h.do("DELETE", users("/"+ids["olga"]+"/roles/"+orgAdmin), m2, nil, nil), 200, "marta2 takes OrganizationAdmin from olga")
+	assign(m2, "olga", desk, 200, "and gives her the desk")
+	assign(m2, "olga", orgAdmin, 403, "but not OrganizationAdmin back")
+	// El rol mixto: nadie lo define, y si existiera (filas puestas a mano) no se asigna a quien no
+	// tiene roles.
+	h.must(h.do("POST", "/api/security/roles", root, map[string]any{"name": "Mixed", "permissions": []string{string(quote), string(sapp.PermUserRole)}}, nil),
+		422, "the global does not define a mixed role")
+	h.must(h.do("PUT", "/api/security/roles/"+desk+"/permissions", root, map[string]any{"permissions": []string{string(quote), string(sapp.PermUserRole)}}, nil),
+		422, "nor turns one into it")
+	mixed := sdomain.NewRoleID()
+	if err := db.Insert(ctx, "sec_roles", sqlrepo.Values{"id": mixed, "version": int64(1), "name": "Mixed", "name_key": "mixed", "system_role": false}); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{string(quote), string(sapp.PermUserRole)} {
+		if err := db.Insert(ctx, "sec_role_permissions", sqlrepo.Values{"role_id": mixed, "code": p}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	user("rita", acme.ID, "ReadOnly")
+	assign(m, "rita", mixed.String(), 403, "a mixed role to a user without roles")
+	assign(root, "marta", desk, 200, "the global is not limited")
+}
+
 func TestSecurity_SQLiteSeedMatchesTheCSharpIdentities(t *testing.T) {
 	ctx := context.Background()
 	raw, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "seed.db"))
@@ -725,7 +877,7 @@ func TestPasswordHasher(t *testing.T) {
 	}
 }
 
-// Cada contexto delimitado declara sus permisos y el anfitrión los pasa al catálogo: los 151
+// Cada contexto delimitado declara sus permisos y el anfitrión los pasa al catálogo: los 154
 // códigos que comprueban los veinticinco contextos de negocio, más los ocho de Security y el comodín.
 func TestCatalog_EveryContextDeclaresItsPermissions(t *testing.T) {
 	declared := map[string][]authz.Permission{
@@ -733,7 +885,8 @@ func TestCatalog_EveryContextDeclaresItsPermissions(t *testing.T) {
 		"Fiscal": fisapp.Permissions(), "Geography": geoapp.Permissions(), "HR": hrapp.Permissions(), "Inventory": invapp.Permissions(),
 		"Orders": ordapp.Permissions(), "Parties": papp.Permissions(), "Products": prdapp.Permissions(),
 		"Payments": payapp.Permissions(), "Payroll": prlapp.Permissions(), "Purchases": purapp.Permissions(),
-		"Receivables": recapp.Permissions(), "Treasury": treapp.Permissions(), "Financial": finapp.Permissions(), "Exports": expapp.Permissions(), "Exchange": exgapp.Permissions(), "Audit": autapp.Permissions(), "Modules": modapp.Permissions(), "Shipments": shpapp.Permissions(), "Documents": docapp.Permissions(), "Work": wrkapp.Permissions(), sdomain.Namespace: sapp.Permissions(),
+		"Receivables": recapp.Permissions(), "Financial": slices.Concat(finapp.Permissions(), treapp.Permissions()), // Treasury declara Financial.* (D-135)
+		"Exports": expapp.Permissions(), "Exchange": exgapp.Permissions(), "Audit": autapp.Permissions(), "Modules": modapp.Permissions(), "Shipments": shpapp.Permissions(), "Documents": docapp.Permissions(), "Work": wrkapp.Permissions(), sdomain.Namespace: sapp.Permissions(),
 	}
 	var all []authz.Permission
 	for namespace, perms := range declared {
@@ -744,7 +897,7 @@ func TestCatalog_EveryContextDeclaresItsPermissions(t *testing.T) {
 			all = append(all, p)
 		}
 	}
-	if len(all) != 153+len(sapp.Permissions()) || len(sapp.Permissions()) != 8 {
+	if len(all) != 154+len(sapp.Permissions()) || len(sapp.Permissions()) != 8 {
 		t.Fatalf("declared permissions: %d", len(all))
 	}
 
@@ -770,15 +923,20 @@ func TestCatalog_EveryContextDeclaresItsPermissions(t *testing.T) {
 	// (emitir una factura, aprobar una nómina, presentar una declaración, liquidar una remesa...)
 	// llegan al administrador de la organización o a un rol propio, nunca al usuario estándar.
 	std := granted["StandardUser"]
-	for _, special := range []string{"Billing.Invoice.Issue", "Payroll.Payslip.Approve", "Fiscal.Filing.Submit", "Treasury.Remittance.Settle",
+	for _, special := range []string{"Billing.Invoice.Issue", "Payroll.Payslip.Approve", "Fiscal.Filing.Submit", "Financial.Remittance.Settle",
 		"Accounting.Entry.Reverse", "Parties.PartyRole.Assign", "Parties.Relationship.SetTrial", "Purchases.Invoice.Register", "Orders.Order.Confirm",
 		"Inventory.Stock.Adjust", "Security.User.Read"} {
 		if slices.Contains(std, special) || (special != "Security.User.Read" && !slices.Contains(granted["OrganizationAdmin"], special)) {
 			t.Errorf("%s: standard user %v, organization admin %v", special, slices.Contains(std, special), slices.Contains(granted["OrganizationAdmin"], special))
 		}
 	}
-	if len(granted["OrganizationAdmin"]) != len(all)-1 || slices.Contains(granted["OrganizationAdmin"], string(sapp.PermRoleUpdate)) {
-		t.Errorf("OrganizationAdmin holds everything but the roles: %d of %d", len(granted["OrganizationAdmin"]), len(all))
+	if len(granted["OrganizationAdmin"]) != len(all)-2 || slices.Contains(granted["OrganizationAdmin"], string(sapp.PermRoleUpdate)) {
+		t.Errorf("OrganizationAdmin holds everything but the roles and quoting: %d of %d", len(granted["OrganizationAdmin"]), len(all))
+	}
+	for _, r := range []string{"OrganizationAdmin", "StandardUser", "ReadOnlyUser"} { // D-141: sólo por asignación
+		if slices.Contains(granted[r], "Exchange.Quote.Read") {
+			t.Errorf("%s quotes currencies", r)
+		}
 	}
 	if len(granted["ReadOnlyUser"]) != 61+1 || !slices.Contains(std, "Billing.Invoice.Create") || len(granted["Customer"]) != 0 ||
 		!slices.Equal(granted["GlobalSuperAdmin"], []string{"*.*.*"}) {

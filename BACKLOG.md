@@ -136,6 +136,9 @@ Pendiente:
   una sola vez) cada vaivén los quitaría y volvería a dar a los roles del sistema. Antes de partir
   el monolito: que cada proceso sólo gestione los permisos de sus contextos (por espacio de
   nombres), o un catálogo declarado por despliegue. Lo señaló la revisión de D-98.
+- **Roles por organización:** decidir si un rol debe valer sólo en una organización del usuario.
+  Hoy vale en todas: quien recibe «Currency desk» de un `OrganizationAdmin` cotiza también en sus
+  otras organizaciones (D-141, ver [docs/SEGURIDAD.md](docs/SEGURIDAD.md), sección 11).
 
 ### 2d. Revisión de la integración del 2026-10-11: lo que queda
 Hallazgos menores de la revisión independiente (G-6) que no se arreglaron en la rama

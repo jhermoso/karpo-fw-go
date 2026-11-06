@@ -17,10 +17,10 @@ import (
 // Permisos de las órdenes de transferencias: preparar, generar el fichero y registrar lo que hizo
 // el banco van por separado, como en las remesas.
 var (
-	PermTransferRead = authz.MustPermission("Treasury.Transfer.Read")
-	PermTransferEdit = authz.MustPermission("Treasury.Transfer.Update")
-	PermTransferSend = authz.MustPermission("Treasury.Transfer.Generate")
-	PermTransferBank = authz.MustPermission("Treasury.Transfer.Settle")
+	PermTransferRead = authz.MustPermission("Financial.Transfer.Read")
+	PermTransferEdit = authz.MustPermission("Financial.Transfer.Update")
+	PermTransferSend = authz.MustPermission("Financial.Transfer.Generate")
+	PermTransferBank = authz.MustPermission("Financial.Transfer.Settle")
 )
 
 // TaxAuthorityName es el nombre de la administración tributaria en una transferencia.

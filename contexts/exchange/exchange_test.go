@@ -66,7 +66,7 @@ func compose(t *testing.T, opts ...exchange.Option) *host {
 		"pricer":   {xapp.PermPricingRead, xapp.PermPricingUpdate},
 		"clerk":    {xapp.PermReservationRead, xapp.PermReservationCreate},
 		"desk":     {xapp.PermReservationRead, xapp.PermReservationProgress},
-		"viewer":   {xapp.PermReservationRead, xapp.PermPricingRead},
+		"viewer":   {xapp.PermReservationRead, xapp.PermPricingRead, xapp.PermQuoteRead},
 		"outsider": xapp.Permissions(),
 	}
 	for u, perms := range users {
@@ -174,7 +174,9 @@ func (h *host) scenario() {
 		return "/api/exchange/quote?company=" + acme + "&currency=" + currency + "&amount=" + amount
 	}
 	var q xapp.QuoteDTO
+	// Ya era 403 antes de D-141; se queda porque fija que los permisos de precios no dan para cotizar.
 	h.must(h.do("GET", quote("USD", "500"), "pricer", nil, nil), 403, "setting prices is not quoting")
+	h.must(h.do("GET", quote("USD", "500"), "clerk", nil, nil), 403, "reading reservations is not quoting")
 	h.must(h.do("GET", quote("USD", "500"), "outsider", nil, nil), 404, "outsider")
 	h.must(h.do("GET", quote("USD", "0"), "viewer", nil, nil), 422, "amount")
 	h.must(h.do("GET", quote("JPY", "500"), "viewer", nil, nil), 422, "unknown currency")

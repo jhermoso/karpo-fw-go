@@ -24,14 +24,14 @@ import (
 // Permisos (los endpoints de banco de C# sólo pedían autenticación). Generar el fichero y liquidar
 // son permisos propios, aparte de preparar.
 var (
-	PermAccountRead    = authz.MustPermission("Treasury.Account.Read")
-	PermAccountUpdate  = authz.MustPermission("Treasury.Account.Update")
-	PermMandateRead    = authz.MustPermission("Treasury.Mandate.Read")
-	PermMandateUpdate  = authz.MustPermission("Treasury.Mandate.Update")
-	PermRemittanceRead = authz.MustPermission("Treasury.Remittance.Read")
-	PermRemittanceEdit = authz.MustPermission("Treasury.Remittance.Update")
-	PermRemittanceSend = authz.MustPermission("Treasury.Remittance.Generate")
-	PermRemittanceBank = authz.MustPermission("Treasury.Remittance.Settle")
+	PermAccountRead    = authz.MustPermission("Financial.BankAccount.Read")
+	PermAccountUpdate  = authz.MustPermission("Financial.BankAccount.Update")
+	PermMandateRead    = authz.MustPermission("Financial.Mandate.Read")
+	PermMandateUpdate  = authz.MustPermission("Financial.Mandate.Update")
+	PermRemittanceRead = authz.MustPermission("Financial.Remittance.Read")
+	PermRemittanceEdit = authz.MustPermission("Financial.Remittance.Update")
+	PermRemittanceSend = authz.MustPermission("Financial.Remittance.Generate")
+	PermRemittanceBank = authz.MustPermission("Financial.Remittance.Settle")
 )
 
 // Deps son los puertos que necesitan los casos de uso; Recorder y Audit son opcionales.
