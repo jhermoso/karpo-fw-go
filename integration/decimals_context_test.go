@@ -256,7 +256,14 @@ func insertAsText[ID fw.Identifier, T fw.AggregateRoot[ID]](t *testing.T, ctx co
 	agg T) {
 	t.Helper()
 	text := func(table string, v sqlrepo.Values) {
+		// La base está antes de la migración de los decimales: las columnas que llegan después (el
+		// domicilio de la factura, T1-G2) aún no existen y no se escriben.
+		present := columnsOf(t, ctx, db, table)
 		for c, x := range v {
+			if !present[c] {
+				delete(v, c)
+				continue
+			}
 			if dec, ok := x.(vocab.Decimal); ok {
 				if f, ok := oldText[table+"."+c]; ok {
 					v[c] = f(dec)
@@ -288,6 +295,25 @@ func insertAsText[ID fw.Identifier, T fw.AggregateRoot[ID]](t *testing.T, ctx co
 			}
 		}
 	}
+}
+
+// columnsOf devuelve las columnas que tiene hoy una tabla, en minúsculas.
+func columnsOf(t *testing.T, ctx context.Context, db *sqlrepo.DB, table string) map[string]bool {
+	t.Helper()
+	rows, err := db.QueryContext(ctx, "SELECT * FROM "+table+" WHERE 1 = 0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	names, err := rows.Columns()
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := make(map[string]bool, len(names))
+	for _, n := range names {
+		out[strings.ToLower(n)] = true
+	}
+	return out
 }
 
 // sameRows comprueba que dos agregados dan las mismas filas: los decimales, por valor. No mira la
