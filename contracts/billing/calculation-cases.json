@@ -1,0 +1,385 @@
+{
+  "format": 1,
+  "title": "Casos compartidos del cálculo de la factura de venta (Karpo Go y Karpo C#)",
+  "rules": [
+    "El neto de una línea es quantity × unitPrice × (1 − discount / 100), con discount de 0 a 100, al céntimo. Con lineRounding = once se redondea una sola vez, al final; con gross_then_discount se redondea primero el bruto (quantity × unitPrice) y el descuento se aplica sobre ese bruto ya redondeado, y se vuelve a redondear (D-128, D-144).",
+    "Los decimales del precio (priceDecimals, 0 a 6) se cuentan por valor, no por la cadena: \"0.120\" con priceDecimals = 2 se acepta, porque vale 0.12.",
+    "El desglose tiene un grupo por clave (taxCode o vacío, treatment o vacío). Una línea sujeta lleva taxCode; una exenta o no sujeta lleva treatment y no taxCode (Fiscal la rechaza si lleva los dos). Sólo un tratamiento de clase subject puede ir con un taxCode, y en este catálogo no hay ninguno.",
+    "La cuota y el recargo se calculan una vez por grupo sobre la suma de los netos: Round(Σ bases × tipo / 100), no línea a línea.",
+    "Sin recargo de equivalencia (equivalenceSurcharge = false), surchargeRate se espera \"0.00\" aunque el catálogo tenga un tipo de recargo para ese código.",
+    "Todo redondeo es al céntimo y el medio se aleja de cero (0.125 → 0.13; −0.125 → −0.13).",
+    "El total es net + tax + surcharge. Los plazos reparten el total en partes iguales al céntimo y el último se queda con el resto.",
+    "date es a la vez la fecha con la que se busca el tipo vigente del catálogo y la fecha de la que se cuentan los días de los plazos.",
+    "rejection.field es el nombre del campo en el contrato HTTP (p. ej. unitPrice); rejection.line cuenta desde 1."
+  ],
+  "amounts": "Todos los importes, precios, cantidades, porcentajes y tipos son cadenas decimales con punto ('1234.56'), nunca números en coma flotante. Se comparan por valor. Un importe esperado no se omite nunca: si falta, la prueba falla.",
+  "codes": "Los códigos de impuesto (taxCode) y de tratamiento (treatment) son los del catálogo de Fiscal de Karpo Go (contexts/fiscal), con los tipos de la sección catalog. Si Karpo C# usa otros códigos, los traduce al cargar este fichero. Las clases del desglose (kind) son las de Fiscal: subject, exempt, not-subject. Los valores de invoiceKind y de settings son los del contrato HTTP (ordinary, corrective; once, gross_then_discount).",
+  "order": "El orden de los grupos del desglose no forma parte del contrato: se compara por taxCode y treatment.",
+  "catalog": {
+    "country": "ES",
+    "territory": "common",
+    "validFrom": "2012-09-01",
+    "rates": [
+      { "code": "G21", "tax": "vat", "rate": "21", "surcharge": "5.2" },
+      { "code": "R10", "tax": "vat", "rate": "10", "surcharge": "1.4" },
+      { "code": "SR4", "tax": "vat", "rate": "4", "surcharge": "0.5" }
+    ],
+    "treatments": [
+      { "code": "E1", "kind": "exempt" },
+      { "code": "N1", "kind": "not-subject" },
+      { "code": "N2", "kind": "not-subject" }
+    ]
+  },
+  "pending": [
+    "Retención (IRPF) en la factura: Karpo Go no la calcula; no hay caso.",
+    "Descuentos en cascada (varios porcentajes sobre la misma línea): Karpo Go tiene un solo descuento por línea; los casos de descuento llevan uno.",
+    "La cascada cliente > empresa de lineRounding y priceDecimals (D-144): Karpo Go sólo tiene el ajuste de la empresa.",
+    "Plazos cuya parte tiene medio céntimo o más: falta acordar si cada parte se trunca o se redondea. Con 100.01 / 3, truncando (lo que hace hoy Karpo Go) sale 33.33 + 33.33 + 33.35; redondeando, 33.34 + 33.34 + 33.33. Los casos de hoy no lo distinguen.",
+    "Una rectificativa con plazos (total negativo) da en Karpo Go un único vencimiento por todo el importe en la fecha de emisión, sin repartir (contexts/receivables/domain/terms.go:166); no hay caso.",
+    "Fechas de vencimiento con días fijos, meses sin pago, mes comercial o festivos: sólo hay un caso de días corridos.",
+    "IGIC e IPSI (Canarias, Ceuta y Melilla), inversión del sujeto pasivo, regímenes especiales y operaciones con el extranjero.",
+    "Moneda distinta del euro y factura simplificada."
+  ],
+  "cases": [
+    {
+      "id": "iva-una-linea",
+      "description": "Una línea al 21 %: 2 × 49.99 = 99.98; cuota 20.9958 → 21.00.",
+      "input": {
+        "invoiceKind": "ordinary",
+        "date": "2026-11-02",
+        "settings": { "lineRounding": "once", "priceDecimals": 4 },
+        "equivalenceSurcharge": false,
+        "lines": [
+          { "quantity": "2", "unitPrice": "49.99", "discount": "0", "taxCode": "G21" }
+        ]
+      },
+      "expected": {
+        "lineNets": ["99.98"],
+        "breakdown": [
+          { "taxCode": "G21", "kind": "subject", "base": "99.98", "rate": "21.00", "amount": "21.00", "surchargeRate": "0.00", "surcharge": "0.00" }
+        ],
+        "net": "99.98",
+        "tax": "21.00",
+        "surcharge": "0.00",
+        "total": "120.98"
+      }
+    },
+    {
+      "id": "iva-varios-tipos",
+      "description": "Tres tipos con tres líneas cada uno. La cuota se redondea por grupo: G21 30.09 → 6.3189 → 6.32 (línea a línea, 3 × 2.11 = 6.33); R10 0.45 → 0.045 → 0.05 (3 × 0.02 = 0.06); SR4 3.36 → 0.1344 → 0.13 (3 × 0.04 = 0.12).",
+      "input": {
+        "invoiceKind": "ordinary",
+        "date": "2026-11-02",
+        "settings": { "lineRounding": "once", "priceDecimals": 4 },
+        "equivalenceSurcharge": false,
+        "lines": [
+          { "quantity": "1", "unitPrice": "10.03", "discount": "0", "taxCode": "G21" },
+          { "quantity": "3", "unitPrice": "0.05", "discount": "0", "taxCode": "R10" },
+          { "quantity": "1", "unitPrice": "1.12", "discount": "0", "taxCode": "SR4" },
+          { "quantity": "1", "unitPrice": "10.03", "discount": "0", "taxCode": "G21" },
+          { "quantity": "1", "unitPrice": "0.15", "discount": "0", "taxCode": "R10" },
+          { "quantity": "1", "unitPrice": "1.12", "discount": "0", "taxCode": "SR4" },
+          { "quantity": "1", "unitPrice": "10.03", "discount": "0", "taxCode": "G21" },
+          { "quantity": "1", "unitPrice": "0.15", "discount": "0", "taxCode": "R10" },
+          { "quantity": "1", "unitPrice": "1.12", "discount": "0", "taxCode": "SR4" }
+        ]
+      },
+      "expected": {
+        "lineNets": ["10.03", "0.15", "1.12", "10.03", "0.15", "1.12", "10.03", "0.15", "1.12"],
+        "breakdown": [
+          { "taxCode": "G21", "kind": "subject", "base": "30.09", "rate": "21.00", "amount": "6.32", "surchargeRate": "0.00", "surcharge": "0.00" },
+          { "taxCode": "R10", "kind": "subject", "base": "0.45", "rate": "10.00", "amount": "0.05", "surchargeRate": "0.00", "surcharge": "0.00" },
+          { "taxCode": "SR4", "kind": "subject", "base": "3.36", "rate": "4.00", "amount": "0.13", "surchargeRate": "0.00", "surcharge": "0.00" }
+        ],
+        "net": "33.90",
+        "tax": "6.50",
+        "surcharge": "0.00",
+        "total": "40.40"
+      }
+    },
+    {
+      "id": "medio-centimo",
+      "description": "Medio céntimo en el neto y en la cuota, alejándose de cero: 1 × 0.125 → 0.13 (al par sería 0.12); base 2.50 × 21 % = 0.525 → 0.53 (al par, 0.52).",
+      "input": {
+        "invoiceKind": "ordinary",
+        "date": "2026-11-02",
+        "settings": { "lineRounding": "once", "priceDecimals": 4 },
+        "equivalenceSurcharge": false,
+        "lines": [
+          { "quantity": "1", "unitPrice": "0.125", "discount": "0", "taxCode": "G21" },
+          { "quantity": "1", "unitPrice": "2.37", "discount": "0", "taxCode": "G21" }
+        ]
+      },
+      "expected": {
+        "lineNets": ["0.13", "2.37"],
+        "breakdown": [
+          { "taxCode": "G21", "kind": "subject", "base": "2.50", "rate": "21.00", "amount": "0.53", "surchargeRate": "0.00", "surcharge": "0.00" }
+        ],
+        "net": "2.50",
+        "tax": "0.53",
+        "surcharge": "0.00",
+        "total": "3.03"
+      }
+    },
+    {
+      "id": "medio-centimo-rectificativa",
+      "description": "El mismo medio céntimo en negativo, en una rectificativa por diferencias: −1 × 0.125 → −0.13; base −2.50 × 21 % = −0.525 → −0.53.",
+      "input": {
+        "invoiceKind": "corrective",
+        "date": "2026-11-02",
+        "settings": { "lineRounding": "once", "priceDecimals": 4 },
+        "equivalenceSurcharge": false,
+        "lines": [
+          { "quantity": "-1", "unitPrice": "0.125", "discount": "0", "taxCode": "G21" },
+          { "quantity": "-1", "unitPrice": "2.37", "discount": "0", "taxCode": "G21" }
+        ]
+      },
+      "expected": {
+        "lineNets": ["-0.13", "-2.37"],
+        "breakdown": [
+          { "taxCode": "G21", "kind": "subject", "base": "-2.50", "rate": "21.00", "amount": "-0.53", "surchargeRate": "0.00", "surcharge": "0.00" }
+        ],
+        "net": "-2.50",
+        "tax": "-0.53",
+        "surcharge": "0.00",
+        "total": "-3.03"
+      }
+    },
+    {
+      "id": "descuento-una-vez",
+      "description": "line_rounding = once: 2.5 × 1.01 = 2.525, con el 50 %, 1.2625 → 1.26. La segunda línea da lo mismo con las dos formas: 3 × 19.99 = 59.97, con el 15 %, 50.9745 → 50.97.",
+      "input": {
+        "invoiceKind": "ordinary",
+        "date": "2026-11-02",
+        "settings": { "lineRounding": "once", "priceDecimals": 4 },
+        "equivalenceSurcharge": false,
+        "lines": [
+          { "quantity": "2.5", "unitPrice": "1.01", "discount": "50", "taxCode": "G21" },
+          { "quantity": "3", "unitPrice": "19.99", "discount": "15", "taxCode": "G21" }
+        ]
+      },
+      "expected": {
+        "lineNets": ["1.26", "50.97"],
+        "breakdown": [
+          { "taxCode": "G21", "kind": "subject", "base": "52.23", "rate": "21.00", "amount": "10.97", "surchargeRate": "0.00", "surcharge": "0.00" }
+        ],
+        "net": "52.23",
+        "tax": "10.97",
+        "surcharge": "0.00",
+        "total": "63.20"
+      }
+    },
+    {
+      "id": "descuento-bruto-y-descuento",
+      "description": "Las mismas líneas con line_rounding = gross_then_discount: el bruto 2.525 → 2.53 y, con el 50 %, 1.265 → 1.27, un céntimo más que una sola vez. La segunda línea, igual: 59.97 → 50.97.",
+      "input": {
+        "invoiceKind": "ordinary",
+        "date": "2026-11-02",
+        "settings": { "lineRounding": "gross_then_discount", "priceDecimals": 4 },
+        "equivalenceSurcharge": false,
+        "lines": [
+          { "quantity": "2.5", "unitPrice": "1.01", "discount": "50", "taxCode": "G21" },
+          { "quantity": "3", "unitPrice": "19.99", "discount": "15", "taxCode": "G21" }
+        ]
+      },
+      "expected": {
+        "lineNets": ["1.27", "50.97"],
+        "breakdown": [
+          { "taxCode": "G21", "kind": "subject", "base": "52.24", "rate": "21.00", "amount": "10.97", "surchargeRate": "0.00", "surcharge": "0.00" }
+        ],
+        "net": "52.24",
+        "tax": "10.97",
+        "surcharge": "0.00",
+        "total": "63.21"
+      }
+    },
+    {
+      "id": "precio-seis-decimales",
+      "description": "price_decimals = 6: 1000 × 0.123456 = 123.456 → 123.46; 3 × 0.333333 = 0.999999 → 1.00.",
+      "input": {
+        "invoiceKind": "ordinary",
+        "date": "2026-11-02",
+        "settings": { "lineRounding": "once", "priceDecimals": 6 },
+        "equivalenceSurcharge": false,
+        "lines": [
+          { "quantity": "1000", "unitPrice": "0.123456", "discount": "0", "taxCode": "G21" },
+          { "quantity": "3", "unitPrice": "0.333333", "discount": "0", "taxCode": "G21" }
+        ]
+      },
+      "expected": {
+        "lineNets": ["123.46", "1.00"],
+        "breakdown": [
+          { "taxCode": "G21", "kind": "subject", "base": "124.46", "rate": "21.00", "amount": "26.14", "surchargeRate": "0.00", "surcharge": "0.00" }
+        ],
+        "net": "124.46",
+        "tax": "26.14",
+        "surcharge": "0.00",
+        "total": "150.60"
+      }
+    },
+    {
+      "id": "precio-seis-decimales-rechaza-siete",
+      "description": "price_decimals = 6: un precio con 7 decimales es un error del campo unitPrice.",
+      "input": {
+        "invoiceKind": "ordinary",
+        "date": "2026-11-02",
+        "settings": { "lineRounding": "once", "priceDecimals": 6 },
+        "equivalenceSurcharge": false,
+        "lines": [
+          { "quantity": "1", "unitPrice": "0.1234567", "discount": "0", "taxCode": "G21" }
+        ]
+      },
+      "expected": {
+        "rejection": { "line": 1, "field": "unitPrice" }
+      }
+    },
+    {
+      "id": "precio-dos-decimales",
+      "description": "price_decimals = 2: 1000 × 0.12 = 120.00; 3 × 0.33 = 0.99.",
+      "input": {
+        "invoiceKind": "ordinary",
+        "date": "2026-11-02",
+        "settings": { "lineRounding": "once", "priceDecimals": 2 },
+        "equivalenceSurcharge": false,
+        "lines": [
+          { "quantity": "1000", "unitPrice": "0.12", "discount": "0", "taxCode": "G21" },
+          { "quantity": "3", "unitPrice": "0.33", "discount": "0", "taxCode": "G21" }
+        ]
+      },
+      "expected": {
+        "lineNets": ["120.00", "0.99"],
+        "breakdown": [
+          { "taxCode": "G21", "kind": "subject", "base": "120.99", "rate": "21.00", "amount": "25.41", "surchargeRate": "0.00", "surcharge": "0.00" }
+        ],
+        "net": "120.99",
+        "tax": "25.41",
+        "surcharge": "0.00",
+        "total": "146.40"
+      }
+    },
+    {
+      "id": "precio-dos-decimales-ceros-a-la-derecha",
+      "description": "priceDecimals = 2: los decimales se cuentan por valor, no por la cadena; \"0.120\" vale 0.12 y se acepta: 1000 × 0.120 = 120.00.",
+      "input": {
+        "invoiceKind": "ordinary",
+        "date": "2026-11-02",
+        "settings": { "lineRounding": "once", "priceDecimals": 2 },
+        "equivalenceSurcharge": false,
+        "lines": [
+          { "quantity": "1000", "unitPrice": "0.120", "discount": "0", "taxCode": "G21" }
+        ]
+      },
+      "expected": {
+        "lineNets": ["120.00"],
+        "breakdown": [
+          { "taxCode": "G21", "kind": "subject", "base": "120.00", "rate": "21.00", "amount": "25.20", "surchargeRate": "0.00", "surcharge": "0.00" }
+        ],
+        "net": "120.00",
+        "tax": "25.20",
+        "surcharge": "0.00",
+        "total": "145.20"
+      }
+    },
+    {
+      "id": "precio-dos-decimales-rechaza-tres",
+      "description": "price_decimals = 2: un precio con 3 decimales es un error del campo unitPrice; no se redondea.",
+      "input": {
+        "invoiceKind": "ordinary",
+        "date": "2026-11-02",
+        "settings": { "lineRounding": "once", "priceDecimals": 2 },
+        "equivalenceSurcharge": false,
+        "lines": [
+          { "quantity": "1", "unitPrice": "0.125", "discount": "0", "taxCode": "G21" }
+        ]
+      },
+      "expected": {
+        "rejection": { "line": 1, "field": "unitPrice" }
+      }
+    },
+    {
+      "id": "exenta-y-no-sujeta",
+      "description": "Una línea sujeta al 21 % junto a una exenta (E1) y dos no sujetas (N1, N2): cada tratamiento es un grupo del desglose con tipo y cuota cero, y su base cuenta en la base y en el total.",
+      "input": {
+        "invoiceKind": "ordinary",
+        "date": "2026-11-02",
+        "settings": { "lineRounding": "once", "priceDecimals": 4 },
+        "equivalenceSurcharge": false,
+        "lines": [
+          { "quantity": "1", "unitPrice": "100", "discount": "0", "taxCode": "G21" },
+          { "quantity": "1", "unitPrice": "50", "discount": "0", "treatment": "E1" },
+          { "quantity": "1", "unitPrice": "30", "discount": "0", "treatment": "N1" },
+          { "quantity": "1", "unitPrice": "20", "discount": "0", "treatment": "N2" }
+        ]
+      },
+      "expected": {
+        "lineNets": ["100.00", "50.00", "30.00", "20.00"],
+        "breakdown": [
+          { "taxCode": "G21", "kind": "subject", "base": "100.00", "rate": "21.00", "amount": "21.00", "surchargeRate": "0.00", "surcharge": "0.00" },
+          { "treatment": "E1", "kind": "exempt", "base": "50.00", "rate": "0.00", "amount": "0.00", "surchargeRate": "0.00", "surcharge": "0.00" },
+          { "treatment": "N1", "kind": "not-subject", "base": "30.00", "rate": "0.00", "amount": "0.00", "surchargeRate": "0.00", "surcharge": "0.00" },
+          { "treatment": "N2", "kind": "not-subject", "base": "20.00", "rate": "0.00", "amount": "0.00", "surchargeRate": "0.00", "surcharge": "0.00" }
+        ],
+        "net": "200.00",
+        "tax": "21.00",
+        "surcharge": "0.00",
+        "total": "221.00"
+      }
+    },
+    {
+      "id": "recargo-equivalencia",
+      "description": "Cliente en recargo de equivalencia: el recargo también se calcula por grupo. G21 30.09 × 5.2 % = 1.56468 → 1.56; R10 100 × 1.4 % = 1.40; SR4 1.00 × 0.5 % = 0.005 → 0.01 (medio céntimo).",
+      "input": {
+        "invoiceKind": "ordinary",
+        "date": "2026-11-02",
+        "settings": { "lineRounding": "once", "priceDecimals": 4 },
+        "equivalenceSurcharge": true,
+        "lines": [
+          { "quantity": "3", "unitPrice": "10.03", "discount": "0", "taxCode": "G21" },
+          { "quantity": "1", "unitPrice": "100", "discount": "0", "taxCode": "R10" },
+          { "quantity": "1", "unitPrice": "1", "discount": "0", "taxCode": "SR4" }
+        ]
+      },
+      "expected": {
+        "lineNets": ["30.09", "100.00", "1.00"],
+        "breakdown": [
+          { "taxCode": "G21", "kind": "subject", "base": "30.09", "rate": "21.00", "amount": "6.32", "surchargeRate": "5.20", "surcharge": "1.56" },
+          { "taxCode": "R10", "kind": "subject", "base": "100.00", "rate": "10.00", "amount": "10.00", "surchargeRate": "1.40", "surcharge": "1.40" },
+          { "taxCode": "SR4", "kind": "subject", "base": "1.00", "rate": "4.00", "amount": "0.04", "surchargeRate": "0.50", "surcharge": "0.01" }
+        ],
+        "net": "131.09",
+        "tax": "16.36",
+        "surcharge": "2.97",
+        "total": "150.42"
+      }
+    },
+    {
+      "id": "vencimientos-tres-plazos",
+      "description": "Total 121.00 en tres plazos a 30, 60 y 90 días corridos: 121.00 / 3 = 40.333…; 40.33, 40.33 y el resto, 40.34, en el último.",
+      "input": {
+        "invoiceKind": "ordinary",
+        "date": "2026-11-02",
+        "settings": { "lineRounding": "once", "priceDecimals": 4 },
+        "equivalenceSurcharge": false,
+        "lines": [
+          { "quantity": "1", "unitPrice": "100", "discount": "0", "taxCode": "G21" }
+        ],
+        "installments": { "count": 3, "daysToFirst": 30, "daysBetween": 30 }
+      },
+      "expected": {
+        "lineNets": ["100.00"],
+        "breakdown": [
+          { "taxCode": "G21", "kind": "subject", "base": "100.00", "rate": "21.00", "amount": "21.00", "surchargeRate": "0.00", "surcharge": "0.00" }
+        ],
+        "net": "100.00",
+        "tax": "21.00",
+        "surcharge": "0.00",
+        "total": "121.00",
+        "installments": [
+          { "date": "2026-12-02", "amount": "40.33" },
+          { "date": "2027-01-01", "amount": "40.33" },
+          { "date": "2027-01-31", "amount": "40.34" }
+        ]
+      }
+    }
+  ]
+}

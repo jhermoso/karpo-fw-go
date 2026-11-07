@@ -159,7 +159,8 @@ type Due struct {
 //  3. en un mes sin pagos, se mueve al primer día fijo (o al día 1) después del periodo;
 //  4. con ControlHolidays, un festivo se mueve hacia atrás hasta BackwardDays; si no, hacia delante
 //     a un día laborable;
-//  5. el importe se reparte en partes iguales redondeadas al céntimo; la última se queda con el resto.
+//  5. el importe se reparte en partes iguales truncadas al céntimo (100.01 / 3 da 33.33), y la
+//     última se queda con el resto (33.35).
 //
 // Un importe negativo (un abono) tiene un único vencimiento en la fecha de emisión.
 func (t *Terms) Schedule(ctx context.Context, issued vocab.Date, amount vocab.Decimal, cal Calendar) ([]Due, error) {

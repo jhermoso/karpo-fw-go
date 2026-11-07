@@ -358,6 +358,44 @@ del vendedor, 404. Un borrador no tiene PDF: 422 `billing.invoice_not_issued`.
   - las letras latinas que WinAnsi no tiene salen con su letra base (Łódź sale «Lódz»); otros
     alfabetos salen como «?», hasta que haya fuentes incrustadas.
 
+## Casos compartidos con Karpo C# (plan Sage, T1-G7; añadido el 2026-11-07)
+
+Karpo C# y Karpo Go no comparten código, sino especificación y casos (D-1). Los casos del cálculo
+de la factura están en [`contracts/billing/calculation-cases.json`](../contracts/billing/calculation-cases.json),
+en la raíz del repositorio y no en un `testdata` de Billing, porque **son contrato, no una prueba
+interna**: Karpo C# copia el fichero tal cual a su repositorio y lo pasa por su propio cálculo.
+
+- **Qué es:** un JSON neutral respecto al lenguaje, con las claves en inglés y en camelCase, como
+  el contrato HTTP (`unitPrice`, `lineRounding`, `priceDecimals`); los textos (reglas, descripciones,
+  pendientes) van en español. Lleva la versión del formato (`format`), las reglas (`rules`: cómo se
+  calcula el neto con cada `lineRounding`, la clave del desglose, los decimales del precio contados
+  por valor, `surchargeRate` a cero sin recargo, que `date` es a la vez la vigencia del tipo y la
+  base de los plazos, y que `rejection.field` es el campo del contrato HTTP), el catálogo de Fiscal
+  que usan los casos (`catalog`: G21, R10 y SR4 con su recargo; E1, N1 y N2), la lista `pending` de
+  lo que aún no cubre y, por caso, un `id` estable, una `description`, la entrada (`input`: ajustes
+  de D-144, líneas con `quantity`, `unitPrice`, `discount` y `taxCode` o `treatment`, recargo de
+  equivalencia, plazos) y lo esperado (`expected`: neto por línea, desglose por grupo con base,
+  tipo, cuota y recargo, totales y plazos, o el campo que se rechaza). Todos los importes son
+  cadenas decimales; los códigos son los del catálogo de Fiscal de Go, y C# los traduce si los
+  suyos difieren.
+- **Qué cubre:** una línea al 21 %; varios tipos con la cuota por grupo, no por línea; el medio
+  céntimo alejándose de cero en neto y cuota, también en una rectificativa; `once` frente a
+  `gross_then_discount` con un céntimo de diferencia; precios de 6 y de 2 decimales, el rechazo de
+  uno con más y la aceptación de "0.120" con 2; líneas exentas y no sujetas junto a sujetas; el
+  recargo de equivalencia; y tres plazos con el resto en el último. Lo que falta (retención,
+  descuentos en cascada, cascada cliente > empresa, si un plazo con medio céntimo o más se trunca o
+  se redondea, plazos de una rectificativa…), en `pending`.
+- **La prueba:** `contracts/billing/calculation_cases_test.go` pasa cada caso por el dominio de
+  Billing, el `TaxEngine` de Fiscal con la jurisdicción española (a través del adaptador
+  `FiscalTaxes`) y las condiciones de pago de Receivables. Lee el fichero sin admitir campos
+  desconocidos (un campo nuevo es un cambio de `format`), y un importe esperado que falte hace
+  fallar la prueba en vez de contar como cero.
+- **Regla:** el fichero es de las dos sesiones. **Quien cambia, añade o quita un caso avisa a la
+  otra sesión** (Karpo C# o Karpo Go) con el `id` y el porqué; un caso no se ajusta al código: si
+  el código no da lo acordado, se anota como divergencia y se decide.
+- **Cómo se corren:** `go test -count=1 -run TestSharedCalculationCases -v ./contracts/billing/`
+  (un subtest por `id`).
+
 ## Pendiente
 
 - Todo el cálculo de impuestos que falta, por país y por sector: punto 6 de
