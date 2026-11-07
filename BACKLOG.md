@@ -162,6 +162,14 @@ Hallazgos menores de la revisión independiente (G-6) que no se arreglaron en la
   comentario de cabecera; el detalle no venía en el encargo de los arreglos, hay que recuperarlo
   del informe de la revisión.
 
+### 2e. Varios albaranes en una factura (D-146): lo que queda
+Ver [docs/FACTURACION.md](docs/FACTURACION.md), «Varios albaranes en una factura».
+
+- **Cierre del periodo programado:** hoy se lanza por `POST /api/billing/periods/close`; no hay
+  tarea que lo haga sola (por ejemplo, el día 1 de cada mes para el mes anterior).
+- **Documentos enlaza sólo el primer albarán** de una factura: lee `sourceId` de
+  `billing.invoice-issued.v1` y no `sources` (`contexts/documents/application/subscriptions.go`).
+
 ### 3. PoC Frontend: Evaluación de Stack Ligero (Svelte 5 / SolidJS)
 - Prototipar la interfaz de listado y ficha de `Parties`.
 - Comparar tamaño de bundle (< 100 KB objetivo vs ~9.4 MB de Angular 20) y velocidad de carga/hidratación.

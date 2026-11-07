@@ -98,6 +98,10 @@ func Migrations() sqlrepo.MigrationSet {
 		// El motivo del bloqueo de pedidos o de entregas de la pareja (docs/DECISIONES-COMUNES.md, D-122;
 		// el BlockReason de 200 de Trench): se guarda con el bloqueo y se borra al desbloquear.
 		{Version: 6, Name: "block reason", Up: sqlrepo.RenderDDLAll(`ALTER TABLE ord_terms {add:block_reason} {str:200}{addEnd}`)},
+		// Cuándo se factura al cliente lo entregado (D-146; el BillingPeriodicity del perfil comercial
+		// de Trench): per_delivery, como hasta ahora, o monthly.
+		{Version: 7, Name: "billing periodicity", Up: sqlrepo.RenderDDLAll(`ALTER TABLE ord_terms {add:billing_periodicity} {str:20}{addEnd}`,
+			`UPDATE ord_terms SET billing_periodicity = 'per_delivery'`)},
 	}}
 }
 
@@ -143,16 +147,19 @@ func TermsMapping() sqlrepo.Mapping[domain.TermsID, *domain.Terms] {
 	return sqlrepo.Mapping[domain.TermsID, *domain.Terms]{
 		Table:    "ord_terms",
 		Decimals: decimalColumns.Of("ord_terms"),
-		Columns:  sqlrepo.WithAuditColumns("company", "customer", "price_list", "discount", "block_orders", "block_delivery", "block_reason"),
+		Columns: sqlrepo.WithAuditColumns("company", "customer", "price_list", "discount", "block_orders", "block_delivery", "block_reason",
+			"billing_periodicity"),
 		Dehydrate: func(t *domain.Terms) (sqlrepo.Values, error) {
 			s := t.State()
 			return sqlrepo.AuditStampValues(sqlrepo.Values{"company": s.Company, "customer": s.Customer, "price_list": optUUID(s.PriceList.UUID),
-				"discount": s.Discount.Round(2), "block_orders": s.BlockOrders, "block_delivery": s.BlockDelivery, "block_reason": nullString(s.BlockReason)}, t.AuditStamp()), nil
+				"discount": s.Discount.Round(2), "block_orders": s.BlockOrders, "block_delivery": s.BlockDelivery, "block_reason": nullString(s.BlockReason),
+				"billing_periodicity": string(s.BillingPeriodicity)}, t.AuditStamp()), nil
 		},
 		Hydrate: func(r *sqlrepo.Row, _ sqlrepo.ChildRows) (*domain.Terms, error) {
 			s := domain.TermsState{Company: domain.OrganizationID{UUID: r.UUID("company")}, Customer: domain.PartyID{UUID: r.UUID("customer")},
 				PriceList: domain.PriceListID{UUID: r.UUID("price_list")}, Discount: r.Decimal("discount"), BlockOrders: r.Bool("block_orders"),
-				BlockDelivery: r.Bool("block_delivery"), BlockReason: r.String("block_reason"), Audit: r.AuditStamp()}
+				BlockDelivery: r.Bool("block_delivery"), BlockReason: r.String("block_reason"),
+				BillingPeriodicity: domain.BillingPeriodicity(r.String("billing_periodicity")), Audit: r.AuditStamp()}
 			if err := r.Err(); err != nil {
 				return nil, err
 			}

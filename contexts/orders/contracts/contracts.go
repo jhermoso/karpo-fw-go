@@ -66,18 +66,21 @@ type DeliveryLine struct {
 }
 
 // DeliveryIssuedV1 se publica al emitir un albarán: Inventory da salida a sus líneas con
-// existencias contra las reservas del pedido. Total es antes de impuestos.
+// existencias contra las reservas del pedido; Billing lo factura. Total es antes de impuestos.
+// BillingPeriodicity es la del cliente al emitirlo (D-146): per_delivery, Billing prepara su
+// borrador; monthly, lo deja pendiente hasta el cierre del periodo. Falta en los de antes.
 type DeliveryIssuedV1 struct {
-	DeliveryID  string         `json:"deliveryId"`
-	OrderID     string         `json:"orderId"`
-	OrderNumber string         `json:"orderNumber"`
-	Company     string         `json:"company"`
-	Customer    string         `json:"customer"`
-	Warehouse   string         `json:"warehouse,omitempty"`
-	Number      string         `json:"number"`
-	Date        string         `json:"date"`
-	Total       string         `json:"total"`
-	Lines       []DeliveryLine `json:"lines"`
+	DeliveryID         string         `json:"deliveryId"`
+	OrderID            string         `json:"orderId"`
+	OrderNumber        string         `json:"orderNumber"`
+	Company            string         `json:"company"`
+	Customer           string         `json:"customer"`
+	Warehouse          string         `json:"warehouse,omitempty"`
+	Number             string         `json:"number"`
+	Date               string         `json:"date"`
+	BillingPeriodicity string         `json:"billingPeriodicity,omitempty"`
+	Total              string         `json:"total"`
+	Lines              []DeliveryLine `json:"lines"`
 }
 
 // IntegrationEventType implementa application.IntegrationEvent.

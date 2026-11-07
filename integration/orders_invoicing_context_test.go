@@ -170,6 +170,86 @@ func TestOrdersInvoicing(t *testing.T) {
 			if err != nil || exp.Open != "40.33" {
 				t.Fatalf("receivable: %+v %v", exp, err)
 			}
+
+			// Varios albaranes en una factura (D-146), con las migraciones 10 y 11 de Billing y la 7 de
+			// Orders: dos borradores de Ana unidos a mano y emitidos, que facturan sus dos albaranes por
+			// la tabla de orígenes; y Bea, mensual, cuyos tres albaranes esperan en la tabla de pendientes
+			// hasta un cierre que prepara un único borrador, y un segundo cierre que no prepara nada.
+			montaje, err := dm.Service.RegisterProduct.Handle(actx, dapp.RegisterProduct{Company: acme.ID, SKU: "MONT", DetailsInput: dapp.DetailsInput{
+				Name: "Montaje", Kind: "service", UoM: "h", TaxCode: "G21", BasePrice: "35", ForSale: true}})
+			must(err)
+			bea, err := pm.Service.RegisterPerson.Handle(actx, papp.RegisterPerson{GivenName: "Bea", FirstSurname: "Mensual"})
+			must(err)
+			terms, err := om.Service.SetTerms.Handle(actx, oapp.SetTerms{Company: acme.ID, Customer: bea.ID, BillingPeriodicity: "monthly"})
+			if err != nil || terms.BillingPeriodicity != "monthly" {
+				t.Fatalf("monthly terms: %+v %v", terms, err)
+			}
+			delivered := func(customer string, day int) oapp.DeliveryDTO {
+				t.Helper()
+				o, err := om.Service.DraftOrder.Handle(actx, oapp.DraftOrder{Company: acme.ID, Customer: customer, Date: vocab.MustDate(2026, 10, 1)})
+				must(err)
+				id, _ := odomain.ParseOrderID(o.ID)
+				_, err = om.Service.AddLine.Handle(actx, oapp.AddLine{ID: id, Product: montaje.ID, Quantity: "1"})
+				must(err)
+				_, err = om.Service.Confirm.Handle(actx, oapp.ConfirmOrder{ID: id})
+				must(err)
+				deliver()
+				note, err := om.Service.Deliver.Handle(actx, oapp.Deliver{ID: id, Date: vocab.MustDate(2026, 10, day)})
+				must(err)
+				deliver()
+				return note
+			}
+			draftsOf := func(customer string) []bapp.InvoiceDTO {
+				t.Helper()
+				page, err := bm.Service.SearchInvoices.Handle(actx, bapp.SearchInvoices{Seller: acme.ID, Customer: customer, Status: "draft"})
+				must(err)
+				return page.Items
+			}
+			a1, a2 := delivered(ana.ID, 7), delivered(ana.ID, 8)
+			two := draftsOf(ana.ID)
+			if len(two) != 2 {
+				t.Fatalf("one draft per delivery note: %+v", two)
+			}
+			merged, err := bm.Service.MergeDrafts.Handle(actx, bapp.MergeDrafts{Invoices: []string{two[0].ID, two[1].ID}})
+			must(err)
+			if len(merged.Sources) != 2 || merged.Net != "70.00" || len(draftsOf(ana.ID)) != 1 {
+				t.Fatalf("merged draft: %+v", merged)
+			}
+			mid, _ := bdomain.ParseInvoiceID(merged.ID)
+			got, err := bm.Service.GetInvoice.Handle(actx, bapp.GetInvoice{ID: mid})
+			if err != nil || len(got.Sources) != 2 || got.Sources[0].ID != merged.Sources[0].ID || got.Sources[1].Ref != merged.Sources[1].Ref {
+				t.Fatalf("sources round trip: %+v %v", got, err)
+			}
+			inv2, err := bm.Service.Issue.Handle(actx, bapp.IssueInvoice{ID: mid, Series: series.ID, Date: vocab.MustDate(2026, 10, 9)})
+			must(err)
+			deliver()
+			for _, n := range []oapp.DeliveryDTO{a1, a2} {
+				id, _ := odomain.ParseDeliveryID(n.ID)
+				note, err := om.Service.GetDelivery.Handle(actx, oapp.GetDelivery{ID: id})
+				if err != nil || note.Invoice != inv2.ID {
+					t.Fatalf("delivery note %s invoiced: %+v %v", n.Number, note, err)
+				}
+			}
+			if exp, err := rm.Credit.Exposure(ctx, acme.ID, ana.ID, "2026-10-09"); err != nil || exp.Open != "125.03" {
+				t.Fatalf("receivable after the merged invoice: %+v %v", exp, err)
+			}
+
+			delivered(bea.ID, 2)
+			delivered(bea.ID, 15)
+			delivered(bea.ID, 28)
+			if d := draftsOf(bea.ID); len(d) != 0 {
+				t.Fatalf("no draft per delivery note for a monthly customer: %+v", d)
+			}
+			res, err := bm.Service.ClosePeriod.Handle(actx, bapp.ClosePeriod{Seller: acme.ID, UpTo: vocab.MustDate(2026, 10, 31)})
+			must(err)
+			closed := res.Drafts
+			if len(closed) != 1 || closed[0].Customer != bea.ID || len(closed[0].Sources) != 3 || closed[0].Net != "105.00" || closed[0].OperationDate != "2026-10-28" {
+				t.Fatalf("the draft of the period: %+v", closed)
+			}
+			again, err := bm.Service.ClosePeriod.Handle(actx, bapp.ClosePeriod{Seller: acme.ID, UpTo: vocab.MustDate(2026, 10, 31)})
+			if err != nil || len(again.Drafts) != 0 || len(again.Failed) != 0 || len(draftsOf(bea.ID)) != 1 {
+				t.Fatalf("a second close does not repeat: %+v %v", again, err)
+			}
 		})
 	}
 }

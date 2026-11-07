@@ -40,5 +40,8 @@ var decimalColumns = func() sqlrepo.DecimalColumns {
 			out[i].Type = sqlrepo.Dec(20, 6)
 		}
 	}
-	return out
+	// Las líneas de los albaranes pendientes (migración 11), como las de la factura.
+	return append(out,
+		sqlrepo.DecimalChange{Table: "bil_pending_delivery_lines", Column: "quantity", Type: sqlrepo.Dec(18, 4), NotNull: true},
+		sqlrepo.DecimalChange{Table: "bil_pending_delivery_lines", Column: "unit_price", Type: sqlrepo.Dec(20, 6), NotNull: true})
 }()

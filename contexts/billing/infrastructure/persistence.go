@@ -120,6 +120,35 @@ func calculationDDL() map[string][]string {
 	return out
 }
 
+// uniqueSource impide que un documento esté en dos facturas: un albarán se factura una vez (la
+// invariante de shipment_item_billing en Trench).
+const uniqueSource = "ux_bil_invoice_sources_source"
+
+// sourcesDDL lleva los orígenes de una factura a una tabla hija, uno por documento (D-146), y copia
+// en ella el de las facturas que ya lo tenían antes de crear el índice único: si dos facturas
+// tuvieran el mismo documento, la creación del índice lo dice y la migración no se da por hecha.
+// Las columnas source_* de bil_invoices se quedan con el primer origen, para quien ya las lea.
+var sourcesDDL = []string{
+	`CREATE TABLE bil_invoice_sources (invoice_id {uuid} NOT NULL, line_no {int} NOT NULL, source_type {str:80} NOT NULL,
+	source_id {str:80} NOT NULL, source_ref {str:40}, PRIMARY KEY (invoice_id, line_no), FOREIGN KEY (invoice_id) REFERENCES bil_invoices (id))`,
+	`INSERT INTO bil_invoice_sources (invoice_id, line_no, source_type, source_id, source_ref)
+	SELECT id, 1, source_type, source_id, source_ref FROM bil_invoices WHERE source_type IS NOT NULL`,
+	`CREATE UNIQUE INDEX ` + uniqueSource + ` ON bil_invoice_sources (source_type, source_id)`,
+}
+
+// pendingDDL guarda los albaranes de los clientes con facturación periódica hasta el cierre (D-146).
+var pendingDDL = []string{
+	`CREATE TABLE bil_pending_deliveries (id {uuid} NOT NULL PRIMARY KEY, version {bigint} NOT NULL, seller {uuid} NOT NULL, customer {uuid} NOT NULL,
+	delivery_number {str:40} NOT NULL, order_number {str:40}, delivery_date {date} NOT NULL, ` + audit + `)`,
+	`CREATE INDEX ix_bil_pending_deliveries ON bil_pending_deliveries (seller, delivery_date)`,
+	`CREATE TABLE bil_pending_delivery_lines (pending_id {uuid} NOT NULL, line_no {int} NOT NULL, description {str:500} NOT NULL,
+	quantity {dec:18,4} NOT NULL, unit_price {dec:20,6} NOT NULL, tax_code {str:5}, PRIMARY KEY (pending_id, line_no),
+	FOREIGN KEY (pending_id) REFERENCES bil_pending_deliveries (id))`,
+}
+
+// errSourceTaken es un conflicto: otra factura ya tiene ese documento (dos cierres a la vez).
+var errSourceTaken = fmt.Errorf("%w: billing: the document is already in another invoice", fw.ErrConflict)
+
 // errNumberTaken es un conflicto: la emisión se reintenta y toma otro número.
 var errNumberTaken = fmt.Errorf("%w: billing: the invoice number is already taken in its series", fw.ErrConflict)
 
@@ -156,6 +185,8 @@ func Migrations() sqlrepo.MigrationSet {
 		{Version: 7, Name: "last issue date of a series", Up: sqlrepo.RenderDDLAll(issueDateDDL...)},
 		{Version: 8, Name: "fiscal addresses of an invoice", Up: sqlrepo.RenderDDLAll(addressDDL...)},
 		{Version: 9, Name: "line calculation of an invoice: rounding and price decimals", Up: calculationDDL()},
+		{Version: 10, Name: "sources of an invoice", Up: sqlrepo.RenderDDLAll(sourcesDDL...)},
+		{Version: 11, Name: "delivery notes pending of the period close", Up: sqlrepo.RenderDDLAll(pendingDDL...)},
 	}}
 }
 
@@ -165,7 +196,8 @@ func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 }
 
 // Tables lista las tablas del contexto, las hijas primero (orden de borrado).
-var Tables = []string{"bil_invoice_taxes", "bil_invoice_lines", "bil_invoices", "bil_series", TableOutbox, TableIntegrationOutbox, TableAuditLog, TableInbox}
+var Tables = []string{"bil_pending_delivery_lines", "bil_pending_deliveries", "bil_invoice_sources", "bil_invoice_taxes", "bil_invoice_lines", "bil_invoices",
+	"bil_series", TableOutbox, TableIntegrationOutbox, TableAuditLog, TableInbox}
 
 // DropAll borra las tablas del contexto y su historial de migraciones (sólo para pruebas).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
@@ -243,6 +275,10 @@ func InvoiceMapping() sqlrepo.Mapping[domain.InvoiceID, *domain.Invoice] {
 			"line_rounding", "price_decimals"),
 		Dehydrate: func(i *domain.Invoice) (sqlrepo.Values, error) {
 			s := i.State()
+			var first domain.Source // las columnas de la cabecera guardan el primer origen
+			if len(s.Sources) > 0 {
+				first = s.Sources[0]
+			}
 			v := sqlrepo.Values{"seller": s.Seller, "customer": s.Customer, "kind": int64(s.Kind), "status": int64(s.Status), "currency": s.Currency.String(),
 				"description": opt(s.Description), "operation_date": optDate(s.OperationDate), "due_date": optDate(s.DueDate),
 				"equivalence_surcharge": s.EquivalenceSurcharge, "corrects": optUUID(s.Corrects.UUID), "reason": opt(s.Reason),
@@ -250,7 +286,7 @@ func InvoiceMapping() sqlrepo.Mapping[domain.InvoiceID, *domain.Invoice] {
 				"seller_nif": opt(s.SellerIdentity.NIF), "seller_name": opt(s.SellerIdentity.Name), "seller_country": opt(s.SellerIdentity.Country),
 				"customer_nif": opt(s.CustomerIdentity.NIF), "customer_name": opt(s.CustomerIdentity.Name), "customer_country": opt(s.CustomerIdentity.Country),
 				"tax_country": opt(s.Taxes.Country), "net": i.Net().Round(2), "tax_amount": nil, "surcharge": nil,
-				"source_type": opt(s.Source.Type), "source_id": opt(s.Source.ID), "source_ref": opt(s.Source.Ref),
+				"source_type": opt(first.Type), "source_id": opt(first.ID), "source_ref": opt(first.Ref),
 				"line_rounding": string(s.Calculation.Rounding), "price_decimals": int64(s.Calculation.PriceDecimals)}
 			if s.Status == domain.Issued {
 				v["tax_amount"], v["surcharge"] = s.Taxes.Tax.Round(2), s.Taxes.Surcharge.Round(2)
@@ -271,7 +307,6 @@ func InvoiceMapping() sqlrepo.Mapping[domain.InvoiceID, *domain.Invoice] {
 				OperationDate: r.Date("operation_date"), DueDate: r.Date("due_date"), EquivalenceSurcharge: r.Bool("equivalence_surcharge"),
 				Corrects: domain.InvoiceID{UUID: r.UUID("corrects")}, Reason: r.String("reason"), Series: domain.SeriesID{UUID: r.UUID("series_id")},
 				Number: r.String("invoice_number"), IssueDate: r.Date("issue_date"), Audit: r.AuditStamp(),
-				Source: domain.Source{Type: r.String("source_type"), ID: r.String("source_id"), Ref: r.String("source_ref")},
 				SellerIdentity: domain.Identity{NIF: r.String("seller_nif"), Name: r.String("seller_name"), Country: r.String("seller_country"),
 					Address: address(r, "seller")},
 				CustomerIdentity: domain.Identity{NIF: r.String("customer_nif"), Name: r.String("customer_name"), Country: r.String("customer_country"),
@@ -288,6 +323,14 @@ func InvoiceMapping() sqlrepo.Mapping[domain.InvoiceID, *domain.Invoice] {
 				}
 			}
 			slices.SortFunc(s.Lines, func(a, b domain.Line) int { return bytes.Compare(a.ID.Bytes(), b.ID.Bytes()) })
+			srcs := slices.Clone(children.Of("sources"))
+			slices.SortFunc(srcs, func(a, b *sqlrepo.Row) int { return int(a.Int64("line_no") - b.Int64("line_no")) })
+			for _, c := range srcs {
+				s.Sources = append(s.Sources, domain.Source{Type: c.String("source_type"), ID: c.String("source_id"), Ref: c.String("source_ref")})
+				if err := c.Err(); err != nil {
+					return nil, err
+				}
+			}
 			if s.Status == domain.Issued {
 				s.Taxes = domain.Breakdown{Country: r.String("tax_country"), Net: r.Decimal("net"), Tax: r.Decimal("tax_amount"), Surcharge: r.Decimal("surcharge")}
 				type line struct {
@@ -339,8 +382,67 @@ func InvoiceMapping() sqlrepo.Mapping[domain.InvoiceID, *domain.Invoice] {
 				}
 				return out, nil
 			},
+		}, {
+			Name: "sources", Table: "bil_invoice_sources", ForeignKey: "invoice_id", OrderBy: []string{"line_no"},
+			Columns: []string{"line_no", "source_type", "source_id", "source_ref"},
+			Unique:  []sqlrepo.UniqueIndex{{Name: uniqueSource, Columns: []string{"source_type", "source_id"}, Err: errSourceTaken}},
+			Dehydrate: func(i *domain.Invoice) ([]sqlrepo.Values, error) {
+				out := []sqlrepo.Values{}
+				for k, s := range i.State().Sources {
+					out = append(out, sqlrepo.Values{"line_no": int64(k + 1), "source_type": s.Type, "source_id": s.ID, "source_ref": opt(s.Ref)})
+				}
+				return out, nil
+			},
 		}},
 	}
+}
+
+// PendingDeliveryMapping mapea PendingDelivery a bil_pending_deliveries y sus líneas.
+func PendingDeliveryMapping() sqlrepo.Mapping[domain.PendingDeliveryID, *domain.PendingDelivery] {
+	return sqlrepo.Mapping[domain.PendingDeliveryID, *domain.PendingDelivery]{
+		Table:   "bil_pending_deliveries",
+		Columns: sqlrepo.WithAuditColumns("seller", "customer", "delivery_number", "order_number", "delivery_date"),
+		Dehydrate: func(p *domain.PendingDelivery) (sqlrepo.Values, error) {
+			s := p.State()
+			return sqlrepo.AuditStampValues(sqlrepo.Values{"seller": s.Seller, "customer": s.Customer, "delivery_number": s.Number,
+				"order_number": opt(s.OrderNumber), "delivery_date": s.Date}, p.AuditStamp()), nil
+		},
+		Hydrate: func(r *sqlrepo.Row, children sqlrepo.ChildRows) (*domain.PendingDelivery, error) {
+			s := domain.PendingDeliveryState{Seller: domain.OrganizationID{UUID: r.UUID("seller")}, Customer: domain.PartyID{UUID: r.UUID("customer")},
+				Number: r.String("delivery_number"), OrderNumber: r.String("order_number"), Date: r.Date("delivery_date"), Audit: r.AuditStamp()}
+			rows := slices.Clone(children.Of("lines"))
+			slices.SortFunc(rows, func(a, b *sqlrepo.Row) int { return int(a.Int64("line_no") - b.Int64("line_no")) })
+			for _, c := range rows {
+				s.Lines = append(s.Lines, domain.LineInput{Description: c.String("description"), Quantity: c.Decimal("quantity"),
+					UnitPrice: c.Decimal("unit_price"), TaxCode: c.String("tax_code")})
+				if err := c.Err(); err != nil {
+					return nil, err
+				}
+			}
+			if err := r.Err(); err != nil {
+				return nil, err
+			}
+			return domain.ReconstitutePendingDelivery(domain.PendingDeliveryID{UUID: r.UUID("id")}, s)
+		},
+		Children: []sqlrepo.Child[*domain.PendingDelivery]{{
+			Name: "lines", Table: "bil_pending_delivery_lines", ForeignKey: "pending_id", OrderBy: []string{"line_no"},
+			Columns:  []string{"line_no", "description", "quantity", "unit_price", "tax_code"},
+			Decimals: decimalColumns.Of("bil_pending_delivery_lines"),
+			Dehydrate: func(p *domain.PendingDelivery) ([]sqlrepo.Values, error) {
+				out := []sqlrepo.Values{}
+				for k, l := range p.State().Lines {
+					out = append(out, sqlrepo.Values{"line_no": int64(k + 1), "description": l.Description, "quantity": l.Quantity,
+						"unit_price": l.UnitPrice, "tax_code": opt(l.TaxCode)})
+				}
+				return out, nil
+			},
+		}},
+	}
+}
+
+// PendingDeliveryRepositoryFactory construye el repositorio de albaranes pendientes.
+func PendingDeliveryRepositoryFactory(b hotswap.Backend) (domain.PendingDeliveryRepository, error) {
+	return repository(b, PendingDeliveryMapping())
 }
 
 func unsupported(b hotswap.Backend) error { return fmt.Errorf("billing: unsupported backend %T", b) }

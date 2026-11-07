@@ -298,6 +298,7 @@ importes al céntimo (18,2), cantidades (18,4). Nunca es menor que la escala del
 | | `bil_invoice_lines.discount` | 7,4 | order_item.LineDiscountPercent (la línea de factura no tiene descuento) |
 | | `bil_invoice_taxes.rate`, `surcharge_rate` | 5,2 | vat_group.Rate, EquivalenceSurchargeRate |
 | | `bil_invoice_taxes.base`, `amount`, `surcharge_amount` | 18,2 | dominio (Fiscal calcula al céntimo) |
+| | `bil_pending_delivery_lines.quantity`, `unit_price` (v11) | 18,4 y 20,6 | las de `bil_invoice_lines`, a las que pasan al cerrar el periodo (D-146) |
 | Documents (v3) | `doc_documents.total` | 18,2 | dominio |
 | Exchange (v3) | `exg_currencies.rate` | 18,6 | dominio (seis decimales), como QuotedRate |
 | | `exg_currencies.facial` | 18,4 | currency.Facial |

@@ -266,7 +266,8 @@ func Publications(r *messaging.Recorder) *messaging.Recorder {
 	messaging.On(r, func(_ context.Context, e domain.DeliveryIssued) ([]app.IntegrationEvent, error) {
 		d := e.Snapshot
 		out := contracts.DeliveryIssuedV1{DeliveryID: e.AggregateID, OrderID: d.Order.String(), OrderNumber: d.OrderNumber, Company: d.Company.String(),
-			Customer: d.Customer.String(), Warehouse: optID(d.Warehouse.UUID), Number: d.Number, Date: d.Date.String()}
+			Customer: d.Customer.String(), Warehouse: optID(d.Warehouse.UUID), Number: d.Number, Date: d.Date.String(),
+			BillingPeriodicity: string(e.BillingPeriodicity)}
 		total := vocab.DecimalFromInt(0)
 		for _, l := range d.Lines {
 			total = total.Add(l.Amount)
@@ -296,12 +297,21 @@ func (StockReserved) IntegrationEventType() string { return "inventory.stock-res
 // DeliverySource es el tipo de origen que Billing da a las facturas preparadas a partir de albaranes.
 const DeliverySource = "orders.delivery"
 
-// InvoiceIssued es la copia de Orders de billing.invoice-issued.v1.
+// InvoiceIssued es la copia de Orders de billing.invoice-issued.v1. Sources son todos los
+// documentos de la factura (D-146); SourceType y SourceID, el primero, lo único que traían los
+// eventos de antes.
 type InvoiceIssued struct {
-	InvoiceID  string `json:"invoiceId"`
-	Number     string `json:"number"`
-	SourceType string `json:"sourceType"`
-	SourceID   string `json:"sourceId"`
+	InvoiceID  string          `json:"invoiceId"`
+	Number     string          `json:"number"`
+	SourceType string          `json:"sourceType"`
+	SourceID   string          `json:"sourceId"`
+	Sources    []InvoiceSource `json:"sources"`
+}
+
+// InvoiceSource es un documento del que Billing preparó una factura.
+type InvoiceSource struct {
+	Type string `json:"type"`
+	ID   string `json:"id"`
 }
 
 // IntegrationEventType implementa application.IntegrationEvent.
@@ -314,18 +324,24 @@ func (InvoiceIssued) IntegrationEventType() string { return "billing.invoice-iss
 func Subscribe(c *messaging.Consumer, d Deps) {
 	s := newService(d)
 	messaging.Handle(c, func(ctx context.Context, e InvoiceIssued, _ app.Envelope) error {
-		if e.SourceType != DeliverySource {
-			return nil
+		sources := e.Sources
+		if len(sources) == 0 && e.SourceType != "" { // un evento de antes de D-146
+			sources = append(sources, InvoiceSource{Type: e.SourceType, ID: e.SourceID})
 		}
-		id, err := domain.ParseDeliveryID(e.SourceID)
-		if err != nil {
-			return fw.Violation("orders.invalid_event", "billing.invoice-issued.v1: "+e.SourceID)
+		for _, src := range sources {
+			if src.Type != DeliverySource {
+				continue
+			}
+			id, err := domain.ParseDeliveryID(src.ID)
+			if err != nil {
+				return fw.Violation("orders.invalid_event", "billing.invoice-issued.v1: "+src.ID)
+			}
+			_, err = s.deliveries.Update(ctx, id, func(_ context.Context, d *domain.Delivery) error { d.MarkInvoiced(e.InvoiceID, e.Number); return nil })
+			if err != nil && !errors.Is(err, fw.ErrNotFound) {
+				return err
+			}
 		}
-		_, err = s.deliveries.Update(ctx, id, func(_ context.Context, d *domain.Delivery) error { d.MarkInvoiced(e.InvoiceID, e.Number); return nil })
-		if errors.Is(err, fw.ErrNotFound) {
-			return nil
-		}
-		return err
+		return nil
 	})
 	messaging.Handle(c, func(ctx context.Context, e StockReserved, _ app.Envelope) error {
 		if e.SourceType != OrderSource {

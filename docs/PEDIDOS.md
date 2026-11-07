@@ -127,6 +127,16 @@ contexts/inventory/  # + suscripción a Pedidos (migración 3: inventory_inbox),
   guarda mientras alguno está puesto y se borra al quitar los dos. La vista por pareja lo enseña en
   `blockReason`, junto al del crédito de Cobros.
   Fijar las condiciones las sustituye enteras: reenviar un bloqueo sin `blockReason` borra el motivo.
+- **Periodicidad de facturación** (D-146, migración 7): las condiciones llevan `billingPeriodicity`,
+  `per_delivery` (por omisión, un borrador de factura por albarán) o `monthly` (una factura con
+  todos los albaranes del periodo, al cerrarlo en Facturación). Es la columna
+  `ord_terms.billing_periodicity`, el `BillingPeriodicity` del perfil comercial de Trench, que allí
+  es un código numérico de Sage; aquí es un nombre. Cada albarán lleva en
+  `orders.delivery-issued.v1` (`billingPeriodicity`) la del cliente al emitirlo: Facturación no
+  consulta Pedidos. Cambiarla no toca los albaranes ya emitidos. Al recibir
+  `billing.invoice-issued.v1`, Pedidos marca como facturados **todos** los albaranes de `sources`
+  (o el de `sourceType` y `sourceId` en un evento de antes). Detalle en
+  [FACTURACION.md](FACTURACION.md), «Varios albaranes en una factura».
 - **Fusión de fichas** (D-93; [PARTIES.md](PARTIES.md) §17): Pedidos escucha
   `parties.relationship-transferred.v1`. Cuando la relación de cliente de una empresa pasa de una
   ficha a otra, copia las condiciones de venta (tarifa, descuento, bloqueos) de (empresa, la que

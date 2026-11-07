@@ -37,6 +37,7 @@ var (
 type Deps struct {
 	Series     domain.SeriesRepository
 	Invoices   domain.InvoiceRepository
+	Pending    domain.PendingDeliveryRepository // los albaranes que esperan al cierre del periodo (D-146)
 	Taxes      domain.Taxes
 	Identities domain.Identities
 	Blocks     domain.Blocks     // opcional
@@ -119,6 +120,11 @@ type Service struct {
 	GetInvoice     app.QueryHandler[GetInvoice, InvoiceDTO]
 	SearchInvoices app.QueryHandler[SearchInvoices, fw.Page[InvoiceDTO]]
 	InvoicePDF     app.QueryHandler[InvoicePDF, PDFDocument]
+
+	// Varios albaranes en una factura (D-146): a mano o al cerrar el periodo.
+	MergeDrafts             app.CommandHandler[MergeDrafts, InvoiceDTO]
+	ClosePeriod             app.CommandHandler[ClosePeriod, ClosePeriodResult]
+	SearchPendingDeliveries app.QueryHandler[SearchPendingDeliveries, fw.Page[PendingDeliveryDTO]]
 }
 
 type scope struct {
@@ -179,6 +185,7 @@ type service struct {
 	Deps
 	series   *orchestration.Orchestrator[domain.SeriesID, *domain.Series]
 	invoices *orchestration.Orchestrator[domain.InvoiceID, *domain.Invoice]
+	pending  *orchestration.Orchestrator[domain.PendingDeliveryID, *domain.PendingDelivery]
 }
 
 func parseID(v *fw.Validation, field, s string) fw.UUID {
@@ -223,6 +230,7 @@ func newService(d Deps) service {
 	return service{Deps: d,
 		series:   orchestration.New[domain.SeriesID, *domain.Series](d.Series, d.UoW, opts...),
 		invoices: orchestration.New[domain.InvoiceID, *domain.Invoice](d.Invoices, d.UoW, opts...),
+		pending:  orchestration.New[domain.PendingDeliveryID, *domain.PendingDelivery](d.Pending, d.UoW, opts...),
 	}
 }
 
@@ -233,6 +241,7 @@ func NewService(d Deps) *Service {
 	s.seriesUseCases(svc)
 	s.invoiceUseCases(svc)
 	s.invoicePDFUseCase(svc)
+	s.groupingUseCases(svc)
 	return svc
 }
 
@@ -386,7 +395,12 @@ func issuedV1(id string, s domain.InvoiceState) contracts.InvoiceIssuedV1 {
 	if !s.Corrects.IsZero() {
 		out.Corrects = s.Corrects.String()
 	}
-	out.SourceType, out.SourceID = s.Source.Type, s.Source.ID
+	for k, src := range s.Sources {
+		if k == 0 {
+			out.SourceType, out.SourceID = src.Type, src.ID
+		}
+		out.Sources = append(out.Sources, contracts.SourceV1{Type: src.Type, ID: src.ID, Ref: src.Ref})
+	}
 	for _, l := range s.Taxes.Lines {
 		out.Taxes = append(out.Taxes, contracts.TaxLineV1{TaxType: l.TaxType, TaxCode: l.TaxCode, Treatment: l.Treatment,
 			TreatmentKind: l.TreatmentKind, Rate: money(l.Rate), Base: money(l.Base), Amount: money(l.Amount),

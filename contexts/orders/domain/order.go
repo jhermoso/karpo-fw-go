@@ -495,15 +495,20 @@ func (d *Delivery) MarkInvoiced(invoice, number string) {
 	}
 }
 
-// IssueDelivery emite el albarán de lo que un pedido acaba de entregar. No cambia nunca.
-func IssueDelivery(id DeliveryID, o *Order, number string, date vocab.Date, lines []DeliveryLine) (*Delivery, error) {
+// IssueDelivery emite el albarán de lo que un pedido acaba de entregar. No cambia nunca. El evento
+// lleva la periodicidad de facturación del cliente (D-146), para que Billing sepa si prepara su
+// borrador o lo deja pendiente del cierre del periodo.
+func IssueDelivery(id DeliveryID, o *Order, number string, date vocab.Date, lines []DeliveryLine, billing BillingPeriodicity) (*Delivery, error) {
 	os := o.State()
 	d, err := ReconstituteDelivery(id, DeliveryState{Company: os.Company, Customer: os.Customer, Order: o.ID(), OrderNumber: os.Number, Number: number,
 		Date: date, Warehouse: os.Warehouse, Lines: lines})
 	if err != nil {
 		return nil, err
 	}
-	d.Raise(DeliveryIssued{EventMeta: d.NewEventMeta(), Snapshot: d.s})
+	if billing == "" {
+		billing = PerDelivery
+	}
+	d.Raise(DeliveryIssued{EventMeta: d.NewEventMeta(), Snapshot: d.s, BillingPeriodicity: billing})
 	return d, nil
 }
 
@@ -548,8 +553,22 @@ type TermsState struct {
 	// BlockReason dice por qué están bloqueados los pedidos o las entregas (D-122); se borra al
 	// desbloquear los dos.
 	BlockReason string
-	Audit       traits.AuditStamp
+	// BillingPeriodicity dice cuándo se le factura lo entregado (D-146); vacía, PerDelivery.
+	BillingPeriodicity BillingPeriodicity
+	Audit              traits.AuditStamp
 }
+
+// BillingPeriodicity es cuándo se factura a un cliente lo que se le entrega (D-146; el
+// BillingPeriodicity del perfil comercial de Trench, que guarda un código de Sage).
+type BillingPeriodicity string
+
+// Periodicidades de facturación.
+const (
+	// PerDelivery, un borrador de factura por albarán, en cuanto se emite (lo de siempre).
+	PerDelivery BillingPeriodicity = "per_delivery"
+	// Monthly, una factura con todos los albaranes del periodo, al cerrarlo en Billing.
+	Monthly BillingPeriodicity = "monthly"
+)
 
 // Terms son las condiciones de venta que una empresa da a un cliente (la parte de ventas del
 // CustomerRelationshipCommercialProfile de C#, que se buscaba sin mirar la empresa, cuyo
@@ -573,6 +592,10 @@ func ReconstituteTerms(id TermsID, s TermsState) (*Terms, error) {
 	var v fw.Validation
 	v.Require(!s.Company.IsZero() && !s.Customer.IsZero(), "customer", "required", "company and customer are required")
 	v.Require(percent(s.Discount), "discount", "range", "a percentage from 0 to 100")
+	if s.BillingPeriodicity == "" {
+		s.BillingPeriodicity = PerDelivery
+	}
+	v.Require(s.BillingPeriodicity == PerDelivery || s.BillingPeriodicity == Monthly, "billingPeriodicity", "enum", "per_delivery or monthly")
 	if !s.BlockOrders && !s.BlockDelivery {
 		s.BlockReason = ""
 	}
@@ -601,7 +624,8 @@ func (t *Terms) Change(s TermsState) error {
 
 // AuditSnapshot implementa traits.Snapshotter.
 func (t *Terms) AuditSnapshot() map[string]any {
-	s := map[string]any{"discount": t.s.Discount.String(), "blockOrders": t.s.BlockOrders, "blockDelivery": t.s.BlockDelivery}
+	s := map[string]any{"discount": t.s.Discount.String(), "blockOrders": t.s.BlockOrders, "blockDelivery": t.s.BlockDelivery,
+		"billingPeriodicity": string(t.s.BillingPeriodicity)}
 	if t.s.BlockReason != "" {
 		s["blockReason"] = t.s.BlockReason
 	}
@@ -687,7 +711,8 @@ type (
 	// DeliveryIssued se lanza al emitir un albarán, con su estado.
 	DeliveryIssued struct {
 		fw.EventMeta
-		Snapshot DeliveryState `json:"snapshot"`
+		Snapshot           DeliveryState      `json:"snapshot"`
+		BillingPeriodicity BillingPeriodicity `json:"billingPeriodicity"`
 	}
 )
 

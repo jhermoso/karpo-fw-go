@@ -68,7 +68,8 @@ func Compose(sw *hotswap.Switch, taxes domain.Taxes, identities domain.Identitie
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
 	d := bapp.Deps{
 		Series: hotswap.Repository(sw, infrastructure.SeriesRepositoryFactory), Invoices: hotswap.Repository(sw, infrastructure.InvoiceRepositoryFactory),
-		Taxes: taxes, Identities: identities, UoW: sw, Audit: audit,
+		Pending: hotswap.Repository(sw, infrastructure.PendingDeliveryRepositoryFactory),
+		Taxes:   taxes, Identities: identities, UoW: sw, Audit: audit,
 		Recorder: outbox.Recorders(outbox.NewRecorder(hotswap.Outbox(sw, infrastructure.OutboxFactory)),
 			bapp.Publications(messaging.NewRecorder(contracts.Source, integration))),
 	}
@@ -154,6 +155,33 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/billing/series/{id}/close", command(ser, func(c *bapp.CloseSeries, id domain.SeriesID) { c.ID = id }, svc.CloseSeries.Handle))
 
 	mux.HandleFunc("POST /api/billing/invoices", create(svc.DraftInvoice.Handle))
+	// Varios albaranes en una factura (D-146): a mano, uniendo borradores, o al cerrar el periodo de
+	// los clientes con facturación mensual. El cierre no se programa: se lanza por su ruta.
+	mux.HandleFunc("POST /api/billing/invoices/merge", func(w http.ResponseWriter, r *http.Request) {
+		var c bapp.MergeDrafts
+		if err := decode(r, &c); err != nil {
+			distribution.WriteError(w, r, err)
+			return
+		}
+		out, err := svc.MergeDrafts.Handle(r.Context(), c)
+		distribution.Respond(w, r, out, err, http.StatusOK)
+	})
+	mux.HandleFunc("GET /api/billing/pending-deliveries", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		atoi := func(k string) int { n, _ := strconv.Atoi(q.Get(k)); return n }
+		page, err := svc.SearchPendingDeliveries.Handle(r.Context(), bapp.SearchPendingDeliveries{Seller: q.Get("seller"), Customer: q.Get("customer"), UpTo: q.Get("upTo"),
+			Page: atoi("page"), Size: atoi("size")})
+		distribution.Respond(w, r, page, err, http.StatusOK)
+	})
+	mux.HandleFunc("POST /api/billing/periods/close", func(w http.ResponseWriter, r *http.Request) {
+		var c bapp.ClosePeriod
+		if err := decode(r, &c); err != nil {
+			distribution.WriteError(w, r, err)
+			return
+		}
+		out, err := svc.ClosePeriod.Handle(r.Context(), c)
+		distribution.Respond(w, r, out, err, http.StatusOK)
+	})
 	mux.HandleFunc("GET /api/billing/invoices", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		atoi := func(k string) int { n, _ := strconv.Atoi(q.Get(k)); return n }

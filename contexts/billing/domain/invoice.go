@@ -206,12 +206,35 @@ type Breakdown struct {
 // Total devuelve base + impuestos + recargo.
 func (b Breakdown) Total() vocab.Decimal { return b.Net.Add(b.Tax).Add(b.Surcharge) }
 
-// Source es el documento del que se preparó una factura (un albarán de Orders); vacío cuando se
-// preparó a mano.
+// Source es un documento del que se preparó una factura (un albarán de Orders). Una factura hecha
+// a mano no tiene ninguno; una de varios albaranes, uno por albarán (D-146).
 type Source struct {
 	Type string
 	ID   string
 	Ref  string // su número, para mostrarlo
+}
+
+// MaxSources limita los orígenes de una factura: como mucho uno por línea.
+const MaxSources = MaxLines
+
+func checkSources(v *fw.Validation, ss []Source) {
+	seen := map[[2]string]bool{}
+	ok := len(ss) <= MaxSources
+	for _, s := range ss {
+		k := [2]string{s.Type, s.ID}
+		ok = ok && s.Type != "" && s.ID != "" && len(s.Type) <= 80 && len(s.ID) <= 80 && len(s.Ref) <= 40 && !seen[k]
+		seen[k] = true
+	}
+	v.Require(ok, "sources", "length", "each source once, with a type and an id within limits")
+}
+
+// refs devuelve los números de los orígenes, separados por comas.
+func refs(ss []Source) string {
+	out := make([]string, 0, len(ss))
+	for _, s := range ss {
+		out = append(out, s.Ref)
+	}
+	return strings.Join(out, ", ")
 }
 
 // Invoice es una factura de venta de un vendedor a un cliente, con sus líneas.
@@ -241,7 +264,7 @@ type InvoiceState struct {
 	SellerIdentity       Identity
 	CustomerIdentity     Identity
 	Taxes                Breakdown
-	Source               Source
+	Sources              []Source
 	// Calculation es cómo se calculan las líneas; vacío (sin Rounding), DefaultCalculation.
 	Calculation Calculation
 	Audit       traits.AuditStamp
@@ -277,8 +300,7 @@ func ReconstituteInvoice(id InvoiceID, s InvoiceState) (*Invoice, error) {
 		"a corrective invoice names the invoice it corrects and a reason R1–R5")
 	v.Require(s.Kind == Corrective || (s.Corrects.IsZero() && s.Reason == ""), "corrects", "ordinary", "only corrective invoices correct")
 	v.Require(len(s.Lines) <= MaxLines, "lines", "count", "too many lines")
-	v.Require((s.Source.Type == "") == (s.Source.ID == "") && len(s.Source.Type) <= 80 && len(s.Source.ID) <= 80 && len(s.Source.Ref) <= 40, "source",
-		"length", "a source type and id within limits")
+	checkSources(&v, s.Sources)
 	if s.Calculation.Rounding == "" {
 		s.Calculation = DefaultCalculation()
 	}
@@ -289,7 +311,7 @@ func ReconstituteInvoice(id InvoiceID, s InvoiceState) (*Invoice, error) {
 		return nil, err
 	}
 	s.Description = d.Description
-	s.Lines = slices.Clone(s.Lines)
+	s.Lines, s.Sources = slices.Clone(s.Lines), slices.Clone(s.Sources)
 	return &Invoice{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
@@ -309,6 +331,7 @@ func (i *Invoice) State() InvoiceState {
 	s := i.s
 	s.Lines = slices.Clone(s.Lines)
 	s.Taxes.Lines = slices.Clone(s.Taxes.Lines)
+	s.Sources = slices.Clone(s.Sources)
 	return s
 }
 
@@ -452,14 +475,65 @@ func (i *Invoice) Issue(x Issuance) error {
 
 // Discard comprueba que un borrador puede borrarse (una factura emitida, nunca). Un borrador hecho a
 // partir de un albarán tampoco se descarta: lo entregado se factura, y un error se corrige después
-// de emitirlo.
+// de emitirlo. Sólo desaparece al unirse a otro (Merge).
 func (i *Invoice) Discard() error {
 	if err := i.mustBeDraft(); err != nil {
 		return err
 	}
-	if i.s.Source.Type != "" {
-		return fw.Violation("billing.sourced_draft", "the draft comes from "+i.s.Source.Ref+": it is issued, not discarded")
+	if len(i.s.Sources) > 0 {
+		return fw.Violation("billing.sourced_draft", "the draft comes from "+refs(i.s.Sources)+": it is issued, not discarded")
 	}
+	return nil
+}
+
+// Merge une a este borrador otros borradores de documentos (albaranes) del mismo vendedor y cliente
+// (D-146): se queda con las líneas y los orígenes de todos, y la descripción que se le da. La fecha
+// de la operación es la última de todas, el final del periodo que cubre. Los demás desaparecen:
+// la aplicación los borra en la misma unidad de trabajo. Todos tienen que ser borradores
+// ordinarios con algún origen y calcularse igual (D-144: el mismo redondeo y los mismos
+// decimales), con o sin recargo de equivalencia todos a la vez.
+func (i *Invoice) Merge(others []*Invoice, description string) error {
+	if len(others) == 0 {
+		return fw.Violation("billing.merge_too_few", "at least two drafts are merged")
+	}
+	all := append([]*Invoice{i}, others...)
+	lines, sources, date := 0, []Source{}, vocab.Date{}
+	for _, o := range all {
+		if err := o.mustBeDraft(); err != nil {
+			return err
+		}
+		os := o.s
+		switch {
+		case os.Kind != Ordinary || len(os.Sources) == 0:
+			return fw.Violation("billing.merge_unsourced", "only drafts prepared from delivery notes are merged")
+		case os.Seller != i.s.Seller || os.Customer != i.s.Customer:
+			return fw.Violation("billing.merge_other_customer", "the drafts are of the same seller and customer")
+		case os.Calculation != i.s.Calculation:
+			return fw.Violation("billing.merge_calculation", "the drafts are calculated alike: the same line rounding and price decimals")
+		case os.EquivalenceSurcharge != i.s.EquivalenceSurcharge:
+			return fw.Violation("billing.merge_surcharge", "the drafts all have the equivalence surcharge, or none has it")
+		}
+		lines += len(os.Lines)
+		sources = append(sources, os.Sources...)
+		if os.OperationDate.After(date) {
+			date = os.OperationDate
+		}
+	}
+	if lines > MaxLines {
+		return fw.Violation("billing.too_many_lines", "the invoice has too many lines")
+	}
+	var v fw.Validation
+	checkSources(&v, sources)
+	d := Details{Description: description, OperationDate: date, DueDate: i.s.DueDate, EquivalenceSurcharge: i.s.EquivalenceSurcharge}
+	checkDetails(&v, &d)
+	if err := v.Err(); err != nil {
+		return err
+	}
+	merged := slices.Clone(i.s.Lines)
+	for _, o := range others {
+		merged = append(merged, o.s.Lines...)
+	}
+	i.s.Lines, i.s.Sources, i.s.Description, i.s.OperationDate = merged, sources, d.Description, d.OperationDate
 	return nil
 }
 
@@ -477,14 +551,21 @@ var (
 	InvFieldCorrects = spec.Comparable("corrects", func(i *Invoice) InvoiceID { return i.s.Corrects })
 	InvFieldIssued   = spec.OrderedBy("issue_date", func(i *Invoice) vocab.Date { return i.s.IssueDate }, vocab.CompareDates)
 	InvFieldNumber   = spec.Ordered("invoice_number", func(i *Invoice) string { return i.s.Number })
-	InvFieldSrcType  = spec.Comparable("source_type", func(i *Invoice) string { return i.s.Source.Type })
-	InvFieldSrcID    = spec.Comparable("source_id", func(i *Invoice) string { return i.s.Source.ID })
+	InvFieldSources  = spec.Collection("sources", func(i *Invoice) []Source { return i.s.Sources })
+	SrcFieldType     = spec.Comparable("source_type", func(s Source) string { return s.Type })
+	SrcFieldID       = spec.Comparable("source_id", func(s Source) string { return s.ID })
 )
+
+// FromSource selecciona las facturas, borradores o emitidas, que tienen ese documento entre sus orígenes.
+func FromSource(typ, id string) spec.Spec[*Invoice] {
+	return InvFieldSources.Any(spec.And(SrcFieldType.Eq(typ), SrcFieldID.Eq(id)))
+}
 
 // Repositorios y puertos del contexto.
 type (
-	SeriesRepository  = fw.Repository[SeriesID, *Series]
-	InvoiceRepository = fw.Repository[InvoiceID, *Invoice]
+	SeriesRepository          = fw.Repository[SeriesID, *Series]
+	InvoiceRepository         = fw.Repository[InvoiceID, *Invoice]
+	PendingDeliveryRepository = fw.Repository[PendingDeliveryID, *PendingDelivery]
 )
 
 // TaxableLine es una línea que se envía al motor de impuestos.
