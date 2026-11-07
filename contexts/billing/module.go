@@ -166,6 +166,13 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 		out, err := svc.MergeDrafts.Handle(r.Context(), c)
 		distribution.Respond(w, r, out, err, http.StatusOK)
 	})
+	mux.HandleFunc("GET /api/billing/pending-deliveries", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		atoi := func(k string) int { n, _ := strconv.Atoi(q.Get(k)); return n }
+		page, err := svc.SearchPendingDeliveries.Handle(r.Context(), bapp.SearchPendingDeliveries{Seller: q.Get("seller"), Customer: q.Get("customer"),
+			Page: atoi("page"), Size: atoi("size")})
+		distribution.Respond(w, r, page, err, http.StatusOK)
+	})
 	mux.HandleFunc("POST /api/billing/periods/close", func(w http.ResponseWriter, r *http.Request) {
 		var c bapp.ClosePeriod
 		if err := decode(r, &c); err != nil {

@@ -122,8 +122,9 @@ type Service struct {
 	InvoicePDF     app.QueryHandler[InvoicePDF, PDFDocument]
 
 	// Varios albaranes en una factura (D-146): a mano o al cerrar el periodo.
-	MergeDrafts app.CommandHandler[MergeDrafts, InvoiceDTO]
-	ClosePeriod app.CommandHandler[ClosePeriod, []InvoiceDTO]
+	MergeDrafts             app.CommandHandler[MergeDrafts, InvoiceDTO]
+	ClosePeriod             app.CommandHandler[ClosePeriod, ClosePeriodResult]
+	SearchPendingDeliveries app.QueryHandler[SearchPendingDeliveries, fw.Page[PendingDeliveryDTO]]
 }
 
 type scope struct {

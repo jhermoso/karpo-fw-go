@@ -125,14 +125,15 @@ func calculationDDL() map[string][]string {
 const uniqueSource = "ux_bil_invoice_sources_source"
 
 // sourcesDDL lleva los orígenes de una factura a una tabla hija, uno por documento (D-146), y copia
-// en ella el de las facturas que ya lo tenían. Las columnas source_* de bil_invoices se quedan con
-// el primer origen, para quien ya las lea.
+// en ella el de las facturas que ya lo tenían antes de crear el índice único: si dos facturas
+// tuvieran el mismo documento, la creación del índice lo dice y la migración no se da por hecha.
+// Las columnas source_* de bil_invoices se quedan con el primer origen, para quien ya las lea.
 var sourcesDDL = []string{
 	`CREATE TABLE bil_invoice_sources (invoice_id {uuid} NOT NULL, line_no {int} NOT NULL, source_type {str:80} NOT NULL,
 	source_id {str:80} NOT NULL, source_ref {str:40}, PRIMARY KEY (invoice_id, line_no), FOREIGN KEY (invoice_id) REFERENCES bil_invoices (id))`,
-	`CREATE UNIQUE INDEX ` + uniqueSource + ` ON bil_invoice_sources (source_type, source_id)`,
 	`INSERT INTO bil_invoice_sources (invoice_id, line_no, source_type, source_id, source_ref)
 	SELECT id, 1, source_type, source_id, source_ref FROM bil_invoices WHERE source_type IS NOT NULL`,
+	`CREATE UNIQUE INDEX ` + uniqueSource + ` ON bil_invoice_sources (source_type, source_id)`,
 }
 
 // pendingDDL guarda los albaranes de los clientes con facturación periódica hasta el cierre (D-146).

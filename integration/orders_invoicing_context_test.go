@@ -240,13 +240,14 @@ func TestOrdersInvoicing(t *testing.T) {
 			if d := draftsOf(bea.ID); len(d) != 0 {
 				t.Fatalf("no draft per delivery note for a monthly customer: %+v", d)
 			}
-			closed, err := bm.Service.ClosePeriod.Handle(actx, bapp.ClosePeriod{Seller: acme.ID, UpTo: vocab.MustDate(2026, 10, 31)})
+			res, err := bm.Service.ClosePeriod.Handle(actx, bapp.ClosePeriod{Seller: acme.ID, UpTo: vocab.MustDate(2026, 10, 31)})
 			must(err)
+			closed := res.Drafts
 			if len(closed) != 1 || closed[0].Customer != bea.ID || len(closed[0].Sources) != 3 || closed[0].Net != "105.00" || closed[0].OperationDate != "2026-10-28" {
 				t.Fatalf("the draft of the period: %+v", closed)
 			}
 			again, err := bm.Service.ClosePeriod.Handle(actx, bapp.ClosePeriod{Seller: acme.ID, UpTo: vocab.MustDate(2026, 10, 31)})
-			if err != nil || len(again) != 0 || len(draftsOf(bea.ID)) != 1 {
+			if err != nil || len(again.Drafts) != 0 || len(again.Failed) != 0 || len(draftsOf(bea.ID)) != 1 {
 				t.Fatalf("a second close does not repeat: %+v %v", again, err)
 			}
 		})

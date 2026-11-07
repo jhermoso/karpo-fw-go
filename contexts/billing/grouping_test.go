@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"testing"
 
@@ -122,8 +123,9 @@ func TestBilling_MergeDeliveryDrafts(t *testing.T) {
 }
 
 // Un cliente con facturación mensual no recibe un borrador por albarán: sus albaranes quedan
-// pendientes y el cierre del periodo prepara uno por cliente con los de hasta la fecha de corte. Un
-// segundo cierre no prepara nada (D-146).
+// pendientes, se listan, y el cierre del periodo prepara uno por cliente con los de hasta la fecha
+// de corte. Un segundo cierre no prepara nada; uno que llega tarde entra en el cierre siguiente
+// (D-146).
 func TestBilling_ClosePeriod(t *testing.T) {
 	h := compose(t)
 	acme, ana := h.seller(t)
@@ -139,26 +141,40 @@ func TestBilling_ClosePeriod(t *testing.T) {
 		t.Fatalf("no draft per delivery note for a monthly customer: %d", n)
 	}
 
+	// Los pendientes se listan con el permiso de leer facturas, en el ámbito de quien lee.
+	var pending struct {
+		Items []bapp.PendingDeliveryDTO `json:"items"`
+	}
+	h.must(h.do("GET", "/api/billing/pending-deliveries?seller="+acme+"&customer="+ana, "clerk", nil, &pending), http.StatusOK, "pending outside the scope")
+	if len(pending.Items) != 0 {
+		t.Fatalf("pending outside the scope: %+v", pending.Items)
+	}
+	h.grant("clerk", acme)
+	h.must(h.do("GET", "/api/billing/pending-deliveries?seller="+acme+"&customer="+ana, "clerk", nil, &pending), http.StatusOK, "pending")
+	if len(pending.Items) != 4 || pending.Items[0].Delivery != m1 || pending.Items[3].Number != "M-3" || pending.Items[1].Net != "10.00" {
+		t.Fatalf("pending delivery notes: %+v", pending.Items)
+	}
+
 	if _, err := bs.ClosePeriod.Handle(actx, bapp.ClosePeriod{Seller: acme}); !errors.Is(err, fw.ErrValidation) {
 		t.Fatalf("a close without its date: %v", err)
 	}
-	h.grant("clerk", acme)
 	h.must(h.do("POST", "/api/billing/periods/close", "issuer", bapp.ClosePeriod{Seller: acme, Customer: ana, UpTo: vocab.MustDate(2026, 10, 31)}, nil),
 		http.StatusForbidden, "close without the permission to prepare drafts")
-	var closed []bapp.InvoiceDTO
-	h.must(h.do("POST", "/api/billing/periods/close", "clerk", bapp.ClosePeriod{Seller: acme, Customer: ana, UpTo: vocab.MustDate(2026, 10, 31)}, &closed),
+	var res bapp.ClosePeriodResult
+	h.must(h.do("POST", "/api/billing/periods/close", "clerk", bapp.ClosePeriod{Seller: acme, Customer: ana, UpTo: vocab.MustDate(2026, 10, 31)}, &res),
 		http.StatusOK, "close")
-	if len(closed) != 1 || len(closed[0].Sources) != 3 || closed[0].Sources[0].ID != m1 || closed[0].Sources[2].ID != m2 || closed[0].Customer != ana ||
-		closed[0].Net != "40.00" || closed[0].OperationDate != "2026-10-20" || closed[0].Description != "Albaranes M-1, M-1, M-2" {
-		t.Fatalf("the draft of the period: %+v", closed)
+	closed := res.Drafts
+	if len(res.Failed) != 0 || len(closed) != 1 || len(closed[0].Sources) != 3 || closed[0].Sources[0].ID != m1 || closed[0].Sources[2].ID != m2 ||
+		closed[0].Customer != ana || closed[0].Net != "40.00" || closed[0].OperationDate != "2026-10-20" || closed[0].Description != "Albaranes M-1, M-1, M-2" {
+		t.Fatalf("the draft of the period: %+v", res)
 	}
 	again, err := bs.ClosePeriod.Handle(actx, bapp.ClosePeriod{Seller: acme, Customer: ana, UpTo: vocab.MustDate(2026, 10, 31)})
-	if err != nil || len(again) != 0 {
+	if err != nil || len(again.Drafts) != 0 || len(again.Failed) != 0 {
 		t.Fatalf("a second close prepares nothing: %+v %v", again, err)
 	}
 	// Sin cliente, el resto de clientes del vendedor.
 	rest, err := bs.ClosePeriod.Handle(actx, bapp.ClosePeriod{Seller: acme, UpTo: vocab.MustDate(2026, 10, 31)})
-	if err != nil || len(rest) != 1 || rest[0].Customer != bea.ID || rest[0].Description != "Albarán B-1 (pedido P-B-1)" {
+	if err != nil || len(rest.Drafts) != 1 || rest.Drafts[0].Customer != bea.ID || rest.Drafts[0].Description != "Albarán B-1 (pedido P-B-1)" {
 		t.Fatalf("the other customer: %+v %v", rest, err)
 	}
 	// Un albarán ya facturado que llega otra vez no queda pendiente.
@@ -167,11 +183,94 @@ func TestBilling_ClosePeriod(t *testing.T) {
 			"quantity": "1", "netPrice": "10"}}})
 	h.ok(h.billing.Consumer.HandleMessage(context.Background(), application.Envelope{ID: fw.NewUUID().String(), Type: "orders.delivery-issued.v1",
 		Source: "orders", Data: data}))
+	// Uno que llega tarde, con fecha de un periodo ya cerrado, entra en el cierre siguiente.
+	late := h.delivery(acme, ana, "M-0", "2026-10-30", "monthly", "1")
 	next, err := bs.ClosePeriod.Handle(actx, bapp.ClosePeriod{Seller: acme, UpTo: vocab.MustDate(2026, 11, 30)})
-	if err != nil || len(next) != 1 || len(next[0].Sources) != 1 || next[0].SourceRef != "M-3" || next[0].Net != "40.00" {
+	if err != nil || len(next.Drafts) != 1 || len(next.Drafts[0].Sources) != 2 || next.Drafts[0].Sources[0].ID != late || next.Drafts[0].Net != "50.00" ||
+		next.Drafts[0].OperationDate != "2026-11-02" {
 		t.Fatalf("the next period: %+v %v", next, err)
 	}
 	if n := len(h.drafts(acme)); n != 3 {
 		t.Fatalf("one draft per customer and period: %d", n)
+	}
+}
+
+// pendingDelivery entrega a Billing un albarán mensual con lines líneas.
+func (h *host) pendingDelivery(acme, customer, number, taxCode string, lines int) string {
+	h.t.Helper()
+	ls := make([]map[string]any, 0, lines)
+	for range lines {
+		ls = append(ls, map[string]any{"sku": "T", "description": "Tornillo", "taxCode": taxCode, "quantity": "1", "netPrice": "1"})
+	}
+	id := fw.NewUUID().String()
+	data, _ := json.Marshal(map[string]any{"deliveryId": id, "orderNumber": "P-" + number, "company": acme, "customer": customer,
+		"number": number, "date": "2026-10-10", "billingPeriodicity": "monthly", "lines": ls})
+	h.ok(h.billing.Consumer.HandleMessage(context.Background(), application.Envelope{ID: fw.NewUUID().String(), Type: "orders.delivery-issued.v1",
+		Source: "orders", Data: data}))
+	return id
+}
+
+// El cierre va cliente a cliente: con muchos albaranes la descripción se acorta; con más de 500
+// líneas el borrador se parte sin partir un albarán; una línea que la factura no admite hace fallar
+// sólo a su cliente, cuyos albaranes siguen pendientes; y un pendiente que ya está en una factura se
+// borra sin otro borrador.
+func TestBilling_ClosePeriodPerCustomer(t *testing.T) {
+	h := compose(t)
+	acme, ana := h.seller(t)
+	bs, actx, ps := h.billing.Service, h.adminCtx, h.parties.Service
+	person := func(name string) string {
+		p, err := ps.RegisterPerson.Handle(actx, papp.RegisterPerson{GivenName: name, FirstSurname: "Cierre"})
+		h.ok(err)
+		return p.ID
+	}
+	many, big, bad := person("Muchos"), person("Grande"), person("Mala")
+	for k := range 40 {
+		h.pendingDelivery(acme, many, fmt.Sprintf("ALB-2026-%06d", 101+k), "G21", 1)
+	}
+	h.pendingDelivery(acme, big, "G-1", "G21", 200)
+	h.pendingDelivery(acme, big, "G-2", "G21", 200)
+	h.pendingDelivery(acme, big, "G-3", "G21", 200)
+	h.pendingDelivery(acme, bad, "X-1", "", 1) // sin código de impuesto: la factura no admite la línea
+	// Un pendiente que ya está en una factura: llegó como mensual y otra vez como por albarán.
+	twice := h.pendingDelivery(acme, ana, "T-1", "G21", 1)
+	data, _ := json.Marshal(map[string]any{"deliveryId": twice, "orderNumber": "P-T-1", "company": acme, "customer": ana, "number": "T-1",
+		"date": "2026-10-10", "billingPeriodicity": "per_delivery", "lines": []map[string]any{{"sku": "T", "description": "Tornillo", "taxCode": "G21",
+			"quantity": "1", "netPrice": "1"}}})
+	h.ok(h.billing.Consumer.HandleMessage(context.Background(), application.Envelope{ID: fw.NewUUID().String(), Type: "orders.delivery-issued.v1",
+		Source: "orders", Data: data}))
+
+	res, err := bs.ClosePeriod.Handle(actx, bapp.ClosePeriod{Seller: acme, UpTo: vocab.MustDate(2026, 10, 31)})
+	h.ok(err)
+	by := map[string][]bapp.InvoiceDTO{}
+	for _, d := range res.Drafts {
+		by[d.Customer] = append(by[d.Customer], d)
+	}
+	if m := by[many]; len(m) != 1 || len(m[0].Sources) != 40 || m[0].Description != "Albaranes ALB-2026-000101 a ALB-2026-000140 (40)" {
+		t.Fatalf("forty delivery notes: %+v", m)
+	}
+	if b := by[big]; len(b) != 2 || len(b[0].Lines) != 400 || len(b[0].Sources) != 2 || len(b[1].Lines) != 200 || b[1].SourceRef != "G-3" ||
+		b[1].Description != "Albarán G-3 (pedido P-G-3)" {
+		t.Fatalf("600 lines in two drafts: %d", len(b))
+	}
+	if len(by[ana]) != 0 || len(res.Failed) != 1 || res.Failed[0].Customer != bad || res.Failed[0].Code != "billing.close_invalid_line" {
+		t.Fatalf("the failed customer: %+v", res.Failed)
+	}
+	page, err := bs.SearchPendingDeliveries.Handle(actx, bapp.SearchPendingDeliveries{Seller: acme})
+	if err != nil || len(page.Items) != 1 || page.Items[0].Customer != bad {
+		t.Fatalf("what stays pending: %+v %v", page.Items, err)
+	}
+	// Cuarenta borradores unidos a mano también se describen en corto.
+	var ids []string
+	for k := range 40 {
+		h.delivery(acme, ana, fmt.Sprintf("ALB-2026-%06d", 201+k), "2026-10-11", "per_delivery", "1")
+	}
+	for _, d := range h.drafts(acme) {
+		if d.Customer == ana && len(d.Sources) == 1 && d.SourceRef != "T-1" {
+			ids = append(ids, d.ID)
+		}
+	}
+	merged, err := bs.MergeDrafts.Handle(actx, bapp.MergeDrafts{Invoices: ids})
+	if err != nil || len(merged.Sources) != 40 || len(merged.Description) > 500 {
+		t.Fatalf("forty drafts merged: %q %v", merged.Description, err)
 	}
 }

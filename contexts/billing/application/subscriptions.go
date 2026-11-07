@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/billing/domain"
@@ -43,8 +44,13 @@ type DeliveryIssued struct {
 // IntegrationEventType implementa application.IntegrationEvent.
 func (DeliveryIssued) IntegrationEventType() string { return "orders.delivery-issued.v1" }
 
+// maxListedRefs es lo más largo que puede ser la lista de albaranes en una descripción; con más,
+// sólo el primero, el último y cuántos son (la lista entera está en los orígenes).
+const maxListedRefs = 200
+
 // deliveryDescription es la descripción de la operación de un borrador de albaranes: cita el
-// albarán y su pedido, o los albaranes.
+// albarán y su pedido; o los albaranes («Albaranes A-1, A-2»); o, si son muchos, el primero, el
+// último y cuántos («Albaranes A-1 a A-40 (40)»). Siempre cabe en los 500 caracteres.
 func deliveryDescription(number, order string, sources []domain.Source) string {
 	if len(sources) == 1 {
 		return "Albarán " + number + " (pedido " + order + ")"
@@ -53,7 +59,10 @@ func deliveryDescription(number, order string, sources []domain.Source) string {
 	for _, s := range sources {
 		refs = append(refs, s.Ref)
 	}
-	return "Albaranes " + strings.Join(refs, ", ")
+	if list := strings.Join(refs, ", "); len(list) <= maxListedRefs {
+		return "Albaranes " + list
+	}
+	return fmt.Sprintf("Albaranes %s a %s (%d)", refs[0], refs[len(refs)-1], len(refs))
 }
 
 // deliveryDraft prepara el borrador de uno o varios albaranes: sus líneas, con sus precios netos

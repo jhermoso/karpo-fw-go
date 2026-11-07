@@ -126,14 +126,15 @@ func (c *chain) grouping(tag string) {
 	if err != nil || len(open.Items) != 3 {
 		t.Fatalf("delivery notes to invoice: %+v %v", open.Items, err)
 	}
-	closed, err := c.bm.Service.ClosePeriod.Handle(ctx, bapp.ClosePeriod{Seller: acme.ID, UpTo: vocab.MustDate(2026, 10, 31)})
+	res, err := c.bm.Service.ClosePeriod.Handle(ctx, bapp.ClosePeriod{Seller: acme.ID, UpTo: vocab.MustDate(2026, 10, 31)})
 	c.ok(err)
+	closed := res.Drafts
 	if len(closed) != 1 || closed[0].Customer != bea.ID || len(closed[0].Sources) != 3 || closed[0].Net != "105.00" ||
 		closed[0].Description != "Albaranes "+m1.Number+", "+m2.Number+", "+m3.Number {
 		t.Fatalf("the draft of the period: %+v", closed)
 	}
 	again, err := c.bm.Service.ClosePeriod.Handle(ctx, bapp.ClosePeriod{Seller: acme.ID, UpTo: vocab.MustDate(2026, 10, 31)})
-	if err != nil || len(again) != 0 || len(drafts(bea.ID)) != 1 {
+	if err != nil || len(again.Drafts) != 0 || len(again.Failed) != 0 || len(drafts(bea.ID)) != 1 {
 		t.Fatalf("a second close does not repeat: %+v %v", again, err)
 	}
 	id, _ = bdomain.ParseInvoiceID(closed[0].ID)
