@@ -35,6 +35,7 @@ type Deps struct {
 	Categories domain.CategoryRepository
 	PriceLists domain.PriceListRepository
 	UoW        fw.UnitOfWork
+	Today      app.CompanyToday // opcional: sin él, hoy es el de UTC (docs/ARQUITECTURA.md, «Hoy es el de la empresa»)
 	Recorder   app.EventRecorder
 	Audit      app.AuditLog
 }

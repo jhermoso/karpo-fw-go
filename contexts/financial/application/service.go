@@ -46,6 +46,7 @@ type Deps struct {
 	Agreements   domain.AgreementRepository
 	Institutions domain.Institutions
 	UoW          fw.UnitOfWork
+	Today        app.CompanyToday // opcional: sin él, hoy es el de UTC (docs/ARQUITECTURA.md, «Hoy es el de la empresa»)
 	Recorder     app.EventRecorder
 	Audit        app.AuditLog
 	Merged       app.MergedParties // opcional: las parties fusionadas, que los listados dejan fuera (D-100)
@@ -288,11 +289,9 @@ func optDate(d vocab.Date) string {
 	return d.String()
 }
 
-func today(d vocab.Date) vocab.Date {
-	if d.IsZero() {
-		return vocab.DateOf(fw.Now())
-	}
-	return d
+// today es d si trae fecha; si no, hoy para la empresa (en su zona horaria, con el anfitrión).
+func (s service) today(ctx context.Context, company domain.OrganizationID, d vocab.Date) (vocab.Date, error) {
+	return app.OrToday(ctx, s.Today, company.UUID, d)
 }
 
 func accountDTO(a *domain.Account) AccountDTO {
@@ -378,7 +377,11 @@ func NewService(d Deps) *Service {
 		if err := s.institution(ctx, company); err != nil {
 			return AccountDTO{}, err
 		}
-		if err := s.governs(ctx, company, product, agreement, []domain.PartyID{holder}, today(c.Opened), true); err != nil {
+		opened, err := s.today(ctx, company, c.Opened)
+		if err != nil {
+			return AccountDTO{}, err
+		}
+		if err := s.governs(ctx, company, product, agreement, []domain.PartyID{holder}, opened, true); err != nil {
 			return AccountDTO{}, err
 		}
 		uses := []string{}
@@ -388,7 +391,7 @@ func NewService(d Deps) *Service {
 			}
 		}
 		a, err := domain.Open(domain.NewAccountID(), domain.Opening{Company: company, Number: c.Number, Virtual: c.Virtual, BIC: c.BIC, Currency: currency,
-			Name: c.Name, Product: product, Agreement: agreement, Demo: c.Demo, Opened: today(c.Opened), Holder: holder, Uses: uses})
+			Name: c.Name, Product: product, Agreement: agreement, Demo: c.Demo, Opened: opened, Holder: holder, Uses: uses})
 		if err != nil {
 			return AccountDTO{}, err
 		}
@@ -419,7 +422,11 @@ func NewService(d Deps) *Service {
 					holders = append(holders, h.Party)
 				}
 			}
-			if err := s.governs(ctx, st.Company, product, agreement, holders, vocab.DateOf(fw.Now()), false); err != nil {
+			today, err := s.today(ctx, st.Company, vocab.Date{})
+			if err != nil {
+				return err
+			}
+			if err := s.governs(ctx, st.Company, product, agreement, holders, today, false); err != nil {
 				return err
 			}
 			return a.Describe(c.Name, c.BIC, product, agreement)
@@ -434,7 +441,13 @@ func NewService(d Deps) *Service {
 		if err := v.Err(); err != nil {
 			return AccountDTO{}, err
 		}
-		return s.update(ctx, c.ID, func(a *domain.Account) error { return a.Relate(party, role, today(c.From), c.Primary) })
+		return s.update(ctx, c.ID, func(a *domain.Account) error {
+			on, err := s.today(ctx, a.State().Company, c.From)
+			if err != nil {
+				return err
+			}
+			return a.Relate(party, role, on, c.Primary)
+		})
 	})
 
 	svc.Unrelate = changing(d.UoW, PermAccountUpdate, func(ctx context.Context, c UnrelateParty) (AccountDTO, error) {
@@ -444,7 +457,11 @@ func NewService(d Deps) *Service {
 			return AccountDTO{}, err
 		}
 		return s.update(ctx, c.ID, func(a *domain.Account) error {
-			return a.Unrelate(party, strings.ToLower(strings.TrimSpace(c.Role)), today(c.On))
+			on, err := s.today(ctx, a.State().Company, c.On)
+			if err != nil {
+				return err
+			}
+			return a.Unrelate(party, strings.ToLower(strings.TrimSpace(c.Role)), on)
 		})
 	})
 
@@ -468,7 +485,13 @@ func NewService(d Deps) *Service {
 		if err := v.Err(); err != nil {
 			return AccountDTO{}, err
 		}
-		return s.update(ctx, c.ID, func(a *domain.Account) error { return a.Assign(code, today(c.On)) })
+		return s.update(ctx, c.ID, func(a *domain.Account) error {
+			on, err := s.today(ctx, a.State().Company, c.On)
+			if err != nil {
+				return err
+			}
+			return a.Assign(code, on)
+		})
 	})
 	svc.Withdraw = changing(d.UoW, PermAccountUpdate, func(ctx context.Context, c ChangeUse) (AccountDTO, error) {
 		var v fw.Validation
@@ -476,7 +499,13 @@ func NewService(d Deps) *Service {
 		if err := v.Err(); err != nil {
 			return AccountDTO{}, err
 		}
-		return s.update(ctx, c.ID, func(a *domain.Account) error { return a.Withdraw(code, today(c.On)) })
+		return s.update(ctx, c.ID, func(a *domain.Account) error {
+			on, err := s.today(ctx, a.State().Company, c.On)
+			if err != nil {
+				return err
+			}
+			return a.Withdraw(code, on)
+		})
 	})
 
 	svc.Block = changing(d.UoW, PermAccountBlock, func(ctx context.Context, c ChangeStatus) (AccountDTO, error) {
@@ -489,7 +518,13 @@ func NewService(d Deps) *Service {
 		return s.update(ctx, c.ID, func(a *domain.Account) error { return a.Release() })
 	})
 	svc.Close = changing(d.UoW, PermAccountClose, func(ctx context.Context, c ChangeStatus) (AccountDTO, error) {
-		return s.update(ctx, c.ID, func(a *domain.Account) error { return a.Close(today(c.On), c.Reason) })
+		return s.update(ctx, c.ID, func(a *domain.Account) error {
+			on, err := s.today(ctx, a.State().Company, c.On)
+			if err != nil {
+				return err
+			}
+			return a.Close(on, c.Reason)
+		})
 	})
 
 	svc.Get = guard(PermAccountRead, func(ctx context.Context, q GetAccount) (AccountDTO, error) {

@@ -277,7 +277,11 @@ func (s service) collectionUseCases(svc *Service) {
 			if col.State().Method == domain.Offset {
 				return fw.Violation("receivables.offset_allocation", "an offset is registered whole")
 			}
-			return s.apply(ctx, col, c.AllocationInput, vocab.DateOf(fw.Now()))
+			today, err := app.TodayOf(ctx, s.Today, col.State().Seller.UUID)
+			if err != nil {
+				return err
+			}
+			return s.apply(ctx, col, c.AllocationInput, today)
 		})
 	}, retry[Allocate, CollectionDTO](), pipeline.Transactional[Allocate, CollectionDTO](s.UoW))
 
@@ -328,9 +332,9 @@ func (s service) collectionUseCases(svc *Service) {
 		if !cr.State().Total.IsNegative() {
 			return CollectionDTO{}, fw.Violation("receivables.not_a_credit", "only a credit (corrective invoice) is offset")
 		}
-		on := c.Date
-		if on.IsZero() {
-			on = vocab.DateOf(fw.Now())
+		on, err := app.OrToday(ctx, s.Today, seller.UUID, c.Date)
+		if err != nil {
+			return CollectionDTO{}, err
 		}
 		col, err := domain.RegisterCollection(domain.NewCollectionID(), domain.CollectionState{Seller: seller, Payer: cr.State().Customer, Date: on,
 			Currency: vocab.MustCurrencyCode("EUR"), Method: domain.Offset, Reference: "offset " + cr.State().Number})

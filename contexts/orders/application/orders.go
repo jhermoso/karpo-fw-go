@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/orders/domain"
+	app "github.com/jhermoso/karpo-fw-go/pkg/application"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
@@ -312,8 +313,9 @@ func (s service) orderUseCases(svc *Service) {
 		if err := s.notBlocked(ctx, customer); err != nil {
 			return OrderDTO{}, err
 		}
-		if st.Date.IsZero() {
-			st.Date = vocab.DateOf(fw.Now())
+		var err error
+		if st.Date, err = app.OrToday(ctx, s.Today, company.UUID, st.Date); err != nil {
+			return OrderDTO{}, err
 		}
 		terms, err := s.termsOf(ctx, company, customer)
 		if err != nil {
@@ -402,15 +404,15 @@ func (s service) orderUseCases(svc *Service) {
 		if err := v.Err(); err != nil {
 			return DeliveryDTO{}, err
 		}
-		date := c.Date
-		if date.IsZero() {
-			date = vocab.DateOf(fw.Now())
-		}
 		sc := scopeOf(ctx)
 		var note *domain.Delivery
 		o, err := s.orders.Update(ctx, c.ID, func(ctx context.Context, o *domain.Order) error {
 			os := o.State()
 			if err := sc.check(domain.OrderKind, o.ID(), os.Company, true); err != nil {
+				return err
+			}
+			date, err := app.OrToday(ctx, s.Today, os.Company.UUID, c.Date) // hoy de la empresa, en cada intento
+			if err != nil {
 				return err
 			}
 			terms, err := s.termsOf(ctx, os.Company, os.Customer)

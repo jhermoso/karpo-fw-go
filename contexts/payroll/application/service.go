@@ -59,6 +59,7 @@ type Deps struct {
 	Catalogs    domain.Catalogs
 	Employments Employments
 	UoW         fw.UnitOfWork
+	Today       app.CompanyToday // opcional: sin él, hoy es el de UTC (docs/ARQUITECTURA.md, «Hoy es el de la empresa»)
 	Recorder    app.EventRecorder
 	Audit       app.AuditLog
 	Merged      app.MergedParties // opcional: las parties fusionadas, que los listados dejan fuera (D-100)

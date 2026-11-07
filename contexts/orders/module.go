@@ -44,6 +44,12 @@ func WithMergedParties(m application.MergedParties) Option {
 	return func(d *oapp.Deps) { d.Merged = m }
 }
 
+// WithToday dice qué día es hoy para una empresa (el anfitrión: el de su zona horaria). Sin él, el
+// de UTC.
+func WithToday(t application.CompanyToday) Option {
+	return func(d *oapp.Deps) { d.Today = t }
+}
+
 // Compose construye el contexto sobre sw. Orders necesita el catálogo y los precios de Products y,
 // cuando se controla el crédito, el riesgo de Receivables (nil: sin control de crédito): puertos
 // propios. Las opciones son los puertos de Parties: bloqueos y fusionadas.

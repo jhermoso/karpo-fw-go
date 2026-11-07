@@ -30,6 +30,7 @@ type Deps struct {
 	Shipments domain.ShipmentRepository
 	Carriers  domain.CarrierRepository
 	UoW       fw.UnitOfWork
+	Today     app.CompanyToday // opcional: sin él, hoy es el de UTC (docs/ARQUITECTURA.md, «Hoy es el de la empresa»)
 	Recorder  app.EventRecorder
 	Audit     app.AuditLog
 	Merged    app.MergedParties // opcional: las parties fusionadas, que los listados dejan fuera (D-100)
@@ -141,11 +142,9 @@ func dateText(d vocab.Date) string {
 	return d.String()
 }
 
-func orToday(d vocab.Date) vocab.Date {
-	if d.IsZero() {
-		return vocab.DateOf(fw.Now())
-	}
-	return d
+// orToday es d si trae fecha; si no, hoy para la empresa (en su zona horaria, con el anfitrión).
+func (s service) orToday(ctx context.Context, company domain.OrganizationID, d vocab.Date) (vocab.Date, error) {
+	return app.OrToday(ctx, s.Today, company.UUID, d)
 }
 
 func guard[In, Out any](p authz.Permission, fn func(context.Context, In) (Out, error), mw ...app.Middleware[In, Out]) app.Handler[In, Out] {

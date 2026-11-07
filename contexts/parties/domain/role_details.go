@@ -43,6 +43,7 @@ func NewSelfEmployedDetails(tradeName, activityCode string, registeredOn vocab.D
 	var v fw.Validation
 	v.Require(utf8.RuneCountInString(d.TradeName) <= MaxSelfEmployedTradeName, "tradeName", "length", "trade name must have at most 120 characters")
 	v.Require(utf8.RuneCountInString(d.ActivityCode) <= MaxActivityCode, "activityCode", "length", "activity code must have at most 10 characters")
+	// Hoy en UTC, como la fecha de nacimiento: el dominio no sabe de zonas (docs/ARQUITECTURA.md).
 	v.Require(d.RegisteredOn.IsZero() || !d.RegisteredOn.After(vocab.DateOf(fw.Now())), "registeredOn", "future",
 		"the registration in the activity cannot be in the future")
 	return d, v.Err()

@@ -191,7 +191,11 @@ func (s service) wireShipments(svc *Service) {
 		if _, err := s.carrierOf(ctx, company, plan.Carrier, true); err != nil {
 			return ShipmentDTO{}, err
 		}
-		shp, err := domain.ScheduleShipment(domain.NewShipmentID(), company, customer, domain.Source{}, plan, lines, orToday(c.On))
+		on, err := s.orToday(ctx, company, c.On)
+		if err != nil {
+			return ShipmentDTO{}, err
+		}
+		shp, err := domain.ScheduleShipment(domain.NewShipmentID(), company, customer, domain.Source{}, plan, lines, on)
 		if err != nil {
 			return ShipmentDTO{}, err
 		}
@@ -235,8 +239,11 @@ func (s service) wireShipments(svc *Service) {
 		if err := v.Err(); err != nil {
 			return ShipmentDTO{}, err
 		}
-		on := orToday(c.On)
 		return update(ctx, c.ID, func(ctx context.Context, shp *domain.Shipment) error {
+			on, err := s.orToday(ctx, shp.State().Company, c.On)
+			if err != nil {
+				return err
+			}
 			switch to {
 			case domain.Delivered:
 				return shp.Deliver(on, c.ReceivedBy)

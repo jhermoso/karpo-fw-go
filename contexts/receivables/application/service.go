@@ -41,6 +41,7 @@ type Deps struct {
 	Calendar    domain.Calendar
 	Merged      app.MergedParties // opcional: las parties fusionadas, que los listados dejan fuera (D-100)
 	UoW         fw.UnitOfWork
+	Today       app.CompanyToday // opcional: sin él, hoy es el de UTC (docs/ARQUITECTURA.md, «Hoy es el de la empresa»)
 	Recorder    app.EventRecorder
 	Audit       app.AuditLog
 }

@@ -314,6 +314,37 @@ su código.
 - **Módulos** (`Module`, `Host`): equivalen a `IBoundedContext`; declaran dependencias
   (`Fw ← ErpKernel ← ErpDetail ← ...`), se ordenan y detectan ciclos.
 
+### Hoy es el de la empresa
+Una fecha de negocio que no llega en la petición es la de hoy **en la zona horaria de la
+empresa**, no en UTC: a las 22:30 UTC del 14 de octubre ya es día 15 en Madrid, y un pedido sin
+fecha de una empresa de Madrid es del 15. La zona es, en este orden (D-133): la que la empresa
+guarda en su perfil de Parties (`internal_organization_profile.time_zone`, docs/PARTIES.md §25);
+si no, la principal del país de su identidad fiscal en Geography; si no, UTC.
+
+- **Un solo puerto**, `application.CompanyToday` (`Today(ctx, empresa) (vocab.Date, error)`, en
+  `pkg/application/today.go`). Cada contexto lo recibe con su opción `WithToday(...)`; sin ella
+  (pruebas, un contexto compuesto suelto, nil) es UTC.
+- **En el anfitrión**, `host.CompanyZones` lo implementa una vez para todos (el mismo objeto que
+  da la zona a Facturación): lee la zona guardada en cada llamada, sin caché, y sólo si no hay
+  pregunta a Parties por el país de la empresa; ese país y la zona de cada país se recuerdan 5
+  minutos.
+- **Un fallo de Parties o de Geography hace fallar la operación** que necesitaba la fecha (un
+  pedido, un cobro, un asiento…), como ya pasaba al emitir en Facturación: no se cae a UTC en
+  silencio. Con la fecha en la petición no se pregunta nada.
+- **Dentro del reintento:** «hoy» se pide dentro del cierre que se reintenta (la carga del
+  agregado), no antes: un reintento después de medianoche toma el día nuevo.
+- **Qué fechas:** pedido, entrega, presupuesto (fecha, envío, aceptación y caducidad), aplicación
+  de cobros y pagos, compensación de abonos, riesgo del cliente sin fecha, reversión de asientos,
+  movimientos de inventario, baja de productos, cambio de divisa, envíos, trabajos, cuentas,
+  productos y contratos del sectorial financiero (también si un producto se ofrece hoy, al leerlo o
+  al listar los de una empresa), alta en RRHH, ocupación de un puesto sin fecha y perfil de
+  nómina. Facturación ya lo hacía con `Zones` (docs/FACTURACION.md).
+- **Qué sigue en UTC, y por qué:** las validaciones del dominio de Parties (fecha de nacimiento,
+  alta en una actividad), porque el dominio es puro y una persona no es de ninguna empresa; si un
+  producto del sectorial financiero se ofrece hoy en un listado sin empresa, que mezcla empresas;
+  y las fechas que salen de un instante (`OccurredAt` de un evento, la ocupación de un puesto con
+  hora), que necesitan «instante → fecha en la zona de la empresa» (BACKLOG.md).
+
 ---
 
 ## 7. Guardián de arquitectura

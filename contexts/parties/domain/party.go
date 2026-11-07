@@ -37,6 +37,8 @@ type PersonDetails struct {
 func (d PersonDetails) validate() error {
 	var v fw.Validation
 	v.Require(!d.Name.IsZero(), "name", "required", "a person needs a name")
+	// Hoy en UTC: una persona no es de ninguna empresa, y el dominio no sabe de zonas (docs/ARQUITECTURA.md,
+	// «Hoy es el de la empresa»). Sólo afecta a quien nace hoy entre la medianoche local y la de UTC.
 	v.Require(d.BirthDate.IsZero() || !d.BirthDate.After(vocab.DateOf(fw.Now())), "birthDate", "future", "birth date cannot be in the future")
 	return v.Err()
 }

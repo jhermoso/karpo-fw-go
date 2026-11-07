@@ -6,6 +6,7 @@ import (
 
 	"github.com/jhermoso/karpo-fw-go/contexts/receivables/contracts"
 	"github.com/jhermoso/karpo-fw-go/contexts/receivables/domain"
+	app "github.com/jhermoso/karpo-fw-go/pkg/application"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/pipeline"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
@@ -309,7 +310,7 @@ func (s service) termsUseCases(svc *Service) {
 		if err := scopeOf(ctx).check("parties.party", seller, seller, false); err != nil {
 			return contracts.Exposure{}, err
 		}
-		return CreditPort{Receivables: s.Receivables, Credit: s.Credit}.Exposure(ctx, q.Seller, q.Customer, q.On)
+		return CreditPort{Receivables: s.Receivables, Credit: s.Credit, Today: s.Today}.Exposure(ctx, q.Seller, q.Customer, q.On)
 	})
 }
 
@@ -317,6 +318,7 @@ func (s service) termsUseCases(svc *Service) {
 type CreditPort struct {
 	Receivables domain.ReceivableRepository
 	Credit      domain.CreditProfileRepository
+	Today       app.CompanyToday // opcional: sin él, sin on es hoy en UTC
 }
 
 var _ contracts.Credit = CreditPort{}
@@ -327,13 +329,17 @@ func (p CreditPort) Exposure(ctx context.Context, seller, customer, on string) (
 	var v fw.Validation
 	sid := domain.OrganizationID{UUID: parseID(&v, "seller", seller)}
 	cid := domain.PartyID{UUID: parseID(&v, "customer", customer)}
-	day := vocab.DateOf(fw.Now())
+	var day vocab.Date
 	if on != "" {
 		d, err := vocab.ParseDate(on)
 		v.Require(err == nil, "on", "format", "a date YYYY-MM-DD is required")
 		day = d
 	}
 	if err := v.Err(); err != nil {
+		return contracts.Exposure{}, err
+	}
+	day, err := app.OrToday(ctx, p.Today, sid.UUID, day)
+	if err != nil {
 		return contracts.Exposure{}, err
 	}
 	rs, err := p.Receivables.Find(ctx, spec.And(domain.RecFieldSeller.Eq(sid), domain.RecFieldCustomer.Eq(cid), domain.RecFieldSettled.Eq(false)))

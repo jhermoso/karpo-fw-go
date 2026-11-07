@@ -39,6 +39,12 @@ func WithMergedParties(m application.MergedParties) Option {
 	return func(d *fapp.Deps) { d.Merged = m }
 }
 
+// WithToday dice qué día es hoy para una empresa (el anfitrión: el de su zona horaria). Sin él, el
+// de UTC.
+func WithToday(t application.CompanyToday) Option {
+	return func(d *fapp.Deps) { d.Today = t }
+}
+
 // Compose monta el contexto sobre sw. Es el sector financiero de Karpo: institutions dice qué
 // empresas son entidades financieras, las únicas para las que existe (nil: ninguna).
 func Compose(sw *hotswap.Switch, institutions domain.Institutions, opts ...Option) *Module {

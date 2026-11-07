@@ -196,7 +196,11 @@ func (s service) wireWorks(svc *Service) {
 				return WorkDTO{}, fw.Violation("work.closed", "the work it is part of is "+string(p.State().Status))
 			}
 		}
-		w, err := domain.OpenWork(domain.NewWorkID(), company, c.Code, domain.Kind(strings.TrimSpace(c.Kind)), parent, plan, orToday(c.On))
+		on, err := s.orToday(ctx, company, c.On)
+		if err != nil {
+			return WorkDTO{}, err
+		}
+		w, err := domain.OpenWork(domain.NewWorkID(), company, c.Code, domain.Kind(strings.TrimSpace(c.Kind)), parent, plan, on)
 		if err != nil {
 			return WorkDTO{}, err
 		}
@@ -240,7 +244,13 @@ func (s service) wireWorks(svc *Service) {
 		if err := v.Err(); err != nil {
 			return WorkDTO{}, err
 		}
-		return update(ctx, c.ID, func(_ context.Context, w *domain.Work) error { return w.Assign(person, c.Role, rate, orToday(c.From)) })
+		return update(ctx, c.ID, func(ctx context.Context, w *domain.Work) error {
+			from, err := s.orToday(ctx, w.State().Company, c.From)
+			if err != nil {
+				return err
+			}
+			return w.Assign(person, c.Role, rate, from)
+		})
 	})
 	svc.Release = changing(d.UoW, PermWorkUpdate, func(ctx context.Context, c ReleasePerson) (WorkDTO, error) {
 		var v fw.Validation
@@ -248,7 +258,13 @@ func (s service) wireWorks(svc *Service) {
 		if err := v.Err(); err != nil {
 			return WorkDTO{}, err
 		}
-		return update(ctx, c.ID, func(_ context.Context, w *domain.Work) error { return w.Release(person, orToday(c.Until)) })
+		return update(ctx, c.ID, func(ctx context.Context, w *domain.Work) error {
+			until, err := s.orToday(ctx, w.State().Company, c.Until)
+			if err != nil {
+				return err
+			}
+			return w.Release(person, until)
+		})
 	})
 
 	// Terminar exige que todo lo que cuelga del trabajo esté cerrado y que no haya tiempo pendiente de
@@ -260,8 +276,11 @@ func (s service) wireWorks(svc *Service) {
 		if err := v.Err(); err != nil {
 			return WorkDTO{}, err
 		}
-		on := orToday(c.On)
 		return update(ctx, c.ID, func(ctx context.Context, w *domain.Work) error {
+			on, err := s.orToday(ctx, w.State().Company, c.On)
+			if err != nil {
+				return err
+			}
 			switch to {
 			case domain.Scheduled:
 				return w.Schedule(on)

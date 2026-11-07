@@ -30,8 +30,17 @@ type Module struct {
 	Audit             application.AuditLog
 }
 
+// Option configura un puerto opcional del contexto.
+type Option func(*papp.Deps)
+
+// WithToday dice qué día es hoy para una empresa (el anfitrión: el de su zona horaria). Sin él, el
+// de UTC.
+func WithToday(t application.CompanyToday) Option {
+	return func(d *papp.Deps) { d.Today = t }
+}
+
 // Compose construye el contexto sobre sw.
-func Compose(sw *hotswap.Switch) *Module {
+func Compose(sw *hotswap.Switch, opts ...Option) *Module {
 	integration := hotswap.Outbox(sw, infrastructure.IntegrationOutboxFactory)
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
 	d := papp.Deps{
@@ -39,6 +48,9 @@ func Compose(sw *hotswap.Switch) *Module {
 		PriceLists: hotswap.Repository(sw, infrastructure.PriceListRepositoryFactory), UoW: sw, Audit: audit,
 		Recorder: outbox.Recorders(outbox.NewRecorder(hotswap.Outbox(sw, infrastructure.OutboxFactory)),
 			papp.Publications(messaging.NewRecorder(contracts.Source, integration))),
+	}
+	for _, o := range opts {
+		o(&d)
 	}
 	return &Module{Service: papp.NewService(d), Catalog: papp.CatalogPort{Repo: d.Products},
 		Pricing: papp.PricingPort{Products: d.Products, PriceLists: d.PriceLists}, IntegrationOutbox: integration, Audit: audit}

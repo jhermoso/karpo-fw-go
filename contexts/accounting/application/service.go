@@ -39,6 +39,7 @@ type Deps struct {
 	Parked   domain.ParkedRepository
 	Parking  *Parking // lo que está delante del consumidor y guarda lo que aún no puede contabilizarse
 	UoW      fw.UnitOfWork
+	Today    app.CompanyToday // opcional: sin él, hoy es el de UTC (docs/ARQUITECTURA.md, «Hoy es el de la empresa»)
 	Recorder app.EventRecorder
 	Audit    app.AuditLog
 }
