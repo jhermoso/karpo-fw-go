@@ -382,9 +382,9 @@ interna**: Karpo C# copia el fichero tal cual a su repositorio y lo pasa por su 
   céntimo alejándose de cero en neto y cuota, también en una rectificativa; `once` frente a
   `gross_then_discount` con un céntimo de diferencia; precios de 6 y de 2 decimales, el rechazo de
   uno con más y la aceptación de "0.120" con 2; líneas exentas y no sujetas junto a sujetas; el
-  recargo de equivalencia; y tres plazos con el resto en el último. Lo que falta (retención,
-  descuentos en cascada, cascada cliente > empresa, si un plazo con medio céntimo o más se trunca o
-  se redondea, plazos de una rectificativa…), en `pending`.
+  recargo de equivalencia; y plazos truncados al céntimo con el resto en el último (D-145: 100.01
+  en tres da 33.33 + 33.33 + 33.35). Lo que falta (retención, descuentos en cascada, cascada
+  cliente > empresa, plazos de una rectificativa…), en `pending`.
 - **La prueba:** `contracts/billing/calculation_cases_test.go` pasa cada caso por el dominio de
   Billing, el `TaxEngine` de Fiscal con la jurisdicción española (a través del adaptador
   `FiscalTaxes`) y las condiciones de pago de Receivables. Lee el fichero sin admitir campos
