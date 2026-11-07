@@ -209,9 +209,14 @@ factura, de los dos modos. Por defecto sigue un borrador por albarán.
 - **La factura recuerda todos sus orígenes** en la tabla hija `bil_invoice_sources` (`invoice_id`,
   `line_no`, `source_type`, `source_id`, `source_ref`), migración 10, que copia el origen de las
   facturas que ya lo tenían **antes** de crear el índice único `ux_bil_invoice_sources_source`
-  sobre (`source_type`, `source_id`): si dos facturas tuvieran el mismo documento, la creación del
-  índice falla con un error de clave repetida y la migración no se marca como hecha. El índice
-  impide que un albarán esté en dos facturas; el choque es un conflicto (se reintenta). Las columnas `source_type`, `source_id` y `source_ref`
+  sobre (`source_type`, `source_id`), todo en la misma migración. Si dos facturas tuvieran el mismo
+  documento, la creación del índice falla con un error de clave repetida. En PostgreSQL, SQL Server
+  y SQLite la migración entera se deshace y no se marca como hecha; en Oracle y MySQL, donde el DDL
+  no es transaccional, queda **sucia** (`ErrSchemaDirty`): hay que quitar el duplicado y la tabla a
+  medio hacer y forzarla (`Migrator.Force`). Un duplicado así sólo puede venir de antes de D-146, de
+  un mismo albarán entregado dos veces a la vez, que pasó las dos la comprobación de origen antes
+  de que ninguna guardara su borrador. El índice impide que un albarán esté en dos facturas; el
+  choque es un conflicto (se reintenta). Las columnas `source_type`, `source_id` y `source_ref`
   de `bil_invoices` **se conservan** con el primer origen, para quien ya las lea; quitarlas exigía
   borrar un índice y columnas en cinco dialectos sin ganar nada.
 - **La factura y el evento:** `sources` (`type`, `id`, `ref`) lleva todos; `sourceType`, `sourceId` y
@@ -221,7 +226,8 @@ factura, de los dos modos. Por defecto sigue un borrador por albarán.
 - **A mano:** `POST /api/billing/invoices/merge` con `{"invoices": [id1, id2, …]}` une en el
   primero los demás borradores: las líneas y los orígenes de todos; la fecha de operación pasa a
   ser la última de todas (el final del periodo que cubren) y la descripción cita los albaranes
-  («Albaranes A-1, A-2»); si la lista pasa de 200 caracteres, sólo el primero, el último y cuántos
+  por orden de número («Albaranes A-1, A-2»); si la lista pasa de 200 caracteres, sólo el menor, el
+  mayor y cuántos
   («Albaranes ALB-2026-000101 a ALB-2026-000140 (40)»), que siempre cabe en los 500 de la
   descripción: la lista entera está en los orígenes. Los demás se borran en la misma transacción: es el único modo de quitar
   un borrador de albarán. Permiso: el de editar borradores, `Billing.Invoice.Update` (el de
@@ -237,10 +243,12 @@ factura, de los dos modos. Por defecto sigue un borrador por albarán.
   ningún contexto escribe en otro. El albarán de un cliente `monthly` no tiene borrador: queda en
   `bil_pending_deliveries` (+ `bil_pending_delivery_lines`), migración 11, con lo necesario para
   facturarlo; su Id es el del albarán, así que no queda pendiente dos veces, y uno que ya está en
-  una factura tampoco.
-- **Pendientes:** `GET /api/billing/pending-deliveries?seller=…&customer=…&page=…&size=…` los lista
-  (Id del albarán en `delivery`, cliente, número, pedido, fecha, número de líneas y neto), por fecha
-  y número. Permiso: el de leer facturas, `Billing.Invoice.Read`, y sólo los de los vendedores del
+  una factura tampoco. Al llegar se prepara su borrador sin guardarlo, para validar sus líneas: un
+  albarán que no se podría facturar (una línea sin código de impuesto) se rechaza ahora, como el de
+  un cliente por albarán, en vez de quedar pendiente y hacer fallar el cierre de su cliente.
+- **Pendientes:** `GET /api/billing/pending-deliveries?seller=…&customer=…&upTo=…&page=…&size=…`
+  los lista (Id del albarán en `delivery`, cliente, número, pedido, fecha, número de líneas y neto),
+  por fecha y número; con `upTo`, sólo los de hasta ese día: lo que facturaría un cierre. Permiso: el de leer facturas, `Billing.Invoice.Read`, y sólo los de los vendedores del
   ámbito de quien lee.
 - **Cierre del periodo:** `POST /api/billing/periods/close` con `{"seller", "upTo", "customer"?}`
   prepara para cada cliente un borrador con todos sus albaranes pendientes hasta `upTo`, incluido,
@@ -248,7 +256,11 @@ factura, de los dos modos. Por defecto sigue un borrador por albarán.
   - **Cliente a cliente**, cada uno en su propia transacción: si uno falla, sus albaranes siguen
     pendientes y los demás se cierran. La respuesta es `{"drafts": [...], "failed": [{"customer",
     "code", "message"}]}`. Una línea que la factura no admite da `billing.close_invalid_line` a ese
-    cliente; una regla del borrador, su propio código; cualquier otro error, `billing.close_failed`.
+    cliente (sólo un pendiente guardado antes de validarse al llegar); una regla del borrador, su
+    propio código; un conflicto que agota los reintentos, `billing.close_conflict`, con un mensaje
+    genérico y el detalle en el log. Cualquier otro error (la base de datos, una cancelación) no es
+    del cliente: corta el cierre y la ruta responde con ese error; los clientes ya cerrados se
+    quedan cerrados (cada uno en su transacción) y un cierre posterior sigue con los demás.
   - **Como mucho 500 líneas por borrador:** si los albaranes de un cliente pasan de ahí, el cierre
     prepara varios borradores, sin partir ningún albarán (por fecha y número, cada borrador se llena
     con los albaranes que caben enteros).
@@ -270,8 +282,9 @@ factura, de los dos modos. Por defecto sigue un borrador por albarán.
   `billing.invoice_not_draft`, `billing.merge_unsourced`, `billing.merge_other_customer`,
   `billing.merge_calculation`, `billing.merge_surcharge`, `billing.too_many_lines` (la unión pasa de
   500 líneas), `billing.sourced_draft` (descartar un borrador de albarán); en `failed` del cierre,
-  `billing.close_invalid_line` y `billing.close_failed`. Validación (400): `invoices` repetido o mal
-  formado, `upTo` que falta, `seller` o `customer` mal formados; `billingPeriodicity` distinta de
+  `billing.close_invalid_line` y `billing.close_conflict`. Validación (400): `invoices` repetido o
+  mal formado, `upTo` que falta (cierre) o mal formado (listado), `seller` o `customer` mal formados,
+  un albarán mensual con una línea que la factura no admite (el mensaje se rechaza); `billingPeriodicity` distinta de
   `per_delivery` o `monthly` en las condiciones de Pedidos.
 - **Diferencia con Trench:** Trench enlaza **líneas** (`shipment_item_billing`, `order_item_billing`:
   línea de envío o de pedido con línea de factura, con `IsActive` y un índice único sobre la línea
@@ -282,8 +295,9 @@ factura, de los dos modos. Por defecto sigue un borrador por albarán.
   `TestOrder_ConfirmHoldDeliver`); de aplicación con HTTP (`TestBilling_MergeDeliveryDrafts`,
   `TestBilling_ClosePeriod`, con el listado de pendientes y un albarán tardío;
   `TestBilling_ClosePeriodPerCustomer`: 40 albaranes con la descripción corta, 600 líneas en dos
-  borradores, un cliente que falla sin tumbar a los demás, un pendiente ya facturado y 40 borradores
-  unidos a mano); de extremo a extremo en memoria y en SQLite migrada
+  borradores, un albarán mensual sin código de impuesto rechazado al llegar, un pendiente
+  defectuoso que hace fallar sólo a su cliente, el listado con `upTo`, un pendiente ya facturado y
+  40 borradores unidos a mano; `TestCloseFailure`, qué errores anota el cierre y cuáles lo cortan); de extremo a extremo en memoria y en SQLite migrada
   (`TestOrders_DeliveryNotesAreGrouped_MemoryThenSQLite`): dos albaranes unidos a mano y emitidos
   (127,05), los dos facturados en Pedidos y la deuda en Cobros; una clienta mensual con tres
   albaranes, ningún borrador hasta el cierre, uno con los tres al cerrar y ninguno más en un

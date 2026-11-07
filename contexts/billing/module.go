@@ -169,7 +169,7 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/billing/pending-deliveries", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		atoi := func(k string) int { n, _ := strconv.Atoi(q.Get(k)); return n }
-		page, err := svc.SearchPendingDeliveries.Handle(r.Context(), bapp.SearchPendingDeliveries{Seller: q.Get("seller"), Customer: q.Get("customer"),
+		page, err := svc.SearchPendingDeliveries.Handle(r.Context(), bapp.SearchPendingDeliveries{Seller: q.Get("seller"), Customer: q.Get("customer"), UpTo: q.Get("upTo"),
 			Page: atoi("page"), Size: atoi("size")})
 		distribution.Respond(w, r, page, err, http.StatusOK)
 	})

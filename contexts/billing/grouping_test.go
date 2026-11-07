@@ -2,19 +2,26 @@ package billing_test
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"testing"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/billing"
 	bapp "github.com/jhermoso/karpo-fw-go/contexts/billing/application"
 	bdomain "github.com/jhermoso/karpo-fw-go/contexts/billing/domain"
+	binfra "github.com/jhermoso/karpo-fw-go/contexts/billing/infrastructure"
+	finfra "github.com/jhermoso/karpo-fw-go/contexts/fiscal/infrastructure"
 	papp "github.com/jhermoso/karpo-fw-go/contexts/parties/application"
+	pinfra "github.com/jhermoso/karpo-fw-go/contexts/parties/infrastructure"
 	"github.com/jhermoso/karpo-fw-go/pkg/application"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
+	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
+	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlite"
 )
 
 // delivery entrega a Billing el albarán number de customer, con una línea de qty × 10,00, como lo
@@ -103,7 +110,7 @@ func TestBilling_MergeDeliveryDrafts(t *testing.T) {
 	h.must(h.do("POST", "/api/billing/invoices/merge", "clerk", bapp.MergeDrafts{Invoices: []string{by["A-2"].ID, by["A-1"].ID}}, &got), http.StatusOK,
 		"merge")
 	if got.ID != by["A-2"].ID || len(got.Sources) != 2 || got.Sources[0].ID != a2 || got.Sources[1].ID != a1 || got.SourceID != a2 ||
-		got.Description != "Albaranes A-2, A-1" || got.OperationDate != "2026-10-07" || len(got.Lines) != 2 || got.Net != "30.00" {
+		got.Description != "Albaranes A-1, A-2" || got.OperationDate != "2026-10-07" || len(got.Lines) != 2 || got.Net != "30.00" {
 		t.Fatalf("merged draft: %+v", got)
 	}
 	if _, err := bs.GetInvoice.Handle(actx, bapp.GetInvoice{ID: bdomain.InvoiceID{UUID: fw.MustParseUUID(by["A-1"].ID)}}); !errors.Is(err, fw.ErrNotFound) {
@@ -198,6 +205,13 @@ func TestBilling_ClosePeriod(t *testing.T) {
 // pendingDelivery entrega a Billing un albarán mensual con lines líneas.
 func (h *host) pendingDelivery(acme, customer, number, taxCode string, lines int) string {
 	h.t.Helper()
+	id, err := h.monthlyDelivery(acme, customer, number, taxCode, lines)
+	h.ok(err)
+	return id
+}
+
+// monthlyDelivery es pendingDelivery con el error de Billing al recibir el mensaje.
+func (h *host) monthlyDelivery(acme, customer, number, taxCode string, lines int) (string, error) {
 	ls := make([]map[string]any, 0, lines)
 	for range lines {
 		ls = append(ls, map[string]any{"sku": "T", "description": "Tornillo", "taxCode": taxCode, "quantity": "1", "netPrice": "1"})
@@ -205,17 +219,28 @@ func (h *host) pendingDelivery(acme, customer, number, taxCode string, lines int
 	id := fw.NewUUID().String()
 	data, _ := json.Marshal(map[string]any{"deliveryId": id, "orderNumber": "P-" + number, "company": acme, "customer": customer,
 		"number": number, "date": "2026-10-10", "billingPeriodicity": "monthly", "lines": ls})
-	h.ok(h.billing.Consumer.HandleMessage(context.Background(), application.Envelope{ID: fw.NewUUID().String(), Type: "orders.delivery-issued.v1",
-		Source: "orders", Data: data}))
-	return id
+	return id, h.billing.Consumer.HandleMessage(context.Background(), application.Envelope{ID: fw.NewUUID().String(), Type: "orders.delivery-issued.v1",
+		Source: "orders", Data: data})
 }
 
 // El cierre va cliente a cliente: con muchos albaranes la descripción se acorta; con más de 500
-// líneas el borrador se parte sin partir un albarán; una línea que la factura no admite hace fallar
-// sólo a su cliente, cuyos albaranes siguen pendientes; y un pendiente que ya está en una factura se
-// borra sin otro borrador.
+// líneas el borrador se parte sin partir un albarán; un albarán mensual que no se podría facturar se
+// rechaza al llegar y no queda pendiente; un pendiente defectuoso (de antes de esa comprobación) hace
+// fallar sólo a su cliente, cuyos albaranes siguen pendientes; y un pendiente que ya está en una
+// factura se borra sin otro borrador. Sobre SQLite migrada, para poder guardar el pendiente
+// defectuoso sin pasar por el mensaje.
 func TestBilling_ClosePeriodPerCustomer(t *testing.T) {
 	h := compose(t)
+	raw, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "close.db")+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)")
+	h.ok(err)
+	raw.SetMaxOpenConns(1)
+	t.Cleanup(func() { _ = raw.Close() })
+	db := sqlite.Open(raw, sqlrepo.WithName("sqlite"))
+	m, err := sqlrepo.NewMigrator(db, []sqlrepo.MigrationSet{pinfra.Migrations(), finfra.Migrations(), binfra.Migrations()})
+	h.ok(err)
+	_, err = m.Migrate(context.Background())
+	h.ok(err)
+	h.ok(h.sw.Swap(context.Background(), db))
 	acme, ana := h.seller(t)
 	bs, actx, ps := h.billing.Service, h.adminCtx, h.parties.Service
 	person := func(name string) string {
@@ -223,14 +248,33 @@ func TestBilling_ClosePeriodPerCustomer(t *testing.T) {
 		h.ok(err)
 		return p.ID
 	}
-	many, big, bad := person("Muchos"), person("Grande"), person("Mala")
+	many, big, bad, old := person("Muchos"), person("Grande"), person("Mala"), person("Antigua")
 	for k := range 40 {
 		h.pendingDelivery(acme, many, fmt.Sprintf("ALB-2026-%06d", 101+k), "G21", 1)
 	}
 	h.pendingDelivery(acme, big, "G-1", "G21", 200)
 	h.pendingDelivery(acme, big, "G-2", "G21", 200)
 	h.pendingDelivery(acme, big, "G-3", "G21", 200)
-	h.pendingDelivery(acme, bad, "X-1", "", 1) // sin código de impuesto: la factura no admite la línea
+	// Sin código de impuesto la factura no admite la línea: el mensaje se rechaza y no queda pendiente.
+	if _, err := h.monthlyDelivery(acme, bad, "X-1", "", 1); !errors.Is(err, fw.ErrValidation) {
+		t.Fatalf("a delivery note that could not be invoiced: %v", err)
+	}
+	h.pendingDelivery(acme, bad, "X-2", "G21", 1)
+	// Uno así guardado antes de que se comprobara al llegar: falla su cliente, no el cierre.
+	repo, err := binfra.PendingDeliveryRepositoryFactory(db)
+	h.ok(err)
+	defective, err := bdomain.ReconstitutePendingDelivery(bdomain.PendingDeliveryID{UUID: fw.NewUUID()}, bdomain.PendingDeliveryState{
+		Seller: bdomain.OrganizationID{UUID: fw.MustParseUUID(acme)}, Customer: bdomain.PartyID{UUID: fw.MustParseUUID(old)}, Number: "V-1",
+		Date: vocab.MustDate(2026, 10, 10), Lines: []bdomain.LineInput{{Description: "Tornillo", Quantity: vocab.MustDecimal("1"), UnitPrice: vocab.MustDecimal("1")}}})
+	h.ok(err)
+	h.ok(repo.Save(context.Background(), defective))
+	ahead, err := bs.SearchPendingDeliveries.Handle(actx, bapp.SearchPendingDeliveries{Seller: acme, Customer: bad, UpTo: "2026-10-31"})
+	if err != nil || len(ahead.Items) != 1 || ahead.Items[0].Number != "X-2" {
+		t.Fatalf("what a close would invoice: %+v %v", ahead.Items, err)
+	}
+	if none, err := bs.SearchPendingDeliveries.Handle(actx, bapp.SearchPendingDeliveries{Seller: acme, UpTo: "2026-10-09"}); err != nil || len(none.Items) != 0 {
+		t.Fatalf("nothing before the 10th: %+v %v", none.Items, err)
+	}
 	// Un pendiente que ya está en una factura: llegó como mensual y otra vez como por albarán.
 	twice := h.pendingDelivery(acme, ana, "T-1", "G21", 1)
 	data, _ := json.Marshal(map[string]any{"deliveryId": twice, "orderNumber": "P-T-1", "company": acme, "customer": ana, "number": "T-1",
@@ -252,11 +296,14 @@ func TestBilling_ClosePeriodPerCustomer(t *testing.T) {
 		b[1].Description != "Albarán G-3 (pedido P-G-3)" {
 		t.Fatalf("600 lines in two drafts: %d", len(b))
 	}
-	if len(by[ana]) != 0 || len(res.Failed) != 1 || res.Failed[0].Customer != bad || res.Failed[0].Code != "billing.close_invalid_line" {
+	if x := by[bad]; len(x) != 1 || x[0].SourceRef != "X-2" {
+		t.Fatalf("the customer with a refused delivery note still closes: %+v", x)
+	}
+	if len(by[ana]) != 0 || len(res.Failed) != 1 || res.Failed[0].Customer != old || res.Failed[0].Code != "billing.close_invalid_line" {
 		t.Fatalf("the failed customer: %+v", res.Failed)
 	}
 	page, err := bs.SearchPendingDeliveries.Handle(actx, bapp.SearchPendingDeliveries{Seller: acme})
-	if err != nil || len(page.Items) != 1 || page.Items[0].Customer != bad {
+	if err != nil || len(page.Items) != 1 || page.Items[0].Customer != old {
 		t.Fatalf("what stays pending: %+v %v", page.Items, err)
 	}
 	// Cuarenta borradores unidos a mano también se describen en corto.

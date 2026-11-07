@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/billing/domain"
@@ -45,10 +46,11 @@ type CloseFailure struct {
 	Message  string `json:"message"`
 }
 
-// SearchPendingDeliveries lista los albaranes pendientes del cierre del periodo.
+// SearchPendingDeliveries lista los albaranes pendientes del cierre del periodo; con UpTo
+// (YYYY-MM-DD), sólo los que facturaría un cierre hasta ese día.
 type SearchPendingDeliveries struct {
-	Seller, Customer string
-	Page, Size       int
+	Seller, Customer, UpTo string
+	Page, Size             int
 }
 
 // PendingDeliveryDTO es un albarán pendiente del cierre del periodo. Net es la suma de sus líneas,
@@ -158,7 +160,11 @@ func (s service) groupingUseCases(svc *Service) {
 		for _, cu := range customers {
 			invs, err := closeOne.Handle(ctx, closeCustomer{seller: seller, customer: cu, upTo: c.UpTo})
 			if err != nil {
-				out.Failed = append(out.Failed, CloseFailure{Customer: cu.String(), Code: failureCode(err), Message: err.Error()})
+				f, ok := closeFailure(cu, err)
+				if !ok { // la base de datos, una cancelación: no es del cliente, se corta el cierre
+					return ClosePeriodResult{}, err
+				}
+				out.Failed = append(out.Failed, f)
 				continue
 			}
 			for _, inv := range invs {
@@ -176,6 +182,11 @@ func (s service) groupingUseCases(svc *Service) {
 		}
 		if q.Customer != "" {
 			parts = append(parts, domain.PdFieldCustomer.Eq(domain.PartyID{UUID: parseID(&v, "customer", q.Customer)}))
+		}
+		if q.UpTo != "" { // lo que facturaría un cierre hasta ese día
+			d, err := vocab.ParseDate(q.UpTo)
+			v.Require(err == nil, "upTo", "format", "a date YYYY-MM-DD is required")
+			parts = append(parts, domain.PdFieldDate.Le(d))
 		}
 		if err := v.Err(); err != nil {
 			return fw.Page[PendingDeliveryDTO]{}, err
@@ -263,17 +274,26 @@ func (s service) periodDraft(ctx context.Context, seller domain.OrganizationID, 
 	return s.deliveryDraft(ctx, seller, customer, deliveryDescription(first.Number, first.OrderNumber, sources), last.Date, sources, lines)
 }
 
-// failureCode es el código del error de un cliente en el cierre: el de la regla que incumple; el
-// de una línea que la factura no admite; o, si es otra cosa, billing.close_failed.
-func failureCode(err error) string {
+// closeFailure dice por qué no se cerró un cliente, cuyos albaranes siguen pendientes: el código de
+// la regla que incumple; billing.close_invalid_line, una línea que la factura no admite; o
+// billing.close_conflict, un conflicto que agotó los reintentos (otro cambio a la vez), con un
+// mensaje genérico y el detalle en el log. Cualquier otro error (la base de datos, una cancelación)
+// no es del cliente: ok es falso y el cierre se corta con ese error.
+func closeFailure(customer domain.PartyID, err error) (CloseFailure, bool) {
+	f := CloseFailure{Customer: customer.String(), Message: err.Error()}
 	var rv *fw.RuleViolationError
 	switch {
 	case errors.As(err, &rv):
-		return rv.Code
+		f.Code = rv.Code
 	case errors.Is(err, fw.ErrValidation):
-		return "billing.close_invalid_line"
+		f.Code = "billing.close_invalid_line"
+	case errors.Is(err, fw.ErrConflict):
+		slog.Warn("billing: the period close of a customer kept colliding", "customer", customer.String(), "error", err)
+		f.Code, f.Message = "billing.close_conflict", "the customer's delivery notes changed while they were closed: close again"
+	default:
+		return CloseFailure{}, false
 	}
-	return "billing.close_failed"
+	return f, true
 }
 
 func pendingDTO(p *domain.PendingDelivery) PendingDeliveryDTO {

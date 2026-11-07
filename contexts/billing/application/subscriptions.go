@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/billing/domain"
@@ -49,8 +50,9 @@ func (DeliveryIssued) IntegrationEventType() string { return "orders.delivery-is
 const maxListedRefs = 200
 
 // deliveryDescription es la descripción de la operación de un borrador de albaranes: cita el
-// albarán y su pedido; o los albaranes («Albaranes A-1, A-2»); o, si son muchos, el primero, el
-// último y cuántos («Albaranes A-1 a A-40 (40)»). Siempre cabe en los 500 caracteres.
+// albarán y su pedido; o los albaranes, por orden de número («Albaranes A-1, A-2»); o, si son
+// muchos, el menor, el mayor y cuántos («Albaranes A-1 a A-40 (40)»). Siempre cabe en los 500
+// caracteres.
 func deliveryDescription(number, order string, sources []domain.Source) string {
 	if len(sources) == 1 {
 		return "Albarán " + number + " (pedido " + order + ")"
@@ -59,6 +61,7 @@ func deliveryDescription(number, order string, sources []domain.Source) string {
 	for _, s := range sources {
 		refs = append(refs, s.Ref)
 	}
+	slices.Sort(refs)
 	if list := strings.Join(refs, ", "); len(list) <= maxListedRefs {
 		return "Albaranes " + list
 	}
@@ -128,6 +131,14 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 			id := domain.PendingDeliveryID{UUID: delivery}
 			if _, err := s.Pending.Get(ctx, id); !errors.Is(err, fw.ErrNotFound) {
 				return err // ya pendiente (nil) o un error
+			}
+			// Se prepara su borrador sin guardarlo, para validar sus líneas: un albarán que no se
+			// podría facturar se rechaza ahora, como el de un cliente por albarán, y no queda pendiente
+			// bloqueando el cierre de su cliente.
+			sources := []domain.Source{{Type: DeliverySource, ID: e.DeliveryID, Ref: e.Number}}
+			if _, err := s.deliveryDraft(ctx, sid, domain.PartyID{UUID: customer}, deliveryDescription(e.Number, e.OrderNumber, sources), date,
+				sources, lines); err != nil {
+				return err
 			}
 			p, err := domain.ReconstitutePendingDelivery(id, domain.PendingDeliveryState{Seller: sid, Customer: domain.PartyID{UUID: customer},
 				Number: e.Number, OrderNumber: e.OrderNumber, Date: date, Lines: lines})
