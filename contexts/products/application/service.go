@@ -4,6 +4,7 @@ package application
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"time"
@@ -32,12 +33,19 @@ var (
 	PermSpecialPriceUpdate = authz.MustPermission("Products.SpecialPrice.Update")
 )
 
+// CompanySettings dice la tarifa general de una empresa (D-148): el ajuste default_price_list de
+// su perfil en Parties, que cablea el anfitrión. "" si no tiene.
+type CompanySettings interface {
+	DefaultPriceList(ctx context.Context, company string) (string, error)
+}
+
 // Deps son los puertos que necesitan los casos de uso; Recorder y Audit son opcionales.
 type Deps struct {
 	Products   domain.ProductRepository
 	Categories domain.CategoryRepository
 	PriceLists domain.PriceListRepository
 	Specials   domain.SpecialPricesRepository
+	Settings   CompanySettings // opcional: sin él, ninguna empresa tiene tarifa general
 	UoW        fw.UnitOfWork
 	Today      app.CompanyToday // opcional: sin él, hoy es el de UTC (docs/ARQUITECTURA.md, «Hoy es el de la empresa»)
 	Recorder   app.EventRecorder
@@ -60,7 +68,6 @@ type Service struct {
 	SetPrice           app.CommandHandler[SetPrice, PriceListDTO]
 	RemovePrice        app.CommandHandler[RemovePrice, PriceListDTO]
 	SetPriceListActive app.CommandHandler[SetPriceListActive, PriceListDTO]
-	SetDefaultList     app.CommandHandler[SetDefaultPriceList, PriceListDTO]
 	GetPriceList       app.QueryHandler[GetPriceList, PriceListDTO]
 	SearchPriceLists   app.QueryHandler[SearchPriceLists, []PriceListDTO]
 	Quote              app.QueryHandler[GetQuote, contracts.Quote]
@@ -223,6 +230,7 @@ type PricingPort struct {
 	Products   domain.ProductRepository
 	PriceLists domain.PriceListRepository
 	Specials   domain.SpecialPricesRepository
+	Settings   CompanySettings // opcional: sin él, se salta la tarifa general
 }
 
 var _ contracts.Pricing = PricingPort{}
@@ -276,16 +284,44 @@ func (p PricingPort) Quote(ctx context.Context, r contracts.QuoteRequest) (contr
 		}
 		levels = append(levels, domain.Level{Source: domain.FromCustomerList, Prices: list})
 	}
-	defaults, err := p.PriceLists.Find(ctx, domain.PlFieldDefaultFor.Eq(cid))
+	general, err := p.defaultList(ctx, cid)
 	if err != nil {
 		return contracts.Quote{}, err
 	}
-	if len(defaults) > 0 {
-		levels = append(levels, domain.Level{Source: domain.FromDefaultList, Prices: defaults[0]})
+	if general != nil {
+		levels = append(levels, domain.Level{Source: domain.FromDefaultList, Prices: general})
 	}
 	q := domain.QuoteOf(prod, qty, date, levels...)
 	return contracts.Quote{UnitPrice: q.UnitPrice.StringFixed(4), Discount: q.Discount.StringFixed(2), Net: q.Net.StringFixed(4),
 		Source: sources[q.Source]}, nil
+}
+
+// defaultList es la tarifa general de la empresa según su perfil, o nil si no tiene, si no se
+// encuentra o si es de otra empresa (una retirada la salta domain.QuoteOf). El ajuste vive en
+// Parties, que no sabe de listas de precios: aquí se tolera lo que allí no se comprueba.
+func (p PricingPort) defaultList(ctx context.Context, company domain.OrganizationID) (*domain.PriceList, error) {
+	if p.Settings == nil {
+		return nil, nil
+	}
+	id, err := p.Settings.DefaultPriceList(ctx, company.String())
+	if err != nil || id == "" {
+		return nil, err
+	}
+	lid, err := domain.ParsePriceListID(id)
+	if err != nil || lid.IsZero() {
+		return nil, nil
+	}
+	list, err := p.PriceLists.Get(ctx, lid)
+	if errors.Is(err, fw.ErrNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if list.State().Company != company {
+		return nil, nil
+	}
+	return list, nil
 }
 
 // sources traduce el origen del dominio al del lenguaje publicado.

@@ -60,8 +60,9 @@ type CompanyTimeZones interface {
 	TimeZone(ctx context.Context, organization string) (string, error)
 }
 
-// CompanySettings son los ajustes de facturación que una empresa interna guarda en su perfil
-// (docs/DECISIONES-COMUNES.md, D-144). Un valor vacío o nil es el comportamiento de siempre.
+// CompanySettings son los ajustes de facturación y de precios que una empresa interna guarda en su
+// perfil (docs/DECISIONES-COMUNES.md, D-144 y D-148). Un valor vacío o nil es el comportamiento de
+// siempre.
 type CompanySettings struct {
 	// LineRounding es "once" (una sola vez al final) o "gross_then_discount" (el bruto de la línea,
 	// y después el neto con el descuento).
@@ -71,6 +72,11 @@ type CompanySettings struct {
 	// InstallmentsTiming es "after_issue" (los vencimientos nacen después, del evento de la
 	// emisión) o "with_issue" (en la misma transacción que la emisión).
 	InstallmentsTiming string
+	// DefaultPriceList es el id de la tarifa general de la empresa en Products; "" si no tiene.
+	DefaultPriceList string
+	// AutomaticPricing dice si una línea de factura sin pedido toma sola el precio de Products (sí,
+	// si la empresa no lo ha cambiado).
+	AutomaticPricing bool
 }
 
 // CompanyProfiles dice los ajustes de facturación de una empresa interna y el patrón (una

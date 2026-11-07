@@ -102,7 +102,7 @@ contexts/products/
 - **Tablas:**
   - `prd_products` (+ `prd_barcodes`, `prd_components`, `prd_product_suppliers`);
   - `prd_categories`;
-  - `prd_price_lists` (+ `prd_price_lines`), con `default_for` para la tarifa general;
+  - `prd_price_lists` (+ `prd_price_lines`);
   - `prd_special_prices` (+ `prd_special_price_lines`);
   - las bandejas de salida y la auditoría.
 
@@ -115,7 +115,7 @@ vigente para la cantidad (la de mayor cantidad mínima que no la supere):
 |---|---|---|---|
 | 1 | Precio especial del cliente para el producto | `special` | `SpecialPrices` de la empresa y el cliente |
 | 2 | Tarifa del cliente | `customer_list` | la tarifa que traen las condiciones (`Terms`) de Orders |
-| 3 | Tarifa general de la empresa | `default_list` | la `PriceList` marcada como general |
+| 3 | Tarifa general de la empresa | `default_list` | el ajuste `default_price_list` del perfil de la empresa en Parties |
 | 4 | Precio base del producto | `base` | `Product.BasePrice` |
 
 - Un nivel gana entero: si el precio especial tiene línea, da precio y descuento aunque la tarifa
@@ -128,13 +128,15 @@ vigente para la cantidad (la de mayor cantidad mínima que no la supere):
   precio, descuento opcional y vigencia desde/hasta. Dos líneas del mismo producto y cantidad no se
   solapan en el tiempo. Se crea con su primer precio. El cliente es una party de Parties y no se
   comprueba su rol, igual que el proveedor de un producto.
-- **Tarifa general:** una marca en `PriceList` (`Default`). En la tabla es `default_for`: la empresa
-  si la lista es la general y NULL si no; el índice único `ux_prd_price_lists_default` (con
-  `{whereNotNull}` para SQL Server) da «como mucho una por empresa» en los cinco motores. El caso de
-  uso lo comprueba antes (422 `products.default_price_list_exists`; el índice está declarado en el
-  mapeo, así que una carrera también da 422): para cambiarla, primero se desmarca la anterior. Una
-  lista retirada no puede ser la general (422 `products.inactive_default_price_list`), y retirar la
-  general la desmarca.
+- **Tarifa general:** no es una marca de la tarifa, sino un ajuste de la empresa,
+  `default_price_list`, en `internal_organization_profile` de Parties, junto a la zona horaria y los
+  ajustes de D-144, con el mismo nombre que en Karpo C# (docs/PARTIES.md §25). Products lo lee por
+  el puerto `application.CompanySettings` (`DefaultPriceList(empresa)`), que cablea el anfitrión
+  (`host.ProductsSettings`, sobre `contracts.CompanyProfiles` de Parties) con
+  `products.WithSettings`, igual que Billing lee sus ajustes. Se lee en cada cotización. Si no hay
+  puerto, la empresa no tiene el ajuste, o la tarifa no existe, es de otra empresa o está retirada,
+  ese nivel se salta: Parties no sabe de tarifas y no lo comprueba al guardarlo. Una sola tarifa
+  general por empresa sale del propio esquema (una columna del perfil).
 - **`GET /quote?customer=` no conoce los `Terms` de Orders:** la tarifa del cliente la pasa quien
   llama en `priceList`; sin ella, ese nivel se salta. Con `customer` se pide además
   `Products.SpecialPrice.Read` (403 sin él), porque la respuesta enseña su precio especial. El
@@ -149,13 +151,16 @@ vigente para la cantidad (la de mayor cantidad mínima que no la supere):
   | `GET /special-prices?company=&customer=` | `Products.SpecialPrice.Read` | los precios especiales del cliente (lista vacía si no tiene) |
   | `POST /special-prices` | `Products.SpecialPrice.Update` | alta de un precio especial |
   | `POST /special-prices/remove` | `Products.SpecialPrice.Update` | baja de un precio (producto, cantidad mínima y fecha desde) |
-  | `PUT /price-lists/{id}/default` | `Products.PriceList.Update` | marca o desmarca la tarifa general |
   | `GET /quote?company=&customer=&product=&priceList=&quantity=&on=` | `Products.PriceList.Read` (y `Products.SpecialPrice.Read` con `customer`) | la cadena completa |
 
   No hay verbo `Delete`: como en las líneas de tarifa, borrar un precio es cambiar los precios del
   cliente (`Update`).
-- **Migración 4** de Products, en los cinco motores: `default_for` en `prd_price_lists` con su
-  índice, y las dos tablas nuevas, con los decimales ya como `{dec:18,4}` y `{dec:5,2}`.
+  La tarifa general se fija en el perfil de la empresa: `PUT /api/profiles/internal-organizations/{id}`
+  con `defaultPriceList` (docs/PARTIES.md §25).
+- **Migración 4** de Products, en los cinco motores: las dos tablas nuevas, con los decimales ya
+  como `{dec:18,4}` y `{dec:5,2}`. Los ajustes de la empresa van en la migración 35 de Parties.
+- **Precio automático de la factura directa:** el mismo perfil guarda `automatic_pricing`
+  (`automaticPricing`, nulo es sí). Hoy sólo se guarda y se expone; Facturación lo usará en otra rama.
 - **Orders** pasa el cliente al puerto: `Catalog.Price` recibe el cliente del pedido o del
   presupuesto. Nada más cambia allí.
 
@@ -232,9 +237,12 @@ una de tarifa sean el mismo tipo (`PriceLine`) y la misma lectura.
   - cotización: tramo pequeño, tramo de 1.000 con 5 % de descuento, fuera de vigencia, sin
     tarifa, tarifa retirada, cantidad cero 400;
   - precios especiales (D-148): sólo con su permiso (403), ajeno 404, descuento 400, producto
-    desconocido 404, solape 422, consulta y baja; tarifa general: una por empresa (422), desmarcar;
-    la cadena por `GET /quote`, un caso por nivel;
+    desconocido 404, solape 422, consulta y baja; la cadena por `GET /quote`, un caso por nivel, con
+    la tarifa general de un puerto falso; la tarifa general se salta si no hay, no existe, es de otra
+    empresa o está retirada;
   - descatalogar una sola vez; el puerto `Catalog` devuelve los productos conocidos.
+- **Anfitrión** (memoria y SQLite): la tarifa general sale del perfil de la empresa en Parties; sin
+  ajuste o retirada, el precio base.
 - **Pedidos:** un pedido y un presupuesto con precio especial y el descuento del cliente
   encadenado (0,09 × 0,95 × 0,90), y otro cliente sin especial que toma el tramo de su tarifa.
 - **Integración** en PostgreSQL, SQL Server, Oracle y MySQL (junto con Inventario):
@@ -242,7 +250,7 @@ una de tarifa sean el mismo tipo (`PriceLine`) y la misma lectura.
   - SKU y código de barras repetidos;
   - búsquedas, incluida la de código de barras sobre la tabla hija;
   - tarifa de ida y vuelta, solape y cotización por el puerto `Pricing`;
-  - tarifa general (una por empresa) y precios especiales de ida y vuelta, su solape, la cadena
+  - tarifa general sacada del perfil de Parties y precios especiales de ida y vuelta, su solape, la cadena
     completa por el puerto `Pricing` y la baja de un precio especial.
 
 ## Pendiente

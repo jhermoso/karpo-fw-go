@@ -42,6 +42,7 @@ func TestParties_InternalOrganizationProfile(t *testing.T) {
 			}
 			e.profile()
 			e.profileSettings()
+			e.profilePricing()
 		})
 	}
 }
@@ -117,6 +118,41 @@ func (e *env) badProfile(got papp.InternalOrganizationProfileDTO) {
 // Los ajustes de facturación de D-144 en el mismo perfil, y el patrón de cada tipo de código en
 // su propio recurso: mismos permisos y ámbito que la zona; un valor fuera del enumerado o del rango,
 // o un patrón que no compila, da 422 con su código; null limpia.
+// profilePricing: la tarifa general y el precio automático de D-148, de ida y vuelta.
+func (e *env) profilePricing() {
+	e.t.Helper()
+	var acme papp.PartyDTO
+	e.must(e.do("POST", "/api/organizations", e.admin, map[string]any{"legalName": "Acme Precios",
+		"roles": []string{domain.RoleInternalOrganization.String()}}, &acme), 201, "register acme")
+	e.grant("clerk", authz.Full, acme.ID)
+	path := "/api/profiles/internal-organizations/" + acme.ID
+	var got papp.InternalOrganizationProfileDTO
+	e.must(e.do("GET", path, e.clerk, nil, &got), 200, "nothing saved yet")
+	if got.DefaultPriceList != nil || !got.AutomaticPricing {
+		e.t.Fatalf("no general list, automatic pricing by default: %+v", got)
+	}
+	list := "8f0c1a52-6d4e-4b8a-9f3e-2a7b5c1d0e94"
+	e.must(e.do("PUT", path, e.clerk, map[string]any{"defaultPriceList": list, "automaticPricing": false}, &got), 200, "set them")
+	e.must(e.do("GET", path, e.clerk, nil, &got), 200, "read them back")
+	if got.DefaultPriceList == nil || *got.DefaultPriceList != list || got.AutomaticPricing {
+		e.t.Fatalf("the pricing settings: %+v", got)
+	}
+	st, err := e.mod.CompanyProfiles.Settings(context.Background(), acme.ID)
+	if err != nil || st.DefaultPriceList != list || st.AutomaticPricing {
+		e.t.Fatalf("the settings other contexts read: %+v %v", st, err)
+	}
+	e.mustProblem(e.problem("PUT", path, e.clerk, map[string]any{"defaultPriceList": "mayor"}), 422, domain.ErrInvalidDefaultPriceList, "not an id")
+	got = papp.InternalOrganizationProfileDTO{} // defaultPriceList se omite cuando no hay
+	e.must(e.do("PUT", path, e.clerk, map[string]any{"automaticPricing": true}, &got), 200, "explicitly on")
+	if got.DefaultPriceList != nil || !got.AutomaticPricing {
+		e.t.Fatalf("the PUT replaces the whole profile: %+v", got)
+	}
+	e.must(e.do("PUT", path, e.clerk, map[string]any{}, &got), 200, "cleared")
+	if st, err := e.mod.CompanyProfiles.Settings(context.Background(), acme.ID); err != nil || st.DefaultPriceList != "" || !st.AutomaticPricing {
+		e.t.Fatalf("cleared settings: %+v %v", st, err)
+	}
+}
+
 func (e *env) profileSettings() {
 	e.t.Helper()
 	var acme, globex papp.PartyDTO

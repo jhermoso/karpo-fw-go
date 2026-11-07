@@ -196,7 +196,7 @@ func Compose(sw *hotswap.Switch, o Options) (*Host, error) {
 	// Hoy es el de la empresa: la zona que guarda en su perfil, si no la de su país, si no UTC
 	// (docs/ARQUITECTURA.md, «Hoy es el de la empresa»). Una sola instancia: el país se recuerda una vez.
 	zones := &CompanyZones{Geography: h.Geography, Profiles: h.Parties.CompanyTimeZones, Identities: h.Parties.TaxIdentities}
-	h.Products = products.Compose(sw, products.WithToday(zones))
+	h.Products = products.Compose(sw, products.WithToday(zones), products.WithSettings(ProductsSettings{Profiles: h.Parties.CompanyProfiles}))
 	// Las parties fusionadas, que los listados de los demás contextos dejan fuera salvo que se pidan
 	// (docs/DECISIONES-COMUNES.md, D-100). Parties las lee dentro del proceso, sin los permisos del
 	// usuario (D-103), como las identidades fiscales.

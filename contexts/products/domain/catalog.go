@@ -220,7 +220,6 @@ type PriceListState struct {
 	Name     string
 	Currency vocab.CurrencyCode
 	Active   bool
-	Default  bool // la tarifa general de la empresa: como mucho una por empresa (D-148)
 	Lines    []PriceLine
 	Audit    traits.AuditStamp
 }
@@ -281,32 +280,8 @@ func (p *PriceList) RemovePrice(product ProductID, minQuantity vocab.Decimal, fr
 	return nil
 }
 
-// SetActive activa o retira la lista; una tarifa general retirada deja de ser la general.
-func (p *PriceList) SetActive(active bool) {
-	p.s.Active = active
-	if !active {
-		p.s.Default = false
-	}
-}
-
-// DefaultFor es la empresa de la que la lista es la tarifa general; cero si no lo es.
-func (p *PriceList) DefaultFor() OrganizationID {
-	if !p.s.Default {
-		return OrganizationID{}
-	}
-	return p.s.Company
-}
-
-// SetDefault marca o desmarca la lista como la tarifa general de su empresa; una lista retirada no
-// puede ser la general. Que no haya dos en la misma empresa lo comprueba el caso de uso, y lo
-// garantiza un índice único.
-func (p *PriceList) SetDefault(def bool) error {
-	if def && !p.s.Active {
-		return fw.Violation("products.inactive_default_price_list", "a retired price list cannot be the general one")
-	}
-	p.s.Default = def
-	return nil
-}
+// SetActive activa o retira la lista.
+func (p *PriceList) SetActive(active bool) { p.s.Active = active }
 
 // PriceFor devuelve el precio de un producto para una cantidad en una fecha: la línea vigente con
 // la mayor cantidad mínima que no supere la cantidad.
@@ -324,15 +299,13 @@ func (p *PriceList) PriceOf(prod *Product, quantity vocab.Decimal, on vocab.Date
 
 // AuditSnapshot implementa traits.Snapshotter.
 func (p *PriceList) AuditSnapshot() map[string]any {
-	return map[string]any{"code": p.s.Code, "lines": len(p.s.Lines), "active": p.s.Active, "default": p.s.Default}
+	return map[string]any{"code": p.s.Code, "lines": len(p.s.Lines), "active": p.s.Active}
 }
 
 // Campos de la lista de precios.
 var (
 	PlFieldCompany = spec.Comparable("company", func(p *PriceList) OrganizationID { return p.s.Company })
 	PlFieldCode    = spec.Ordered("code", func(p *PriceList) string { return p.s.Code })
-	// PlFieldDefaultFor es la empresa de la que la lista es la tarifa general (cero si no lo es).
-	PlFieldDefaultFor = spec.Comparable("default_for", func(p *PriceList) OrganizationID { return p.DefaultFor() })
 )
 
 // SpecialPricesKind es el nombre estable del tipo de agregado.
@@ -427,7 +400,7 @@ type PriceSource string
 const (
 	FromSpecial      PriceSource = "special"       // precio especial del cliente para el producto
 	FromCustomerList PriceSource = "customer_list" // la tarifa del cliente (sus condiciones en Orders)
-	FromDefaultList  PriceSource = "default_list"  // la tarifa general de la empresa
+	FromDefaultList  PriceSource = "default_list"  // la tarifa general de la empresa (su perfil en Parties)
 	FromBase         PriceSource = "base"          // el precio base del producto
 )
 

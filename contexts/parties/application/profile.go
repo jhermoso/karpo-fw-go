@@ -20,22 +20,28 @@ type GetInternalOrganizationProfile struct {
 }
 
 // SetInternalOrganizationProfile reemplaza el perfil de una empresa interna: un campo vacío,
-// nulo o ausente lo limpia, y vuelve el comportamiento de siempre (D-133, D-144).
+// nulo o ausente lo limpia, y vuelve el comportamiento de siempre (D-133, D-144, D-148).
 type SetInternalOrganizationProfile struct {
 	ID                 domain.PartyID `json:"-"`
 	TimeZone           string         `json:"timeZone"`
 	LineRounding       string         `json:"lineRounding"`
 	PriceDecimals      *int           `json:"priceDecimals"`
 	InstallmentsTiming string         `json:"installmentsTiming"`
+	DefaultPriceList   string         `json:"defaultPriceList"`
+	AutomaticPricing   *bool          `json:"automaticPricing"`
 }
 
 // InternalOrganizationProfileDTO es la forma de transporte del perfil de una empresa interna.
+// DefaultPriceList se omite si no hay tarifa general; AutomaticPricing es el valor que rige (sí,
+// si no se guardó ninguno).
 type InternalOrganizationProfileDTO struct {
 	InternalOrganizationID string  `json:"internalOrganizationId"`
 	TimeZone               *string `json:"timeZone"`
 	LineRounding           *string `json:"lineRounding"`
 	PriceDecimals          *int    `json:"priceDecimals"`
 	InstallmentsTiming     *string `json:"installmentsTiming"`
+	DefaultPriceList       *string `json:"defaultPriceList,omitempty"`
+	AutomaticPricing       bool    `json:"automaticPricing"`
 }
 
 // GetInternalOrganizationCodePattern lee el patrón de un tipo de código de una empresa interna.
@@ -68,7 +74,8 @@ func optional(s string) *string {
 
 func profileDTO(p domain.InternalOrganizationProfile) InternalOrganizationProfileDTO {
 	return InternalOrganizationProfileDTO{InternalOrganizationID: p.Organization.String(), TimeZone: optional(p.TimeZone),
-		LineRounding: optional(p.LineRounding), PriceDecimals: p.PriceDecimals, InstallmentsTiming: optional(p.InstallmentsTiming)}
+		LineRounding: optional(p.LineRounding), PriceDecimals: p.PriceDecimals, InstallmentsTiming: optional(p.InstallmentsTiming),
+		DefaultPriceList: optional(p.DefaultPriceList), AutomaticPricing: p.PricesAutomatically()}
 }
 
 // profileAudit son los campos del perfil tal como quedan en el registro de auditoría.
@@ -77,8 +84,12 @@ func profileAudit(p domain.InternalOrganizationProfile) map[string]any {
 	if p.PriceDecimals != nil {
 		decimals = *p.PriceDecimals
 	}
+	var automatic any
+	if p.AutomaticPricing != nil {
+		automatic = *p.AutomaticPricing
+	}
 	return map[string]any{"timeZone": p.TimeZone, "lineRounding": p.LineRounding, "priceDecimals": decimals,
-		"installmentsTiming": p.InstallmentsTiming}
+		"installmentsTiming": p.InstallmentsTiming, "defaultPriceList": p.DefaultPriceList, "automaticPricing": automatic}
 }
 
 // addProfile conecta los casos de uso del perfil de la empresa interna (D-133, D-144) y de sus
@@ -107,8 +118,9 @@ func addProfile(svc *Service, s service) {
 			return InternalOrganizationProfileDTO{}, err
 		}
 		before := p
+		p.SetAutomaticPricing(c.AutomaticPricing)
 		if err := errors.Join(p.SetTimeZone(c.TimeZone), p.SetLineRounding(c.LineRounding), p.SetPriceDecimals(c.PriceDecimals),
-			p.SetInstallmentsTiming(c.InstallmentsTiming)); err != nil {
+			p.SetInstallmentsTiming(c.InstallmentsTiming), p.SetDefaultPriceList(c.DefaultPriceList)); err != nil {
 			return InternalOrganizationProfileDTO{}, firstError(err)
 		}
 		if p.Equal(before) {
@@ -263,7 +275,8 @@ func (c CompanyProfiles) Settings(ctx context.Context, organization string) (con
 	if err != nil {
 		return contracts.CompanySettings{}, err
 	}
-	return contracts.CompanySettings{LineRounding: p.LineRounding, PriceDecimals: p.PriceDecimals, InstallmentsTiming: p.InstallmentsTiming}, nil
+	return contracts.CompanySettings{LineRounding: p.LineRounding, PriceDecimals: p.PriceDecimals, InstallmentsTiming: p.InstallmentsTiming,
+		DefaultPriceList: p.DefaultPriceList, AutomaticPricing: p.PricesAutomatically()}, nil
 }
 
 // CodePattern implementa contracts.CompanyProfiles.

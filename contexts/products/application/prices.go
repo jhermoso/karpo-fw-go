@@ -2,7 +2,6 @@ package application
 
 import (
 	"context"
-	"slices"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/products/contracts"
 	"github.com/jhermoso/karpo-fw-go/contexts/products/domain"
@@ -45,13 +44,6 @@ type SetPriceListActive struct {
 	Active bool               `json:"active"`
 }
 
-// SetDefaultPriceList marca o desmarca una lista como la tarifa general de su empresa (como mucho
-// una por empresa: para cambiarla, primero se desmarca la anterior).
-type SetDefaultPriceList struct {
-	ID      domain.PriceListID `json:"-"`
-	Default bool               `json:"default"`
-}
-
 // GetPriceList carga una lista de precios con sus líneas.
 type GetPriceList struct{ ID domain.PriceListID }
 
@@ -80,7 +72,6 @@ type PriceListDTO struct {
 	Name     string         `json:"name"`
 	Currency string         `json:"currency"`
 	Active   bool           `json:"active"`
-	Default  bool           `json:"default"` // la tarifa general de la empresa
 	Lines    []PriceLineDTO `json:"lines"`
 	Version  int64          `json:"version"`
 }
@@ -88,7 +79,7 @@ type PriceListDTO struct {
 func priceListDTO(p *domain.PriceList, lines bool) PriceListDTO {
 	s := p.State()
 	d := PriceListDTO{ID: p.ID().String(), Company: s.Company.String(), Code: s.Code, Name: s.Name, Currency: s.Currency.String(), Active: s.Active,
-		Default: s.Default, Lines: []PriceLineDTO{}, Version: p.Version()}
+		Lines: []PriceLineDTO{}, Version: p.Version()}
 	if lines {
 		d.Lines = priceLineDTOs(s.Lines)
 	}
@@ -175,21 +166,6 @@ func (s service) priceUseCases(svc *Service) {
 	svc.SetPriceListActive = guard(PermPriceListWrite, func(ctx context.Context, c SetPriceListActive) (PriceListDTO, error) {
 		return update(ctx, c.ID, func(_ context.Context, pl *domain.PriceList) error { pl.SetActive(c.Active); return nil })
 	}, retry[SetPriceListActive, PriceListDTO]())
-	svc.SetDefaultList = guard(PermPriceListWrite, func(ctx context.Context, c SetDefaultPriceList) (PriceListDTO, error) {
-		return update(ctx, c.ID, func(ctx context.Context, pl *domain.PriceList) error {
-			if c.Default {
-				others, err := s.PriceLists.Find(ctx, domain.PlFieldDefaultFor.Eq(pl.State().Company))
-				if err != nil {
-					return err
-				}
-				if slices.ContainsFunc(others, func(o *domain.PriceList) bool { return o.ID() != pl.ID() }) {
-					return fw.Violation("products.default_price_list_exists", "the company already has a general price list: unmark it first")
-				}
-			}
-			return pl.SetDefault(c.Default)
-		})
-	}, retry[SetDefaultPriceList, PriceListDTO](), pipeline.Transactional[SetDefaultPriceList, PriceListDTO](s.UoW))
-
 	svc.GetPriceList = guard(PermPriceListRead, func(ctx context.Context, q GetPriceList) (PriceListDTO, error) {
 		pl, err := s.PriceLists.Get(ctx, q.ID)
 		if err != nil {
@@ -233,7 +209,7 @@ func (s service) priceUseCases(svc *Service) {
 		if err := scopeOf(ctx).check("parties.party", company, company, false); err != nil {
 			return contracts.Quote{}, err
 		}
-		return PricingPort{Products: s.Products, PriceLists: s.PriceLists, Specials: s.Specials}.Quote(ctx, contracts.QuoteRequest{Company: q.Company,
+		return PricingPort{Products: s.Products, PriceLists: s.PriceLists, Specials: s.Specials, Settings: s.Settings}.Quote(ctx, contracts.QuoteRequest{Company: q.Company,
 			Customer: q.Customer, Product: q.Product, PriceList: q.PriceList, Quantity: q.Quantity, On: q.On})
 	})
 }

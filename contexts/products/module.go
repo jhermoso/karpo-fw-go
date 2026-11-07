@@ -39,6 +39,12 @@ func WithToday(t application.CompanyToday) Option {
 	return func(d *papp.Deps) { d.Today = t }
 }
 
+// WithSettings da la tarifa general de cada empresa (D-148): el anfitrión, desde su perfil en
+// Parties. Sin él, ninguna empresa tiene tarifa general y ese nivel de la cadena se salta.
+func WithSettings(s papp.CompanySettings) Option {
+	return func(d *papp.Deps) { d.Settings = s }
+}
+
 // Compose construye el contexto sobre sw.
 func Compose(sw *hotswap.Switch, opts ...Option) *Module {
 	integration := hotswap.Outbox(sw, infrastructure.IntegrationOutboxFactory)
@@ -54,7 +60,7 @@ func Compose(sw *hotswap.Switch, opts ...Option) *Module {
 		o(&d)
 	}
 	return &Module{Service: papp.NewService(d), Catalog: papp.CatalogPort{Repo: d.Products},
-		Pricing: papp.PricingPort{Products: d.Products, PriceLists: d.PriceLists, Specials: d.Specials}, IntegrationOutbox: integration, Audit: audit}
+		Pricing: papp.PricingPort{Products: d.Products, PriceLists: d.PriceLists, Specials: d.Specials, Settings: d.Settings}, IntegrationOutbox: integration, Audit: audit}
 }
 
 // Relay reenvía el Published Language a un transporte.
@@ -187,9 +193,6 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/products/price-lists/{id}/prices/remove", command(pl, func(c *papp.RemovePrice, id domain.PriceListID) { c.ID = id }, svc.RemovePrice.Handle))
 	mux.HandleFunc("PUT /api/products/price-lists/{id}/active", command(pl, func(c *papp.SetPriceListActive, id domain.PriceListID) { c.ID = id },
 		svc.SetPriceListActive.Handle))
-	mux.HandleFunc("PUT /api/products/price-lists/{id}/default", command(pl, func(c *papp.SetDefaultPriceList, id domain.PriceListID) { c.ID = id },
-		svc.SetDefaultList.Handle))
-
 	mux.HandleFunc("GET /api/products/special-prices", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		out, err := svc.GetSpecialPrices.Handle(r.Context(), papp.GetSpecialPrices{Company: q.Get("company"), Customer: q.Get("customer")})

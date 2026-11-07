@@ -18,6 +18,7 @@ import (
 	dcontracts "github.com/jhermoso/karpo-fw-go/contexts/products/contracts"
 	ddomain "github.com/jhermoso/karpo-fw-go/contexts/products/domain"
 	dinfra "github.com/jhermoso/karpo-fw-go/contexts/products/infrastructure"
+	"github.com/jhermoso/karpo-fw-go/host"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
@@ -52,7 +53,7 @@ func TestProductsAndInventoryContexts(t *testing.T) {
 			}
 			sw := hotswap.New(db)
 			pm := parties.Compose(sw)
-			dm := products.Compose(sw)
+			dm := products.Compose(sw, products.WithSettings(host.ProductsSettings{Profiles: pm.CompanyProfiles}))
 			im := inventory.Compose(sw, iinfra.ProductsCatalog{Catalog: dm.Catalog})
 			must := func(err error) {
 				t.Helper()
@@ -130,22 +131,16 @@ func TestProductsAndInventoryContexts(t *testing.T) {
 				t.Fatalf("quote: %+v", q)
 			}
 
-			// Tarifa general (como mucho una por empresa) y precios especiales de un cliente.
+			// Tarifa general (el ajuste default_price_list del perfil de la empresa en Parties) y precios
+			// especiales de un cliente.
 			general, err := ps.CreatePriceList.Handle(actx, dapp.CreatePriceList{Company: acme.ID, Code: "general", Name: "General"})
 			must(err)
 			gid, _ := ddomain.ParsePriceListID(general.ID)
 			_, err = ps.SetPrice.Handle(actx, dapp.SetPrice{ID: gid, Product: tornillo.ID, UnitPrice: "0.12", From: vocab.MustDate(2026, 1, 1)})
 			must(err)
-			general, err = ps.SetDefaultList.Handle(actx, dapp.SetDefaultPriceList{ID: gid, Default: true})
-			if err != nil || !general.Default {
-				t.Fatalf("general list: %+v %v", general, err)
-			}
-			if _, err := ps.SetDefaultList.Handle(actx, dapp.SetDefaultPriceList{ID: plid, Default: true}); !errors.Is(err, fw.ErrRuleViolation) {
-				t.Fatalf("two general lists: %v", err)
-			}
-			if general, err = ps.GetPriceList.Handle(actx, dapp.GetPriceList{ID: gid}); err != nil || !general.Default {
-				t.Fatalf("general list round trip: %+v %v", general, err)
-			}
+			acmeID, _ := pdomain.ParsePartyID(acme.ID)
+			_, err = pm.Service.SetInternalOrganizationProfile.Handle(actx, papp.SetInternalOrganizationProfile{ID: acmeID, DefaultPriceList: general.ID})
+			must(err)
 			cliente, err := pm.Service.RegisterOrganization.Handle(actx, papp.RegisterOrganization{LegalName: "Cliente, S.L."})
 			must(err)
 			_, err = ps.SetSpecialPrice.Handle(actx, dapp.SetSpecialPrice{Company: acme.ID, Customer: cliente.ID, Product: tornillo.ID, UnitPrice: "0.09",
@@ -174,6 +169,11 @@ func TestProductsAndInventoryContexts(t *testing.T) {
 				if q := quote(c.customer, c.list, c.qty, c.on); q.Source != c.source || q.Net != c.net {
 					t.Fatalf("chain %+v: %+v", c, q)
 				}
+			}
+			_, err = ps.SetPriceListActive.Handle(actx, dapp.SetPriceListActive{ID: gid, Active: false})
+			must(err)
+			if q := quote(cliente.ID, "", "10", "2027-02-01"); q.Source != "base" || q.Net != "0.1250" {
+				t.Fatalf("a retired general list is skipped: %+v", q)
 			}
 			sp, err = ps.RemoveSpecialPrice.Handle(actx, dapp.RemoveSpecialPrice{Company: acme.ID, Customer: cliente.ID, Product: tornillo.ID,
 				From: vocab.MustDate(2026, 1, 1)})

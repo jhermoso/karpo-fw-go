@@ -322,6 +322,13 @@ func Migrations() sqlrepo.MigrationSet {
 				`CREATE TABLE `+TableInternalOrganizationCodePatterns+` (internal_organization_id {uuid} NOT NULL, code_kind {str:40} NOT NULL,
 	pattern {str:200} NOT NULL, PRIMARY KEY (internal_organization_id, code_kind),
 	FOREIGN KEY (internal_organization_id) REFERENCES parties (id))`)},
+		// Los ajustes de precios de D-148, con los nombres de Karpo C#: la tarifa general de la
+		// empresa (una lista de precios de Products, sin clave ajena porque es de otro contexto) y
+		// si una línea de factura sin pedido toma sola el precio (nulo: sí).
+		{Version: 35, Name: "internal organization profile: default price list and automatic pricing",
+			Up: sqlrepo.RenderDDLAll(
+				`ALTER TABLE `+TableInternalOrganizationProfiles+` {add:default_price_list} {uuid}{addEnd}`,
+				`ALTER TABLE `+TableInternalOrganizationProfiles+` {add:automatic_pricing} {bool}{addEnd}`)},
 	}}
 }
 

@@ -1074,7 +1074,7 @@ cliente), `sage_code` y `apiscore_code`, y la tabla `party_data_protection_conse
   de método, ruta y cuerpo, porque la aplicación no conoce HTTP. Lo que cuenta entre proyectos es
   el resultado, y la huella no se compara con otro proyecto.
 
-## 25. El perfil de la empresa interna: zona horaria y ajustes de facturación (D-133, D-144)
+## 25. El perfil de la empresa interna: zona horaria y ajustes de facturación y de precios (D-133, D-144, D-148)
 
 Cada empresa interna guarda sus propios ajustes en `internal_organization_profile`, el nombre de la
 tabla en Karpo C# y en Trench: la zona horaria (D-133) y los ajustes de facturación de D-128 a
@@ -1127,6 +1127,24 @@ Los códigos son los del contrato común, sin el prefijo `parties.`, como `Compa
 Las equivalencias con las fichas de Trench: `NetOnce` = `once`, `GrossThenDiscount` =
 `gross_then_discount`, `AfterIssueEvent` = `after_issue`, `InIssueTransaction` = `with_issue`. Qué
 hace cada uno, en docs/FACTURACION.md («Los ajustes de la empresa») y docs/COBROS.md.
+
+### Los ajustes de precios (D-148)
+
+En el mismo perfil y el mismo `PUT`, con los mismos permisos, ámbito y auditoría. Los nombres son
+los de Karpo C#. Migración 35.
+
+| Columna | JSON | Valores | Nulo (lo de siempre) | 422 |
+|---|---|---|---|---|
+| `default_price_list` `{uuid}` | `defaultPriceList` | el id de la tarifa general de la empresa en Products | sin tarifa general | `Company.InvalidDefaultPriceList` (no es un id) |
+| `automatic_pricing` `{bool}` | `automaticPricing` | si una línea de factura sin pedido toma sola el precio de Products | sí | — |
+
+- `defaultPriceList` se omite en la respuesta si no hay; `automaticPricing` da siempre el valor que
+  rige (`true` si no se guardó ninguno).
+- Sin clave ajena: la tarifa es de otro contexto. Parties no comprueba que exista; Products se salta
+  una que no encuentra, de otra empresa o retirada (docs/PRODUCTOS.md).
+- Los demás contextos los leen con `contracts.CompanyProfiles.Settings` (`DefaultPriceList`,
+  `AutomaticPricing`); el anfitrión se los lleva a Products con `host.ProductsSettings`.
+  `automatic_pricing` todavía no lo usa nadie: es para la factura directa de Facturación.
 
 ### El patrón de cada tipo de código (D-129, D-144)
 

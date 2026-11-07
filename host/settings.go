@@ -18,6 +18,22 @@ type BillingSettings struct {
 	Profiles pcontracts.CompanyProfiles
 }
 
+// ProductsSettings dice a Products la tarifa general de una empresa (D-148): el ajuste
+// default_price_list de su perfil en Parties. Se lee en cada cotización: un cambio vale desde la
+// siguiente.
+type ProductsSettings struct {
+	Profiles pcontracts.CompanyProfiles
+}
+
+// DefaultPriceList implementa products/application.CompanySettings.
+func (p ProductsSettings) DefaultPriceList(ctx context.Context, company string) (string, error) {
+	st, err := p.Profiles.Settings(ctx, company)
+	if err != nil {
+		return "", fmt.Errorf("products settings: company %s: %w", company, err)
+	}
+	return st.DefaultPriceList, nil
+}
+
 // Settings implementa billing/application.Settings.
 func (b BillingSettings) Settings(ctx context.Context, company string) (bilapp.CompanySettings, error) {
 	st, err := b.Profiles.Settings(ctx, company)
