@@ -135,7 +135,8 @@ vigente para la cantidad (la de mayor cantidad mínima que no la supere):
   (`host.ProductsSettings`, sobre `contracts.CompanyProfiles` de Parties) con
   `products.WithSettings`, igual que Billing lee sus ajustes. Se lee en cada cotización. Si no hay
   puerto, la empresa no tiene el ajuste, o la tarifa no existe, es de otra empresa o está retirada,
-  ese nivel se salta: Parties no sabe de tarifas y no lo comprueba al guardarlo. Una sola tarifa
+  ese nivel se salta. Parties ya la comprueba al guardarla (con el puerto `contracts.PriceLists` de
+  Products, `Module.PriceLists`), pero se puede retirar después. Una sola tarifa
   general por empresa sale del propio esquema (una columna del perfil).
 - **`GET /quote?customer=` no conoce los `Terms` de Orders:** la tarifa del cliente la pasa quien
   llama en `priceList`; sin ella, ese nivel se salta. Con `customer` se pide además

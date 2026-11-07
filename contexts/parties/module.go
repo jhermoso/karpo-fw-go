@@ -47,6 +47,12 @@ func WithFacilityDirectory(f papp.FacilityDirectory) Option {
 	return func(d *papp.Deps) { d.FacilityDirectory = f }
 }
 
+// WithPriceListCheck comprueba en Products la tarifa general que una empresa guarda en su perfil
+// (D-148). Sin él, se guarda sin comprobar.
+func WithPriceListCheck(c papp.PriceListCheck) Option {
+	return func(d *papp.Deps) { d.PriceLists = c }
+}
+
 // Compose construye el contexto sobre sw.
 func Compose(sw *hotswap.Switch, opts ...Option) *Module {
 	parties := hotswap.Repository(sw, infrastructure.PartyRepositoryFactory)

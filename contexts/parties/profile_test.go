@@ -115,10 +115,8 @@ func (e *env) badProfile(got papp.InternalOrganizationProfileDTO) {
 	e.t.Fatalf("profile: %s %s", got.InternalOrganizationID, tz)
 }
 
-// Los ajustes de facturación de D-144 en el mismo perfil, y el patrón de cada tipo de código en
-// su propio recurso: mismos permisos y ámbito que la zona; un valor fuera del enumerado o del rango,
-// o un patrón que no compila, da 422 con su código; null limpia.
-// profilePricing: la tarifa general y el precio automático de D-148, de ida y vuelta.
+// Los ajustes de precios de D-148 en el mismo perfil, de ida y vuelta: la tarifa general (un id, que
+// el puerto de Products comprueba cuando cambia) y el precio automático (nulo es sí).
 func (e *env) profilePricing() {
 	e.t.Helper()
 	var acme papp.PartyDTO
@@ -142,6 +140,15 @@ func (e *env) profilePricing() {
 		e.t.Fatalf("the settings other contexts read: %+v %v", st, err)
 	}
 	e.mustProblem(e.problem("PUT", path, e.clerk, map[string]any{"defaultPriceList": "mayor"}), 422, domain.ErrInvalidDefaultPriceList, "not an id")
+	unusable := "3b2d9e71-0c4f-4a6e-8d15-7f9a2c4b6e08"
+	e.priceLists.ids.Store(unusable, true)
+	e.mustProblem(e.problem("PUT", path, e.clerk, map[string]any{"defaultPriceList": unusable}), 422, domain.ErrUnknownDefaultPriceList,
+		"a price list that does not exist, is another company's or is retired")
+	// La que ya estaba no se vuelve a mirar: retirarla después no impide cambiar el resto.
+	e.priceLists.ids.Store(list, true)
+	e.must(e.do("PUT", path, e.clerk, map[string]any{"defaultPriceList": list, "automaticPricing": false, "timeZone": "Europe/Madrid"}, nil), 200,
+		"the saved list is not checked again")
+	e.priceLists.ids.Delete(list)
 	got = papp.InternalOrganizationProfileDTO{} // defaultPriceList se omite cuando no hay
 	e.must(e.do("PUT", path, e.clerk, map[string]any{"automaticPricing": true}, &got), 200, "explicitly on")
 	if got.DefaultPriceList != nil || !got.AutomaticPricing {
@@ -153,6 +160,9 @@ func (e *env) profilePricing() {
 	}
 }
 
+// Los ajustes de facturación de D-144 en el mismo perfil, y el patrón de cada tipo de código en
+// su propio recurso: mismos permisos y ámbito que la zona; un valor fuera del enumerado o del rango,
+// o un patrón que no compila, da 422 con su código; null limpia.
 func (e *env) profileSettings() {
 	e.t.Helper()
 	var acme, globex papp.PartyDTO

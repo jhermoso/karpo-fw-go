@@ -71,6 +71,18 @@ type Pricing interface {
 	Quote(ctx context.Context, r QuoteRequest) (Quote, error)
 }
 
+// PriceListRef es lo que otros contextos necesitan de una tarifa.
+type PriceListRef struct {
+	ID      string `json:"id"`
+	Company string `json:"company"`
+	Active  bool   `json:"active"`
+}
+
+// PriceLists resuelve una tarifa por id; ok es false si no existe.
+type PriceLists interface {
+	PriceList(ctx context.Context, id string) (ref PriceListRef, ok bool, err error)
+}
+
 // ProductRegisteredV1 se publica cuando un producto entra en el catálogo de una empresa.
 type ProductRegisteredV1 struct {
 	ProductID string `json:"productId"`

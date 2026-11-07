@@ -126,6 +126,9 @@ func addProfile(svc *Service, s service) {
 		if p.Equal(before) {
 			return profileDTO(p), nil
 		}
+		if err := s.checkDefaultPriceList(ctx, p, before); err != nil {
+			return InternalOrganizationProfileDTO{}, err
+		}
 		if err := s.Profiles.Save(ctx, p); err != nil {
 			return InternalOrganizationProfileDTO{}, err
 		}
@@ -182,6 +185,24 @@ func addProfile(svc *Service, s service) {
 		return out, nil
 	}, pipeline.RetryOnConflict[SetInternalOrganizationCodePattern, CodePatternDTO](3, 10*time.Millisecond),
 		pipeline.Transactional[SetInternalOrganizationCodePattern, CodePatternDTO](s.UoW))
+}
+
+// checkDefaultPriceList comprueba una tarifa general nueva o cambiada con el puerto de Products, si
+// lo hay: una que no existe, es de otra empresa o está retirada da 422. La que ya estaba no se
+// vuelve a mirar, para que retirarla después no impida cambiar el resto del perfil (Products se la
+// salta al cotizar).
+func (s service) checkDefaultPriceList(ctx context.Context, p, before domain.InternalOrganizationProfile) error {
+	if s.PriceLists == nil || p.DefaultPriceList == "" || p.DefaultPriceList == before.DefaultPriceList {
+		return nil
+	}
+	ok, err := s.PriceLists.UsableDefaultPriceList(ctx, p.Organization.String(), p.DefaultPriceList)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fw.Violation(domain.ErrUnknownDefaultPriceList, "the default price list does not exist, belongs to another company or is retired")
+	}
+	return nil
 }
 
 // firstError devuelve la primera violación de varias juntas (errors.Join): la respuesta lleva un

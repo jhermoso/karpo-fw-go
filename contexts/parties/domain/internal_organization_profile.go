@@ -32,6 +32,7 @@ const (
 	ErrInvalidCodeKind           = "Company.InvalidCodeKind"
 	ErrInvalidCodePattern        = "Company.InvalidCodePattern"
 	ErrInvalidDefaultPriceList   = "Company.InvalidDefaultPriceList"
+	ErrUnknownDefaultPriceList   = "Company.UnknownDefaultPriceList"
 )
 
 // Formas de redondear una línea con descuento (D-128, D-144).
@@ -79,8 +80,8 @@ type InternalOrganizationProfile struct {
 	// InstallmentsTiming es InstallmentsAfterIssue o InstallmentsWithIssue; vacío, después.
 	InstallmentsTiming string
 	// DefaultPriceList es la tarifa general de la empresa, una lista de precios de Products (su id,
-	// en su forma canónica); vacío, no tiene (D-148). Parties no comprueba que exista: Products se
-	// salta una tarifa que no encuentra, que es de otra empresa o que está retirada.
+	// en su forma canónica); vacío, no tiene (D-148). Al guardarla la comprueba, si lo hay, el puerto
+	// application.PriceListCheck; Products se salta además una que ya no sirve (retirada después).
 	DefaultPriceList string
 	// AutomaticPricing dice si una línea de factura sin pedido toma sola el precio de la cadena de
 	// Products (D-148); nil, sí.

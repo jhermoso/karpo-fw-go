@@ -1135,13 +1135,20 @@ los de Karpo C#. Migración 35.
 
 | Columna | JSON | Valores | Nulo (lo de siempre) | 422 |
 |---|---|---|---|---|
-| `default_price_list` `{uuid}` | `defaultPriceList` | el id de la tarifa general de la empresa en Products | sin tarifa general | `Company.InvalidDefaultPriceList` (no es un id) |
+| `default_price_list` `{uuid}` | `defaultPriceList` | el id de la tarifa general de la empresa en Products | sin tarifa general | `Company.InvalidDefaultPriceList` (no es un id); `Company.UnknownDefaultPriceList` (no existe, es de otra empresa o está retirada) |
 | `automatic_pricing` `{bool}` | `automaticPricing` | si una línea de factura sin pedido toma sola el precio de Products | sí | — |
 
 - `defaultPriceList` se omite en la respuesta si no hay; `automaticPricing` da siempre el valor que
   rige (`true` si no se guardó ninguno).
-- Sin clave ajena: la tarifa es de otro contexto. Parties no comprueba que exista; Products se salta
-  una que no encuentra, de otra empresa o retirada (docs/PRODUCTOS.md).
+- Sin clave ajena: la tarifa es de otro contexto. Al guardar una tarifa nueva o cambiada, Parties la
+  comprueba con el puerto opcional `application.PriceListCheck` (`parties.WithPriceListCheck`), que
+  el anfitrión cablea sobre las tarifas de Products (`host.DefaultPriceLists`, sobre
+  `contracts.PriceLists` de Products): si no existe, es de otra empresa o está retirada, 422
+  `Company.UnknownDefaultPriceList`. Parties no depende de Products. Sin puerto, se guarda sin
+  comprobar. La que ya estaba no se vuelve a mirar, así que retirarla después no impide cambiar el
+  resto del perfil; Products se la salta al cotizar (docs/PRODUCTOS.md).
+- **Permiso:** fijar la tarifa general es cambiar el perfil de la empresa: pide
+  `Parties.Party.Update` sobre ella, no un permiso de Products, como en Karpo C#.
 - Los demás contextos los leen con `contracts.CompanyProfiles.Settings` (`DefaultPriceList`,
   `AutomaticPricing`); el anfitrión se los lleva a Products con `host.ProductsSettings`.
   `automatic_pricing` todavía no lo usa nadie: es para la factura directa de Facturación.

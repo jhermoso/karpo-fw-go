@@ -225,6 +225,28 @@ func (c CatalogPort) Products(ctx context.Context, ids []string) (map[string]con
 	return out, nil
 }
 
+// PriceListPort implementa contracts.PriceLists (sirve a otros contextos, no a usuarios).
+type PriceListPort struct{ Repo domain.PriceListRepository }
+
+var _ contracts.PriceLists = PriceListPort{}
+
+// PriceList implementa contracts.PriceLists.
+func (p PriceListPort) PriceList(ctx context.Context, id string) (contracts.PriceListRef, bool, error) {
+	lid, err := domain.ParsePriceListID(id)
+	if err != nil || lid.IsZero() {
+		return contracts.PriceListRef{}, false, nil
+	}
+	pl, err := p.Repo.Get(ctx, lid)
+	if errors.Is(err, fw.ErrNotFound) {
+		return contracts.PriceListRef{}, false, nil
+	}
+	if err != nil {
+		return contracts.PriceListRef{}, false, err
+	}
+	s := pl.State()
+	return contracts.PriceListRef{ID: pl.ID().String(), Company: s.Company.String(), Active: s.Active}, true, nil
+}
+
 // PricingPort implementa contracts.Pricing (sirve a otros contextos, no a usuarios).
 type PricingPort struct {
 	Products   domain.ProductRepository

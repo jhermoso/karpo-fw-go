@@ -1,6 +1,7 @@
 package host_test
 
 import (
+	"errors"
 	"testing"
 
 	papp "github.com/jhermoso/karpo-fw-go/contexts/parties/application"
@@ -8,6 +9,7 @@ import (
 	dapp "github.com/jhermoso/karpo-fw-go/contexts/products/application"
 	dcontracts "github.com/jhermoso/karpo-fw-go/contexts/products/contracts"
 	ddomain "github.com/jhermoso/karpo-fw-go/contexts/products/domain"
+	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 )
@@ -47,6 +49,19 @@ func TestProductsSettings_GeneralListFromThePartiesProfile(t *testing.T) {
 			if q := quote(); q.Source != dcontracts.SourceBase {
 				t.Fatalf("no general list yet: %+v", q)
 			}
+			// Al guardarla, Parties la comprueba en Products: una que no existe o de otra empresa, 422.
+			globex, err := h.Parties.Service.RegisterOrganization.Handle(actx, papp.RegisterOrganization{LegalName: "Globex Tarifas SL",
+				Roles: []string{pdomain.RoleInternalOrganization.String()}})
+			must(err)
+			foreign, err := h.Products.Service.CreatePriceList.Handle(actx, dapp.CreatePriceList{Company: globex.ID, Code: "GENERAL", Name: "Ajena"})
+			must(err)
+			for what, id := range map[string]string{"unknown": fw.NewUUID().String(), "foreign": foreign.ID} {
+				_, err := h.Parties.Service.SetInternalOrganizationProfile.Handle(actx, papp.SetInternalOrganizationProfile{ID: acmeID, DefaultPriceList: id})
+				var rv *fw.RuleViolationError
+				if !errors.As(err, &rv) || rv.Code != pdomain.ErrUnknownDefaultPriceList {
+					t.Fatalf("a %s general list: %v", what, err)
+				}
+			}
 			_, err = h.Parties.Service.SetInternalOrganizationProfile.Handle(actx, papp.SetInternalOrganizationProfile{ID: acmeID, DefaultPriceList: general.ID})
 			must(err)
 			if q := quote(); q.Source != dcontracts.SourceDefaultList || q.Net != "0.1200" {
@@ -56,6 +71,14 @@ func TestProductsSettings_GeneralListFromThePartiesProfile(t *testing.T) {
 			must(err)
 			if q := quote(); q.Source != dcontracts.SourceBase {
 				t.Fatalf("a retired general list is skipped: %+v", q)
+			}
+			// Una retirada tampoco se puede poner de nuevo.
+			_, err = h.Parties.Service.SetInternalOrganizationProfile.Handle(actx, papp.SetInternalOrganizationProfile{ID: acmeID})
+			must(err)
+			_, err = h.Parties.Service.SetInternalOrganizationProfile.Handle(actx, papp.SetInternalOrganizationProfile{ID: acmeID, DefaultPriceList: general.ID})
+			var rv *fw.RuleViolationError
+			if !errors.As(err, &rv) || rv.Code != pdomain.ErrUnknownDefaultPriceList {
+				t.Fatalf("a retired general list: %v", err)
 			}
 		})
 	}

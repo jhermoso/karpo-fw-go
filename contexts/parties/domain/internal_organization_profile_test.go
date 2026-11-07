@@ -91,8 +91,6 @@ func TestInternalOrganizationProfile_Settings(t *testing.T) {
 	}
 }
 
-// El patrón de un código: una expresión regular de Go de hasta 200 caracteres, que el código cumple
-// entero; sólo para los tipos de código conocidos.
 // La tarifa general es el id de una lista de precios, o vacío; el precio automático, nil es sí
 // (D-148).
 func TestInternalOrganizationProfile_PricingSettings(t *testing.T) {
@@ -125,6 +123,8 @@ func TestInternalOrganizationProfile_PricingSettings(t *testing.T) {
 	}
 }
 
+// El patrón de un código: una expresión regular de Go de hasta 200 caracteres, que el código cumple
+// entero; sólo para los tipos de código conocidos.
 func TestCodePattern(t *testing.T) {
 	violation := func(err error, code string) bool {
 		var rv *fw.RuleViolationError

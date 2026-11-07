@@ -26,6 +26,7 @@ type Module struct {
 	Service           *papp.Service
 	Catalog           contracts.Catalog
 	Pricing           contracts.Pricing
+	PriceLists        contracts.PriceLists
 	IntegrationOutbox application.OutboxStore
 	Audit             application.AuditLog
 }
@@ -60,7 +61,8 @@ func Compose(sw *hotswap.Switch, opts ...Option) *Module {
 		o(&d)
 	}
 	return &Module{Service: papp.NewService(d), Catalog: papp.CatalogPort{Repo: d.Products},
-		Pricing: papp.PricingPort{Products: d.Products, PriceLists: d.PriceLists, Specials: d.Specials, Settings: d.Settings}, IntegrationOutbox: integration, Audit: audit}
+		Pricing:    papp.PricingPort{Products: d.Products, PriceLists: d.PriceLists, Specials: d.Specials, Settings: d.Settings},
+		PriceLists: papp.PriceListPort{Repo: d.PriceLists}, IntegrationOutbox: integration, Audit: audit}
 }
 
 // Relay reenvía el Published Language a un transporte.

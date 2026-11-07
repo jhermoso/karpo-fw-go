@@ -8,6 +8,7 @@ import (
 	bildomain "github.com/jhermoso/karpo-fw-go/contexts/billing/domain"
 	pcontracts "github.com/jhermoso/karpo-fw-go/contexts/parties/contracts"
 	pdomain "github.com/jhermoso/karpo-fw-go/contexts/parties/domain"
+	prdcontracts "github.com/jhermoso/karpo-fw-go/contexts/products/contracts"
 )
 
 // BillingSettings dice a Billing los ajustes de facturación de una empresa (docs/DECISIONES-COMUNES.md,
@@ -32,6 +33,25 @@ func (p ProductsSettings) DefaultPriceList(ctx context.Context, company string) 
 		return "", fmt.Errorf("products settings: company %s: %w", company, err)
 	}
 	return st.DefaultPriceList, nil
+}
+
+// DefaultPriceLists comprueba en Products la tarifa general que una empresa guarda en su perfil de
+// Parties (D-148): que exista, sea suya y esté activa. Parties se compone antes que Products, así
+// que Lists se pone después; mientras no está, todo vale (como sin puerto).
+type DefaultPriceLists struct {
+	Lists prdcontracts.PriceLists
+}
+
+// UsableDefaultPriceList implementa parties/application.PriceListCheck.
+func (d *DefaultPriceLists) UsableDefaultPriceList(ctx context.Context, company, priceList string) (bool, error) {
+	if d.Lists == nil {
+		return true, nil
+	}
+	ref, ok, err := d.Lists.PriceList(ctx, priceList)
+	if err != nil {
+		return false, fmt.Errorf("default price list %s: %w", priceList, err)
+	}
+	return ok && ref.Company == company && ref.Active, nil
 }
 
 // Settings implementa billing/application.Settings.
