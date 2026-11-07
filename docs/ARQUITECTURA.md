@@ -383,12 +383,14 @@ suscriptores tipados.
 ./integration/run.ps1 -Down
 ```
 
-levanta PostgreSQL 17, SQL Server 2022, Oracle 23 Free y MySQL 8.4 y ejecuta en todos ellos:
+levanta PostgreSQL 17, SQL Server 2022, Oracle 23 Free, MySQL 8.4 y Supabase (su imagen de
+Postgres 17, con el mismo driver y dialecto que PostgreSQL) y ejecuta en todos ellos:
 
 - la batería de conformidad completa (las 47 especificaciones dan en SQL exactamente lo mismo que
   en memoria), también en Oracle con GUIDs en orden .NET (`oracle.WithDotNetGUIDs`);
 - el contexto Parties (tabla hija, especificación custom con `COUNT`, NIF único en la base de datos);
 - `TestHotSwapAcrossEngines`: un único repositorio de dominio que cambia en caliente
-  PostgreSQL → SQL Server → Oracle → MySQL con una unidad de trabajo abierta en cada cambio.
+  PostgreSQL → Supabase → SQL Server → Oracle → MySQL con una unidad de trabajo abierta en cada
+  cambio (la prueba espera al backend, no al nombre del dialecto, porque Supabase también es `postgres`).
 
-Todo ello pasa en verde contra los cuatro motores.
+Todo ello pasa en verde contra los cinco motores; la batería completa tarda unos 40 minutos.

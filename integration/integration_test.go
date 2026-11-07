@@ -51,6 +51,9 @@ type engine struct {
 
 var engines = []engine{
 	{"postgres", "KARPO_PG_DSN", "pgx", postgres.New()},
+	// Supabase es PostgreSQL con sus extensiones, roles y esquemas propios: el destino de producción
+	// posible (despliegue en PostgreSQL o Supabase). Mismo dialecto, otra imagen.
+	{"supabase", "KARPO_SUPABASE_DSN", "pgx", postgres.New()},
 	{"sqlserver", "KARPO_MSSQL_DSN", "sqlserver", sqlserver.New()},
 	{"oracle", "KARPO_ORACLE_DSN", "oracle", oracle.New()},
 	// RAW(16) en el orden de bytes del Guid de .NET, para compartir tablas con los servicios de Karpo C#.
@@ -126,7 +129,7 @@ func TestDecimals(t *testing.T) {
 			continue
 		}
 		var adjust func(string) string
-		if e.name == "postgres" {
+		if e.dialect.Name() == "postgres" { // también Supabase
 			adjust = postgres.WithoutStatementCache
 		}
 		t.Run(e.name, func(t *testing.T) { sqlconformance.RunDecimals(t, openWith(t, e, adjust)) })
@@ -251,7 +254,7 @@ func TestHotSwapAcrossEngines(t *testing.T) {
 			<-started
 			swapped := make(chan error, 1)
 			go func() { swapped <- sw.Swap(ctx, dbs[i+1]) }()
-			for sw.Name() == name {
+			for sw.Current() == db { // por el backend, no por el nombre: Supabase también se llama postgres
 				time.Sleep(time.Millisecond)
 			}
 			close(release)

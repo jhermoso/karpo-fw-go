@@ -16,6 +16,18 @@ services:
       interval: 5s
       retries: 30
 
+  # Supabase: su imagen de PostgreSQL (extensiones, roles y esquemas auth, storage...). Un posible
+  # destino de producción, así que la suite corre también contra ella.
+  supabase:
+    image: supabase/postgres:17.11.0.004
+    environment:
+      POSTGRES_PASSWORD: karpo
+    ports: ["${KARPO_SUPABASE_PORT:-54433}:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -h localhost"]
+      interval: 5s
+      retries: 60
+
   sqlserver:
     image: mcr.microsoft.com/mssql/server:2022-latest
     environment:
