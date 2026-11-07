@@ -317,6 +317,40 @@ importa Parties: los pide por su puerto `Settings` (`billing.WithSettings`), que
 - **Pendiente:** que el cliente sobrescriba redondeo y decimales (cascada cliente > empresa de
   D-144), en BACKLOG.md.
 
+## PDF de la factura (plan Sage, T1-G6; añadido el 2026-11-07)
+
+`GET /api/billing/invoices/{id}/pdf` devuelve `application/pdf` (en línea, con el número como nombre
+de fichero) de una factura **emitida**. Permiso `Billing.Invoice.Read` y el ámbito de siempre: fuera
+del vendedor, 404. Un borrador no tiene PDF: 422 `billing.invoice_not_issued`.
+
+- **Qué lleva** (art. 6 del RD 1619/2012, con lo que la factura congeló al emitir): número con su
+  serie; fecha de expedición; fecha de la operación si es distinta; vencimiento si lo hay; nombre,
+  NIF y domicilio fiscal del emisor y del destinatario (T1-G2; el domicilio sale si Parties lo
+  tenía); descripción de la operación (T1-G1); las líneas (concepto, cantidad, precio, descuento e
+  importe); el desglose por tipo (base, tipo y cuota, y el recargo si lo hay); base, cuota, recargo
+  y total; la mención de cada exención o no sujeción con su clave (E1–E6, N1–N2) y el artículo de
+  la Ley 37/1992 que corresponde a la clave; en la rectificativa, el número y la fecha de la
+  factura rectificada y la causa R1–R5. Importes al estilo español (1.234,56 €), precios con sus
+  decimales y al menos dos.
+- **Cómo:** el maquetado está en la aplicación de Billing (`application/invoice_pdf.go`), con los
+  textos en constantes en un solo sitio. El PDF lo escribe `pkg/render/pdf`, un generador mínimo con
+  la biblioteca estándar: A4, Helvetica y Helvetica-Bold con WinAnsiEncoding, texto, líneas y
+  rectángulos, flujos sin comprimir. Si las líneas no caben, sigue en otras páginas con la cabecera
+  de las líneas repetida y «Página n de m». El dominio no sabe nada de PDF. Sin migraciones.
+- **Prueba:** `TestBilling_InvoicePDF` (número, fechas, NIF y domicilio de las dos partes, total,
+  mención de la exención, rectificativa; borrador 422, sin permiso 403, fuera del ámbito 404),
+  `TestRenderInvoice_SeveralPages`, `TestSpanishNumbers` y las del generador (`pkg/render/pdf`:
+  cabecera, xref leída objeto a objeto, longitudes de los flujos, `%%EOF`, WinAnsi).
+- **Pendiente:**
+  - el **QR de VERI*FACTU** (T9): hay un hueco de unos 30 × 30 mm arriba a la derecha, vacío;
+  - la **leyenda registral** del emisor (Registro Mercantil, tomo, folio, hoja): Parties no la guarda;
+  - el **logotipo** de la empresa: no hay dónde guardarlo;
+  - **idiomas:** sólo español; los textos están en constantes para traducirlos;
+  - la **descripción del tratamiento** de Fiscal no se congela en la factura: la mención usa la
+    clave y el artículo de la Ley del IVA que le corresponde; en IGIC sólo sale la clave, porque las
+    referencias de la Ley 37/1992 no valen allí;
+  - el **país** del domicilio sale con su código (ES), no con su nombre.
+
 ## Pendiente
 
 - Todo el cálculo de impuestos que falta, por país y por sector: punto 6 de
@@ -326,4 +360,6 @@ importa Parties: los pide por su puerto `Settings` (`billing.WithSettings`), que
 - ~~Plazos de vencimiento y cobros~~: hechos en [COBROS.md](COBROS.md). Las remesas quedan para Tesorería.
 - Facturas recibidas (compras), con el mismo `TaxEngine` y la deducibilidad.
 - ~~Dirección fiscal del cliente en la factura~~: hecha (T1-G2); falta decidir si se exige para emitir.
+- PDF de la factura: hecho (T1-G6); falta el QR de VERI*FACTU (T9), la leyenda registral, el logotipo y
+  otros idiomas.
 - Importar las facturas de C# como emitidas, con sus números de Documents.

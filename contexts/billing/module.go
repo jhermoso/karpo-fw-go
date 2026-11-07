@@ -179,6 +179,21 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 		out, err := svc.PreviewTaxes.Handle(r.Context(), bapp.PreviewTaxes{ID: id, On: r.URL.Query().Get("on")})
 		distribution.Respond(w, r, out, err, http.StatusOK)
 	})
+	mux.HandleFunc("GET /api/billing/invoices/{id}/pdf", func(w http.ResponseWriter, r *http.Request) {
+		id, err := inv(r.PathValue("id"))
+		if err != nil {
+			badID(w, r)
+			return
+		}
+		doc, err := svc.InvoicePDF.Handle(r.Context(), bapp.InvoicePDF{ID: id})
+		if err != nil {
+			distribution.WriteError(w, r, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/pdf")
+		w.Header().Set("Content-Disposition", `inline; filename="`+doc.FileName+`"`)
+		_, _ = w.Write(doc.Content)
+	})
 	mux.HandleFunc("DELETE /api/billing/invoices/{id}", func(w http.ResponseWriter, r *http.Request) {
 		id, err := inv(r.PathValue("id"))
 		if err != nil {

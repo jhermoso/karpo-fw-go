@@ -118,6 +118,7 @@ type Service struct {
 	Discard        app.CommandHandler[DiscardInvoice, struct{}]
 	GetInvoice     app.QueryHandler[GetInvoice, InvoiceDTO]
 	SearchInvoices app.QueryHandler[SearchInvoices, fw.Page[InvoiceDTO]]
+	InvoicePDF     app.QueryHandler[InvoicePDF, PDFDocument]
 }
 
 type scope struct {
@@ -231,6 +232,7 @@ func NewService(d Deps) *Service {
 	svc := &Service{}
 	s.seriesUseCases(svc)
 	s.invoiceUseCases(svc)
+	s.invoicePDFUseCase(svc)
 	return svc
 }
 
