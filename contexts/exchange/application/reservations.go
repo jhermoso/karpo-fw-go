@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/exchange/domain"
+	app "github.com/jhermoso/karpo-fw-go/pkg/application"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
@@ -209,8 +210,18 @@ func (s service) wireReservations(svc *Service) {
 				return ReservationDTO{}, fw.Violation("exchange.promotion_unknown", "the promotion code is not that of an active collaborator")
 			}
 		}
-		req := domain.Request{Company: org, Customer: customer, Channel: c.Channel, Segment: c.Segment, Pickup: c.Pickup, TimeSlot: c.TimeSlot,
-			Facility: facility, PromotionCode: code, Collaborator: collaborator}
+		// Los días de la recogida y del registro son los de la empresa, no los de UTC.
+		now := fw.Now()
+		pickupOn, err := app.DateOf(ctx, s.Today, org.UUID, c.Pickup)
+		if err != nil {
+			return ReservationDTO{}, err
+		}
+		today, err := app.DateOf(ctx, s.Today, org.UUID, now)
+		if err != nil {
+			return ReservationDTO{}, err
+		}
+		req := domain.Request{Company: org, Customer: customer, Channel: c.Channel, Segment: c.Segment, Pickup: c.Pickup, PickupOn: pickupOn,
+			TimeSlot: c.TimeSlot, Facility: facility, PromotionCode: code, Collaborator: collaborator}
 		if strings.TrimSpace(req.Segment) == "" {
 			req.Segment = domain.DefaultSegment
 		}
@@ -222,7 +233,7 @@ func (s service) wireReservations(svc *Service) {
 			}
 			req.Lines = append(req.Lines, domain.RequestLine{Quotation: q, Collector: l.Collector, CollectorNote: l.CollectorNote})
 		}
-		res, err := domain.RegisterReservation(domain.NewReservationID(), req, set.ExpiryHours, fw.Now())
+		res, err := domain.RegisterReservation(domain.NewReservationID(), req, set.ExpiryHours, now, today)
 		if err != nil {
 			return ReservationDTO{}, err
 		}
@@ -412,7 +423,7 @@ func (s service) wireReservations(svc *Service) {
 			}
 			eur := r.Total()
 			total = sum{n: total.n + 1, eur: total.eur.Add(eur)}
-			add(daily, vocab.DateOf(st.History[0].At).String(), 1, zero, eur)
+			add(daily, st.CreatedOn.String(), 1, zero, eur)
 			add(byFac, optID(st.Facility), 1, zero, eur)
 			for _, l := range st.Lines {
 				add(byCur, l.Currency, 1, l.Delivered, l.Eur)

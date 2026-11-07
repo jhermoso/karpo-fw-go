@@ -27,6 +27,7 @@ type Deps struct {
 	UoW       fw.UnitOfWork
 	Audit     app.AuditLog
 	Merged    app.MergedParties // opcional: las parties fusionadas, que los listados dejan fuera (D-100)
+	Today     app.CompanyToday  // opcional: sin él, las fechas son las de UTC (docs/ARQUITECTURA.md, «Hoy es el de la empresa»)
 }
 
 // Service expone las consultas.

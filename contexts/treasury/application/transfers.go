@@ -254,7 +254,19 @@ func (s service) transferUseCases(svc *Service) {
 	})
 
 	svc.SettleTransfers = guard(PermTransferBank, func(ctx context.Context, c SettleTransfers) (TransferOrderDTO, error) {
-		return update(ctx, c.ID, func(_ context.Context, o *domain.TransferOrder) error { return o.Settle(c.On) })
+		return update(ctx, c.ID, func(ctx context.Context, o *domain.TransferOrder) error {
+			// El día en que se generó es el de la empresa que paga, no el de UTC. Sólo se pregunta
+			// si la orden está generada: si no, el error es ése, no uno de zonas.
+			st := o.State()
+			if st.Status != domain.RemGenerated {
+				return o.Settle(c.On, vocab.Date{})
+			}
+			generated, err := app.DateOf(ctx, s.Today, st.Debtor.UUID, st.GeneratedAt)
+			if err != nil {
+				return err
+			}
+			return o.Settle(c.On, generated)
+		})
 	}, retry[SettleTransfers, TransferOrderDTO]())
 
 	svc.RejectTransfer = guard(PermTransferBank, func(ctx context.Context, c RejectTransfer) (TransferOrderDTO, error) {

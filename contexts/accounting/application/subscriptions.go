@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/accounting/domain"
 	app "github.com/jhermoso/karpo-fw-go/pkg/application"
@@ -253,7 +254,8 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 	}
 	// reverseSource revierte el último asiento de una clave de origen que aún no está revertido, en
 	// la fecha del hecho o en la del asiento cuando el hecho llega con fecha anterior.
-	reverseSource := func(ctx context.Context, company domain.OrganizationID, srcType, key string, on vocab.Date, src domain.Source) error {
+	// La anulación es del día del evento que la pide (at) en la zona de la empresa del asiento.
+	reverseSource := func(ctx context.Context, company domain.OrganizationID, srcType, key string, at time.Time, src domain.Source) error {
 		found, err := s.Entries.Find(ctx, spec.And(domain.EntFieldCompany.Eq(company), domain.EntFieldSrcType.Eq(srcType),
 			domain.EntFieldSrcKey.Eq(key), domain.EntFieldReversed.Eq(false)), domain.EntFieldNumber.Desc())
 		if err != nil || len(found) == 0 {
@@ -261,6 +263,10 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 		}
 		done, err := s.Entries.Exists(ctx, spec.And(domain.EntFieldCompany.Eq(company), domain.EntFieldSrcType.Eq(src.Type), domain.EntFieldSrcID.Eq(src.ID)))
 		if err != nil || done {
+			return err
+		}
+		on, err := app.DateOf(ctx, s.Today, company.UUID, at)
+		if err != nil {
 			return err
 		}
 		if orig := found[0].State().Date; on.Before(orig) {
@@ -333,7 +339,7 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 			return err
 		}
 		key := fmt.Sprintf("%s|%s|%d", e.CollectionID, e.InvoiceID, e.Installment)
-		return reverseSource(ctx, domain.OrganizationID{UUID: company}, "receivables.collection-allocated.v1", key, vocab.DateOf(env.OccurredAt),
+		return reverseSource(ctx, domain.OrganizationID{UUID: company}, "receivables.collection-allocated.v1", key, env.OccurredAt,
 			domain.Source{Type: "receivables.allocation-reversed.v1", ID: env.ID, Key: key})
 	})
 
@@ -410,7 +416,7 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 		if err := p.check("purchases.invoice-cancelled.v1"); err != nil {
 			return err
 		}
-		return reverseSource(ctx, domain.OrganizationID{UUID: company}, "purchases.invoice-registered.v1", e.InvoiceID, vocab.DateOf(env.OccurredAt),
+		return reverseSource(ctx, domain.OrganizationID{UUID: company}, "purchases.invoice-registered.v1", e.InvoiceID, env.OccurredAt,
 			domain.Source{Type: "purchases.invoice-cancelled.v1", ID: e.InvoiceID, Key: e.InvoiceID})
 	})
 
@@ -450,7 +456,7 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 			return err
 		}
 		key := e.PaymentID + "|" + e.PayableID
-		return reverseSource(ctx, domain.OrganizationID{UUID: company}, "payments.payment-allocated.v1", key, vocab.DateOf(env.OccurredAt),
+		return reverseSource(ctx, domain.OrganizationID{UUID: company}, "payments.payment-allocated.v1", key, env.OccurredAt,
 			domain.Source{Type: "payments.allocation-reversed.v1", ID: env.ID, Key: key})
 	})
 
@@ -534,7 +540,7 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 			return err
 		}
 		company := found[0].State().Company
-		return reverseSource(ctx, company, "payroll.payslip-approved.v1", e.PayslipID, vocab.DateOf(env.OccurredAt),
+		return reverseSource(ctx, company, "payroll.payslip-approved.v1", e.PayslipID, env.OccurredAt,
 			domain.Source{Type: "payroll.payslip-cancelled.v1", ID: e.PayslipID, Key: e.PayslipID})
 	})
 }

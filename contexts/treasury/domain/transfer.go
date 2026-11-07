@@ -170,12 +170,14 @@ func (o *TransferOrder) Generate(d Debtor, at time.Time) error {
 	return nil
 }
 
-// Settle registra que el banco ejecutó la orden en una fecha.
-func (o *TransferOrder) Settle(on vocab.Date) error {
+// Settle registra que el banco ejecutó la orden en una fecha. generated es el día en que se generó
+// la orden (GeneratedAt) en la zona horaria de la empresa: lo da la aplicación, porque el dominio
+// no conoce zonas.
+func (o *TransferOrder) Settle(on, generated vocab.Date) error {
 	if o.s.Status != RemGenerated {
 		return fw.Violation("treasury.order_not_generated", "only a generated order is settled")
 	}
-	if on.Before(vocab.DateOf(o.s.GeneratedAt)) {
+	if on.Before(generated) {
 		return fw.Violation("treasury.settle_date", "the order is executed after being generated")
 	}
 	o.s.Status, o.s.Settled = RemSettled, on

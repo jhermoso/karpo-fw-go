@@ -210,15 +210,15 @@ func ReservationMapping() sqlrepo.Mapping[domain.ReservationID, *domain.Reservat
 		Dehydrate: func(x *domain.Reservation) (sqlrepo.Values, error) {
 			s := x.State()
 			return sqlrepo.AuditStampValues(sqlrepo.Values{"company": s.Company, "customer": s.Customer, "reference": s.Reference, "channel": s.Channel,
-				"segment_code": s.Segment, "pickup_at": s.Pickup, "pickup_on": vocab.DateOf(s.Pickup), "time_slot": opt(s.TimeSlot), "expires_at": s.ExpiresAt,
+				"segment_code": s.Segment, "pickup_at": s.Pickup, "pickup_on": s.PickupOn, "time_slot": opt(s.TimeSlot), "expires_at": s.ExpiresAt,
 				"facility": optUUID(s.Facility), "promotion_code": opt(s.PromotionCode), "collaborator": optUUID(s.Collaborator.UUID),
-				"status": string(s.Status), "reason": opt(s.Reason), "created_on": vocab.DateOf(s.History[0].At), "total": x.Total().Round(2)},
+				"status": string(s.Status), "reason": opt(s.Reason), "created_on": s.CreatedOn, "total": x.Total().Round(2)},
 				x.AuditStamp()), nil
 		},
 		Hydrate: func(r *sqlrepo.Row, children sqlrepo.ChildRows) (*domain.Reservation, error) {
 			s := domain.ReservationState{Company: domain.OrganizationID{UUID: r.UUID("company")}, Customer: domain.PartyID{UUID: r.UUID("customer")},
 				Reference: r.String("reference"), Channel: r.String("channel"), Segment: r.String("segment_code"), Pickup: r.Time("pickup_at").UTC(),
-				TimeSlot: r.String("time_slot"), ExpiresAt: r.Time("expires_at").UTC(), Facility: r.UUID("facility"), PromotionCode: r.String("promotion_code"),
+				PickupOn: r.Date("pickup_on"), CreatedOn: r.Date("created_on"), TimeSlot: r.String("time_slot"), ExpiresAt: r.Time("expires_at").UTC(), Facility: r.UUID("facility"), PromotionCode: r.String("promotion_code"),
 				Collaborator: domain.PartyID{UUID: r.UUID("collaborator")}, Status: domain.Status(r.String("status")), Reason: r.String("reason"),
 				Audit: r.AuditStamp()}
 			for _, c := range byNo(children.Of("lines")) {

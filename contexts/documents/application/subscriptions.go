@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/documents/domain"
 	app "github.com/jhermoso/karpo-fw-go/pkg/application"
@@ -203,10 +204,28 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 		}
 		return record(ctx, x)
 	})
-	// Un pedido confirmado no lleva fecha propia: el día en que se confirmó.
+	// dayOf es el día de at en la zona de la empresa. Una empresa que no se entiende se queda en
+	// UTC: la rechaza la validación del documento.
+	dayOf := func(ctx context.Context, company string, at time.Time) (string, error) {
+		id, err := fw.ParseUUID(company)
+		if err != nil {
+			return vocab.DateOf(at.UTC()).String(), nil
+		}
+		on, err := app.DateOf(ctx, d.Today, id, at)
+		return on.String(), err
+	}
+	// Un pedido confirmado no lleva fecha propia: el día en que se confirmó, en la zona de la empresa.
 	messaging.Handle(c, func(ctx context.Context, e OrderConfirmed, env app.Envelope) error {
-		return record(ctx, entry{event: e.IntegrationEventType(), company: e.Company, party: e.Customer, date: vocab.DateOf(env.OccurredAt).String(),
-			total: e.Total, number: e.Number, fact: domain.Ref{Type: domain.Order, ID: e.OrderID}})
+		fact := domain.Ref{Type: domain.Order, ID: e.OrderID}
+		if existing, err := s.byFact(ctx, fact); err != nil || existing != nil {
+			return err // ya anotado: una reentrega no pregunta la zona
+		}
+		date, err := dayOf(ctx, e.Company, env.OccurredAt)
+		if err != nil {
+			return err
+		}
+		return record(ctx, entry{event: e.IntegrationEventType(), company: e.Company, party: e.Customer, date: date,
+			total: e.Total, number: e.Number, fact: fact})
 	})
 	messaging.Handle(c, func(ctx context.Context, e DeliveryIssued, _ app.Envelope) error {
 		return record(ctx, entry{event: e.IntegrationEventType(), company: e.Company, party: e.Customer, date: e.Date, total: e.Total, number: e.Number,
@@ -236,10 +255,18 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 	messaging.Handle(c, func(ctx context.Context, e PayslipCancelled, _ app.Envelope) error {
 		return cancel(ctx, domain.Ref{Type: domain.Payslip, ID: e.PayslipID}, e.Reason)
 	})
-	// Una declaración: modelo, año y periodo, el día en que se presentó.
+	// Una declaración: modelo, año y periodo, el día en que se presentó en la zona del declarante.
 	messaging.Handle(c, func(ctx context.Context, e FilingSubmitted, env app.Envelope) error {
-		return record(ctx, entry{event: e.IntegrationEventType(), company: e.Declarant, date: vocab.DateOf(env.OccurredAt).String(), total: e.Withheld,
-			number: fmt.Sprintf("%s-%d-%s", e.Form, e.Year, e.Period), fact: domain.Ref{Type: domain.TaxFiling, ID: e.FilingID}})
+		fact := domain.Ref{Type: domain.TaxFiling, ID: e.FilingID}
+		if existing, err := s.byFact(ctx, fact); err != nil || existing != nil {
+			return err // ya anotado: una reentrega no pregunta la zona
+		}
+		date, err := dayOf(ctx, e.Declarant, env.OccurredAt)
+		if err != nil {
+			return err
+		}
+		return record(ctx, entry{event: e.IntegrationEventType(), company: e.Declarant, date: date, total: e.Withheld,
+			number: fmt.Sprintf("%s-%d-%s", e.Form, e.Year, e.Period), fact: fact})
 	})
 	messaging.Handle(c, func(ctx context.Context, e FilingReverted, _ app.Envelope) error {
 		return cancel(ctx, domain.Ref{Type: domain.TaxFiling, ID: e.FilingID}, e.Reason)

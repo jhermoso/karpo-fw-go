@@ -148,7 +148,7 @@ func TestReservation_Lifecycle(t *testing.T) {
 			Lines: []domain.RequestLine{{Quotation: q}, {Quotation: eurLine}}}
 	}
 	register := func(r domain.Request) (*domain.Reservation, error) {
-		return domain.RegisterReservation(domain.NewReservationID(), r, 4, now)
+		return domain.RegisterReservation(domain.NewReservationID(), r, 4, now, vocab.Date{})
 	}
 	past := req()
 	past.Pickup = now

@@ -307,14 +307,11 @@ func (s service) positionUseCases(svc *Service) {
 		}
 		from := at(c.From)
 		return update(ctx, c.ID, func(ctx context.Context, p *domain.Position) error {
-			// El empleo se mira el día de la empresa, como el alta (Hire): sin «from», hoy en su zona;
-			// con él, el día de ese instante en UTC, porque el instante lo trae quien llama.
-			on := vocab.DateOf(from)
-			if c.From == nil || c.From.IsZero() {
-				var err error
-				if on, err = app.TodayOf(ctx, s.Today, p.Organization().UUID); err != nil {
-					return err
-				}
+			// El empleo se mira el día de la empresa, como el alta (Hire): el de «from» en su zona
+			// (sin «from», hoy).
+			on, err := app.DateOf(ctx, s.Today, p.Organization().UUID, from)
+			if err != nil {
+				return err
 			}
 			ok, err := s.employedBy(ctx, person, p.Organization(), on)
 			if err != nil {

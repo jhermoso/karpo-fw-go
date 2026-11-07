@@ -37,6 +37,12 @@ func WithMergedParties(m application.MergedParties) Option {
 	return func(d *dapp.Deps) { d.Merged = m }
 }
 
+// WithToday dice qué día es para una empresa en un instante (el anfitrión: el de su zona
+// horaria). Sin él, el de UTC.
+func WithToday(t application.CompanyToday) Option {
+	return func(d *dapp.Deps) { d.Today = t }
+}
+
 // Compose construye el contexto sobre sw.
 func Compose(sw *hotswap.Switch, opts ...Option) *Module {
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)

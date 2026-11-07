@@ -23,7 +23,8 @@ import (
 // La zona del perfil se lee siempre (una fila por su clave): un cambio vale desde la factura
 // siguiente, también si se hace dos minutos antes de medianoche. Sólo se recuerda la del país.
 //
-// A los demás contextos les dice qué día es hoy para una empresa (application.CompanyToday): el
+// A los demás contextos les dice qué día es para una empresa, hoy o en un instante
+// (application.CompanyToday): el
 // país es el de la identidad fiscal de la empresa en Parties, como el del vendedor en Billing. Ese
 // país se recuerda 5 minutos por empresa, como la zona de cada país: preguntarlo carga la party
 // entera. La zona guardada sigue sin recordarse.
@@ -61,9 +62,10 @@ func (z *CompanyZones) Location(ctx context.Context, company, country string) (*
 
 var _ application.CompanyToday = (*CompanyZones)(nil)
 
-// Today implementa application.CompanyToday: la fecha de hoy en la zona de la empresa, con el
-// mismo orden que Location. El país sólo se pregunta a Parties cuando la empresa no guarda zona.
-func (z *CompanyZones) Today(ctx context.Context, company fw.UUID) (vocab.Date, error) {
+// DateOf implementa application.CompanyToday: la fecha de at en la zona de la empresa, con el
+// mismo orden que Location (hoy es la del reloj del dominio). El país sólo se pregunta a Parties
+// cuando la empresa no guarda zona.
+func (z *CompanyZones) DateOf(ctx context.Context, company fw.UUID, at time.Time) (vocab.Date, error) {
 	id := company.String()
 	loc, err := z.stored(ctx, id)
 	if err != nil {
@@ -78,7 +80,7 @@ func (z *CompanyZones) Today(ctx context.Context, company fw.UUID) (vocab.Date, 
 			return vocab.Date{}, err
 		}
 	}
-	return vocab.Today(loc), nil
+	return vocab.DateOf(at.In(loc)), nil
 }
 
 // countryOf es el país de la identidad fiscal de la empresa ("" si no tiene); se recuerda 5 minutos.
