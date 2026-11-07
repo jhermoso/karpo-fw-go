@@ -175,13 +175,15 @@ factura, sin que ningún contexto escriba en el otro.
 ### Decisiones (aprobadas por Javier el 2026-10-06)
 
 1. **Cada albarán genera un borrador de factura, automáticamente.** No se factura el pedido sino
-   lo entregado.
+   lo entregado. Desde D-146, salvo el de un cliente con facturación mensual, que espera al cierre
+   del periodo.
 2. **El borrador se emite a mano,** en la serie y fecha que decida quien factura. Facturar
    automáticamente al entregar queda fuera.
 3. **Un borrador nacido de un albarán no se descarta;** sí se pueden editar sus líneas antes de
-   emitir.
-4. **Una factura por albarán.** Agrupar varios albaranes de un cliente en una factura
-   (facturación periódica) queda para la fase 2.
+   emitir. Desde D-146, sólo desaparece al unirse a otro.
+4. ~~Una factura por albarán~~. **Sustituida por D-146** (Javier, 2026-11-07): varios albaranes de
+   un cliente en una factura, configurable y con los dos modos, a mano y por periodo. Ver
+   «Varios albaranes en una factura».
 
 ### Validación
 
@@ -198,6 +200,61 @@ factura, sin que ningún contexto escriba en el otro.
   la misma base, incluidas las migraciones que añaden columnas: borrador desde el albarán por
   `billing_inbox`, origen de ida y vuelta, descarte rechazado, emisión, albarán facturado por
   `orders_inbox` y deuda abierta en Cobros.
+
+## Varios albaranes en una factura (D-146, plan Sage T8; añadido el 2026-11-07)
+
+Decisión de Javier del 2026-11-07 («1 c configurable»): varios albaranes de un cliente en una sola
+factura, de los dos modos. Por defecto sigue un borrador por albarán.
+
+- **La factura recuerda todos sus orígenes** en la tabla hija `bil_invoice_sources` (`invoice_id`,
+  `line_no`, `source_type`, `source_id`, `source_ref`), migración 10, que copia el origen de las
+  facturas que ya lo tenían. Un índice único sobre (`source_type`, `source_id`) impide que un
+  albarán esté en dos facturas (dos cierres a la vez: el segundo choca, es un conflicto y se
+  reintenta sin encontrar nada pendiente). Las columnas `source_type`, `source_id` y `source_ref`
+  de `bil_invoices` **se conservan** con el primer origen, para quien ya las lea; quitarlas exigía
+  borrar un índice y columnas en cinco dialectos sin ganar nada.
+- **La factura y el evento:** `sources` (`type`, `id`, `ref`) lleva todos; `sourceType`, `sourceId` y
+  `sourceRef` siguen con el primero. `billing.invoice-issued.v1` añade `sources` y conserva
+  `sourceType` y `sourceId`: es compatible hacia atrás. Pedidos marca facturado **cada** albarán de
+  `sources`. Documentos sigue enlazando sólo el primero (pendiente en BACKLOG).
+- **A mano:** `POST /api/billing/invoices/merge` con `{"invoices": [id1, id2, …]}` une en el
+  primero los demás borradores: las líneas y los orígenes de todos; la fecha de operación pasa a
+  ser la última de todas (el final del periodo que cubren) y la descripción cita los albaranes
+  («Albaranes A-1, A-2»). Los demás se borran en la misma transacción: es el único modo de quitar
+  un borrador de albarán. Permiso: el de editar borradores, `Billing.Invoice.Update` (el de
+  descartar). Rechazos (422): menos de dos (`billing.merge_too_few`), alguno emitido
+  (`billing.invoice_not_draft`), alguno que no viene de albarán (`billing.merge_unsourced`),
+  clientes o vendedores distintos (`billing.merge_other_customer`), un cálculo distinto, redondeo o
+  decimales congelados al preparar, D-144 (`billing.merge_calculation`), y unos con recargo de
+  equivalencia y otros sin él (`billing.merge_surcharge`). El mismo borrador dos veces es un 400.
+- **Por periodo:** la periodicidad es del cliente en cada empresa, en las condiciones de venta de
+  Pedidos (`Terms.billingPeriodicity`, `per_delivery` o `monthly`; [PEDIDOS.md](PEDIDOS.md)), que es
+  donde ya están la tarifa, el descuento y los bloqueos, y donde Trench tiene `BillingPeriodicity`.
+  Pedidos la pone en cada `orders.delivery-issued.v1`, así Facturación no consulta a Pedidos ni
+  ningún contexto escribe en otro. El albarán de un cliente `monthly` no tiene borrador: queda en
+  `bil_pending_deliveries` (+ `bil_pending_delivery_lines`), migración 11, con lo necesario para
+  facturarlo; su Id es el del albarán, así que no queda pendiente dos veces, y uno que ya está en
+  una factura tampoco.
+- **Cierre del periodo:** `POST /api/billing/periods/close` con `{"seller", "upTo", "customer"?}`
+  prepara un borrador por cliente con todos sus albaranes pendientes hasta `upTo`, incluido, y los
+  quita de pendientes en la misma transacción. Devuelve los borradores. Un segundo cierre no
+  encuentra nada y devuelve `[]`: es idempotente. Permiso: el de preparar borradores,
+  `Billing.Invoice.Create`. Los borradores del cierre se calculan con los ajustes del vendedor al
+  cerrar (D-144) y no se descartan, como los de un albarán. **No hay tarea programada:** el cierre
+  se lanza por la ruta; programarlo (p. ej. el día 1 de cada mes) es un trabajo aparte.
+- **Diferencia con Trench:** Trench enlaza **líneas** (`shipment_item_billing`, `order_item_billing`:
+  línea de envío o de pedido con línea de factura, con `IsActive` y un índice único sobre la línea
+  activa). Aquí el enlace es por **documento**, porque el albarán de Pedidos es inmutable y se
+  factura entero, y es una sola tabla para cualquier tipo de origen. La invariante es la misma: un
+  albarán no se factura dos veces (índice único).
+- **Pruebas:** de dominio (`TestInvoice_Merge`, `TestPendingDelivery`, `TestTermsAndCounter`,
+  `TestOrder_ConfirmHoldDeliver`); de aplicación con HTTP (`TestBilling_MergeDeliveryDrafts`,
+  `TestBilling_ClosePeriod`); de extremo a extremo en memoria y en SQLite migrada
+  (`TestOrders_DeliveryNotesAreGrouped_MemoryThenSQLite`): dos albaranes unidos a mano y emitidos
+  (127,05), los dos facturados en Pedidos y la deuda en Cobros; una clienta mensual con tres
+  albaranes, ningún borrador hasta el cierre, uno con los tres al cerrar y ninguno más en un
+  segundo cierre; emitido, los tres facturados. En los motores, `TestOrdersInvoicing` lo repite
+  con las migraciones nuevas.
 
 ## Números que no se repiten y fechas que no retroceden (plan Sage, T0; añadido el 2026-11-03)
 
@@ -414,8 +471,10 @@ interna**: Karpo C# copia el fichero tal cual a su repositorio y lo pasa por su 
 
 - Todo el cálculo de impuestos que falta, por país y por sector: punto 6 de
   [BACKLOG.md](../BACKLOG.md).
-- ~~Facturación desde Pedidos~~: hecha desde el albarán, ver la sección anterior. Queda agrupar
-  varios albaranes en una factura y la rectificativa que reabra un albarán.
+- ~~Facturación desde Pedidos~~: hecha desde el albarán, ver la sección anterior; varios albaranes
+  en una factura, hecho (D-146). Queda la rectificativa que reabra un albarán.
+- Del D-146: programar el cierre del periodo (hoy se lanza por su ruta) y que Documentos enlace la
+  factura con todos sus albaranes (hoy, con el primero: lee `sourceId`, no `sources`).
 - ~~Plazos de vencimiento y cobros~~: hechos en [COBROS.md](COBROS.md). Las remesas quedan para Tesorería.
 - Facturas recibidas (compras), con el mismo `TaxEngine` y la deducibilidad.
 - ~~Dirección fiscal del cliente en la factura~~: hecha (T1-G2), y obligatoria para emitir (D-147).

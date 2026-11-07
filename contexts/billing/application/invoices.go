@@ -154,9 +154,11 @@ type InvoiceDTO struct {
 	Lines                []LineDTO            `json:"lines"`
 	Net                  string               `json:"net"`
 	Taxes                *BreakdownDTO        `json:"taxes,omitempty"` // facturas emitidas
-	SourceType           string               `json:"sourceType,omitempty"`
-	SourceID             string               `json:"sourceId,omitempty"`
-	SourceRef            string               `json:"sourceRef,omitempty"`
+	// SourceType, SourceID y SourceRef son el primer origen; Sources, todos (D-146).
+	SourceType string               `json:"sourceType,omitempty"`
+	SourceID   string               `json:"sourceId,omitempty"`
+	SourceRef  string               `json:"sourceRef,omitempty"`
+	Sources    []contracts.SourceV1 `json:"sources"`
 	// LineRounding y PriceDecimals son cómo se calculan las líneas: los ajustes de la empresa al
 	// preparar el borrador, que se quedan en la factura (D-144).
 	LineRounding  string `json:"lineRounding"`
@@ -181,8 +183,14 @@ func invoiceDTO(i *domain.Invoice) InvoiceDTO {
 		OperationDate: dateText(s.OperationDate), DueDate: dateText(s.DueDate), EquivalenceSurcharge: s.EquivalenceSurcharge,
 		SellerNIF: s.SellerIdentity.NIF, CustomerNIF: s.CustomerIdentity.NIF, CustomerName: s.CustomerIdentity.Name, Lines: []LineDTO{},
 		SellerAddress: addressV1(s.SellerIdentity.Address), CustomerAddress: addressV1(s.CustomerIdentity.Address),
-		Net: money(i.Net()), Version: i.Version(), ModifiedBy: i.ModifiedBy().Name, SourceType: s.Source.Type, SourceID: s.Source.ID,
-		SourceRef: s.Source.Ref, LineRounding: string(s.Calculation.Rounding), PriceDecimals: s.Calculation.PriceDecimals}
+		Net: money(i.Net()), Version: i.Version(), ModifiedBy: i.ModifiedBy().Name, Sources: []contracts.SourceV1{},
+		LineRounding: string(s.Calculation.Rounding), PriceDecimals: s.Calculation.PriceDecimals}
+	for k, src := range s.Sources {
+		if k == 0 {
+			d.SourceType, d.SourceID, d.SourceRef = src.Type, src.ID, src.Ref
+		}
+		d.Sources = append(d.Sources, contracts.SourceV1{Type: src.Type, ID: src.ID, Ref: src.Ref})
+	}
 	if !s.Corrects.IsZero() {
 		d.Corrects = s.Corrects.String()
 	}

@@ -144,8 +144,20 @@ func TestOrder_ConfirmHoldDeliver(t *testing.T) {
 	if err := o.RequestStock(); !isViolation(err, "orders.nothing_short") {
 		t.Fatalf("nothing short: %v", err)
 	}
-	if _, err := o.Deliver([]domain.Pick{{Line: 1, Quantity: dec("4")}}); err != nil || o.State().Status != domain.Delivered {
+	last, err := o.Deliver([]domain.Pick{{Line: 1, Quantity: dec("4")}})
+	if err != nil || o.State().Status != domain.Delivered {
 		t.Fatalf("last delivery: %v %s", err, o.State().Status)
+	}
+	// El albarán lleva al evento la periodicidad de facturación del cliente (D-146); sin ella, por albarán.
+	for want, given := range map[domain.BillingPeriodicity]domain.BillingPeriodicity{domain.Monthly: domain.Monthly, domain.PerDelivery: ""} {
+		d, err := domain.IssueDelivery(domain.NewDeliveryID(), o, "ALB-1", vocab.MustDate(2026, 10, 5), last, given)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ev := d.PendingEvents()
+		if issued, ok := ev[0].(domain.DeliveryIssued); len(ev) != 1 || !ok || issued.BillingPeriodicity != want {
+			t.Fatalf("delivery issued %s: %+v %v", want, ev, err)
+		}
 	}
 	if err := o.Close("x"); !isViolation(err, "orders.not_confirmed") {
 		t.Fatalf("close a delivered order: %v", err)
@@ -208,6 +220,16 @@ func TestTermsAndCounter(t *testing.T) {
 	}
 	if err := tr.Change(domain.TermsState{BlockReason: "impagos"}); err != nil || tr.State().BlockReason != "" {
 		t.Fatalf("unblocked: %v %+v", err, tr.State())
+	}
+	// La periodicidad de facturación (D-146): por albarán si no se dice; mensual; nada más.
+	if tr.State().BillingPeriodicity != domain.PerDelivery {
+		t.Fatalf("per delivery by default: %+v", tr.State())
+	}
+	if err := tr.Change(domain.TermsState{BillingPeriodicity: domain.Monthly}); err != nil || tr.State().BillingPeriodicity != domain.Monthly {
+		t.Fatalf("monthly: %v %+v", err, tr.State())
+	}
+	if err := tr.Change(domain.TermsState{BillingPeriodicity: "weekly"}); !errors.Is(err, fw.ErrValidation) || tr.State().BillingPeriodicity != domain.Monthly {
+		t.Fatalf("weekly: %v", err)
 	}
 	c, err := domain.ReconstituteCounter(domain.NewCounterID(), company, "PED", 2026, 41)
 	if err != nil || c.Next() != "PED-2026-000042" {
