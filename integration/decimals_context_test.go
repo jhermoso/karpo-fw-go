@@ -52,7 +52,7 @@ func TestContextDecimalColumns(t *testing.T) {
 			continue
 		}
 		var adjust func(string) string
-		if e.name == "postgres" {
+		if e.dialect.Name() == "postgres" { // también Supabase
 			adjust = postgres.WithoutStatementCache
 		}
 		t.Run(e.name, func(t *testing.T) {
