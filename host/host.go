@@ -220,10 +220,10 @@ func Compose(sw *hotswap.Switch, o Options) (*Host, error) {
 	h.Payments = payments.Compose(sw, payinfra.PayrollNetPay{Remittance: h.Payroll.Remittance}, payments.WithMergedParties(merged), payments.WithToday(zones))
 	h.Treasury = treasury.Compose(sw, treinfra.ReceivablesDueItems{Collectable: h.Receivables.Collectable},
 		treinfra.PaymentsPayables{Payable: h.Payments.Payable}, treinfra.PartiesIdentities{TaxIdentities: h.Parties.TaxIdentities},
-		treasury.WithMergedParties(merged))
+		treasury.WithMergedParties(merged), treasury.WithToday(zones))
 	h.Accounting = accounting.Compose(sw, accounting.WithToday(zones))
 	h.Assets = assets.Compose(sw)
-	h.Documents = documents.Compose(sw, documents.WithMergedParties(merged))
+	h.Documents = documents.Compose(sw, documents.WithMergedParties(merged), documents.WithToday(zones))
 	h.Shipments = shipments.Compose(sw, shipments.WithMergedParties(merged), shipments.WithToday(zones))
 	h.Work = work.Compose(sw, work.WithMergedParties(merged), work.WithToday(zones))
 	institutions := FinancialInstitutions{Parties: h.Parties, system: func() context.Context { return h.system }}

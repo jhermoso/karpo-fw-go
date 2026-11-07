@@ -250,7 +250,11 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 		if err != nil {
 			return nil // un periodo sin pago (resúmenes anuales)
 		}
-		issued := vocab.DateOf(env.OccurredAt)
+		// Emitida el día en que se presentó, en la zona de la empresa declarante.
+		issued, err := app.DateOf(ctx, s.Today, declarant, env.OccurredAt)
+		if err != nil {
+			return err
+		}
 		if due.Before(issued) {
 			due = issued // presentado tarde: vence en el acto
 		}

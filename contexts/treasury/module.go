@@ -37,6 +37,12 @@ func WithMergedParties(m application.MergedParties) Option {
 	return func(d *tapp.Deps) { d.Merged = m }
 }
 
+// WithToday dice qué día es para una empresa en un instante (el anfitrión: el de su zona
+// horaria). Sin él, el de UTC.
+func WithToday(t application.CompanyToday) Option {
+	return func(d *tapp.Deps) { d.Today = t }
+}
+
 // Compose construye el contexto sobre sw. Treasury necesita los vencimientos de Receivables, las
 // obligaciones de pago de Payments (nil: sin órdenes de transferencias) y las identidades de
 // Parties: todos son puertos propios.

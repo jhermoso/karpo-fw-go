@@ -67,6 +67,7 @@ type ReservationState struct {
 	Channel       string
 	Segment       string
 	Pickup        time.Time
+	PickupOn      vocab.Date // el día de la recogida en la zona de la empresa
 	TimeSlot      string
 	ExpiresAt     time.Time
 	Facility      fw.UUID // la oficina donde se recoge
@@ -76,6 +77,7 @@ type ReservationState struct {
 	Status        Status
 	Reason        string // de la cancelación
 	History       []Step
+	CreatedOn     vocab.Date // el día en que se registró (History[0]), en la zona de la empresa
 	Audit         traits.AuditStamp
 }
 
@@ -130,6 +132,14 @@ func ReconstituteReservation(id ReservationID, s ReservationState) (*Reservation
 	if err := v.Err(); err != nil {
 		return nil, err
 	}
+	// Los días los da la aplicación en la zona de la empresa; sin ellos (pruebas, filas anteriores),
+	// los de UTC.
+	if s.PickupOn.IsZero() {
+		s.PickupOn = vocab.DateOf(s.Pickup.UTC())
+	}
+	if s.CreatedOn.IsZero() {
+		s.CreatedOn = vocab.DateOf(s.History[0].At.UTC())
+	}
 	s.History = slices.Clone(s.History)
 	return &Reservation{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
@@ -141,6 +151,7 @@ type Request struct {
 	Channel       string
 	Segment       string
 	Pickup        time.Time
+	PickupOn      vocab.Date // el día de Pickup en la zona de la empresa; sin él, el de UTC
 	TimeSlot      string
 	Facility      fw.UUID
 	PromotionCode string
@@ -155,15 +166,19 @@ type RequestLine struct {
 	CollectorNote string
 }
 
-// RegisterReservation registra una reserva en un momento: la recogida es posterior, y la reserva la
-// espera las horas que fija la empresa.
-func RegisterReservation(id ReservationID, r Request, expiryHours int, now time.Time) (*Reservation, error) {
+// RegisterReservation registra una reserva en un momento (now, que es el día today en la zona de la
+// empresa; sin today, el de UTC): la recogida es posterior, y la reserva la espera las horas que
+// fija la empresa. La referencia lleva el año de today.
+func RegisterReservation(id ReservationID, r Request, expiryHours int, now time.Time, today vocab.Date) (*Reservation, error) {
 	if !r.Pickup.After(now) {
 		return nil, fw.Violation("exchange.pickup_past", "the pickup time is still to come")
 	}
-	s := ReservationState{Company: r.Company, Customer: r.Customer, Reference: ReferenceOf(id, now.UTC().Year()), Channel: r.Channel, Segment: r.Segment,
-		Pickup: r.Pickup.UTC(), TimeSlot: r.TimeSlot, ExpiresAt: r.Pickup.UTC().Add(time.Duration(expiryHours) * time.Hour), Facility: r.Facility,
-		PromotionCode: r.PromotionCode, Collaborator: r.Collaborator, Status: Registered, History: []Step{{Status: Registered, At: now.UTC()}}}
+	if today.IsZero() {
+		today = vocab.DateOf(now.UTC())
+	}
+	s := ReservationState{Company: r.Company, Customer: r.Customer, Reference: ReferenceOf(id, today.Year()), Channel: r.Channel, Segment: r.Segment,
+		Pickup: r.Pickup.UTC(), PickupOn: r.PickupOn, TimeSlot: r.TimeSlot, ExpiresAt: r.Pickup.UTC().Add(time.Duration(expiryHours) * time.Hour), Facility: r.Facility,
+		PromotionCode: r.PromotionCode, Collaborator: r.Collaborator, Status: Registered, History: []Step{{Status: Registered, At: now.UTC()}}, CreatedOn: today}
 	for i, l := range r.Lines {
 		s.Lines = append(s.Lines, Line{No: i + 1, Currency: l.Currency, Requested: l.Amount, Delivered: l.Delivered, BaseRate: l.BaseRate,
 			OfferedRate: l.OfferedRate, MarginKind: l.MarginKind, MarginValue: l.MarginValue, Eur: l.Eur, Collector: l.Collector, CollectorNote: l.CollectorNote})
@@ -263,8 +278,8 @@ var (
 	ResFieldReference = spec.Ordered("reference", func(r *Reservation) string { return r.s.Reference })
 	ResFieldStatus    = spec.Comparable("status", func(r *Reservation) string { return string(r.s.Status) })
 	ResFieldFacility  = spec.Comparable("facility", func(r *Reservation) fw.UUID { return r.s.Facility })
-	ResFieldCreated   = spec.OrderedBy("created_on", func(r *Reservation) vocab.Date { return vocab.DateOf(r.s.History[0].At) }, vocab.CompareDates)
-	ResFieldPickup    = spec.OrderedBy("pickup_on", func(r *Reservation) vocab.Date { return vocab.DateOf(r.s.Pickup) }, vocab.CompareDates)
+	ResFieldCreated   = spec.OrderedBy("created_on", func(r *Reservation) vocab.Date { return r.s.CreatedOn }, vocab.CompareDates)
+	ResFieldPickup    = spec.OrderedBy("pickup_on", func(r *Reservation) vocab.Date { return r.s.PickupOn }, vocab.CompareDates)
 	ResFieldLines     = spec.Collection("lines", func(r *Reservation) []Line { return r.s.Lines })
 	LineFieldCurrency = spec.Comparable("currency", func(l Line) string { return l.Currency })
 )

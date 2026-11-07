@@ -18,8 +18,11 @@ import (
 // zones hace de anfitrión: la zona de cada empresa; la que no está, UTC.
 type zones map[string]*time.Location
 
-func (z zones) Today(_ context.Context, company fw.UUID) (vocab.Date, error) {
-	return vocab.Today(z[company.String()]), nil
+func (z zones) DateOf(_ context.Context, company fw.UUID, at time.Time) (vocab.Date, error) {
+	if loc := z[company.String()]; loc != nil {
+		return vocab.DateOf(at.In(loc)), nil
+	}
+	return vocab.DateOf(at.UTC()), nil
 }
 
 // Un pedido y un presupuesto sin fecha son del día de la empresa: el 14 de octubre a las 22:30 UTC

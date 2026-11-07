@@ -42,7 +42,7 @@ func TestTransferOrderAndPain001(t *testing.T) {
 	if _, err := o.Pain001(); !isViolation(err, "treasury.order_not_generated") {
 		t.Fatalf("file of a draft: %v", err)
 	}
-	if err := o.Settle(date("2026-10-05")); !isViolation(err, "treasury.order_not_generated") {
+	if err := o.Settle(date("2026-10-05"), date("2026-10-01")); !isViolation(err, "treasury.order_not_generated") {
 		t.Fatalf("settle a draft: %v", err)
 	}
 	if err := o.Generate(domain.Debtor{Name: "Acme"}, time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)); !isViolation(err, "treasury.debtor_incomplete") {
@@ -87,10 +87,10 @@ func TestTransferOrderAndPain001(t *testing.T) {
 		t.Fatalf("pain.001:\n%s", file)
 	}
 
-	if err := o.Settle(date("2026-09-30")); !isViolation(err, "treasury.settle_date") {
+	if err := o.Settle(date("2026-09-30"), date("2026-10-01")); !isViolation(err, "treasury.settle_date") {
 		t.Fatalf("settled before generated: %v", err)
 	}
-	if err := o.Settle(date("2026-10-05")); err != nil {
+	if err := o.Settle(date("2026-10-05"), date("2026-10-01")); err != nil {
 		t.Fatal(err)
 	}
 	e2e := o.State().Transfers[0].EndToEnd

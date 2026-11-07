@@ -321,9 +321,11 @@ fecha de una empresa de Madrid es del 15. La zona es, en este orden (D-133): la 
 guarda en su perfil de Parties (`internal_organization_profile.time_zone`, docs/PARTIES.md §25);
 si no, la principal del país de su identidad fiscal en Geography; si no, UTC.
 
-- **Un solo puerto**, `application.CompanyToday` (`Today(ctx, empresa) (vocab.Date, error)`, en
-  `pkg/application/today.go`). Cada contexto lo recibe con su opción `WithToday(...)`; sin ella
-  (pruebas, un contexto compuesto suelto, nil) es UTC.
+- **Un solo puerto**, `application.CompanyToday` (`DateOf(ctx, empresa, instante) (vocab.Date,
+  error)`, en `pkg/application/today.go`): la fecha de un instante en la zona de la empresa. «Hoy»
+  es la del reloj del dominio (`application.TodayOf`, `OrToday`); la de un instante cualquiera,
+  `application.DateOf`. Cada contexto lo recibe con su opción `WithToday(...)`; sin ella (pruebas,
+  un contexto compuesto suelto, nil) es UTC.
 - **En el anfitrión**, `host.CompanyZones` lo implementa una vez para todos (el mismo objeto que
   da la zona a Facturación): lee la zona guardada en cada llamada, sin caché, y sólo si no hay
   pregunta a Parties por el país de la empresa; ese país y la zona de cada país se recuerdan 5
@@ -339,11 +341,26 @@ si no, la principal del país de su identidad fiscal en Geography; si no, UTC.
   productos y contratos del sectorial financiero (también si un producto se ofrece hoy, al leerlo o
   al listar los de una empresa), alta en RRHH, ocupación de un puesto sin fecha y perfil de
   nómina. Facturación ya lo hacía con `Zones` (docs/FACTURACION.md).
+- **Fechas que salen de un instante**, en la zona de la empresa que manda en cada caso:
+  - Tesorería: una orden de transferencias no se ejecuta antes del día en que se generó
+    (`GeneratedAt`), el de la empresa que paga. El dominio no conoce zonas:
+    `TransferOrder.Settle(on, generated)` recibe ese día de la aplicación.
+  - Cambio de divisa: `pickup_on` y `created_on` de una reserva (y su resumen diario y el año de
+    su referencia) son los días de la recogida y del registro en la zona de la empresa de la
+    reserva. La aplicación los calcula al reservar y se guardan en el estado; una fila anterior
+    conserva los que tenía (UTC).
+  - Contabilidad: la anulación por un evento (cobro o pago deshecho, factura recibida anulada,
+    nómina anulada) es del día de `OccurredAt` en la zona de la empresa del asiento.
+  - Documentos: un pedido confirmado y una declaración presentada son del día de `OccurredAt` en la
+    zona de la empresa (la del pedido, la declarante).
+  - Pagos: un modelo presentado se emite el día de `OccurredAt` en la zona de la declarante.
+  - RRHH: ocupar un puesto desde un instante mira el empleo el día de ese instante en la zona de la
+    organización del puesto.
 - **Qué sigue en UTC, y por qué:** las validaciones del dominio de Parties (fecha de nacimiento,
   alta en una actividad), porque el dominio es puro y una persona no es de ninguna empresa; si un
   producto del sectorial financiero se ofrece hoy en un listado sin empresa, que mezcla empresas;
-  y las fechas que salen de un instante (`OccurredAt` de un evento, la ocupación de un puesto con
-  hora), que necesitan «instante → fecha en la zona de la empresa» (BACKLOG.md).
+  en Documentos, un evento cuya empresa no es un identificador válido (lo rechaza la validación
+  del documento).
 
 ---
 
