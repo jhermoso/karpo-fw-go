@@ -42,6 +42,10 @@ func tradeDatasetsScenario(t *testing.T, sw *hotswap.Switch) {
 		pid, _ := pardomain.ParsePartyID(p.ID)
 		_, err = h.Parties.Service.AddIdentification.Handle(actx, parapp.AddIdentification{PartyID: pid, DocumentType: taxID, Country: "ES", Number: nif, Primary: true})
 		must(err)
+		// El domicilio fiscal: sin él no se emite una factura completa (D-147).
+		_, err = h.Parties.Service.AddContact.Handle(actx, parapp.AddContact{PartyID: pid, Kind: "postal", Purposes: []string{"default"},
+			Address: &parapp.AddressDTO{Line1: "Calle Mayor 1", PostalCode: "28013", Locality: "Madrid", Country: "ES"}})
+		must(err)
 		return p.ID
 	}
 	acme := organization("Acme SL", "B12345674", []string{pardomain.RoleInternalOrganization.String()}, nil)

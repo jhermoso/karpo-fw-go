@@ -128,6 +128,27 @@ func (h *host) must(got, want int, what string) {
 	}
 }
 
+// refused comprueba que la petición se rechaza con 422 y el código dado.
+func (h *host) refused(method, path, user string, body any, code, what string) {
+	h.t.Helper()
+	var buf bytes.Buffer
+	_ = json.NewEncoder(&buf).Encode(body)
+	req, _ := http.NewRequest(method, h.srv.URL+path, &buf)
+	req.Header.Set("Authorization", h.tokens[user])
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		h.t.Fatal(err)
+	}
+	defer res.Body.Close()
+	var p struct {
+		Code string `json:"code"`
+	}
+	_ = json.NewDecoder(res.Body).Decode(&p)
+	if res.StatusCode != 422 || p.Code != code {
+		h.t.Fatalf("%s: status %d, code %q; want 422 %s", what, res.StatusCode, p.Code, code)
+	}
+}
+
 func (h *host) ok(err error) {
 	h.t.Helper()
 	if err != nil {
@@ -154,10 +175,22 @@ func (h *host) scenario(tag string) {
 		h.ok(err)
 	}
 	doc(acme.ID, "c0000000-0004-0000-0000-000000000003", "A58818501")
-	person := func(name, dni string) papp.PartyDTO {
+	// El domicilio fiscal: sin él no se emite una factura completa (D-147).
+	address := func(party, street string) {
+		id, _ := pdomain.ParsePartyID(party)
+		_, err := ps.AddContact.Handle(ctx, papp.AddContact{PartyID: id, Kind: "postal", Purposes: []string{"default"},
+			Address: &papp.AddressDTO{Line1: street, PostalCode: "28013", Locality: "Madrid", Country: "ES"}})
+		h.ok(err)
+	}
+	bare := func(name, dni string) papp.PartyDTO {
 		p, err := ps.RegisterPerson.Handle(ctx, papp.RegisterPerson{GivenName: name, FirstSurname: tag})
 		h.ok(err)
 		doc(p.ID, "c0000000-0004-0000-0000-000000000002", dni)
+		return p
+	}
+	person := func(name, dni string) papp.PartyDTO {
+		p := bare(name, dni)
+		address(p.ID, "Calle de "+name+" 1")
 		return p
 	}
 	ana, bea := person("Ana", "12345678Z"), person("Bea", "00000000T")
@@ -193,6 +226,23 @@ func (h *host) scenario(tag string) {
 	h.must(h.do("POST", "/api/billing/invoices/"+pending.ID+"/issue", "issuer", map[string]any{"series": fa.ID, "date": "2026-09-28"}, nil), 422, "carla turned out a duplicate")
 	h.must(h.do("POST", "/api/billing/invoices", "clerk", map[string]any{"seller": acme.ID, "customer": carla.ID, "dueDate": "2026-10-28"}, nil), 422, "nor a new draft for her")
 
+	// Sin el domicilio fiscal de las dos partes no se emite (D-147); el rechazo no consume número.
+	var homeless bapp.InvoiceDTO
+	h.must(h.do("POST", "/api/billing/invoices", "clerk", map[string]any{"seller": acme.ID, "customer": ana.ID, "description": "Consultoría"}, &homeless), 201, "draft")
+	h.must(h.do("POST", "/api/billing/invoices/"+homeless.ID+"/lines", "clerk", map[string]any{"description": "X", "quantity": "1", "unitPrice": "1", "taxCode": "G21"}, nil), 200, "line")
+	h.refused("POST", "/api/billing/invoices/"+homeless.ID+"/issue", "issuer", map[string]any{"series": fa.ID, "date": "2026-09-28"},
+		"billing.seller_address_required", "a seller without an address")
+	address(acme.ID, "Calle Mayor 1")
+	dora := bare("Dora", "87654321X")
+	var nowhere bapp.InvoiceDTO
+	h.must(h.do("POST", "/api/billing/invoices", "clerk", map[string]any{"seller": acme.ID, "customer": dora.ID, "description": "Consultoría"}, &nowhere), 201, "draft")
+	h.must(h.do("POST", "/api/billing/invoices/"+nowhere.ID+"/lines", "clerk", map[string]any{"description": "X", "quantity": "1", "unitPrice": "1", "taxCode": "G21"}, nil), 200, "line")
+	h.refused("POST", "/api/billing/invoices/"+nowhere.ID+"/issue", "issuer", map[string]any{"series": fa.ID, "date": "2026-09-28"},
+		"billing.customer_address_required", "a customer without an address")
+	for _, d := range []string{homeless.ID, nowhere.ID} {
+		h.must(h.do("DELETE", "/api/billing/invoices/"+d, "clerk", nil, nil), 204, "discard the draft")
+	}
+
 	// Una factura con tres tipos: impuestos sobre la base agregada por tipo.
 	var inv bapp.InvoiceDTO
 	h.must(h.do("POST", "/api/billing/invoices", "clerk", map[string]any{"seller": acme.ID, "customer": ana.ID, "dueDate": "2026-10-28", "description": "Consultoría"}, &inv), 201, "draft")
@@ -216,7 +266,8 @@ func (h *host) scenario(tag string) {
 	h.must(h.do("POST", "/api/billing/invoices/"+inv.ID+"/issue", "issuer", map[string]any{"series": rs.ID, "date": "2026-09-28"}, nil), 422, "not in a corrective series")
 	h.must(h.do("POST", "/api/billing/invoices/"+inv.ID+"/issue", "issuer", map[string]any{"series": fa.ID, "date": "2026-09-28"}, &inv), 200, "issue")
 	if inv.Number != "FA-2026-000001" || inv.Status != "issued" || inv.Taxes == nil || inv.Taxes.Total != "185.41" || inv.CustomerNIF != "12345678Z" ||
-		inv.SellerNIF != "A58818501" {
+		inv.SellerNIF != "A58818501" || inv.SellerAddress == nil || inv.SellerAddress.Street != "Calle Mayor 1" ||
+		inv.CustomerAddress == nil || inv.CustomerAddress.Street != "Calle de Ana 1" {
 		t.Fatalf("issued: %+v", inv)
 	}
 	h.must(h.do("POST", "/api/billing/invoices/"+inv.ID+"/issue", "issuer", map[string]any{"series": fa.ID, "date": "2026-09-28"}, nil), 422, "issued once")
@@ -246,7 +297,14 @@ func (h *host) scenario(tag string) {
 		t.Fatalf("no gaps: %+v", series)
 	}
 
-	// Factura rectificativa (por diferencias) de la primera.
+	// Ana se muda después de la primera factura: su domicilio de facturación es otro.
+	anaID, _ := pdomain.ParsePartyID(ana.ID)
+	_, err = ps.AddContact.Handle(ctx, papp.AddContact{PartyID: anaID, Kind: "postal", Purposes: []string{"billing"},
+		Address: &papp.AddressDTO{Line1: "Avenida Nueva 9", PostalCode: "28013", Locality: "Madrid", Country: "ES"}})
+	h.ok(err)
+
+	// Factura rectificativa (por diferencias) de la primera: lleva los domicilios de la original,
+	// no el nuevo de Ana (D-147).
 	var fix bapp.InvoiceDTO
 	h.must(h.do("POST", "/api/billing/invoices", "clerk", map[string]any{"seller": acme.ID, "corrects": inv.ID, "reason": "r1"}, &fix), 201, "corrective draft")
 	h.must(h.do("POST", "/api/billing/invoices", "clerk", map[string]any{"seller": acme.ID, "corrects": fix.ID, "reason": "R1"}, nil), 422, "a draft is not corrected")
@@ -257,9 +315,21 @@ func (h *host) scenario(tag string) {
 	if fix.Number != "R-2026-000001" || fix.Customer != ana.ID || fix.Corrects != inv.ID || fix.Reason != "R1" || fix.Taxes.Tax != "-6.32" || fix.Taxes.Total != "-36.41" {
 		t.Fatalf("corrective: %+v %+v", fix, fix.Taxes)
 	}
+	if fix.SellerAddress == nil || *fix.SellerAddress != *inv.SellerAddress || fix.CustomerAddress == nil || *fix.CustomerAddress != *inv.CustomerAddress {
+		t.Fatalf("the corrective carries the addresses of the invoice it corrects: %+v %+v", fix.SellerAddress, fix.CustomerAddress)
+	}
+
+	// Una factura antigua, emitida antes de D-147 sin domicilios: su rectificativa toma los de hoy.
+	// Se escribe directamente en el repositorio, y en memoria cada repositorio guarda lo suyo: sólo
+	// sobre SQLite.
+	corrections := 1
+	if tag == "s" {
+		corrections = 2
+		h.correctOld(acme.ID, ana.ID, fa.ID, rs.ID, tag)
+	}
 	var issued fw.Page[bapp.InvoiceDTO]
 	h.must(h.do("GET", "/api/billing/invoices?seller="+acme.ID+"&status=issued&from=2026-09-01", "clerk", nil, &issued), 200, "search")
-	if issued.Total != 3 {
+	if issued.Total != int64(2+corrections) {
 		t.Fatalf("issued: %d", issued.Total)
 	}
 
@@ -280,9 +350,42 @@ func (h *host) scenario(tag string) {
 			break
 		}
 	}
-	if len(got) != 3 || got[0].Number != "FA-2026-000001" || len(got[0].Taxes) != 3 || got[0].Taxes[0].Amount != "6.32" || got[2].Kind != "corrective" ||
+	if len(got) != 2+corrections || got[0].Number != "FA-2026-000001" || len(got[0].Taxes) != 3 || got[0].Taxes[0].Amount != "6.32" || got[2].Kind != "corrective" ||
 		got[2].Corrects != inv.ID || got[1].Surcharge != "5.20" || got[0].Country != "ES" {
 		t.Fatalf("published: %+v", got)
+	}
+}
+
+// correctOld guarda una factura de Ana emitida antes de D-147, sin domicilios, y la rectifica: la
+// rectificativa toma los domicilios de hoy (el de Ana, el nuevo de facturación).
+func (h *host) correctOld(acmeID, anaID, faID, rsID, tag string) {
+	t, ctx := h.t, h.adminCtx
+	d, err := bdomain.DraftInvoice(bdomain.NewInvoiceID(), bdomain.InvoiceState{Seller: bdomain.OrganizationID{UUID: fw.MustParseUUID(acmeID)},
+		Customer: bdomain.PartyID{UUID: fw.MustParseUUID(anaID)}, Kind: bdomain.Ordinary, Description: "Factura antigua"})
+	h.ok(err)
+	_, err = d.AddLine(bdomain.LineInput{Description: "Hora", Quantity: vocab.MustDecimal("1"), UnitPrice: vocab.MustDecimal("10"), TaxCode: "G21"})
+	h.ok(err)
+	st := d.State()
+	series, _ := bdomain.ParseSeriesID(faID)
+	st.Status, st.Series, st.Number, st.IssueDate = bdomain.Issued, series, "FA-2025-000099", vocab.MustDate(2025, 6, 30)
+	st.SellerIdentity = bdomain.Identity{NIF: "A58818501", Name: "Acme " + tag, Country: "ES"}
+	st.CustomerIdentity = bdomain.Identity{NIF: "12345678Z", Name: "Ana " + tag, Country: "ES"}
+	st.Taxes = bdomain.Breakdown{Country: "ES", Net: vocab.MustDecimal("10"), Tax: vocab.MustDecimal("2.10"), Surcharge: vocab.MustDecimal("0")}
+	old, err := bdomain.ReconstituteInvoice(d.ID(), st)
+	h.ok(err)
+	h.ok(hotswap.Repository(h.sw, binfra.InvoiceRepositoryFactory).Save(ctx, old))
+	var got bapp.InvoiceDTO
+	h.must(h.do("GET", "/api/billing/invoices/"+old.ID().String(), "clerk", nil, &got), 200, "the old invoice")
+	if got.SellerAddress != nil || got.CustomerAddress != nil {
+		t.Fatalf("the old invoice has no addresses: %+v %+v", got.SellerAddress, got.CustomerAddress)
+	}
+	var fix bapp.InvoiceDTO
+	h.must(h.do("POST", "/api/billing/invoices", "clerk", map[string]any{"seller": acmeID, "corrects": got.ID, "reason": "R1"}, &fix), 201, "corrective of the old one")
+	h.must(h.do("POST", "/api/billing/invoices/"+fix.ID+"/lines", "clerk", map[string]any{"description": "Abono", "quantity": "-1",
+		"unitPrice": "10", "taxCode": "G21"}, nil), 200, "negative line")
+	h.must(h.do("POST", "/api/billing/invoices/"+fix.ID+"/issue", "issuer", map[string]any{"series": rsID, "date": "2026-09-28"}, &fix), 200, "issue it")
+	if fix.SellerAddress == nil || fix.SellerAddress.Street != "Calle Mayor 1" || fix.CustomerAddress == nil || fix.CustomerAddress.Street != "Avenida Nueva 9" {
+		t.Fatalf("the addresses of today: %+v %+v", fix.SellerAddress, fix.CustomerAddress)
 	}
 }
 
@@ -370,6 +473,12 @@ func TestBilling_IssueDateIsTodayInTheSellerZone(t *testing.T) {
 			for party, doc := range map[string][2]string{acme.ID: {"c0000000-0004-0000-0000-000000000003", "A58818501"}, ana.ID: {"c0000000-0004-0000-0000-000000000002", "12345678Z"}} {
 				id, _ := pdomain.ParsePartyID(party)
 				_, err := ps.AddIdentification.Handle(ctx, papp.AddIdentification{PartyID: id, DocumentType: doc[0], Country: "ES", Number: doc[1], Primary: true})
+				h.ok(err)
+				// El domicilio fiscal: sin él no se emite una factura completa (D-147). Vale desde antes
+				// de la hora que finge la prueba.
+				since := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+				_, err = ps.AddContact.Handle(ctx, papp.AddContact{PartyID: id, Kind: "postal", Purposes: []string{"default"}, From: &since,
+					Address: &papp.AddressDTO{Line1: "Calle Mayor 1", PostalCode: "28013", Locality: "Madrid", Country: "ES"}})
 				h.ok(err)
 			}
 			_, err = h.fiscal.Service.CreateRate.Handle(ctx, fapp.CreateRate{Type: "vat", Territory: "common", Code: "G21", Description: "General", Rate: "21", Surcharge: "5.2", From: vocab.MustDate(2012, 9, 1)})

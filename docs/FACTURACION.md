@@ -257,9 +257,23 @@ Tareas de Go del tramo T1 del plan de Karpo C# (D-127). Karpo C# llega primero a
   `billing.invoice-issued.v1` lo llevan en `sellerAddress` y `customerAddress`, que faltan si la
   party no tiene ninguno. La provincia que el mismo contrato da a Fiscal se sigue eligiendo
   aparte (el primer contacto español con código postal de cinco cifras), así que, si el de
-  facturación es extranjero, puede salir de otro contacto. **No se exige para emitir:** el reglamento pide el domicilio en la
-  factura completa, pero exigirlo es una regla fiscal que queda para quien valide lo fiscal (plan,
-  §7).
+  facturación es extranjero, puede salir de otro contacto.
+- **Domicilio fiscal obligatorio para emitir (D-147, desde el 2026-11-07):** lo pide el art. 6 del
+  RD 1619/2012 en la factura completa. La regla es del dominio (`RequireAddresses`, que usa
+  `Invoice.Issue` junto a la de la descripción) y se comprueba al emitir, que es cuando se congela;
+  la aplicación la comprueba también antes de tomar número, para bloquear la serie menos tiempo. Un
+  domicilio vale si tiene al menos calle y país (sin contar espacios); si no, 422
+  `billing.seller_address_required` (emisor) o `billing.customer_address_required` (cliente). Se
+  arregla dando a la party un contacto postal y volviendo a emitir; el rechazo no consume número.
+- **La rectificativa** no lo exige, pero lo lleva. Al emitirla, el **nombre y el NIF** salen de
+  Parties ese día, como en la ordinaria; el **domicilio**, de cada parte, el congelado en la factura
+  que rectifica, no el que Parties tenga hoy. Si la original no lo tenía (emitida antes de D-147),
+  el de Parties hoy, porque el art. 15 pide que la rectificativa cumpla el art. 6; y si tampoco hay,
+  se emite igualmente: una factura antigua se tiene que poder corregir.
+- **Pendiente:**
+  - exigir también la localidad (hoy sólo calle y país);
+  - `fiscalAddress` (Parties) elige el contacto vigente hoy, no el vigente en la fecha de emisión:
+    una factura emitida con fecha pasada congela el domicilio de hoy.
 
 ## Los ajustes de la empresa (D-128 a D-130, D-144; desde el 2026-11-06)
 
@@ -325,9 +339,9 @@ del vendedor, 404. Un borrador no tiene PDF: 422 `billing.invoice_not_issued`.
 
 - **Qué lleva** (art. 6 del RD 1619/2012, con lo que la factura congeló al emitir): número con su
   serie; fecha de expedición; fecha de la operación si es distinta; vencimiento si lo hay; nombre,
-  NIF y domicilio fiscal del emisor y del destinatario (T1-G2; el domicilio sale si Parties lo
-  tenía); descripción de la operación (T1-G1); las líneas (concepto, cantidad, precio, descuento e
-  importe); el desglose por tipo (base, tipo y cuota, y el recargo si lo hay); base, cuota, recargo
+  NIF y domicilio fiscal del emisor y del destinatario (T1-G2; el domicilio sale si la factura lo
+  congeló, y desde D-147 una ordinaria siempre lo lleva); descripción de la operación (T1-G1);
+  las líneas (concepto, cantidad, precio, descuento e importe); el desglose por tipo (base, tipo y cuota, y el recargo si lo hay); base, cuota, recargo
   y total; la mención de cada exención o no sujeción con su clave (E1–E6, N1–N2) y el artículo de
   la Ley 37/1992 que corresponde a la clave; en la rectificativa, el número y la fecha de la
   factura rectificada y la causa R1–R5. Importes al estilo español (1.234,56 €), precios con sus
@@ -404,7 +418,7 @@ interna**: Karpo C# copia el fichero tal cual a su repositorio y lo pasa por su 
   varios albaranes en una factura y la rectificativa que reabra un albarán.
 - ~~Plazos de vencimiento y cobros~~: hechos en [COBROS.md](COBROS.md). Las remesas quedan para Tesorería.
 - Facturas recibidas (compras), con el mismo `TaxEngine` y la deducibilidad.
-- ~~Dirección fiscal del cliente en la factura~~: hecha (T1-G2); falta decidir si se exige para emitir.
+- ~~Dirección fiscal del cliente en la factura~~: hecha (T1-G2), y obligatoria para emitir (D-147).
 - PDF de la factura: hecho (T1-G6); falta el QR de VERI*FACTU (T9), la leyenda registral, el logotipo y
   otros idiomas.
 - Importar las facturas de C# como emitidas, con sus números de Documents.

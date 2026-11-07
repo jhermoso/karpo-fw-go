@@ -86,6 +86,10 @@ func TestBilling_CompanySettings(t *testing.T) {
 				id, _ := pdomain.ParsePartyID(party)
 				_, err := ps.AddIdentification.Handle(actx, papp.AddIdentification{PartyID: id, DocumentType: doc[0], Country: "ES", Number: doc[1], Primary: true})
 				h.ok(err)
+				// El domicilio fiscal: sin él no se emite una factura completa (D-147).
+				_, err = ps.AddContact.Handle(actx, papp.AddContact{PartyID: id, Kind: "postal", Purposes: []string{"default"},
+					Address: &papp.AddressDTO{Line1: "Calle Mayor 1", PostalCode: "28013", Locality: "Madrid", Country: "ES"}})
+				h.ok(err)
 			}
 			_, err = h.fiscal.Service.CreateRate.Handle(actx, fapp.CreateRate{Type: "vat", Territory: "common", Code: "G21", Description: "General", Rate: "21",
 				From: vocab.MustDate(2012, 9, 1)})
@@ -207,6 +211,10 @@ func TestBilling_InstallmentsWithIssue(t *testing.T) {
 		id, _ := pdomain.ParsePartyID(party)
 		_, err := ps.AddIdentification.Handle(actx, papp.AddIdentification{PartyID: id, DocumentType: doc[0], Country: "ES", Number: doc[1], Primary: true})
 		h.ok(err)
+		// El domicilio fiscal: sin él no se emite una factura completa (D-147).
+		_, err = ps.AddContact.Handle(actx, papp.AddContact{PartyID: id, Kind: "postal", Purposes: []string{"default"},
+			Address: &papp.AddressDTO{Line1: "Calle Mayor 1", PostalCode: "28013", Locality: "Madrid", Country: "ES"}})
+		h.ok(err)
 	}
 	_, err = h.fiscal.Service.CreateRate.Handle(actx, fapp.CreateRate{Type: "vat", Territory: "common", Code: "G21", Description: "General", Rate: "21",
 		From: vocab.MustDate(2012, 9, 1)})
@@ -306,6 +314,10 @@ func (h *host) seller(t *testing.T) (string, string) {
 	for party, doc := range map[string][2]string{acme.ID: {"c0000000-0004-0000-0000-000000000003", "A58818501"}, ana.ID: {"c0000000-0004-0000-0000-000000000002", "12345678Z"}} {
 		id, _ := pdomain.ParsePartyID(party)
 		_, err := ps.AddIdentification.Handle(actx, papp.AddIdentification{PartyID: id, DocumentType: doc[0], Country: "ES", Number: doc[1], Primary: true})
+		h.ok(err)
+		// El domicilio fiscal: sin él no se emite una factura completa (D-147).
+		_, err = ps.AddContact.Handle(actx, papp.AddContact{PartyID: id, Kind: "postal", Purposes: []string{"default"},
+			Address: &papp.AddressDTO{Line1: "Calle Mayor 1", PostalCode: "28013", Locality: "Madrid", Country: "ES"}})
 		h.ok(err)
 	}
 	_, err = h.fiscal.Service.CreateRate.Handle(actx, fapp.CreateRate{Type: "vat", Territory: "common", Code: "G21", Description: "General", Rate: "21",

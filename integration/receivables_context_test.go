@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/billing"
 	bapp "github.com/jhermoso/karpo-fw-go/contexts/billing/application"
@@ -81,6 +82,12 @@ func TestReceivablesContext(t *testing.T) {
 			for party, d := range map[string][2]string{acme.ID: {"c0000000-0004-0000-0000-000000000003", "A58818501"}, ana.ID: {"c0000000-0004-0000-0000-000000000002", "12345678Z"}} {
 				id, _ := pdomain.ParsePartyID(party)
 				_, err := pm.Service.AddIdentification.Handle(actx, papp.AddIdentification{PartyID: id, DocumentType: d[0], Country: "ES", Number: d[1], Primary: true})
+				must(err)
+				// El domicilio fiscal: sin él no se emite una factura completa (D-147). Vale desde
+				// antes de cualquier hora que finja la prueba.
+				since := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+				_, err = pm.Service.AddContact.Handle(actx, papp.AddContact{PartyID: id, Kind: "postal", Purposes: []string{"default"}, From: &since,
+					Address: &papp.AddressDTO{Line1: "Calle Mayor 1", PostalCode: "28013", Locality: "Madrid", Country: "ES"}})
 				must(err)
 			}
 			_, err = fm.Service.CreateRate.Handle(actx, fapp.CreateRate{Type: "vat", Territory: "common", Code: "G21", Description: "General", Rate: "21",

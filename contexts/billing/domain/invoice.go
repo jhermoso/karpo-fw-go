@@ -158,6 +158,29 @@ type Address struct {
 	Country    string
 }
 
+// Complete dice si el domicilio basta para una factura completa: al menos la calle y el país
+// (D-147). La localidad todavía no se exige.
+func (a Address) Complete() bool {
+	return strings.TrimSpace(a.Street) != "" && strings.TrimSpace(a.Country) != ""
+}
+
+// RequireAddresses comprueba que las dos partes de una factura ordinaria tienen domicilio fiscal
+// (art. 6 del RD 1619/2012, D-147). A la rectificativa no se le exige: lleva el de la factura que
+// rectifica o, si aquélla no lo tenía, el que haya hoy, y una factura antigua se tiene que poder
+// corregir aunque no haya ninguno.
+func RequireAddresses(kind Kind, seller, customer Identity) error {
+	if kind != Ordinary {
+		return nil
+	}
+	if !seller.Address.Complete() {
+		return fw.Violation("billing.seller_address_required", "the seller has no fiscal address")
+	}
+	if !customer.Address.Complete() {
+		return fw.Violation("billing.customer_address_required", "the customer has no fiscal address")
+	}
+	return nil
+}
+
 // TaxLine es una línea del desglose de impuestos congelado al emitir.
 type TaxLine struct {
 	TaxType         string
@@ -388,7 +411,8 @@ type Issuance struct {
 // Issue congela la factura con su número, las identidades de las partes y el desglose de
 // impuestos. Invariantes: una descripción de la operación (la exige el SII, plan Sage T1); al menos una línea; una factura ordinaria tiene un neto positivo y una
 // rectificativa un neto distinto de cero; el desglose cubre exactamente el neto de las líneas; el
-// vendedor tiene un NIF español válido y el cliente un número fiscal; el vencimiento no precede a la emisión.
+// vendedor tiene un NIF español válido y el cliente un número fiscal; en una factura ordinaria, las
+// dos partes tienen domicilio fiscal (D-147); el vencimiento no precede a la emisión.
 func (i *Invoice) Issue(x Issuance) error {
 	if err := i.mustBeDraft(); err != nil {
 		return err
@@ -415,6 +439,9 @@ func (i *Invoice) Issue(x Issuance) error {
 	}
 	if strings.TrimSpace(x.Customer.NIF) == "" {
 		return fw.Violation("billing.customer_nif", "the customer has no tax number (simplified invoices are not supported yet)")
+	}
+	if err := RequireAddresses(i.s.Kind, x.Seller, x.Customer); err != nil {
+		return err
 	}
 	i.s.Status, i.s.Series, i.s.Number, i.s.IssueDate = Issued, x.Series, x.Number, x.Date
 	i.s.SellerIdentity, i.s.CustomerIdentity, i.s.Taxes = x.Seller, x.Customer, x.Taxes
