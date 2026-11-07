@@ -21,12 +21,15 @@ import (
 )
 
 // Permisos (los endpoints de producto, precio y stock del C# sólo pedían autenticación). El
-// catálogo y los precios los mantienen personas distintas.
+// catálogo y los precios los mantienen personas distintas; los precios especiales de cada cliente,
+// también aparte de las tarifas.
 var (
-	PermProductRead    = authz.MustPermission("Products.Product.Read")
-	PermProductUpdate  = authz.MustPermission("Products.Product.Update")
-	PermPriceListRead  = authz.MustPermission("Products.PriceList.Read")
-	PermPriceListWrite = authz.MustPermission("Products.PriceList.Update")
+	PermProductRead        = authz.MustPermission("Products.Product.Read")
+	PermProductUpdate      = authz.MustPermission("Products.Product.Update")
+	PermPriceListRead      = authz.MustPermission("Products.PriceList.Read")
+	PermPriceListWrite     = authz.MustPermission("Products.PriceList.Update")
+	PermSpecialPriceRead   = authz.MustPermission("Products.SpecialPrice.Read")
+	PermSpecialPriceUpdate = authz.MustPermission("Products.SpecialPrice.Update")
 )
 
 // Deps son los puertos que necesitan los casos de uso; Recorder y Audit son opcionales.
@@ -34,6 +37,7 @@ type Deps struct {
 	Products   domain.ProductRepository
 	Categories domain.CategoryRepository
 	PriceLists domain.PriceListRepository
+	Specials   domain.SpecialPricesRepository
 	UoW        fw.UnitOfWork
 	Today      app.CompanyToday // opcional: sin él, hoy es el de UTC (docs/ARQUITECTURA.md, «Hoy es el de la empresa»)
 	Recorder   app.EventRecorder
@@ -56,9 +60,14 @@ type Service struct {
 	SetPrice           app.CommandHandler[SetPrice, PriceListDTO]
 	RemovePrice        app.CommandHandler[RemovePrice, PriceListDTO]
 	SetPriceListActive app.CommandHandler[SetPriceListActive, PriceListDTO]
+	SetDefaultList     app.CommandHandler[SetDefaultPriceList, PriceListDTO]
 	GetPriceList       app.QueryHandler[GetPriceList, PriceListDTO]
 	SearchPriceLists   app.QueryHandler[SearchPriceLists, []PriceListDTO]
 	Quote              app.QueryHandler[GetQuote, contracts.Quote]
+
+	SetSpecialPrice    app.CommandHandler[SetSpecialPrice, SpecialPricesDTO]
+	RemoveSpecialPrice app.CommandHandler[RemoveSpecialPrice, SpecialPricesDTO]
+	GetSpecialPrices   app.QueryHandler[GetSpecialPrices, SpecialPricesDTO]
 }
 
 type scope struct {
@@ -105,6 +114,7 @@ type service struct {
 	products   *orchestration.Orchestrator[domain.ProductID, *domain.Product]
 	categories *orchestration.Orchestrator[domain.CategoryID, *domain.Category]
 	priceLists *orchestration.Orchestrator[domain.PriceListID, *domain.PriceList]
+	specials   *orchestration.Orchestrator[domain.SpecialPricesID, *domain.SpecialPrices]
 }
 
 // NewService conecta los casos de uso.
@@ -120,10 +130,12 @@ func NewService(d Deps) *Service {
 		products:   orchestration.New[domain.ProductID, *domain.Product](d.Products, d.UoW, opts...),
 		categories: orchestration.New[domain.CategoryID, *domain.Category](d.Categories, d.UoW, opts...),
 		priceLists: orchestration.New[domain.PriceListID, *domain.PriceList](d.PriceLists, d.UoW, opts...),
+		specials:   orchestration.New[domain.SpecialPricesID, *domain.SpecialPrices](d.Specials, d.UoW, opts...),
 	}
 	svc := &Service{}
 	s.productUseCases(svc)
 	s.priceUseCases(svc)
+	s.specialPriceUseCases(svc)
 	return svc
 }
 
@@ -210,22 +222,29 @@ func (c CatalogPort) Products(ctx context.Context, ids []string) (map[string]con
 type PricingPort struct {
 	Products   domain.ProductRepository
 	PriceLists domain.PriceListRepository
+	Specials   domain.SpecialPricesRepository
 }
 
 var _ contracts.Pricing = PricingPort{}
 
-// Quote implementa contracts.Pricing.
-func (p PricingPort) Quote(ctx context.Context, company, product, priceList, quantity, on string) (contracts.Quote, error) {
+// Quote implementa contracts.Pricing: arma la cadena de D-148 (precio especial del cliente, tarifa
+// del cliente, tarifa general de la empresa) y domain.QuoteOf toma el primer nivel con precio o, si
+// ninguno lo tiene, el precio base.
+func (p PricingPort) Quote(ctx context.Context, r contracts.QuoteRequest) (contracts.Quote, error) {
 	var v fw.Validation
-	cid := domain.OrganizationID{UUID: parseID(&v, "company", company)}
-	pid := domain.ProductID{UUID: parseID(&v, "product", product)}
-	qty := parseDecimal(&v, "quantity", quantity)
-	date, err := vocab.ParseDate(on)
+	cid := domain.OrganizationID{UUID: parseID(&v, "company", r.Company)}
+	pid := domain.ProductID{UUID: parseID(&v, "product", r.Product)}
+	qty := parseDecimal(&v, "quantity", r.Quantity)
+	date, err := vocab.ParseDate(r.On)
 	v.Require(err == nil, "on", "format", "a date YYYY-MM-DD is required")
 	v.Require(qty.IsPositive(), "quantity", "range", "a positive quantity")
 	var lid domain.PriceListID
-	if priceList != "" {
-		lid = domain.PriceListID{UUID: parseID(&v, "priceList", priceList)}
+	if r.PriceList != "" {
+		lid = domain.PriceListID{UUID: parseID(&v, "priceList", r.PriceList)}
+	}
+	var customer domain.PartyID
+	if r.Customer != "" {
+		customer = domain.PartyID{UUID: parseID(&v, "customer", r.Customer)}
 	}
 	if err := v.Err(); err != nil {
 		return contracts.Quote{}, err
@@ -237,15 +256,33 @@ func (p PricingPort) Quote(ctx context.Context, company, product, priceList, qua
 	if prod.State().Company != cid {
 		return contracts.Quote{}, fw.NotFound(domain.ProductKind, pid)
 	}
-	var list *domain.PriceList
+	var levels []domain.Level
+	if !customer.IsZero() && p.Specials != nil {
+		sps, err := p.Specials.Find(ctx, spec.And(domain.SpFieldCompany.Eq(cid), domain.SpFieldCustomer.Eq(customer)))
+		if err != nil {
+			return contracts.Quote{}, err
+		}
+		if len(sps) > 0 {
+			levels = append(levels, domain.Level{Source: domain.FromSpecial, Prices: sps[0]})
+		}
+	}
 	if !lid.IsZero() {
-		if list, err = p.PriceLists.Get(ctx, lid); err != nil {
+		list, err := p.PriceLists.Get(ctx, lid)
+		if err != nil {
 			return contracts.Quote{}, err
 		}
 		if list.State().Company != cid {
 			return contracts.Quote{}, fw.NotFound(domain.PriceListKind, lid)
 		}
+		levels = append(levels, domain.Level{Source: domain.FromCustomerList, Prices: list})
 	}
-	q := domain.QuoteOf(prod, list, qty, date)
-	return contracts.Quote{UnitPrice: q.UnitPrice.StringFixed(4), Discount: q.Discount.StringFixed(2), Net: q.Net.StringFixed(4), Source: q.Source}, nil
+	defaults, err := p.PriceLists.Find(ctx, domain.PlFieldDefaultFor.Eq(cid))
+	if err != nil {
+		return contracts.Quote{}, err
+	}
+	if len(defaults) > 0 {
+		levels = append(levels, domain.Level{Source: domain.FromDefaultList, Prices: defaults[0]})
+	}
+	q := domain.QuoteOf(prod, qty, date, levels...)
+	return contracts.Quote{UnitPrice: q.UnitPrice.StringFixed(4), Discount: q.Discount.StringFixed(2), Net: q.Net.StringFixed(4), Source: string(q.Source)}, nil
 }

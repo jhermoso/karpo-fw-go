@@ -45,7 +45,8 @@ func Compose(sw *hotswap.Switch, opts ...Option) *Module {
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
 	d := papp.Deps{
 		Products: hotswap.Repository(sw, infrastructure.ProductRepositoryFactory), Categories: hotswap.Repository(sw, infrastructure.CategoryRepositoryFactory),
-		PriceLists: hotswap.Repository(sw, infrastructure.PriceListRepositoryFactory), UoW: sw, Audit: audit,
+		PriceLists: hotswap.Repository(sw, infrastructure.PriceListRepositoryFactory),
+		Specials:   hotswap.Repository(sw, infrastructure.SpecialPricesRepositoryFactory), UoW: sw, Audit: audit,
 		Recorder: outbox.Recorders(outbox.NewRecorder(hotswap.Outbox(sw, infrastructure.OutboxFactory)),
 			papp.Publications(messaging.NewRecorder(contracts.Source, integration))),
 	}
@@ -53,7 +54,7 @@ func Compose(sw *hotswap.Switch, opts ...Option) *Module {
 		o(&d)
 	}
 	return &Module{Service: papp.NewService(d), Catalog: papp.CatalogPort{Repo: d.Products},
-		Pricing: papp.PricingPort{Products: d.Products, PriceLists: d.PriceLists}, IntegrationOutbox: integration, Audit: audit}
+		Pricing: papp.PricingPort{Products: d.Products, PriceLists: d.PriceLists, Specials: d.Specials}, IntegrationOutbox: integration, Audit: audit}
 }
 
 // Relay reenvía el Published Language a un transporte.
@@ -105,6 +106,18 @@ func create[In, Out any](run func(context.Context, In) (Out, error)) http.Handle
 		}
 		out, err := run(r.Context(), c)
 		distribution.Respond(w, r, out, err, http.StatusCreated)
+	}
+}
+
+func post[In, Out any](run func(context.Context, In) (Out, error)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var c In
+		if err := decode(r, &c); err != nil {
+			distribution.WriteError(w, r, err)
+			return
+		}
+		out, err := run(r.Context(), c)
+		distribution.Respond(w, r, out, err, http.StatusOK)
 	}
 }
 
@@ -174,10 +187,21 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/products/price-lists/{id}/prices/remove", command(pl, func(c *papp.RemovePrice, id domain.PriceListID) { c.ID = id }, svc.RemovePrice.Handle))
 	mux.HandleFunc("PUT /api/products/price-lists/{id}/active", command(pl, func(c *papp.SetPriceListActive, id domain.PriceListID) { c.ID = id },
 		svc.SetPriceListActive.Handle))
+	mux.HandleFunc("PUT /api/products/price-lists/{id}/default", command(pl, func(c *papp.SetDefaultPriceList, id domain.PriceListID) { c.ID = id },
+		svc.SetDefaultList.Handle))
+
+	mux.HandleFunc("GET /api/products/special-prices", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		out, err := svc.GetSpecialPrices.Handle(r.Context(), papp.GetSpecialPrices{Company: q.Get("company"), Customer: q.Get("customer")})
+		distribution.Respond(w, r, out, err, http.StatusOK)
+	})
+	mux.HandleFunc("POST /api/products/special-prices", post(svc.SetSpecialPrice.Handle))
+	mux.HandleFunc("POST /api/products/special-prices/remove", post(svc.RemoveSpecialPrice.Handle))
+
 	mux.HandleFunc("GET /api/products/quote", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
-		out, err := svc.Quote.Handle(r.Context(), papp.GetQuote{Company: q.Get("company"), Product: q.Get("product"), PriceList: q.Get("priceList"),
-			Quantity: q.Get("quantity"), On: q.Get("on")})
+		out, err := svc.Quote.Handle(r.Context(), papp.GetQuote{Company: q.Get("company"), Customer: q.Get("customer"), Product: q.Get("product"),
+			PriceList: q.Get("priceList"), Quantity: q.Get("quantity"), On: q.Get("on")})
 		distribution.Respond(w, r, out, err, http.StatusOK)
 	})
 }

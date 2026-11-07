@@ -348,7 +348,7 @@ func (s service) orderUseCases(svc *Service) {
 		}
 		return update(ctx, c.ID, func(ctx context.Context, o *domain.Order) error {
 			os := o.State()
-			it, err := s.item(ctx, os.Company, os.PriceList, product, q, os.Date)
+			it, err := s.item(ctx, os.Company, os.Customer, os.PriceList, product, q, os.Date)
 			if err != nil {
 				return err
 			}

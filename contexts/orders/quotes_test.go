@@ -40,7 +40,7 @@ type priceBook struct {
 	items map[odomain.ProductID]odomain.Item
 }
 
-func (b *priceBook) Price(_ context.Context, _ odomain.OrganizationID, p odomain.ProductID, _ odomain.PriceListID, _ vocab.Decimal, _ vocab.Date) (odomain.Item, bool, error) {
+func (b *priceBook) Price(_ context.Context, _ odomain.OrganizationID, _ odomain.PartyID, p odomain.ProductID, _ odomain.PriceListID, _ vocab.Decimal, _ vocab.Date) (odomain.Item, bool, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	it, ok := b.items[p]

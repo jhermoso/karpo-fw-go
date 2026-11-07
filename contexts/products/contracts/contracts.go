@@ -42,13 +42,33 @@ type Quote struct {
 	UnitPrice string `json:"unitPrice"`
 	Discount  string `json:"discount"`
 	Net       string `json:"net"`
-	Source    string `json:"source"` // list | base
+	Source    string `json:"source"` // special | customer_list | default_list | base
 }
 
-// Pricing pone precio a un producto de una empresa para una cantidad en una fecha civil, con una
-// lista de precios de la empresa (vacía: el precio base del producto).
+// Origen de un precio (Quote.Source), de más a menos prioritario (D-148).
+const (
+	SourceSpecial      = "special"       // precio especial del cliente para ese producto
+	SourceCustomerList = "customer_list" // la tarifa del cliente
+	SourceDefaultList  = "default_list"  // la tarifa general de la empresa
+	SourceBase         = "base"          // el precio base del producto
+)
+
+// QuoteRequest es lo que se pide para poner precio a un producto. Customer y PriceList pueden ir
+// vacíos; On es una fecha civil. Un dato nuevo de la petición (la moneda) entra como un campo más.
+type QuoteRequest struct {
+	Company   string
+	Customer  string // el cliente: sus precios especiales
+	Product   string
+	PriceList string // la tarifa del cliente (sus condiciones en Orders)
+	Quantity  string
+	On        string
+}
+
+// Pricing pone precio a un producto de una empresa para una cantidad en una fecha civil, por este
+// orden: precio especial del cliente, tarifa del cliente, tarifa general de la empresa y precio base
+// del producto. El descuento propio del cliente no entra: lo aplica quien vende, encima.
 type Pricing interface {
-	Quote(ctx context.Context, company, product, priceList, quantity, on string) (Quote, error)
+	Quote(ctx context.Context, r QuoteRequest) (Quote, error)
 }
 
 // ProductRegisteredV1 se publica cuando un producto entra en el catálogo de una empresa.

@@ -24,7 +24,7 @@ import (
 // quotedItems hace de Products: qué es y cuánto cuesta cada producto.
 type quotedItems map[odomain.ProductID]odomain.Item
 
-func (q quotedItems) Price(_ context.Context, _ odomain.OrganizationID, p odomain.ProductID, _ odomain.PriceListID, _ vocab.Decimal, _ vocab.Date) (odomain.Item, bool, error) {
+func (q quotedItems) Price(_ context.Context, _ odomain.OrganizationID, _ odomain.PartyID, p odomain.ProductID, _ odomain.PriceListID, _ vocab.Decimal, _ vocab.Date) (odomain.Item, bool, error) {
 	it, ok := q[p]
 	return it, ok, nil
 }

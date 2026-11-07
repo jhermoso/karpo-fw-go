@@ -60,6 +60,28 @@ var schemaDDL = []string{
 	`CREATE INDEX ix_prd_price_lines_product ON prd_price_lines (product_id)`,
 }
 
+// specialPricesDDL es la migración 4 (D-148): la marca de tarifa general y los precios especiales.
+//
+// default_for es la empresa cuando la lista es su tarifa general y NULL cuando no lo es; el índice
+// único sobre esa columna da «como mucho una tarifa general por empresa» en los cinco motores.
+//
+// Los precios especiales siguen al price_component de Trench con Party y Product (cliente, producto,
+// precio y caducidad), pero con las columnas de prd_price_lines: customer en lugar de party,
+// unit_price en lugar de price y valid_to en lugar de expiration_date, más la empresa, valid_from,
+// min_quantity y discount, que Trench no tiene (docs/PRODUCTOS.md).
+var specialPricesDDL = []string{
+	`ALTER TABLE prd_price_lists {add:default_for} {uuid}{addEnd}`,
+	`CREATE UNIQUE INDEX ux_prd_price_lists_default ON prd_price_lists (default_for){whereNotNull:default_for}`,
+	`CREATE TABLE prd_special_prices (id {uuid} NOT NULL PRIMARY KEY, version {bigint} NOT NULL, company {uuid} NOT NULL, customer {uuid} NOT NULL,
+	currency {str:3} NOT NULL, ` + audit + `)`,
+	`CREATE UNIQUE INDEX ux_prd_special_prices_customer ON prd_special_prices (company, customer)`,
+	`CREATE TABLE prd_special_price_lines (special_prices_id {uuid} NOT NULL, line_no {int} NOT NULL, product_id {uuid} NOT NULL,
+	min_quantity {dec:18,4} NOT NULL, unit_price {dec:18,4} NOT NULL, discount {dec:5,2} NOT NULL, valid_from {date} NOT NULL, valid_to {date},
+	PRIMARY KEY (special_prices_id, line_no), FOREIGN KEY (special_prices_id) REFERENCES prd_special_prices (id),
+	FOREIGN KEY (product_id) REFERENCES prd_products (id))`,
+	`CREATE INDEX ix_prd_special_lines_product ON prd_special_price_lines (product_id)`,
+}
+
 func technicalDDL(d string) []string {
 	switch d {
 	case "sqlite":
@@ -86,6 +108,7 @@ func Migrations() sqlrepo.MigrationSet {
 		{Version: 1, Name: "categories, products and price lists", Up: sqlrepo.RenderDDLAll(schemaDDL...)},
 		{Version: 2, Name: "outboxes and audit log", Up: technical},
 		{Version: 3, Name: "decimal columns", Run: decimalColumnsV3.Run},
+		{Version: 4, Name: "special prices and the general price list", Up: sqlrepo.RenderDDLAll(specialPricesDDL...)},
 	}}
 }
 
@@ -95,7 +118,7 @@ func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 }
 
 // Tables lista las tablas del contexto, primero las hijas (orden de borrado).
-var Tables = []string{"prd_price_lines", "prd_price_lists", "prd_product_suppliers", "prd_components", "prd_barcodes", "prd_products", "prd_categories",
+var Tables = []string{"prd_special_price_lines", "prd_special_prices", "prd_price_lines", "prd_price_lists", "prd_product_suppliers", "prd_components", "prd_barcodes", "prd_products", "prd_categories",
 	TableOutbox, TableIntegrationOutbox, TableAuditLog}
 
 // DropAll borra las tablas del contexto y su historial de migraciones (sólo pruebas).
@@ -237,11 +260,11 @@ func ProductMapping() sqlrepo.Mapping[domain.ProductID, *domain.Product] {
 func PriceListMapping() sqlrepo.Mapping[domain.PriceListID, *domain.PriceList] {
 	return sqlrepo.Mapping[domain.PriceListID, *domain.PriceList]{
 		Table:   "prd_price_lists",
-		Columns: sqlrepo.WithAuditColumns("company", "code", "name", "currency", "active"),
+		Columns: sqlrepo.WithAuditColumns("company", "code", "name", "currency", "active", "default_for"),
 		Dehydrate: func(p *domain.PriceList) (sqlrepo.Values, error) {
 			s := p.State()
 			return sqlrepo.AuditStampValues(sqlrepo.Values{"company": s.Company, "code": s.Code, "name": s.Name, "currency": s.Currency.String(),
-				"active": s.Active}, p.AuditStamp()), nil
+				"active": s.Active, "default_for": optUUID(p.DefaultFor().UUID)}, p.AuditStamp()), nil
 		},
 		Hydrate: func(r *sqlrepo.Row, children sqlrepo.ChildRows) (*domain.PriceList, error) {
 			cur, err := vocab.NewCurrencyCode(r.String("currency"))
@@ -249,32 +272,79 @@ func PriceListMapping() sqlrepo.Mapping[domain.PriceListID, *domain.PriceList] {
 				return nil, err
 			}
 			s := domain.PriceListState{Company: domain.OrganizationID{UUID: r.UUID("company")}, Code: r.String("code"), Name: r.String("name"),
-				Currency: cur, Active: r.Bool("active"), Audit: r.AuditStamp()}
-			for _, c := range byNo(children.Of("lines")) {
-				s.Lines = append(s.Lines, domain.PriceLine{Product: domain.ProductID{UUID: c.UUID("product_id")}, MinQuantity: c.Decimal("min_quantity"),
-					UnitPrice: c.Decimal("unit_price"), Discount: c.Decimal("discount"), From: c.Date("valid_from"), To: c.Date("valid_to")})
-				if err := c.Err(); err != nil {
-					return nil, err
-				}
+				Currency: cur, Active: r.Bool("active"), Default: !r.UUID("default_for").IsZero(), Audit: r.AuditStamp()}
+			lines, err := priceLines(children.Of("lines"))
+			if err != nil {
+				return nil, err
 			}
+			s.Lines = lines
 			if err := r.Err(); err != nil {
 				return nil, err
 			}
 			return domain.ReconstitutePriceList(domain.PriceListID{UUID: r.UUID("id")}, s)
 		},
-		Children: []sqlrepo.Child[*domain.PriceList]{{
-			Name: "lines", Table: "prd_price_lines", ForeignKey: "price_list_id", OrderBy: []string{"line_no"},
-			Decimals: decimalColumns.Of("prd_price_lines"),
-			Columns:  []string{"line_no", "product_id", "min_quantity", "unit_price", "discount", "valid_from", "valid_to"},
-			Dehydrate: func(p *domain.PriceList) ([]sqlrepo.Values, error) {
-				out := []sqlrepo.Values{}
-				for i, l := range p.State().Lines {
-					out = append(out, sqlrepo.Values{"line_no": int64(i + 1), "product_id": l.Product, "min_quantity": l.MinQuantity,
-						"unit_price": l.UnitPrice.Round(4), "discount": l.Discount.Round(2), "valid_from": l.From, "valid_to": optDate(l.To)})
-				}
-				return out, nil
-			},
-		}},
+		Children: []sqlrepo.Child[*domain.PriceList]{priceLinesChild("prd_price_lines", "price_list_id", func(p *domain.PriceList) []domain.PriceLine {
+			return p.State().Lines
+		})},
+	}
+}
+
+// priceLines lee las líneas de precio de una tarifa o de unos precios especiales.
+func priceLines(rows []*sqlrepo.Row) ([]domain.PriceLine, error) {
+	var out []domain.PriceLine
+	for _, c := range byNo(rows) {
+		out = append(out, domain.PriceLine{Product: domain.ProductID{UUID: c.UUID("product_id")}, MinQuantity: c.Decimal("min_quantity"),
+			UnitPrice: c.Decimal("unit_price"), Discount: c.Decimal("discount"), From: c.Date("valid_from"), To: c.Date("valid_to")})
+		if err := c.Err(); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
+// priceLinesChild mapea las líneas de precio a su tabla hija.
+func priceLinesChild[T any](table, fk string, lines func(T) []domain.PriceLine) sqlrepo.Child[T] {
+	return sqlrepo.Child[T]{
+		Name: "lines", Table: table, ForeignKey: fk, OrderBy: []string{"line_no"},
+		Decimals: decimalColumns.Of(table),
+		Columns:  []string{"line_no", "product_id", "min_quantity", "unit_price", "discount", "valid_from", "valid_to"},
+		Dehydrate: func(p T) ([]sqlrepo.Values, error) {
+			out := []sqlrepo.Values{}
+			for i, l := range lines(p) {
+				out = append(out, sqlrepo.Values{"line_no": int64(i + 1), "product_id": l.Product, "min_quantity": l.MinQuantity,
+					"unit_price": l.UnitPrice.Round(4), "discount": l.Discount.Round(2), "valid_from": l.From, "valid_to": optDate(l.To)})
+			}
+			return out, nil
+		},
+	}
+}
+
+// SpecialPricesMapping mapea SpecialPrices a prd_special_prices y sus líneas.
+func SpecialPricesMapping() sqlrepo.Mapping[domain.SpecialPricesID, *domain.SpecialPrices] {
+	return sqlrepo.Mapping[domain.SpecialPricesID, *domain.SpecialPrices]{
+		Table:   "prd_special_prices",
+		Columns: sqlrepo.WithAuditColumns("company", "customer", "currency"),
+		Dehydrate: func(p *domain.SpecialPrices) (sqlrepo.Values, error) {
+			s := p.State()
+			return sqlrepo.AuditStampValues(sqlrepo.Values{"company": s.Company, "customer": s.Customer, "currency": s.Currency.String()}, p.AuditStamp()), nil
+		},
+		Hydrate: func(r *sqlrepo.Row, children sqlrepo.ChildRows) (*domain.SpecialPrices, error) {
+			cur, err := vocab.NewCurrencyCode(r.String("currency"))
+			if err != nil {
+				return nil, err
+			}
+			s := domain.SpecialPricesState{Company: domain.OrganizationID{UUID: r.UUID("company")}, Customer: domain.PartyID{UUID: r.UUID("customer")},
+				Currency: cur, Audit: r.AuditStamp()}
+			if s.Lines, err = priceLines(children.Of("lines")); err != nil {
+				return nil, err
+			}
+			if err := r.Err(); err != nil {
+				return nil, err
+			}
+			return domain.ReconstituteSpecialPrices(domain.SpecialPricesID{UUID: r.UUID("id")}, s)
+		},
+		Children: []sqlrepo.Child[*domain.SpecialPrices]{priceLinesChild("prd_special_price_lines", "special_prices_id",
+			func(p *domain.SpecialPrices) []domain.PriceLine { return p.State().Lines })},
 	}
 }
 
@@ -303,6 +373,11 @@ func CategoryRepositoryFactory(b hotswap.Backend) (domain.CategoryRepository, er
 // PriceListRepositoryFactory construye el repositorio de listas de precios.
 func PriceListRepositoryFactory(b hotswap.Backend) (domain.PriceListRepository, error) {
 	return repository(b, PriceListMapping())
+}
+
+// SpecialPricesRepositoryFactory construye el repositorio de precios especiales.
+func SpecialPricesRepositoryFactory(b hotswap.Backend) (domain.SpecialPricesRepository, error) {
+	return repository(b, SpecialPricesMapping())
 }
 
 // OutboxFactory construye el outbox de eventos de dominio.

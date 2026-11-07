@@ -363,8 +363,8 @@ type ProductsCatalog struct {
 var _ domain.Catalog = ProductsCatalog{}
 
 // Price implementa domain.Catalog.
-func (p ProductsCatalog) Price(ctx context.Context, company domain.OrganizationID, product domain.ProductID, list domain.PriceListID, q vocab.Decimal,
-	on vocab.Date) (domain.Item, bool, error) {
+func (p ProductsCatalog) Price(ctx context.Context, company domain.OrganizationID, customer domain.PartyID, product domain.ProductID,
+	list domain.PriceListID, q vocab.Decimal, on vocab.Date) (domain.Item, bool, error) {
 	refs, err := p.Catalog.Products(ctx, []string{product.String()})
 	if err != nil {
 		return domain.Item{}, false, err
@@ -387,11 +387,15 @@ func (p ProductsCatalog) Price(ctx context.Context, company domain.OrganizationI
 	if it.Company != company {
 		return it, true, nil // quien llama lo rechaza; no se pide ningún precio de otra empresa
 	}
-	priceList := ""
+	priceList, buyer := "", ""
 	if !list.IsZero() {
 		priceList = list.String()
 	}
-	quote, err := p.Pricing.Quote(ctx, company.String(), product.String(), priceList, q.String(), on.String())
+	if !customer.IsZero() {
+		buyer = customer.String()
+	}
+	quote, err := p.Pricing.Quote(ctx, products.QuoteRequest{Company: company.String(), Customer: buyer, Product: product.String(),
+		PriceList: priceList, Quantity: q.String(), On: on.String()})
 	if err != nil {
 		return domain.Item{}, false, err
 	}

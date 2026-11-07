@@ -153,25 +153,25 @@ func TestPriceList(t *testing.T) {
 	if err := pl.SetPrice(line("0", "0.09", "0", "2026-12-31", "")); !isViolation(err, "products.price_overlap") {
 		t.Fatalf("overlap: %v", err)
 	}
-	q := domain.QuoteOf(p, pl, dec("10"), date("2026-10-04"))
-	if q.Source != "list" || !q.Net.Equal(dec("0.10")) {
+	q := domain.QuoteOf(p, dec("10"), date("2026-10-04"), customerList(pl))
+	if q.Source != domain.FromCustomerList || !q.Net.Equal(dec("0.10")) {
 		t.Fatalf("small quantity: %+v", q)
 	}
-	q = domain.QuoteOf(p, pl, dec("1000"), date("2026-10-04"))
+	q = domain.QuoteOf(p, dec("1000"), date("2026-10-04"), customerList(pl))
 	if !q.UnitPrice.Equal(dec("0.08")) || !q.Net.Equal(dec("0.076")) || !q.Discount.Equal(dec("5")) {
 		t.Fatalf("volume: %+v", q)
 	}
-	if q = domain.QuoteOf(p, pl, dec("10"), date("2027-03-01")); !q.Net.Equal(dec("0.11")) {
+	if q = domain.QuoteOf(p, dec("10"), date("2027-03-01"), customerList(pl)); !q.Net.Equal(dec("0.11")) {
 		t.Fatalf("next year: %+v", q)
 	}
-	if q = domain.QuoteOf(p, pl, dec("10"), date("2025-12-31")); q.Source != "base" || !q.Net.Equal(dec("0.125")) {
+	if q = domain.QuoteOf(p, dec("10"), date("2025-12-31"), customerList(pl)); q.Source != "base" || !q.Net.Equal(dec("0.125")) {
 		t.Fatalf("before the list: %+v", q)
 	}
 	pl.SetActive(false)
-	if q = domain.QuoteOf(p, pl, dec("10"), date("2026-10-04")); q.Source != "base" {
+	if q = domain.QuoteOf(p, dec("10"), date("2026-10-04"), customerList(pl)); q.Source != "base" {
 		t.Fatalf("retired list: %+v", q)
 	}
-	if q = domain.QuoteOf(p, nil, dec("10"), date("2026-10-04")); q.Source != "base" {
+	if q = domain.QuoteOf(p, dec("10"), date("2026-10-04")); q.Source != "base" {
 		t.Fatalf("no list: %+v", q)
 	}
 	if err := pl.RemovePrice(p.ID(), dec("1000"), date("2026-01-01")); err != nil || len(pl.State().Lines) != 2 {
@@ -179,6 +179,129 @@ func TestPriceList(t *testing.T) {
 	}
 	if err := pl.RemovePrice(p.ID(), dec("1000"), date("2026-01-01")); !errors.Is(err, fw.ErrNotFound) {
 		t.Fatalf("remove twice: %v", err)
+	}
+}
+
+func customerList(pl *domain.PriceList) domain.Level {
+	return domain.Level{Source: domain.FromCustomerList, Prices: pl}
+}
+
+func TestSpecialPrices(t *testing.T) {
+	p, err := domain.RegisterProduct(domain.NewProductID(), company, "TOR-M8", good())
+	if err != nil {
+		t.Fatal(err)
+	}
+	customer := domain.PartyID{UUID: fw.NewUUID()}
+	eur := vocab.MustCurrencyCode("EUR")
+	if _, err := domain.ReconstituteSpecialPrices(domain.NewSpecialPricesID(), domain.SpecialPricesState{Company: company, Currency: eur}); !errors.Is(err, fw.ErrValidation) {
+		t.Fatalf("customer required: %v", err)
+	}
+	if _, err := domain.ReconstituteSpecialPrices(domain.NewSpecialPricesID(), domain.SpecialPricesState{Company: company, Customer: customer,
+		Currency: vocab.MustCurrencyCode("USD")}); !errors.Is(err, fw.ErrValidation) {
+		t.Fatalf("only euros: %v", err)
+	}
+	sp, err := domain.ReconstituteSpecialPrices(domain.NewSpecialPricesID(), domain.SpecialPricesState{Company: company, Customer: customer, Currency: eur})
+	if err != nil {
+		t.Fatal(err)
+	}
+	line := func(min, price, disc, from, to string) domain.PriceLine {
+		l := domain.PriceLine{Product: p.ID(), MinQuantity: dec(min), UnitPrice: dec(price), Discount: dec(disc), From: date(from)}
+		if to != "" {
+			l.To = date(to)
+		}
+		return l
+	}
+	if err := sp.SetPrice(line("0", "-1", "0", "2026-01-01", "")); !errors.Is(err, fw.ErrValidation) {
+		t.Fatalf("negative price: %v", err)
+	}
+	// Vigencia: hasta fin de año; tramo desde 500 con descuento, abierto.
+	for _, l := range []domain.PriceLine{line("0", "0.09", "0", "2026-01-01", "2026-12-31"), line("500", "0.07", "2", "2026-01-01", "")} {
+		if err := sp.SetPrice(l); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := sp.SetPrice(line("0", "0.08", "0", "2026-12-31", "2027-06-30")); !isViolation(err, "products.price_overlap") {
+		t.Fatalf("overlap: %v", err)
+	}
+	if err := sp.SetPrice(line("0", "0.08", "0", "2027-01-01", "2027-06-30")); err != nil {
+		t.Fatalf("the next period: %v", err)
+	}
+	special := domain.Level{Source: domain.FromSpecial, Prices: sp}
+	for _, c := range []struct {
+		qty, on, net string
+		src          domain.PriceSource
+	}{
+		{"10", "2026-10-04", "0.09", domain.FromSpecial},
+		{"499.9999", "2026-10-04", "0.09", domain.FromSpecial}, // por debajo del tramo
+		{"500", "2026-10-04", "0.0686", domain.FromSpecial},    // 0.07 × 0.98
+		{"10", "2027-03-01", "0.08", domain.FromSpecial},       // el periodo siguiente
+		{"10", "2027-07-01", "0.125", domain.FromBase},         // sin precio vigente para 10
+		{"10", "2025-12-31", "0.125", domain.FromBase},         // antes de la vigencia
+	} {
+		q := domain.QuoteOf(p, dec(c.qty), date(c.on), special)
+		if q.Source != c.src || !q.Net.Equal(dec(c.net)) {
+			t.Fatalf("%s on %s: %+v", c.qty, c.on, q)
+		}
+	}
+	if err := sp.RemovePrice(p.ID(), dec("500"), date("2026-01-01")); err != nil || len(sp.State().Lines) != 2 {
+		t.Fatalf("remove: %v", err)
+	}
+	if err := sp.RemovePrice(p.ID(), dec("500"), date("2026-01-01")); !errors.Is(err, fw.ErrNotFound) {
+		t.Fatalf("remove twice: %v", err)
+	}
+}
+
+// TestPriceChain comprueba el orden de la cadena: especial > tarifa del cliente > tarifa general >
+// precio base, y que el especial gana aunque la tarifa del cliente tenga un tramo por cantidad.
+func TestPriceChain(t *testing.T) {
+	p, err := domain.RegisterProduct(domain.NewProductID(), company, "TOR-M8", good())
+	if err != nil {
+		t.Fatal(err)
+	}
+	eur := vocab.MustCurrencyCode("EUR")
+	list := func(code, price string) *domain.PriceList {
+		pl, err := domain.ReconstitutePriceList(domain.NewPriceListID(), domain.PriceListState{Company: company, Code: code, Name: code, Currency: eur, Active: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := pl.SetPrice(domain.PriceLine{Product: p.ID(), UnitPrice: dec(price), From: date("2026-01-01")}); err != nil {
+			t.Fatal(err)
+		}
+		return pl
+	}
+	mine, general := list("MAYOR", "0.10"), list("GENERAL", "0.11")
+	if err := mine.SetPrice(domain.PriceLine{Product: p.ID(), MinQuantity: dec("1000"), UnitPrice: dec("0.06"), From: date("2026-01-01")}); err != nil {
+		t.Fatal(err)
+	}
+	general.SetDefault(true)
+	if general.DefaultFor() != company || !mine.DefaultFor().IsZero() {
+		t.Fatalf("default for: %v %v", general.DefaultFor(), mine.DefaultFor())
+	}
+	sp, err := domain.ReconstituteSpecialPrices(domain.NewSpecialPricesID(), domain.SpecialPricesState{Company: company,
+		Customer: domain.PartyID{UUID: fw.NewUUID()}, Currency: eur})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sp.SetPrice(domain.PriceLine{Product: p.ID(), UnitPrice: dec("0.09"), Discount: dec("5"), From: date("2026-01-01")}); err != nil {
+		t.Fatal(err)
+	}
+	on := date("2026-10-04")
+	chain := func(sp, mine, general domain.Prices) domain.Quote {
+		return domain.QuoteOf(p, dec("2000"), on, domain.Level{Source: domain.FromSpecial, Prices: sp},
+			domain.Level{Source: domain.FromCustomerList, Prices: mine}, domain.Level{Source: domain.FromDefaultList, Prices: general})
+	}
+	if q := chain(sp, mine, general); q.Source != domain.FromSpecial || !q.Net.Equal(dec("0.0855")) {
+		t.Fatalf("special beats the volume price of the customer list: %+v", q)
+	}
+	if q := chain(nil, mine, general); q.Source != domain.FromCustomerList || !q.Net.Equal(dec("0.06")) {
+		t.Fatalf("customer list: %+v", q)
+	}
+	if q := chain(nil, nil, general); q.Source != domain.FromDefaultList || !q.Net.Equal(dec("0.11")) {
+		t.Fatalf("default list: %+v", q)
+	}
+	general.SetActive(false)
+	if q := chain(nil, nil, general); q.Source != domain.FromBase || !q.Net.Equal(dec("0.125")) {
+		t.Fatalf("base: %+v", q)
 	}
 }
 

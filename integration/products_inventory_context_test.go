@@ -15,6 +15,7 @@ import (
 	pinfra "github.com/jhermoso/karpo-fw-go/contexts/parties/infrastructure"
 	"github.com/jhermoso/karpo-fw-go/contexts/products"
 	dapp "github.com/jhermoso/karpo-fw-go/contexts/products/application"
+	dcontracts "github.com/jhermoso/karpo-fw-go/contexts/products/contracts"
 	ddomain "github.com/jhermoso/karpo-fw-go/contexts/products/domain"
 	dinfra "github.com/jhermoso/karpo-fw-go/contexts/products/infrastructure"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
@@ -27,7 +28,8 @@ import (
 // TestProductsAndInventoryContexts ejecuta Products e Inventory con Parties en cada motor.
 // Products: categorías, ida y vuelta de un producto con códigos de barras, componentes y
 // proveedores, búsqueda por código de barras (EXISTS sobre la tabla hija) y por nombre, SKU único,
-// tarifa con tramos y la cotización. Inventory: entradas con coste medio ponderado, idempotentes por
+// tarifa con tramos, precios especiales, la tarifa general y la cadena de precios de D-148 (especial
+// > tarifa del cliente > tarifa general > precio base) por el puerto Pricing. Inventory: entradas con coste medio ponderado, idempotentes por
 // origen, salida, reserva y su salida, traspaso, recuento, la ficha de stock en orden de registro,
 // valoración y disponibilidad.
 func TestProductsAndInventoryContexts(t *testing.T) {
@@ -117,9 +119,66 @@ func TestProductsAndInventoryContexts(t *testing.T) {
 			if err != nil || len(pl.Lines) != 2 || pl.Lines[0].To != "2026-12-31" || pl.Lines[1].MinQuantity != "1000" || pl.Lines[1].To != "" {
 				t.Fatalf("price list round trip: %+v %v", pl, err)
 			}
-			q, err := dm.Pricing.Quote(ctx, acme.ID, tornillo.ID, pl.ID, "2500", "2026-10-04")
-			if err != nil || q.Net != "0.0760" || q.Source != "list" {
-				t.Fatalf("quote: %+v %v", q, err)
+			quote := func(customer, list, qty, on string) dcontracts.Quote {
+				t.Helper()
+				q, err := dm.Pricing.Quote(ctx, dcontracts.QuoteRequest{Company: acme.ID, Customer: customer, Product: tornillo.ID, PriceList: list,
+					Quantity: qty, On: on})
+				must(err)
+				return q
+			}
+			if q := quote("", pl.ID, "2500", "2026-10-04"); q.Net != "0.0760" || q.Source != "customer_list" {
+				t.Fatalf("quote: %+v", q)
+			}
+
+			// Tarifa general (como mucho una por empresa) y precios especiales de un cliente.
+			general, err := ps.CreatePriceList.Handle(actx, dapp.CreatePriceList{Company: acme.ID, Code: "general", Name: "General"})
+			must(err)
+			gid, _ := ddomain.ParsePriceListID(general.ID)
+			_, err = ps.SetPrice.Handle(actx, dapp.SetPrice{ID: gid, Product: tornillo.ID, UnitPrice: "0.12", From: vocab.MustDate(2026, 1, 1)})
+			must(err)
+			general, err = ps.SetDefaultList.Handle(actx, dapp.SetDefaultPriceList{ID: gid, Default: true})
+			if err != nil || !general.Default {
+				t.Fatalf("general list: %+v %v", general, err)
+			}
+			if _, err := ps.SetDefaultList.Handle(actx, dapp.SetDefaultPriceList{ID: plid, Default: true}); !errors.Is(err, fw.ErrRuleViolation) {
+				t.Fatalf("two general lists: %v", err)
+			}
+			if general, err = ps.GetPriceList.Handle(actx, dapp.GetPriceList{ID: gid}); err != nil || !general.Default {
+				t.Fatalf("general list round trip: %+v %v", general, err)
+			}
+			cliente, err := pm.Service.RegisterOrganization.Handle(actx, papp.RegisterOrganization{LegalName: "Cliente, S.L."})
+			must(err)
+			_, err = ps.SetSpecialPrice.Handle(actx, dapp.SetSpecialPrice{Company: acme.ID, Customer: cliente.ID, Product: tornillo.ID, UnitPrice: "0.09",
+				Discount: "5", From: vocab.MustDate(2026, 1, 1), To: vocab.MustDate(2026, 12, 31)})
+			must(err)
+			if _, err := ps.SetSpecialPrice.Handle(actx, dapp.SetSpecialPrice{Company: acme.ID, Customer: cliente.ID, Product: tornillo.ID, UnitPrice: "0.08",
+				From: vocab.MustDate(2026, 6, 1)}); !errors.Is(err, fw.ErrRuleViolation) {
+				t.Fatalf("special overlap: %v", err)
+			}
+			_, err = ps.SetSpecialPrice.Handle(actx, dapp.SetSpecialPrice{Company: acme.ID, Customer: cliente.ID, Product: tornillo.ID, MinQuantity: "5000",
+				UnitPrice: "0.05", From: vocab.MustDate(2026, 1, 1)})
+			must(err)
+			sp, err := ps.GetSpecialPrices.Handle(actx, dapp.GetSpecialPrices{Company: acme.ID, Customer: cliente.ID})
+			if err != nil || len(sp.Lines) != 2 || sp.Lines[0].UnitPrice != "0.0900" || sp.Lines[0].Discount != "5.00" || sp.Lines[0].To != "2026-12-31" ||
+				sp.Lines[1].MinQuantity != "5000" || sp.Lines[1].To != "" {
+				t.Fatalf("special prices round trip: %+v %v", sp, err)
+			}
+			for _, c := range []struct{ customer, list, qty, on, source, net string }{
+				{cliente.ID, pl.ID, "2500", "2026-10-04", "special", "0.0855"},       // gana al tramo de 1000 de la tarifa
+				{cliente.ID, pl.ID, "6000", "2026-10-04", "special", "0.0500"},       // su propio tramo
+				{cliente.ID, pl.ID, "2500", "2027-02-01", "customer_list", "0.0760"}, // el especial de 2026 caducó
+				{"", pl.ID, "10", "2026-10-04", "customer_list", "0.1000"},
+				{cliente.ID, "", "10", "2027-02-01", "default_list", "0.1200"},
+				{"", "", "10", "2025-10-04", "base", "0.1250"},
+			} {
+				if q := quote(c.customer, c.list, c.qty, c.on); q.Source != c.source || q.Net != c.net {
+					t.Fatalf("chain %+v: %+v", c, q)
+				}
+			}
+			sp, err = ps.RemoveSpecialPrice.Handle(actx, dapp.RemoveSpecialPrice{Company: acme.ID, Customer: cliente.ID, Product: tornillo.ID,
+				From: vocab.MustDate(2026, 1, 1)})
+			if err != nil || len(sp.Lines) != 1 {
+				t.Fatalf("remove special price: %+v %v", sp, err)
 			}
 
 			// Inventory.

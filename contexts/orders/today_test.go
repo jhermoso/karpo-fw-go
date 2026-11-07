@@ -58,7 +58,7 @@ func TestOrders_TodayIsTheCompanys(t *testing.T) {
 // sellAnything hace de Products: cualquier producto se vende a 10, sin almacenar.
 type sellAnything struct{}
 
-func (sellAnything) Price(_ context.Context, company odomain.OrganizationID, _ odomain.ProductID, _ odomain.PriceListID, _ vocab.Decimal,
+func (sellAnything) Price(_ context.Context, company odomain.OrganizationID, _ odomain.PartyID, _ odomain.ProductID, _ odomain.PriceListID, _ vocab.Decimal,
 	_ vocab.Date) (odomain.Item, bool, error) {
 	return odomain.Item{Company: company, SKU: "SRV", Name: "Servicio", UoM: "ud", TaxCode: "G21", Sellable: true,
 		UnitPrice: vocab.DecimalFromInt(10)}, true, nil
