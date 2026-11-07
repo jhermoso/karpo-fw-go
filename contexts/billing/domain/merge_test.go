@@ -43,8 +43,9 @@ func TestInvoice_Merge(t *testing.T) {
 	}
 
 	issued := draft("A-9", 1, nil)
-	if err := issued.Issue(domain.Issuance{Number: "FA-1", Date: vocab.MustDate(2026, 10, 2), Seller: domain.Identity{NIF: "A58818501"},
-		Customer: domain.Identity{NIF: "12345678Z"}, Taxes: domain.Breakdown{Net: dec("10")}}); err != nil {
+	home := domain.Address{Street: "Calle Mayor 1", PostalCode: "28013", Locality: "Madrid", Country: "ES"} // D-147
+	if err := issued.Issue(domain.Issuance{Number: "FA-1", Date: vocab.MustDate(2026, 10, 2), Seller: domain.Identity{NIF: "A58818501", Address: home},
+		Customer: domain.Identity{NIF: "12345678Z", Address: home}, Taxes: domain.Breakdown{Net: dec("10")}}); err != nil {
 		t.Fatal(err)
 	}
 	for code, others := range map[string][]*domain.Invoice{

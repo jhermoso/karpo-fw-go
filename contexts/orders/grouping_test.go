@@ -44,6 +44,10 @@ func (c *chain) grouping(tag string) {
 		id, _ := pdomain.ParsePartyID(party)
 		_, err := c.pm.Service.AddIdentification.Handle(ctx, papp.AddIdentification{PartyID: id, DocumentType: d[0], Country: "ES", Number: d[1], Primary: true})
 		c.ok(err)
+		// El domicilio fiscal: sin él no se emite una factura completa (D-147).
+		_, err = c.pm.Service.AddContact.Handle(ctx, papp.AddContact{PartyID: id, Kind: "postal", Purposes: []string{"default"},
+			Address: &papp.AddressDTO{Line1: "Calle Mayor 1", PostalCode: "28013", Locality: "Madrid", Country: "ES"}})
+		c.ok(err)
 	}
 	_, err = c.fm.Service.CreateRate.Handle(ctx, fapp.CreateRate{Type: "vat", Territory: "common", Code: "G21", Description: "General", Rate: "21",
 		From: vocab.MustDate(2012, 9, 1)})
