@@ -38,6 +38,7 @@ type Deps struct {
 	Reservations domain.ReservationRepository
 	Catalog      domain.Catalog
 	UoW          fw.UnitOfWork
+	Today        app.CompanyToday // opcional: sin él, hoy es el de UTC (docs/ARQUITECTURA.md, «Hoy es el de la empresa»)
 	Recorder     app.EventRecorder
 	Audit        app.AuditLog
 }
@@ -139,11 +140,10 @@ func parseDecimal(v *fw.Validation, field, s string) vocab.Decimal {
 	return d
 }
 
-func today(d vocab.Date) vocab.Date {
-	if d.IsZero() {
-		return vocab.DateOf(fw.Now())
-	}
-	return d
+// today es d si trae fecha; si no, hoy para la empresa del almacén (en su zona horaria, con el
+// anfitrión).
+func (s service) today(ctx context.Context, w *domain.Warehouse, d vocab.Date) (vocab.Date, error) {
+	return app.OrToday(ctx, s.Today, w.State().Company.UUID, d)
 }
 
 func guard[In, Out any](p authz.Permission, fn func(context.Context, In) (Out, error), mw ...app.Middleware[In, Out]) app.Handler[In, Out] {

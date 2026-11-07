@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/payroll/domain"
+	app "github.com/jhermoso/karpo-fw-go/pkg/application"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/pipeline"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
@@ -169,7 +170,11 @@ func (s service) profileUseCases(svc *Service) {
 		if err := scopeOf(ctx).check("parties.party", employer, employer, true); err != nil {
 			return ProfileDTO{}, err
 		}
-		emp, ok, err := s.Employments.EmploymentOn(ctx, person, employer, vocab.DateOf(fw.Now()))
+		today, err := app.TodayOf(ctx, s.Today, employer.UUID)
+		if err != nil {
+			return ProfileDTO{}, err
+		}
+		emp, ok, err := s.Employments.EmploymentOn(ctx, person, employer, today)
 		if err != nil {
 			return ProfileDTO{}, err
 		}

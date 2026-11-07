@@ -34,6 +34,7 @@ arrancar junto.
   | Pagos | reparto del neto de nómina | Nóminas |
   | Tesorería | lo cobrable y lo pagable | Cobros, Pagos |
   | Cobros | calendario del vendedor (festivos y fines de semana) | Geografía y Parties (escrito aquí) |
+  | Los que fechan (Facturación, Pedidos, Cobros, Contabilidad…) | hoy en la zona de la empresa (docs/ARQUITECTURA.md, «Hoy es el de la empresa») | Parties y Geografía (escrito aquí) |
   | Cambio | de quién es un código de promoción | Parties (escrito aquí) |
   | Importación | cargadores de empresas, departamentos y personas | Parties (escritos aquí) |
 | Importación | cargador de centros de trabajo | Instalaciones (escrito aquí) |

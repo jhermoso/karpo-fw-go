@@ -193,39 +193,42 @@ func Compose(sw *hotswap.Switch, o Options) (*Host, error) {
 		parties.WithFacilityDirectory(parinfra.FacilitiesDirectory{Directory: h.Facilities.Directory}))
 	h.Security = security.Compose(sw, security.WithTokenIssuer(secdist.HS256Issuer{JWT: jwt}),
 		security.WithParties(secinfra.PartiesDirectory{Directory: h.Parties.Directory, Organizations: h.Parties.Organizations}))
-	h.Products = products.Compose(sw)
+	// Hoy es el de la empresa: la zona que guarda en su perfil, si no la de su país, si no UTC
+	// (docs/ARQUITECTURA.md, «Hoy es el de la empresa»). Una sola instancia: el país se recuerda una vez.
+	zones := &CompanyZones{Geography: h.Geography, Profiles: h.Parties.CompanyTimeZones, Identities: h.Parties.TaxIdentities}
+	h.Products = products.Compose(sw, products.WithToday(zones))
 	// Las parties fusionadas, que los listados de los demás contextos dejan fuera salvo que se pidan
 	// (docs/DECISIONES-COMUNES.md, D-100). Parties las lee dentro del proceso, sin los permisos del
 	// usuario (D-103), como las identidades fiscales.
 	merged := h.Parties.MergedParties
 	h.Fiscal = fiscal.Compose(sw, fisinfra.PartiesIdentities{TaxIdentities: h.Parties.TaxIdentities})
 	h.HR = hr.Compose(sw, hr.WithOrganizations(hrinfra.PartiesOrganizations{Hierarchy: h.Parties.Organizations, Membership: h.Parties.Organizations}),
-		hr.WithFacilities(hrinfra.FacilitiesDirectory{Directory: h.Facilities.Directory}), hr.WithMergedParties(merged))
-	h.Payroll = payroll.Compose(sw, prlinfra.HRStaff{Staff: h.HR.Staff}, payroll.WithMergedParties(merged))
+		hr.WithFacilities(hrinfra.FacilitiesDirectory{Directory: h.Facilities.Directory}), hr.WithMergedParties(merged), hr.WithToday(zones))
+	h.Payroll = payroll.Compose(sw, prlinfra.HRStaff{Staff: h.HR.Staff}, payroll.WithMergedParties(merged), payroll.WithToday(zones))
 	h.Receivables = receivables.Compose(sw, &SellerCalendar{Parties: h.Parties, Geography: h.Geography, system: func() context.Context { return h.system }},
-		receivables.WithMergedParties(merged))
-	h.Inventory = inventory.Compose(sw, invinfra.ProductsCatalog{Catalog: h.Products.Catalog})
+		receivables.WithMergedParties(merged), receivables.WithToday(zones))
+	h.Inventory = inventory.Compose(sw, invinfra.ProductsCatalog{Catalog: h.Products.Catalog}, inventory.WithToday(zones))
 	h.Orders = orders.Compose(sw, ordinfra.ProductsCatalog{Catalog: h.Products.Catalog, Pricing: h.Products.Pricing},
 		ordinfra.ReceivablesCredit{Exposure: h.Receivables.Credit}, orders.WithBlocks(ordinfra.PartiesBlocks{TaxIdentities: h.Parties.TaxIdentities}),
-		orders.WithMergedParties(merged))
+		orders.WithMergedParties(merged), orders.WithToday(zones))
 	h.Billing = billing.Compose(sw, bilinfra.FiscalTaxes{Engine: h.Fiscal.TaxEngine}, bilinfra.PartiesIdentities{TaxIdentities: h.Parties.TaxIdentities},
-		billing.WithMergedParties(merged), billing.WithZones(&CompanyZones{Geography: h.Geography, Profiles: h.Parties.CompanyTimeZones}),
+		billing.WithMergedParties(merged), billing.WithZones(zones),
 		// Los ajustes de la empresa (D-144); con with_issue, los vencimientos nacen en la transacción
 		// de la emisión: Receivables está sobre el mismo backend.
 		billing.WithSettings(BillingSettings{Profiles: h.Parties.CompanyProfiles}), billing.WithInstallmentsInTransaction(h.Receivables.Consumer, h.Receivables.Backend))
 	h.Purchases = purchases.Compose(sw, purinfra.FiscalTaxes{Engine: h.Fiscal.TaxEngine}, purchases.WithMergedParties(merged))
-	h.Payments = payments.Compose(sw, payinfra.PayrollNetPay{Remittance: h.Payroll.Remittance}, payments.WithMergedParties(merged))
+	h.Payments = payments.Compose(sw, payinfra.PayrollNetPay{Remittance: h.Payroll.Remittance}, payments.WithMergedParties(merged), payments.WithToday(zones))
 	h.Treasury = treasury.Compose(sw, treinfra.ReceivablesDueItems{Collectable: h.Receivables.Collectable},
 		treinfra.PaymentsPayables{Payable: h.Payments.Payable}, treinfra.PartiesIdentities{TaxIdentities: h.Parties.TaxIdentities},
 		treasury.WithMergedParties(merged))
-	h.Accounting = accounting.Compose(sw)
+	h.Accounting = accounting.Compose(sw, accounting.WithToday(zones))
 	h.Assets = assets.Compose(sw)
 	h.Documents = documents.Compose(sw, documents.WithMergedParties(merged))
-	h.Shipments = shipments.Compose(sw, shipments.WithMergedParties(merged))
-	h.Work = work.Compose(sw, work.WithMergedParties(merged))
+	h.Shipments = shipments.Compose(sw, shipments.WithMergedParties(merged), shipments.WithToday(zones))
+	h.Work = work.Compose(sw, work.WithMergedParties(merged), work.WithToday(zones))
 	institutions := FinancialInstitutions{Parties: h.Parties, system: func() context.Context { return h.system }}
-	h.Financial = financial.Compose(sw, institutions, financial.WithMergedParties(merged))
-	h.Exchange = exchange.Compose(sw, PromotionCodes{Collaborators: h.Parties.Collaborators}, exchange.WithMergedParties(merged))
+	h.Financial = financial.Compose(sw, institutions, financial.WithMergedParties(merged), financial.WithToday(zones))
+	h.Exchange = exchange.Compose(sw, PromotionCodes{Collaborators: h.Parties.Collaborators}, exchange.WithMergedParties(merged), exchange.WithToday(zones))
 	h.Modules = modules.Compose(sw, modules.WithDerivation(SectorCapabilities{Institutions: institutions}))
 	h.Exports = exports.Compose(sw, o.Files).Offer(CustomerAccounts{Financial: h.Financial}).Offer(PartyLists(h.Parties, h.HR)...).
 		Offer(TradeLists(h.Parties, h.Billing, h.Orders, h.Receivables, h.Purchases)...).

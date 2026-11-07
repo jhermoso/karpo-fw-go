@@ -87,6 +87,21 @@ tiempo de prueba, participación en el capital) y edición de persona.
   `MergedParties` (`contexts/parties/application/ports.go`) reconstruye las parties enteras sólo
   para sacar sus ids: el repositorio genérico no tiene una lectura de identidades (`FindIDs`), que
   habría que añadir a `sqlrepo` y a `memory`.
+- **Fechas que salen de un instante, aún en UTC.** «Hoy» ya es el de la empresa en todos los
+  contextos (`application.CompanyToday`, [ARQUITECTURA.md](docs/ARQUITECTURA.md), «Hoy es el de la
+  empresa»), pero estas fechas salen de un instante y lo pasan a fecha en UTC: a las 23:30 UTC ya
+  es otro día en Madrid. Necesitan un puerto «instante → fecha en la zona de la empresa» (como
+  `CompanyToday`, con un `time.Time`):
+  - Tesorería: `TransferOrder.Settle` (`contexts/treasury/domain/transfer.go:178`) compara la
+    fecha de ejecución con `DateOf(GeneratedAt)`; en el dominio, así que el día lo daría la
+    aplicación.
+  - Cambio: `pickup_on` y `created_on` de las reservas (`contexts/exchange/domain/reservation.go`,
+    `infrastructure/persistence.go`) y el resumen diario por `History[0].At` (`application/reservations.go`).
+  - Las reversiones y fechas tomadas de `env.OccurredAt`: Contabilidad
+    (`application/subscriptions.go`, reversiones de cobros, facturas de proveedor, pagos y
+    nóminas), Documentos (`application/subscriptions.go`) y Pagos (`application/subscriptions.go`,
+    fecha de emisión).
+  - RRHH: la ocupación de un puesto con hora (`FillPosition` con `from`).
 
 ### 2b-bis. Observabilidad: siguientes pasos
 Hecho (ver [docs/OBSERVABILIDAD.md](docs/OBSERVABILIDAD.md), decisiones D1 a D8 aprobadas el

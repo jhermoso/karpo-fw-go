@@ -274,7 +274,10 @@ func (s service) stockUseCases(svc *Service) {
 		if err != nil {
 			return MovementDTO{}, err
 		}
-		date := today(c.Date)
+		date, err := s.today(ctx, w, c.Date)
+		if err != nil {
+			return MovementDTO{}, err
+		}
 		if !it.Discontinued.IsZero() && !date.Before(it.Discontinued) {
 			return MovementDTO{}, fw.Violation("inventory.discontinued", "the product is discontinued: it is not received any more")
 		}
@@ -341,7 +344,11 @@ func (s service) stockUseCases(svc *Service) {
 		if err != nil {
 			return MovementDTO{}, err
 		}
-		m, err := s.post(ctx, l, seq, domain.Issue, today(c.Date), q.Neg(), cost, c.Lot, c.Note, src)
+		date, err := s.today(ctx, w, c.Date)
+		if err != nil {
+			return MovementDTO{}, err
+		}
+		m, err := s.post(ctx, l, seq, domain.Issue, date, q.Neg(), cost, c.Lot, c.Note, src)
 		if err != nil {
 			return MovementDTO{}, err
 		}
@@ -374,7 +381,11 @@ func (s service) stockUseCases(svc *Service) {
 			return LevelDTO{}, err
 		}
 		if !diff.IsZero() {
-			if _, err := s.post(ctx, l, seq, domain.Adjustment, today(c.Date), diff, l.State().AverageCost, "", c.Reason, domain.Source{}); err != nil {
+			date, err := s.today(ctx, w, c.Date)
+			if err != nil {
+				return LevelDTO{}, err
+			}
+			if _, err := s.post(ctx, l, seq, domain.Adjustment, date, diff, l.State().AverageCost, "", c.Reason, domain.Source{}); err != nil {
 				return LevelDTO{}, err
 			}
 		}
@@ -421,7 +432,10 @@ func (s service) stockUseCases(svc *Service) {
 		if err != nil {
 			return nil, err
 		}
-		date := today(c.Date)
+		date, err := s.today(ctx, src, c.Date)
+		if err != nil {
+			return nil, err
+		}
 		// Los dos movimientos se señalan entre sí mediante el id del de salida.
 		mo, err := s.post(ctx, out, seqOut, domain.TransferOut, date, q.Neg(), cost, c.Lot, c.Note, domain.Source{})
 		if err != nil {

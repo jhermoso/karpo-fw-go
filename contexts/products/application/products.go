@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/products/domain"
+	app "github.com/jhermoso/karpo-fw-go/pkg/application"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/pipeline"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
@@ -264,11 +265,13 @@ func (s service) productUseCases(svc *Service) {
 		})
 	}, retry[ChangeProduct, ProductDTO](), pipeline.Transactional[ChangeProduct, ProductDTO](s.UoW))
 	svc.DiscontinueProduct = guard(PermProductUpdate, func(ctx context.Context, c DiscontinueProduct) (ProductDTO, error) {
-		on := c.On
-		if on.IsZero() {
-			on = vocab.DateOf(fw.Now())
-		}
-		return update(ctx, c.ID, func(_ context.Context, p *domain.Product) error { return p.Discontinue(on) })
+		return update(ctx, c.ID, func(ctx context.Context, p *domain.Product) error {
+			on, err := app.OrToday(ctx, s.Today, p.State().Company.UUID, c.On) // hoy de la empresa, en cada intento
+			if err != nil {
+				return err
+			}
+			return p.Discontinue(on)
+		})
 	}, retry[DiscontinueProduct, ProductDTO]())
 
 	svc.GetProduct = guard(PermProductRead, func(ctx context.Context, q GetProduct) (ProductDTO, error) {

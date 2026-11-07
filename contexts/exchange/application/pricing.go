@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/exchange/domain"
+	app "github.com/jhermoso/karpo-fw-go/pkg/application"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
@@ -194,7 +195,10 @@ func (s service) wirePricing(svc *Service) {
 		if err != nil {
 			return CurrencyDTO{}, err
 		}
-		today := vocab.DateOf(fw.Now())
+		today, err := app.TodayOf(ctx, s.Today, org.UUID)
+		if err != nil {
+			return CurrencyDTO{}, err
+		}
 		on := c.On
 		if on.IsZero() {
 			on = today

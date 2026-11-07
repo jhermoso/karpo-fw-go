@@ -45,6 +45,12 @@ func WithMergedParties(m application.MergedParties) Option {
 	return func(d *rapp.Deps) { d.Merged = m }
 }
 
+// WithToday dice qué día es hoy para una empresa (el anfitrión: el de su zona horaria). Sin él, el
+// de UTC.
+func WithToday(t application.CompanyToday) Option {
+	return func(d *rapp.Deps) { d.Today = t }
+}
+
 // Compose construye el contexto sobre sw. cal puede ser nil (sin festivos).
 func Compose(sw *hotswap.Switch, cal domain.Calendar, opts ...Option) *Module {
 	integration := hotswap.Outbox(sw, infrastructure.IntegrationOutboxFactory)
@@ -63,7 +69,7 @@ func Compose(sw *hotswap.Switch, cal domain.Calendar, opts ...Option) *Module {
 	rapp.Subscribe(consumer, d)
 	rapp.SubscribeTreasury(consumer, d)
 	rapp.SubscribeParties(consumer, d)
-	return &Module{Service: rapp.NewService(d), Credit: rapp.CreditPort{Receivables: d.Receivables, Credit: d.Credit},
+	return &Module{Service: rapp.NewService(d), Credit: rapp.CreditPort{Receivables: d.Receivables, Credit: d.Credit, Today: d.Today},
 		Collectable:       rapp.DueItemsPort{Receivables: d.Receivables},
 		IntegrationOutbox: integration, Audit: audit, Consumer: consumer, Backend: sw}
 }

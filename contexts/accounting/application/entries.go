@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/accounting/domain"
+	app "github.com/jhermoso/karpo-fw-go/pkg/application"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/pipeline"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
@@ -187,9 +188,9 @@ func (s service) entryUseCases(svc *Service) {
 		if err := scopeOf(ctx).check(domain.EntryKind, e.ID(), e.State().Company, true); err != nil {
 			return EntryDTO{}, err
 		}
-		on := c.Date
-		if on.IsZero() {
-			on = vocab.DateOf(fw.Now())
+		on, err := app.OrToday(ctx, s.Today, e.State().Company.UUID, c.Date)
+		if err != nil {
+			return EntryDTO{}, err
 		}
 		r, err := s.reverse(ctx, c.ID, on, domain.Source{Type: "manual-reversal"})
 		if err != nil {

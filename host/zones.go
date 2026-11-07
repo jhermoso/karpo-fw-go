@@ -10,7 +10,9 @@ import (
 
 	"github.com/jhermoso/karpo-fw-go/contexts/geography"
 	pcontracts "github.com/jhermoso/karpo-fw-go/contexts/parties/contracts"
+	"github.com/jhermoso/karpo-fw-go/pkg/application"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
+	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
 
 // CompanyZones dice a Billing la zona horaria de una empresa (docs/DECISIONES-COMUNES.md, D-133):
@@ -20,12 +22,25 @@ import (
 //
 // La zona del perfil se lee siempre (una fila por su clave): un cambio vale desde la factura
 // siguiente, también si se hace dos minutos antes de medianoche. Sólo se recuerda la del país.
+//
+// A los demás contextos les dice qué día es hoy para una empresa (application.CompanyToday): el
+// país es el de la identidad fiscal de la empresa en Parties, como el del vendedor en Billing. Ese
+// país se recuerda 5 minutos por empresa, como la zona de cada país: preguntarlo carga la party
+// entera. La zona guardada sigue sin recordarse.
 type CompanyZones struct {
-	Geography *geography.Module
-	Profiles  pcontracts.CompanyTimeZones // opcional: sin él, sólo cuenta el país
+	Geography  *geography.Module
+	Profiles   pcontracts.CompanyTimeZones // opcional: sin él, sólo cuenta el país
+	Identities pcontracts.TaxIdentities    // para Today: sin él, sin zona guardada es UTC
 
-	mu    sync.Mutex
-	known map[string]zone // por país
+	mu        sync.Mutex
+	known     map[string]zone    // por país
+	countries map[string]country // por empresa
+}
+
+// country es el país de la identidad fiscal de una empresa y hasta cuándo se recuerda.
+type country struct {
+	code  string
+	until time.Time
 }
 
 // zone es la zona de un país y hasta cuándo se recuerda: como el lugar de una empresa en
@@ -42,6 +57,54 @@ func (z *CompanyZones) Location(ctx context.Context, company, country string) (*
 		return loc, err
 	}
 	return z.ofCountry(ctx, country)
+}
+
+var _ application.CompanyToday = (*CompanyZones)(nil)
+
+// Today implementa application.CompanyToday: la fecha de hoy en la zona de la empresa, con el
+// mismo orden que Location. El país sólo se pregunta a Parties cuando la empresa no guarda zona.
+func (z *CompanyZones) Today(ctx context.Context, company fw.UUID) (vocab.Date, error) {
+	id := company.String()
+	loc, err := z.stored(ctx, id)
+	if err != nil {
+		return vocab.Date{}, err
+	}
+	if loc == nil {
+		code, err := z.countryOf(ctx, id)
+		if err != nil {
+			return vocab.Date{}, err
+		}
+		if loc, err = z.ofCountry(ctx, code); err != nil {
+			return vocab.Date{}, err
+		}
+	}
+	return vocab.Today(loc), nil
+}
+
+// countryOf es el país de la identidad fiscal de la empresa ("" si no tiene); se recuerda 5 minutos.
+func (z *CompanyZones) countryOf(ctx context.Context, company string) (string, error) {
+	if z.Identities == nil {
+		return "", nil
+	}
+	now := time.Now()
+	z.mu.Lock()
+	known, ok := z.countries[company]
+	z.mu.Unlock()
+	if ok && now.Before(known.until) {
+		return known.code, nil
+	}
+	ids, err := z.Identities.TaxIdentities(ctx, []string{company})
+	if err != nil {
+		return "", fmt.Errorf("zones: company %s: %w", company, err)
+	}
+	code := ids[company].Country
+	z.mu.Lock()
+	if z.countries == nil {
+		z.countries = map[string]country{}
+	}
+	z.countries[company] = country{code: code, until: now.Add(placeFor)}
+	z.mu.Unlock()
+	return code, nil
 }
 
 // stored es la zona que la empresa guarda en su perfil; nil si no guarda ninguna. Parties sólo

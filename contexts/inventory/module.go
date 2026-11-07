@@ -32,9 +32,18 @@ type Module struct {
 	Consumer *messaging.Consumer
 }
 
+// Option configura un puerto opcional del contexto.
+type Option func(*iapp.Deps)
+
+// WithToday dice qué día es hoy para una empresa (el anfitrión: el de su zona horaria). Sin él, el
+// de UTC.
+func WithToday(t application.CompanyToday) Option {
+	return func(d *iapp.Deps) { d.Today = t }
+}
+
 // Compose construye el contexto sobre sw. Inventario necesita el catálogo de Products, un puerto
 // que es suyo.
-func Compose(sw *hotswap.Switch, catalog domain.Catalog) *Module {
+func Compose(sw *hotswap.Switch, catalog domain.Catalog, opts ...Option) *Module {
 	integration := hotswap.Outbox(sw, infrastructure.IntegrationOutboxFactory)
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
 	levels := hotswap.Repository(sw, infrastructure.LevelRepositoryFactory)
@@ -44,6 +53,9 @@ func Compose(sw *hotswap.Switch, catalog domain.Catalog) *Module {
 		Catalog: catalog, UoW: sw, Audit: audit,
 		Recorder: outbox.Recorders(outbox.NewRecorder(hotswap.Outbox(sw, infrastructure.OutboxFactory)),
 			iapp.Publications(messaging.NewRecorder(contracts.Source, integration))),
+	}
+	for _, o := range opts {
+		o(&d)
 	}
 	consumer := messaging.NewConsumer(contracts.Source, hotswap.Inbox(sw, infrastructure.InboxFactory), sw)
 	iapp.Subscribe(consumer, d)

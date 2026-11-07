@@ -229,8 +229,9 @@ Javier el 2026-11-03.
   empresa de Canarias que guarda `Atlantic/Canary` emite el 31 de diciembre a las 23:30, hora
   canaria, con fecha del 31: ya no sale con fecha del año siguiente ni pide la serie de ese año.
   Una que no la guarda sigue tomando la de Madrid. Los demás «hoy» de Go (pedidos, presupuestos,
-  contabilidad…) siguen en UTC; la vista previa de impuestos sin fecha usa la misma que la
-  emisión. La zona del perfil se lee en cada emisión (una fila por su clave): quien la guarda a
+  cobros, contabilidad…) toman también el de la empresa, con el mismo objeto del anfitrión
+  (docs/ARQUITECTURA.md, «Hoy es el de la empresa»); la vista previa de impuestos sin fecha usa la
+  misma que la emisión. La zona del perfil se lee en cada emisión (una fila por su clave): quien la guarda a
   las 23:28 del 31 de diciembre y factura a las 23:30 ya saca fecha del 31. Sólo la zona de cada
   país se recuerda 5 minutos, como el lugar de una empresa en el calendario de cobros: un cambio
   en Geography llega en ese tiempo, sin reiniciar.

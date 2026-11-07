@@ -41,6 +41,12 @@ func WithMergedParties(m application.MergedParties) Option {
 	return func(d *papp.Deps) { d.Merged = m }
 }
 
+// WithToday dice qué día es hoy para una empresa (el anfitrión: el de su zona horaria). Sin él, el
+// de UTC.
+func WithToday(t application.CompanyToday) Option {
+	return func(d *papp.Deps) { d.Today = t }
+}
+
 // Compose construye el contexto sobre sw. netPay puede ser nil (obligaciones de nómina sin cuentas).
 func Compose(sw *hotswap.Switch, netPay domain.NetPaySplits, opts ...Option) *Module {
 	integration := hotswap.Outbox(sw, infrastructure.IntegrationOutboxFactory)

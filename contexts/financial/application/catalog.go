@@ -121,10 +121,20 @@ type (
 	}
 )
 
-func productDTO(p *domain.Product) ProductDTO {
+// productDTO dice si el producto se ofrece el día day.
+func productDTO(p *domain.Product, day vocab.Date) ProductDTO {
 	s := p.State()
 	return ProductDTO{ID: p.ID().String(), Company: s.Company.String(), Code: s.Code, Name: s.Name, Description: s.Description, Family: s.Family,
-		RegulatoryCode: s.RegulatoryCode, Discontinued: optDate(s.Discontinued), Offered: p.Offered(vocab.DateOf(fw.Now())), Version: p.Version()}
+		RegulatoryCode: s.RegulatoryCode, Discontinued: optDate(s.Discontinued), Offered: p.Offered(day), Version: p.Version()}
+}
+
+// productOn es productDTO el día de hoy de la empresa del producto.
+func (s service) productOn(ctx context.Context, p *domain.Product) (ProductDTO, error) {
+	day, err := s.today(ctx, p.State().Company, vocab.Date{})
+	if err != nil {
+		return ProductDTO{}, err
+	}
+	return productDTO(p, day), nil
 }
 
 func agreementDTO(a *domain.Agreement) AgreementDTO {
@@ -231,7 +241,7 @@ func (s service) catalogUseCases(svc *Service) {
 		if err := s.products.Create(ctx, p); err != nil {
 			return ProductDTO{}, err
 		}
-		return productDTO(p), nil
+		return s.productOn(ctx, p)
 	})
 
 	product := func(ctx context.Context, id domain.ProductID, fn func(*domain.Product) error) (ProductDTO, error) {
@@ -245,7 +255,7 @@ func (s service) catalogUseCases(svc *Service) {
 		if err != nil {
 			return ProductDTO{}, err
 		}
-		return productDTO(p), nil
+		return s.productOn(ctx, p)
 	}
 	svc.ChangeProduct = changing(d.UoW, PermProductUpdate, func(ctx context.Context, c ChangeProduct) (ProductDTO, error) {
 		return product(ctx, c.ID, func(p *domain.Product) error { return p.Change(c.Name, c.Description, c.Family, c.RegulatoryCode) })
@@ -256,7 +266,11 @@ func (s service) catalogUseCases(svc *Service) {
 				p.Reinstate()
 				return nil
 			}
-			return p.Discontinue(today(c.On))
+			on, err := s.today(ctx, p.State().Company, c.On)
+			if err != nil {
+				return err
+			}
+			return p.Discontinue(on)
 		})
 	})
 	svc.GetProduct = guard(PermProductRead, func(ctx context.Context, q GetProduct) (ProductDTO, error) {
@@ -267,13 +281,15 @@ func (s service) catalogUseCases(svc *Service) {
 		if err := scopeOf(ctx).check(domain.ProductKind, p.ID(), p.State().Company, false); err != nil {
 			return ProductDTO{}, err
 		}
-		return productDTO(p), nil
+		return s.productOn(ctx, p)
 	})
 	svc.SearchProducts = guard(PermProductRead, func(ctx context.Context, q SearchProducts) (fw.Page[ProductDTO], error) {
 		var v fw.Validation
 		parts := []spec.Specification[*domain.Product]{within(scopeOf(ctx), domain.ProFieldCompany)}
+		var company domain.OrganizationID
 		if q.Company != "" {
-			parts = append(parts, domain.ProFieldCompany.Eq(domain.OrganizationID{UUID: parseID(&v, "company", q.Company)}))
+			company = domain.OrganizationID{UUID: parseID(&v, "company", q.Company)}
+			parts = append(parts, domain.ProFieldCompany.Eq(company))
 		}
 		if q.Family != "" {
 			parts = append(parts, domain.ProFieldFamily.Eq(family(&v, q.Family)))
@@ -282,23 +298,33 @@ func (s service) catalogUseCases(svc *Service) {
 		if err := v.Err(); err != nil {
 			return fw.Page[ProductDTO]{}, err
 		}
+		// Si se ofrece depende del día: el de la empresa pedida; sin empresa, el listado puede mezclar
+		// empresas de zonas distintas y el día es el de UTC.
+		day := vocab.Today(nil)
+		if q.Company != "" {
+			var err error
+			if day, err = s.today(ctx, company, vocab.Date{}); err != nil {
+				return fw.Page[ProductDTO]{}, err
+			}
+		}
+		dto := func(p *domain.Product) ProductDTO { return productDTO(p, day) }
 		if q.Offered == "" {
 			page, err := d.Products.FindPage(ctx, spec.And(parts...), fw.NewPageRequest(q.Page, q.Size, domain.ProFieldCode.Asc()))
 			if err != nil {
 				return fw.Page[ProductDTO]{}, err
 			}
-			return fw.MapPage(page, productDTO), nil
+			return fw.MapPage(page, dto), nil
 		}
-		// Si se ofrece depende del día: un catálogo es lo bastante corto para decirlo aquí.
+		// Un catálogo es lo bastante corto para decir aquí si se ofrece.
 		all, err := d.Products.Find(ctx, spec.And(parts...))
 		if err != nil {
 			return fw.Page[ProductDTO]{}, err
 		}
-		day, items := vocab.DateOf(fw.Now()), []ProductDTO{}
+		items := []ProductDTO{}
 		slices.SortFunc(all, func(a, b *domain.Product) int { return strings.Compare(a.State().Code, b.State().Code) })
 		for _, p := range all {
 			if p.Offered(day) == (q.Offered == "true") {
-				items = append(items, productDTO(p))
+				items = append(items, dto(p))
 			}
 		}
 		req := fw.NewPageRequest[*domain.Product](q.Page, q.Size)
@@ -320,8 +346,12 @@ func (s service) catalogUseCases(svc *Service) {
 		if err := s.institution(ctx, company); err != nil {
 			return AgreementDTO{}, err
 		}
+		signed, err := s.today(ctx, company, c.Signed)
+		if err != nil {
+			return AgreementDTO{}, err
+		}
 		st := domain.AgreementState{Company: company, Customer: customer, Number: c.Number, Name: c.Name, Description: c.Description, Family: c.Family,
-			Product: domain.ProductID{UUID: prod}, Signed: today(c.Signed), From: c.From, Thru: c.Thru}
+			Product: domain.ProductID{UUID: prod}, Signed: signed, From: c.From, Thru: c.Thru}
 		if !prod.IsZero() {
 			p, err := s.productOf(ctx, company, prod)
 			if err != nil {
@@ -368,7 +398,13 @@ func (s service) catalogUseCases(svc *Service) {
 		return agreement(ctx, c.ID, func(a *domain.Agreement) error { return a.Change(c.Name, c.Description, c.Thru) })
 	})
 	svc.TerminateAgreement = changing(d.UoW, PermAgreementUpdate, func(ctx context.Context, c TerminateAgreement) (AgreementDTO, error) {
-		return agreement(ctx, c.ID, func(a *domain.Agreement) error { return a.Terminate(today(c.On), c.Reason) })
+		return agreement(ctx, c.ID, func(a *domain.Agreement) error {
+			on, err := s.today(ctx, a.State().Company, c.On)
+			if err != nil {
+				return err
+			}
+			return a.Terminate(on, c.Reason)
+		})
 	})
 	svc.GetAgreement = guard(PermAgreementRead, func(ctx context.Context, q GetAgreement) (AgreementDTO, error) {
 		a, err := d.Agreements.Get(ctx, q.ID)

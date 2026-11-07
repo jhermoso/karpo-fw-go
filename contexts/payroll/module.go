@@ -38,6 +38,12 @@ func WithMergedParties(m application.MergedParties) Option {
 	return func(d *papp.Deps) { d.Merged = m }
 }
 
+// WithToday dice qué día es hoy para una empresa (el anfitrión: el de su zona horaria). Sin él, el
+// de UTC.
+func WithToday(t application.CompanyToday) Option {
+	return func(d *papp.Deps) { d.Today = t }
+}
+
 // Compose construye el contexto sobre sw. Payroll necesita HR: las relaciones laborales son su
 // puerto propio.
 func Compose(sw *hotswap.Switch, employments papp.Employments, opts ...Option) *Module {

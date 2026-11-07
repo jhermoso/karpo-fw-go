@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/orders/domain"
+	app "github.com/jhermoso/karpo-fw-go/pkg/application"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
@@ -204,8 +205,9 @@ func (s service) quoteUseCases(svc *Service) {
 			return QuoteDTO{}, err
 		}
 		st := domain.QuoteState{Company: company, Customer: customer, Date: c.Date, ValidUntil: c.ValidUntil, Reference: c.Reference, Notes: c.Notes}
-		if st.Date.IsZero() {
-			st.Date = vocab.DateOf(fw.Now())
+		var err error
+		if st.Date, err = app.OrToday(ctx, s.Today, company.UUID, st.Date); err != nil {
+			return QuoteDTO{}, err
 		}
 		terms, err := s.termsOf(ctx, company, customer)
 		if err != nil {
@@ -265,11 +267,15 @@ func (s service) quoteUseCases(svc *Service) {
 			if qs.Status != domain.QuoteDraft { // antes de tomar un número para nada
 				return fw.Violation("orders.quote_not_draft", "only a draft quote is sent")
 			}
+			today, err := app.TodayOf(ctx, s.Today, qs.Company.UUID) // antes del número: si falla, no se gasta
+			if err != nil {
+				return err
+			}
 			number, err := s.number(ctx, qs.Company, "PRE", qs.Date.Year())
 			if err != nil {
 				return err
 			}
-			return q.Send(number, vocab.DateOf(fw.Now()))
+			return q.Send(number, today)
 		}))
 	})
 
@@ -282,8 +288,15 @@ func (s service) quoteUseCases(svc *Service) {
 		if err := v.Err(); err != nil {
 			return AcceptedQuoteDTO{}, err
 		}
-		today, id := vocab.DateOf(fw.Now()), domain.NewOrderID()
-		q, err := update(ctx, c.ID, func(_ context.Context, q *domain.Quote) error { return q.Accept(id, today) })
+		var today vocab.Date
+		id := domain.NewOrderID()
+		q, err := update(ctx, c.ID, func(ctx context.Context, q *domain.Quote) error {
+			var err error
+			if today, err = app.TodayOf(ctx, s.Today, q.State().Company.UUID); err != nil { // hoy de la empresa, en cada intento
+				return err
+			}
+			return q.Accept(id, today)
+		})
 		if err != nil {
 			return AcceptedQuoteDTO{}, err
 		}
@@ -327,7 +340,11 @@ func (s service) quoteUseCases(svc *Service) {
 		if err != nil {
 			return ExpiredQuotesDTO{}, err
 		}
-		out, today := ExpiredQuotesDTO{Numbers: []string{}}, vocab.DateOf(fw.Now())
+		today, err := app.TodayOf(ctx, s.Today, company.UUID)
+		if err != nil {
+			return ExpiredQuotesDTO{}, err
+		}
+		out := ExpiredQuotesDTO{Numbers: []string{}}
 		for _, q := range sent {
 			if !q.Due(today) {
 				continue

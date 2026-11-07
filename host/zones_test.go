@@ -1,6 +1,8 @@
 package host_test
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -8,9 +10,13 @@ import (
 	bilapp "github.com/jhermoso/karpo-fw-go/contexts/billing/application"
 	bildomain "github.com/jhermoso/karpo-fw-go/contexts/billing/domain"
 	fisapp "github.com/jhermoso/karpo-fw-go/contexts/fiscal/application"
+	ordapp "github.com/jhermoso/karpo-fw-go/contexts/orders/application"
 	papp "github.com/jhermoso/karpo-fw-go/contexts/parties/application"
 	pdomain "github.com/jhermoso/karpo-fw-go/contexts/parties/domain"
+	recapp "github.com/jhermoso/karpo-fw-go/contexts/receivables/application"
+	recdomain "github.com/jhermoso/karpo-fw-go/contexts/receivables/domain"
 	"github.com/jhermoso/karpo-fw-go/host"
+	"github.com/jhermoso/karpo-fw-go/pkg/application"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 	"github.com/jhermoso/karpo-fw-go/pkg/time/fake"
@@ -96,5 +102,60 @@ func TestCompanyZones_IssueDateInTheCanaries(t *testing.T) {
 	must(err)
 	if issued.IssueDate != "2026-12-31" {
 		t.Fatalf("issue date: %s, want 2026-12-31", issued.IssueDate)
+	}
+}
+
+// De punta a punta, con las zonas del anfitrión, los demás contextos toman también el día de la
+// empresa (docs/ARQUITECTURA.md, «Hoy es el de la empresa»): el 14 de octubre a las 22:30 UTC, una
+// empresa con NIF español y sin zona guardada ya está en el 15 (Europe/Madrid); la que guarda
+// Atlantic/Canary, aún en el 14. Un pedido sin fecha y la aplicación de un cobro salen de ese día.
+func TestCompanyZones_OrderAndCollectionOnTheCompanysDay(t *testing.T) {
+	defer fw.SetClock(fake.New(time.Date(2026, 10, 14, 22, 30, 0, 0, time.UTC)))()
+	th := newTradeHost(t, memorySwitch(t))
+	h, actx := th.h, th.actx
+	must := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	company := func(name, nif, zone string) string {
+		t.Helper()
+		p, err := h.Parties.Service.RegisterOrganization.Handle(actx, papp.RegisterOrganization{LegalName: name,
+			Roles: []string{pdomain.RoleInternalOrganization.String()}})
+		must(err)
+		pid, _ := pdomain.ParsePartyID(p.ID)
+		_, err = h.Parties.Service.AddIdentification.Handle(actx, papp.AddIdentification{PartyID: pid,
+			DocumentType: "c0000000-0004-0000-0000-000000000003", Country: "ES", Number: nif, Primary: true})
+		must(err)
+		if zone != "" {
+			_, err = h.Parties.Service.SetInternalOrganizationProfile.Handle(actx, papp.SetInternalOrganizationProfile{ID: pid, TimeZone: zone})
+			must(err)
+		}
+		return p.ID
+	}
+	madrid := company("Madrid SL", "B12345674", "")
+	canary := company("Canarias SL", "A08015497", "Atlantic/Canary")
+	for seller, want := range map[string]string{madrid: "2026-10-15", canary: "2026-10-14"} {
+		customer := fw.NewUUID().String()
+		o, err := h.Orders.Service.DraftOrder.Handle(actx, ordapp.DraftOrder{Company: seller, Customer: customer})
+		if err != nil || o.Date != want {
+			t.Fatalf("order of %s: %s %v, want %s", seller, o.Date, err, want)
+		}
+		// Billing publica la factura; Receivables abre su cobro pendiente.
+		invoice := fw.NewUUID().String()
+		e := recapp.InvoiceIssued{InvoiceID: invoice, Number: "FA-1", Seller: seller, Customer: customer, IssueDate: "2026-10-01", Currency: "EUR", Total: "100.00"}
+		data, _ := json.Marshal(e)
+		must(h.Receivables.Consumer.HandleMessage(context.Background(), application.Envelope{ID: fw.NewUUID().String(), Type: e.IntegrationEventType(),
+			Source: "billing", Subject: invoice, OccurredAt: fw.Now(), Data: data}))
+		col, err := h.Receivables.Service.RegisterCollection.Handle(actx, recapp.RegisterCollection{Seller: seller, Payer: customer,
+			Date: vocab.MustDate(2026, 10, 10), Amount: "100", Method: "transfer"})
+		must(err)
+		id, _ := recdomain.ParseCollectionID(col.ID)
+		col, err = h.Receivables.Service.Allocate.Handle(actx, recapp.Allocate{ID: id, AllocationInput: recapp.AllocationInput{Invoice: invoice, Installment: 1,
+			Amount: "100"}})
+		if err != nil || len(col.Allocations) != 1 || col.Allocations[0].On != want {
+			t.Fatalf("allocation of %s: %+v %v, want %s", seller, col.Allocations, err, want)
+		}
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/payments/domain"
+	app "github.com/jhermoso/karpo-fw-go/pkg/application"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/pipeline"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
@@ -191,7 +192,11 @@ func (s service) paymentUseCases(svc *Service) {
 
 	svc.Allocate = guard(PermPaymentWrite, func(ctx context.Context, c Allocate) (PaymentDTO, error) {
 		return update(ctx, c.ID, func(ctx context.Context, p *domain.Payment) error {
-			return s.apply(ctx, p, c.AllocationInput, vocab.DateOf(fw.Now()))
+			today, err := app.TodayOf(ctx, s.Today, p.State().Company.UUID)
+			if err != nil {
+				return err
+			}
+			return s.apply(ctx, p, c.AllocationInput, today)
 		})
 	}, retry[Allocate, PaymentDTO](), pipeline.Transactional[Allocate, PaymentDTO](s.UoW))
 

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/hr/domain"
+	app "github.com/jhermoso/karpo-fw-go/pkg/application"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/pipeline"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
@@ -172,8 +173,12 @@ func (s service) employmentUseCases(svc *Service) {
 		if len(current) > 0 {
 			return EmploymentDTO{}, fw.Violation("hr.already_employed", "the person is already an employee of the organization")
 		}
+		today, err := app.TodayOf(ctx, s.Today, employer.UUID)
+		if err != nil {
+			return EmploymentDTO{}, err
+		}
 		e, err := domain.Hire(domain.NewEmploymentID(), domain.EmploymentState{Person: person, Employer: employer, Number: c.Number,
-			Hired: c.Hired, JobCategory: c.JobCategory, WageGroup: c.WageGroup}, vocab.DateOf(fw.Now()))
+			Hired: c.Hired, JobCategory: c.JobCategory, WageGroup: c.WageGroup}, today)
 		if err != nil {
 			return EmploymentDTO{}, err
 		}
