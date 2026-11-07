@@ -273,7 +273,9 @@ func TestPriceChain(t *testing.T) {
 	if err := mine.SetPrice(domain.PriceLine{Product: p.ID(), MinQuantity: dec("1000"), UnitPrice: dec("0.06"), From: date("2026-01-01")}); err != nil {
 		t.Fatal(err)
 	}
-	general.SetDefault(true)
+	if err := general.SetDefault(true); err != nil {
+		t.Fatal(err)
+	}
 	if general.DefaultFor() != company || !mine.DefaultFor().IsZero() {
 		t.Fatalf("default for: %v %v", general.DefaultFor(), mine.DefaultFor())
 	}
@@ -302,6 +304,12 @@ func TestPriceChain(t *testing.T) {
 	general.SetActive(false)
 	if q := chain(nil, nil, general); q.Source != domain.FromBase || !q.Net.Equal(dec("0.125")) {
 		t.Fatalf("base: %+v", q)
+	}
+	if general.State().Default {
+		t.Fatal("a retired list stops being the general one")
+	}
+	if err := general.SetDefault(true); !isViolation(err, "products.inactive_default_price_list") {
+		t.Fatalf("a retired list cannot be the general one: %v", err)
 	}
 }
 

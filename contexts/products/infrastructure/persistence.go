@@ -261,6 +261,8 @@ func PriceListMapping() sqlrepo.Mapping[domain.PriceListID, *domain.PriceList] {
 	return sqlrepo.Mapping[domain.PriceListID, *domain.PriceList]{
 		Table:   "prd_price_lists",
 		Columns: sqlrepo.WithAuditColumns("company", "code", "name", "currency", "active", "default_for"),
+		Unique: []sqlrepo.UniqueIndex{{Name: "ux_prd_price_lists_default", Columns: []string{"default_for"},
+			Err: fw.Violation("products.default_price_list_exists", "the company already has a general price list: unmark it first")}},
 		Dehydrate: func(p *domain.PriceList) (sqlrepo.Values, error) {
 			s := p.State()
 			return sqlrepo.AuditStampValues(sqlrepo.Values{"company": s.Company, "code": s.Code, "name": s.Name, "currency": s.Currency.String(),

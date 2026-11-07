@@ -131,8 +131,17 @@ vigente para la cantidad (la de mayor cantidad mínima que no la supere):
 - **Tarifa general:** una marca en `PriceList` (`Default`). En la tabla es `default_for`: la empresa
   si la lista es la general y NULL si no; el índice único `ux_prd_price_lists_default` (con
   `{whereNotNull}` para SQL Server) da «como mucho una por empresa» en los cinco motores. El caso de
-  uso lo comprueba antes (422 `products.default_price_list_exists`): para cambiarla, primero se
-  desmarca la anterior.
+  uso lo comprueba antes (422 `products.default_price_list_exists`; el índice está declarado en el
+  mapeo, así que una carrera también da 422): para cambiarla, primero se desmarca la anterior. Una
+  lista retirada no puede ser la general (422 `products.inactive_default_price_list`), y retirar la
+  general la desmarca.
+- **`GET /quote?customer=` no conoce los `Terms` de Orders:** la tarifa del cliente la pasa quien
+  llama en `priceList`; sin ella, ese nivel se salta. Con `customer` se pide además
+  `Products.SpecialPrice.Read` (403 sin él), porque la respuesta enseña su precio especial. El
+  puerto `Pricing`, de servicio a servicio, no pide permisos.
+- **Cambios de comportamiento:** una tarifa del cliente sin línea vigente cae ahora a la tarifa
+  general, si la empresa tiene una, y no directamente al precio base. `Quote.Source` deja de valer
+  `list` y pasa a `customer_list` (los demás valores: `special`, `default_list`, `base`).
 - **API** (`/api/products`):
 
   | Método y ruta | Permiso | Qué hace |
@@ -141,7 +150,7 @@ vigente para la cantidad (la de mayor cantidad mínima que no la supere):
   | `POST /special-prices` | `Products.SpecialPrice.Update` | alta de un precio especial |
   | `POST /special-prices/remove` | `Products.SpecialPrice.Update` | baja de un precio (producto, cantidad mínima y fecha desde) |
   | `PUT /price-lists/{id}/default` | `Products.PriceList.Update` | marca o desmarca la tarifa general |
-  | `GET /quote?company=&customer=&product=&priceList=&quantity=&on=` | `Products.PriceList.Read` | la cadena completa |
+  | `GET /quote?company=&customer=&product=&priceList=&quantity=&on=` | `Products.PriceList.Read` (y `Products.SpecialPrice.Read` con `customer`) | la cadena completa |
 
   No hay verbo `Delete`: como en las líneas de tarifa, borrar un precio es cambiar los precios del
   cliente (`Update`).

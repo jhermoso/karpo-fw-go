@@ -281,8 +281,13 @@ func (p *PriceList) RemovePrice(product ProductID, minQuantity vocab.Decimal, fr
 	return nil
 }
 
-// SetActive activa o retira la lista.
-func (p *PriceList) SetActive(active bool) { p.s.Active = active }
+// SetActive activa o retira la lista; una tarifa general retirada deja de ser la general.
+func (p *PriceList) SetActive(active bool) {
+	p.s.Active = active
+	if !active {
+		p.s.Default = false
+	}
+}
 
 // DefaultFor es la empresa de la que la lista es la tarifa general; cero si no lo es.
 func (p *PriceList) DefaultFor() OrganizationID {
@@ -292,9 +297,16 @@ func (p *PriceList) DefaultFor() OrganizationID {
 	return p.s.Company
 }
 
-// SetDefault marca o desmarca la lista como la tarifa general de su empresa. Que no haya dos en la
-// misma empresa lo comprueba el caso de uso, y lo garantiza un índice único.
-func (p *PriceList) SetDefault(def bool) { p.s.Default = def }
+// SetDefault marca o desmarca la lista como la tarifa general de su empresa; una lista retirada no
+// puede ser la general. Que no haya dos en la misma empresa lo comprueba el caso de uso, y lo
+// garantiza un índice único.
+func (p *PriceList) SetDefault(def bool) error {
+	if def && !p.s.Active {
+		return fw.Violation("products.inactive_default_price_list", "a retired price list cannot be the general one")
+	}
+	p.s.Default = def
+	return nil
+}
 
 // PriceFor devuelve el precio de un producto para una cantidad en una fecha: la línea vigente con
 // la mayor cantidad mínima que no supere la cantidad.
@@ -399,7 +411,7 @@ func (p *SpecialPrices) PriceOf(prod *Product, quantity vocab.Decimal, on vocab.
 
 // AuditSnapshot implementa traits.Snapshotter.
 func (p *SpecialPrices) AuditSnapshot() map[string]any {
-	return map[string]any{"customer": p.s.Customer.String(), "lines": len(p.s.Lines)}
+	return map[string]any{"company": p.s.Company.String(), "customer": p.s.Customer.String(), "lines": len(p.s.Lines)}
 }
 
 // Campos de los precios especiales.
@@ -495,12 +507,10 @@ func (ProductRegistered) EventType() string   { return "products.product_registe
 func (ProductDiscontinued) EventType() string { return "products.product_discontinued" }
 
 // Identidades nuevas y análisis.
-func NewProductID() ProductID     { return ProductID{fw.NewUUID()} }
-func NewCategoryID() CategoryID   { return CategoryID{fw.NewUUID()} }
-func NewPriceListID() PriceListID { return PriceListID{fw.NewUUID()} }
-func NewSpecialPricesID() SpecialPricesID {
-	return SpecialPricesID{fw.NewUUID()}
-}
+func NewProductID() ProductID             { return ProductID{fw.NewUUID()} }
+func NewCategoryID() CategoryID           { return CategoryID{fw.NewUUID()} }
+func NewPriceListID() PriceListID         { return PriceListID{fw.NewUUID()} }
+func NewSpecialPricesID() SpecialPricesID { return SpecialPricesID{fw.NewUUID()} }
 
 // ParseProductID analiza una identidad textual.
 func ParseProductID(s string) (ProductID, error) { u, err := fw.ParseUUID(s); return ProductID{u}, err }

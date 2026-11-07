@@ -6,6 +6,7 @@ import (
 
 	"github.com/jhermoso/karpo-fw-go/contexts/products/contracts"
 	"github.com/jhermoso/karpo-fw-go/contexts/products/domain"
+	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/pipeline"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
@@ -185,8 +186,7 @@ func (s service) priceUseCases(svc *Service) {
 					return fw.Violation("products.default_price_list_exists", "the company already has a general price list: unmark it first")
 				}
 			}
-			pl.SetDefault(c.Default)
-			return nil
+			return pl.SetDefault(c.Default)
 		})
 	}, retry[SetDefaultPriceList, PriceListDTO](), pipeline.Transactional[SetDefaultPriceList, PriceListDTO](s.UoW))
 
@@ -220,6 +220,11 @@ func (s service) priceUseCases(svc *Service) {
 		return out, nil
 	})
 	svc.Quote = guard(PermPriceListRead, func(ctx context.Context, q GetQuote) (contracts.Quote, error) {
+		if q.Customer != "" { // los precios especiales del cliente tienen su propio permiso
+			if err := authz.Require(ctx, PermSpecialPriceRead); err != nil {
+				return contracts.Quote{}, err
+			}
+		}
 		var v fw.Validation
 		company := domain.OrganizationID{UUID: parseID(&v, "company", q.Company)}
 		if err := v.Err(); err != nil {

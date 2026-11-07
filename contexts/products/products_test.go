@@ -332,10 +332,16 @@ func (h *host) specialPrices(company, product, retired, customer string) {
 		t.Fatalf("no special prices: %+v", none)
 	}
 
+	// Ver la cadena con un cliente pide también ver sus precios especiales.
+	h.must(h.do("GET", "/api/products/quote?company="+company+"&product="+product+"&customer="+customer+"&quantity=10&on=2026-10-04", "pricer", nil, nil),
+		403, "special prices are not price lists")
+	h.must(h.do("GET", "/api/products/quote?company="+company+"&product="+product+"&quantity=10&on=2026-10-04", "pricer", nil, nil), 200,
+		"quote without a customer")
+
 	// La cadena, un caso por nivel.
 	quote := func(query string) contracts.Quote {
 		var q contracts.Quote
-		h.must(h.do("GET", "/api/products/quote?company="+company+"&product="+product+"&"+query, "pricer", nil, &q), 200, "quote "+query)
+		h.must(h.do("GET", "/api/products/quote?company="+company+"&product="+product+"&"+query, "dealer", nil, &q), 200, "quote "+query)
 		return q
 	}
 	for query, want := range map[string][2]string{
@@ -356,7 +362,12 @@ func (h *host) specialPrices(company, product, retired, customer string) {
 	if q := quote("quantity=10&on=2026-10-04"); general.Default || q.Source != "base" {
 		t.Fatalf("without a general list: %+v %+v", general, q)
 	}
-	h.must(h.do("PUT", "/api/products/price-lists/"+retired+"/default", "pricer", map[string]any{"default": true}, nil), 200, "another general list")
+	h.must(h.do("PUT", "/api/products/price-lists/"+retired+"/default", "pricer", map[string]any{"default": true}, nil), 422, "a retired general list")
+	h.must(h.do("PUT", "/api/products/price-lists/"+general.ID+"/default", "pricer", map[string]any{"default": true}, nil), 200, "mark general again")
+	h.must(h.do("PUT", "/api/products/price-lists/"+general.ID+"/active", "pricer", map[string]any{"active": false}, &general), 200, "retire general")
+	if general.Default || general.Active {
+		t.Fatalf("a retired list stops being the general one: %+v", general)
+	}
 
 	// Borrar un precio especial.
 	remove := map[string]any{"company": company, "customer": customer, "product": product, "from": "2026-01-01"}

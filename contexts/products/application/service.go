@@ -284,5 +284,14 @@ func (p PricingPort) Quote(ctx context.Context, r contracts.QuoteRequest) (contr
 		levels = append(levels, domain.Level{Source: domain.FromDefaultList, Prices: defaults[0]})
 	}
 	q := domain.QuoteOf(prod, qty, date, levels...)
-	return contracts.Quote{UnitPrice: q.UnitPrice.StringFixed(4), Discount: q.Discount.StringFixed(2), Net: q.Net.StringFixed(4), Source: string(q.Source)}, nil
+	return contracts.Quote{UnitPrice: q.UnitPrice.StringFixed(4), Discount: q.Discount.StringFixed(2), Net: q.Net.StringFixed(4),
+		Source: sources[q.Source]}, nil
+}
+
+// sources traduce el origen del dominio al del lenguaje publicado.
+var sources = map[domain.PriceSource]string{
+	domain.FromSpecial:      contracts.SourceSpecial,
+	domain.FromCustomerList: contracts.SourceCustomerList,
+	domain.FromDefaultList:  contracts.SourceDefaultList,
+	domain.FromBase:         contracts.SourceBase,
 }
