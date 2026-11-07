@@ -158,6 +158,9 @@ type Address struct {
 	Country    string
 }
 
+// IsZero dice si no hay domicilio.
+func (a Address) IsZero() bool { return a == Address{} }
+
 // TaxLine es una línea del desglose de impuestos congelado al emitir.
 type TaxLine struct {
 	TaxType         string
@@ -388,7 +391,8 @@ type Issuance struct {
 // Issue congela la factura con su número, las identidades de las partes y el desglose de
 // impuestos. Invariantes: una descripción de la operación (la exige el SII, plan Sage T1); al menos una línea; una factura ordinaria tiene un neto positivo y una
 // rectificativa un neto distinto de cero; el desglose cubre exactamente el neto de las líneas; el
-// vendedor tiene un NIF español válido y el cliente un número fiscal; el vencimiento no precede a la emisión.
+// vendedor tiene un NIF español válido y el cliente un número fiscal; en una factura ordinaria, las
+// dos partes tienen domicilio fiscal (D-147); el vencimiento no precede a la emisión.
 func (i *Invoice) Issue(x Issuance) error {
 	if err := i.mustBeDraft(); err != nil {
 		return err
@@ -415,6 +419,16 @@ func (i *Invoice) Issue(x Issuance) error {
 	}
 	if strings.TrimSpace(x.Customer.NIF) == "" {
 		return fw.Violation("billing.customer_nif", "the customer has no tax number (simplified invoices are not supported yet)")
+	}
+	// El domicilio fiscal de las dos partes es obligatorio en la factura completa (art. 6 del
+	// RD 1619/2012, D-147). La rectificativa no lo exige: lleva el de la factura que rectifica.
+	if i.s.Kind == Ordinary {
+		if x.Seller.Address.IsZero() {
+			return fw.Violation("billing.seller_address_required", "the seller has no fiscal address")
+		}
+		if x.Customer.Address.IsZero() {
+			return fw.Violation("billing.customer_address_required", "the customer has no fiscal address")
+		}
 	}
 	i.s.Status, i.s.Series, i.s.Number, i.s.IssueDate = Issued, x.Series, x.Number, x.Date
 	i.s.SellerIdentity, i.s.CustomerIdentity, i.s.Taxes = x.Seller, x.Customer, x.Taxes

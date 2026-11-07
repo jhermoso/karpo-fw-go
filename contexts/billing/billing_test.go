@@ -128,6 +128,27 @@ func (h *host) must(got, want int, what string) {
 	}
 }
 
+// refused comprueba que la petición se rechaza con 422 y el código dado.
+func (h *host) refused(method, path, user string, body any, code, what string) {
+	h.t.Helper()
+	var buf bytes.Buffer
+	_ = json.NewEncoder(&buf).Encode(body)
+	req, _ := http.NewRequest(method, h.srv.URL+path, &buf)
+	req.Header.Set("Authorization", h.tokens[user])
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		h.t.Fatal(err)
+	}
+	defer res.Body.Close()
+	var p struct {
+		Code string `json:"code"`
+	}
+	_ = json.NewDecoder(res.Body).Decode(&p)
+	if res.StatusCode != 422 || p.Code != code {
+		h.t.Fatalf("%s: status %d, code %q; want 422 %s", what, res.StatusCode, p.Code, code)
+	}
+}
+
 func (h *host) ok(err error) {
 	h.t.Helper()
 	if err != nil {
@@ -154,10 +175,22 @@ func (h *host) scenario(tag string) {
 		h.ok(err)
 	}
 	doc(acme.ID, "c0000000-0004-0000-0000-000000000003", "A58818501")
-	person := func(name, dni string) papp.PartyDTO {
+	// El domicilio fiscal: sin él no se emite una factura completa (D-147).
+	address := func(party, street string) {
+		id, _ := pdomain.ParsePartyID(party)
+		_, err := ps.AddContact.Handle(ctx, papp.AddContact{PartyID: id, Kind: "postal", Purposes: []string{"default"},
+			Address: &papp.AddressDTO{Line1: street, PostalCode: "28013", Locality: "Madrid", Country: "ES"}})
+		h.ok(err)
+	}
+	bare := func(name, dni string) papp.PartyDTO {
 		p, err := ps.RegisterPerson.Handle(ctx, papp.RegisterPerson{GivenName: name, FirstSurname: tag})
 		h.ok(err)
 		doc(p.ID, "c0000000-0004-0000-0000-000000000002", dni)
+		return p
+	}
+	person := func(name, dni string) papp.PartyDTO {
+		p := bare(name, dni)
+		address(p.ID, "Calle de "+name+" 1")
 		return p
 	}
 	ana, bea := person("Ana", "12345678Z"), person("Bea", "00000000T")
@@ -193,6 +226,23 @@ func (h *host) scenario(tag string) {
 	h.must(h.do("POST", "/api/billing/invoices/"+pending.ID+"/issue", "issuer", map[string]any{"series": fa.ID, "date": "2026-09-28"}, nil), 422, "carla turned out a duplicate")
 	h.must(h.do("POST", "/api/billing/invoices", "clerk", map[string]any{"seller": acme.ID, "customer": carla.ID, "dueDate": "2026-10-28"}, nil), 422, "nor a new draft for her")
 
+	// Sin el domicilio fiscal de las dos partes no se emite (D-147); el rechazo no consume número.
+	var homeless bapp.InvoiceDTO
+	h.must(h.do("POST", "/api/billing/invoices", "clerk", map[string]any{"seller": acme.ID, "customer": ana.ID, "description": "Consultoría"}, &homeless), 201, "draft")
+	h.must(h.do("POST", "/api/billing/invoices/"+homeless.ID+"/lines", "clerk", map[string]any{"description": "X", "quantity": "1", "unitPrice": "1", "taxCode": "G21"}, nil), 200, "line")
+	h.refused("POST", "/api/billing/invoices/"+homeless.ID+"/issue", "issuer", map[string]any{"series": fa.ID, "date": "2026-09-28"},
+		"billing.seller_address_required", "a seller without an address")
+	address(acme.ID, "Calle Mayor 1")
+	dora := bare("Dora", "87654321X")
+	var nowhere bapp.InvoiceDTO
+	h.must(h.do("POST", "/api/billing/invoices", "clerk", map[string]any{"seller": acme.ID, "customer": dora.ID, "description": "Consultoría"}, &nowhere), 201, "draft")
+	h.must(h.do("POST", "/api/billing/invoices/"+nowhere.ID+"/lines", "clerk", map[string]any{"description": "X", "quantity": "1", "unitPrice": "1", "taxCode": "G21"}, nil), 200, "line")
+	h.refused("POST", "/api/billing/invoices/"+nowhere.ID+"/issue", "issuer", map[string]any{"series": fa.ID, "date": "2026-09-28"},
+		"billing.customer_address_required", "a customer without an address")
+	for _, d := range []string{homeless.ID, nowhere.ID} {
+		h.must(h.do("DELETE", "/api/billing/invoices/"+d, "clerk", nil, nil), 204, "discard the draft")
+	}
+
 	// Una factura con tres tipos: impuestos sobre la base agregada por tipo.
 	var inv bapp.InvoiceDTO
 	h.must(h.do("POST", "/api/billing/invoices", "clerk", map[string]any{"seller": acme.ID, "customer": ana.ID, "dueDate": "2026-10-28", "description": "Consultoría"}, &inv), 201, "draft")
@@ -216,7 +266,8 @@ func (h *host) scenario(tag string) {
 	h.must(h.do("POST", "/api/billing/invoices/"+inv.ID+"/issue", "issuer", map[string]any{"series": rs.ID, "date": "2026-09-28"}, nil), 422, "not in a corrective series")
 	h.must(h.do("POST", "/api/billing/invoices/"+inv.ID+"/issue", "issuer", map[string]any{"series": fa.ID, "date": "2026-09-28"}, &inv), 200, "issue")
 	if inv.Number != "FA-2026-000001" || inv.Status != "issued" || inv.Taxes == nil || inv.Taxes.Total != "185.41" || inv.CustomerNIF != "12345678Z" ||
-		inv.SellerNIF != "A58818501" {
+		inv.SellerNIF != "A58818501" || inv.SellerAddress == nil || inv.SellerAddress.Street != "Calle Mayor 1" ||
+		inv.CustomerAddress == nil || inv.CustomerAddress.Street != "Calle de Ana 1" {
 		t.Fatalf("issued: %+v", inv)
 	}
 	h.must(h.do("POST", "/api/billing/invoices/"+inv.ID+"/issue", "issuer", map[string]any{"series": fa.ID, "date": "2026-09-28"}, nil), 422, "issued once")
@@ -256,6 +307,9 @@ func (h *host) scenario(tag string) {
 	h.must(h.do("POST", "/api/billing/invoices/"+fix.ID+"/issue", "issuer", map[string]any{"series": rs.ID, "date": "2026-09-28"}, &fix), 200, "issue corrective")
 	if fix.Number != "R-2026-000001" || fix.Customer != ana.ID || fix.Corrects != inv.ID || fix.Reason != "R1" || fix.Taxes.Tax != "-6.32" || fix.Taxes.Total != "-36.41" {
 		t.Fatalf("corrective: %+v %+v", fix, fix.Taxes)
+	}
+	if fix.SellerAddress == nil || *fix.SellerAddress != *inv.SellerAddress || fix.CustomerAddress == nil || *fix.CustomerAddress != *inv.CustomerAddress {
+		t.Fatalf("the corrective carries the addresses of the invoice it corrects: %+v %+v", fix.SellerAddress, fix.CustomerAddress)
 	}
 	var issued fw.Page[bapp.InvoiceDTO]
 	h.must(h.do("GET", "/api/billing/invoices?seller="+acme.ID+"&status=issued&from=2026-09-01", "clerk", nil, &issued), 200, "search")
@@ -370,6 +424,12 @@ func TestBilling_IssueDateIsTodayInTheSellerZone(t *testing.T) {
 			for party, doc := range map[string][2]string{acme.ID: {"c0000000-0004-0000-0000-000000000003", "A58818501"}, ana.ID: {"c0000000-0004-0000-0000-000000000002", "12345678Z"}} {
 				id, _ := pdomain.ParsePartyID(party)
 				_, err := ps.AddIdentification.Handle(ctx, papp.AddIdentification{PartyID: id, DocumentType: doc[0], Country: "ES", Number: doc[1], Primary: true})
+				h.ok(err)
+				// El domicilio fiscal: sin él no se emite una factura completa (D-147). Vale desde antes
+				// de la hora que finge la prueba.
+				since := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+				_, err = ps.AddContact.Handle(ctx, papp.AddContact{PartyID: id, Kind: "postal", Purposes: []string{"default"}, From: &since,
+					Address: &papp.AddressDTO{Line1: "Calle Mayor 1", PostalCode: "28013", Locality: "Madrid", Country: "ES"}})
 				h.ok(err)
 			}
 			_, err = h.fiscal.Service.CreateRate.Handle(ctx, fapp.CreateRate{Type: "vat", Territory: "common", Code: "G21", Description: "General", Rate: "21", Surcharge: "5.2", From: vocab.MustDate(2012, 9, 1)})

@@ -39,6 +39,10 @@ func TestBillingSettings_FromThePartiesProfile(t *testing.T) {
 				_, err = h.Parties.Service.AddIdentification.Handle(actx, papp.AddIdentification{PartyID: pid,
 					DocumentType: "c0000000-0004-0000-0000-000000000003", Country: "ES", Number: nif, Primary: true})
 				must(err)
+				// El domicilio fiscal: sin él no se emite una factura completa (D-147).
+				_, err = h.Parties.Service.AddContact.Handle(actx, papp.AddContact{PartyID: pid, Kind: "postal", Purposes: []string{"default"},
+					Address: &papp.AddressDTO{Line1: "Calle Mayor 1", PostalCode: "28013", Locality: "Madrid", Country: "ES"}})
+				must(err)
 				return p.ID
 			}
 			acme := organization("Acme Ajustes SL", "B12345674", []string{pdomain.RoleInternalOrganization.String()}, nil)

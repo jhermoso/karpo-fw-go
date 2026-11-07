@@ -88,6 +88,11 @@ func TestBillingContext(t *testing.T) {
 					Address: &papp.AddressDTO{StreetType: "CL", Line1: line, Floor: "3", Line2: "Edificio Norte", PostalCode: "28013", Locality: "Madrid", Region: "Madrid", Country: "ES"}})
 				must(err)
 			}
+			// El domicilio fiscal de Ana: sin él no se emite una factura completa (D-147).
+			anaID, _ := pdomain.ParsePartyID(ana.ID)
+			_, err = pm.Service.AddContact.Handle(actx, papp.AddContact{PartyID: anaID, Kind: "postal", Purposes: []string{"default"},
+				Address: &papp.AddressDTO{Line1: "Plaza de España 7", PostalCode: "28008", Locality: "Madrid", Country: "ES"}})
+			must(err)
 			_, err = fm.Service.CreateRate.Handle(actx, fapp.CreateRate{Type: "vat", Territory: "common", Code: "G21", Description: "General", Rate: "21",
 				Surcharge: "5.2", From: vocab.MustDate(2012, 9, 1)})
 			must(err)
@@ -123,7 +128,7 @@ func TestBillingContext(t *testing.T) {
 				t.Fatalf("round trip: %+v %+v %v", got, got.Taxes, err)
 			}
 			if a := got.SellerAddress; a == nil || a.Street != "CL Mayor 2 planta 3, Edificio Norte" || a.PostalCode != "28013" || a.Locality != "Madrid" ||
-				a.Region != "Madrid" || a.Country != "ES" || got.CustomerAddress != nil {
+				a.Region != "Madrid" || a.Country != "ES" || got.CustomerAddress == nil || got.CustomerAddress.Street != "Plaza de España 7" {
 				t.Fatalf("fiscal addresses: %+v %+v", got.SellerAddress, got.CustomerAddress)
 			}
 			if _, err := svc.AddLine.Handle(actx, bapp.AddLine{ID: id, Description: "X", Quantity: "1", UnitPrice: "1", TaxCode: "G21"}); !errors.Is(err, fw.ErrRuleViolation) {

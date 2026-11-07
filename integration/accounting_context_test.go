@@ -112,6 +112,12 @@ func TestAccountingContext(t *testing.T) {
 				id, _ := pdomain.ParsePartyID(party)
 				_, err := pm.Service.AddIdentification.Handle(actx, papp.AddIdentification{PartyID: id, DocumentType: d[0], Country: "ES", Number: d[1], Primary: true})
 				must(err)
+				// El domicilio fiscal: sin él no se emite una factura completa (D-147). Vale desde
+				// antes de cualquier hora que finja la prueba.
+				since := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+				_, err = pm.Service.AddContact.Handle(actx, papp.AddContact{PartyID: id, Kind: "postal", Purposes: []string{"default"}, From: &since,
+					Address: &papp.AddressDTO{Line1: "Calle Mayor 1", PostalCode: "28013", Locality: "Madrid", Country: "ES"}})
+				must(err)
 			}
 
 			for code, name := range map[string]string{"4300": "Clientes", "7000": "Ventas", "4770": "IVA repercutido", "5700": "Caja", "5720": "Bancos",

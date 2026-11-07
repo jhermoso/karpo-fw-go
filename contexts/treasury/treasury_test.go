@@ -191,6 +191,10 @@ func (h *host) scenario(tag string) {
 		id, _ := pdomain.ParsePartyID(party)
 		_, err := ps.AddIdentification.Handle(ctx, papp.AddIdentification{PartyID: id, DocumentType: docType, Country: "ES", Number: number, Primary: true})
 		h.ok(err)
+		// El domicilio fiscal: sin él no se emite una factura completa (D-147).
+		_, err = ps.AddContact.Handle(ctx, papp.AddContact{PartyID: id, Kind: "postal", Purposes: []string{"default"},
+			Address: &papp.AddressDTO{Line1: "Calle Mayor 1", PostalCode: "28013", Locality: "Madrid", Country: "ES"}})
+		h.ok(err)
 	}
 	doc(acme.ID, "c0000000-0004-0000-0000-000000000003", "A58818501")
 	person := func(name, dni string) papp.PartyDTO {

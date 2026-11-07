@@ -94,8 +94,10 @@ func TestInvoice(t *testing.T) {
 	if !lines[0].Net.Equal(dec("90")) || lines[0].TaxCode != "G21" || lines[1].Treatment != "E1" || !inv.Net().Equal(dec("140")) {
 		t.Fatalf("lines: %+v", lines)
 	}
-	seller := domain.Identity{NIF: "A58818501", Name: "ACME SA", Country: "ES"}
-	customer := domain.Identity{NIF: "12345678Z", Name: "GARCIA ANA", Country: "ES"}
+	seller := domain.Identity{NIF: "A58818501", Name: "ACME SA", Country: "ES",
+		Address: domain.Address{Street: "Calle Mayor 1", PostalCode: "28013", Locality: "Madrid", Country: "ES"}}
+	customer := domain.Identity{NIF: "12345678Z", Name: "GARCIA ANA", Country: "ES",
+		Address: domain.Address{Street: "Rúa Nova 2", PostalCode: "15705", Locality: "Santiago", Country: "ES"}}
 	taxes := domain.Breakdown{Country: "ES", Net: dec("140"), Tax: dec("18.90"), Surcharge: dec("0")}
 	if err := inv.Issue(domain.Issuance{Number: "FA-2026-000001", Date: vocab.MustDate(2026, 9, 28), Seller: seller, Customer: customer,
 		Taxes: domain.Breakdown{Net: dec("100")}}); !isViolation(err, "billing.breakdown_mismatch") {
@@ -104,6 +106,16 @@ func TestInvoice(t *testing.T) {
 	if err := inv.Issue(domain.Issuance{Number: "FA-2026-000001", Date: vocab.MustDate(2026, 9, 28), Seller: domain.Identity{NIF: "X"},
 		Customer: customer, Taxes: taxes}); !isViolation(err, "billing.seller_nif") {
 		t.Fatalf("seller nif: %v", err)
+	}
+	// El domicilio fiscal de las dos partes es obligatorio (D-147).
+	noAddress := func(id domain.Identity) domain.Identity { id.Address = domain.Address{}; return id }
+	if err := inv.Issue(domain.Issuance{Number: "FA-2026-000001", Date: vocab.MustDate(2026, 9, 28), Seller: noAddress(seller),
+		Customer: customer, Taxes: taxes}); !isViolation(err, "billing.seller_address_required") {
+		t.Fatalf("seller address: %v", err)
+	}
+	if err := inv.Issue(domain.Issuance{Number: "FA-2026-000001", Date: vocab.MustDate(2026, 9, 28), Seller: seller,
+		Customer: noAddress(customer), Taxes: taxes}); !isViolation(err, "billing.customer_address_required") {
+		t.Fatalf("customer address: %v", err)
 	}
 	_ = inv.SetDetails(domain.Details{Description: "Servicios de septiembre", DueDate: vocab.MustDate(2026, 9, 1)})
 	if err := inv.Issue(domain.Issuance{Number: "FA-2026-000001", Date: vocab.MustDate(2026, 9, 28), Seller: seller, Customer: customer,
@@ -139,6 +151,11 @@ func TestInvoice(t *testing.T) {
 	}
 	if !fix.Net().Equal(dec("-30")) {
 		t.Fatal("negative correction")
+	}
+	// La rectificativa no exige domicilio: lleva el de la factura que rectifica (D-147).
+	if err := fix.Issue(domain.Issuance{Number: "FR-2026-000001", Date: vocab.MustDate(2026, 9, 29), Seller: noAddress(seller),
+		Customer: noAddress(customer), Taxes: domain.Breakdown{Country: "ES", Net: dec("-30"), Tax: dec("-6.30"), Surcharge: dec("0")}}); err != nil {
+		t.Fatalf("a corrective invoice without addresses: %v", err)
 	}
 }
 

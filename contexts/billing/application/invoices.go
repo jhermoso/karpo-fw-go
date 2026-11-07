@@ -396,8 +396,17 @@ func (s service) invoiceUseCases(svc *Service) {
 			}); err != nil {
 				return err
 			}
-			return i.Issue(domain.Issuance{Series: seriesID, Number: number, Date: date, Seller: ids[domain.PartyID{UUID: st.Seller.UUID}],
-				Customer: ids[st.Customer], Taxes: taxes})
+			seller, customer := ids[domain.PartyID{UUID: st.Seller.UUID}], ids[st.Customer]
+			if st.Kind == domain.Corrective { // el domicilio, el de la factura que rectifica (D-147)
+				orig, err := s.Invoices.Get(ctx, st.Corrects)
+				if err != nil {
+					return err
+				}
+				os := orig.State()
+				seller.Address, customer.Address = os.SellerIdentity.Address, os.CustomerIdentity.Address
+			}
+			return i.Issue(domain.Issuance{Series: seriesID, Number: number, Date: date, Seller: seller,
+				Customer: customer, Taxes: taxes})
 		})
 		if err != nil || !withIssue || s.InTransaction == nil {
 			return out, err
