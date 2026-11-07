@@ -8,7 +8,7 @@
     "La cuota y el recargo se calculan una vez por grupo sobre la suma de los netos: Round(Σ bases × tipo / 100), no línea a línea.",
     "Sin recargo de equivalencia (equivalenceSurcharge = false), surchargeRate se espera \"0.00\" aunque el catálogo tenga un tipo de recargo para ese código.",
     "Todo redondeo es al céntimo y el medio se aleja de cero (0.125 → 0.13; −0.125 → −0.13).",
-    "El total es net + tax + surcharge. Los plazos reparten el total en partes iguales al céntimo y el último se queda con el resto.",
+    "El total es net + tax + surcharge. Los plazos reparten el total en partes iguales truncadas al céntimo (hacia cero) y el último se queda con el resto (D-145).",
     "date es a la vez la fecha con la que se busca el tipo vigente del catálogo y la fecha de la que se cuentan los días de los plazos.",
     "rejection.field es el nombre del campo en el contrato HTTP (p. ej. unitPrice); rejection.line cuenta desde 1."
   ],
@@ -34,7 +34,6 @@
     "Retención (IRPF) en la factura: Karpo Go no la calcula; no hay caso.",
     "Descuentos en cascada (varios porcentajes sobre la misma línea): Karpo Go tiene un solo descuento por línea; los casos de descuento llevan uno.",
     "La cascada cliente > empresa de lineRounding y priceDecimals (D-144): Karpo Go sólo tiene el ajuste de la empresa.",
-    "Plazos cuya parte tiene medio céntimo o más: falta acordar si cada parte se trunca o se redondea. Con 100.01 / 3, truncando (lo que hace hoy Karpo Go) sale 33.33 + 33.33 + 33.35; redondeando, 33.34 + 33.34 + 33.33. Los casos de hoy no lo distinguen.",
     "Una rectificativa con plazos (total negativo) da en Karpo Go un único vencimiento por todo el importe en la fecha de emisión, sin repartir (contexts/receivables/domain/terms.go:166); no hay caso.",
     "Fechas de vencimiento con días fijos, meses sin pago, mes comercial o festivos: sólo hay un caso de días corridos.",
     "IGIC e IPSI (Canarias, Ceuta y Melilla), inversión del sujeto pasivo, regímenes especiales y operaciones con el extranjero.",
@@ -378,6 +377,35 @@
           { "date": "2026-12-02", "amount": "40.33" },
           { "date": "2027-01-01", "amount": "40.33" },
           { "date": "2027-01-31", "amount": "40.34" }
+        ]
+      }
+    },
+    {
+      "id": "vencimientos-truncados",
+      "description": "Total 100.01 en tres plazos (D-145): cada parte se trunca al céntimo, 100.01 / 3 = 33.336… → 33.33, y el último se queda con el resto, 33.35. Redondeando saldría 33.34 + 33.34 + 33.33, que no es la regla.",
+      "input": {
+        "invoiceKind": "ordinary",
+        "date": "2026-11-02",
+        "settings": { "lineRounding": "once", "priceDecimals": 4 },
+        "equivalenceSurcharge": false,
+        "lines": [
+          { "quantity": "1", "unitPrice": "100.01", "discount": "0", "treatment": "N1" }
+        ],
+        "installments": { "count": 3, "daysToFirst": 30, "daysBetween": 30 }
+      },
+      "expected": {
+        "lineNets": ["100.01"],
+        "breakdown": [
+          { "treatment": "N1", "kind": "not-subject", "base": "100.01", "rate": "0.00", "amount": "0.00", "surchargeRate": "0.00", "surcharge": "0.00" }
+        ],
+        "net": "100.01",
+        "tax": "0.00",
+        "surcharge": "0.00",
+        "total": "100.01",
+        "installments": [
+          { "date": "2026-12-02", "amount": "33.33" },
+          { "date": "2027-01-01", "amount": "33.33" },
+          { "date": "2027-01-31", "amount": "33.35" }
         ]
       }
     }
