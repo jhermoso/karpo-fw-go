@@ -377,6 +377,26 @@ func (s service) invoiceUseCases(svc *Service) {
 			if err != nil {
 				return err
 			}
+			// El nombre y el NIF, los de Parties hoy. El domicilio de una rectificativa, el congelado
+			// en la factura que rectifica; si aquélla no lo tenía (anterior a D-147), el de hoy.
+			seller, customer := ids[domain.PartyID{UUID: st.Seller.UUID}], ids[st.Customer]
+			if st.Kind == domain.Corrective {
+				orig, err := s.Invoices.Get(ctx, st.Corrects)
+				if err != nil {
+					return err
+				}
+				os := orig.State()
+				if os.SellerIdentity.Address.Complete() {
+					seller.Address = os.SellerIdentity.Address
+				}
+				if os.CustomerIdentity.Address.Complete() {
+					customer.Address = os.CustomerIdentity.Address
+				}
+			}
+			// Antes de tomar número: así la serie se bloquea menos tiempo. Issue lo vuelve a comprobar.
+			if err := domain.RequireAddresses(st.Kind, seller, customer); err != nil {
+				return err
+			}
 			date := c.Date
 			if date.IsZero() { // hoy en la zona horaria del vendedor
 				if date, err = s.today(ctx, domain.PartyID{UUID: st.Seller.UUID}, ids[domain.PartyID{UUID: st.Seller.UUID}].Country); err != nil {
@@ -395,15 +415,6 @@ func (s service) invoiceUseCases(svc *Service) {
 				return err
 			}); err != nil {
 				return err
-			}
-			seller, customer := ids[domain.PartyID{UUID: st.Seller.UUID}], ids[st.Customer]
-			if st.Kind == domain.Corrective { // el domicilio, el de la factura que rectifica (D-147)
-				orig, err := s.Invoices.Get(ctx, st.Corrects)
-				if err != nil {
-					return err
-				}
-				os := orig.State()
-				seller.Address, customer.Address = os.SellerIdentity.Address, os.CustomerIdentity.Address
 			}
 			return i.Issue(domain.Issuance{Series: seriesID, Number: number, Date: date, Seller: seller,
 				Customer: customer, Taxes: taxes})

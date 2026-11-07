@@ -117,6 +117,18 @@ func TestInvoice(t *testing.T) {
 		Customer: noAddress(customer), Taxes: taxes}); !isViolation(err, "billing.customer_address_required") {
 		t.Fatalf("customer address: %v", err)
 	}
+	// Al menos la calle y el país; la localidad todavía no se exige.
+	for _, a := range []domain.Address{{Street: "  ", Country: "ES"}, {Street: "Rúa Nova 2", Locality: "Santiago"}, {Street: "Rúa Nova 2", Country: " "}} {
+		partial := customer
+		partial.Address = a
+		if err := inv.Issue(domain.Issuance{Number: "FA-2026-000001", Date: vocab.MustDate(2026, 9, 28), Seller: seller,
+			Customer: partial, Taxes: taxes}); !isViolation(err, "billing.customer_address_required") {
+			t.Fatalf("an incomplete address %+v: %v", a, err)
+		}
+	}
+	if err := domain.RequireAddresses(domain.Ordinary, seller, domain.Identity{Address: domain.Address{Street: "Rúa Nova 2", Country: "ES"}}); err != nil {
+		t.Fatalf("street and country are enough: %v", err)
+	}
 	_ = inv.SetDetails(domain.Details{Description: "Servicios de septiembre", DueDate: vocab.MustDate(2026, 9, 1)})
 	if err := inv.Issue(domain.Issuance{Number: "FA-2026-000001", Date: vocab.MustDate(2026, 9, 28), Seller: seller, Customer: customer,
 		Taxes: taxes}); !isViolation(err, "billing.due_before_issue") {

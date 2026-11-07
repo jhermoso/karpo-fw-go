@@ -259,13 +259,21 @@ Tareas de Go del tramo T1 del plan de Karpo C# (D-127). Karpo C# llega primero a
   aparte (el primer contacto español con código postal de cinco cifras), así que, si el de
   facturación es extranjero, puede salir de otro contacto.
 - **Domicilio fiscal obligatorio para emitir (D-147, desde el 2026-11-07):** lo pide el art. 6 del
-  RD 1619/2012 en la factura completa. La regla es del dominio (`Invoice.Issue`, junto a la de la
-  descripción) y se comprueba al emitir, que es cuando se congela: si Parties no da domicilio del
-  emisor, 422 `billing.seller_address_required`; si no da el del cliente, 422
-  `billing.customer_address_required`. Se arregla dando a la party un contacto postal y volviendo a
-  emitir; el rechazo no consume número. La **rectificativa** no lo exige: lleva los domicilios
-  congelados en la factura que rectifica, no los que Parties tenga hoy (así se rectifica también una
-  factura emitida antes de la regla, sin domicilio).
+  RD 1619/2012 en la factura completa. La regla es del dominio (`RequireAddresses`, que usa
+  `Invoice.Issue` junto a la de la descripción) y se comprueba al emitir, que es cuando se congela;
+  la aplicación la comprueba también antes de tomar número, para bloquear la serie menos tiempo. Un
+  domicilio vale si tiene al menos calle y país (sin contar espacios); si no, 422
+  `billing.seller_address_required` (emisor) o `billing.customer_address_required` (cliente). Se
+  arregla dando a la party un contacto postal y volviendo a emitir; el rechazo no consume número.
+- **La rectificativa** no lo exige, pero lo lleva. Al emitirla, el **nombre y el NIF** salen de
+  Parties ese día, como en la ordinaria; el **domicilio**, de cada parte, el congelado en la factura
+  que rectifica, no el que Parties tenga hoy. Si la original no lo tenía (emitida antes de D-147),
+  el de Parties hoy, porque el art. 15 pide que la rectificativa cumpla el art. 6; y si tampoco hay,
+  se emite igualmente: una factura antigua se tiene que poder corregir.
+- **Pendiente:**
+  - exigir también la localidad (hoy sólo calle y país);
+  - `fiscalAddress` (Parties) elige el contacto vigente hoy, no el vigente en la fecha de emisión:
+    una factura emitida con fecha pasada congela el domicilio de hoy.
 
 ## Los ajustes de la empresa (D-128 a D-130, D-144; desde el 2026-11-06)
 
