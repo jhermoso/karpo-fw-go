@@ -216,12 +216,16 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 	}
 	// Un pedido confirmado no lleva fecha propia: el día en que se confirmó, en la zona de la empresa.
 	messaging.Handle(c, func(ctx context.Context, e OrderConfirmed, env app.Envelope) error {
+		fact := domain.Ref{Type: domain.Order, ID: e.OrderID}
+		if existing, err := s.byFact(ctx, fact); err != nil || existing != nil {
+			return err // ya anotado: una reentrega no pregunta la zona
+		}
 		date, err := dayOf(ctx, e.Company, env.OccurredAt)
 		if err != nil {
 			return err
 		}
 		return record(ctx, entry{event: e.IntegrationEventType(), company: e.Company, party: e.Customer, date: date,
-			total: e.Total, number: e.Number, fact: domain.Ref{Type: domain.Order, ID: e.OrderID}})
+			total: e.Total, number: e.Number, fact: fact})
 	})
 	messaging.Handle(c, func(ctx context.Context, e DeliveryIssued, _ app.Envelope) error {
 		return record(ctx, entry{event: e.IntegrationEventType(), company: e.Company, party: e.Customer, date: e.Date, total: e.Total, number: e.Number,
@@ -253,12 +257,16 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 	})
 	// Una declaración: modelo, año y periodo, el día en que se presentó en la zona del declarante.
 	messaging.Handle(c, func(ctx context.Context, e FilingSubmitted, env app.Envelope) error {
+		fact := domain.Ref{Type: domain.TaxFiling, ID: e.FilingID}
+		if existing, err := s.byFact(ctx, fact); err != nil || existing != nil {
+			return err // ya anotado: una reentrega no pregunta la zona
+		}
 		date, err := dayOf(ctx, e.Declarant, env.OccurredAt)
 		if err != nil {
 			return err
 		}
 		return record(ctx, entry{event: e.IntegrationEventType(), company: e.Declarant, date: date, total: e.Withheld,
-			number: fmt.Sprintf("%s-%d-%s", e.Form, e.Year, e.Period), fact: domain.Ref{Type: domain.TaxFiling, ID: e.FilingID}})
+			number: fmt.Sprintf("%s-%d-%s", e.Form, e.Year, e.Period), fact: fact})
 	})
 	messaging.Handle(c, func(ctx context.Context, e FilingReverted, _ app.Envelope) error {
 		return cancel(ctx, domain.Ref{Type: domain.TaxFiling, ID: e.FilingID}, e.Reason)

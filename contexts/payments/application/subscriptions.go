@@ -138,9 +138,11 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 	bySource := func(ctx context.Context, typ, id string) ([]*domain.Payable, error) {
 		return s.Payables.Find(ctx, spec.And(domain.PayFieldSrcType.Eq(typ), domain.PayFieldSrcID.Eq(id)))
 	}
+	known := func(ctx context.Context, company domain.OrganizationID, src domain.Source) (bool, error) {
+		return s.Payables.Exists(ctx, spec.And(domain.PayFieldCompany.Eq(company), domain.PayFieldSrcType.Eq(src.Type), domain.PayFieldSrcID.Eq(src.ID)))
+	}
 	create := func(ctx context.Context, st domain.PayableState) error {
-		if found, err := s.Payables.Exists(ctx, spec.And(domain.PayFieldCompany.Eq(st.Company), domain.PayFieldSrcType.Eq(st.Source.Type),
-			domain.PayFieldSrcID.Eq(st.Source.ID))); err != nil || found {
+		if found, err := known(ctx, st.Company, st.Source); err != nil || found {
 			return err
 		}
 		p, err := domain.RegisterPayable(domain.NewPayableID(), st)
@@ -250,6 +252,10 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 		if err != nil {
 			return nil // un periodo sin pago (resúmenes anuales)
 		}
+		company, src := domain.OrganizationID{UUID: declarant}, domain.Source{Type: filingSubmitted, ID: e.FilingID}
+		if found, err := known(ctx, company, src); err != nil || found {
+			return err // ya registrada: una reentrega no pregunta la zona
+		}
 		// Emitida el día en que se presentó, en la zona de la empresa declarante.
 		issued, err := app.DateOf(ctx, s.Today, declarant, env.OccurredAt)
 		if err != nil {
@@ -258,8 +264,8 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 		if due.Before(issued) {
 			due = issued // presentado tarde: vence en el acto
 		}
-		return create(ctx, domain.PayableState{Company: domain.OrganizationID{UUID: declarant}, Authority: TaxAuthority, Kind: domain.Tax,
-			Source: domain.Source{Type: filingSubmitted, ID: e.FilingID}, Document: fmt.Sprintf("Modelo %s %d-%s", e.Form, e.Year, e.Period),
+		return create(ctx, domain.PayableState{Company: company, Authority: TaxAuthority, Kind: domain.Tax,
+			Source: src, Document: fmt.Sprintf("Modelo %s %d-%s", e.Form, e.Year, e.Period),
 			Issued: issued, Due: due, Currency: euro, Amount: amount})
 	})
 	messaging.Handle(c, func(ctx context.Context, e FilingReverted, _ app.Envelope) error {

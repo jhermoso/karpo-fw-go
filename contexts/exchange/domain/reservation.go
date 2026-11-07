@@ -151,7 +151,7 @@ type Request struct {
 	Channel       string
 	Segment       string
 	Pickup        time.Time
-	PickupOn      vocab.Date // el día de Pickup en la zona de la empresa; sin él, el de UTC
+	PickupOn      vocab.Date // el día de Pickup en la zona de la empresa; sin él, ReconstituteReservation pone el de UTC
 	TimeSlot      string
 	Facility      fw.UUID
 	PromotionCode string
