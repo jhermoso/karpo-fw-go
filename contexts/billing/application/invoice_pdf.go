@@ -122,10 +122,10 @@ const (
 	smallSize     = 8.0
 	columnWidth   = 245.0
 	customerX     = 310.0
-	conceptWidth  = 250.0
-	quantityRight = 350.0
-	priceRight    = 420.0
-	discountRight = 470.0
+	conceptWidth  = 195.0 // el concepto acaba en 235
+	quantityRight = 310.0 // cabe 1.234,5678
+	priceRight    = 400.0 // cabe 1.234.567,123456 (unos 73 puntos)
+	discountRight = 450.0
 	qrSize        = 85.0 // unos 30 mm
 )
 
@@ -195,13 +195,17 @@ func renderInvoice(st domain.InvoiceState, original *domain.InvoiceState) []byte
 	}
 	s.y = max(s.y, 40+qrSize) + 20
 
-	// Las partes, en dos columnas.
+	// Las partes, en dos columnas y en la misma página.
+	seller, customer := partyLines(txtSeller, st.SellerIdentity), partyLines(txtCustomer, st.CustomerIdentity)
+	s.need(float64(max(len(seller), len(customer))) * lineHeight)
 	top := s.y
-	s.party(left, txtSeller, st.SellerIdentity)
-	end := s.y
-	s.y = top
-	s.party(customerX, txtCustomer, st.CustomerIdentity)
-	s.y = max(s.y, end) + 10
+	for k, l := range seller {
+		s.page.Text(left, top+float64(k)*lineHeight, l.font, l.size, l.text)
+	}
+	for k, l := range customer {
+		s.page.Text(customerX, top+float64(k)*lineHeight, l.font, l.size, l.text)
+	}
+	s.y = top + float64(max(len(seller), len(customer)))*lineHeight + 10
 
 	s.text(left, pdf.Bold, bodySize, txtDescription+":")
 	s.y += lineHeight
@@ -247,22 +251,27 @@ func renderInvoice(st domain.InvoiceState, original *domain.InvoiceState) []byte
 	// El desglose: base, tipo y cuota por tipo, y la mención de las exentas y no sujetas.
 	surcharge := !st.Taxes.Surcharge.IsZero()
 	cols := []float64{250, 320, 400, 470, right} // base, tipo, cuota, rec. %, cuota rec. (por la derecha)
+	taxHeader := func() {
+		s.text(left, pdf.Bold, bodySize, txtTax)
+		for k, h := range []string{txtBase, txtRate, txtQuota, txtSurchargeRate, txtSurchargeQuota} {
+			if k < 3 || surcharge {
+				s.right(cols[k], pdf.Bold, bodySize, h)
+			}
+		}
+		s.page.Line(left, s.y+4, right, s.y+4, 0.5)
+		s.y += lineHeight + 4
+	}
 	s.need(4 * lineHeight)
 	s.text(left, pdf.Bold, bodySize, txtTaxes)
 	s.y += lineHeight
-	s.text(left, pdf.Bold, bodySize, txtTax)
-	for k, h := range []string{txtBase, txtRate, txtQuota, txtSurchargeRate, txtSurchargeQuota} {
-		if k < 3 || surcharge {
-			s.right(cols[k], pdf.Bold, bodySize, h)
-		}
-	}
-	s.page.Line(left, s.y+4, right, s.y+4, 0.5)
-	s.y += lineHeight + 4
+	taxHeader()
 	igic := false
 	type mention struct{ format, code string }
 	var mentions []mention
 	for _, t := range st.Taxes.Lines {
-		s.need(lineHeight)
+		if s.need(lineHeight) {
+			taxHeader()
+		}
 		igic = igic || t.TaxType == "igic"
 		name := taxNames[t.TaxType]
 		if name == "" {
@@ -325,24 +334,28 @@ func renderInvoice(st domain.InvoiceState, original *domain.InvoiceState) []byte
 	return s.doc.Bytes()
 }
 
-// party escribe el nombre, el NIF y el domicilio de una de las partes; lo que falte no sale.
-func (s *sheet) party(x float64, label string, id domain.Identity) {
-	s.text(x, pdf.Bold, smallSize, label)
-	s.y += lineHeight
+// styled es una línea de texto con su fuente y su tamaño.
+type styled struct {
+	font pdf.Font
+	size float64
+	text string
+}
+
+// partyLines son las líneas de una de las partes: nombre, NIF y domicilio; lo que falte no sale.
+func partyLines(label string, id domain.Identity) []styled {
+	out := []styled{{pdf.Bold, smallSize, label}}
 	for _, l := range pdf.Wrap(pdf.Bold, bodySize, columnWidth, id.Name) {
-		s.text(x, pdf.Bold, bodySize, l)
-		s.y += lineHeight
+		out = append(out, styled{pdf.Bold, bodySize, l})
 	}
-	s.text(x, pdf.Regular, bodySize, txtNIF+": "+id.NIF)
-	s.y += lineHeight
+	out = append(out, styled{pdf.Regular, bodySize, txtNIF + ": " + id.NIF})
 	a := id.Address
 	place := strings.TrimSpace(a.PostalCode + " " + a.Locality)
 	for _, t := range []string{a.Street, place, a.Region, a.Country} {
 		for _, l := range pdf.Wrap(pdf.Regular, bodySize, columnWidth, t) {
-			s.text(x, pdf.Regular, bodySize, l)
-			s.y += lineHeight
+			out = append(out, styled{pdf.Regular, bodySize, l})
 		}
 	}
+	return out
 }
 
 // esDate escribe una fecha como dd/mm/aaaa.

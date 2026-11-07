@@ -58,3 +58,34 @@ func TestRenderInvoice_SeveralPages(t *testing.T) {
 		t.Errorf("line headers: %d in %d pages", n, pages)
 	}
 }
+
+// El desglose que no cabe en la página sigue en la siguiente con su cabecera.
+func TestRenderInvoice_TaxHeaderOnEveryPage(t *testing.T) {
+	st := domain.InvoiceState{Kind: domain.Ordinary, Number: "FA-2026-000010", IssueDate: vocab.MustDate(2026, 9, 28), Description: "Varios tipos",
+		SellerIdentity: domain.Identity{NIF: "A58818501", Name: "Acme"}, CustomerIdentity: domain.Identity{NIF: "12345678Z", Name: "Ana"}}
+	for k := range 90 {
+		st.Lines = append(st.Lines, domain.Line{Description: "Hora " + strconv.Itoa(k+1), Quantity: vocab.MustDecimal("1"), UnitPrice: vocab.MustDecimal("10"),
+			Net: vocab.MustDecimal("10")})
+		st.Taxes.Lines = append(st.Taxes.Lines, domain.TaxLine{TaxType: "vat", TreatmentKind: "subject", Rate: vocab.MustDecimal("21"),
+			Base: vocab.MustDecimal("10"), Amount: vocab.MustDecimal("2.10")})
+	}
+	b := renderInvoice(st, nil)
+	pages := bytes.Count(b, []byte("/Type /Page /Parent"))
+	// Las líneas llenan la primera página y parte de la segunda; el desglose empieza en la segunda
+	// y sigue en la tercera.
+	if headers := bytes.Count(b, pdf.Encode("("+txtTax+")")); pages < 3 || headers < 2 {
+		t.Fatalf("%d tax headers in %d pages", headers, pages)
+	}
+}
+
+// Un precio de 6 decimales no se monta sobre la cantidad, ni la cantidad sobre el concepto.
+func TestRenderInvoice_ColumnsDoNotOverlap(t *testing.T) {
+	price := esDecimal(vocab.MustDecimal("1234567.123456"), 2)
+	quantity := esDecimal(vocab.MustDecimal("1234.5678"), 0)
+	if start := priceRight - pdf.Width(pdf.Regular, bodySize, price); start <= quantityRight+5 {
+		t.Fatalf("the price %s starts at %v, over the quantity (%v)", price, start, quantityRight)
+	}
+	if start := quantityRight - pdf.Width(pdf.Regular, bodySize, quantity); start <= left+conceptWidth+5 {
+		t.Fatalf("the quantity %s starts at %v, over the concept", quantity, start)
+	}
+}

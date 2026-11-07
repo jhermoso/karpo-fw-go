@@ -336,7 +336,9 @@ del vendedor, 404. Un borrador no tiene PDF: 422 `billing.invoice_not_issued`.
   textos en constantes en un solo sitio. El PDF lo escribe `pkg/render/pdf`, un generador mínimo con
   la biblioteca estándar: A4, Helvetica y Helvetica-Bold con WinAnsiEncoding, texto, líneas y
   rectángulos, flujos sin comprimir. Si las líneas no caben, sigue en otras páginas con la cabecera
-  de las líneas repetida y «Página n de m». El dominio no sabe nada de PDF. Sin migraciones.
+  de las líneas, o la del desglose, repetida y «Página n de m». La respuesta lleva
+  `Cache-Control: no-store` y `X-Content-Type-Options: nosniff`, y el nombre en `filename*` si el
+  número no es ASCII. El dominio no sabe nada de PDF. Sin migraciones.
 - **Prueba:** `TestBilling_InvoicePDF` (número, fechas, NIF y domicilio de las dos partes, total,
   mención de la exención, rectificativa; borrador 422, sin permiso 403, fuera del ámbito 404),
   `TestRenderInvoice_SeveralPages`, `TestSpanishNumbers` y las del generador (`pkg/render/pdf`:
@@ -350,6 +352,11 @@ del vendedor, 404. Un borrador no tiene PDF: 422 `billing.invoice_not_issued`.
     clave y el artículo de la Ley del IVA que le corresponde; en IGIC sólo sale la clave, porque las
     referencias de la Ley 37/1992 no valen allí;
   - el **país** del domicilio sale con su código (ES), no con su nombre.
+  - la mención de una exención o no sujeción con una clave que no es del SII (E1–E6, N1–N2) no cita
+    el precepto: sólo la clave, hasta que la factura congele la descripción del tratamiento;
+  - el PDF no lleva `/ID` en el trailer, que hará falta para PDF/A;
+  - las letras latinas que WinAnsi no tiene salen con su letra base (Łódź sale «Lódz»); otros
+    alfabetos salen como «?», hasta que haya fuentes incrustadas.
 
 ## Pendiente
 

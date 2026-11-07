@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"mime"
 	"net/http"
 	"strconv"
 
@@ -191,7 +192,11 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/pdf")
-		w.Header().Set("Content-Disposition", `inline; filename="`+doc.FileName+`"`)
+		// Un número que no es ASCII va en filename*; y los datos fiscales de las partes no se guardan
+		// por el camino.
+		w.Header().Set("Content-Disposition", mime.FormatMediaType("inline", map[string]string{"filename": doc.FileName}))
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
 		_, _ = w.Write(doc.Content)
 	})
 	mux.HandleFunc("DELETE /api/billing/invoices/{id}", func(w http.ResponseWriter, r *http.Request) {

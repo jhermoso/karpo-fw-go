@@ -26,8 +26,8 @@ func inPDF(s string) []byte {
 	return pdf.Encode(strings.NewReplacer(`\`, `\\`, "(", `\(`, ")", `\)`).Replace(s))
 }
 
-// get pide path y devuelve el estado, el tipo de contenido y el cuerpo.
-func (h *host) get(path, user string) (int, string, []byte) {
+// get pide path y devuelve el estado, las cabeceras y el cuerpo.
+func (h *host) get(path, user string) (int, http.Header, []byte) {
 	h.t.Helper()
 	req, _ := http.NewRequest("GET", h.srv.URL+path, nil)
 	req.Header.Set("Authorization", h.tokens[user])
@@ -37,7 +37,7 @@ func (h *host) get(path, user string) (int, string, []byte) {
 	}
 	defer res.Body.Close()
 	body, _ := io.ReadAll(res.Body)
-	return res.StatusCode, res.Header.Get("Content-Type"), body
+	return res.StatusCode, res.Header, body
 }
 
 // El PDF de una factura emitida lleva lo del artículo 6 del Reglamento de facturación que guarda
@@ -99,9 +99,13 @@ func TestBilling_InvoicePDF(t *testing.T) {
 	}
 	h.must(h.do("POST", "/api/billing/invoices/"+inv.ID+"/issue", "issuer", map[string]any{"series": fa.ID, "date": "2026-09-28"}, &inv), 200, "issue")
 
-	status, ctype, body := h.get(path, "clerk")
-	if status != 200 || ctype != "application/pdf" || !bytes.HasPrefix(body, []byte("%PDF-")) {
-		t.Fatalf("pdf: %d %s %q", status, ctype, body[:min(len(body), 40)])
+	status, header, body := h.get(path, "clerk")
+	if status != 200 || header.Get("Content-Type") != "application/pdf" || !bytes.HasPrefix(body, []byte("%PDF-")) {
+		t.Fatalf("pdf: %d %v %q", status, header, body[:min(len(body), 40)])
+	}
+	if header.Get("Content-Disposition") != "inline; filename=FA-2026-000001.pdf" || header.Get("Cache-Control") != "no-store" ||
+		header.Get("X-Content-Type-Options") != "nosniff" {
+		t.Fatalf("headers: %v", header)
 	}
 	_ = os.WriteFile(filepath.Join(t.TempDir(), "factura.pdf"), body, 0o600) // para mirarlo a mano
 	for _, want := range []string{
@@ -121,6 +125,19 @@ func TestBilling_InvoicePDF(t *testing.T) {
 	}
 	if status, _, _ := h.get(path, "outsider"); status != 404 {
 		t.Fatalf("outside the scope: %d", status)
+	}
+
+	// Un número con letras que no son ASCII va en filename* (RFC 2231).
+	var an bapp.SeriesDTO
+	h.must(h.do("POST", "/api/billing/series", "clerk", map[string]any{"seller": acme.ID, "code": "AÑ", "year": 2026}, &an), 201, "series AÑ")
+	var other bapp.InvoiceDTO
+	h.must(h.do("POST", "/api/billing/invoices", "clerk", map[string]any{"seller": acme.ID, "customer": ana.ID, "description": "Licencia"}, &other), 201, "draft")
+	h.must(h.do("POST", "/api/billing/invoices/"+other.ID+"/lines", "clerk", map[string]any{"description": "Licencia", "quantity": "1", "unitPrice": "10",
+		"taxCode": "G21"}, nil), 200, "line")
+	h.must(h.do("POST", "/api/billing/invoices/"+other.ID+"/issue", "issuer", map[string]any{"series": an.ID, "date": "2026-09-28"}, nil), 200, "issue in AÑ")
+	_, header, _ = h.get("/api/billing/invoices/"+other.ID+"/pdf", "clerk")
+	if got := header.Get("Content-Disposition"); got != "inline; filename*=utf-8''A%C3%91-2026-000001.pdf" {
+		t.Fatalf("non-ASCII file name: %q", got)
 	}
 
 	// La rectificativa cita la factura que rectifica y la causa.

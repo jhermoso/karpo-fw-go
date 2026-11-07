@@ -89,6 +89,13 @@ func TestEncode_WinAnsi(t *testing.T) {
 	if !bytes.Equal(got, want) {
 		t.Fatalf("encode: % X", got)
 	}
+	if got := pdf.Encode("Łódź, Gdańsk, Ostrava-Poruba, Kraków, Iaşi, Győr, Košice, Ağrı"); string(got) != "L\xf3dz, Gdansk, Ostrava-Poruba, Krak\xf3w, Iasi, Gyor, Ko\x9aice, Agri" {
+		t.Fatalf("transliteration: %q", got)
+	}
+	// La ó y la š sí están en WinAnsi y se quedan: Łódź sale como Lódz.
+	if got := pdf.Encode("Łódź"); string(got) != "L\xf3dz" {
+		t.Fatalf("Łódź: %q", got)
+	}
 	if got := pdf.Encode("a→b"); string(got) != "a?b" {
 		t.Fatalf("unknown: %q", got)
 	}

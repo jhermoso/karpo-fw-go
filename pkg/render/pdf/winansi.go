@@ -10,7 +10,21 @@ var winAnsiHigh = map[rune]byte{
 	'–': 0x96, '—': 0x97, '˜': 0x98, '™': 0x99, 'š': 0x9A, '›': 0x9B, 'œ': 0x9C, 'ž': 0x9E, 'Ÿ': 0x9F,
 }
 
-// Encode pasa s a WinAnsiEncoding. Lo que no tiene código sale como '?'; los caracteres de
+// latinBase da la letra base de las letras latinas con diacrítico que WinAnsi no tiene (polaco,
+// checo, húngaro, rumano, turco, croata, letón, lituano…): Łódź sale como Lodz, mejor que como ?ód?.
+var latinBase = func() map[rune]rune {
+	const from = "ĀāĂăĄąĆćĈĉĊċČčĎďĐđĒēĔĕĖėĘęĚěĜĝĞğĠġĢģĤĥĦħĨĩĪīĬĭĮįİıĴĵĶķĹĺĻļĽľĿŀŁłŃńŅņŇňŌōŎŏŐőŔŕŖŗŘřŚśŜŝŞşŢţŤťŦŧŨũŪūŬŭŮůŰűŲųŴŵŶŷŹźŻżȘșȚț"
+	const to = "AaAaAaCcCcCcCcDdDdEeEeEeEeEeGgGgGgGgHhHhIiIiIiIiIiJjKkLlLlLlLlLlNnNnNnOoOoOoRrRrRrSsSsSsTtTtTtUuUuUuUuUuUuWwYyZzZzSsTt"
+	m := map[rune]rune{}
+	t := []rune(to)
+	for k, r := range []rune(from) {
+		m[r] = t[k]
+	}
+	return m
+}()
+
+// Encode pasa s a WinAnsiEncoding. Una letra latina que no tiene código sale como su letra base;
+// lo demás que no tiene código, como '?'; los caracteres de
 // control, como espacios.
 func Encode(s string) []byte {
 	out := make([]byte, 0, len(s))
@@ -23,6 +37,8 @@ func Encode(s string) []byte {
 		default:
 			if b, ok := winAnsiHigh[r]; ok {
 				out = append(out, b)
+			} else if base, ok := latinBase[r]; ok {
+				out = append(out, byte(base))
 			} else {
 				out = append(out, '?')
 			}
