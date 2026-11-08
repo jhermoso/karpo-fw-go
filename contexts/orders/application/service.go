@@ -296,7 +296,8 @@ func Publications(r *messaging.Recorder) *messaging.Recorder {
 		for _, l := range d.Lines {
 			total = total.Add(l.Amount)
 			out.Lines = append(out.Lines, contracts.DeliveryLine{Line: l.Line, Product: l.Product.String(), SKU: l.SKU, Description: l.Description, UoM: l.UoM,
-				TaxCode: l.TaxCode, Stocked: l.Stocked, Quantity: l.Quantity.String(), NetPrice: l.NetPrice.StringFixed(4), Amount: money(l.Amount)})
+				TaxCode: l.TaxCode, Stocked: l.Stocked, Quantity: l.Quantity.String(), UnitPrice: l.UnitPrice.StringFixed(4),
+				Discount: l.Discount.StringFixed(4), NetPrice: l.NetPrice.StringFixed(4), Amount: money(l.Amount)})
 		}
 		out.Total = money(total)
 		return []app.IntegrationEvent{out}, nil

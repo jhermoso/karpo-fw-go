@@ -156,8 +156,8 @@ Aplica la decisión 5 de [PEDIDOS.md](PEDIDOS.md): Pedidos publica el albarán y
 factura, sin que ningún contexto escriba en el otro.
 
 - **Qué hace Facturación al recibir `orders.delivery-issued.v1`:** prepara un **borrador** de
-  factura para ese cliente con las líneas del albarán, a su precio neto y con su código de
-  impuesto. La fecha de operación es la del albarán y la descripción cita el albarán y el pedido.
+  factura para ese cliente con las líneas del albarán, con su precio, su descuento encadenado
+  (D-149) y su código de impuesto. La fecha de operación es la del albarán y la descripción cita el albarán y el pedido.
   Una persona lo revisa y lo emite en una serie; la emisión sigue siendo un permiso aparte.
 - **La factura recuerda su origen** (tipo, Id y número del documento). Hay un borrador por
   albarán: un mensaje repetido no crea otro.
@@ -245,7 +245,9 @@ factura, de los dos modos. Por defecto sigue un borrador por albarán.
   facturarlo; su Id es el del albarán, así que no queda pendiente dos veces, y uno que ya está en
   una factura tampoco. Al llegar se prepara su borrador sin guardarlo, para validar sus líneas: un
   albarán que no se podría facturar (una línea sin código de impuesto) se rechaza ahora, como el de
-  un cliente por albarán, en vez de quedar pendiente y hacer fallar el cierre de su cliente.
+  un cliente por albarán, en vez de quedar pendiente y hacer fallar el cierre de su cliente. Cada
+  línea pendiente guarda su precio y su descuento encadenado (`bil_pending_delivery_lines.discount`,
+  migración 13, D-149; nulo en las de antes, que guardaban el precio neto).
 - **Pendientes:** `GET /api/billing/pending-deliveries?seller=…&customer=…&upTo=…&page=…&size=…`
   los lista (Id del albarán en `delivery`, cliente, número, pedido, fecha, número de líneas y neto),
   por fecha y número; con `upTo`, sólo los de hasta ese día: lo que facturaría un cierre. Permiso: el de leer facturas, `Billing.Invoice.Read`, y sólo los de los vendedores del
@@ -395,7 +397,7 @@ importa Parties: los pide por su puerto `Settings` (`billing.WithSettings`), que
   es un error del campo `unitPrice` (400), como antes con 4. El precio de la línea pasa de (18,4) a
   (20,6) en la migración 9: caben 6 decimales y siguen cabiendo las mismas 14 cifras enteras. El
   borrador de un albarán de Orders lleva al menos 4 decimales del precio, los del pedido, aunque la
-  empresa pida menos: redondear el precio neto perdería dinero (1,2345 × 1000 daría 1230,00 y no
+  empresa pida menos: redondear el precio perdería dinero (1,2345 × 1000 daría 1230,00 y no
   1234,50) y rechazarlo repetiría el evento sin fin.
 - **Dónde se aplica y dónde se congela:** la forma de redondear y los decimales se toman de la
   empresa **al preparar el borrador** (a mano o desde un albarán) y se quedan en la
@@ -502,8 +504,15 @@ interna**: Karpo C# copia el fichero tal cual a su repositorio y lo pasa por su 
   `gross_then_discount` con un céntimo de diferencia; precios de 6 y de 2 decimales, el rechazo de
   uno con más y la aceptación de "0.120" con 2; líneas exentas y no sujetas junto a sujetas; el
   recargo de equivalencia; y plazos truncados al céntimo con el resto en el último (D-145: 100.01
-  en tres da 33.33 + 33.33 + 33.35). Lo que falta (retención, descuentos en cascada, cascada
-  cliente > empresa, plazos de una rectificativa…), en `pending`.
+  en tres da 33.33 + 33.33 + 33.35); y el descuento de la línea encadenado con el del cliente
+  (`descuento-encadenado`, D-149: 1000 × 1 con un 5 % y un 2,5 % dan 926,25). Con `lineRounding` =
+  `once`, la prueba comprueba además que el importe de una línea de pedido de Orders da el mismo
+  neto. Lo que falta (retención, más de dos descuentos, cascada cliente > empresa, plazos de una
+  rectificativa…), en `pending`.
+- **`customerDiscount`** (D-149): campo opcional de una línea de entrada, el descuento del cliente.
+  Se encadena con `discount` y se redondea a 4 decimales; sin él, `discount` vale tal cual. Se
+  añadió sin cambiar `format` (sigue en 1) porque es opcional y no cambia ningún caso anterior;
+  Karpo C# tiene que admitirlo al leer el fichero.
 - **La prueba:** `contracts/billing/calculation_cases_test.go` pasa cada caso por el dominio de
   Billing, el `TaxEngine` de Fiscal con la jurisdicción española (a través del adaptador
   `FiscalTaxes`) y las condiciones de pago de Receivables. Lee el fichero sin admitir campos
@@ -541,12 +550,11 @@ en su perfil de Parties (docs/PARTIES.md §25), por omisión sí.
   `vocab.ChainedDiscount`, que usan Orders y Billing. La línea guarda un solo descuento, el
   encadenado, con los 4 decimales de su columna: dos descuentos de 2 decimales pueden dar hasta 6
   (12,5 y 7,25 dan 18,84375) y se redondea a 18,8438.
-- **El neto puede no coincidir con el del pedido** para lo mismo. Orders redondea a 4 decimales el
-  precio neto unitario (precio con los dos descuentos) y multiplica por la cantidad; Billing aplica
-  el descuento a la línea entera y redondea una vez al céntimo. La diferencia crece con la
-  cantidad: 1000 unidades a 1 € con un 5 % y un 2,5 % dan 926,30 en el pedido (0,9263 por unidad)
-  y 926,25 en la factura directa (descuento 7,375 %), 0,05 de diferencia. El redondeo del
-  descuento a 4 decimales también cuenta, y también crece con la cantidad.
+- **El neto coincide con el del pedido** para lo mismo (D-149): Orders calcula el importe de la
+  línea como Billing con `once`, con el descuento encadenado a 4 decimales sobre la línea entera.
+  1000 unidades a 1 € con un 5 % y un 2,5 % dan 926,25 en el pedido, en el albarán y en la
+  factura. Sólo una empresa con `gross_then_discount` puede ver un céntimo de diferencia entre el
+  albarán y su factura, porque la factura se calcula con su ajuste.
 - **Lo que no se escribe sale del producto:** la descripción, su nombre; el código de impuesto, el
   suyo si la línea no trae ni código ni tratamiento.
 - **Lo escrito manda** (sobrescritura explícita): si la línea trae `unitPrice`, el precio y el
@@ -581,8 +589,8 @@ en su perfil de Parties (docs/PARTIES.md §25), por omisión sí.
 - **Migración 12** de Billing, en los cinco motores: `bil_invoice_lines.product` `{uuid}` y
   `price_source` `{str:20}`, nulos. Sin clave ajena: el producto es de otro contexto. Las líneas que
   ya hay no tienen producto.
-- **El borrador de un albarán** no cambia: trae el precio neto del pedido y sus líneas no guardan
-  el producto.
+- **El borrador de un albarán** trae el precio y el descuento encadenado del pedido (D-149) y sus
+  líneas no guardan el producto.
 - **Prueba:** `TestBilling_AutomaticPricing` (Products y Orders de mentira: un caso por nivel con la
   tarifa del cliente y la fecha de la operación en la petición, el descuento encadenado, los
   decimales de la factura, el precio y el descuento escritos, `automatic_pricing` a false con y sin
@@ -594,6 +602,32 @@ en su perfil de Parties (docs/PARTIES.md §25), por omisión sí.
   producto vuelve con su producto y su nivel de las columnas nuevas).
 - **Pendiente:** el descuento por familia y otras monedas (D-148), que entran por la cadena de
   Products sin tocar Billing; que el borrador de un albarán guarde también el producto.
+
+## Importe como el del pedido y el albarán (D-149; añadido el 2026-11-08)
+
+Acuerdo técnico de Karpo Go y Karpo C#: el importe de la línea de pedido y de albarán se calcula
+como el de la factura. Lo que cambia en Facturación:
+
+- **`orders.delivery-issued.v1`** trae en cada línea `unitPrice` (el precio del pedido, 4
+  decimales) y `discount` (el descuento encadenado de la tarifa y del cliente, 4 decimales), además
+  de `netPrice`, que se queda informativo. El borrador y el pendiente mensual toman el precio y el
+  descuento: la factura sale igual que el albarán al céntimo (con `once`). Un evento de antes, sin
+  `unitPrice`, se factura como siempre: `netPrice` sin descuento.
+- **Compatibilidad:** los campos son nuevos y el viejo se conserva. Un consumidor antiguo los
+  ignora y sigue facturando a `netPrice` (con la diferencia de céntimos de antes); uno nuevo lee un
+  evento antiguo sin ellos.
+- **Migración 13:** `bil_pending_delivery_lines.discount` `{dec:7,4}`, nula (sin descuento), como la
+  de `bil_invoice_lines`. Los pendientes que ya hay guardan el precio neto y siguen sin descuento,
+  que es como llegaron.
+- **La API** escribe el descuento de una línea con al menos 2 decimales y todos los que tenga, hasta
+  4 (`7.375`, no `7.38`): con 2 no se podría rehacer el neto. La regla es `vocab.StringMinPlaces`,
+  la misma del PDF y del albarán de Pedidos.
+- **El neto de la lista de pendientes** se calcula con el cálculo de la empresa vendedora
+  (`lineRounding`), como el borrador que prepararía el cierre.
+- **Pruebas:** `TestBilling_DeliveryWithChainedDiscount` (SQLite: borrador, evento antiguo,
+  pendiente mensual y cierre); de punta a punta, `TestOrders_ChainedDiscountLikeTheInvoice_MemoryThenSQLite`
+  en `contexts/orders` (pedido, albarán y factura emitida, 926,25 y 1120,76 con IVA); el caso
+  `descuento-encadenado`; en los motores, el final de `TestOrdersInvoicing`.
 
 ## Pendiente
 

@@ -154,6 +154,14 @@ var productDDL = []string{
 	`ALTER TABLE bil_invoice_lines {add:price_source} {str:20}{addEnd}`,
 }
 
+// pendingDiscountDDL guarda el descuento encadenado de cada línea de un albarán pendiente, que ahora
+// llega con su precio y no con su precio neto (D-149). Nulo, como el de bil_invoice_lines: sin
+// descuento. Las líneas que ya hay tienen el precio neto y se quedan sin descuento, que es como
+// llegaron.
+var pendingDiscountDDL = []string{
+	`ALTER TABLE bil_pending_delivery_lines {add:discount} {dec:7,4}{addEnd}`,
+}
+
 // errSourceTaken es un conflicto: otra factura ya tiene ese documento (dos cierres a la vez).
 var errSourceTaken = fmt.Errorf("%w: billing: the document is already in another invoice", fw.ErrConflict)
 
@@ -196,6 +204,7 @@ func Migrations() sqlrepo.MigrationSet {
 		{Version: 10, Name: "sources of an invoice", Up: sqlrepo.RenderDDLAll(sourcesDDL...)},
 		{Version: 11, Name: "delivery notes pending of the period close", Up: sqlrepo.RenderDDLAll(pendingDDL...)},
 		{Version: 12, Name: "product and price source of an invoice line", Up: sqlrepo.RenderDDLAll(productDDL...)},
+		{Version: 13, Name: "discount of a pending delivery line", Up: sqlrepo.RenderDDLAll(pendingDiscountDDL...)},
 	}}
 }
 
@@ -424,7 +433,7 @@ func PendingDeliveryMapping() sqlrepo.Mapping[domain.PendingDeliveryID, *domain.
 			slices.SortFunc(rows, func(a, b *sqlrepo.Row) int { return int(a.Int64("line_no") - b.Int64("line_no")) })
 			for _, c := range rows {
 				s.Lines = append(s.Lines, domain.LineInput{Description: c.String("description"), Quantity: c.Decimal("quantity"),
-					UnitPrice: c.Decimal("unit_price"), TaxCode: c.String("tax_code")})
+					UnitPrice: c.Decimal("unit_price"), Discount: c.Decimal("discount"), TaxCode: c.String("tax_code")})
 				if err := c.Err(); err != nil {
 					return nil, err
 				}
@@ -436,13 +445,13 @@ func PendingDeliveryMapping() sqlrepo.Mapping[domain.PendingDeliveryID, *domain.
 		},
 		Children: []sqlrepo.Child[*domain.PendingDelivery]{{
 			Name: "lines", Table: "bil_pending_delivery_lines", ForeignKey: "pending_id", OrderBy: []string{"line_no"},
-			Columns:  []string{"line_no", "description", "quantity", "unit_price", "tax_code"},
+			Columns:  []string{"line_no", "description", "quantity", "unit_price", "discount", "tax_code"},
 			Decimals: decimalColumns.Of("bil_pending_delivery_lines"),
 			Dehydrate: func(p *domain.PendingDelivery) ([]sqlrepo.Values, error) {
 				out := []sqlrepo.Values{}
 				for k, l := range p.State().Lines {
 					out = append(out, sqlrepo.Values{"line_no": int64(k + 1), "description": l.Description, "quantity": l.Quantity,
-						"unit_price": l.UnitPrice, "tax_code": opt(l.TaxCode)})
+						"unit_price": l.UnitPrice, "discount": optDecimal(l.Discount), "tax_code": opt(l.TaxCode)})
 				}
 				return out, nil
 			},

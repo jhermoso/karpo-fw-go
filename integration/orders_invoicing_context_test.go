@@ -41,7 +41,9 @@ import (
 // misma base de datos (incluidas las migraciones de Billing y Orders que añaden columnas): un
 // pedido, su albarán, la factura que Billing prepara en borrador a partir de él a través de su inbox
 // SQL con ida y vuelta del origen de la factura, la factura emitida anotada en el albarán y la
-// cuenta por cobrar abierta.
+// cuenta por cobrar abierta. Al final, D-149: un pedido con dos descuentos encadenados y cantidad
+// grande vale lo mismo en el pedido, en el albarán y en la factura del cierre, pasando por las
+// columnas nuevas (migración 8 de Orders y 13 de Billing).
 func TestOrdersInvoicing(t *testing.T) {
 	for _, e := range engines {
 		if e.name == "oracle-dotnet-guids" {
@@ -249,6 +251,47 @@ func TestOrdersInvoicing(t *testing.T) {
 			again, err := bm.Service.ClosePeriod.Handle(actx, bapp.ClosePeriod{Seller: acme.ID, UpTo: vocab.MustDate(2026, 10, 31)})
 			if err != nil || len(again.Drafts) != 0 || len(again.Failed) != 0 || len(draftsOf(bea.ID)) != 1 {
 				t.Fatalf("a second close does not repeat: %+v %v", again, err)
+			}
+
+			// D-149: 1000 h a 1 € con un 5 % del precio especial y un 2,5 % de Carla, mensual. El pedido
+			// guarda el descuento encadenado (ord_order_lines.chained_discount), el albarán el precio y
+			// ese descuento (ord_delivery_lines.unit_price y discount), el pendiente su descuento
+			// (bil_pending_delivery_lines.discount) y la factura del cierre vale lo mismo: 926,25.
+			carla, err := pm.Service.RegisterPerson.Handle(actx, papp.RegisterPerson{GivenName: "Carla", FirstSurname: "Encadenada"})
+			must(err)
+			_, err = om.Service.SetTerms.Handle(actx, oapp.SetTerms{Company: acme.ID, Customer: carla.ID, Discount: "2.5", BillingPeriodicity: "monthly"})
+			must(err)
+			_, err = dm.Service.SetSpecialPrice.Handle(actx, dapp.SetSpecialPrice{Company: acme.ID, Customer: carla.ID, Product: montaje.ID, UnitPrice: "1",
+				Discount: "5", From: vocab.MustDate(2026, 1, 1)})
+			must(err)
+			co, err := om.Service.DraftOrder.Handle(actx, oapp.DraftOrder{Company: acme.ID, Customer: carla.ID, Date: vocab.MustDate(2026, 10, 1)})
+			must(err)
+			coid, _ := odomain.ParseOrderID(co.ID)
+			_, err = om.Service.AddLine.Handle(actx, oapp.AddLine{ID: coid, Product: montaje.ID, Quantity: "1000"})
+			must(err)
+			co, err = om.Service.GetOrder.Handle(actx, oapp.GetOrder{ID: coid})
+			if l := co.Lines[0]; err != nil || l.UnitPrice != "1.0000" || l.ChainedDiscount != "7.3750" || l.Amount != "926.25" || co.Total != "926.25" {
+				t.Fatalf("order with a chained discount: %+v %v", co, err)
+			}
+			_, err = om.Service.Confirm.Handle(actx, oapp.ConfirmOrder{ID: coid})
+			must(err)
+			deliver()
+			cnote, err := om.Service.Deliver.Handle(actx, oapp.Deliver{ID: coid, Date: vocab.MustDate(2026, 10, 20)})
+			must(err)
+			deliver()
+			cdid, _ := odomain.ParseDeliveryID(cnote.ID)
+			cnote, err = om.Service.GetDelivery.Handle(actx, oapp.GetDelivery{ID: cdid})
+			if l := cnote.Lines[0]; err != nil || l.UnitPrice != "1.0000" || l.Discount != "7.375" || l.Amount != "926.25" || cnote.Total != "926.25" {
+				t.Fatalf("delivery note with a chained discount: %+v %v", cnote, err)
+			}
+			cpending, err := bm.Service.SearchPendingDeliveries.Handle(actx, bapp.SearchPendingDeliveries{Seller: acme.ID, Customer: carla.ID})
+			if err != nil || len(cpending.Items) != 1 || cpending.Items[0].Net != "926.25" {
+				t.Fatalf("pending delivery note with a chained discount: %+v %v", cpending, err)
+			}
+			cres, err := bm.Service.ClosePeriod.Handle(actx, bapp.ClosePeriod{Seller: acme.ID, Customer: carla.ID, UpTo: vocab.MustDate(2026, 10, 31)})
+			if err != nil || len(cres.Drafts) != 1 || cres.Drafts[0].Net != "926.25" || cres.Drafts[0].Lines[0].UnitPrice != "1" ||
+				cres.Drafts[0].Lines[0].Discount != "7.375" {
+				t.Fatalf("the invoice of the delivery note with a chained discount: %+v %v", cres, err)
 			}
 		})
 	}

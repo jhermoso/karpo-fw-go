@@ -102,8 +102,10 @@ type QuoteLineDTO struct {
 	Quantity    string `json:"quantity"`
 	UnitPrice   string `json:"unitPrice"`
 	Discount    string `json:"discount"`
-	NetPrice    string `json:"netPrice"`
-	Amount      string `json:"amount"`
+	// ChainedDiscount es el descuento que se aplica, como en la línea de pedido (D-149).
+	ChainedDiscount string `json:"chainedDiscount"`
+	NetPrice        string `json:"netPrice"`
+	Amount          string `json:"amount"`
 }
 
 // QuoteDTO es la forma de transporte de un presupuesto.
@@ -146,7 +148,7 @@ func quoteDTO(q *domain.Quote) QuoteDTO {
 	for _, l := range s.Lines {
 		d.Lines = append(d.Lines, QuoteLineDTO{No: l.No, Product: l.Product.String(), SKU: l.SKU, Description: l.Description, UoM: l.UoM, TaxCode: l.TaxCode,
 			Stocked: l.Stocked, Quantity: l.Quantity.String(), UnitPrice: l.UnitPrice.StringFixed(4), Discount: money(l.Discount),
-			NetPrice: l.NetPrice.StringFixed(4), Amount: money(l.Amount)})
+			ChainedDiscount: l.ChainedDiscount.StringFixed(4), NetPrice: l.NetPrice.StringFixed(4), Amount: money(l.Amount)})
 	}
 	return d
 }

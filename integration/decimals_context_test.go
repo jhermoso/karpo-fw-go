@@ -80,10 +80,12 @@ func TestContextDecimalColumns(t *testing.T) {
 				Customer: odomain.PartyID{UUID: fw.NewUUID()}, Number: "P-2026-000001", Date: vocab.MustDate(2026, time.October, 21),
 				CustomerDiscount: d("5.25"), Status: odomain.Confirmed, Lines: []odomain.Line{
 					{No: 1, Product: odomain.ProductID{UUID: fw.NewUUID()}, SKU: "A-1", Description: "Tornillo", UoM: "u", TaxCode: "G", Stocked: true,
-						Quantity: d("12345678901234.5678"), UnitPrice: d("0.0125"), Discount: d("12.5"), NetPrice: d("0.0104"), Amount: d("128395061.37"),
+						// El descuento encadenado lo rellena la migración 8 (D-149): 12,5 % y 5,25 % dan 17,09375 → 17,0938.
+						Quantity: d("12345678901234.5678"), UnitPrice: d("0.0125"), Discount: d("12.5"), ChainedDiscount: d("17.0938"),
+						NetPrice: d("0.0104"), Amount: d("128395061.37"),
 						Reserved: d("0.0001"), Delivered: d("2")},
 					{No: 2, Product: odomain.ProductID{UUID: fw.NewUUID()}, SKU: "B-2", Description: "Servicio", UoM: "h",
-						Quantity: d("1"), UnitPrice: d("99999999999999.9999"), Discount: d("0"), NetPrice: d("94749999999999.9999"),
+						Quantity: d("1"), UnitPrice: d("99999999999999.9999"), Discount: d("0"), ChainedDiscount: d("5.25"), NetPrice: d("94749999999999.9999"),
 						Amount: d("94750000000000.00"), Reserved: d("0"), Delivered: d("0")}}})
 			if err != nil {
 				t.Fatal(err)
@@ -135,7 +137,17 @@ func TestContextDecimalColumns(t *testing.T) {
 			}
 			nullable := map[string]bool{}
 			for table, cols := range columns {
+				if len(cols) == 0 {
+					continue // sin decimales; puede llegar en una migración posterior (bil_invoice_sources)
+				}
+				present := columnsOf(t, ctx, db, table)
 				for c := range cols {
+					if !present[c] {
+						// Llega en una migración posterior (el descuento encadenado, D-149), que la
+						// añade anulable.
+						nullable[table+"."+c] = true
+						continue
+					}
 					nullable[table+"."+c] = catalog(t, ctx, db, table, c).nullable
 				}
 			}

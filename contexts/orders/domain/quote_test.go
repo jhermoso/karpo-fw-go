@@ -46,7 +46,8 @@ func TestQuote_Lifecycle(t *testing.T) {
 		t.Fatalf("a validity before the date: %v", err)
 	}
 	quoteViolates(t, q.Send("PRE-1", day("2026-10-08")), "orders.quote_empty")
-	if no, err := q.AddLine(line); err != nil || no != 1 || q.State().Lines[0].NetPrice.String() != "8.55" || q.Total().StringFixed(2) != "25.65" {
+	if no, err := q.AddLine(line); err != nil || no != 1 || q.State().Lines[0].NetPrice.String() != "8.55" ||
+		q.State().Lines[0].ChainedDiscount.String() != "14.5" || q.Total().StringFixed(2) != "25.65" {
 		t.Fatalf("line: %d %v %+v", no, err, q.State().Lines)
 	}
 	bad := line

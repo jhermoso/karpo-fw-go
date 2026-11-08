@@ -69,7 +69,12 @@ type OrderClosedV1 struct {
 // IntegrationEventType implementa application.IntegrationEvent.
 func (OrderClosedV1) IntegrationEventType() string { return "orders.order-closed.v1" }
 
-// DeliveryLine es una línea de un albarán. NetPrice tiene hasta cuatro decimales; Amount, dos.
+// DeliveryLine es una línea de un albarán. UnitPrice (hasta cuatro decimales) y Discount (el
+// descuento que se aplica, porcentaje con hasta cuatro decimales) son los de una línea de factura:
+// Amount = Quantity × UnitPrice × (1 − Discount / 100), al céntimo, una sola vez (D-149). Los dos
+// llegaron después: un albarán de antes no los lleva, y quien los lee factura entonces NetPrice
+// sin descuento. NetPrice (cuatro decimales) es informativo y sigue estando para quien ya lo lea;
+// Amount tiene dos.
 type DeliveryLine struct {
 	Line        int    `json:"line"`
 	Product     string `json:"product"`
@@ -79,6 +84,8 @@ type DeliveryLine struct {
 	TaxCode     string `json:"taxCode,omitempty"`
 	Stocked     bool   `json:"stocked"`
 	Quantity    string `json:"quantity"`
+	UnitPrice   string `json:"unitPrice,omitempty"`
+	Discount    string `json:"discount,omitempty"`
 	NetPrice    string `json:"netPrice"`
 	Amount      string `json:"amount"`
 }

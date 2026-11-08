@@ -1,6 +1,10 @@
 package infrastructure
 
-import "github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
+import (
+	"slices"
+
+	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
+)
 
 // decimalColumnsV5 son las columnas que la migración 5 pasa de texto a {dec:p,s} (D-94). La
 // precisión y la escala son las de Trench y Karpo C# (order_item, quote_item, perfiles comerciales
@@ -31,6 +35,10 @@ var decimalColumnsV5 = sqlrepo.DecimalColumns{
 	{Table: "ord_quote_lines", Column: "amount", Type: sqlrepo.Dec(18, 4), NotNull: true},
 }
 
-// decimalColumns son las columnas decimales vigentes del contexto, las que declaran los mapeos:
-// hoy, las de la migración 5.
-var decimalColumns = decimalColumnsV5
+// decimalColumns son las columnas decimales vigentes del contexto, las que declaran los mapeos: las
+// de la migración 5 y las que añade la 8 (D-149), anulables en la base aunque se escriban siempre.
+var decimalColumns = append(slices.Clone(decimalColumnsV5),
+	sqlrepo.DecimalChange{Table: "ord_order_lines", Column: "chained_discount", Type: sqlrepo.Dec(7, 4)},
+	sqlrepo.DecimalChange{Table: "ord_quote_lines", Column: "chained_discount", Type: sqlrepo.Dec(7, 4)},
+	sqlrepo.DecimalChange{Table: "ord_delivery_lines", Column: "unit_price", Type: sqlrepo.Dec(18, 4)},
+	sqlrepo.DecimalChange{Table: "ord_delivery_lines", Column: "discount", Type: sqlrepo.Dec(7, 4)})

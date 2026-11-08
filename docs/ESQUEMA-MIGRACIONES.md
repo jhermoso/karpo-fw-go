@@ -299,6 +299,7 @@ importes al céntimo (18,2), cantidades (18,4). Nunca es menor que la escala del
 | | `bil_invoice_taxes.rate`, `surcharge_rate` | 5,2 | vat_group.Rate, EquivalenceSurchargeRate |
 | | `bil_invoice_taxes.base`, `amount`, `surcharge_amount` | 18,2 | dominio (Fiscal calcula al céntimo) |
 | | `bil_pending_delivery_lines.quantity`, `unit_price` (v11) | 18,4 y 20,6 | las de `bil_invoice_lines`, a las que pasan al cerrar el periodo (D-146) |
+| | `bil_pending_delivery_lines.discount` (v13, anulable) | 7,4 | el de `bil_invoice_lines` (D-149) |
 | Documents (v3) | `doc_documents.total` | 18,2 | dominio |
 | Exchange (v3) | `exg_currencies.rate` | 18,6 | dominio (seis decimales), como QuotedRate |
 | | `exg_currencies.facial` | 18,4 | currency.Facial |
@@ -319,6 +320,8 @@ importes al céntimo (18,2), cantidades (18,4). Nunca es menor que la escala del
 | | `ord_order_lines`, `ord_quote_lines`: `quantity`, `unit_price`, `net_price`, `amount`; `ord_delivery_lines.quantity`, `net_price`, `amount` | 18,4 | order_item, quote_item, shipment_item |
 | | `ord_order_lines.reserved`, `delivered` | 18,4 | dominio, como la cantidad |
 | | `ord_order_lines.discount`, `ord_quote_lines.discount` | 7,4 | order_item.LineDiscountPercent |
+| | `ord_order_lines.chained_discount`, `ord_quote_lines.chained_discount`, `ord_delivery_lines.discount` (v8, anulables) | 7,4 | el descuento encadenado, como `bil_invoice_lines.discount` (D-149) |
+| | `ord_delivery_lines.unit_price` (v8, anulable) | 18,4 | el de `ord_order_lines` (D-149) |
 | Parties (v26) | `party_relationships.share_percent` | 5,2 | party_relationship.DirectOwnershipPercent |
 | Payments (v3) | `pay_payables.amount`, `paid`; `pay_payable_accounts.amount` | 18,2 | dominio |
 | | `pay_payments.amount`; `pay_allocations.amount` | 19,4 | payment_header.Amount, payment_application.AmountApplied |

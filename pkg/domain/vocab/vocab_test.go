@@ -164,6 +164,14 @@ func TestChainedDiscount(t *testing.T) {
 	}
 }
 
+func TestStringMinPlaces(t *testing.T) {
+	for in, want := range map[string]string{"7.3750": "7.375", "5": "5.00", "19.9990": "19.999", "0": "0.00", "-0.125": "-0.125", "12.5": "12.50"} {
+		if got := vocab.StringMinPlaces(vocab.MustDecimal(in), 2); got != want {
+			t.Errorf("%s: %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestPercentage(t *testing.T) {
 	vat := vocab.MustPercentage("21")
 	if got := vat.Of(vocab.MustMoney("100", "EUR")).Round().String(); got != "21.00 EUR" {

@@ -49,18 +49,19 @@ var QuoteStatuses = []QuoteStatus{QuoteDraft, QuoteSent, QuoteAccepted, QuoteRej
 // QuoteLine es un producto ofrecido a un precio: los mismos precios que tiene una línea de pedido,
 // sin lo que un pedido añade al servirse.
 type QuoteLine struct {
-	No          int
-	Product     ProductID
-	SKU         string
-	Description string
-	UoM         string
-	TaxCode     string
-	Stocked     bool
-	Quantity    vocab.Decimal
-	UnitPrice   vocab.Decimal
-	Discount    vocab.Decimal // porcentaje, de la tarifa
-	NetPrice    vocab.Decimal
-	Amount      vocab.Decimal
+	No              int
+	Product         ProductID
+	SKU             string
+	Description     string
+	UoM             string
+	TaxCode         string
+	Stocked         bool
+	Quantity        vocab.Decimal
+	UnitPrice       vocab.Decimal
+	Discount        vocab.Decimal // porcentaje, de la tarifa
+	ChainedDiscount vocab.Decimal // el que se aplica: el de la tarifa y el del cliente, 4 decimales (D-149)
+	NetPrice        vocab.Decimal // informativo
+	Amount          vocab.Decimal // como el de una línea de pedido (LineAmount)
 }
 
 // QuoteState es el estado persistido de un presupuesto.
@@ -110,6 +111,7 @@ func ReconstituteQuote(id QuoteID, s QuoteState) (*Quote, error) {
 		f := fmt.Sprintf("lines[%d]", i)
 		v.Require(l.No > 0 && !l.Product.IsZero(), f, "required", "a numbered line of a product")
 		v.Require(quantity(l.Quantity), f+".quantity", "range", "a positive quantity of up to 4 decimals")
+		v.Require(discount4(l.ChainedDiscount), f+".chainedDiscount", "range", "a discount from 0 to 100 with up to 4 decimals")
 		v.Require(!l.UnitPrice.IsNegative() && l.UnitPrice.Equal(l.UnitPrice.Round(4)) && percent(l.Discount), f+".unitPrice", "range",
 			"a non-negative price of up to 4 decimals and a discount from 0 to 100")
 	}
@@ -182,7 +184,7 @@ func (q *Quote) AddLine(l QuoteLine) (int, error) {
 		l.No = max(l.No, x.No+1)
 	}
 	p := price(Line{Quantity: l.Quantity, UnitPrice: l.UnitPrice, Discount: l.Discount}, q.s.CustomerDiscount)
-	l.NetPrice, l.Amount = p.NetPrice, p.Amount
+	l.ChainedDiscount, l.NetPrice, l.Amount = p.ChainedDiscount, p.NetPrice, p.Amount
 	s := q.s
 	s.Lines = append(slices.Clone(q.s.Lines), l)
 	if _, err := ReconstituteQuote(q.ID(), s); err != nil {
