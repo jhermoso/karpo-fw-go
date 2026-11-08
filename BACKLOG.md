@@ -164,8 +164,8 @@ Hallazgos menores de la revisión independiente (G-6) que no se arreglaron en la
 ### 2e. Varios albaranes en una factura (D-146): lo que queda
 Ver [docs/FACTURACION.md](docs/FACTURACION.md), «Varios albaranes en una factura».
 
-- **Cierre del periodo programado:** hoy se lanza por `POST /api/billing/periods/close`; no hay
-  tarea que lo haga sola (por ejemplo, el día 1 de cada mes para el mes anterior).
+- ~~**Cierre del periodo programado**~~ ✅ `CloseDuePeriods` en las tareas del anfitrión: cada
+  empresa cierra el mes anterior en su zona horaria (docs/FACTURACION.md).
 - **Documentos enlaza sólo el primer albarán** de una factura: lee `sourceId` de
   `billing.invoice-issued.v1` y no `sources` (`contexts/documents/application/subscriptions.go`).
 

@@ -341,6 +341,7 @@ type Chores struct {
 	ExportsGivenUp  int
 	Reservations    int   // de divisa, que nadie recogió a tiempo
 	Quotes          int   // que nadie contestó dentro de su validez
+	PeriodDrafts    int   // borradores del cierre programado del mes anterior (D-146)
 	Postings        int   // hechos que Accounting había guardado y ahora pudo contabilizar
 	Redelivered     int   // mensajes que un oyente no pudo recoger antes y recogió ahora
 	IdempotencyKeys int64 // claves de idempotencia de altas de Parties ya caducadas
@@ -352,7 +353,8 @@ const MaxExportsPerRound = 20
 
 // RunChores hace una vez lo que los contextos dejan para un planificador: cierra las importaciones
 // cuyo proceso murió, escribe las exportaciones que esperan y quita los ficheros guardados el tiempo
-// suficiente, y cierra, empresa a empresa, las reservas de divisa y las ofertas cuyo plazo pasó, y
+// suficiente, y cierra, empresa a empresa, las reservas de divisa y las ofertas cuyo plazo pasó y el
+// periodo de facturación del mes anterior de los clientes mensuales (D-146), y
 // contabiliza lo que Accounting había guardado para cuando pudiera. Una tarea que falla no detiene
 // a las otras; se devuelven todos los fallos.
 func (h *Host) RunChores(ctx context.Context) (Chores, error) {
@@ -395,6 +397,12 @@ func (h *Host) RunChores(ctx context.Context) (Chores, error) {
 		quotes, err := h.Orders.Service.ExpireQuotes.Handle(ctx, ordapp.ExpireQuotes{Company: c.ID})
 		note("quotes of "+c.Name, err)
 		out.Quotes += len(quotes.Numbers)
+		closed, err := h.Billing.Service.CloseDuePeriods.Handle(ctx, bilapp.CloseDuePeriods{Seller: c.ID})
+		note("billing period of "+c.Name, err)
+		out.PeriodDrafts += len(closed.Drafts)
+		for _, f := range closed.Failed {
+			note("billing period of "+c.Name, fmt.Errorf("customer %s: %s (%s)", f.Customer, f.Message, f.Code))
+		}
 	}
 	// Sólo lo que ya toca: un hecho que sigue sin poder contabilizarse se intenta, y se anota aquí,
 	// cada vez más espaciado (ver accounting/domain.ParkedBackoff), y no en cada ronda.

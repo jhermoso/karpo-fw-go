@@ -25,11 +25,19 @@ type MergeDrafts struct {
 // ClosePeriod cierra el periodo de facturación de un vendedor (D-146): prepara para cada cliente un
 // borrador con todos sus albaranes pendientes hasta UpTo, incluido (varios si pasan de MaxLines
 // líneas); sólo los de Customer, si se da. Un segundo cierre no encuentra nada pendiente y no
-// prepara nada. No hay tarea programada: el cierre se lanza por su ruta.
+// prepara nada. Se lanza por su ruta o lo lanza CloseDuePeriods.
 type ClosePeriod struct {
 	Seller   string     `json:"seller"`
 	Customer string     `json:"customer,omitempty"`
 	UpTo     vocab.Date `json:"upTo"`
+}
+
+// CloseDuePeriods es el cierre programado: cierra el periodo de un vendedor hasta el último día del
+// mes anterior, contado en la zona horaria de la empresa. En el anfitrión lo lanza cada ronda de
+// tareas para cada empresa; sólo prepara algo la primera vez que un mes queda atrás (o cuando llega
+// después un albarán de un mes ya cerrado, que va en su propio borrador).
+type CloseDuePeriods struct {
+	Seller string `json:"seller"`
 }
 
 // ClosePeriodResult son los borradores que preparó el cierre y los clientes que no pudo cerrar,
@@ -172,6 +180,28 @@ func (s service) groupingUseCases(svc *Service) {
 			}
 		}
 		return out, nil
+	})
+
+	svc.CloseDuePeriods = guard(PermInvoiceCreate, func(ctx context.Context, c CloseDuePeriods) (ClosePeriodResult, error) {
+		var v fw.Validation
+		seller := domain.PartyID{UUID: parseID(&v, "seller", c.Seller)}
+		if err := v.Err(); err != nil {
+			return ClosePeriodResult{}, err
+		}
+		// Hoy en la zona de la empresa: la guardada o, si no, la de su país (el anfitrión implementa
+		// los dos puertos); sin el país, today usaría UTC.
+		var today vocab.Date
+		var err error
+		if t, ok := s.Zones.(app.CompanyToday); ok {
+			today, err = app.TodayOf(ctx, t, seller.UUID)
+		} else {
+			today, err = s.today(ctx, seller, "")
+		}
+		if err != nil {
+			return ClosePeriodResult{}, err
+		}
+		// El último día del mes anterior: el día 1 de marzo, el 28 o el 29 de febrero.
+		return svc.ClosePeriod.Handle(ctx, ClosePeriod{Seller: c.Seller, UpTo: today.AddDays(-today.Day())})
 	})
 
 	svc.SearchPendingDeliveries = guard(PermInvoiceRead, func(ctx context.Context, q SearchPendingDeliveries) (fw.Page[PendingDeliveryDTO], error) {
