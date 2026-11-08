@@ -137,6 +137,9 @@ func TestContextDecimalColumns(t *testing.T) {
 			}
 			nullable := map[string]bool{}
 			for table, cols := range columns {
+				if len(cols) == 0 {
+					continue // sin decimales; puede llegar en una migración posterior (bil_invoice_sources)
+				}
 				present := columnsOf(t, ctx, db, table)
 				for c := range cols {
 					if !present[c] {
