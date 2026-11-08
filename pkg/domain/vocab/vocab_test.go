@@ -150,6 +150,20 @@ func TestMoney(t *testing.T) {
 	}
 }
 
+// Los descuentos encadenados no se suman: 5 y 10 dan 14.5 (0,95 × 0,90); 12.5 y 7.25, 18.84375,
+// exacto; sin ninguno, 0.
+func TestChainedDiscount(t *testing.T) {
+	for want, ds := range map[string][]string{"14.5": {"5", "10"}, "18.84375": {"12.5", "7.25"}, "0": {}, "100": {"100", "3"}} {
+		var in []vocab.Decimal
+		for _, d := range ds {
+			in = append(in, vocab.MustDecimal(d))
+		}
+		if got := vocab.ChainedDiscount(in...); !got.Equal(vocab.MustDecimal(want)) {
+			t.Fatalf("%v: %s, want %s", ds, got, want)
+		}
+	}
+}
+
 func TestPercentage(t *testing.T) {
 	vat := vocab.MustPercentage("21")
 	if got := vat.Of(vocab.MustMoney("100", "EUR")).Round().String(); got != "21.00 EUR" {

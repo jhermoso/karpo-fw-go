@@ -3,8 +3,26 @@
 // pedidos; Billing facturará los albaranes).
 package contracts
 
+import "context"
+
 // Source es el nombre del contexto delimitado que publica.
 const Source = "orders"
+
+// TermsRef son las condiciones de venta de una empresa con un cliente que necesitan otros
+// contextos: su tarifa (el id de una tarifa de Products; "" si no tiene) y su descuento (un
+// porcentaje con hasta dos decimales; "0" si no tiene).
+type TermsRef struct {
+	PriceList string `json:"priceList,omitempty"`
+	Discount  string `json:"discount"`
+}
+
+// CustomerTerms dice las condiciones de venta de una empresa con un cliente; las de cero si no
+// tiene. Billing las usa para poner precio a la línea de una factura directa (D-148): la tarifa
+// entra en la cadena de Products y el descuento se encadena encima. Sólo lectura; sirve a otros
+// contextos, sin los permisos del usuario.
+type CustomerTerms interface {
+	Terms(ctx context.Context, company, customer string) (TermsRef, error)
+}
 
 // OrderConfirmedV1 se publica al confirmar un pedido de venta. Total es antes de impuestos.
 type OrderConfirmedV1 struct {

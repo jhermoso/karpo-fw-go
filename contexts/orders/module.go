@@ -26,6 +26,9 @@ type Module struct {
 	Service           *oapp.Service
 	IntegrationOutbox application.OutboxStore
 	Audit             application.AuditLog
+	// Terms son las condiciones de cada cliente (tarifa y descuento), de sólo lectura, para otros
+	// contextos: Billing pone precio a la factura directa (D-148).
+	Terms contracts.CustomerTerms
 	// Consumer recibe las existencias que Inventory retiene para los pedidos y las facturas que
 	// Billing emite para sus albaranes, y las relaciones de cliente que Parties traslada al fusionar
 	// fichas: hay que suscribirlo al transporte.
@@ -70,7 +73,7 @@ func Compose(sw *hotswap.Switch, catalog domain.Catalog, credit domain.CreditChe
 	consumer := messaging.NewConsumer(contracts.Source, hotswap.Inbox(sw, infrastructure.InboxFactory), sw)
 	oapp.Subscribe(consumer, d)
 	oapp.SubscribeParties(consumer, d)
-	return &Module{Service: oapp.NewService(d), IntegrationOutbox: integration, Audit: audit, Consumer: consumer}
+	return &Module{Service: oapp.NewService(d), IntegrationOutbox: integration, Audit: audit, Consumer: consumer, Terms: oapp.TermsPort{Repo: d.Terms}}
 }
 
 // Relay reenvía el Published Language a un transporte.

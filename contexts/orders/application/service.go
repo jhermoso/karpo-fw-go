@@ -231,11 +231,35 @@ func (s service) notBlocked(ctx context.Context, customer domain.PartyID) error 
 }
 
 func (s service) termsOf(ctx context.Context, company domain.OrganizationID, customer domain.PartyID) (domain.TermsState, error) {
-	ts, err := s.Terms.Find(ctx, spec.And(domain.TrmFieldCompany.Eq(company), domain.TrmFieldCustomer.Eq(customer)))
+	return termsOf(ctx, s.Terms, company, customer)
+}
+
+func termsOf(ctx context.Context, repo domain.TermsRepository, company domain.OrganizationID, customer domain.PartyID) (domain.TermsState, error) {
+	ts, err := repo.Find(ctx, spec.And(domain.TrmFieldCompany.Eq(company), domain.TrmFieldCustomer.Eq(customer)))
 	if err != nil || len(ts) == 0 {
 		return domain.TermsState{Company: company, Customer: customer, Discount: vocab.DecimalFromInt(0)}, err
 	}
 	return ts[0].State(), nil
+}
+
+// TermsPort implementa contracts.CustomerTerms (sirve a otros contextos, no a usuarios): las
+// condiciones de un cliente con una empresa, o las de cero. Un id que no es un id no tiene ninguna.
+type TermsPort struct{ Repo domain.TermsRepository }
+
+var _ contracts.CustomerTerms = TermsPort{}
+
+// Terms implementa contracts.CustomerTerms.
+func (p TermsPort) Terms(ctx context.Context, company, customer string) (contracts.TermsRef, error) {
+	co, err1 := fw.ParseUUID(company)
+	cu, err2 := fw.ParseUUID(customer)
+	if err1 != nil || err2 != nil {
+		return contracts.TermsRef{Discount: "0"}, nil
+	}
+	st, err := termsOf(ctx, p.Repo, domain.OrganizationID{UUID: co}, domain.PartyID{UUID: cu})
+	if err != nil {
+		return contracts.TermsRef{}, err
+	}
+	return contracts.TermsRef{PriceList: optID(st.PriceList.UUID), Discount: st.Discount.String()}, nil
 }
 
 // Publications traduce los eventos de dominio al Published Language.

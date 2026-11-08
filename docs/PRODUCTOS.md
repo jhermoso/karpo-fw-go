@@ -161,7 +161,8 @@ vigente para la cantidad (la de mayor cantidad mínima que no la supere):
 - **Migración 4** de Products, en los cinco motores: las dos tablas nuevas, con los decimales ya
   como `{dec:18,4}` y `{dec:5,2}`. Los ajustes de la empresa van en la migración 35 de Parties.
 - **Precio automático de la factura directa:** el mismo perfil guarda `automatic_pricing`
-  (`automaticPricing`, nulo es sí). Hoy sólo se guarda y se expone; Facturación lo usará en otra rama.
+  (`automaticPricing`, nulo es sí). Facturación pide el precio con `Pricing.Quote` para la línea
+  con producto de una factura directa (docs/FACTURACION.md, «Precio automático»).
 - **Orders** pasa el cliente al puerto: `Catalog.Price` recibe el cliente del pedido o del
   presupuesto. Nada más cambia allí.
 

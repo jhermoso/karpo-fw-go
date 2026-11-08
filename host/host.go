@@ -219,7 +219,11 @@ func Compose(sw *hotswap.Switch, o Options) (*Host, error) {
 		billing.WithMergedParties(merged), billing.WithZones(zones),
 		// Los ajustes de la empresa (D-144); con with_issue, los vencimientos nacen en la transacción
 		// de la emisión: Receivables está sobre el mismo backend.
-		billing.WithSettings(BillingSettings{Profiles: h.Parties.CompanyProfiles}), billing.WithInstallmentsInTransaction(h.Receivables.Consumer, h.Receivables.Backend))
+		billing.WithSettings(BillingSettings{Profiles: h.Parties.CompanyProfiles}), billing.WithInstallmentsInTransaction(h.Receivables.Consumer, h.Receivables.Backend),
+		// El precio de la línea con producto de una factura directa (D-148): la cadena de Products y
+		// las condiciones del cliente en Orders, por sus contratos.
+		billing.WithPricing(bilinfra.ProductsCatalog{Catalog: h.Products.Catalog, Pricing: h.Products.Pricing},
+			bilinfra.OrdersTerms{Customers: h.Orders.Terms}))
 	h.Purchases = purchases.Compose(sw, purinfra.FiscalTaxes{Engine: h.Fiscal.TaxEngine}, purchases.WithMergedParties(merged))
 	h.Payments = payments.Compose(sw, payinfra.PayrollNetPay{Remittance: h.Payroll.Remittance}, payments.WithMergedParties(merged), payments.WithToday(zones))
 	h.Treasury = treasury.Compose(sw, treinfra.ReceivablesDueItems{Collectable: h.Receivables.Collectable},

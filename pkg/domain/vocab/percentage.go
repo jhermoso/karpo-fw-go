@@ -38,6 +38,16 @@ func (p Percentage) AddTo(m Money) Money { return m.Mul(decimal.NewFromInt(1).Ad
 // Equal compara numéricamente.
 func (p Percentage) Equal(o Percentage) bool { return p.points.Equal(o.points) }
 
+// ChainedDiscount es el descuento único, en puntos, que equivale a aplicar varios descuentos uno
+// detrás de otro: 5 y 10 dan 14.5, porque 0,95 × 0,90 = 0,855, y no 15. Es exacto, sin redondear.
+func ChainedDiscount(discounts ...Decimal) Decimal {
+	left := hundred
+	for _, d := range discounts {
+		left = left.Mul(hundred.Sub(d)).Div(hundred)
+	}
+	return hundred.Sub(left)
+}
+
 // String devuelve "21%".
 func (p Percentage) String() string { return p.points.String() + "%" }
 

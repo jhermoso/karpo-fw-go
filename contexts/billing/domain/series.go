@@ -28,6 +28,8 @@ type (
 	OrganizationID struct{ fw.UUID }
 	// PartyID es el cliente, una party del contexto Parties.
 	PartyID struct{ fw.UUID }
+	// ProductID es un producto del contexto Products (D-148).
+	ProductID struct{ fw.UUID }
 )
 
 // SeriesKind es el nombre estable del tipo de agregado.
