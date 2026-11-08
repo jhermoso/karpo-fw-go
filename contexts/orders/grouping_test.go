@@ -59,9 +59,24 @@ func (c *chain) grouping(tag string) {
 	montaje, err := c.dm.Service.RegisterProduct.Handle(ctx, dapp.RegisterProduct{Company: acme.ID, SKU: "MONT", DetailsInput: dapp.DetailsInput{
 		Name: "Montaje " + tag, Kind: "service", UoM: "h", TaxCode: "G21", BasePrice: "35", ForSale: true}})
 	c.ok(err)
-	terms, err := c.om.Service.SetTerms.Handle(ctx, oapp.SetTerms{Company: acme.ID, Customer: bea.ID, BillingPeriodicity: "monthly"})
-	if err != nil || terms.BillingPeriodicity != "monthly" {
+	// El cálculo propio del cliente (D-150) se guarda y llega a Billing por el contrato; quitarlo
+	// vuelve al de la empresa.
+	five := 5
+	terms, err := c.om.Service.SetTerms.Handle(ctx, oapp.SetTerms{Company: acme.ID, Customer: bea.ID, BillingPeriodicity: "monthly",
+		LineRounding: "gross_then_discount", PriceDecimals: &five})
+	if err != nil || terms.LineRounding != "gross_then_discount" || terms.PriceDecimals == nil || *terms.PriceDecimals != 5 {
+		t.Fatalf("the calculation of the customer: %+v %v", terms, err)
+	}
+	if ref, err := c.om.Terms.Terms(ctx, acme.ID, bea.ID); err != nil || ref.LineRounding != "gross_then_discount" || ref.PriceDecimals == nil ||
+		*ref.PriceDecimals != 5 {
+		t.Fatalf("the calculation of the customer for Billing: %+v %v", ref, err)
+	}
+	terms, err = c.om.Service.SetTerms.Handle(ctx, oapp.SetTerms{Company: acme.ID, Customer: bea.ID, BillingPeriodicity: "monthly"})
+	if err != nil || terms.BillingPeriodicity != "monthly" || terms.LineRounding != "" || terms.PriceDecimals != nil {
 		t.Fatalf("monthly terms: %+v %v", terms, err)
+	}
+	if ref, err := c.om.Terms.Terms(ctx, acme.ID, bea.ID); err != nil || ref.LineRounding != "" || ref.PriceDecimals != nil {
+		t.Fatalf("back to the company's calculation: %+v %v", ref, err)
 	}
 
 	// Un pedido de horas de montaje, entregado entero en un albarán.

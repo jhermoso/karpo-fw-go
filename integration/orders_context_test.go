@@ -131,6 +131,19 @@ func TestOrdersContext(t *testing.T) {
 			if err != nil || terms.BlockReason != "" {
 				t.Fatalf("unblocked: %+v %v", terms, err)
 			}
+			// Migración 9: el cálculo de las facturas del cliente va y vuelve, también el cero (D-150).
+			zero := 0
+			_, err = svc.SetTerms.Handle(actx, oapp.SetTerms{Company: acme.ID, Customer: ana.ID, PriceList: list.ID, Discount: "10",
+				LineRounding: "gross_then_discount", PriceDecimals: &zero})
+			must(err)
+			if ts, err := svc.SearchTerms.Handle(actx, oapp.SearchTerms{Company: acme.ID}); err != nil || len(ts) != 1 ||
+				ts[0].LineRounding != "gross_then_discount" || ts[0].PriceDecimals == nil || *ts[0].PriceDecimals != 0 {
+				t.Fatalf("the calculation of the customer read back: %+v %v", ts, err)
+			}
+			terms, err = svc.SetTerms.Handle(actx, oapp.SetTerms{Company: acme.ID, Customer: ana.ID, PriceList: list.ID, Discount: "10"})
+			if err != nil || terms.LineRounding != "" || terms.PriceDecimals != nil {
+				t.Fatalf("back to the company's calculation: %+v %v", terms, err)
+			}
 
 			o, err := svc.DraftOrder.Handle(actx, oapp.DraftOrder{Company: acme.ID, Customer: ana.ID, Date: vocab.MustDate(2026, 10, 4), Warehouse: wh.ID,
 				Reference: "Su pedido 77", Notes: "Entregar por la mañana"})

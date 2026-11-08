@@ -259,7 +259,8 @@ func (p TermsPort) Terms(ctx context.Context, company, customer string) (contrac
 	if err != nil {
 		return contracts.TermsRef{}, err
 	}
-	return contracts.TermsRef{PriceList: optID(st.PriceList.UUID), Discount: st.Discount.String()}, nil
+	return contracts.TermsRef{PriceList: optID(st.PriceList.UUID), Discount: st.Discount.String(), LineRounding: st.LineRounding,
+		PriceDecimals: st.PriceDecimals}, nil
 }
 
 // Publications traduce los eventos de dominio al Published Language.

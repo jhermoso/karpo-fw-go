@@ -106,6 +106,20 @@ func (s *Deps) settings(ctx context.Context, seller domain.OrganizationID) (Comp
 	return out, nil
 }
 
+// calculation es el cálculo de las facturas de un cliente: el de la empresa vendedora con lo que
+// cambian las condiciones del cliente (la cascada cliente > empresa de D-144, D-150). Sin Terms,
+// el de la empresa.
+func (s *Deps) calculation(ctx context.Context, company CompanySettings, seller domain.OrganizationID, customer domain.PartyID) (domain.Calculation, error) {
+	if s.Terms == nil {
+		return company.Calculation, nil
+	}
+	t, err := s.Terms.Terms(ctx, seller, customer)
+	if err != nil {
+		return domain.Calculation{}, err
+	}
+	return t.Over(company.Calculation), nil
+}
+
 // withoutMerged deja fuera de un listado los registros cuyo cliente es una party fusionada,
 // salvo que se pidan con includeMergedParties (docs/DECISIONES-COMUNES.md, D-100).
 func withoutMerged[T any](ctx context.Context, m app.MergedParties, include bool, f spec.Field[T, domain.PartyID]) ([]spec.Specification[T], error) {

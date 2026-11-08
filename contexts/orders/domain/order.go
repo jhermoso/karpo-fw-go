@@ -591,8 +591,21 @@ type TermsState struct {
 	BlockReason string
 	// BillingPeriodicity dice cuándo se le factura lo entregado (D-146); vacía, PerDelivery.
 	BillingPeriodicity BillingPeriodicity
-	Audit              traits.AuditStamp
+	// LineRounding y PriceDecimals son el cálculo de las facturas del cliente cuando no es el de la
+	// empresa (la cascada cliente > empresa de D-144, D-150): once o gross_then_discount, y de 0 a
+	// 6 decimales en el precio. Vacío y nil, los de la empresa.
+	LineRounding  string
+	PriceDecimals *int
+	Audit         traits.AuditStamp
 }
+
+// Redondeos de la línea que puede pedir un cliente (los de la empresa, D-144).
+const (
+	RoundOnce              = "once"
+	RoundGrossThenDiscount = "gross_then_discount"
+	// MaxPriceDecimals son los decimales del precio que puede pedir un cliente, como su empresa.
+	MaxPriceDecimals = 6
+)
 
 // BillingPeriodicity es cuándo se factura a un cliente lo que se le entrega (D-146; el
 // BillingPeriodicity del perfil comercial de Trench, que guarda un código de Sage).
@@ -632,6 +645,13 @@ func ReconstituteTerms(id TermsID, s TermsState) (*Terms, error) {
 		s.BillingPeriodicity = PerDelivery
 	}
 	v.Require(s.BillingPeriodicity == PerDelivery || s.BillingPeriodicity == Monthly, "billingPeriodicity", "enum", "per_delivery or monthly")
+	v.Require(s.LineRounding == "" || s.LineRounding == RoundOnce || s.LineRounding == RoundGrossThenDiscount, "lineRounding", "enum",
+		"once or gross_then_discount")
+	if s.PriceDecimals != nil {
+		n := *s.PriceDecimals // una copia: el agregado no comparte memoria con quien lo llama
+		s.PriceDecimals = &n
+		v.Require(n >= 0 && n <= MaxPriceDecimals, "priceDecimals", "range", "from 0 to 6")
+	}
 	if !s.BlockOrders && !s.BlockDelivery {
 		s.BlockReason = ""
 	}
@@ -664,6 +684,12 @@ func (t *Terms) AuditSnapshot() map[string]any {
 		"billingPeriodicity": string(t.s.BillingPeriodicity)}
 	if t.s.BlockReason != "" {
 		s["blockReason"] = t.s.BlockReason
+	}
+	if t.s.LineRounding != "" {
+		s["lineRounding"] = t.s.LineRounding
+	}
+	if t.s.PriceDecimals != nil {
+		s["priceDecimals"] = *t.s.PriceDecimals
 	}
 	return s
 }

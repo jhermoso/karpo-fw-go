@@ -196,18 +196,26 @@ func (s service) groupingUseCases(svc *Service) {
 			return fw.Page[PendingDeliveryDTO]{}, err
 		}
 		// El neto de cada pendiente, con el cálculo de su vendedor, como lo calcularía el cierre.
-		calcs := map[domain.OrganizationID]domain.Calculation{}
+		type pair struct {
+			seller   domain.OrganizationID
+			customer domain.PartyID
+		}
+		calcs := map[pair]domain.Calculation{}
 		for _, p := range page.Items {
-			seller := p.State().Seller
-			if _, ok := calcs[seller]; !ok {
-				settings, err := s.settings(ctx, seller)
+			k := pair{p.State().Seller, p.State().Customer}
+			if _, ok := calcs[k]; !ok {
+				settings, err := s.settings(ctx, k.seller)
 				if err != nil {
 					return fw.Page[PendingDeliveryDTO]{}, err
 				}
-				calcs[seller] = settings.Calculation
+				if calcs[k], err = s.calculation(ctx, settings, k.seller, k.customer); err != nil {
+					return fw.Page[PendingDeliveryDTO]{}, err
+				}
 			}
 		}
-		return fw.MapPage(page, func(p *domain.PendingDelivery) PendingDeliveryDTO { return pendingDTO(p, calcs[p.State().Seller]) }), nil
+		return fw.MapPage(page, func(p *domain.PendingDelivery) PendingDeliveryDTO {
+			return pendingDTO(p, calcs[pair{p.State().Seller, p.State().Customer}])
+		}), nil
 	})
 }
 
@@ -248,15 +256,22 @@ func (s service) closeCustomerHandler() app.Handler[closeCustomer, []*domain.Inv
 			}
 		}
 		// Un borrador tiene como mucho MaxLines líneas: los albaranes que no caben van a otro, sin
-		// partir ninguno (un albarán pendiente tiene como mucho MaxLines).
+		// partir ninguno (un albarán pendiente tiene como mucho MaxLines). Todos con el mismo cálculo,
+		// tomado una vez, para que se puedan unir después.
 		var out []*domain.Invoice
+		var calc domain.Calculation
+		if len(take) > 0 {
+			if calc, err = s.deliveryCalculation(ctx, c.seller, c.customer); err != nil {
+				return nil, err
+			}
+		}
 		for len(take) > 0 {
 			n, lines := 0, 0
 			for n < len(take) && lines+len(take[n].State().Lines) <= domain.MaxLines {
 				lines += len(take[n].State().Lines)
 				n++
 			}
-			inv, err := s.periodDraft(ctx, c.seller, c.customer, take[:n])
+			inv, err := s.periodDraft(ctx, c.seller, c.customer, calc, take[:n])
 			if err != nil {
 				return nil, err
 			}
@@ -274,7 +289,8 @@ func (s service) closeCustomerHandler() app.Handler[closeCustomer, []*domain.Inv
 
 // periodDraft prepara el borrador de unos albaranes pendientes de un cliente, con la fecha de
 // operación del último: el final del periodo que cubre.
-func (s service) periodDraft(ctx context.Context, seller domain.OrganizationID, customer domain.PartyID, ps []*domain.PendingDelivery) (*domain.Invoice, error) {
+func (s service) periodDraft(ctx context.Context, seller domain.OrganizationID, customer domain.PartyID, calc domain.Calculation,
+	ps []*domain.PendingDelivery) (*domain.Invoice, error) {
 	var sources []domain.Source
 	var lines []domain.LineInput
 	first, last := ps[0].State(), ps[len(ps)-1].State()
@@ -283,7 +299,7 @@ func (s service) periodDraft(ctx context.Context, seller domain.OrganizationID, 
 		sources = append(sources, domain.Source{Type: DeliverySource, ID: p.ID().String(), Ref: st.Number})
 		lines = append(lines, st.Lines...)
 	}
-	return s.deliveryDraft(ctx, seller, customer, deliveryDescription(first.Number, first.OrderNumber, sources), last.Date, sources, lines)
+	return s.deliveryDraft(ctx, seller, customer, calc, deliveryDescription(first.Number, first.OrderNumber, sources), last.Date, sources, lines)
 }
 
 // closeFailure dice por qué no se cerró un cliente, cuyos albaranes siguen pendientes: el código de

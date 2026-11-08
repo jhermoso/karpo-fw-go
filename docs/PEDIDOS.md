@@ -131,6 +131,12 @@ contexts/inventory/  # + suscripción a Pedidos (migración 3: inventory_inbox),
   guarda mientras alguno está puesto y se borra al quitar los dos. La vista por pareja lo enseña en
   `blockReason`, junto al del crédito de Cobros.
   Fijar las condiciones las sustituye enteras: reenviar un bloqueo sin `blockReason` borra el motivo.
+- **Cálculo de las facturas del cliente** (D-150, migración 9): las condiciones pueden llevar
+  `lineRounding` (`once` o `gross_then_discount`) y `priceDecimals` (0 a 6), las columnas
+  `ord_terms.line_rounding` y `ord_terms.price_decimals`, nulas por omisión. Cuando están, ganan
+  a los ajustes de la empresa (cascada cliente > empresa de D-144); Facturación las lee por
+  `contracts.CustomerTerms`. Como el resto de las condiciones, fijarlas las sustituye: no
+  enviarlas vuelve a los de la empresa.
 - **Periodicidad de facturación** (D-146, migración 7): las condiciones llevan `billingPeriodicity`,
   `per_delivery` (por omisión, un borrador de factura por albarán) o `monthly` (una factura con
   todos los albaranes del periodo, al cerrarlo en Facturación). Es la columna
