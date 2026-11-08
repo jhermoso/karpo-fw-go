@@ -23,12 +23,13 @@ func (m madrid) DateOf(_ context.Context, _ fw.UUID, at time.Time) (vocab.Date, 
 	return vocab.DateOf(at.In(m.loc)), nil
 }
 
-// El cierre programado (D-146): cierra el mes anterior, contado en la zona de la empresa (a las
-// 23:30 UTC del 31 de octubre ya es 1 de noviembre en Madrid, y octubre queda atrás; en UTC, no);
+// El cierre programado (D-146): cierra el mes anterior, contado en la zona de la empresa y una hora
+// después de acabar (a las 00:30 UTC del 1 de noviembre son las 01:30 en Madrid, y octubre queda
+// atrás; en UTC aún no ha pasado la hora);
 // deja pendientes los albaranes del mes en curso; la segunda vez no prepara nada; y un albarán de
 // octubre que llega tarde va en su propio borrador en la vez siguiente.
 func TestBilling_CloseDuePeriods(t *testing.T) {
-	defer fw.SetClock(fake.New(time.Date(2026, 10, 31, 23, 30, 0, 0, time.UTC)))()
+	defer fw.SetClock(fake.New(time.Date(2026, 11, 1, 0, 30, 0, 0, time.UTC)))()
 	loc, err := time.LoadLocation("Europe/Madrid")
 	if err != nil {
 		t.Skip("no time zone database:", err)
@@ -69,9 +70,9 @@ func TestBilling_CloseDuePeriods(t *testing.T) {
 			return len(p.Items)
 		}
 		if !zoned {
-			// En UTC aún es 31 de octubre: sólo septiembre ha quedado atrás.
+			// En UTC, octubre acabó hace media hora: aún no se cierra.
 			if res := due(); len(res.Drafts) != 0 || pending() != 2 {
-				t.Fatalf("in UTC, October is not over yet: %+v", res)
+				t.Fatalf("in UTC, October is not over for an hour yet: %+v", res)
 			}
 			continue
 		}

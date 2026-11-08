@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/accounting"
@@ -96,6 +97,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/distribution"
 	"github.com/jhermoso/karpo-fw-go/pkg/distribution/jwtauth"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
+	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 	"github.com/jhermoso/karpo-fw-go/pkg/messaging/inprocess"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
@@ -118,6 +120,11 @@ type Options struct {
 type Host struct {
 	Switch *hotswap.Switch
 	Broker *inprocess.Broker
+
+	// closeFailures es el día (UTC) en que se avisó de cada cliente que el cierre programado no pudo
+	// cerrar: se avisa una vez al día, no en cada ronda.
+	closeMu       sync.Mutex
+	closeFailures map[string]vocab.Date
 
 	Geography   *geography.Module
 	Facilities  *facilities.Module
@@ -401,7 +408,9 @@ func (h *Host) RunChores(ctx context.Context) (Chores, error) {
 		note("billing period of "+c.Name, err)
 		out.PeriodDrafts += len(closed.Drafts)
 		for _, f := range closed.Failed {
-			note("billing period of "+c.Name, fmt.Errorf("customer %s: %s (%s)", f.Customer, f.Message, f.Code))
+			if h.firstCloseFailureToday(c.ID + "|" + f.Customer + "|" + f.Code) {
+				note("billing period of "+c.Name, fmt.Errorf("customer %s: %s (%s)", f.Customer, f.Message, f.Code))
+			}
 		}
 	}
 	// Sólo lo que ya toca: un hecho que sigue sin poder contabilizarse se intenta, y se anota aquí,
@@ -413,6 +422,22 @@ func (h *Host) RunChores(ctx context.Context) (Chores, error) {
 	}
 	out.Postings = retried.Posted
 	return out, failed
+}
+
+// firstCloseFailureToday dice si hoy aún no se ha avisado de este fallo del cierre programado, y
+// lo anota.
+func (h *Host) firstCloseFailureToday(key string) bool {
+	h.closeMu.Lock()
+	defer h.closeMu.Unlock()
+	today := vocab.DateOf(fw.Now())
+	if h.closeFailures == nil {
+		h.closeFailures = map[string]vocab.Date{}
+	}
+	if h.closeFailures[key] == today {
+		return false
+	}
+	h.closeFailures[key] = today
+	return true
 }
 
 func authzOf(ctx context.Context) *authz.Context {
