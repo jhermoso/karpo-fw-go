@@ -755,14 +755,16 @@ type Item struct {
 	Stocked   bool
 	Sellable  bool // a la venta, no bloqueado
 	Retired   vocab.Date
-	UnitPrice vocab.Decimal // de la tarifa o el precio base
+	UnitPrice vocab.Decimal // del precio especial, la tarifa del cliente, la general o el precio base (D-148)
 	Discount  vocab.Decimal
 }
 
-// Catalog pone precio a un producto para un pedido de cliente (un puerto propio de Orders sobre los
-// contratos Catalog y Pricing de Products). Un producto desconocido se señala con ok false.
+// Catalog pone precio a un producto para un pedido de un cliente (un puerto propio de Orders sobre
+// los contratos Catalog y Pricing de Products): el precio especial del cliente, su tarifa, la general
+// de la empresa o el precio base. Un producto desconocido se señala con ok false.
 type Catalog interface {
-	Price(ctx context.Context, company OrganizationID, product ProductID, list PriceListID, q vocab.Decimal, on vocab.Date) (Item, bool, error)
+	Price(ctx context.Context, company OrganizationID, customer PartyID, product ProductID, list PriceListID, q vocab.Decimal, on vocab.Date) (Item, bool,
+		error)
 }
 
 // Credit es la situación de crédito de un cliente con la empresa (un puerto propio de Orders sobre

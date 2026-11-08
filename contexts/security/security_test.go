@@ -877,7 +877,7 @@ func TestPasswordHasher(t *testing.T) {
 	}
 }
 
-// Cada contexto delimitado declara sus permisos y el anfitrión los pasa al catálogo: los 154
+// Cada contexto delimitado declara sus permisos y el anfitrión los pasa al catálogo: los 156
 // códigos que comprueban los veinticinco contextos de negocio, más los ocho de Security y el comodín.
 func TestCatalog_EveryContextDeclaresItsPermissions(t *testing.T) {
 	declared := map[string][]authz.Permission{
@@ -897,7 +897,7 @@ func TestCatalog_EveryContextDeclaresItsPermissions(t *testing.T) {
 			all = append(all, p)
 		}
 	}
-	if len(all) != 154+len(sapp.Permissions()) || len(sapp.Permissions()) != 8 {
+	if len(all) != 156+len(sapp.Permissions()) || len(sapp.Permissions()) != 8 {
 		t.Fatalf("declared permissions: %d", len(all))
 	}
 
@@ -938,7 +938,7 @@ func TestCatalog_EveryContextDeclaresItsPermissions(t *testing.T) {
 			t.Errorf("%s quotes currencies", r)
 		}
 	}
-	if len(granted["ReadOnlyUser"]) != 61+1 || !slices.Contains(std, "Billing.Invoice.Create") || len(granted["Customer"]) != 0 ||
+	if len(granted["ReadOnlyUser"]) != 62+1 || !slices.Contains(std, "Billing.Invoice.Create") || len(granted["Customer"]) != 0 ||
 		!slices.Equal(granted["GlobalSuperAdmin"], []string{"*.*.*"}) {
 		t.Errorf("read only %d, customer %d, global %v", len(granted["ReadOnlyUser"]), len(granted["Customer"]), granted["GlobalSuperAdmin"])
 	}

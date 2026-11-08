@@ -333,6 +333,8 @@ importes al céntimo (18,2), cantidades (18,4). Nunca es menor que la escala del
 | | `prd_components.quantity` | 18,4 | product_component.QuantityUsed |
 | | `prd_price_lines.unit_price`, `min_quantity` | 18,4 | price_list_line (sólo Karpo C#) |
 | | `prd_price_lines.discount` | 5,2 | price_list_line.DiscountPercent (Trench: price_component.Percent, 9,4) |
+| Products (v4) | `prd_special_price_lines.unit_price`, `min_quantity` | 18,4 | como `prd_price_lines` (Trench: price_component.Price, 18,2) |
+| | `prd_special_price_lines.discount` | 5,2 | como `prd_price_lines` (Trench: price_component.Percent, 9,4) |
 | Purchases (v3) | `pur_invoices.withholding_rate`; `pur_suppliers.withholding_rate` | 5,2 | supplier_relationship_commercial_profile.WithholdingTaxPercent |
 | | `pur_invoice_taxes.rate` | 5,2 | vat_group.Rate |
 | | `pur_invoices.withholding`, `net`, `tax`, `declared_total`; `pur_invoice_lines.base`; `pur_invoice_taxes.base`, `amount`; `pur_invoice_accounts.amount` | 18,2 | dominio (no hay factura recibida en Trench ni en Karpo C#) |

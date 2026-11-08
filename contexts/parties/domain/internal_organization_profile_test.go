@@ -91,6 +91,38 @@ func TestInternalOrganizationProfile_Settings(t *testing.T) {
 	}
 }
 
+// La tarifa general es el id de una lista de precios, o vacío; el precio automático, nil es sí
+// (D-148).
+func TestInternalOrganizationProfile_PricingSettings(t *testing.T) {
+	p := domain.InternalOrganizationProfile{Organization: domain.NewPartyID()}
+	id := fw.NewUUID()
+	if err := p.SetDefaultPriceList(" " + strings.ToUpper(id.String()) + " "); err != nil || p.DefaultPriceList != id.String() {
+		t.Fatalf("default price list: %q %v", p.DefaultPriceList, err)
+	}
+	for _, bad := range []string{"mayor", "00000000-0000-0000-0000-000000000000"} {
+		var rv *fw.RuleViolationError
+		if err := p.SetDefaultPriceList(bad); !errors.As(err, &rv) || rv.Code != domain.ErrInvalidDefaultPriceList || p.DefaultPriceList != id.String() {
+			t.Fatalf("%q must be refused: %v", bad, err)
+		}
+	}
+	if err := p.SetDefaultPriceList(""); err != nil || p.DefaultPriceList != "" {
+		t.Fatalf("cleared: %q %v", p.DefaultPriceList, err)
+	}
+	if !p.PricesAutomatically() {
+		t.Fatal("automatic pricing by default")
+	}
+	off := false
+	p.SetAutomaticPricing(&off)
+	off = true // el perfil guarda su copia
+	if p.PricesAutomatically() || p.Equal(domain.InternalOrganizationProfile{Organization: p.Organization}) {
+		t.Fatalf("automatic pricing off: %+v", p)
+	}
+	p.SetAutomaticPricing(nil)
+	if !p.PricesAutomatically() || !p.Equal(domain.InternalOrganizationProfile{Organization: p.Organization}) {
+		t.Fatalf("automatic pricing cleared: %+v", p)
+	}
+}
+
 // El patrón de un código: una expresión regular de Go de hasta 200 caracteres, que el código cumple
 // entero; sólo para los tipos de código conocidos.
 func TestCodePattern(t *testing.T) {

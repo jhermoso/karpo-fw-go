@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/parties/domain"
@@ -28,9 +29,9 @@ type SQLProfiles struct{ db *sqlrepo.DB }
 // Get implementa domain.InternalOrganizationProfiles: lee la fila de la organización.
 func (s SQLProfiles) Get(ctx context.Context, org domain.PartyID) (domain.InternalOrganizationProfile, error) {
 	d := s.db.Dialect()
-	rows, err := s.db.QueryContext(ctx, fmt.Sprintf("SELECT %s, %s, %s, %s FROM %s WHERE %s = %s", d.Quote("time_zone"), d.Quote("line_rounding"),
-		d.Quote("price_decimals"), d.Quote("installments_timing"), d.Quote(TableInternalOrganizationProfiles), d.Quote("internal_organization_id"),
-		d.Placeholder(1)), d.UUIDValue(org.UUID))
+	rows, err := s.db.QueryContext(ctx, fmt.Sprintf("SELECT %s, %s, %s, %s, %s, %s FROM %s WHERE %s = %s", d.Quote("time_zone"), d.Quote("line_rounding"),
+		d.Quote("price_decimals"), d.Quote("installments_timing"), d.Quote("default_price_list"), d.Quote("automatic_pricing"),
+		d.Quote(TableInternalOrganizationProfiles), d.Quote("internal_organization_id"), d.Placeholder(1)), d.UUIDValue(org.UUID))
 	if err != nil {
 		return domain.InternalOrganizationProfile{}, err
 	}
@@ -39,7 +40,8 @@ func (s SQLProfiles) Get(ctx context.Context, org domain.PartyID) (domain.Intern
 	if rows.Next() {
 		var tz, rounding, timing sql.NullString
 		var decimals sql.NullInt64
-		if err := rows.Scan(&tz, &rounding, &decimals, &timing); err != nil {
+		var list, automatic any
+		if err := rows.Scan(&tz, &rounding, &decimals, &timing, &list, &automatic); err != nil {
 			return domain.InternalOrganizationProfile{}, err
 		}
 		p.TimeZone, p.LineRounding, p.InstallmentsTiming = tz.String, rounding.String, timing.String
@@ -47,8 +49,48 @@ func (s SQLProfiles) Get(ctx context.Context, org domain.PartyID) (domain.Intern
 			n := int(decimals.Int64)
 			p.PriceDecimals = &n
 		}
+		if list != nil {
+			u, err := d.ParseUUID(list)
+			if err != nil {
+				return domain.InternalOrganizationProfile{}, fmt.Errorf("%s.default_price_list: %w", TableInternalOrganizationProfiles, err)
+			}
+			if !u.IsZero() {
+				p.DefaultPriceList = u.String()
+			}
+		}
+		if p.AutomaticPricing, err = optionalBool(automatic); err != nil {
+			return domain.InternalOrganizationProfile{}, fmt.Errorf("%s.automatic_pricing: %w", TableInternalOrganizationProfiles, err)
+		}
 	}
 	return p, rows.Err()
+}
+
+// optionalBool lee un booleano anulable tal como lo entrega cada driver (BOOLEAN, BIT, NUMBER(1),
+// INTEGER o su texto).
+func optionalBool(v any) (*bool, error) {
+	var b bool
+	switch x := v.(type) {
+	case nil:
+		return nil, nil
+	case bool:
+		b = x
+	case int64:
+		b = x != 0
+	case float64:
+		b = x != 0
+	case []byte:
+		return optionalBool(string(x))
+	default:
+		switch strings.ToLower(strings.TrimSpace(fmt.Sprint(x))) { // también los números de Oracle (godror.Number)
+		case "1", "true", "t":
+			b = true
+		case "0", "false", "f":
+			b = false
+		default:
+			return nil, fmt.Errorf("cannot convert %v (%T) to bool", x, x)
+		}
+	}
+	return &b, nil
 }
 
 // CodePattern implementa domain.InternalOrganizationProfiles.
@@ -101,8 +143,19 @@ func (s SQLProfiles) Save(ctx context.Context, p domain.InternalOrganizationProf
 	if p.PriceDecimals != nil {
 		decimals = int64(*p.PriceDecimals)
 	}
+	var list, automatic any
+	if p.DefaultPriceList != "" {
+		u, err := fw.ParseUUID(p.DefaultPriceList)
+		if err != nil {
+			return err
+		}
+		list = u
+	}
+	if p.AutomaticPricing != nil {
+		automatic = *p.AutomaticPricing
+	}
 	set := sqlrepo.Values{"time_zone": nullable(p.TimeZone), "line_rounding": nullable(p.LineRounding), "price_decimals": decimals,
-		"installments_timing": nullable(p.InstallmentsTiming)}
+		"installments_timing": nullable(p.InstallmentsTiming), "default_price_list": list, "automatic_pricing": automatic}
 	n, err := s.db.Update(ctx, TableInternalOrganizationProfiles, set, sqlrepo.Values{"internal_organization_id": p.Organization})
 	if err != nil || n > 0 {
 		return err

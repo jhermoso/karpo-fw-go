@@ -35,6 +35,16 @@ type Deps struct {
 	// Profiles guarda los perfiles de las empresas internas (D-133); sin él, sus casos de uso
 	// responden que no están disponibles.
 	Profiles domain.InternalOrganizationProfiles
+	// PriceLists comprueba la tarifa general que se guarda en el perfil (D-148; opcional: sin él, se
+	// guarda sin comprobar).
+	PriceLists PriceListCheck
+}
+
+// PriceListCheck dice si una tarifa de Products puede ser la general de una empresa: si existe, es
+// de esa empresa y está activa. El puerto es de Parties, que no depende de Products: el anfitrión lo
+// cablea sobre las tarifas de Products.
+type PriceListCheck interface {
+	UsableDefaultPriceList(ctx context.Context, company, priceList string) (bool, error)
 }
 
 // AddressChecker valida la parte geográfica de una dirección postal y completa sus referencias a

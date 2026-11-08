@@ -31,6 +31,8 @@ const (
 	ErrInvalidInstallmentsTiming = "Company.InvalidInstallmentsTiming"
 	ErrInvalidCodeKind           = "Company.InvalidCodeKind"
 	ErrInvalidCodePattern        = "Company.InvalidCodePattern"
+	ErrInvalidDefaultPriceList   = "Company.InvalidDefaultPriceList"
+	ErrUnknownDefaultPriceList   = "Company.UnknownDefaultPriceList"
 )
 
 // Formas de redondear una línea con descuento (D-128, D-144).
@@ -77,13 +79,53 @@ type InternalOrganizationProfile struct {
 	PriceDecimals *int
 	// InstallmentsTiming es InstallmentsAfterIssue o InstallmentsWithIssue; vacío, después.
 	InstallmentsTiming string
+	// DefaultPriceList es la tarifa general de la empresa, una lista de precios de Products (su id,
+	// en su forma canónica); vacío, no tiene (D-148). Al guardarla la comprueba, si lo hay, el puerto
+	// application.PriceListCheck; Products se salta además una que ya no sirve (retirada después).
+	DefaultPriceList string
+	// AutomaticPricing dice si una línea de factura sin pedido toma sola el precio de la cadena de
+	// Products (D-148); nil, sí.
+	AutomaticPricing *bool
+}
+
+// PricesAutomatically dice si la empresa pone precio sola a una línea de factura sin pedido: el
+// ajuste, o sí si no lo tiene.
+func (p InternalOrganizationProfile) PricesAutomatically() bool {
+	return p.AutomaticPricing == nil || *p.AutomaticPricing
+}
+
+// SetDefaultPriceList fija la tarifa general: el id de una lista de precios, o vacío para quitarla.
+func (p *InternalOrganizationProfile) SetDefaultPriceList(id string) error {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		p.DefaultPriceList = ""
+		return nil
+	}
+	u, err := fw.ParseUUID(id)
+	if err != nil || u.IsZero() {
+		return fw.Violation(ErrInvalidDefaultPriceList, "the default price list must be the id of a price list")
+	}
+	p.DefaultPriceList = u.String()
+	return nil
+}
+
+// SetAutomaticPricing fija si se pone precio solo a una línea de factura sin pedido; nil lo limpia
+// (y vale sí).
+func (p *InternalOrganizationProfile) SetAutomaticPricing(on *bool) {
+	if on == nil {
+		p.AutomaticPricing = nil
+		return
+	}
+	v := *on
+	p.AutomaticPricing = &v
 }
 
 // Equal dice si dos perfiles guardan lo mismo.
 func (p InternalOrganizationProfile) Equal(o InternalOrganizationProfile) bool {
 	samePrice := (p.PriceDecimals == nil) == (o.PriceDecimals == nil) && (p.PriceDecimals == nil || *p.PriceDecimals == *o.PriceDecimals)
+	sameAuto := (p.AutomaticPricing == nil) == (o.AutomaticPricing == nil) && (p.AutomaticPricing == nil || *p.AutomaticPricing == *o.AutomaticPricing)
 	return p.Organization == o.Organization && p.TimeZone == o.TimeZone && p.LineRounding == o.LineRounding && samePrice &&
-		p.InstallmentsTiming == o.InstallmentsTiming
+		p.InstallmentsTiming == o.InstallmentsTiming && p.DefaultPriceList == o.DefaultPriceList && sameAuto
 }
 
 // SetLineRounding fija la forma de redondear las líneas: once, gross_then_discount, o vacío para

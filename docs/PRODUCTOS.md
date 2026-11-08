@@ -75,13 +75,13 @@ Puntuación de 1 a 5 por criterio; nota ponderada sobre 100. **Mantener** ≥ 70
 | 10 | `ProductFeature*`, `ProductQuality`, `ProductionRun`, `ProductQuote`, `ProductRequirement` | 1 | 2 | 2 | 2 | **33** | Retirar → sin uso; las características volverán si hacen falta variantes |
 | 11 | `VatGroup` | 2 | 2 | 2 | 3 | **43** | Sustituido → el código de impuesto del catálogo de Fiscal |
 | 12 | Cuentas contables del perfil (`SalesAccountId`…) | 1 | 2 | 1 | 2 | **30** | Retirar → las cuentas las decide el perfil del libro de Contabilidad |
-| 13 | Endpoints sin permisos | — | — | — | — | — | Sustituido → `Products.Product.Read/Update` (catálogo) y `Products.PriceList.Read/Update` (precios), separados, con ámbito por empresa |
+| 13 | Endpoints sin permisos | — | — | — | — | — | Sustituido → `Products.Product.Read/Update` (catálogo), `Products.PriceList.Read/Update` (tarifas) y `Products.SpecialPrice.Read/Update` (precios especiales, D-148), separados, con ámbito por empresa |
 
 ## Diseño
 
 ```
 contexts/products/
-├── domain/          # Product (+Barcode, Component, SupplierItem), Category, PriceList (+PriceLine, QuoteOf), Unit y Convert
+├── domain/          # Product (+Barcode, Component, SupplierItem), Category, PriceList y SpecialPrices (+PriceLine), QuoteOf, Unit y Convert
 ├── contracts/       # lenguaje publicado v1 y puertos Catalog y Pricing
 ├── application/     # casos de uso con permisos y ámbito
 ├── infrastructure/  # esquema prd_* de 5 motores, mapeos
@@ -92,8 +92,9 @@ contexts/products/
   - `Catalog.Products(ids)` devuelve lo que necesitan de un producto: empresa, SKU, nombre, tipo,
     unidad, código de impuesto, categoría de gasto, si se almacena, trazabilidad, bloqueos y
     descatalogación.
-  - `Pricing.Quote(empresa, producto, tarifa, cantidad, fecha)` devuelve precio, descuento y
-    precio neto, e indica si viene de la tarifa o del precio base.
+  - `Pricing.Quote(QuoteRequest{empresa, cliente, producto, tarifa, cantidad, fecha})` devuelve
+    precio, descuento y precio neto, y de qué nivel de la cadena sale (ver «Precios especiales y
+    tarifa general»).
 - **Precios con hasta 4 decimales**; el neto se redondea a 4.
 - **Búsqueda** por texto (nombre sin distinguir mayúsculas, o SKU exacto), tipo, categoría y
   código de barras.
@@ -102,7 +103,95 @@ contexts/products/
   - `prd_products` (+ `prd_barcodes`, `prd_components`, `prd_product_suppliers`);
   - `prd_categories`;
   - `prd_price_lists` (+ `prd_price_lines`);
+  - `prd_special_prices` (+ `prd_special_price_lines`);
   - las bandejas de salida y la auditoría.
+
+## Precios especiales y tarifa general (D-148, plan Sage T6)
+
+**Cadena del precio de venta**, de más a menos prioritaria; gana el primer nivel con una línea
+vigente para la cantidad (la de mayor cantidad mínima que no la supere):
+
+| # | Nivel | `Quote.Source` | De dónde sale |
+|---|---|---|---|
+| 1 | Precio especial del cliente para el producto | `special` | `SpecialPrices` de la empresa y el cliente |
+| 2 | Tarifa del cliente | `customer_list` | la tarifa que traen las condiciones (`Terms`) de Orders |
+| 3 | Tarifa general de la empresa | `default_list` | el ajuste `default_price_list` del perfil de la empresa en Parties |
+| 4 | Precio base del producto | `base` | `Product.BasePrice` |
+
+- Un nivel gana entero: si el precio especial tiene línea, da precio y descuento aunque la tarifa
+  del cliente tenga un tramo por cantidad más barato. Una tarifa retirada no da precio.
+- **El descuento del cliente** (`Terms.Discount`) no entra en la cadena: Orders lo aplica encima de
+  la línea, encadenado con el del nivel que ganó (precio × (1 − dto. del nivel) × (1 − dto. del
+  cliente), no la suma de los dos), también sobre un precio especial.
+- **Precios especiales:** agregado `SpecialPrices`, uno por empresa y cliente (índice único
+  `ux_prd_special_prices_customer`), con líneas como las de la tarifa: producto, cantidad mínima,
+  precio, descuento opcional y vigencia desde/hasta. Dos líneas del mismo producto y cantidad no se
+  solapan en el tiempo. Se crea con su primer precio. El cliente es una party de Parties y no se
+  comprueba su rol, igual que el proveedor de un producto.
+- **Tarifa general:** no es una marca de la tarifa, sino un ajuste de la empresa,
+  `default_price_list`, en `internal_organization_profile` de Parties, junto a la zona horaria y los
+  ajustes de D-144, con el mismo nombre que en Karpo C# (docs/PARTIES.md §25). Products lo lee por
+  el puerto `application.CompanySettings` (`DefaultPriceList(empresa)`), que cablea el anfitrión
+  (`host.ProductsSettings`, sobre `contracts.CompanyProfiles` de Parties) con
+  `products.WithSettings`, igual que Billing lee sus ajustes. Se lee en cada cotización. Si no hay
+  puerto, la empresa no tiene el ajuste, o la tarifa no existe, es de otra empresa o está retirada,
+  ese nivel se salta. Parties ya la comprueba al guardarla (con el puerto `contracts.PriceLists` de
+  Products, `Module.PriceLists`), pero se puede retirar después. Una sola tarifa
+  general por empresa sale del propio esquema (una columna del perfil).
+- **`GET /quote?customer=` no conoce los `Terms` de Orders:** la tarifa del cliente la pasa quien
+  llama en `priceList`; sin ella, ese nivel se salta. Con `customer` se pide además
+  `Products.SpecialPrice.Read` (403 sin él), porque la respuesta enseña su precio especial. El
+  puerto `Pricing`, de servicio a servicio, no pide permisos.
+- **Cambios de comportamiento:** una tarifa del cliente sin línea vigente cae ahora a la tarifa
+  general, si la empresa tiene una, y no directamente al precio base. `Quote.Source` deja de valer
+  `list` y pasa a `customer_list` (los demás valores: `special`, `default_list`, `base`).
+- **API** (`/api/products`):
+
+  | Método y ruta | Permiso | Qué hace |
+  |---|---|---|
+  | `GET /special-prices?company=&customer=` | `Products.SpecialPrice.Read` | los precios especiales del cliente (lista vacía si no tiene) |
+  | `POST /special-prices` | `Products.SpecialPrice.Update` | alta de un precio especial |
+  | `POST /special-prices/remove` | `Products.SpecialPrice.Update` | baja de un precio (producto, cantidad mínima y fecha desde) |
+  | `GET /quote?company=&customer=&product=&priceList=&quantity=&on=` | `Products.PriceList.Read` (y `Products.SpecialPrice.Read` con `customer`) | la cadena completa |
+
+  No hay verbo `Delete`: como en las líneas de tarifa, borrar un precio es cambiar los precios del
+  cliente (`Update`).
+  La tarifa general se fija en el perfil de la empresa: `PUT /api/profiles/internal-organizations/{id}`
+  con `defaultPriceList` (docs/PARTIES.md §25).
+- **Migración 4** de Products, en los cinco motores: las dos tablas nuevas, con los decimales ya
+  como `{dec:18,4}` y `{dec:5,2}`. Los ajustes de la empresa van en la migración 35 de Parties.
+- **Precio automático de la factura directa:** el mismo perfil guarda `automatic_pricing`
+  (`automaticPricing`, nulo es sí). Hoy sólo se guarda y se expone; Facturación lo usará en otra rama.
+- **Orders** pasa el cliente al puerto: `Catalog.Price` recibe el cliente del pedido o del
+  presupuesto. Nada más cambia allí.
+
+**Diferencias con `price_component` de Trench.** Trench guarda el precio de un cliente en
+`price_component` con `Party`, `Product`, `Price` (18,2), `Percent` (9,4) y `ExpirationDate`, sin
+empresa y sin tramos:
+
+| Trench (`price_component`) | Go (`prd_special_price_lines` y cabecera) | Por qué |
+|---|---|---|
+| `Party` | `customer` | el nivel es sólo de clientes |
+| `Product` | `product_id` | como `prd_price_lines` |
+| `Price` (18,2) | `unit_price` (18,4) | los cuatro decimales de los precios de Products |
+| `Percent` (9,4) | `discount` (5,2) | como `prd_price_lines.discount` |
+| `ExpirationDate` | `valid_to` | más `valid_from`: un precio pactado empieza un día |
+| — | `company` | el catálogo es de cada empresa |
+| — | `min_quantity` | tramos por cantidad, como en la tarifa |
+| `ProductCategory`, `ProductFeature`, `Uom`, `Comments`, `IsActive` | — | categoría: ver el hueco previsto; el resto, sin uso |
+
+Se usan los nombres de `prd_price_lines` y no los de Trench para que una línea de precio especial y
+una de tarifa sean el mismo tipo (`PriceLine`) y la misma lectura.
+
+**Hueco previsto** (sin construir):
+
+- **Descuento por familia:** la cadena es una lista de niveles (`domain.Level`) con una interfaz
+  `Prices.PriceOf(producto, cantidad, fecha)` que recibe el producto entero, categoría incluida. Un
+  descuento por familia es otro tipo de línea (categoría en lugar de producto) en los precios
+  especiales o en la tarifa, o un nivel nuevo entre los que hay, sin tocar `QuoteOf` ni el contrato.
+- **Otras monedas:** la tarifa y los precios especiales ya guardan su moneda (hoy sólo `EUR`), y la
+  petición es un `QuoteRequest`: la moneda entra como un campo más y cada nivel mira sólo las listas
+  de esa moneda.
 
 ## Decisiones (aprobadas por Javier el 2026-10-04)
 
@@ -113,7 +202,9 @@ contexts/products/
    (bien o servicio) no cambia, y un producto se descataloga, no se borra.
 3. **Las tarifas viven en Productos** (no en Parties) y el precio sale de la tarifa o, si no hay
    línea vigente, del precio base. **Los precios y descuentos por cliente o grupo de clientes
-   van con Pedidos**, que es quien conoce al cliente.
+   van con Pedidos**, que es quien conoce al cliente. *Revisado por D-148 (2026-11-07):* el precio
+   especial por cliente y producto vive en Productos, que es quien da precios; el descuento general
+   del cliente sigue en las condiciones de Pedidos.
 4. **Las unidades de medida son un catálogo fijo en código**, con conversión solo dentro de la
    misma dimensión. Añadir una unidad es un cambio de versión, no un alta de usuario.
 5. **Se retiran** las características, las relaciones entre productos distintas de los
@@ -130,6 +221,8 @@ contexts/products/
   - conversiones (g a kg, l a ml, min a h, m³ a l) y las que no existen (kg a l, caja a unidad);
   - tarifa: descuento y fechas inválidos, solape, tramos por cantidad, vigencia, tarifa retirada,
     precio base;
+  - precios especiales: cliente y moneda, precio negativo, vigencia, solape, tramo, baja;
+  - la cadena: el especial gana al tramo de la tarifa del cliente, y un caso por nivel;
   - categoría que es su propio padre.
 - **Extremo a extremo** (Parties y Productos, en memoria y en SQLite migrada, por HTTP):
   - las 14 unidades;
@@ -144,18 +237,30 @@ contexts/products/
     producto desconocido 404;
   - cotización: tramo pequeño, tramo de 1.000 con 5 % de descuento, fuera de vigencia, sin
     tarifa, tarifa retirada, cantidad cero 400;
+  - precios especiales (D-148): sólo con su permiso (403), ajeno 404, descuento 400, producto
+    desconocido 404, solape 422, consulta y baja; la cadena por `GET /quote`, un caso por nivel, con
+    la tarifa general de un puerto falso; la tarifa general se salta si no hay, no existe, es de otra
+    empresa o está retirada;
   - descatalogar una sola vez; el puerto `Catalog` devuelve los productos conocidos.
+- **Anfitrión** (memoria y SQLite): la tarifa general sale del perfil de la empresa en Parties; sin
+  ajuste o retirada, el precio base.
+- **Pedidos:** un pedido y un presupuesto con precio especial y el descuento del cliente
+  encadenado (0,09 × 0,95 × 0,90), y otro cliente sin especial que toma el tramo de su tarifa.
 - **Integración** en PostgreSQL, SQL Server, Oracle y MySQL (junto con Inventario):
   - producto de ida y vuelta con códigos, componentes y proveedores;
   - SKU y código de barras repetidos;
   - búsquedas, incluida la de código de barras sobre la tabla hija;
-  - tarifa de ida y vuelta, solape y cotización por el puerto `Pricing`.
+  - tarifa de ida y vuelta, solape y cotización por el puerto `Pricing`;
+  - tarifa general sacada del perfil de Parties y precios especiales de ida y vuelta, su solape, la cadena
+    completa por el puerto `Pricing` y la baja de un precio especial.
 
 ## Pendiente
 
-- Precios y descuentos por cliente y grupo de clientes, con Pedidos.
+- Descuento por familia (categoría) y por grupo de clientes (D-148 deja el hueco).
+- Que una línea de factura sin pedido tome el precio de la cadena, configurable por empresa
+  (D-148, Facturación).
 - Variantes de producto (características).
-- Tarifas en otras monedas.
+- Tarifas y precios especiales en otras monedas.
 - Precio mínimo de venta y control de descuentos máximos.
 - Validar el código de impuesto contra el catálogo de Fiscal al dar de alta el producto (hoy se
   valida al facturar).

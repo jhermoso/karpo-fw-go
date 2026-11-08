@@ -153,9 +153,9 @@ func quoteDTO(q *domain.Quote) QuoteDTO {
 
 // item pone precio a un producto de la empresa para una venta en una fecha, y rechaza lo que no se
 // puede vender.
-func (s service) item(ctx context.Context, company domain.OrganizationID, list domain.PriceListID, product domain.ProductID, q vocab.Decimal,
-	on vocab.Date) (domain.Item, error) {
-	it, ok, err := s.Catalog.Price(ctx, company, product, list, q, on)
+func (s service) item(ctx context.Context, company domain.OrganizationID, customer domain.PartyID, list domain.PriceListID, product domain.ProductID,
+	q vocab.Decimal, on vocab.Date) (domain.Item, error) {
+	it, ok, err := s.Catalog.Price(ctx, company, customer, product, list, q, on)
 	if err != nil {
 		return domain.Item{}, err
 	}
@@ -247,7 +247,7 @@ func (s service) quoteUseCases(svc *Service) {
 		}
 		return dto(update(ctx, c.ID, func(ctx context.Context, q *domain.Quote) error {
 			qs := q.State()
-			it, err := s.item(ctx, qs.Company, qs.PriceList, product, n, qs.Date)
+			it, err := s.item(ctx, qs.Company, qs.Customer, qs.PriceList, product, n, qs.Date)
 			if err != nil {
 				return err
 			}

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -44,20 +45,32 @@ type host struct {
 	prod     *products.Module
 	parties  *parties.Module
 	adminCtx context.Context
+	generals *sync.Map // empresa -> tarifa general, el ajuste que el anfitrión lee del perfil de Parties
+}
+
+// generalLists es un CompanySettings falso: la tarifa general de cada empresa.
+type generalLists struct{ m *sync.Map }
+
+func (g generalLists) DefaultPriceList(_ context.Context, company string) (string, error) {
+	v, _ := g.m.Load(company)
+	s, _ := v.(string)
+	return s, nil
 }
 
 func compose(t *testing.T) *host {
 	ctx := context.Background()
 	sw := hotswap.New(memory.NewStore("memory"))
 	pm := parties.Compose(sw)
-	dm := products.Compose(sw)
+	generals := &sync.Map{}
+	dm := products.Compose(sw, products.WithSettings(generalLists{generals}))
 
 	jwt, _ := jwtauth.New(jwtauth.Config{Secret: []byte("products-test")})
 	dir := authorization.NewMemoryDirectory()
-	h := &host{t: t, sw: sw, dir: dir, ids: map[string]fw.UUID{}, tokens: map[string]string{}, prod: dm, parties: pm}
-	all := []authz.Permission{dapp.PermProductRead, dapp.PermProductUpdate, dapp.PermPriceListRead, dapp.PermPriceListWrite}
+	h := &host{t: t, sw: sw, dir: dir, ids: map[string]fw.UUID{}, tokens: map[string]string{}, prod: dm, parties: pm, generals: generals}
+	all := dapp.Permissions()
 	users := map[string][]authz.Permission{"cataloguer": {dapp.PermProductRead, dapp.PermProductUpdate, dapp.PermPriceListRead},
-		"pricer": {dapp.PermProductRead, dapp.PermPriceListRead, dapp.PermPriceListWrite}, "outsider": all}
+		"pricer": {dapp.PermProductRead, dapp.PermPriceListRead, dapp.PermPriceListWrite}, "dealer": {dapp.PermPriceListRead, dapp.PermSpecialPriceRead,
+			dapp.PermSpecialPriceUpdate}, "outsider": all}
 	for u, perms := range users {
 		h.ids[u] = fw.NewUUID()
 		dir.Put(h.ids[u], authz.Subject{Active: true, Permissions: perms})
@@ -142,6 +155,7 @@ func (h *host) scenario(tag string) {
 	proveedor := org("Tornillería Ibérica")
 	h.grant("cataloguer", acme.ID)
 	h.grant("pricer", acme.ID)
+	h.grant("dealer", acme.ID)
 	h.grant("outsider", globex.ID)
 
 	var units []products.UnitDTO
@@ -250,7 +264,7 @@ func (h *host) scenario(tag string) {
 		h.must(h.do("GET", "/api/products/quote?company="+acme.ID+"&product="+tornillo.ID+"&"+query, "pricer", nil, &q), 200, "quote "+query)
 		return q
 	}
-	if q := quote("priceList=" + list.ID + "&quantity=10&on=2026-10-04"); q.Net != "0.1000" || q.Source != "list" {
+	if q := quote("priceList=" + list.ID + "&quantity=10&on=2026-10-04"); q.Net != "0.1000" || q.Source != "customer_list" {
 		t.Fatalf("small quantity: %+v", q)
 	}
 	if q := quote("priceList=" + list.ID + "&quantity=1000&on=2026-10-04"); q.UnitPrice != "0.0800" || q.Discount != "5.00" || q.Net != "0.0760" {
@@ -271,6 +285,7 @@ func (h *host) scenario(tag string) {
 	if len(list.Lines) != 1 {
 		t.Fatalf("after removal: %+v", list.Lines)
 	}
+	h.specialPrices(acme.ID, tornillo.ID, list.ID, org("Cliente").ID)
 
 	// Un producto se retira, nunca se borra; los demás contextos lo ven a través del puerto Catalog.
 	h.must(h.do("POST", "/api/products/products/"+tuerca.ID+"/discontinue", "cataloguer", map[string]any{"on": "2026-11-01"}, &tuerca), 200, "discontinue")
@@ -280,6 +295,97 @@ func (h *host) scenario(tag string) {
 	if len(refs) != 2 || refs[tuerca.ID].Discontinued != "2026-11-01" || refs[tornillo.ID].Tracking != "lot" || !refs[tornillo.ID].Stocked ||
 		refs[tornillo.ID].ExpenseCategory != "goods" || refs[tornillo.ID].StandardCost != "0.0400" {
 		t.Fatalf("catalog port: %+v", refs)
+	}
+}
+
+// specialPrices recorre la cadena de D-148 por HTTP: precio especial del cliente > tarifa del cliente
+// > tarifa general de la empresa > precio base (0.125). retired es una tarifa retirada de la empresa.
+func (h *host) specialPrices(company, product, retired, customer string) {
+	t := h.t
+	// La tarifa general: un ajuste de la empresa, que aquí da un puerto falso.
+	var general, vip dapp.PriceListDTO
+	h.must(h.do("POST", "/api/products/price-lists", "pricer", map[string]any{"company": company, "code": "general", "name": "General"}, &general), 201,
+		"general list")
+	h.must(h.do("POST", "/api/products/price-lists/"+general.ID+"/prices", "pricer", map[string]any{"product": product, "unitPrice": "0.12",
+		"from": "2026-01-01"}, nil), 200, "general price")
+	h.generals.Store(company, general.ID)
+	// La tarifa del cliente, con un tramo por cantidad más barato que su precio especial.
+	h.must(h.do("POST", "/api/products/price-lists", "pricer", map[string]any{"company": company, "code": "vip", "name": "VIP"}, &vip), 201, "vip list")
+	for _, p := range []map[string]any{{"product": product, "unitPrice": "0.10", "from": "2026-01-01"},
+		{"product": product, "minQuantity": "1000", "unitPrice": "0.07", "from": "2026-01-01"}} {
+		h.must(h.do("POST", "/api/products/price-lists/"+vip.ID+"/prices", "pricer", p, nil), 200, "vip price")
+	}
+
+	// Precios especiales: su propio permiso, sin solapes, de productos de la empresa.
+	special := map[string]any{"company": company, "customer": customer, "product": product, "unitPrice": "0.09", "discount": "5", "from": "2026-01-01",
+		"to": "2026-12-31"}
+	var sp dapp.SpecialPricesDTO
+	h.must(h.do("POST", "/api/products/special-prices", "pricer", special, nil), 403, "pricing lists is not dealing")
+	h.must(h.do("POST", "/api/products/special-prices", "outsider", special, nil), 404, "outsider")
+	h.must(h.do("POST", "/api/products/special-prices", "dealer", merge(special, map[string]any{"discount": "120"}), nil), 400, "discount")
+	h.must(h.do("POST", "/api/products/special-prices", "dealer", merge(special, map[string]any{"product": fw.NewUUID().String()}), nil), 404, "unknown product")
+	h.must(h.do("POST", "/api/products/special-prices", "dealer", special, &sp), 200, "special price")
+	h.must(h.do("POST", "/api/products/special-prices", "dealer", merge(special, map[string]any{"from": "2026-12-01", "to": "2027-06-30"}), nil), 422, "overlap")
+	h.must(h.do("POST", "/api/products/special-prices", "dealer", merge(special, map[string]any{"minQuantity": "5000", "unitPrice": "0.05", "discount": ""}),
+		&sp), 200, "special volume price")
+	h.must(h.do("GET", "/api/products/special-prices?company="+company+"&customer="+customer, "dealer", nil, &sp), 200, "special prices")
+	if sp.ID == "" || sp.Customer != customer || len(sp.Lines) != 2 || sp.Lines[0].UnitPrice != "0.0900" || sp.Lines[0].To != "2026-12-31" {
+		t.Fatalf("special prices: %+v", sp)
+	}
+	var none dapp.SpecialPricesDTO
+	h.must(h.do("GET", "/api/products/special-prices?company="+company+"&customer="+fw.NewUUID().String(), "dealer", nil, &none), 200, "no special prices")
+	if none.ID != "" || len(none.Lines) != 0 {
+		t.Fatalf("no special prices: %+v", none)
+	}
+
+	// Ver la cadena con un cliente pide también ver sus precios especiales.
+	h.must(h.do("GET", "/api/products/quote?company="+company+"&product="+product+"&customer="+customer+"&quantity=10&on=2026-10-04", "pricer", nil, nil),
+		403, "special prices are not price lists")
+	h.must(h.do("GET", "/api/products/quote?company="+company+"&product="+product+"&quantity=10&on=2026-10-04", "pricer", nil, nil), 200,
+		"quote without a customer")
+
+	// La cadena, un caso por nivel.
+	quote := func(query string) contracts.Quote {
+		var q contracts.Quote
+		h.must(h.do("GET", "/api/products/quote?company="+company+"&product="+product+"&"+query, "dealer", nil, &q), 200, "quote "+query)
+		return q
+	}
+	for query, want := range map[string][2]string{
+		"customer=" + customer + "&priceList=" + vip.ID + "&quantity=10&on=2026-10-04":   {"special", "0.0855"},       // 0.09 × 0.95
+		"customer=" + customer + "&priceList=" + vip.ID + "&quantity=2000&on=2026-10-04": {"special", "0.0855"},       // gana al tramo de 0.07
+		"customer=" + customer + "&priceList=" + vip.ID + "&quantity=6000&on=2026-10-04": {"special", "0.0500"},       // su propio tramo
+		"customer=" + customer + "&priceList=" + vip.ID + "&quantity=10&on=2027-02-01":   {"customer_list", "0.1000"}, // el especial caducó
+		"priceList=" + vip.ID + "&quantity=2000&on=2026-10-04":                           {"customer_list", "0.0700"},
+		"customer=" + customer + "&quantity=10&on=2027-02-01":                            {"default_list", "0.1200"},
+		"quantity=10&on=2026-10-04":                                                      {"default_list", "0.1200"},
+		"quantity=10&on=2025-10-04":                                                      {"base", "0.1250"},
+	} {
+		if q := quote(query); q.Source != want[0] || q.Net != want[1] {
+			t.Fatalf("%s: %+v, want %v", query, q, want)
+		}
+	}
+	// Una tarifa general que no da precio se salta: ninguna, una que no existe, una de otra empresa,
+	// una retirada.
+	foreign, err := h.prod.Service.CreatePriceList.Handle(h.adminCtx, dapp.CreatePriceList{Company: fw.NewUUID().String(), Code: "general",
+		Name: "Ajena"})
+	h.ok(err)
+	h.must(h.do("PUT", "/api/products/price-lists/"+general.ID+"/active", "pricer", map[string]any{"active": false}, nil), 200, "retire general")
+	for what, id := range map[string]string{"none": "", "unknown": fw.NewUUID().String(), "foreign": foreign.ID, "retired": general.ID, "other retired": retired} {
+		h.generals.Store(company, id)
+		if q := quote("quantity=10&on=2026-10-04"); q.Source != "base" || q.Net != "0.1250" {
+			t.Fatalf("general list %s: %+v", what, q)
+		}
+	}
+	h.generals.Delete(company)
+
+	// Borrar un precio especial.
+	remove := map[string]any{"company": company, "customer": customer, "product": product, "from": "2026-01-01"}
+	h.must(h.do("POST", "/api/products/special-prices/remove", "dealer", remove, &sp), 200, "remove special")
+	h.must(h.do("POST", "/api/products/special-prices/remove", "dealer", remove, nil), 404, "remove special twice")
+	h.must(h.do("POST", "/api/products/special-prices/remove", "dealer", merge(remove, map[string]any{"customer": fw.NewUUID().String()}), nil), 404,
+		"no special prices")
+	if len(sp.Lines) != 1 || sp.Lines[0].MinQuantity != "5000" {
+		t.Fatalf("after removal: %+v", sp)
 	}
 }
 

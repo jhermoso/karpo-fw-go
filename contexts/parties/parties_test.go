@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -54,6 +55,18 @@ type env struct {
 	// escritura), outsider (completo en otra organización), seller (completo, todo menos conceder
 	// pruebas).
 	admin, reader, clerk, viewer, outsider, seller string
+	// priceLists es el puerto falso que comprueba la tarifa general del perfil (D-148): las tarifas
+	// que guarda no sirven; las demás, sí.
+	priceLists *unusablePriceLists
+}
+
+// unusablePriceLists implementa application.PriceListCheck: sirve cualquier tarifa salvo las que
+// se le dan.
+type unusablePriceLists struct{ ids sync.Map }
+
+func (u *unusablePriceLists) UsableDefaultPriceList(_ context.Context, _, priceList string) (bool, error) {
+	_, unusable := u.ids.Load(priceList)
+	return !unusable, nil
 }
 
 var allPerms = append(slices.Clone(sellerPerms), papp.PermRelationshipSetTrial, papp.PermRoleTypeDefine, papp.PermRelationshipTypeDefine, papp.PermRoleAnnul, papp.PermPartyUpdateRelated, papp.PermPartyMerge)
@@ -208,7 +221,8 @@ func compose(t *testing.T, newDirectory func(*testing.T) directory) *env {
 	}
 
 	sw := hotswap.New(memory.NewStore("memory"))
-	mod := parties.Compose(sw)
+	priceLists := &unusablePriceLists{}
+	mod := parties.Compose(sw, parties.WithPriceListCheck(priceLists))
 	mux := http.NewServeMux()
 	mod.HTTP.RegisterRoutes(mux)
 	srv := httptest.NewServer(distribution.Chain(mux, distribution.Correlation(),
@@ -216,7 +230,7 @@ func compose(t *testing.T, newDirectory func(*testing.T) directory) *env {
 	t.Cleanup(srv.Close)
 	t.Cleanup(func() { _ = sw.Close(context.Background()) })
 	return &env{t: t, srv: srv, sw: sw, mod: mod, dir: dir, clock: clock, admin: tokens["admin"], reader: tokens["reader"],
-		clerk: tokens["clerk"], viewer: tokens["viewer"], outsider: tokens["outsider"], seller: tokens["seller"]}
+		clerk: tokens["clerk"], viewer: tokens["viewer"], outsider: tokens["outsider"], seller: tokens["seller"], priceLists: priceLists}
 }
 
 func (e *env) do(method, path, auth string, body any, out any) int {

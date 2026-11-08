@@ -677,6 +677,31 @@ func TestPartiesContext(t *testing.T) {
 				st.PriceDecimals == nil || *st.PriceDecimals != 0 {
 				t.Fatalf("the settings other contexts read: %+v %v", st, err)
 			}
+			// Migración 35: la tarifa general y el precio automático de D-148, de ida y vuelta.
+			list, off := fw.NewUUID().String(), false
+			if _, err := svc.SetInternalOrganizationProfile.Handle(ctx, papp.SetInternalOrganizationProfile{ID: acmeID, DefaultPriceList: list,
+				AutomaticPricing: &off}); err != nil {
+				t.Fatalf("setting the pricing settings: %v", err)
+			}
+			if p, err := profiles.Get(ctx, acmeID); err != nil || p.DefaultPriceList != list || p.AutomaticPricing == nil || *p.AutomaticPricing {
+				t.Fatalf("the pricing settings read back: %+v %v", p, err)
+			}
+			if st, err := mod.CompanyProfiles.Settings(ctx, acme.ID); err != nil || st.DefaultPriceList != list || st.AutomaticPricing {
+				t.Fatalf("the pricing settings other contexts read: %+v %v", st, err)
+			}
+			on := true
+			if _, err := svc.SetInternalOrganizationProfile.Handle(ctx, papp.SetInternalOrganizationProfile{ID: acmeID, AutomaticPricing: &on}); err != nil {
+				t.Fatal(err)
+			}
+			if p, err := profiles.Get(ctx, acmeID); err != nil || p.DefaultPriceList != "" || p.AutomaticPricing == nil || !*p.AutomaticPricing {
+				t.Fatalf("automatic pricing on, no general list: %+v %v", p, err)
+			}
+			if _, err := svc.SetInternalOrganizationProfile.Handle(ctx, papp.SetInternalOrganizationProfile{ID: acmeID}); err != nil {
+				t.Fatal(err)
+			}
+			if p, err := profiles.Get(ctx, acmeID); err != nil || p.AutomaticPricing != nil || !p.PricesAutomatically() {
+				t.Fatalf("automatic pricing cleared: %+v %v", p, err)
+			}
 			setPattern := func(pattern string) error {
 				_, err := svc.SetInternalOrganizationCodePattern.Handle(ctx, papp.SetInternalOrganizationCodePattern{ID: acmeID,
 					Kind: domain.CodeKindInvoiceSeries, Pattern: pattern})

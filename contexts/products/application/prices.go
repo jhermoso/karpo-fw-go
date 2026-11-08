@@ -5,6 +5,7 @@ import (
 
 	"github.com/jhermoso/karpo-fw-go/contexts/products/contracts"
 	"github.com/jhermoso/karpo-fw-go/contexts/products/domain"
+	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/pipeline"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
@@ -49,8 +50,9 @@ type GetPriceList struct{ ID domain.PriceListID }
 // SearchPriceLists lista las listas de precios de una empresa (sin líneas).
 type SearchPriceLists struct{ Company string }
 
-// GetQuote pone precio a un producto para una cantidad en una fecha, con una lista de precios opcional.
-type GetQuote struct{ Company, Product, PriceList, Quantity, On string }
+// GetQuote pone precio a un producto para una cantidad en una fecha, con un cliente y una lista de
+// precios opcionales (contracts.Pricing).
+type GetQuote struct{ Company, Customer, Product, PriceList, Quantity, On string }
 
 // PriceLineDTO es la forma de transporte de un precio.
 type PriceLineDTO struct {
@@ -79,12 +81,18 @@ func priceListDTO(p *domain.PriceList, lines bool) PriceListDTO {
 	d := PriceListDTO{ID: p.ID().String(), Company: s.Company.String(), Code: s.Code, Name: s.Name, Currency: s.Currency.String(), Active: s.Active,
 		Lines: []PriceLineDTO{}, Version: p.Version()}
 	if lines {
-		for _, l := range s.Lines {
-			d.Lines = append(d.Lines, PriceLineDTO{Product: l.Product.String(), MinQuantity: l.MinQuantity.String(), UnitPrice: l.UnitPrice.StringFixed(4),
-				Discount: l.Discount.StringFixed(2), From: l.From.String(), To: dateText(l.To)})
-		}
+		d.Lines = priceLineDTOs(s.Lines)
 	}
 	return d
+}
+
+func priceLineDTOs(lines []domain.PriceLine) []PriceLineDTO {
+	out := []PriceLineDTO{}
+	for _, l := range lines {
+		out = append(out, PriceLineDTO{Product: l.Product.String(), MinQuantity: l.MinQuantity.String(), UnitPrice: l.UnitPrice.StringFixed(4),
+			Discount: l.Discount.StringFixed(2), From: l.From.String(), To: dateText(l.To)})
+	}
+	return out
 }
 
 func (s service) priceUseCases(svc *Service) {
@@ -158,7 +166,6 @@ func (s service) priceUseCases(svc *Service) {
 	svc.SetPriceListActive = guard(PermPriceListWrite, func(ctx context.Context, c SetPriceListActive) (PriceListDTO, error) {
 		return update(ctx, c.ID, func(_ context.Context, pl *domain.PriceList) error { pl.SetActive(c.Active); return nil })
 	}, retry[SetPriceListActive, PriceListDTO]())
-
 	svc.GetPriceList = guard(PermPriceListRead, func(ctx context.Context, q GetPriceList) (PriceListDTO, error) {
 		pl, err := s.PriceLists.Get(ctx, q.ID)
 		if err != nil {
@@ -189,6 +196,11 @@ func (s service) priceUseCases(svc *Service) {
 		return out, nil
 	})
 	svc.Quote = guard(PermPriceListRead, func(ctx context.Context, q GetQuote) (contracts.Quote, error) {
+		if q.Customer != "" { // los precios especiales del cliente tienen su propio permiso
+			if err := authz.Require(ctx, PermSpecialPriceRead); err != nil {
+				return contracts.Quote{}, err
+			}
+		}
 		var v fw.Validation
 		company := domain.OrganizationID{UUID: parseID(&v, "company", q.Company)}
 		if err := v.Err(); err != nil {
@@ -197,6 +209,7 @@ func (s service) priceUseCases(svc *Service) {
 		if err := scopeOf(ctx).check("parties.party", company, company, false); err != nil {
 			return contracts.Quote{}, err
 		}
-		return PricingPort{Products: s.Products, PriceLists: s.PriceLists}.Quote(ctx, q.Company, q.Product, q.PriceList, q.Quantity, q.On)
+		return PricingPort{Products: s.Products, PriceLists: s.PriceLists, Specials: s.Specials, Settings: s.Settings}.Quote(ctx, contracts.QuoteRequest{Company: q.Company,
+			Customer: q.Customer, Product: q.Product, PriceList: q.PriceList, Quantity: q.Quantity, On: q.On})
 	})
 }

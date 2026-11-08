@@ -152,6 +152,67 @@ func (l PriceLine) overlaps(o PriceLine) bool {
 	return (o.To.IsZero() || !l.From.After(o.To)) && (l.To.IsZero() || !o.From.After(l.To))
 }
 
+func checkLine(v *fw.Validation, f string, l PriceLine) {
+	v.Require(!l.Product.IsZero(), f+".product", "required", "the product is required")
+	v.Require(!l.MinQuantity.IsNegative() && l.MinQuantity.Equal(l.MinQuantity.Round(4)), f+".minQuantity", "range", "a quantity of up to 4 decimals")
+	v.Require(price(l.UnitPrice), f+".unitPrice", "range", "a non-negative price of up to 4 decimals")
+	v.Require(!l.Discount.IsNegative() && !l.Discount.GreaterThan(vocab.DecimalFromInt(100)) && l.Discount.Equal(l.Discount.Round(2)), f+".discount",
+		"range", "a percentage from 0 to 100")
+	v.Require(!l.From.IsZero() && (l.To.IsZero() || !l.To.Before(l.From)), f+".from", "range", "a start date and an end not before it")
+}
+
+func checkLines(v *fw.Validation, lines []PriceLine) {
+	v.Require(len(lines) <= MaxPriceLines, "lines", "count", "too many lines")
+	for i, l := range lines {
+		checkLine(v, fmt.Sprintf("lines[%d]", i), l)
+	}
+}
+
+// addLine añade un precio a unas líneas. Invariante: dos precios de un producto desde la misma
+// cantidad no se solapan en el tiempo (el C# cogía la primera fila que devolvía la base de datos).
+func addLine(lines []PriceLine, l PriceLine) ([]PriceLine, error) {
+	var v fw.Validation
+	checkLine(&v, "line", l)
+	if err := v.Err(); err != nil {
+		return nil, err
+	}
+	if slices.ContainsFunc(lines, func(x PriceLine) bool {
+		return x.Product == l.Product && x.MinQuantity.Equal(l.MinQuantity) && x.overlaps(l)
+	}) {
+		return nil, fw.Violation("products.price_overlap", "the product already has a price from that quantity in those dates")
+	}
+	if len(lines) >= MaxPriceLines {
+		return nil, fw.Violation("products.price_list_full", "the price list is full")
+	}
+	return append(slices.Clone(lines), l), nil
+}
+
+// removeLine quita el precio de un producto desde una cantidad, a partir de una fecha.
+func removeLine(lines []PriceLine, product ProductID, minQuantity vocab.Decimal, from vocab.Date) ([]PriceLine, error) {
+	k := slices.IndexFunc(lines, func(x PriceLine) bool {
+		return x.Product == product && x.MinQuantity.Equal(minQuantity) && x.From == from
+	})
+	if k < 0 {
+		return nil, fw.NotFound("products.price_line", product)
+	}
+	return slices.Delete(slices.Clone(lines), k, k+1), nil
+}
+
+// bestLine es la línea vigente de un producto con la mayor cantidad mínima que no supere la cantidad.
+func bestLine(lines []PriceLine, product ProductID, quantity vocab.Decimal, on vocab.Date) (PriceLine, bool) {
+	var best PriceLine
+	found := false
+	for _, l := range lines {
+		if l.Product != product || !l.validOn(on) || l.MinQuantity.GreaterThan(quantity) {
+			continue
+		}
+		if !found || l.MinQuantity.GreaterThan(best.MinQuantity) {
+			best, found = l, true
+		}
+	}
+	return best, found
+}
+
 // PriceListState es el estado persistido de una lista de precios.
 type PriceListState struct {
 	Company  OrganizationID
@@ -171,15 +232,6 @@ type PriceList struct {
 	s PriceListState
 }
 
-func checkLine(v *fw.Validation, f string, l PriceLine) {
-	v.Require(!l.Product.IsZero(), f+".product", "required", "the product is required")
-	v.Require(!l.MinQuantity.IsNegative() && l.MinQuantity.Equal(l.MinQuantity.Round(4)), f+".minQuantity", "range", "a quantity of up to 4 decimals")
-	v.Require(price(l.UnitPrice), f+".unitPrice", "range", "a non-negative price of up to 4 decimals")
-	v.Require(!l.Discount.IsNegative() && !l.Discount.GreaterThan(vocab.DecimalFromInt(100)) && l.Discount.Equal(l.Discount.Round(2)), f+".discount",
-		"range", "a percentage from 0 to 100")
-	v.Require(!l.From.IsZero() && (l.To.IsZero() || !l.To.Before(l.From)), f+".from", "range", "a start date and an end not before it")
-}
-
 // ReconstitutePriceList reconstruye una lista de precios.
 func ReconstitutePriceList(id PriceListID, s PriceListState) (*PriceList, error) {
 	base, err := fw.NewBaseAggregateRoot(PriceListKind, id)
@@ -192,10 +244,7 @@ func ReconstitutePriceList(id PriceListID, s PriceListState) (*PriceList, error)
 	v.Require(validSKU(s.Code) && len(s.Code) <= 20, "code", "format", "1 to 20 letters, digits, dots, dashes or underscores")
 	v.Require(s.Name != "" && utf8.RuneCountInString(s.Name) <= 100, "name", "length", "a name of 1 to 100 characters")
 	v.Require(s.Currency.String() == "EUR", "currency", "supported", "only euros for now")
-	v.Require(len(s.Lines) <= MaxPriceLines, "lines", "count", "too many lines")
-	for i, l := range s.Lines {
-		checkLine(&v, fmt.Sprintf("lines[%d]", i), l)
-	}
+	checkLines(&v, s.Lines)
 	if err := v.Err(); err != nil {
 		return nil, err
 	}
@@ -210,35 +259,24 @@ func (p *PriceList) State() PriceListState {
 	return s
 }
 
-// SetPrice añade un precio. Invariante: dos precios de un producto desde la misma cantidad no se
-// solapan en el tiempo (el C# cogía la primera fila que devolvía la base de datos).
+// SetPrice añade un precio; dos precios de un producto desde la misma cantidad no se solapan en el
+// tiempo.
 func (p *PriceList) SetPrice(l PriceLine) error {
-	var v fw.Validation
-	checkLine(&v, "line", l)
-	if err := v.Err(); err != nil {
+	lines, err := addLine(p.s.Lines, l)
+	if err != nil {
 		return err
 	}
-	if slices.ContainsFunc(p.s.Lines, func(x PriceLine) bool {
-		return x.Product == l.Product && x.MinQuantity.Equal(l.MinQuantity) && x.overlaps(l)
-	}) {
-		return fw.Violation("products.price_overlap", "the product already has a price from that quantity in those dates")
-	}
-	if len(p.s.Lines) >= MaxPriceLines {
-		return fw.Violation("products.price_list_full", "the price list is full")
-	}
-	p.s.Lines = append(slices.Clone(p.s.Lines), l)
+	p.s.Lines = lines
 	return nil
 }
 
 // RemovePrice quita el precio de un producto desde una cantidad, a partir de una fecha.
 func (p *PriceList) RemovePrice(product ProductID, minQuantity vocab.Decimal, from vocab.Date) error {
-	k := slices.IndexFunc(p.s.Lines, func(x PriceLine) bool {
-		return x.Product == product && x.MinQuantity.Equal(minQuantity) && x.From == from
-	})
-	if k < 0 {
-		return fw.NotFound("products.price_line", product)
+	lines, err := removeLine(p.s.Lines, product, minQuantity, from)
+	if err != nil {
+		return err
 	}
-	p.s.Lines = slices.Delete(slices.Clone(p.s.Lines), k, k+1)
+	p.s.Lines = lines
 	return nil
 }
 
@@ -248,17 +286,15 @@ func (p *PriceList) SetActive(active bool) { p.s.Active = active }
 // PriceFor devuelve el precio de un producto para una cantidad en una fecha: la línea vigente con
 // la mayor cantidad mínima que no supere la cantidad.
 func (p *PriceList) PriceFor(product ProductID, quantity vocab.Decimal, on vocab.Date) (PriceLine, bool) {
-	var best PriceLine
-	found := false
-	for _, l := range p.s.Lines {
-		if l.Product != product || !l.validOn(on) || l.MinQuantity.GreaterThan(quantity) {
-			continue
-		}
-		if !found || l.MinQuantity.GreaterThan(best.MinQuantity) {
-			best, found = l, true
-		}
+	return bestLine(p.s.Lines, product, quantity, on)
+}
+
+// PriceOf implementa Prices: una tarifa retirada no da precio.
+func (p *PriceList) PriceOf(prod *Product, quantity vocab.Decimal, on vocab.Date) (PriceLine, bool) {
+	if !p.s.Active {
+		return PriceLine{}, false
 	}
-	return best, found
+	return p.PriceFor(prod.ID(), quantity, on)
 }
 
 // AuditSnapshot implementa traits.Snapshotter.
@@ -272,23 +308,136 @@ var (
 	PlFieldCode    = spec.Ordered("code", func(p *PriceList) string { return p.s.Code })
 )
 
+// SpecialPricesKind es el nombre estable del tipo de agregado.
+const SpecialPricesKind = "products.special_prices"
+
+// SpecialPricesState es el estado persistido de los precios especiales de un cliente en una empresa.
+type SpecialPricesState struct {
+	Company  OrganizationID
+	Customer PartyID
+	Currency vocab.CurrencyCode
+	Lines    []PriceLine
+	Audit    traits.AuditStamp
+}
+
+// SpecialPrices son los precios especiales que una empresa da a un cliente, producto a producto:
+// el primer nivel de la cadena de precios (D-148). Cada línea es como la de una tarifa (cantidad
+// mínima, precio, descuento opcional y vigencia) y no se solapa con otra del mismo producto y
+// cantidad. Sustituye al price_component con Party y Product del C#, que no tenía empresa, ni fecha
+// de inicio, ni tramos por cantidad.
+type SpecialPrices struct {
+	fw.BaseAggregateRoot[SpecialPricesID]
+	traits.Audited
+	s SpecialPricesState
+}
+
+// ReconstituteSpecialPrices reconstruye los precios especiales de un cliente.
+func ReconstituteSpecialPrices(id SpecialPricesID, s SpecialPricesState) (*SpecialPrices, error) {
+	base, err := fw.NewBaseAggregateRoot(SpecialPricesKind, id)
+	if err != nil {
+		return nil, err
+	}
+	var v fw.Validation
+	v.Require(!s.Company.IsZero(), "company", "required", "the company is required")
+	v.Require(!s.Customer.IsZero(), "customer", "required", "the customer is required")
+	v.Require(s.Currency.String() == "EUR", "currency", "supported", "only euros for now")
+	checkLines(&v, s.Lines)
+	if err := v.Err(); err != nil {
+		return nil, err
+	}
+	s.Lines = slices.Clone(s.Lines)
+	return &SpecialPrices{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
+}
+
+// State devuelve el estado (las líneas son una copia).
+func (p *SpecialPrices) State() SpecialPricesState {
+	s := p.s
+	s.Lines = slices.Clone(s.Lines)
+	return s
+}
+
+// SetPrice añade un precio especial; dos del mismo producto desde la misma cantidad no se solapan
+// en el tiempo.
+func (p *SpecialPrices) SetPrice(l PriceLine) error {
+	lines, err := addLine(p.s.Lines, l)
+	if err != nil {
+		return err
+	}
+	p.s.Lines = lines
+	return nil
+}
+
+// RemovePrice quita el precio especial de un producto desde una cantidad, a partir de una fecha.
+func (p *SpecialPrices) RemovePrice(product ProductID, minQuantity vocab.Decimal, from vocab.Date) error {
+	lines, err := removeLine(p.s.Lines, product, minQuantity, from)
+	if err != nil {
+		return err
+	}
+	p.s.Lines = lines
+	return nil
+}
+
+// PriceOf implementa Prices.
+func (p *SpecialPrices) PriceOf(prod *Product, quantity vocab.Decimal, on vocab.Date) (PriceLine, bool) {
+	return bestLine(p.s.Lines, prod.ID(), quantity, on)
+}
+
+// AuditSnapshot implementa traits.Snapshotter.
+func (p *SpecialPrices) AuditSnapshot() map[string]any {
+	return map[string]any{"company": p.s.Company.String(), "customer": p.s.Customer.String(), "lines": len(p.s.Lines)}
+}
+
+// Campos de los precios especiales.
+var (
+	SpFieldCompany  = spec.Comparable("company", func(p *SpecialPrices) OrganizationID { return p.s.Company })
+	SpFieldCustomer = spec.Comparable("customer", func(p *SpecialPrices) PartyID { return p.s.Customer })
+)
+
+// PriceSource dice de qué nivel de la cadena sale un precio.
+type PriceSource string
+
+// Niveles de la cadena de precios, de más a menos prioritario (D-148).
+const (
+	FromSpecial      PriceSource = "special"       // precio especial del cliente para el producto
+	FromCustomerList PriceSource = "customer_list" // la tarifa del cliente (sus condiciones en Orders)
+	FromDefaultList  PriceSource = "default_list"  // la tarifa general de la empresa (su perfil en Parties)
+	FromBase         PriceSource = "base"          // el precio base del producto
+)
+
+// Prices es un nivel de la cadena: el precio, si lo tiene, de un producto para una cantidad en una
+// fecha. Recibe el producto entero para que un nivel futuro (un descuento por familia) pueda mirar su
+// categoría sin cambiar la cadena.
+type Prices interface {
+	PriceOf(p *Product, quantity vocab.Decimal, on vocab.Date) (PriceLine, bool)
+}
+
+// Level es un nivel de la cadena de precios con su origen.
+type Level struct {
+	Source PriceSource
+	Prices Prices
+}
+
 // Quote es el precio de un producto para una cantidad en una fecha.
 type Quote struct {
 	UnitPrice vocab.Decimal // antes del descuento
 	Discount  vocab.Decimal // porcentaje
 	Net       vocab.Decimal // precio unitario tras el descuento, 4 decimales
-	Source    string        // "list" o "base"
+	Source    PriceSource
 }
 
-// QuoteOf pone precio a un producto: la línea de la lista cuando la tiene; si no, su precio base.
-func QuoteOf(p *Product, list *PriceList, quantity vocab.Decimal, on vocab.Date) Quote {
-	if list != nil && list.s.Active {
-		if l, ok := list.PriceFor(p.ID(), quantity, on); ok {
+// QuoteOf pone precio a un producto: el primer nivel, por orden, que tenga una línea vigente para la
+// cantidad; si ninguno la tiene, el precio base del producto. Un nivel nulo se salta.
+func QuoteOf(p *Product, quantity vocab.Decimal, on vocab.Date, levels ...Level) Quote {
+	for _, lv := range levels {
+		if lv.Prices == nil {
+			continue
+		}
+		if l, ok := lv.Prices.PriceOf(p, quantity, on); ok {
 			net := l.UnitPrice.Mul(vocab.DecimalFromInt(100).Sub(l.Discount)).Div(vocab.DecimalFromInt(100)).Round(4)
-			return Quote{UnitPrice: l.UnitPrice, Discount: l.Discount, Net: net, Source: "list"}
+			return Quote{UnitPrice: l.UnitPrice, Discount: l.Discount, Net: net, Source: lv.Source}
 		}
 	}
-	return Quote{UnitPrice: p.s.BasePrice, Discount: vocab.DecimalFromInt(0), Net: p.s.BasePrice, Source: "base"}
+	return Quote{UnitPrice: p.s.BasePrice, Discount: vocab.DecimalFromInt(0), Net: p.s.BasePrice, Source: FromBase}
 }
 
 // Identidades del contexto.
@@ -299,9 +448,11 @@ type (
 	CategoryID struct{ fw.UUID }
 	// PriceListID identifica una lista de precios.
 	PriceListID struct{ fw.UUID }
+	// SpecialPricesID identifica los precios especiales de un cliente en una empresa.
+	SpecialPricesID struct{ fw.UUID }
 	// OrganizationID es la empresa, una organización interna del contexto Parties.
 	OrganizationID struct{ fw.UUID }
-	// PartyID es un proveedor, una party del contexto Parties.
+	// PartyID es un proveedor o un cliente, una party del contexto Parties.
 	PartyID struct{ fw.UUID }
 )
 
@@ -329,9 +480,10 @@ func (ProductRegistered) EventType() string   { return "products.product_registe
 func (ProductDiscontinued) EventType() string { return "products.product_discontinued" }
 
 // Identidades nuevas y análisis.
-func NewProductID() ProductID     { return ProductID{fw.NewUUID()} }
-func NewCategoryID() CategoryID   { return CategoryID{fw.NewUUID()} }
-func NewPriceListID() PriceListID { return PriceListID{fw.NewUUID()} }
+func NewProductID() ProductID             { return ProductID{fw.NewUUID()} }
+func NewCategoryID() CategoryID           { return CategoryID{fw.NewUUID()} }
+func NewPriceListID() PriceListID         { return PriceListID{fw.NewUUID()} }
+func NewSpecialPricesID() SpecialPricesID { return SpecialPricesID{fw.NewUUID()} }
 
 // ParseProductID analiza una identidad textual.
 func ParseProductID(s string) (ProductID, error) { u, err := fw.ParseUUID(s); return ProductID{u}, err }
@@ -353,4 +505,6 @@ type (
 	ProductRepository   = fw.Repository[ProductID, *Product]
 	CategoryRepository  = fw.Repository[CategoryID, *Category]
 	PriceListRepository = fw.Repository[PriceListID, *PriceList]
+	// SpecialPricesRepository guarda los precios especiales.
+	SpecialPricesRepository = fw.Repository[SpecialPricesID, *SpecialPrices]
 )
