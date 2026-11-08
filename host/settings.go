@@ -12,9 +12,11 @@ import (
 )
 
 // BillingSettings dice a Billing los ajustes de facturación de una empresa (docs/DECISIONES-COMUNES.md,
-// D-144): los que guarda en su perfil de Parties. Lo que no guarda es lo de siempre: una sola vez al
-// final, el precio con 4 decimales, la regla fija del código de serie y los vencimientos después,
-// del evento. Se lee siempre: un cambio vale desde el borrador, la serie o la emisión siguientes.
+// D-144, y el precio automático de D-148): los que guarda en su perfil de Parties. Lo que no guarda
+// es lo de siempre: una sola vez al final, el precio con 4 decimales, la regla fija del código de
+// serie, los vencimientos después, del evento, y el precio automático. Sin perfil, el precio
+// también es automático. Se lee siempre: un cambio vale desde el borrador, la serie o la emisión
+// siguientes.
 type BillingSettings struct {
 	Profiles pcontracts.CompanyProfiles
 }
@@ -72,5 +74,5 @@ func (b BillingSettings) Settings(ctx context.Context, company string) (bilapp.C
 		calc.PriceDecimals = *st.PriceDecimals
 	}
 	return bilapp.CompanySettings{Calculation: calc, SeriesPattern: pattern,
-		InstallmentsWithIssue: st.InstallmentsTiming == pdomain.InstallmentsWithIssue}, nil
+		InstallmentsWithIssue: st.InstallmentsTiming == pdomain.InstallmentsWithIssue, ManualPricing: st.ManualPricing}, nil
 }

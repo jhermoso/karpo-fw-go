@@ -369,6 +369,12 @@ func (h *host) specialPrices(company, product, retired, customer string) {
 	foreign, err := h.prod.Service.CreatePriceList.Handle(h.adminCtx, dapp.CreatePriceList{Company: fw.NewUUID().String(), Code: "general",
 		Name: "Ajena"})
 	h.ok(err)
+	// Una tarifa del cliente que no existe o es de otra empresa también se salta: la general.
+	for what, id := range map[string]string{"unknown": fw.NewUUID().String(), "foreign": foreign.ID} {
+		if q := quote("priceList=" + id + "&quantity=10&on=2026-10-04"); q.Source != "default_list" || q.Net != "0.1200" {
+			t.Fatalf("customer list %s: %+v", what, q)
+		}
+	}
 	h.must(h.do("PUT", "/api/products/price-lists/"+general.ID+"/active", "pricer", map[string]any{"active": false}, nil), 200, "retire general")
 	for what, id := range map[string]string{"none": "", "unknown": fw.NewUUID().String(), "foreign": foreign.ID, "retired": general.ID, "other retired": retired} {
 		h.generals.Store(company, id)

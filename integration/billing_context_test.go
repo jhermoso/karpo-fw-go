@@ -60,8 +60,9 @@ func TestBillingContext(t *testing.T) {
 			sw := hotswap.New(db)
 			pm := parties.Compose(sw)
 			fm := fiscal.Compose(sw, finfra.PartiesIdentities{TaxIdentities: pm.TaxIdentities})
+			pricing := &fixedPricing{product: bdomain.ProductID{UUID: fw.NewUUID()}}
 			bm := billing.Compose(sw, binfra.FiscalTaxes{Engine: fm.TaxEngine}, binfra.PartiesIdentities{TaxIdentities: pm.TaxIdentities},
-				billing.WithSettings(host.BillingSettings{Profiles: pm.CompanyProfiles}))
+				billing.WithSettings(host.BillingSettings{Profiles: pm.CompanyProfiles}), billing.WithPricing(pricing, pricing))
 			admin, _ := authz.NewContext(authz.Context{Subject: fw.NewUUID(), SubjectName: "admin", Kind: authz.Service, Permissions: []authz.Permission{authz.Wildcard}})
 			admin.GlobalAdmin = true
 			actx := authz.WithContext(ctx, admin)
@@ -148,6 +149,8 @@ func TestBillingContext(t *testing.T) {
 				t.Fatalf("search by issue date in SQL: %+v %v", page, err)
 			}
 			billingConcurrentIssue(actx, t, db, svc, acme.ID, ana.ID)
+			pricing.seller = bdomain.OrganizationID{UUID: fw.MustParseUUID(acme.ID)}
+			billingProductLine(actx, t, svc, pricing.product, acme.ID, ana.ID)
 			billingCompanySettings(actx, t, pm, svc, acme.ID, ana.ID)
 			if err := m.Verify(ctx); err != nil {
 				t.Fatal(err)
@@ -203,6 +206,56 @@ func billingCompanySettings(ctx context.Context, t *testing.T, pm *parties.Modul
 	if err != nil || got.LineRounding != "gross_then_discount" || got.PriceDecimals != 6 || got.Lines[0].Net != "0.07" ||
 		got.Lines[1].UnitPrice != "0.123456" || got.Lines[1].Net != "123.46" || got.Taxes.Net != "123.53" {
 		t.Fatalf("an issued invoice keeps its calculation: %+v %v", got, err)
+	}
+}
+
+// fixedPricing es un Products y un Orders de mentira (D-148): un solo producto del vendedor, a 2.5
+// con un 5 % de su precio especial, y un 10 % de descuento de cliente para todos.
+type fixedPricing struct {
+	seller  bdomain.OrganizationID
+	product bdomain.ProductID
+}
+
+func (f *fixedPricing) Product(_ context.Context, id bdomain.ProductID) (bdomain.Product, bool, error) {
+	return bdomain.Product{Company: f.seller, Name: "Tornillo M8", TaxCode: "G21", Sellable: true}, id == f.product, nil
+}
+
+func (f *fixedPricing) Price(context.Context, bdomain.PriceRequest) (bdomain.Price, error) {
+	return bdomain.Price{UnitPrice: vocab.MustDecimal("2.5"), Discount: vocab.MustDecimal("5"), Source: bdomain.PriceSpecial}, nil
+}
+
+func (f *fixedPricing) Terms(context.Context, bdomain.OrganizationID, bdomain.PartyID) (bdomain.Terms, error) {
+	return bdomain.Terms{Discount: vocab.MustDecimal("10")}, nil
+}
+
+// billingProductLine guarda en el motor una línea con producto y precio automático (D-148, migración
+// 12 de Billing): el producto y el nivel del precio vuelven de las columnas product y price_source,
+// con el descuento encadenado; la línea sin producto los deja nulos.
+func billingProductLine(ctx context.Context, t *testing.T, svc *bapp.Service, product bdomain.ProductID, seller, customer string) {
+	t.Helper()
+	inv, err := svc.DraftInvoice.Handle(ctx, bapp.DraftInvoice{Seller: seller, Customer: customer, DetailsInput: bapp.DetailsInput{Description: "Tornillería",
+		OperationDate: vocab.MustDate(2026, 10, 15)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, _ := bdomain.ParseInvoiceID(inv.ID)
+	for _, l := range []bapp.AddLine{{ID: id, Product: product.String(), Quantity: "4"}, {ID: id, Description: "Portes", Quantity: "1", UnitPrice: "5", TaxCode: "G21"}} {
+		if _, err := svc.AddLine.Handle(ctx, l); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := svc.GetInvoice.Handle(ctx, bapp.GetInvoice{ID: id})
+	if err != nil || len(got.Lines) != 2 {
+		t.Fatalf("a draft with a product line: %+v %v", got, err)
+	}
+	withProduct, without := got.Lines[0], got.Lines[1]
+	if withProduct.Product == "" {
+		withProduct, without = without, withProduct
+	}
+	// 4 × 2.5 × 0,95 × 0,90 = 8.55
+	if withProduct.Product != product.String() || withProduct.PriceSource != "special" || withProduct.UnitPrice != "2.5" || withProduct.Discount != "14.50" ||
+		withProduct.Net != "8.55" || withProduct.TaxCode != "G21" || withProduct.Description != "Tornillo M8" || without.Product != "" || without.PriceSource != "" {
+		t.Fatalf("product and price source in the engine: %+v", got.Lines)
 	}
 }
 

@@ -52,6 +52,14 @@ func WithSettings(s bapp.Settings) Option {
 	return func(d *bapp.Deps) { d.Settings = s }
 }
 
+// WithPricing da a Billing lo que necesita una línea con producto (D-148): los productos y la
+// cadena de precios de Products, y la tarifa y el descuento de cada cliente en Orders. En el
+// anfitrión, infrastructure.ProductsCatalog e infrastructure.OrdersTerms. Sin ellos, una línea con
+// producto se rechaza (422 billing.automatic_pricing_unavailable).
+func WithPricing(catalog domain.Catalog, terms domain.CustomerTerms) Option {
+	return func(d *bapp.Deps) { d.Catalog, d.Terms = catalog, terms }
+}
+
 // WithInstallmentsInTransaction da quién recibe billing.invoice-issued.v1 en la transacción de la
 // emisión cuando la empresa quiere los vencimientos con la factura (with_issue, D-130), y sobre qué
 // backend trabaja: en el anfitrión, el consumidor de Receivables. Si su backend no es el de

@@ -32,9 +32,12 @@ type DraftInvoice struct {
 	DetailsInput
 }
 
-// AddLine añade una línea a un borrador.
+// AddLine añade una línea a un borrador. Product es opcional: con él, el precio, el descuento, la
+// descripción y el código de impuesto que no se escriben salen de Products y de Orders (D-148,
+// docs/FACTURACION.md, «Precio automático»).
 type AddLine struct {
 	ID          domain.InvoiceID `json:"-"`
+	Product     string           `json:"product,omitempty"`
 	Description string           `json:"description"`
 	Quantity    string           `json:"quantity"`
 	UnitPrice   string           `json:"unitPrice"`
@@ -93,6 +96,8 @@ type LineDTO struct {
 	TaxCode     string `json:"taxCode,omitempty"`
 	Treatment   string `json:"treatment,omitempty"`
 	Net         string `json:"net"`
+	Product     string `json:"product,omitempty"`
+	PriceSource string `json:"priceSource,omitempty"` // special, customer_list, default_list, base o manual; sólo con producto
 }
 
 // TaxLineDTO es una línea del desglose de impuestos.
@@ -195,8 +200,12 @@ func invoiceDTO(i *domain.Invoice) InvoiceDTO {
 		d.Corrects = s.Corrects.String()
 	}
 	for _, l := range s.Lines {
-		d.Lines = append(d.Lines, LineDTO{ID: l.ID.String(), Description: l.Description, Quantity: l.Quantity.String(), UnitPrice: l.UnitPrice.String(),
-			Discount: optMoney(l.Discount), TaxCode: l.TaxCode, Treatment: l.Treatment, Net: money(l.Net)})
+		ld := LineDTO{ID: l.ID.String(), Description: l.Description, Quantity: l.Quantity.String(), UnitPrice: l.UnitPrice.String(),
+			Discount: optMoney(l.Discount), TaxCode: l.TaxCode, Treatment: l.Treatment, Net: money(l.Net), PriceSource: l.PriceSource}
+		if !l.Product.IsZero() {
+			ld.Product = l.Product.String()
+		}
+		d.Lines = append(d.Lines, ld)
 	}
 	if s.Status == domain.Issued {
 		b := breakdownDTO(s.Taxes)
@@ -298,10 +307,22 @@ func (s service) invoiceUseCases(svc *Service) {
 		var v fw.Validation
 		in := domain.LineInput{Description: c.Description, Quantity: parseDecimal(&v, "quantity", c.Quantity),
 			UnitPrice: parseDecimal(&v, "unitPrice", c.UnitPrice), Discount: parseDecimal(&v, "discount", c.Discount), TaxCode: c.TaxCode, Treatment: c.Treatment}
+		if c.Product != "" {
+			in.Product = domain.ProductID{UUID: parseID(&v, "product", c.Product)}
+		}
 		if err := v.Err(); err != nil {
 			return InvoiceDTO{}, err
 		}
-		return update(ctx, c.ID, func(_ context.Context, i *domain.Invoice) error { _, err := i.AddLine(in); return err })
+		return update(ctx, c.ID, func(ctx context.Context, i *domain.Invoice) error {
+			line := in // cada intento parte de lo escrito
+			if !line.Product.IsZero() {
+				if err := s.withProduct(ctx, i, &line, c.UnitPrice != "", c.Discount != ""); err != nil {
+					return err
+				}
+			}
+			_, err := i.AddLine(line)
+			return err
+		})
 	}, retry[AddLine, InvoiceDTO]())
 
 	svc.RemoveLine = guard(PermInvoiceUpdate, func(ctx context.Context, c RemoveLine) (InvoiceDTO, error) {

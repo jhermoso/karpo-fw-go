@@ -44,6 +44,11 @@ type Deps struct {
 	Merged     app.MergedParties // opcional: las parties fusionadas, que los listados dejan fuera (D-100)
 	Zones      Zones             // opcional: sin él, la fecha de hoy es la de UTC
 	Settings   Settings          // opcional: sin él, los ajustes de siempre (D-144)
+	// Catalog y Terms ponen precio a una línea con producto (D-148): los productos y la cadena de
+	// precios de Products, y la tarifa y el descuento del cliente en Orders. Opcionales: sin ellos,
+	// una línea con producto se rechaza (422 billing.automatic_pricing_unavailable).
+	Catalog domain.Catalog
+	Terms   domain.CustomerTerms
 	// InTransaction recibe billing.invoice-issued.v1 dentro de la transacción de la emisión cuando
 	// la empresa vendedora quiere que los vencimientos nazcan con la factura (with_issue, D-130).
 	// En el anfitrión, el consumidor de Receivables. Opcional: sin él, nacen siempre después.
@@ -81,6 +86,9 @@ type CompanySettings struct {
 	// InstallmentsWithIssue dice si los vencimientos de sus facturas nacen en la misma transacción
 	// que la emisión, y no después, del evento.
 	InstallmentsWithIssue bool
+	// ManualPricing dice que una línea con producto lleva el precio escrito a mano: el ajuste
+	// automatic_pricing a false (D-148). Por omisión, el precio es automático.
+	ManualPricing bool
 }
 
 // settings son los ajustes del vendedor; los de siempre sin Settings.

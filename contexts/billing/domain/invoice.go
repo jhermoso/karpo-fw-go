@@ -129,6 +129,8 @@ type Line struct {
 	TaxCode     string
 	Treatment   string
 	Net         vocab.Decimal
+	Product     ProductID // cero en una línea sin producto (D-148)
+	PriceSource string    // de dónde salió el precio de una línea con producto (PriceSpecial…); "" sin producto
 }
 
 // LineInput es una línea nueva.
@@ -139,6 +141,8 @@ type LineInput struct {
 	Discount    vocab.Decimal
 	TaxCode     string
 	Treatment   string
+	Product     ProductID
+	PriceSource string
 }
 
 // Identity es la identificación fiscal de una party en una factura, congelada al emitirla.
@@ -376,12 +380,14 @@ func (i *Invoice) AddLine(in LineInput) (LineID, error) {
 	code, treat := strings.ToUpper(strings.TrimSpace(in.TaxCode)), strings.ToUpper(strings.TrimSpace(in.Treatment))
 	v.Require(code != "" || treat != "", "taxCode", "required", "a tax code or an exempt or not subject treatment")
 	v.Require(utf8.RuneCountInString(code) <= 5 && utf8.RuneCountInString(treat) <= 5, "taxCode", "length", "codes of at most 5 characters")
+	v.Require(in.PriceSource == "" || (!in.Product.IsZero() && slices.Contains(priceSources, in.PriceSource)), "priceSource", "enum",
+		"the source of the price of a line with a product: special, customer_list, default_list, base or manual")
 	if err := v.Err(); err != nil {
 		return LineID{}, err
 	}
 	net := calc.Net(in.Quantity, in.UnitPrice, in.Discount)
 	l := Line{ID: LineID{fw.NewUUID()}, Description: desc, Quantity: in.Quantity, UnitPrice: in.UnitPrice, Discount: in.Discount,
-		TaxCode: code, Treatment: treat, Net: net}
+		TaxCode: code, Treatment: treat, Net: net, Product: in.Product, PriceSource: in.PriceSource}
 	i.s.Lines = append(slices.Clone(i.s.Lines), l)
 	return l.ID, nil
 }

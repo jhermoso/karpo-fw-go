@@ -146,6 +146,14 @@ var pendingDDL = []string{
 	FOREIGN KEY (pending_id) REFERENCES bil_pending_deliveries (id))`,
 }
 
+// productDDL guarda en cada línea el producto, si lo tiene, y de dónde salió su precio (D-148): un
+// nivel de la cadena de Products (special, customer_list, default_list, base) o manual. Sin clave
+// ajena: el producto es de otro contexto. Las líneas que ya hay no tienen producto.
+var productDDL = []string{
+	`ALTER TABLE bil_invoice_lines {add:product} {uuid}{addEnd}`,
+	`ALTER TABLE bil_invoice_lines {add:price_source} {str:20}{addEnd}`,
+}
+
 // errSourceTaken es un conflicto: otra factura ya tiene ese documento (dos cierres a la vez).
 var errSourceTaken = fmt.Errorf("%w: billing: the document is already in another invoice", fw.ErrConflict)
 
@@ -187,6 +195,7 @@ func Migrations() sqlrepo.MigrationSet {
 		{Version: 9, Name: "line calculation of an invoice: rounding and price decimals", Up: calculationDDL()},
 		{Version: 10, Name: "sources of an invoice", Up: sqlrepo.RenderDDLAll(sourcesDDL...)},
 		{Version: 11, Name: "delivery notes pending of the period close", Up: sqlrepo.RenderDDLAll(pendingDDL...)},
+		{Version: 12, Name: "product and price source of an invoice line", Up: sqlrepo.RenderDDLAll(productDDL...)},
 	}}
 }
 
@@ -317,7 +326,8 @@ func InvoiceMapping() sqlrepo.Mapping[domain.InvoiceID, *domain.Invoice] {
 			for _, c := range children.Of("lines") {
 				s.Lines = append(s.Lines, domain.Line{ID: domain.LineID{UUID: c.UUID("id")}, Description: c.String("description"),
 					Quantity: c.Decimal("quantity"), UnitPrice: c.Decimal("unit_price"), Discount: c.Decimal("discount"), TaxCode: c.String("tax_code"),
-					Treatment: c.String("treatment"), Net: c.Decimal("net")})
+					Treatment: c.String("treatment"), Net: c.Decimal("net"), Product: domain.ProductID{UUID: c.UUID("product")},
+					PriceSource: c.String("price_source")})
 				if err := c.Err(); err != nil {
 					return nil, err
 				}
@@ -358,14 +368,14 @@ func InvoiceMapping() sqlrepo.Mapping[domain.InvoiceID, *domain.Invoice] {
 		},
 		Children: []sqlrepo.Child[*domain.Invoice]{{
 			Name: "lines", Table: "bil_invoice_lines", ForeignKey: "invoice_id", OrderBy: []string{"id"},
-			Columns:  []string{"id", "description", "quantity", "unit_price", "discount", "tax_code", "treatment", "net"},
+			Columns:  []string{"id", "description", "quantity", "unit_price", "discount", "tax_code", "treatment", "net", "product", "price_source"},
 			Decimals: decimalColumns.Of("bil_invoice_lines"),
 			Dehydrate: func(i *domain.Invoice) ([]sqlrepo.Values, error) {
 				out := []sqlrepo.Values{}
 				for _, l := range i.State().Lines {
 					out = append(out, sqlrepo.Values{"id": l.ID, "description": l.Description, "quantity": l.Quantity,
 						"unit_price": l.UnitPrice, "discount": optDecimal(l.Discount), "tax_code": opt(l.TaxCode), "treatment": opt(l.Treatment),
-						"net": l.Net.Round(2)})
+						"net": l.Net.Round(2), "product": optUUID(l.Product.UUID), "price_source": opt(l.PriceSource)})
 				}
 				return out, nil
 			},

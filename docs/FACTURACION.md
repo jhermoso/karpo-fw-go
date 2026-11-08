@@ -515,6 +515,86 @@ interna**: Karpo C# copia el fichero tal cual a su repositorio y lo pasa por su 
 - **Cómo se corren:** `go test -count=1 -run TestSharedCalculationCases -v ./contracts/billing/`
   (un subtest por `id`).
 
+## Precio automático (D-148; añadido el 2026-11-08)
+
+Una línea de una factura directa (sin pedido) puede llevar un producto de Products, y entonces toma
+sola el precio, como el pedido de Orders. Es un ajuste de la empresa vendedora: `automatic_pricing`
+en su perfil de Parties (docs/PARTIES.md §25), por omisión sí.
+
+- **API:** `POST /api/billing/invoices/{id}/lines` admite `product` (el id de un producto de
+  Products). La línea devuelve `product` y `priceSource`, de dónde salió su precio: `special`,
+  `customer_list`, `default_list` o `base` (los niveles de la cadena de docs/PRODUCTOS.md) o
+  `manual` (escrito). Una línea sin producto no trae ninguno de los dos y **funciona como siempre**.
+- **Con precio automático**, Billing pide a Products `Pricing.Quote` con la cadena completa: la
+  empresa vendedora, el cliente, el producto, la cantidad, la fecha de la factura (la de la
+  operación o, si el borrador no la tiene, hoy en la zona de la empresa) y la tarifa del cliente,
+  que está en sus condiciones (`Terms`) de Orders. El precio se redondea a los decimales de la
+  factura (`priceDecimals`, D-144: 0.125 con 2 decimales da 0.13) y el neto se calcula con su
+  `lineRounding`, como el de un precio escrito. Una tarifa del cliente que Products no encuentra o
+  que es de otra empresa se salta: la general y, si no, el precio base.
+- **Se fija al añadir la línea:** el precio, el descuento y la comprobación de producto retirado
+  usan la fecha de la operación del borrador en ese momento o, si no tiene, la de hoy. No se
+  recalculan si después cambia la fecha del borrador ni al emitir: para otro precio, se quita la
+  línea y se vuelve a añadir.
+- **El descuento del cliente** (`Terms.Discount`) se encadena con el del nivel que gana, igual que
+  en el pedido: 5 % y 10 % dan 14,5 % (0,95 × 0,90), no 15 %. La regla está en un solo sitio,
+  `vocab.ChainedDiscount`, que usan Orders y Billing. La línea guarda un solo descuento, el
+  encadenado, con los 4 decimales de su columna: dos descuentos de 2 decimales pueden dar hasta 6
+  (12,5 y 7,25 dan 18,84375) y se redondea a 18,8438.
+- **El neto puede no coincidir con el del pedido** para lo mismo. Orders redondea a 4 decimales el
+  precio neto unitario (precio con los dos descuentos) y multiplica por la cantidad; Billing aplica
+  el descuento a la línea entera y redondea una vez al céntimo. La diferencia crece con la
+  cantidad: 1000 unidades a 1 € con un 5 % y un 2,5 % dan 926,30 en el pedido (0,9263 por unidad)
+  y 926,25 en la factura directa (descuento 7,375 %), 0,05 de diferencia. El redondeo del
+  descuento a 4 decimales también cuenta, y también crece con la cantidad.
+- **Lo que no se escribe sale del producto:** la descripción, su nombre; el código de impuesto, el
+  suyo si la línea no trae ni código ni tratamiento.
+- **Lo escrito manda** (sobrescritura explícita): si la línea trae `unitPrice`, el precio y el
+  descuento son los escritos (sin descuento, si no se escribe ninguno; ni el del nivel ni el del
+  cliente) y `priceSource` es `manual`; si sólo trae `discount`, el precio es el automático y el
+  descuento escrito sustituye al encadenado. Por qué: quien escribe un precio pactado no espera que
+  se le sume un descuento que no ve, y un valor vacío es fácil de distinguir de un cero.
+- **Con `automatic_pricing` a false**, el precio se escribe y es obligatorio (sin él, 400 en
+  `unitPrice`; sin producto, como siempre, un precio vacío es cero). El producto sólo da la
+  descripción y el código de impuesto, y `priceSource` es `manual`. No se pide ningún precio.
+- **Rectificativa:** el precio de una línea con producto se escribe siempre, como con
+  `automatic_pricing` a false: corrige lo que se facturó, no lo que costaría hoy. Tampoco se mira si
+  el producto sigue a la venta: se puede corregir la venta de un producto ya retirado.
+- **Rechazos (422):** `billing.unknown_product`, el producto no existe o es de otra empresa;
+  `billing.product_discontinued`, retirado en la fecha de la factura; `billing.product_not_for_sale`,
+  no está a la venta o tiene las ventas bloqueadas; `billing.automatic_pricing_unavailable`, Billing
+  no tiene los puertos (abajo). Un `product` que no es un id, 400.
+- **Puertos** (`billing.WithPricing`), del dominio de Billing, cableados en el anfitrión como los de
+  D-144:
+  - `domain.Catalog` (`Product`, `Price`), en el anfitrión `infrastructure.ProductsCatalog` sobre
+    los contratos `Catalog` y `Pricing` de Products;
+  - `domain.CustomerTerms`, en el anfitrión `infrastructure.OrdersTerms` sobre el contrato nuevo
+    de Orders `contracts.CustomerTerms` (`Terms(empresa, cliente)` → `TermsRef{PriceList,
+    Discount}`), de sólo lectura, que Orders expone en `Module.Terms`. Billing no lee tablas de
+    Orders;
+  - el ajuste, por el puerto `Settings` de D-144: `CompanySettings.ManualPricing`, que
+    `host.BillingSettings` copia de `ManualPricing` del contrato de Parties (el valor cero, también
+    sin perfil, es el automático). Sin puerto `Settings`, el valor por omisión: automático.
+
+  Sin `Catalog`, una línea con producto se rechaza siempre; sin `CustomerTerms`, la que pide el
+  precio automático. En los dos casos, 422 `billing.automatic_pricing_unavailable`.
+- **Migración 12** de Billing, en los cinco motores: `bil_invoice_lines.product` `{uuid}` y
+  `price_source` `{str:20}`, nulos. Sin clave ajena: el producto es de otro contexto. Las líneas que
+  ya hay no tienen producto.
+- **El borrador de un albarán** no cambia: trae el precio neto del pedido y sus líneas no guardan
+  el producto.
+- **Prueba:** `TestBilling_AutomaticPricing` (Products y Orders de mentira: un caso por nivel con la
+  tarifa del cliente y la fecha de la operación en la petición, el descuento encadenado, los
+  decimales de la factura, el precio y el descuento escritos, `automatic_pricing` a false con y sin
+  precio, el producto ajeno, desconocido, retirado o bloqueado por HTTP, la línea sin producto y
+  sin puertos); `TestChainedDiscount` (`pkg/domain/vocab`); de punta a punta, en memoria y en
+  SQLite, `TestBilling_AutomaticPricingFromProductsAndOrders` en `host` (tarifa general en el
+  perfil, un cliente con precio especial y 10 % de descuento y otro sin nada, dos facturas de dos
+  líneas emitidas con sus totales); en los cuatro motores, `TestBillingContext` (la línea con
+  producto vuelve con su producto y su nivel de las columnas nuevas).
+- **Pendiente:** el descuento por familia y otras monedas (D-148), que entran por la cadena de
+  Products sin tocar Billing; que el borrador de un albarán guarde también el producto.
+
 ## Pendiente
 
 - Todo el cálculo de impuestos que falta, por país y por sector: punto 6 de

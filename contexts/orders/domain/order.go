@@ -123,9 +123,10 @@ func (l Line) Short() vocab.Decimal {
 	return l.Pending().Sub(l.Reserved)
 }
 
-// price deriva el precio neto y el importe de una línea.
+// price deriva el precio neto y el importe de una línea: el descuento del cliente se encadena con
+// el de la línea (vocab.ChainedDiscount, el mismo que usa Billing en la factura directa, D-148).
 func price(l Line, customerDiscount vocab.Decimal) Line {
-	l.NetPrice = l.UnitPrice.Mul(hundred().Sub(l.Discount)).Div(hundred()).Mul(hundred().Sub(customerDiscount)).Div(hundred()).Round(4)
+	l.NetPrice = l.UnitPrice.Mul(hundred().Sub(vocab.ChainedDiscount(l.Discount, customerDiscount))).Div(hundred()).Round(4)
 	l.Amount = l.NetPrice.Mul(l.Quantity).Round(2)
 	return l
 }
