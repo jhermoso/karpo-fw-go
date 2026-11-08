@@ -1150,7 +1150,8 @@ los de Karpo C#. Migración 35.
 - **Permiso:** fijar la tarifa general es cambiar el perfil de la empresa: pide
   `Parties.Party.Update` sobre ella, no un permiso de Products, como en Karpo C#.
 - Los demás contextos los leen con `contracts.CompanyProfiles.Settings` (`DefaultPriceList`,
-  `AutomaticPricing`); el anfitrión se los lleva a Products con `host.ProductsSettings`.
+  `ManualPricing`, el contrario de `automatic_pricing`, para que el valor cero, el de una empresa
+  sin perfil, sea el automático); el anfitrión se los lleva a Products con `host.ProductsSettings`.
   `automatic_pricing` lo usa Facturación para la factura directa, con `host.BillingSettings`
   (docs/FACTURACION.md, «Precio automático»).
 

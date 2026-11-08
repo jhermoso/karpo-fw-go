@@ -297,7 +297,7 @@ func (c CompanyProfiles) Settings(ctx context.Context, organization string) (con
 		return contracts.CompanySettings{}, err
 	}
 	return contracts.CompanySettings{LineRounding: p.LineRounding, PriceDecimals: p.PriceDecimals, InstallmentsTiming: p.InstallmentsTiming,
-		DefaultPriceList: p.DefaultPriceList, AutomaticPricing: p.PricesAutomatically()}, nil
+		DefaultPriceList: p.DefaultPriceList, ManualPricing: !p.PricesAutomatically()}, nil
 }
 
 // CodePattern implementa contracts.CompanyProfiles.

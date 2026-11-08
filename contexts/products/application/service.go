@@ -297,14 +297,15 @@ func (p PricingPort) Quote(ctx context.Context, r contracts.QuoteRequest) (contr
 		}
 	}
 	if !lid.IsZero() {
+		// Una tarifa del cliente que no existe o es de otra empresa se salta, como la general: las
+		// condiciones viven en Orders, que no sabe de listas de precios.
 		list, err := p.PriceLists.Get(ctx, lid)
-		if err != nil {
+		if err != nil && !errors.Is(err, fw.ErrNotFound) {
 			return contracts.Quote{}, err
 		}
-		if list.State().Company != cid {
-			return contracts.Quote{}, fw.NotFound(domain.PriceListKind, lid)
+		if err == nil && list.State().Company == cid {
+			levels = append(levels, domain.Level{Source: domain.FromCustomerList, Prices: list})
 		}
-		levels = append(levels, domain.Level{Source: domain.FromCustomerList, Prices: list})
 	}
 	general, err := p.defaultList(ctx, cid)
 	if err != nil {

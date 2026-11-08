@@ -74,9 +74,10 @@ type CompanySettings struct {
 	InstallmentsTiming string
 	// DefaultPriceList es el id de la tarifa general de la empresa en Products; "" si no tiene.
 	DefaultPriceList string
-	// AutomaticPricing dice si una línea de factura sin pedido toma sola el precio de Products (sí,
-	// si la empresa no lo ha cambiado).
-	AutomaticPricing bool
+	// ManualPricing dice que una línea de factura sin pedido lleva el precio escrito a mano: el
+	// ajuste automatic_pricing a false. El valor cero, el de una empresa sin perfil o sin el ajuste,
+	// es el acordado: precio automático (D-148).
+	ManualPricing bool
 }
 
 // CompanyProfiles dice los ajustes de facturación de una empresa interna y el patrón (una

@@ -530,13 +530,23 @@ en su perfil de Parties (docs/PARTIES.md §25), por omisión sí.
   operación o, si el borrador no la tiene, hoy en la zona de la empresa) y la tarifa del cliente,
   que está en sus condiciones (`Terms`) de Orders. El precio se redondea a los decimales de la
   factura (`priceDecimals`, D-144: 0.125 con 2 decimales da 0.13) y el neto se calcula con su
-  `lineRounding`, como el de un precio escrito.
+  `lineRounding`, como el de un precio escrito. Una tarifa del cliente que Products no encuentra o
+  que es de otra empresa se salta: la general y, si no, el precio base.
+- **Se fija al añadir la línea:** el precio, el descuento y la comprobación de producto retirado
+  usan la fecha de la operación del borrador en ese momento o, si no tiene, la de hoy. No se
+  recalculan si después cambia la fecha del borrador ni al emitir: para otro precio, se quita la
+  línea y se vuelve a añadir.
 - **El descuento del cliente** (`Terms.Discount`) se encadena con el del nivel que gana, igual que
   en el pedido: 5 % y 10 % dan 14,5 % (0,95 × 0,90), no 15 %. La regla está en un solo sitio,
   `vocab.ChainedDiscount`, que usan Orders y Billing. La línea guarda un solo descuento, el
   encadenado, con los 4 decimales de su columna: dos descuentos de 2 decimales pueden dar hasta 6
-  (12,5 y 7,25 dan 18,84375) y se redondea a 18,8438; la diferencia es de menos de una
-  cienmilésima del precio.
+  (12,5 y 7,25 dan 18,84375) y se redondea a 18,8438.
+- **El neto puede no coincidir con el del pedido** para lo mismo. Orders redondea a 4 decimales el
+  precio neto unitario (precio con los dos descuentos) y multiplica por la cantidad; Billing aplica
+  el descuento a la línea entera y redondea una vez al céntimo. La diferencia crece con la
+  cantidad: 1000 unidades a 1 € con un 5 % y un 2,5 % dan 926,30 en el pedido (0,9263 por unidad)
+  y 926,25 en la factura directa (descuento 7,375 %), 0,05 de diferencia. El redondeo del
+  descuento a 4 decimales también cuenta, y también crece con la cantidad.
 - **Lo que no se escribe sale del producto:** la descripción, su nombre; el código de impuesto, el
   suyo si la línea no trae ni código ni tratamiento.
 - **Lo escrito manda** (sobrescritura explícita): si la línea trae `unitPrice`, el precio y el
@@ -563,8 +573,8 @@ en su perfil de Parties (docs/PARTIES.md §25), por omisión sí.
     Discount}`), de sólo lectura, que Orders expone en `Module.Terms`. Billing no lee tablas de
     Orders;
   - el ajuste, por el puerto `Settings` de D-144: `CompanySettings.ManualPricing`, que
-    `host.BillingSettings` saca de `AutomaticPricing` del perfil. Sin puerto `Settings`, el valor
-    por omisión: automático.
+    `host.BillingSettings` copia de `ManualPricing` del contrato de Parties (el valor cero, también
+    sin perfil, es el automático). Sin puerto `Settings`, el valor por omisión: automático.
 
   Sin `Catalog`, una línea con producto se rechaza siempre; sin `CustomerTerms`, la que pide el
   precio automático. En los dos casos, 422 `billing.automatic_pricing_unavailable`.

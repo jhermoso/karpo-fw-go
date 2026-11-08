@@ -686,7 +686,7 @@ func TestPartiesContext(t *testing.T) {
 			if p, err := profiles.Get(ctx, acmeID); err != nil || p.DefaultPriceList != list || p.AutomaticPricing == nil || *p.AutomaticPricing {
 				t.Fatalf("the pricing settings read back: %+v %v", p, err)
 			}
-			if st, err := mod.CompanyProfiles.Settings(ctx, acme.ID); err != nil || st.DefaultPriceList != list || st.AutomaticPricing {
+			if st, err := mod.CompanyProfiles.Settings(ctx, acme.ID); err != nil || st.DefaultPriceList != list || !st.ManualPricing {
 				t.Fatalf("the pricing settings other contexts read: %+v %v", st, err)
 			}
 			on := true

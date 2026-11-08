@@ -119,7 +119,9 @@ vigente para la cantidad (la de mayor cantidad mínima que no la supere):
 | 4 | Precio base del producto | `base` | `Product.BasePrice` |
 
 - Un nivel gana entero: si el precio especial tiene línea, da precio y descuento aunque la tarifa
-  del cliente tenga un tramo por cantidad más barato. Una tarifa retirada no da precio.
+  del cliente tenga un tramo por cantidad más barato. Una tarifa retirada no da precio. Una tarifa
+  del cliente que no existe o es de otra empresa se salta, como la general (antes, 404): las
+  condiciones de Orders guardan su id sin comprobarlo.
 - **El descuento del cliente** (`Terms.Discount`) no entra en la cadena: Orders lo aplica encima de
   la línea, encadenado con el del nivel que ganó (precio × (1 − dto. del nivel) × (1 − dto. del
   cliente), no la suma de los dos), también sobre un precio especial.

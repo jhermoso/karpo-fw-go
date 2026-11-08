@@ -11,6 +11,7 @@ import (
 	pdomain "github.com/jhermoso/karpo-fw-go/contexts/parties/domain"
 	dapp "github.com/jhermoso/karpo-fw-go/contexts/products/application"
 	ddomain "github.com/jhermoso/karpo-fw-go/contexts/products/domain"
+	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 )
@@ -106,7 +107,10 @@ func TestBilling_AutomaticPricingFromProductsAndOrders(t *testing.T) {
 			// El especial con el descuento del cliente (100 × 0,09 × 0,90) y la tuerca a precio base
 			// con el mismo descuento (10 × 0,5 × 0,90): 12,60 + 21 % = 15,25.
 			invoice(special, [2]want{{"0.09", "10.00", "special", "8.10"}, {"0.5", "10.00", "base", "4.50"}}, "12.60", "2.65", "15.25")
-			// Sin especial ni condiciones: la tarifa general y el precio base. 17,00 + 21 % = 20,57.
+			// Sin especial, y con una tarifa que Products no encuentra en sus condiciones, que se salta:
+			// la tarifa general y el precio base. 17,00 + 21 % = 20,57.
+			_, err = h.Orders.Service.SetTerms.Handle(actx, ordapp.SetTerms{Company: acme, Customer: plain, PriceList: fw.NewUUID().String()})
+			must(err)
 			invoice(plain, [2]want{{"0.12", "", "default_list", "12.00"}, {"0.5", "", "base", "5.00"}}, "17.00", "3.57", "20.57")
 		})
 	}
