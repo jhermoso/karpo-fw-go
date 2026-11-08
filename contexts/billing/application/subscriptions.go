@@ -84,7 +84,10 @@ func (s service) deliveryDraft(ctx context.Context, seller domain.OrganizationID
 	// El precio del albarán va con los decimales del pedido (4) o más, si la empresa pide más: con
 	// menos, redondearlo perdería dinero (1,2345 × 1000 daría 1230,00 y no 1234,50), y rechazarlo
 	// repetiría el evento sin fin.
-	calc := settings.Calculation
+	calc, err := s.calculation(ctx, settings, seller, customer)
+	if err != nil {
+		return nil, err
+	}
 	calc.PriceDecimals = max(calc.PriceDecimals, domain.DefaultPriceDecimals)
 	inv, err := domain.DraftInvoice(domain.NewInvoiceID(), domain.InvoiceState{Seller: seller, Customer: customer, Kind: domain.Ordinary,
 		Description: description, OperationDate: date, Sources: sources, Calculation: calc})

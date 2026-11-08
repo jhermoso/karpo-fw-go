@@ -196,18 +196,26 @@ func (s service) groupingUseCases(svc *Service) {
 			return fw.Page[PendingDeliveryDTO]{}, err
 		}
 		// El neto de cada pendiente, con el cálculo de su vendedor, como lo calcularía el cierre.
-		calcs := map[domain.OrganizationID]domain.Calculation{}
+		type pair struct {
+			seller   domain.OrganizationID
+			customer domain.PartyID
+		}
+		calcs := map[pair]domain.Calculation{}
 		for _, p := range page.Items {
-			seller := p.State().Seller
-			if _, ok := calcs[seller]; !ok {
-				settings, err := s.settings(ctx, seller)
+			k := pair{p.State().Seller, p.State().Customer}
+			if _, ok := calcs[k]; !ok {
+				settings, err := s.settings(ctx, k.seller)
 				if err != nil {
 					return fw.Page[PendingDeliveryDTO]{}, err
 				}
-				calcs[seller] = settings.Calculation
+				if calcs[k], err = s.calculation(ctx, settings, k.seller, k.customer); err != nil {
+					return fw.Page[PendingDeliveryDTO]{}, err
+				}
 			}
 		}
-		return fw.MapPage(page, func(p *domain.PendingDelivery) PendingDeliveryDTO { return pendingDTO(p, calcs[p.State().Seller]) }), nil
+		return fw.MapPage(page, func(p *domain.PendingDelivery) PendingDeliveryDTO {
+			return pendingDTO(p, calcs[pair{p.State().Seller, p.State().Customer}])
+		}), nil
 	})
 }
 

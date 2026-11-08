@@ -54,10 +54,9 @@ tiempo de prueba, participación en el capital) y edición de persona.
   cambio del filtro `documentIssue`, aparte.
 - **Prueba intermitente:** `TestParties_EndToEnd_MemoryThenSQLite` falla a veces en Windows al
   terminar un contacto en el mismo tic de reloj en que se creó.
-- **Cascada cliente > empresa de los ajustes de facturación (D-144):** que el cliente sobrescriba
-  el redondeo de la línea y los decimales del precio de la empresa (hoy sólo cuenta el perfil de la
-  empresa, docs/FACTURACION.md «Los ajustes de la empresa»). Falta decidir dónde se guarda (en la
-  relación de cliente, como su número) y llevarlo a Karpo C# y Trench con el mismo esquema.
+- ~~**Cascada cliente > empresa de los ajustes de facturación (D-144):**~~ ✅ D-150: el cliente
+  fija su redondeo y sus decimales en sus condiciones de Pedidos (`ord_terms`, migración 9);
+  docs/FACTURACION.md «Los ajustes de la empresa». Falta que Karpo C# y Trench lo adopten.
 
 ### 2b. Framework: siguientes pasos
 - **Migraciones de esquema** por dialecto (equivalente a `IDatabaseSchemaManager`): hoy el DDL

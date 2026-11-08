@@ -435,8 +435,16 @@ importa Parties: los pide por su puerto `Settings` (`billing.WithSettings`), que
   emitida que no cambia) y `TestBillingCalculationMigration` (la migración 9 conserva los precios,
   también los de 14 cifras enteras); de punta a punta con el perfil de Parties,
   `TestBillingSettings_FromThePartiesProfile` en `host`.
-- **Pendiente:** que el cliente sobrescriba redondeo y decimales (cascada cliente > empresa de
-  D-144), en BACKLOG.md.
+- **El cliente gana a la empresa** (cascada cliente > empresa de D-144, D-150): las condiciones del
+  cliente en Pedidos (`PUT /api/orders/terms`) pueden llevar `lineRounding` y `priceDecimals`; el
+  que lleven gana al de la empresa, campo a campo, y el que no, sigue a la empresa. Facturación los
+  lee por el contrato `CustomerTerms` de Pedidos (el mismo puerto de la tarifa, D-148) al preparar
+  el borrador: la factura directa, el de un albarán (que sigue con al menos 4 decimales) y el de un
+  cierre de periodo; el pendiente de un cliente mensual se enseña con el mismo cálculo. Como los de
+  la empresa, se congelan en el borrador. Sin ese puerto (Facturación sola), manda la empresa.
+  Prueba: `TestBilling_CustomerCalculationOverTheCompany`; en Pedidos, el guardado y la lectura en
+  memoria y SQLite (`TestOrders_DeliveryNotesAreGrouped_MemoryThenSQLite`) y la validación
+  (`TestTermsAndCounter`).
 
 ## PDF de la factura (plan Sage, T1-G6; añadido el 2026-11-07)
 

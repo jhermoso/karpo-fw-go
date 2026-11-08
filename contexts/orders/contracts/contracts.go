@@ -14,6 +14,10 @@ const Source = "orders"
 type TermsRef struct {
 	PriceList string `json:"priceList,omitempty"`
 	Discount  string `json:"discount"`
+	// LineRounding (once o gross_then_discount) y PriceDecimals (0 a 6) son el cálculo de las
+	// facturas del cliente cuando no es el de la empresa (D-150); vacío y nil, el de la empresa.
+	LineRounding  string `json:"lineRounding,omitempty"`
+	PriceDecimals *int   `json:"priceDecimals,omitempty"`
 }
 
 // CustomerTerms dice las condiciones de venta de una empresa con un cliente; las de cero si no

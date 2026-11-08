@@ -105,6 +105,12 @@ func Migrations() sqlrepo.MigrationSet {
 		// El importe de la línea se calcula como el de la factura (D-149): las líneas de pedido y de
 		// presupuesto guardan el descuento que se aplica, y las del albarán, el precio y ese descuento.
 		{Version: 8, Name: "chained discount of the lines", Up: sqlrepo.RenderDDLAll(chainedDiscountDDL...), Run: chainedDiscountsV8},
+		// El cálculo de las facturas del cliente cuando no es el de la empresa (la cascada cliente >
+		// empresa de D-144, D-150): los mismos valores que internal_organization_profile; nulos, los
+		// de la empresa.
+		{Version: 9, Name: "customer calculation", Up: sqlrepo.RenderDDLAll(
+			`ALTER TABLE ord_terms {add:line_rounding} {str:20}{addEnd}`,
+			`ALTER TABLE ord_terms {add:price_decimals} {int}{addEnd}`)},
 	}}
 }
 
@@ -248,18 +254,20 @@ func TermsMapping() sqlrepo.Mapping[domain.TermsID, *domain.Terms] {
 		Table:    "ord_terms",
 		Decimals: decimalColumns.Of("ord_terms"),
 		Columns: sqlrepo.WithAuditColumns("company", "customer", "price_list", "discount", "block_orders", "block_delivery", "block_reason",
-			"billing_periodicity"),
+			"billing_periodicity", "line_rounding", "price_decimals"),
 		Dehydrate: func(t *domain.Terms) (sqlrepo.Values, error) {
 			s := t.State()
 			return sqlrepo.AuditStampValues(sqlrepo.Values{"company": s.Company, "customer": s.Customer, "price_list": optUUID(s.PriceList.UUID),
 				"discount": s.Discount.Round(2), "block_orders": s.BlockOrders, "block_delivery": s.BlockDelivery, "block_reason": nullString(s.BlockReason),
-				"billing_periodicity": string(s.BillingPeriodicity)}, t.AuditStamp()), nil
+				"billing_periodicity": string(s.BillingPeriodicity), "line_rounding": nullString(s.LineRounding),
+				"price_decimals": optInt(s.PriceDecimals)}, t.AuditStamp()), nil
 		},
 		Hydrate: func(r *sqlrepo.Row, _ sqlrepo.ChildRows) (*domain.Terms, error) {
 			s := domain.TermsState{Company: domain.OrganizationID{UUID: r.UUID("company")}, Customer: domain.PartyID{UUID: r.UUID("customer")},
 				PriceList: domain.PriceListID{UUID: r.UUID("price_list")}, Discount: r.Decimal("discount"), BlockOrders: r.Bool("block_orders"),
 				BlockDelivery: r.Bool("block_delivery"), BlockReason: r.String("block_reason"),
-				BillingPeriodicity: domain.BillingPeriodicity(r.String("billing_periodicity")), Audit: r.AuditStamp()}
+				BillingPeriodicity: domain.BillingPeriodicity(r.String("billing_periodicity")), LineRounding: r.String("line_rounding"),
+				PriceDecimals: intPtr(r.NullInt64("price_decimals")), Audit: r.AuditStamp()}
 			if err := r.Err(); err != nil {
 				return nil, err
 			}
@@ -551,4 +559,21 @@ func nullString(s string) any {
 		return nil
 	}
 	return s
+}
+
+// optInt guarda nil como NULL.
+func optInt(n *int) any {
+	if n == nil {
+		return nil
+	}
+	return int64(*n)
+}
+
+// intPtr lee una columna entera que admite NULL.
+func intPtr(n *int64) *int {
+	if n == nil {
+		return nil
+	}
+	v := int(*n)
+	return &v
 }

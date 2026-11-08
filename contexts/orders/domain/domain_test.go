@@ -285,6 +285,22 @@ func TestTermsAndCounter(t *testing.T) {
 	if err := tr.Change(domain.TermsState{BillingPeriodicity: "weekly"}); !errors.Is(err, fw.ErrValidation) || tr.State().BillingPeriodicity != domain.Monthly {
 		t.Fatalf("weekly: %v", err)
 	}
+	// El cálculo de las facturas del cliente (D-150): sin nada, el de la empresa; los dos redondeos
+	// y de 0 a 6 decimales; nada más.
+	if tr.State().LineRounding != "" || tr.State().PriceDecimals != nil {
+		t.Fatalf("the company's calculation by default: %+v", tr.State())
+	}
+	zero, six, seven, minus := 0, 6, 7, -1
+	for _, ok := range []domain.TermsState{{LineRounding: domain.RoundOnce, PriceDecimals: &zero}, {LineRounding: domain.RoundGrossThenDiscount, PriceDecimals: &six}} {
+		if err := tr.Change(ok); err != nil || tr.State().LineRounding != ok.LineRounding || *tr.State().PriceDecimals != *ok.PriceDecimals {
+			t.Fatalf("%+v: %v %+v", ok, err, tr.State())
+		}
+	}
+	for _, bad := range []domain.TermsState{{LineRounding: "twice"}, {PriceDecimals: &seven}, {PriceDecimals: &minus}} {
+		if err := tr.Change(bad); !errors.Is(err, fw.ErrValidation) {
+			t.Fatalf("%+v: %v", bad, err)
+		}
+	}
 	c, err := domain.ReconstituteCounter(domain.NewCounterID(), company, "PED", 2026, 41)
 	if err != nil || c.Next() != "PED-2026-000042" {
 		t.Fatalf("counter: %v", err)

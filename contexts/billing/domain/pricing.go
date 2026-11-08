@@ -59,6 +59,21 @@ type Catalog interface {
 type Terms struct {
 	PriceList string
 	Discount  vocab.Decimal
+	// Rounding y PriceDecimals son el cálculo de las facturas del cliente cuando no es el de la
+	// empresa (la cascada cliente > empresa de D-144, D-150); vacío y nil, el de la empresa.
+	Rounding      LineRounding
+	PriceDecimals *int
+}
+
+// Over es el cálculo de las facturas del cliente: el de la empresa con lo que el cliente cambia.
+func (t Terms) Over(company Calculation) Calculation {
+	if t.Rounding != "" {
+		company.Rounding = t.Rounding
+	}
+	if t.PriceDecimals != nil {
+		company.PriceDecimals = *t.PriceDecimals
+	}
+	return company
 }
 
 // CustomerTerms dice las condiciones de venta de una empresa con un cliente (un puerto propio de

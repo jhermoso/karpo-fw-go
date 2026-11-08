@@ -291,7 +291,9 @@ func (s service) invoiceUseCases(svc *Service) {
 			if err != nil {
 				return InvoiceDTO{}, err
 			}
-			st.Calculation = settings.Calculation
+			if st.Calculation, err = s.calculation(ctx, settings, seller, st.Customer); err != nil {
+				return InvoiceDTO{}, err
+			}
 		}
 		inv, err := domain.DraftInvoice(domain.NewInvoiceID(), st)
 		if err != nil {
