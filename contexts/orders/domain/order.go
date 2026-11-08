@@ -647,7 +647,11 @@ func ReconstituteTerms(id TermsID, s TermsState) (*Terms, error) {
 	v.Require(s.BillingPeriodicity == PerDelivery || s.BillingPeriodicity == Monthly, "billingPeriodicity", "enum", "per_delivery or monthly")
 	v.Require(s.LineRounding == "" || s.LineRounding == RoundOnce || s.LineRounding == RoundGrossThenDiscount, "lineRounding", "enum",
 		"once or gross_then_discount")
-	v.Require(s.PriceDecimals == nil || (*s.PriceDecimals >= 0 && *s.PriceDecimals <= MaxPriceDecimals), "priceDecimals", "range", "from 0 to 6")
+	if s.PriceDecimals != nil {
+		n := *s.PriceDecimals // una copia: el agregado no comparte memoria con quien lo llama
+		s.PriceDecimals = &n
+		v.Require(n >= 0 && n <= MaxPriceDecimals, "priceDecimals", "range", "from 0 to 6")
+	}
 	if !s.BlockOrders && !s.BlockDelivery {
 		s.BlockReason = ""
 	}

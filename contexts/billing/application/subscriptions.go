@@ -72,23 +72,28 @@ func deliveryDescription(number, order string, sources []domain.Source) string {
 	return fmt.Sprintf("Albaranes %s a %s (%d)", refs[0], refs[len(refs)-1], len(refs))
 }
 
+// deliveryCalculation es el cálculo de los borradores de albaranes de un cliente: el de la empresa
+// con lo que cambia el cliente (D-150), y el precio con los decimales del pedido (4) o más, si se
+// piden más: con menos, redondearlo perdería dinero (1,2345 × 1000 daría 1230,00 y no 1234,50), y
+// rechazarlo repetiría el evento sin fin.
+func (s service) deliveryCalculation(ctx context.Context, seller domain.OrganizationID, customer domain.PartyID) (domain.Calculation, error) {
+	settings, err := s.settings(ctx, seller)
+	if err != nil {
+		return domain.Calculation{}, err
+	}
+	calc, err := s.calculation(ctx, settings, seller, customer)
+	if err != nil {
+		return domain.Calculation{}, err
+	}
+	calc.PriceDecimals = max(calc.PriceDecimals, domain.DefaultPriceDecimals)
+	return calc, nil
+}
+
 // deliveryDraft prepara el borrador de uno o varios albaranes: sus líneas, con su precio (con al
 // menos 4 decimales, D-144), su descuento y su código de impuesto, y date como fecha de la
 // operación.
-func (s service) deliveryDraft(ctx context.Context, seller domain.OrganizationID, customer domain.PartyID, description string, date vocab.Date,
-	sources []domain.Source, lines []domain.LineInput) (*domain.Invoice, error) {
-	settings, err := s.settings(ctx, seller)
-	if err != nil {
-		return nil, err
-	}
-	// El precio del albarán va con los decimales del pedido (4) o más, si la empresa pide más: con
-	// menos, redondearlo perdería dinero (1,2345 × 1000 daría 1230,00 y no 1234,50), y rechazarlo
-	// repetiría el evento sin fin.
-	calc, err := s.calculation(ctx, settings, seller, customer)
-	if err != nil {
-		return nil, err
-	}
-	calc.PriceDecimals = max(calc.PriceDecimals, domain.DefaultPriceDecimals)
+func (s service) deliveryDraft(ctx context.Context, seller domain.OrganizationID, customer domain.PartyID, calc domain.Calculation, description string,
+	date vocab.Date, sources []domain.Source, lines []domain.LineInput) (*domain.Invoice, error) {
 	inv, err := domain.DraftInvoice(domain.NewInvoiceID(), domain.InvoiceState{Seller: seller, Customer: customer, Kind: domain.Ordinary,
 		Description: description, OperationDate: date, Sources: sources, Calculation: calc})
 	if err != nil {
@@ -158,6 +163,10 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 		if err != nil || done {
 			return err
 		}
+		calc, err := s.deliveryCalculation(ctx, sid, domain.PartyID{UUID: customer})
+		if err != nil {
+			return err
+		}
 		if e.BillingPeriodicity == Monthly {
 			id := domain.PendingDeliveryID{UUID: delivery}
 			if _, err := s.Pending.Get(ctx, id); !errors.Is(err, fw.ErrNotFound) {
@@ -167,7 +176,7 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 			// podría facturar se rechaza ahora, como el de un cliente por albarán, y no queda pendiente
 			// bloqueando el cierre de su cliente.
 			sources := []domain.Source{{Type: DeliverySource, ID: e.DeliveryID, Ref: e.Number}}
-			if _, err := s.deliveryDraft(ctx, sid, domain.PartyID{UUID: customer}, deliveryDescription(e.Number, e.OrderNumber, sources), date,
+			if _, err := s.deliveryDraft(ctx, sid, domain.PartyID{UUID: customer}, calc, deliveryDescription(e.Number, e.OrderNumber, sources), date,
 				sources, lines); err != nil {
 				return err
 			}
@@ -179,7 +188,7 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 			return s.pending.Create(ctx, p)
 		}
 		sources := []domain.Source{{Type: DeliverySource, ID: e.DeliveryID, Ref: e.Number}}
-		inv, err := s.deliveryDraft(ctx, sid, domain.PartyID{UUID: customer}, deliveryDescription(e.Number, e.OrderNumber, sources), date, sources, lines)
+		inv, err := s.deliveryDraft(ctx, sid, domain.PartyID{UUID: customer}, calc, deliveryDescription(e.Number, e.OrderNumber, sources), date, sources, lines)
 		if err != nil {
 			return err
 		}

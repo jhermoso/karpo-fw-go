@@ -442,6 +442,9 @@ importa Parties: los pide por su puerto `Settings` (`billing.WithSettings`), que
   el borrador: la factura directa, el de un albarán (que sigue con al menos 4 decimales) y el de un
   cierre de periodo; el pendiente de un cliente mensual se enseña con el mismo cálculo. Como los de
   la empresa, se congelan en el borrador. Sin ese puerto (Facturación sola), manda la empresa.
+  Los borradores de un cierre se preparan todos con el mismo cálculo, tomado una vez. Dos
+  borradores de albaranes preparados antes y después de cambiar las condiciones del cliente
+  tienen cálculos distintos y no se pueden unir (422 `billing.merge_calculation`).
   Prueba: `TestBilling_CustomerCalculationOverTheCompany`; en Pedidos, el guardado y la lectura en
   memoria y SQLite (`TestOrders_DeliveryNotesAreGrouped_MemoryThenSQLite`) y la validación
   (`TestTermsAndCounter`).

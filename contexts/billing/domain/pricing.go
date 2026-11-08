@@ -66,11 +66,13 @@ type Terms struct {
 }
 
 // Over es el cálculo de las facturas del cliente: el de la empresa con lo que el cliente cambia.
+// Un valor que no es válido (Orders ya los valida) no cuenta: rechazarlo haría que el borrador de un
+// albarán se reintentara sin fin.
 func (t Terms) Over(company Calculation) Calculation {
-	if t.Rounding != "" {
+	if t.Rounding == RoundOnce || t.Rounding == RoundGrossThenDiscount {
 		company.Rounding = t.Rounding
 	}
-	if t.PriceDecimals != nil {
+	if t.PriceDecimals != nil && *t.PriceDecimals >= 0 && *t.PriceDecimals <= MaxPriceDecimals {
 		company.PriceDecimals = *t.PriceDecimals
 	}
 	return company
