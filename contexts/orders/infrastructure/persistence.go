@@ -102,7 +102,57 @@ func Migrations() sqlrepo.MigrationSet {
 		// de Trench): per_delivery, como hasta ahora, o monthly.
 		{Version: 7, Name: "billing periodicity", Up: sqlrepo.RenderDDLAll(`ALTER TABLE ord_terms {add:billing_periodicity} {str:20}{addEnd}`,
 			`UPDATE ord_terms SET billing_periodicity = 'per_delivery'`)},
+		// El importe de la línea se calcula como el de la factura (D-149): las líneas de pedido y de
+		// presupuesto guardan el descuento que se aplica, y las del albarán, el precio y ese descuento.
+		{Version: 8, Name: "chained discount of the lines", Up: sqlrepo.RenderDDLAll(chainedDiscountDDL...), Run: chainedDiscountsV8},
 	}}
+}
+
+// chainedDiscountDDL añade el descuento que se aplica a las líneas (D-149). Los albaranes que ya
+// había toman como precio su precio neto y descuento cero: su importe guardado sigue siendo el que
+// darían, y nada se recalcula. Las columnas admiten nulos (añadir una NOT NULL a una tabla con
+// filas pide un valor por omisión en cada motor); los mapeos las escriben siempre.
+var chainedDiscountDDL = []string{
+	`ALTER TABLE ord_order_lines {add:chained_discount} {dec:7,4}{addEnd}`,
+	`ALTER TABLE ord_quote_lines {add:chained_discount} {dec:7,4}{addEnd}`,
+	`ALTER TABLE ord_delivery_lines {add:unit_price} {dec:18,4}{addEnd}`,
+	`ALTER TABLE ord_delivery_lines {add:discount} {dec:7,4}{addEnd}`,
+	`UPDATE ord_delivery_lines SET unit_price = net_price, discount = 0`,
+}
+
+// chainedDiscountsV8 rellena el descuento que se aplica a las líneas de pedido y de presupuesto que
+// ya había: el de la línea encadenado con el del cliente de su cabecera, a 4 decimales (D-149). Se
+// calcula aquí y no en SQL porque SQLite guarda los decimales como texto. No toca ningún importe
+// guardado. Como todo Run, no se cambia nunca: un cambio va en una migración nueva.
+func chainedDiscountsV8(ctx context.Context, db *sqlrepo.DB) error {
+	for _, t := range []struct{ head, lines, key string }{{"ord_orders", "ord_order_lines", "order_id"}, {"ord_quotes", "ord_quote_lines", "quote_id"}} {
+		heads, err := db.Select(ctx, t.head, []string{"id", "customer_discount"})
+		if err != nil {
+			return err
+		}
+		customer := make(map[fw.UUID]vocab.Decimal, len(heads))
+		for _, h := range heads {
+			customer[h.UUID("id")] = h.Decimal("customer_discount")
+			if err := h.Err(); err != nil {
+				return err
+			}
+		}
+		lines, err := db.Select(ctx, t.lines, []string{t.key, "line_no", "discount"})
+		if err != nil {
+			return err
+		}
+		for _, l := range lines {
+			id, no, d := l.UUID(t.key), l.Int64("line_no"), l.Decimal("discount")
+			if err := l.Err(); err != nil {
+				return err
+			}
+			chained := vocab.ChainedDiscount(d, customer[id]).Round(4)
+			if _, err := db.Update(ctx, t.lines, sqlrepo.Values{"chained_discount": chained}, sqlrepo.Values{t.key: id, "line_no": no}); err != nil {
+				return fmt.Errorf("orders: chained discount of %s %s/%d: %w", t.lines, id, no, err)
+			}
+		}
+	}
+	return nil
 }
 
 // Migrator devuelve el migrador del esquema del contexto.
@@ -189,8 +239,9 @@ func OrderMapping() sqlrepo.Mapping[domain.OrderID, *domain.Order] {
 			for _, c := range byNo(children.Of("lines")) {
 				s.Lines = append(s.Lines, domain.Line{No: int(c.Int64("line_no")), Product: domain.ProductID{UUID: c.UUID("product")}, SKU: c.String("sku"),
 					Description: c.String("description"), UoM: c.String("uom"), TaxCode: c.String("tax_code"), Stocked: c.Bool("stocked"),
-					Quantity: c.Decimal("quantity"), UnitPrice: c.Decimal("unit_price"), Discount: c.Decimal("discount"), NetPrice: c.Decimal("net_price"),
-					Amount: c.Decimal("amount"), Reserved: c.Decimal("reserved"), Delivered: c.Decimal("delivered")})
+					Quantity: c.Decimal("quantity"), UnitPrice: c.Decimal("unit_price"), Discount: c.Decimal("discount"),
+					ChainedDiscount: c.Decimal("chained_discount"), NetPrice: c.Decimal("net_price"), Amount: c.Decimal("amount"),
+					Reserved: c.Decimal("reserved"), Delivered: c.Decimal("delivered")})
 				if err := c.Err(); err != nil {
 					return nil, err
 				}
@@ -202,16 +253,16 @@ func OrderMapping() sqlrepo.Mapping[domain.OrderID, *domain.Order] {
 		},
 		Children: []sqlrepo.Child[*domain.Order]{{
 			Name: "lines", Table: "ord_order_lines", ForeignKey: "order_id", OrderBy: []string{"line_no"},
-			Columns: []string{"line_no", "product", "sku", "description", "uom", "tax_code", "stocked", "quantity", "unit_price", "discount", "net_price",
-				"amount", "reserved", "delivered"},
+			Columns: []string{"line_no", "product", "sku", "description", "uom", "tax_code", "stocked", "quantity", "unit_price", "discount",
+				"chained_discount", "net_price", "amount", "reserved", "delivered"},
 			Decimals: decimalColumns.Of("ord_order_lines"),
 			Dehydrate: func(o *domain.Order) ([]sqlrepo.Values, error) {
 				out := []sqlrepo.Values{}
 				for _, l := range o.State().Lines {
 					out = append(out, sqlrepo.Values{"line_no": int64(l.No), "product": l.Product, "sku": l.SKU, "description": l.Description, "uom": l.UoM,
 						"tax_code": opt(l.TaxCode), "stocked": l.Stocked, "quantity": l.Quantity, "unit_price": l.UnitPrice.Round(4),
-						"discount": l.Discount.Round(2), "net_price": l.NetPrice.Round(4), "amount": l.Amount.Round(2),
-						"reserved": l.Reserved, "delivered": l.Delivered})
+						"discount": l.Discount.Round(2), "chained_discount": l.ChainedDiscount.Round(4), "net_price": l.NetPrice.Round(4),
+						"amount": l.Amount.Round(2), "reserved": l.Reserved, "delivered": l.Delivered})
 				}
 				return out, nil
 			},
@@ -239,7 +290,8 @@ func DeliveryMapping() sqlrepo.Mapping[domain.DeliveryID, *domain.Delivery] {
 			for _, c := range byNo(children.Of("lines")) {
 				s.Lines = append(s.Lines, domain.DeliveryLine{Line: int(c.Int64("line_no")), Product: domain.ProductID{UUID: c.UUID("product")}, SKU: c.String("sku"),
 					Description: c.String("description"), UoM: c.String("uom"), TaxCode: c.String("tax_code"), Stocked: c.Bool("stocked"),
-					Quantity: c.Decimal("quantity"), NetPrice: c.Decimal("net_price"), Amount: c.Decimal("amount")})
+					Quantity: c.Decimal("quantity"), UnitPrice: c.Decimal("unit_price"), Discount: c.Decimal("discount"), NetPrice: c.Decimal("net_price"),
+					Amount: c.Decimal("amount")})
 				if err := c.Err(); err != nil {
 					return nil, err
 				}
@@ -251,14 +303,15 @@ func DeliveryMapping() sqlrepo.Mapping[domain.DeliveryID, *domain.Delivery] {
 		},
 		Children: []sqlrepo.Child[*domain.Delivery]{{
 			Name: "lines", Table: "ord_delivery_lines", ForeignKey: "delivery_id", OrderBy: []string{"line_no"},
-			Columns:  []string{"line_no", "product", "sku", "description", "uom", "tax_code", "stocked", "quantity", "net_price", "amount"},
+			Columns: []string{"line_no", "product", "sku", "description", "uom", "tax_code", "stocked", "quantity", "unit_price", "discount", "net_price",
+				"amount"},
 			Decimals: decimalColumns.Of("ord_delivery_lines"),
 			Dehydrate: func(d *domain.Delivery) ([]sqlrepo.Values, error) {
 				out := []sqlrepo.Values{}
 				for _, l := range d.State().Lines {
 					out = append(out, sqlrepo.Values{"line_no": int64(l.Line), "product": l.Product, "sku": l.SKU, "description": l.Description, "uom": l.UoM,
-						"tax_code": opt(l.TaxCode), "stocked": l.Stocked, "quantity": l.Quantity, "net_price": l.NetPrice.Round(4),
-						"amount": l.Amount.Round(2)})
+						"tax_code": opt(l.TaxCode), "stocked": l.Stocked, "quantity": l.Quantity, "unit_price": l.UnitPrice.Round(4),
+						"discount": l.Discount.Round(4), "net_price": l.NetPrice.Round(4), "amount": l.Amount.Round(2)})
 				}
 				return out, nil
 			},

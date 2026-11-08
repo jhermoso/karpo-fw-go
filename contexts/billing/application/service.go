@@ -220,6 +220,20 @@ func optMoney(d vocab.Decimal) string {
 	return d.StringFixed(2)
 }
 
+// optDiscount escribe el descuento de una línea con al menos 2 decimales y todos los que tenga
+// (hasta los 4 de su columna): el encadenado de un albarán (D-149) o del precio automático (D-148)
+// puede tener 4, y con 2 no se podría rehacer el neto (7,375 % no es 7,38 %). Vacío sin descuento.
+func optDiscount(d vocab.Decimal) string {
+	if d.IsZero() {
+		return ""
+	}
+	places := 0
+	if text := d.String(); strings.Contains(text, ".") {
+		places = len(text) - strings.IndexByte(text, '.') - 1
+	}
+	return d.StringFixed(int32(max(2, places)))
+}
+
 func dateText(d vocab.Date) string {
 	if d.IsZero() {
 		return ""

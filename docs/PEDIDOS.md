@@ -112,8 +112,12 @@ contexts/inventory/  # + suscripción a Pedidos (migración 3: inventory_inbox),
      medio, con la nota «Albarán …».
   5. Cancelar (sin entregas) o cerrar (con entregas) publica `orders.order-closed.v1` e Inventario
      libera lo que el pedido aún retuviera.
-- **Precio de la línea:** `neto = precio × (1 − dto. tarifa) × (1 − dto. cliente)`, a 4 decimales;
-  el importe, a céntimos. El pedido no lleva impuestos: los calcula Facturación.
+- **Precio de la línea** (D-149): el descuento que se aplica es el de la tarifa encadenado con el
+  del cliente, `100 − (100 − dto. tarifa) × (100 − dto. cliente) / 100`, a 4 decimales (`chainedDiscount`);
+  el importe, `precio × cantidad × (1 − descuento / 100)`, redondeado una vez al céntimo, como el
+  neto de la línea de factura con `once`. El precio neto unitario (`netPrice`) se sigue mostrando,
+  pero es informativo: no entra en ningún importe. El pedido no lleva impuestos: los calcula
+  Facturación.
 - **Idempotencia:** las bandejas de entrada descartan mensajes repetidos, y la salida de un
   albarán es única por albarán y línea.
 - **Tablas:**
@@ -143,6 +147,38 @@ contexts/inventory/  # + suscripción a Pedidos (migración 3: inventory_inbox),
   cede) a (empresa, la que recibe) si ésta no tiene unas. Las de la que cede no se tocan. Al deshacer la
   fusión (`returning: true`) no se copia nada.
 
+## Importe como el de la factura (D-149; añadido el 2026-11-08)
+
+Acuerdo técnico de Karpo Go y Karpo C# (2026-11-08); C# ya lo hacía así. Antes, Pedidos redondeaba
+a 4 decimales el precio neto unitario y lo multiplicaba por la cantidad, y Facturación aplicaba el
+descuento a la línea entera: 1000 unidades a 1 € con un 5 % y un 2,5 % daban 926,30 en el pedido y
+926,25 en la factura.
+
+- **Línea de pedido y de presupuesto:** guardan el precio, el descuento de la tarifa y el
+  encadenado (`chained_discount`, `{dec:7,4}`). El importe es `LineAmount(cantidad, precio,
+  encadenado)`: 926,25. `EffectiveDiscount` y `LineAmount` están en el dominio de Orders y son lo
+  mismo que hace Billing (`vocab.ChainedDiscount` redondeado a 4 y `Calculation.Net` con `once`).
+- **Lo pendiente de servir** (`PendingAmount`) y **cada línea de albarán** se calculan igual, con su
+  cantidad: entregar 400 y 600 da 370,50 y 555,75. La suma de varios albaranes puede diferir del
+  pedido en un céntimo por línea, como la de varias facturas.
+- **Línea de albarán:** guarda `unit_price` y `discount` (el encadenado), como una línea de factura,
+  además de `net_price`, informativo. `orders.delivery-issued.v1` añade `unitPrice` y `discount` y
+  conserva `netPrice`, así que un consumidor antiguo sigue funcionando; Facturación factura con
+  precio y descuento y la factura da lo mismo que el albarán.
+- **Migración 8:** `ord_order_lines.chained_discount`, `ord_quote_lines.chained_discount`,
+  `ord_delivery_lines.unit_price` y `discount`, anulables (añadir una NOT NULL a una tabla con filas
+  pide un valor por omisión en cada motor), pero los mapeos las escriben siempre. Las filas que ya
+  había **conservan su importe**: los albaranes toman su precio neto como precio y descuento cero
+  (dan lo mismo que tenían) y las líneas de pedido y presupuesto, su descuento encadenado, calculado
+  en Go (SQLite guarda los decimales como texto). Lo que se entregue de un pedido de antes se
+  calcula ya con la regla nueva.
+- **Diferencia con C#:** C# guarda el encadenado en el descuento de la línea; aquí `discount` sigue
+  siendo el de la tarifa y el encadenado va en su propia columna, para no perder de dónde sale.
+- **Pruebas:** `TestOrder_AmountLikeTheInvoice` (dominio: 926,25, el redondeo a 18,8438 % y dos
+  albaranes), `TestDecimalColumnsInSQLite` (la migración 8 sobre filas de antes),
+  `TestOrders_ChainedDiscountLikeTheInvoice_MemoryThenSQLite` (pedido, albarán y factura emitida
+  valen 926,25) y, en los motores, `TestOrdersInvoicing` y `TestContextDecimalColumns`.
+
 ## Decisiones (aprobadas por Javier el 2026-10-05)
 
 1. **Un pedido tiene un solo estado** y, una vez confirmado, no se edita: se sirve, se cierra o se
@@ -162,8 +198,9 @@ contexts/inventory/  # + suscripción a Pedidos (migración 3: inventory_inbox),
 ## Validación
 
 - **Dominio:**
-  - precio con los dos descuentos, una vez cada uno (0,08 × 0,95 × 0,90 = 0,0684); numeración de
-    líneas; cantidad y descuento inválidos;
+  - precio con los dos descuentos, una vez cada uno (0,08 × 0,95 × 0,90 = 0,0684); importe como el
+    de la factura (D-149: 1000 × 1 € con un 5 % y un 2,5 % = 926,25); numeración de líneas;
+    cantidad y descuento inválidos;
   - confirmar un pedido vacío; pedido confirmado que ya no cambia;
   - petición de stock con lo que falta; retención limitada a lo pendiente; nada que pedir;
   - entregas: de un borrador, sin retención, de más, línea repetida, parcial y total;

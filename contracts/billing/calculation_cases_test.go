@@ -1,7 +1,8 @@
 // Package billing_test pasa por el cálculo real de Karpo Go los casos compartidos con Karpo C#
 // (calculation-cases.json, docs/FACTURACION.md, «Casos compartidos con Karpo C#»): las líneas por
 // el dominio de Billing, el desglose por el TaxEngine de Fiscal con la jurisdicción española a
-// través del adaptador de Billing, y los plazos por las condiciones de pago de Receivables.
+// través del adaptador de Billing, y los plazos por las condiciones de pago de Receivables. Con
+// lineRounding = once, el neto de cada línea también por el importe de la línea de Orders (D-149).
 package billing_test
 
 import (
@@ -18,6 +19,7 @@ import (
 	fapp "github.com/jhermoso/karpo-fw-go/contexts/fiscal/application"
 	fdomain "github.com/jhermoso/karpo-fw-go/contexts/fiscal/domain"
 	"github.com/jhermoso/karpo-fw-go/contexts/fiscal/jurisdictions/es"
+	odomain "github.com/jhermoso/karpo-fw-go/contexts/orders/domain"
 	rdomain "github.com/jhermoso/karpo-fw-go/contexts/receivables/domain"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
@@ -77,8 +79,10 @@ type input struct {
 		Quantity  string `json:"quantity"`
 		UnitPrice string `json:"unitPrice"`
 		Discount  string `json:"discount"`
-		TaxCode   string `json:"taxCode"`
-		Treatment string `json:"treatment"`
+		// CustomerDiscount es el descuento del cliente, que se encadena con Discount (opcional).
+		CustomerDiscount string `json:"customerDiscount"`
+		TaxCode          string `json:"taxCode"`
+		Treatment        string `json:"treatment"`
 	} `json:"lines"`
 	Installments *struct {
 		Count       int `json:"count"`
@@ -241,9 +245,16 @@ func run(t *testing.T, taxes binfra.FiscalTaxes, seller fw.UUID, c testCase) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	discounts := make([]vocab.Decimal, len(in.Lines))
 	for k, l := range in.Lines {
+		// El descuento del cliente se encadena con el de la línea y se redondea a 4 decimales, como
+		// hacen Orders y el precio automático de Billing (D-148, D-149).
+		discounts[k] = amount(t, "discount", l.Discount)
+		if l.CustomerDiscount != "" {
+			discounts[k] = odomain.EffectiveDiscount(discounts[k], amount(t, "customerDiscount", l.CustomerDiscount))
+		}
 		_, err := inv.AddLine(domain.LineInput{Description: "Línea", Quantity: amount(t, "quantity", l.Quantity),
-			UnitPrice: amount(t, "unitPrice", l.UnitPrice), Discount: amount(t, "discount", l.Discount), TaxCode: l.TaxCode, Treatment: l.Treatment})
+			UnitPrice: amount(t, "unitPrice", l.UnitPrice), Discount: discounts[k], TaxCode: l.TaxCode, Treatment: l.Treatment})
 		if r := want.Rejection; r != nil && r.Line == k+1 {
 			var ve *fw.ValidationError
 			if !errors.As(err, &ve) || !slices.ContainsFunc(ve.Errors, func(e fw.FieldError) bool { return e.Field == r.Field }) {
@@ -264,8 +275,15 @@ func run(t *testing.T, taxes binfra.FiscalTaxes, seller fw.UUID, c testCase) {
 		t.Fatalf("%d line nets, want %d", len(lines), len(want.LineNets))
 	}
 	for k, l := range lines {
-		if w := amount(t, "lineNets", want.LineNets[k]); !l.Net.Equal(w) {
+		w := amount(t, "lineNets", want.LineNets[k])
+		if !l.Net.Equal(w) {
 			t.Errorf("net of line %d: %s, want %s", k+1, l.Net, w)
+		}
+		// El importe de una línea de pedido o de albarán es el neto de la factura con once (D-149).
+		if in.Settings.LineRounding == string(domain.RoundOnce) {
+			if got := odomain.LineAmount(l.Quantity, l.UnitPrice, discounts[k]); !got.Equal(w) {
+				t.Errorf("amount of line %d in Orders: %s, want %s", k+1, got, w)
+			}
 		}
 	}
 

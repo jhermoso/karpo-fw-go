@@ -141,12 +141,16 @@ type LineDTO struct {
 	Quantity    string `json:"quantity"`
 	UnitPrice   string `json:"unitPrice"`
 	Discount    string `json:"discount"`
-	NetPrice    string `json:"netPrice"`
-	Amount      string `json:"amount"`
-	Reserved    string `json:"reserved"`
-	Delivered   string `json:"delivered"`
-	Pending     string `json:"pending"`
-	Short       string `json:"short"`
+	// ChainedDiscount es el descuento que se aplica: el de la tarifa (Discount) encadenado con el del
+	// cliente, con 4 decimales. Amount = Quantity × UnitPrice × (1 − ChainedDiscount / 100), al
+	// céntimo, como en la factura (D-149); NetPrice es informativo.
+	ChainedDiscount string `json:"chainedDiscount"`
+	NetPrice        string `json:"netPrice"`
+	Amount          string `json:"amount"`
+	Reserved        string `json:"reserved"`
+	Delivered       string `json:"delivered"`
+	Pending         string `json:"pending"`
+	Short           string `json:"short"`
 }
 
 // OrderDTO es la forma de transporte de un pedido.
@@ -178,13 +182,15 @@ func orderDTO(o *domain.Order) OrderDTO {
 	for _, l := range s.Lines {
 		d.Lines = append(d.Lines, LineDTO{No: l.No, Product: l.Product.String(), SKU: l.SKU, Description: l.Description, UoM: l.UoM, TaxCode: l.TaxCode,
 			Stocked: l.Stocked, Quantity: l.Quantity.String(), UnitPrice: l.UnitPrice.StringFixed(4), Discount: money(l.Discount),
-			NetPrice: l.NetPrice.StringFixed(4), Amount: money(l.Amount), Reserved: l.Reserved.String(), Delivered: l.Delivered.String(),
+			ChainedDiscount: l.ChainedDiscount.StringFixed(4), NetPrice: l.NetPrice.StringFixed(4), Amount: money(l.Amount),
+			Reserved: l.Reserved.String(), Delivered: l.Delivered.String(),
 			Pending: l.Pending().String(), Short: l.Short().String()})
 	}
 	return d
 }
 
-// DeliveryLineDTO es la forma de transporte de una línea de un albarán.
+// DeliveryLineDTO es la forma de transporte de una línea de un albarán: el precio y el descuento
+// que se aplica, como en una línea de factura (D-149); NetPrice es informativo.
 type DeliveryLineDTO struct {
 	Line        int    `json:"line"`
 	Product     string `json:"product"`
@@ -192,6 +198,8 @@ type DeliveryLineDTO struct {
 	Description string `json:"description"`
 	UoM         string `json:"uom"`
 	Quantity    string `json:"quantity"`
+	UnitPrice   string `json:"unitPrice"`
+	Discount    string `json:"discount"`
 	NetPrice    string `json:"netPrice"`
 	Amount      string `json:"amount"`
 }
@@ -220,7 +228,8 @@ func deliveryDTO(d *domain.Delivery) DeliveryDTO {
 		Lines: []DeliveryLineDTO{}}
 	for _, l := range s.Lines {
 		out.Lines = append(out.Lines, DeliveryLineDTO{Line: l.Line, Product: l.Product.String(), SKU: l.SKU, Description: l.Description, UoM: l.UoM,
-			Quantity: l.Quantity.String(), NetPrice: l.NetPrice.StringFixed(4), Amount: money(l.Amount)})
+			Quantity: l.Quantity.String(), UnitPrice: l.UnitPrice.StringFixed(4), Discount: l.Discount.StringFixed(4), NetPrice: l.NetPrice.StringFixed(4),
+			Amount: money(l.Amount)})
 	}
 	return out
 }

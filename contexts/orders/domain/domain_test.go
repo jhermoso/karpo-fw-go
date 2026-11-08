@@ -57,6 +57,60 @@ func events[E fw.Event](o *domain.Order) []E {
 	return out
 }
 
+// TestOrder_AmountLikeTheInvoice comprueba D-149: el importe de la línea de pedido, de lo pendiente
+// y de la línea de albarán se calcula como el neto de la línea de factura, con el descuento
+// encadenado a 4 decimales y aplicado a la línea entera, redondeando una vez al céntimo. 1000 × 1 €
+// con un 5 % y un 2,5 % dan 926,25 (7,375 %), no 926,30 (0,9263 × 1000).
+func TestOrder_AmountLikeTheInvoice(t *testing.T) {
+	o := draft(t, "2.5")
+	if _, err := o.AddLine(line("1000", "1", "5", false)); err != nil {
+		t.Fatal(err)
+	}
+	l := o.State().Lines[0]
+	if !l.ChainedDiscount.Equal(dec("7.375")) || !l.Amount.Equal(dec("926.25")) || !l.NetPrice.Equal(dec("0.9263")) || !o.Total().Equal(dec("926.25")) ||
+		!o.PendingAmount().Equal(dec("926.25")) {
+		t.Fatalf("line %+v, total %s, pending %s", l, o.Total(), o.PendingAmount())
+	}
+	// 12,5 % y 7,25 % encadenados dan 18,84375 %, que se guarda como 18,8438 % (los 4 decimales de la
+	// línea de factura): 10000 × 1 € dan 8115,62 y no 8115,63.
+	if _, err := o.AddLine(line("10000", "1", "12.5", false)); err != nil {
+		t.Fatal(err)
+	}
+	o2 := draft(t, "7.25")
+	if _, err := o2.AddLine(line("10000", "1", "12.5", false)); err != nil {
+		t.Fatal(err)
+	}
+	if l := o2.State().Lines[0]; !l.ChainedDiscount.Equal(dec("18.8438")) || !l.Amount.Equal(dec("8115.62")) {
+		t.Fatalf("rounded chained discount: %+v", l)
+	}
+	if err := o.RemoveLine(2); err != nil {
+		t.Fatal(err)
+	}
+
+	// Entregado en dos albaranes, 400 y 600: cada línea de albarán con el precio y el descuento del
+	// pedido, y su importe calculado igual (370,50 + 555,75 = 926,25).
+	if err := o.Confirm("PED-1"); err != nil {
+		t.Fatal(err)
+	}
+	first, err := o.Deliver([]domain.Pick{{Line: 1, Quantity: dec("400")}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d := first[0]; !d.UnitPrice.Equal(dec("1")) || !d.Discount.Equal(dec("7.375")) || !d.Amount.Equal(dec("370.50")) {
+		t.Fatalf("first delivery line: %+v", d)
+	}
+	if !o.PendingAmount().Equal(dec("555.75")) {
+		t.Fatalf("pending: %s", o.PendingAmount())
+	}
+	rest, err := o.Deliver([]domain.Pick{{Line: 1, Quantity: dec("600")}})
+	if err != nil || !rest[0].Amount.Equal(dec("555.75")) {
+		t.Fatalf("second delivery line: %+v %v", rest, err)
+	}
+	if !domain.LineAmount(dec("1000"), dec("1"), dec("7.375")).Equal(dec("926.25")) || !domain.EffectiveDiscount(dec("5"), dec("2.5")).Equal(dec("7.375")) {
+		t.Fatal("LineAmount or EffectiveDiscount")
+	}
+}
+
 func TestOrder_PricesEachDiscountOnce(t *testing.T) {
 	o := draft(t, "10")
 	// 0.08 con un 5 % de la tarifa y un 10 % del cliente: 0.08 × 0.95 × 0.90 = 0.0684.

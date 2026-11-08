@@ -201,7 +201,7 @@ func invoiceDTO(i *domain.Invoice) InvoiceDTO {
 	}
 	for _, l := range s.Lines {
 		ld := LineDTO{ID: l.ID.String(), Description: l.Description, Quantity: l.Quantity.String(), UnitPrice: l.UnitPrice.String(),
-			Discount: optMoney(l.Discount), TaxCode: l.TaxCode, Treatment: l.Treatment, Net: money(l.Net), PriceSource: l.PriceSource}
+			Discount: optDiscount(l.Discount), TaxCode: l.TaxCode, Treatment: l.Treatment, Net: money(l.Net), PriceSource: l.PriceSource}
 		if !l.Product.IsZero() {
 			ld.Product = l.Product.String()
 		}

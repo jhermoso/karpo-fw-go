@@ -92,24 +92,49 @@ func percent(p vocab.Decimal) bool {
 	return !p.IsNegative() && !p.GreaterThan(hundred()) && p.Equal(p.Round(2))
 }
 
+// discount4 es un descuento de 0 a 100 con los 4 decimales de la columna del descuento de una
+// línea de factura.
+func discount4(p vocab.Decimal) bool {
+	return !p.IsNegative() && !p.GreaterThan(hundred()) && p.Equal(p.Round(4))
+}
+
+// EffectiveDiscount es el descuento que se aplica a una línea: el de la tarifa encadenado con el
+// del cliente (vocab.ChainedDiscount) y redondeado a 4 decimales, como lo guarda la línea de la
+// factura (D-148, D-149). 5 % y 2,5 % dan 7,375 %; 12,5 % y 7,25 %, 18,84375 → 18,8438 %.
+func EffectiveDiscount(line, customer vocab.Decimal) vocab.Decimal {
+	return vocab.ChainedDiscount(line, customer).Round(4)
+}
+
+// LineAmount es el importe de una cantidad a un precio con un descuento (un porcentaje), calculado
+// como el neto de una línea de factura con el redondeo por omisión (once): cantidad × precio menos
+// el descuento, redondeado una sola vez al céntimo, el medio alejándose de cero (D-149). 1000 × 1 €
+// con un 7,375 % dan 926,25; con el precio neto unitario redondeado antes (0,9263) darían 926,30.
+func LineAmount(quantity, unitPrice, discount vocab.Decimal) vocab.Decimal {
+	gross := quantity.Mul(unitPrice)
+	return gross.Sub(gross.Mul(discount).Div(hundred())).Round(2)
+}
+
 // Line es una línea de un pedido. UnitPrice es el precio antes de cualquier descuento; Discount es
-// el de la tarifa; el descuento de cliente del pedido se aplica encima. NetPrice y Amount se
-// derivan, así que ningún descuento se aplica nunca dos veces.
+// el de la tarifa; ChainedDiscount, el que se aplica: el de la tarifa encadenado con el del cliente
+// del pedido, a 4 decimales. Amount se calcula como el neto de una línea de factura (LineAmount,
+// D-149), así que el pedido, su albarán y su factura dan el mismo importe y ningún descuento se
+// aplica dos veces. NetPrice es sólo informativo: no entra en ningún importe.
 type Line struct {
-	No          int
-	Product     ProductID
-	SKU         string
-	Description string
-	UoM         string
-	TaxCode     string
-	Stocked     bool // Inventory retiene y da salida a sus existencias
-	Quantity    vocab.Decimal
-	UnitPrice   vocab.Decimal
-	Discount    vocab.Decimal // porcentaje
-	NetPrice    vocab.Decimal // precio unitario tras los dos descuentos, 4 decimales
-	Amount      vocab.Decimal // cantidad × precio neto, en céntimos
-	Reserved    vocab.Decimal // retenido por Inventory y aún no entregado
-	Delivered   vocab.Decimal
+	No              int
+	Product         ProductID
+	SKU             string
+	Description     string
+	UoM             string
+	TaxCode         string
+	Stocked         bool // Inventory retiene y da salida a sus existencias
+	Quantity        vocab.Decimal
+	UnitPrice       vocab.Decimal
+	Discount        vocab.Decimal // porcentaje, el de la tarifa
+	ChainedDiscount vocab.Decimal // porcentaje que se aplica: el de la tarifa y el del cliente, 4 decimales
+	NetPrice        vocab.Decimal // informativo: precio unitario con ChainedDiscount, 4 decimales
+	Amount          vocab.Decimal // LineAmount(cantidad, precio, ChainedDiscount), en céntimos
+	Reserved        vocab.Decimal // retenido por Inventory y aún no entregado
+	Delivered       vocab.Decimal
 }
 
 // Pending devuelve lo que queda por entregar.
@@ -123,11 +148,13 @@ func (l Line) Short() vocab.Decimal {
 	return l.Pending().Sub(l.Reserved)
 }
 
-// price deriva el precio neto y el importe de una línea: el descuento del cliente se encadena con
-// el de la línea (vocab.ChainedDiscount, el mismo que usa Billing en la factura directa, D-148).
+// price deriva el descuento que se aplica, el precio neto informativo y el importe de una línea:
+// el descuento del cliente se encadena con el de la línea (EffectiveDiscount, el mismo que guarda
+// Billing en la factura directa, D-148) y el importe sale del precio, no del neto (D-149).
 func price(l Line, customerDiscount vocab.Decimal) Line {
-	l.NetPrice = l.UnitPrice.Mul(hundred().Sub(vocab.ChainedDiscount(l.Discount, customerDiscount))).Div(hundred()).Round(4)
-	l.Amount = l.NetPrice.Mul(l.Quantity).Round(2)
+	l.ChainedDiscount = EffectiveDiscount(l.Discount, customerDiscount)
+	l.NetPrice = l.UnitPrice.Mul(hundred().Sub(l.ChainedDiscount)).Div(hundred()).Round(4)
+	l.Amount = LineAmount(l.Quantity, l.UnitPrice, l.ChainedDiscount)
 	return l
 }
 
@@ -176,6 +203,7 @@ func ReconstituteOrder(id OrderID, s OrderState) (*Order, error) {
 		v.Require(quantity(l.Quantity), f+".quantity", "range", "a positive quantity of up to 4 decimals")
 		v.Require(!l.UnitPrice.IsNegative() && l.UnitPrice.Equal(l.UnitPrice.Round(4)) && percent(l.Discount), f+".unitPrice", "range",
 			"a non-negative price of up to 4 decimals and a discount from 0 to 100")
+		v.Require(discount4(l.ChainedDiscount), f+".chainedDiscount", "range", "a discount from 0 to 100 with up to 4 decimals")
 		v.Require(!l.Delivered.IsNegative() && !l.Delivered.GreaterThan(l.Quantity) && !l.Reserved.IsNegative() && !l.Reserved.GreaterThan(l.Pending()),
 			f+".delivered", "range", "delivered within the quantity, reserved within what is pending")
 	}
@@ -208,11 +236,12 @@ func (o *Order) Total() vocab.Decimal {
 	return t
 }
 
-// PendingAmount devuelve el importe de lo que queda por entregar.
+// PendingAmount devuelve el importe de lo que queda por entregar, línea a línea como lo facturaría
+// su albarán.
 func (o *Order) PendingAmount() vocab.Decimal {
 	t := zero()
 	for _, l := range o.s.Lines {
-		t = t.Add(l.NetPrice.Mul(l.Pending()).Round(2))
+		t = t.Add(LineAmount(l.Pending(), l.UnitPrice, l.ChainedDiscount))
 	}
 	return t
 }
@@ -367,7 +396,8 @@ func (o *Order) Deliver(picks []Pick) ([]DeliveryLine, error) {
 		}
 		l.Delivered = l.Delivered.Add(p.Quantity)
 		out = append(out, DeliveryLine{Line: l.No, Product: l.Product, SKU: l.SKU, Description: l.Description, UoM: l.UoM, TaxCode: l.TaxCode,
-			Stocked: l.Stocked, Quantity: p.Quantity, NetPrice: l.NetPrice, Amount: l.NetPrice.Mul(p.Quantity).Round(2)})
+			Stocked: l.Stocked, Quantity: p.Quantity, UnitPrice: l.UnitPrice, Discount: l.ChainedDiscount, NetPrice: l.NetPrice,
+			Amount: LineAmount(p.Quantity, l.UnitPrice, l.ChainedDiscount)})
 	}
 	o.s.Lines = lines
 	if !slices.ContainsFunc(lines, func(l Line) bool { return l.Pending().IsPositive() }) {
@@ -435,7 +465,10 @@ var (
 	OrdFieldNumber   = spec.Ordered("order_number", func(o *Order) string { return o.s.Number })
 )
 
-// DeliveryLine es una línea de un albarán.
+// DeliveryLine es una línea de un albarán. Lleva el precio y el descuento que se aplica (el
+// encadenado de la línea del pedido), como una línea de factura, y su importe se calcula igual
+// (LineAmount, D-149): la factura del albarán da lo mismo al céntimo. NetPrice es informativo. En
+// los albaranes de antes de D-149, UnitPrice es el precio neto y Discount, cero.
 type DeliveryLine struct {
 	Line        int // la línea del pedido que sirve
 	Product     ProductID
@@ -445,7 +478,9 @@ type DeliveryLine struct {
 	TaxCode     string
 	Stocked     bool
 	Quantity    vocab.Decimal
-	NetPrice    vocab.Decimal
+	UnitPrice   vocab.Decimal
+	Discount    vocab.Decimal // porcentaje, 4 decimales
+	NetPrice    vocab.Decimal // informativo
 	Amount      vocab.Decimal
 }
 

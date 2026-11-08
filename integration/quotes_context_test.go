@@ -100,7 +100,8 @@ func TestQuotesContext(t *testing.T) {
 			if got.Status != "draft" || got.Number != "" || got.Date != today.String() || got.ValidUntil != today.AddDays(10).String() || got.CustomerDiscount != "5.00" ||
 				got.Reference != "Obra 12-B" || got.Notes != "Entrega en obra, mañana" || got.Order != "" || got.Version != 6 || len(got.Lines) != 2 ||
 				got.Lines[0] != (oapp.QuoteLineDTO{No: 1, Product: widget.String(), SKU: "W-1", Description: "Tornillo de cabeza avellanada", UoM: "ud", TaxCode: "G",
-					Stocked: true, Quantity: "2.5", UnitPrice: "10.1234", Discount: "10.00", NetPrice: "8.6555", Amount: "21.64"}) ||
+					Stocked: true, Quantity: "2.5", UnitPrice: "10.1234", Discount: "10.00", ChainedDiscount: "14.5000", NetPrice: "8.6555",
+					Amount: "21.64"}) ||
 				got.Lines[1].No != 2 || got.Lines[1].Stocked || got.Lines[1].Amount != "190.00" || got.Total != "211.64" {
 				t.Fatalf("stored draft: %+v", got)
 			}

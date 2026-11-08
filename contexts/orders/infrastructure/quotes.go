@@ -41,7 +41,8 @@ func QuoteMapping() sqlrepo.Mapping[domain.QuoteID, *domain.Quote] {
 			for _, c := range byNo(children.Of("lines")) {
 				s.Lines = append(s.Lines, domain.QuoteLine{No: int(c.Int64("line_no")), Product: domain.ProductID{UUID: c.UUID("product")}, SKU: c.String("sku"),
 					Description: c.String("description"), UoM: c.String("uom"), TaxCode: c.String("tax_code"), Stocked: c.Bool("stocked"),
-					Quantity: c.Decimal("quantity"), UnitPrice: c.Decimal("unit_price"), Discount: c.Decimal("discount"), NetPrice: c.Decimal("net_price"),
+					Quantity: c.Decimal("quantity"), UnitPrice: c.Decimal("unit_price"), Discount: c.Decimal("discount"),
+					ChainedDiscount: c.Decimal("chained_discount"), NetPrice: c.Decimal("net_price"),
 					Amount: c.Decimal("amount")})
 				if err := c.Err(); err != nil {
 					return nil, err
@@ -54,7 +55,8 @@ func QuoteMapping() sqlrepo.Mapping[domain.QuoteID, *domain.Quote] {
 		},
 		Children: []sqlrepo.Child[*domain.Quote]{{
 			Name: "lines", Table: "ord_quote_lines", ForeignKey: "quote_id", OrderBy: []string{"line_no"},
-			Columns: []string{"line_no", "product", "sku", "description", "uom", "tax_code", "stocked", "quantity", "unit_price", "discount", "net_price",
+			Columns: []string{"line_no", "product", "sku", "description", "uom", "tax_code", "stocked", "quantity", "unit_price", "discount",
+				"chained_discount", "net_price",
 				"amount"},
 			Decimals: decimalColumns.Of("ord_quote_lines"),
 			Dehydrate: func(q *domain.Quote) ([]sqlrepo.Values, error) {
@@ -62,7 +64,8 @@ func QuoteMapping() sqlrepo.Mapping[domain.QuoteID, *domain.Quote] {
 				for _, l := range q.State().Lines {
 					out = append(out, sqlrepo.Values{"line_no": int64(l.No), "product": l.Product, "sku": l.SKU, "description": l.Description, "uom": l.UoM,
 						"tax_code": opt(l.TaxCode), "stocked": l.Stocked, "quantity": l.Quantity, "unit_price": l.UnitPrice.Round(4),
-						"discount": l.Discount.Round(2), "net_price": l.NetPrice.Round(4), "amount": l.Amount.Round(2)})
+						"discount": l.Discount.Round(2), "chained_discount": l.ChainedDiscount.Round(4), "net_price": l.NetPrice.Round(4),
+						"amount": l.Amount.Round(2)})
 				}
 				return out, nil
 			},

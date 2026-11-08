@@ -300,7 +300,7 @@ func pendingDTO(p *domain.PendingDelivery) PendingDeliveryDTO {
 	s := p.State()
 	net := vocab.DecimalFromInt(0)
 	for _, l := range s.Lines {
-		net = net.Add(l.Quantity.Mul(l.UnitPrice).Round(2))
+		net = net.Add(domain.DefaultCalculation().Net(l.Quantity, l.UnitPrice, l.Discount))
 	}
 	return PendingDeliveryDTO{Delivery: p.ID().String(), Seller: s.Seller.String(), Customer: s.Customer.String(), Number: s.Number,
 		OrderNumber: s.OrderNumber, Date: s.Date.String(), Lines: len(s.Lines), Net: money(net)}

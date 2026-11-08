@@ -22,7 +22,9 @@ import (
 // motores de integration: {dec} sigue siendo TEXT, y la migración reescribe en forma canónica el
 // texto que escribía el código anterior ("5.00" con StringFixed(2) pasa a "5", "12.5000" con
 // StringFixed(4) a "12.5"), para que la clave de orden que calcula SQLite coincida con la de Go. El
-// pedido se relee igual, se vuelve a guardar y se relee otra vez.
+// pedido se relee igual, se vuelve a guardar y se relee otra vez. También la migración 8 (D-149):
+// las líneas del pedido toman su descuento encadenado y las del albarán, su precio neto como precio
+// y descuento cero, sin que cambie ningún importe guardado.
 func TestDecimalColumnsInSQLite(t *testing.T) {
 	ctx := context.Background()
 	raw, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "orders.db")+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)")
@@ -73,8 +75,26 @@ func TestDecimalColumnsInSQLite(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	delivery := sqlrepo.Values{"id": fw.NewUUID(), "version": int64(1), "company": order["company"], "customer": order["customer"], "order_id": id,
+		"order_number": "P-1", "delivery_number": "A-1", "delivered_on": vocab.MustDate(2026, time.October, 22)}
+	for k, v := range audit {
+		delivery[k] = v
+	}
+	if err := db.Insert(ctx, "ord_deliveries", delivery); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Insert(ctx, "ord_delivery_lines", sqlrepo.Values{"delivery_id": delivery["id"], "line_no": int64(1), "product": fw.NewUUID(),
+		"sku": "A", "description": "Tornillo", "uom": "u", "stocked": true, "quantity": "2", "net_price": "11.8750", "amount": "23.75"}); err != nil {
+		t.Fatal(err)
+	}
 
 	migrate(all)
+
+	dl, err := db.Select(ctx, "ord_delivery_lines", []string{"unit_price", "discount", "net_price", "amount"})
+	if err != nil || len(dl) != 1 || !dl[0].Decimal("unit_price").Equal(vocab.MustDecimal("11.875")) || !dl[0].Decimal("discount").IsZero() ||
+		dl[0].IsNull("discount") || !dl[0].Decimal("amount").Equal(vocab.MustDecimal("23.75")) {
+		t.Fatalf("delivery line after the chained discount migration: %v %v", dl, err)
+	}
 
 	rows, err := db.Select(ctx, "ord_order_lines", []string{"unit_price", "discount", "net_price", "quantity"}, "line_no")
 	if err != nil {
@@ -106,6 +126,11 @@ func TestDecimalColumnsInSQLite(t *testing.T) {
 		!s.Lines[1].Quantity.Equal(vocab.MustDecimal("9.5")) || !s.Lines[1].Amount.Equal(vocab.MustDecimal("789.69")) ||
 		!s.Lines[1].Reserved.Equal(vocab.MustDecimal("1.25")) {
 		t.Fatalf("reread: %+v", s)
+	}
+	// 5 % del cliente sobre 0 % y sobre 12,5 % de la tarifa: 5 y 16,875 (no 17,5); el importe se queda.
+	if !s.Lines[0].ChainedDiscount.Equal(vocab.MustDecimal("5")) || !s.Lines[1].ChainedDiscount.Equal(vocab.MustDecimal("16.875")) ||
+		!s.Lines[0].Amount.Equal(vocab.MustDecimal("118.75")) {
+		t.Fatalf("chained discounts filled by the migration: %+v", s.Lines)
 	}
 	if err := repo.Save(ctx, o); err != nil {
 		t.Fatalf("save after the migration: %v", err)

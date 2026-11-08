@@ -3,6 +3,7 @@
   "title": "Casos compartidos del cálculo de la factura de venta (Karpo Go y Karpo C#)",
   "rules": [
     "El neto de una línea es quantity × unitPrice × (1 − discount / 100), con discount de 0 a 100, al céntimo. Con lineRounding = once se redondea una sola vez, al final; con gross_then_discount se redondea primero el bruto (quantity × unitPrice) y el descuento se aplica sobre ese bruto ya redondeado, y se vuelve a redondear (D-128, D-144).",
+    "customerDiscount (opcional, de 0 a 100) es el descuento del cliente, que se encadena con el de la línea: el descuento que se aplica es 100 − (100 − discount) × (100 − customerDiscount) / 100, redondeado a 4 decimales con el medio alejándose de cero (5 y 2.5 dan 7.375; 12.5 y 7.25 dan 18.84375 → 18.8438), y el neto se calcula con él como si fuera discount. Sin customerDiscount, discount se aplica tal cual. El importe de la línea de pedido y de albarán se calcula igual que el neto con lineRounding = once (D-148, D-149).",
     "Los decimales del precio (priceDecimals, 0 a 6) se cuentan por valor, no por la cadena: \"0.120\" con priceDecimals = 2 se acepta, porque vale 0.12.",
     "El desglose tiene un grupo por clave (taxCode o vacío, treatment o vacío). Una línea sujeta lleva taxCode; una exenta o no sujeta lleva treatment y no taxCode (Fiscal la rechaza si lleva los dos). Sólo un tratamiento de clase subject puede ir con un taxCode, y en este catálogo no hay ninguno.",
     "La cuota y el recargo se calculan una vez por grupo sobre la suma de los netos: Round(Σ bases × tipo / 100), no línea a línea.",
@@ -32,7 +33,7 @@
   },
   "pending": [
     "Retención (IRPF) en la factura: Karpo Go no la calcula; no hay caso.",
-    "Descuentos en cascada (varios porcentajes sobre la misma línea): Karpo Go tiene un solo descuento por línea; los casos de descuento llevan uno.",
+    "Más de dos descuentos encadenados en una línea: el formato admite el de la línea (discount) y el del cliente (customerDiscount), que es lo que encadenan Orders y Billing.",
     "La cascada cliente > empresa de lineRounding y priceDecimals (D-144): Karpo Go sólo tiene el ajuste de la empresa.",
     "Una rectificativa con plazos (total negativo) da en Karpo Go un único vencimiento por todo el importe en la fecha de emisión, sin repartir (contexts/receivables/domain/terms.go:166); no hay caso.",
     "Fechas de vencimiento con días fijos, meses sin pago, mes comercial o festivos: sólo hay un caso de días corridos.",
@@ -190,6 +191,30 @@
         "tax": "10.97",
         "surcharge": "0.00",
         "total": "63.21"
+      }
+    },
+    {
+      "id": "descuento-encadenado",
+      "description": "El descuento de la línea y el del cliente se encadenan y se redondean a 4 decimales; el neto se calcula sobre la línea entera, una vez (D-149). 1000 × 1 con un 5 % y un 2.5 %: 7.375 %, 926.25 (con el precio neto unitario redondeado antes, 0.9263 × 1000, darían 926.30). 10000 × 1 con un 12.5 % y un 7.25 %: 18.84375 → 18.8438 %, 8115.62 (sin redondear el descuento, 8115.625 → 8115.63).",
+      "input": {
+        "invoiceKind": "ordinary",
+        "date": "2026-11-02",
+        "settings": { "lineRounding": "once", "priceDecimals": 4 },
+        "equivalenceSurcharge": false,
+        "lines": [
+          { "quantity": "1000", "unitPrice": "1", "discount": "5", "customerDiscount": "2.5", "taxCode": "G21" },
+          { "quantity": "10000", "unitPrice": "1", "discount": "12.5", "customerDiscount": "7.25", "taxCode": "G21" }
+        ]
+      },
+      "expected": {
+        "lineNets": ["926.25", "8115.62"],
+        "breakdown": [
+          { "taxCode": "G21", "kind": "subject", "base": "9041.87", "rate": "21.00", "amount": "1898.79", "surchargeRate": "0.00", "surcharge": "0.00" }
+        ],
+        "net": "9041.87",
+        "tax": "1898.79",
+        "surcharge": "0.00",
+        "total": "10940.66"
       }
     },
     {

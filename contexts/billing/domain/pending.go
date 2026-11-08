@@ -25,7 +25,7 @@ type PendingDeliveryState struct {
 	Number      string // el número del albarán
 	OrderNumber string
 	Date        vocab.Date
-	Lines       []LineInput // con su precio neto y su código de impuesto
+	Lines       []LineInput // con su precio, su descuento (D-149) y su código de impuesto
 	Audit       traits.AuditStamp
 }
 

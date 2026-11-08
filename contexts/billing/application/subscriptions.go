@@ -38,7 +38,11 @@ type DeliveryIssued struct {
 		Description string `json:"description"`
 		TaxCode     string `json:"taxCode"`
 		Quantity    string `json:"quantity"`
-		NetPrice    string `json:"netPrice"`
+		// UnitPrice y Discount son el precio y el descuento encadenado de la línea (D-149); un
+		// albarán de antes no los lleva y se factura a NetPrice sin descuento.
+		UnitPrice string `json:"unitPrice"`
+		Discount  string `json:"discount"`
+		NetPrice  string `json:"netPrice"`
 	} `json:"lines"`
 }
 
@@ -68,8 +72,8 @@ func deliveryDescription(number, order string, sources []domain.Source) string {
 	return fmt.Sprintf("Albaranes %s a %s (%d)", refs[0], refs[len(refs)-1], len(refs))
 }
 
-// deliveryDraft prepara el borrador de uno o varios albaranes: sus líneas, con sus precios netos
-// (con al menos 4 decimales del precio, D-144) y códigos de impuesto, y date como fecha de la
+// deliveryDraft prepara el borrador de uno o varios albaranes: sus líneas, con su precio (con al
+// menos 4 decimales, D-144), su descuento y su código de impuesto, y date como fecha de la
 // operación.
 func (s service) deliveryDraft(ctx context.Context, seller domain.OrganizationID, customer domain.PartyID, description string, date vocab.Date,
 	sources []domain.Source, lines []domain.LineInput) (*domain.Invoice, error) {
@@ -77,9 +81,9 @@ func (s service) deliveryDraft(ctx context.Context, seller domain.OrganizationID
 	if err != nil {
 		return nil, err
 	}
-	// El precio neto del albarán va con los decimales del pedido (4) o más, si la empresa pide
-	// más: con menos, redondearlo perdería dinero (1,2345 × 1000 daría 1230,00 y no 1234,50), y
-	// rechazarlo repetiría el evento sin fin.
+	// El precio del albarán va con los decimales del pedido (4) o más, si la empresa pide más: con
+	// menos, redondearlo perdería dinero (1,2345 × 1000 daría 1230,00 y no 1234,50), y rechazarlo
+	// repetiría el evento sin fin.
 	calc := settings.Calculation
 	calc.PriceDecimals = max(calc.PriceDecimals, domain.DefaultPriceDecimals)
 	inv, err := domain.DraftInvoice(domain.NewInvoiceID(), domain.InvoiceState{Seller: seller, Customer: customer, Kind: domain.Ordinary,
@@ -96,9 +100,34 @@ func (s service) deliveryDraft(ctx context.Context, seller domain.OrganizationID
 	return inv, nil
 }
 
+// deliveryLine lee la cantidad, el precio y el descuento de una línea de albarán: el precio y el
+// descuento encadenado si los trae (D-149) o, en un albarán de antes, el precio neto sin descuento.
+func deliveryLine(quantity, unitPrice, discount, netPrice string) (domain.LineInput, error) {
+	q, err := vocab.ParseDecimal(quantity)
+	if err != nil {
+		return domain.LineInput{}, err
+	}
+	if unitPrice == "" {
+		price, err := vocab.ParseDecimal(netPrice)
+		return domain.LineInput{Quantity: q, UnitPrice: price, Discount: vocab.DecimalFromInt(0)}, err
+	}
+	price, err := vocab.ParseDecimal(unitPrice)
+	if err != nil {
+		return domain.LineInput{}, err
+	}
+	d := vocab.DecimalFromInt(0)
+	if discount != "" {
+		if d, err = vocab.ParseDecimal(discount); err != nil {
+			return domain.LineInput{}, err
+		}
+	}
+	return domain.LineInput{Quantity: q, UnitPrice: price, Discount: d}, nil
+}
+
 // Subscribe prepara el borrador de la factura de cada albarán (decisión aprobada 5 de
-// docs/PEDIDOS.md: Orders publica, Billing factura). El borrador toma las líneas del albarán con sus
-// precios netos y códigos de impuesto, con la fecha de entrega como fecha de la operación; una
+// docs/PEDIDOS.md: Orders publica, Billing factura). El borrador toma las líneas del albarán con su
+// precio, su descuento encadenado (D-149: la factura da lo mismo que el albarán al céntimo) y su
+// código de impuesto, con la fecha de entrega como fecha de la operación; una
 // persona lo revisa y lo emite en una serie. Un borrador por albarán: los mensajes entregados otra
 // vez no hacen daño. El albarán de un cliente con facturación mensual no tiene borrador: queda
 // pendiente hasta el cierre del periodo (ClosePeriod, D-146).
@@ -114,13 +143,12 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 		}
 		var lines []domain.LineInput
 		for _, l := range e.Lines {
-			q, err1 := vocab.ParseDecimal(l.Quantity)
-			price, err2 := vocab.ParseDecimal(l.NetPrice)
-			if err := errors.Join(err1, err2); err != nil {
+			line, err := deliveryLine(l.Quantity, l.UnitPrice, l.Discount, l.NetPrice)
+			if err != nil {
 				return fw.Violation("billing.invalid_event", "orders.delivery-issued.v1: "+err.Error())
 			}
-			lines = append(lines, domain.LineInput{Description: strings.TrimSpace(l.SKU + " " + l.Description), Quantity: q, UnitPrice: price,
-				TaxCode: l.TaxCode})
+			line.Description, line.TaxCode = strings.TrimSpace(l.SKU+" "+l.Description), l.TaxCode
+			lines = append(lines, line)
 		}
 		sid := domain.OrganizationID{UUID: seller}
 		done, err := s.Invoices.Exists(ctx, spec.And(domain.InvFieldSeller.Eq(sid), domain.FromSource(DeliverySource, e.DeliveryID)))
