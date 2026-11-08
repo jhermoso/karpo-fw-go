@@ -195,7 +195,19 @@ func (s service) groupingUseCases(svc *Service) {
 		if err != nil {
 			return fw.Page[PendingDeliveryDTO]{}, err
 		}
-		return fw.MapPage(page, pendingDTO), nil
+		// El neto de cada pendiente, con el cálculo de su vendedor, como lo calcularía el cierre.
+		calcs := map[domain.OrganizationID]domain.Calculation{}
+		for _, p := range page.Items {
+			seller := p.State().Seller
+			if _, ok := calcs[seller]; !ok {
+				settings, err := s.settings(ctx, seller)
+				if err != nil {
+					return fw.Page[PendingDeliveryDTO]{}, err
+				}
+				calcs[seller] = settings.Calculation
+			}
+		}
+		return fw.MapPage(page, func(p *domain.PendingDelivery) PendingDeliveryDTO { return pendingDTO(p, calcs[p.State().Seller]) }), nil
 	})
 }
 
@@ -296,11 +308,13 @@ func closeFailure(customer domain.PartyID, err error) (CloseFailure, bool) {
 	return f, true
 }
 
-func pendingDTO(p *domain.PendingDelivery) PendingDeliveryDTO {
+// pendingDTO es la vista de un pendiente; su neto, con el cálculo de la empresa (calc), como el del
+// borrador que prepararía el cierre.
+func pendingDTO(p *domain.PendingDelivery, calc domain.Calculation) PendingDeliveryDTO {
 	s := p.State()
 	net := vocab.DecimalFromInt(0)
 	for _, l := range s.Lines {
-		net = net.Add(domain.DefaultCalculation().Net(l.Quantity, l.UnitPrice, l.Discount))
+		net = net.Add(calc.Net(l.Quantity, l.UnitPrice, l.Discount))
 	}
 	return PendingDeliveryDTO{Delivery: p.ID().String(), Seller: s.Seller.String(), Customer: s.Customer.String(), Number: s.Number,
 		OrderNumber: s.OrderNumber, Date: s.Date.String(), Lines: len(s.Lines), Net: money(net)}

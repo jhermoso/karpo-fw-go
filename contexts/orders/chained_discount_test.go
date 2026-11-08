@@ -74,7 +74,7 @@ func (c *chain) chainedDiscount(tag string) {
 	c.ok(err)
 	note, err := c.om.Service.Deliver.Handle(ctx, oapp.Deliver{ID: oid, Date: vocab.MustDate(2026, 10, 5)})
 	c.ok(err)
-	if l := note.Lines[0]; l.UnitPrice != "1.0000" || l.Discount != "7.3750" || l.Amount != "926.25" || note.Total != "926.25" {
+	if l := note.Lines[0]; l.UnitPrice != "1.0000" || l.Discount != "7.375" || l.Amount != "926.25" || note.Total != "926.25" {
 		t.Fatalf("delivery note: %+v", note)
 	}
 	c.deliver()

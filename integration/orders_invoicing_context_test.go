@@ -281,7 +281,7 @@ func TestOrdersInvoicing(t *testing.T) {
 			deliver()
 			cdid, _ := odomain.ParseDeliveryID(cnote.ID)
 			cnote, err = om.Service.GetDelivery.Handle(actx, oapp.GetDelivery{ID: cdid})
-			if l := cnote.Lines[0]; err != nil || l.UnitPrice != "1.0000" || l.Discount != "7.3750" || l.Amount != "926.25" || cnote.Total != "926.25" {
+			if l := cnote.Lines[0]; err != nil || l.UnitPrice != "1.0000" || l.Discount != "7.375" || l.Amount != "926.25" || cnote.Total != "926.25" {
 				t.Fatalf("delivery note with a chained discount: %+v %v", cnote, err)
 			}
 			cpending, err := bm.Service.SearchPendingDeliveries.Handle(actx, bapp.SearchPendingDeliveries{Seller: acme.ID, Customer: carla.ID})

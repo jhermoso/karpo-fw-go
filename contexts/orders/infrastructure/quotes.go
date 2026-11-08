@@ -42,7 +42,7 @@ func QuoteMapping() sqlrepo.Mapping[domain.QuoteID, *domain.Quote] {
 				s.Lines = append(s.Lines, domain.QuoteLine{No: int(c.Int64("line_no")), Product: domain.ProductID{UUID: c.UUID("product")}, SKU: c.String("sku"),
 					Description: c.String("description"), UoM: c.String("uom"), TaxCode: c.String("tax_code"), Stocked: c.Bool("stocked"),
 					Quantity: c.Decimal("quantity"), UnitPrice: c.Decimal("unit_price"), Discount: c.Decimal("discount"),
-					ChainedDiscount: c.Decimal("chained_discount"), NetPrice: c.Decimal("net_price"),
+					ChainedDiscount: chainedDiscount(c, r), NetPrice: c.Decimal("net_price"),
 					Amount: c.Decimal("amount")})
 				if err := c.Err(); err != nil {
 					return nil, err

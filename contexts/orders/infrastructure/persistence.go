@@ -120,35 +120,85 @@ var chainedDiscountDDL = []string{
 	`UPDATE ord_delivery_lines SET unit_price = net_price, discount = 0`,
 }
 
-// chainedDiscountsV8 rellena el descuento que se aplica a las líneas de pedido y de presupuesto que
-// ya había: el de la línea encadenado con el del cliente de su cabecera, a 4 decimales (D-149). Se
-// calcula aquí y no en SQL porque SQLite guarda los decimales como texto. No toca ningún importe
-// guardado. Como todo Run, no se cambia nunca: un cambio va en una migración nueva.
+// chainedDiscount lee el descuento encadenado de una línea de pedido o de presupuesto; si la columna
+// está vacía (una fila que el relleno de la migración 8 no alcanzó), lo calcula con el de la línea y
+// el del cliente de la cabecera, como al ponerle precio, en vez de leer cero y perder el descuento.
+func chainedDiscount(line, head *sqlrepo.Row) vocab.Decimal {
+	if line.IsNull("chained_discount") {
+		return domain.EffectiveDiscount(line.Decimal("discount"), head.Decimal("customer_discount"))
+	}
+	return line.Decimal("chained_discount")
+}
+
+// chainedTables son las cabeceras y las líneas que rellena la migración 8, y el estado de la cabecera
+// en que la línea aún no compromete a la empresa con el cliente (un pedido o un presupuesto en
+// borrador: el presupuesto enviado es una oferta y el pedido confirmado, un compromiso).
+var chainedTables = []struct {
+	head, lines, key string
+	draft            func(*sqlrepo.Row) bool
+}{
+	{"ord_orders", "ord_order_lines", "order_id", func(r *sqlrepo.Row) bool { return r.Int64("status") == 1 }}, // domain.Draft
+	{"ord_quotes", "ord_quote_lines", "quote_id", func(r *sqlrepo.Row) bool { return r.String("status") == "draft" }},
+}
+
+// chainedDiscountsV8 rellena el descuento encadenado de las líneas de pedido y de presupuesto que ya
+// había (D-149): el de la línea encadenado con el del cliente de su cabecera, a 4 decimales. Un
+// UPDATE por cada pareja distinta (descuento de la línea, descuento del cliente), sólo sobre las
+// líneas que aún no lo tienen: repetirlo no cambia nada. Las parejas se calculan en Go porque SQLite
+// guarda los decimales como texto. Después, las líneas de los borradores (pedidos y presupuestos)
+// recalculan su importe y su precio neto con la regla nueva: aún no son un compromiso con el cliente.
+// Los confirmados, servidos, enviados o aceptados conservan su importe. Como todo Run, una vez en
+// main no se cambia: un cambio va en una migración nueva.
 func chainedDiscountsV8(ctx context.Context, db *sqlrepo.DB) error {
-	for _, t := range []struct{ head, lines, key string }{{"ord_orders", "ord_order_lines", "order_id"}, {"ord_quotes", "ord_quote_lines", "quote_id"}} {
-		heads, err := db.Select(ctx, t.head, []string{"id", "customer_discount"})
+	d := db.Dialect()
+	for _, t := range chainedTables {
+		heads, err := db.Select(ctx, t.head, []string{"id", "customer_discount", "status"})
 		if err != nil {
 			return err
 		}
 		customer := make(map[fw.UUID]vocab.Decimal, len(heads))
+		draft := map[fw.UUID]bool{}
 		for _, h := range heads {
-			customer[h.UUID("id")] = h.Decimal("customer_discount")
+			id := h.UUID("id")
+			customer[id], draft[id] = h.Decimal("customer_discount"), t.draft(h)
 			if err := h.Err(); err != nil {
 				return err
 			}
 		}
-		lines, err := db.Select(ctx, t.lines, []string{t.key, "line_no", "discount"})
+		lines, err := db.Select(ctx, t.lines, []string{t.key, "line_no", "quantity", "unit_price", "discount"})
 		if err != nil {
 			return err
 		}
+		type pair struct{ line, customer string }
+		pairs := map[pair][2]vocab.Decimal{}
 		for _, l := range lines {
-			id, no, d := l.UUID(t.key), l.Int64("line_no"), l.Decimal("discount")
+			disc, cust := l.Decimal("discount"), customer[l.UUID(t.key)]
 			if err := l.Err(); err != nil {
 				return err
 			}
-			chained := vocab.ChainedDiscount(d, customer[id]).Round(4)
-			if _, err := db.Update(ctx, t.lines, sqlrepo.Values{"chained_discount": chained}, sqlrepo.Values{t.key: id, "line_no": no}); err != nil {
-				return fmt.Errorf("orders: chained discount of %s %s/%d: %w", t.lines, id, no, err)
+			pairs[pair{disc.String(), cust.String()}] = [2]vocab.Decimal{disc, cust}
+		}
+		update := fmt.Sprintf("UPDATE %s SET chained_discount = %s WHERE chained_discount IS NULL AND discount = %s AND %s IN (SELECT id FROM %s WHERE customer_discount = %s)",
+			t.lines, d.DecimalExpr(d.Placeholder(1), 7, 4), d.DecimalExpr(d.Placeholder(2), 7, 4), t.key, t.head, d.DecimalExpr(d.Placeholder(3), 5, 2))
+		for _, p := range pairs {
+			chained := vocab.ChainedDiscount(p[0], p[1]).Round(4)
+			if _, err := db.ExecContext(ctx, update, chained.String(), p[0].String(), p[1].String()); err != nil {
+				return fmt.Errorf("orders: chained discount of %s (%s, %s): %w", t.lines, p[0], p[1], err)
+			}
+		}
+		for _, l := range lines {
+			id := l.UUID(t.key)
+			if !draft[id] {
+				continue
+			}
+			// La regla de domain.LineAmount, escrita aquí para que la migración no cambie si cambia el dominio.
+			hundred := vocab.DecimalFromInt(100)
+			price, chained := l.Decimal("unit_price"), vocab.ChainedDiscount(l.Decimal("discount"), customer[id]).Round(4)
+			gross := l.Decimal("quantity").Mul(price)
+			set := sqlrepo.Values{"amount": gross.Sub(gross.Mul(chained).Div(hundred)).Round(2),
+				"net_price": price.Mul(hundred.Sub(chained)).Div(hundred).Round(4)}
+			if _, err := db.Update(ctx, t.lines, set, sqlrepo.Values{t.key: id, "line_no": l.Int64("line_no")}); err != nil {
+				return fmt.Errorf("orders: amount of the draft line %s/%d: %w", id, l.Int64("line_no"), err)
 			}
 		}
 	}
@@ -240,7 +290,7 @@ func OrderMapping() sqlrepo.Mapping[domain.OrderID, *domain.Order] {
 				s.Lines = append(s.Lines, domain.Line{No: int(c.Int64("line_no")), Product: domain.ProductID{UUID: c.UUID("product")}, SKU: c.String("sku"),
 					Description: c.String("description"), UoM: c.String("uom"), TaxCode: c.String("tax_code"), Stocked: c.Bool("stocked"),
 					Quantity: c.Decimal("quantity"), UnitPrice: c.Decimal("unit_price"), Discount: c.Decimal("discount"),
-					ChainedDiscount: c.Decimal("chained_discount"), NetPrice: c.Decimal("net_price"), Amount: c.Decimal("amount"),
+					ChainedDiscount: chainedDiscount(c, r), NetPrice: c.Decimal("net_price"), Amount: c.Decimal("amount"),
 					Reserved: c.Decimal("reserved"), Delivered: c.Decimal("delivered")})
 				if err := c.Err(); err != nil {
 					return nil, err

@@ -228,7 +228,7 @@ func deliveryDTO(d *domain.Delivery) DeliveryDTO {
 		Lines: []DeliveryLineDTO{}}
 	for _, l := range s.Lines {
 		out.Lines = append(out.Lines, DeliveryLineDTO{Line: l.Line, Product: l.Product.String(), SKU: l.SKU, Description: l.Description, UoM: l.UoM,
-			Quantity: l.Quantity.String(), UnitPrice: l.UnitPrice.StringFixed(4), Discount: l.Discount.StringFixed(4), NetPrice: l.NetPrice.StringFixed(4),
+			Quantity: l.Quantity.String(), UnitPrice: l.UnitPrice.StringFixed(4), Discount: vocab.StringMinPlaces(l.Discount, 2), NetPrice: l.NetPrice.StringFixed(4),
 			Amount: money(l.Amount)})
 	}
 	return out

@@ -227,11 +227,7 @@ func optDiscount(d vocab.Decimal) string {
 	if d.IsZero() {
 		return ""
 	}
-	places := 0
-	if text := d.String(); strings.Contains(text, ".") {
-		places = len(text) - strings.IndexByte(text, '.') - 1
-	}
-	return d.StringFixed(int32(max(2, places)))
+	return vocab.StringMinPlaces(d, 2)
 }
 
 func dateText(d vocab.Date) string {

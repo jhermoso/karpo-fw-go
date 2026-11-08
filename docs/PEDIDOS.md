@@ -159,23 +159,37 @@ descuento a la línea entera: 1000 unidades a 1 € con un 5 % y un 2,5 % daban 
   encadenado)`: 926,25. `EffectiveDiscount` y `LineAmount` están en el dominio de Orders y son lo
   mismo que hace Billing (`vocab.ChainedDiscount` redondeado a 4 y `Calculation.Net` con `once`).
 - **Lo pendiente de servir** (`PendingAmount`) y **cada línea de albarán** se calculan igual, con su
-  cantidad: entregar 400 y 600 da 370,50 y 555,75. La suma de varios albaranes puede diferir del
-  pedido en un céntimo por línea, como la de varias facturas.
+  cantidad: entregar 400 y 600 da 370,50 y 555,75. Cada albarán redondea su línea al céntimo, así
+  que la suma de los albaranes puede alejarse del importe del pedido hasta medio céntimo por albarán
+  y línea, como la de varias facturas: 3 unidades a 0,125 € al 50 % valen 0,19 en el pedido
+  (0,1875) y 0,06 + 0,06 + 0,06 = 0,18 servidas de una en una (0,0625 cada una).
+- **Albarán en la API:** el descuento de la línea se escribe como en Facturación, sin ceros
+  sobrantes y con 2 decimales como mínimo (`7.375`, `5.00`), con `vocab.StringMinPlaces`.
 - **Línea de albarán:** guarda `unit_price` y `discount` (el encadenado), como una línea de factura,
   además de `net_price`, informativo. `orders.delivery-issued.v1` añade `unitPrice` y `discount` y
   conserva `netPrice`, así que un consumidor antiguo sigue funcionando; Facturación factura con
   precio y descuento y la factura da lo mismo que el albarán.
 - **Migración 8:** `ord_order_lines.chained_discount`, `ord_quote_lines.chained_discount`,
   `ord_delivery_lines.unit_price` y `discount`, anulables (añadir una NOT NULL a una tabla con filas
-  pide un valor por omisión en cada motor), pero los mapeos las escriben siempre. Las filas que ya
-  había **conservan su importe**: los albaranes toman su precio neto como precio y descuento cero
-  (dan lo mismo que tenían) y las líneas de pedido y presupuesto, su descuento encadenado, calculado
-  en Go (SQLite guarda los decimales como texto). Lo que se entregue de un pedido de antes se
-  calcula ya con la regla nueva.
+  pide un valor por omisión en cada motor), pero los mapeos las escriben siempre. Relleno de las
+  filas que ya había:
+  - los albaranes toman su precio neto como precio y descuento cero: su importe no cambia;
+  - las líneas de pedido y de presupuesto toman su descuento encadenado, con un UPDATE por cada
+    pareja distinta (descuento de la línea, descuento del cliente de la cabecera) y sólo donde aún
+    es NULL, así que repetirlo no cambia nada. Las parejas se calculan en Go (SQLite guarda los
+    decimales como texto);
+  - **los borradores recalculan su importe** (y su precio neto) con la regla nueva: los pedidos en
+    `draft` y los presupuestos en `draft`, que aún no son un compromiso con el cliente. Los pedidos
+    confirmados, servidos, cerrados o anulados y los presupuestos enviados, aceptados, rechazados,
+    caducados o retirados **conservan su importe**. Lo que se entregue de un pedido confirmado antes
+    se calcula ya con la regla nueva.
+- **Una línea sin descuento encadenado** (NULL, una fila que el relleno no alcanzó) se lee con el
+  de la línea y el del cliente de la cabecera (`EffectiveDiscount`), no como cero.
 - **Diferencia con C#:** C# guarda el encadenado en el descuento de la línea; aquí `discount` sigue
   siendo el de la tarifa y el encadenado va en su propia columna, para no perder de dónde sale.
 - **Pruebas:** `TestOrder_AmountLikeTheInvoice` (dominio: 926,25, el redondeo a 18,8438 % y dos
-  albaranes), `TestDecimalColumnsInSQLite` (la migración 8 sobre filas de antes),
+  albaranes), `TestDecimalColumnsInSQLite` (la migración 8 sobre filas de antes: borradores
+  recalculados, confirmado y enviado intactos, la lectura de un NULL y una segunda pasada),
   `TestOrders_ChainedDiscountLikeTheInvoice_MemoryThenSQLite` (pedido, albarán y factura emitida
   valen 926,25) y, en los motores, `TestOrdersInvoicing` y `TestContextDecimalColumns`.
 

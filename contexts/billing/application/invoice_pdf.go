@@ -372,12 +372,7 @@ func euros(d vocab.Decimal) string { return esDecimal(d.Round(2), 2) + " " + txt
 // esDecimal escribe d al estilo español (miles con punto, decimales con coma) con sus decimales
 // significativos, y al menos minPlaces: 2,5; 21; 19,9990 con 2 sale 19,999.
 func esDecimal(d vocab.Decimal, minPlaces int) string {
-	text := d.String()
-	places := 0
-	if k := strings.IndexByte(text, '.'); k >= 0 {
-		places = len(text) - k - 1
-	}
-	text = d.StringFixed(int32(max(places, minPlaces)))
+	text := vocab.StringMinPlaces(d, minPlaces)
 	sign := ""
 	if strings.HasPrefix(text, "-") {
 		sign, text = "-", text[1:]

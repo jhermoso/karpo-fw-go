@@ -41,6 +41,16 @@ func MustDecimal(s string) Decimal {
 // DecimalFromInt devuelve n como Decimal.
 func DecimalFromInt(n int64) Decimal { return decimal.NewFromInt(n) }
 
+// StringMinPlaces escribe d con punto, con todos sus decimales significativos y al menos minPlaces
+// (sin ceros sobrantes): con 2, 7.3750 da "7.375", 5 da "5.00" y 19.9990 da "19.999".
+func StringMinPlaces(d Decimal, minPlaces int) string {
+	places := 0
+	if text := d.String(); strings.Contains(text, ".") {
+		places = len(text) - strings.IndexByte(text, '.') - 1
+	}
+	return d.StringFixed(int32(max(places, minPlaces)))
+}
+
 // CompareDecimal compara dos decimales (para spec.OrderedBy).
 func CompareDecimal(a, b Decimal) int { return a.Cmp(b) }
 

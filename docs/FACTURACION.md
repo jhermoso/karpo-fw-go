@@ -620,7 +620,10 @@ como el de la factura. Lo que cambia en Facturación:
   de `bil_invoice_lines`. Los pendientes que ya hay guardan el precio neto y siguen sin descuento,
   que es como llegaron.
 - **La API** escribe el descuento de una línea con al menos 2 decimales y todos los que tenga, hasta
-  4 (`7.375`, no `7.38`): con 2 no se podría rehacer el neto.
+  4 (`7.375`, no `7.38`): con 2 no se podría rehacer el neto. La regla es `vocab.StringMinPlaces`,
+  la misma del PDF y del albarán de Pedidos.
+- **El neto de la lista de pendientes** se calcula con el cálculo de la empresa vendedora
+  (`lineRounding`), como el borrador que prepararía el cierre.
 - **Pruebas:** `TestBilling_DeliveryWithChainedDiscount` (SQLite: borrador, evento antiguo,
   pendiente mensual y cierre); de punta a punta, `TestOrders_ChainedDiscountLikeTheInvoice_MemoryThenSQLite`
   en `contexts/orders` (pedido, albarán y factura emitida, 926,25 y 1120,76 con IVA); el caso
