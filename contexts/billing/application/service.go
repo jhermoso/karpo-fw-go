@@ -146,6 +146,7 @@ type Service struct {
 	// Varios albaranes en una factura (D-146): a mano o al cerrar el periodo.
 	MergeDrafts             app.CommandHandler[MergeDrafts, InvoiceDTO]
 	ClosePeriod             app.CommandHandler[ClosePeriod, ClosePeriodResult]
+	CloseDuePeriods         app.CommandHandler[CloseDuePeriods, ClosePeriodResult]
 	SearchPendingDeliveries app.QueryHandler[SearchPendingDeliveries, fw.Page[PendingDeliveryDTO]]
 }
 

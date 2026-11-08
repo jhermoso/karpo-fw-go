@@ -278,8 +278,21 @@ factura, de los dos modos. Por defecto sigue un borrador por albarán.
     en el cierre siguiente, con su fecha; la fecha de operación del borrador es la del último
     albarán.
   - Los borradores del cierre se calculan con los ajustes del vendedor al cerrar (D-144) y no se
-    descartan, como los de un albarán. **No hay tarea programada:** el cierre se lanza por la ruta;
-    programarlo (p. ej. el día 1 de cada mes) es un trabajo aparte.
+    descartan, como los de un albarán.
+  - **Cierre programado** (`CloseDuePeriods`): en cada ronda de tareas del anfitrión
+    (`Host.RunChores`), cada empresa cierra su periodo hasta el último día del mes anterior,
+    contado en su zona horaria (la guardada o la de su país) y una hora después de acabar el mes
+    (`CloseGrace`, para que entren los albaranes emitidos al final del último día, que llegan por
+    mensaje): a las 00:30 UTC del 1 de noviembre son las 01:30 en Madrid y octubre se cierra. Como
+    el cierre es idempotente, sólo prepara
+    algo la primera ronda después de acabar el mes; los albaranes del mes en curso siguen
+    pendientes. Un albarán de un mes ya cerrado que llega tarde va en su propio borrador en la ronda
+    siguiente (se puede unir a mano al del cierre, si aún es un borrador). Los clientes que no se
+    pueden cerrar salen como fallo de la ronda (`billing period of …`) una vez al día, y se
+    reintentan en cada ronda. Un cliente que es el duplicado de otro (D-70) no se cierra: sus
+    albaranes siguen pendientes y el cierre lo informa (`billing.customer_blocked`), también el
+    manual. `RunChores` cuenta los borradores en `PeriodDrafts`. La ruta sigue sirviendo para
+    cerrar a mano otro corte. Prueba: `TestBilling_CloseDuePeriods`.
 - **Códigos de error de D-146** (422 salvo que se diga): `billing.merge_too_few`,
   `billing.invoice_not_draft`, `billing.merge_unsourced`, `billing.merge_other_customer`,
   `billing.merge_calculation`, `billing.merge_surcharge`, `billing.too_many_lines` (la unión pasa de

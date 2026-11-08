@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
+	"time"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/billing/domain"
 	app "github.com/jhermoso/karpo-fw-go/pkg/application"
@@ -25,12 +26,25 @@ type MergeDrafts struct {
 // ClosePeriod cierra el periodo de facturación de un vendedor (D-146): prepara para cada cliente un
 // borrador con todos sus albaranes pendientes hasta UpTo, incluido (varios si pasan de MaxLines
 // líneas); sólo los de Customer, si se da. Un segundo cierre no encuentra nada pendiente y no
-// prepara nada. No hay tarea programada: el cierre se lanza por su ruta.
+// prepara nada. Se lanza por su ruta o lo lanza CloseDuePeriods.
 type ClosePeriod struct {
 	Seller   string     `json:"seller"`
 	Customer string     `json:"customer,omitempty"`
 	UpTo     vocab.Date `json:"upTo"`
 }
+
+// CloseDuePeriods es el cierre programado: cierra el periodo de un vendedor hasta el último día del
+// mes anterior, contado en la zona horaria de la empresa y CloseGrace después de acabar el mes. En
+// el anfitrión lo lanza cada ronda de tareas para cada empresa; sólo prepara algo la primera vez
+// que un mes queda atrás (o cuando llega después un albarán de un mes ya cerrado, que va en su
+// propio borrador).
+type CloseDuePeriods struct {
+	Seller string `json:"seller"`
+}
+
+// CloseGrace es lo que espera el cierre programado después de acabar el mes: que los albaranes
+// emitidos al final del último día, que llegan por mensaje, entren en su cierre.
+const CloseGrace = time.Hour
 
 // ClosePeriodResult son los borradores que preparó el cierre y los clientes que no pudo cerrar,
 // cuyos albaranes siguen pendientes.
@@ -174,6 +188,32 @@ func (s service) groupingUseCases(svc *Service) {
 		return out, nil
 	})
 
+	svc.CloseDuePeriods = guard(PermInvoiceCreate, func(ctx context.Context, c CloseDuePeriods) (ClosePeriodResult, error) {
+		var v fw.Validation
+		seller := domain.PartyID{UUID: parseID(&v, "seller", c.Seller)}
+		if err := v.Err(); err != nil {
+			return ClosePeriodResult{}, err
+		}
+		// El día de hace CloseGrace en la zona de la empresa: la guardada o, si no, la de su país (el
+		// anfitrión implementa los dos puertos); sólo con Location, la guardada; sin Zones, UTC.
+		at := fw.Now().Add(-CloseGrace)
+		today := vocab.DateOf(at.UTC())
+		var err error
+		if t, ok := s.Zones.(app.CompanyToday); ok {
+			today, err = app.DateOf(ctx, t, seller.UUID, at)
+		} else if s.Zones != nil {
+			var loc *time.Location
+			if loc, err = s.Zones.Location(ctx, seller.String(), ""); err == nil && loc != nil {
+				today = vocab.DateOf(at.In(loc))
+			}
+		}
+		if err != nil {
+			return ClosePeriodResult{}, err
+		}
+		// El último día del mes anterior: el día 1 de marzo, el 28 o el 29 de febrero.
+		return svc.ClosePeriod.Handle(ctx, ClosePeriod{Seller: c.Seller, UpTo: today.AddDays(-today.Day())})
+	})
+
 	svc.SearchPendingDeliveries = guard(PermInvoiceRead, func(ctx context.Context, q SearchPendingDeliveries) (fw.Page[PendingDeliveryDTO], error) {
 		var v fw.Validation
 		parts := []spec.Specification[*domain.PendingDelivery]{within(scopeOf(ctx), domain.PdFieldSeller)}
@@ -234,6 +274,11 @@ type closeCustomer struct {
 // reintenta, ya sin nada pendiente.
 func (s service) closeCustomerHandler() app.Handler[closeCustomer, []*domain.Invoice] {
 	fn := func(ctx context.Context, c closeCustomer) ([]*domain.Invoice, error) {
+		// A un duplicado no se le factura (D-70): sus albaranes siguen pendientes y el cierre lo
+		// informa (billing.customer_blocked).
+		if err := s.notBlocked(ctx, c.customer); err != nil {
+			return nil, err
+		}
 		pending, err := s.Pending.Find(ctx, spec.And(domain.PdFieldSeller.Eq(c.seller), domain.PdFieldCustomer.Eq(c.customer),
 			domain.PdFieldDate.Le(c.upTo)), domain.PdFieldDate.Asc(), domain.PdFieldNumber.Asc())
 		if err != nil {
