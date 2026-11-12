@@ -187,6 +187,9 @@ func (s service) trail(ctx context.Context, d *domain.Document) ([]*domain.Docum
 		cur := queue[0].State()
 		queue = queue[1:]
 		for _, o := range cur.Origins() {
+			if len(out) >= MaxTrail {
+				break // lleno: no se busca nada más
+			}
 			if visited[o] {
 				continue
 			}
