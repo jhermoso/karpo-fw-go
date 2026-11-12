@@ -23,10 +23,16 @@ type InvoiceIssued struct {
 	Corrects   string `json:"corrects"`
 	SourceType string `json:"sourceType"`
 	SourceID   string `json:"sourceId"`
-	Seller     string `json:"seller"`
-	Customer   string `json:"customer"`
-	IssueDate  string `json:"issueDate"`
-	Total      string `json:"total"`
+	// Sources son todos los documentos de los que se preparó (D-146); SourceType y SourceID, el
+	// primero, en los eventos de antes.
+	Sources []struct {
+		Type string `json:"type"`
+		ID   string `json:"id"`
+	} `json:"sources"`
+	Seller    string `json:"seller"`
+	Customer  string `json:"customer"`
+	IssueDate string `json:"issueDate"`
+	Total     string `json:"total"`
 }
 
 // IntegrationEventType implementa application.IntegrationEvent.
@@ -132,6 +138,7 @@ type entry struct {
 	event                       string
 	company, party, date, total string
 	fact, origin                domain.Ref
+	others                      []domain.Ref
 	number, reference, relation string
 }
 
@@ -142,7 +149,7 @@ func (e entry) state() (domain.DocumentState, error) {
 	date, err := vocab.ParseDate(e.date)
 	errs = errors.Join(errs, err)
 	s := domain.DocumentState{Company: domain.OrganizationID{UUID: company}, Fact: e.fact, Number: e.number, Reference: e.reference, Date: date,
-		Origin: e.origin, Relation: e.relation}
+		Origin: e.origin, OtherOrigins: e.others, Relation: e.relation}
 	if e.party != "" {
 		party, err := fw.ParseUUID(e.party)
 		errs = errors.Join(errs, err)
@@ -199,8 +206,20 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 			if e.Corrects != "" {
 				x.origin, x.relation = domain.Ref{Type: domain.Invoice, ID: e.Corrects}, domain.Rectifies
 			}
-		case e.SourceType == "orders.delivery" && e.SourceID != "":
-			x.origin, x.relation = domain.Ref{Type: domain.DeliveryNote, ID: e.SourceID}, domain.OriginatesFrom
+		default:
+			// Todos los albaranes de los que viene (D-146); en un evento de antes, el único.
+			var from []domain.Ref
+			for _, src := range e.Sources {
+				if src.Type == "orders.delivery" && src.ID != "" {
+					from = append(from, domain.Ref{Type: domain.DeliveryNote, ID: src.ID})
+				}
+			}
+			if len(from) == 0 && e.SourceType == "orders.delivery" && e.SourceID != "" {
+				from = []domain.Ref{{Type: domain.DeliveryNote, ID: e.SourceID}}
+			}
+			if len(from) > 0 {
+				x.origin, x.others, x.relation = from[0], from[1:], domain.OriginatesFrom
+			}
 		}
 		return record(ctx, x)
 	})

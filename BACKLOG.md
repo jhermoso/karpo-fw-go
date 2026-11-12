@@ -166,8 +166,7 @@ Ver [docs/FACTURACION.md](docs/FACTURACION.md), «Varios albaranes en una factur
 
 - ~~**Cierre del periodo programado**~~ ✅ `CloseDuePeriods` en las tareas del anfitrión: cada
   empresa cierra el mes anterior en su zona horaria (docs/FACTURACION.md).
-- **Documentos enlaza sólo el primer albarán** de una factura: lee `sourceId` de
-  `billing.invoice-issued.v1` y no `sources` (`contexts/documents/application/subscriptions.go`).
+- ~~**Documentos enlaza sólo el primer albarán**~~ ✅ enlaza todos los de `sources` (docs/DOCUMENTOS.md).
 
 ### 3. PoC Frontend: Evaluación de Stack Ligero (Svelte 5 / SolidJS)
 - Prototipar la interfaz de listado y ficha de `Parties`.

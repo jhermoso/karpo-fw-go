@@ -3,6 +3,7 @@ package integration
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -129,6 +130,26 @@ func TestDocumentsContext(t *testing.T) {
 			}
 			if n != 10 {
 				t.Fatalf("facts sent: %d", n)
+			}
+
+			// Migración 4: una factura de dos albaranes (D-146) guarda los dos orígenes y la traza los trae.
+			o2, d2, d3, i2 := id(), id(), id(), id()
+			send(day(6, 1), orders.OrderConfirmedV1{OrderID: o2, Company: acme, Customer: customer, Number: "PED-2026-000002", Total: "20.00"})
+			for i, d := range []string{d2, d3} {
+				send(day(6, 2+i), orders.DeliveryIssuedV1{DeliveryID: d, OrderID: o2, OrderNumber: "PED-2026-000002", Company: acme, Customer: customer,
+					Number: fmt.Sprintf("ALB-2026-00000%d", 2+i), Date: fmt.Sprintf("2026-06-0%d", 2+i), Total: "10.00"})
+			}
+			send(day(6, 30), billing.InvoiceIssuedV1{InvoiceID: i2, Number: "A-2026-000002", Kind: "ordinary", SourceType: "orders.delivery", SourceID: d2,
+				Sources: []billing.SourceV1{{Type: "orders.delivery", ID: d2}, {Type: "orders.delivery", ID: d3}}, Seller: acme, Customer: customer,
+				IssueDate: "2026-06-30", Total: "20.00"})
+			merged, err := svc.Get.Handle(actx, dapp.GetDocument{Type: "invoice", FactID: i2})
+			if err != nil || merged.OriginID != d2 || len(merged.OtherOrigins) != 1 || merged.OtherOrigins[0].ID != d3 {
+				t.Fatalf("merged invoice: %+v %v", merged, err)
+			}
+			mid, _ := ddomain.ParseDocumentID(merged.ID)
+			if trail, err := svc.Trail.Handle(actx, dapp.GetTrail{ID: mid}); err != nil || len(trail) != 4 || trail[0].Number != "PED-2026-000002" ||
+				trail[3].Number != "A-2026-000002" {
+				t.Fatalf("trail of the merged invoice: %+v %v", trail, err)
 			}
 		})
 	}

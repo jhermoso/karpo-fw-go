@@ -82,7 +82,7 @@ contexts/documents/
   |---|---|---|
   | `orders.order-confirmed.v1` | `order` (fecha: el día de la confirmación) | — |
   | `orders.delivery-issued.v1` | `delivery-note` | el pedido (`originates-from`) |
-  | `billing.invoice-issued.v1` | `invoice`, o `credit-note` si es rectificativa | el albarán del que nace (`originates-from`), o la factura que rectifica (`rectifies`) |
+  | `billing.invoice-issued.v1` | `invoice`, o `credit-note` si es rectificativa | los albaranes de los que nace (`originates-from`; todos los de `sources`, D-146: el primero es el origen y el resto, `otherOrigins`), o la factura que rectifica (`rectifies`) |
   | `purchases.invoice-registered.v1` | `received-invoice`: nuestro número de registro, y el del proveedor como referencia | la factura que rectifica |
   | `purchases.invoice-cancelled.v1` | anula la entrada, con su motivo | |
   | `payroll.payslip-approved.v1` | `payslip` (número: clase y mes; fecha de pago; neto) | — |
@@ -93,9 +93,11 @@ contexts/documents/
 - **Una entrada por hecho.** El mismo mensaje dos veces lo descarta la bandeja de entrada; el
   mismo hecho en otro mensaje no crea otra entrada; una anulación repetida no cambia nada; y la
   anulación de algo que el registro no conoce se ignora.
-- **Rastro.** Desde cualquier documento se sube hasta el primero del que procede y se baja por
-  todo lo que salió de él, en orden de fecha. Da igual por dónde se entre: desde el pedido o
-  desde la rectificativa se obtiene la misma cadena.
+- **Rastro.** Desde cualquier documento se recorre todo lo enlazado con él, hacia arriba (de lo
+  que viene, todos sus orígenes) y hacia abajo (lo que viene de él), en orden de fecha y, el mismo
+  día, de número. Da igual por dónde se entre: desde el pedido o desde la rectificativa se obtiene
+  la misma cadena; una factura de albaranes de dos pedidos trae los dos pedidos. Los otros
+  orígenes se guardan en `doc_document_origins` (migración 4).
 - **Consultas:** por empresa, tipo, tercero, texto del número, fechas y «no anulados»; por
   identidad o por hecho.
 - **Tablas:** `doc_documents`, la auditoría y `documents_inbox`. No hay bandeja de salida: el
