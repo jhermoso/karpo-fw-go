@@ -292,9 +292,29 @@ func (m *Module) RegisterMaintenanceRoutes(mux *http.ServeMux) {
 			writeMaintenanceError(w, r, fieldError("id", "format", "the identity is not valid"))
 			return
 		}
-		var in maintainedInput
-		if err := readBody(w, r, &in); err != nil {
+		var body map[string]json.RawMessage
+		if err := readBody(w, r, &body); err != nil {
 			writeMaintenanceError(w, r, err)
+			return
+		}
+		// Lo que el cuerpo no trae se queda como está: el modal de la rejilla del motor manda sólo
+		// los campos de su formulario. Las partes no viajan por el contrato: se conservan.
+		current, err := svc.GetProduct.Handle(r.Context(), papp.GetProduct{ID: id})
+		if err != nil {
+			writeMaintenanceError(w, r, err)
+			return
+		}
+		merged := map[string]json.RawMessage{}
+		raw, _ := json.Marshal(maintained(current))
+		_ = json.Unmarshal(raw, &merged)
+		delete(merged, "version") // la versión la dice quien llama, o falta
+		for k, v := range body {
+			merged[k] = v
+		}
+		raw, _ = json.Marshal(merged)
+		var in maintainedInput
+		if err := json.Unmarshal(raw, &in); err != nil {
+			writeMaintenanceError(w, r, fieldError("body", "json", "the body is not a JSON object of the expected shape"))
 			return
 		}
 		if in.Version == nil {
@@ -303,12 +323,6 @@ func (m *Module) RegisterMaintenanceRoutes(mux *http.ServeMux) {
 		}
 		if *in.Version < 1 { // ningún producto está en esa versión
 			writeMaintenanceError(w, r, fw.Conflict(domain.ProductKind, id, *in.Version, "the product changed after it was read: read it again"))
-			return
-		}
-		// Las partes no viajan por el contrato: se conservan las que tiene.
-		current, err := svc.GetProduct.Handle(r.Context(), papp.GetProduct{ID: id})
-		if err != nil {
-			writeMaintenanceError(w, r, err)
 			return
 		}
 		d := in.details()

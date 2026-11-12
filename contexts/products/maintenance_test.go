@@ -135,6 +135,11 @@ func (h *host) maintenance(tag string) {
 	if err != nil || len(full.Barcodes) != 1 {
 		t.Fatalf("the barcodes are kept: %+v %v", full, err)
 	}
+	// Como el modal de la rejilla: sólo los campos del formulario y la versión; lo demás se queda.
+	status, changed, _ = h.raw("PUT", base+"/"+id, "cataloguer", map[string]any{"name": "Tornillo M8 inox", "version": changed["version"]})
+	if status != 200 || changed["name"] != "Tornillo M8 inox" || changed["basePrice"] != "0.1200" || changed["forSale"] != true || changed["sku"] != "TOR-8" {
+		t.Fatalf("an update with only some fields: %d %v", status, changed)
+	}
 	h.must(func() int { s, _, _ := h.raw("PUT", base+"/"+id, "cataloguer", got); return s }(), 409, "the version read before")
 	delete(got, "version")
 	status, problem, _ = h.raw("PUT", base+"/"+id, "cataloguer", got)

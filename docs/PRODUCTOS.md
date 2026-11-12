@@ -282,7 +282,7 @@ puerta a los mismos casos de uso; la configuración de su pantalla está en
 | Lista | `GET /api/v1/products?page&pageSize&sortBy&sortOrder&search&company&kind&category&name&sku`, o `POST /api/v1/products/search` con `{filter, pagination: {pageNumber, pageSize, orderBy, ascending}}` | la página del motor: `{items, total, totalCount, pageNumber, pageSize, totalPages}`. Orden por `sku` (por omisión) o `name`; otro, 400. `search`, `name` y `sku` buscan en el nombre y en la referencia. Un filtro que no es de la lista (el motor manda `isActive`) se ignora |
 | Lectura | `GET /api/v1/products/{id}` | el producto |
 | Alta | `POST /api/v1/products` | 201 con `Location`; lo que sobra en el cuerpo se ignora |
-| Cambio | `PUT /api/v1/products/{id}` con lo leído y su `version` | 200; sin `version`, 400; con una que ya no es la suya, 409. Los códigos de barras, componentes y proveedores no viajan y se conservan |
+| Cambio | `PUT /api/v1/products/{id}` con lo leído y su `version` | 200; lo que el cuerpo no trae se queda como está (el modal del motor manda sólo su formulario); sin `version`, 400; con una que ya no es la suya, 409. Los códigos de barras, componentes y proveedores no viajan y se conservan |
 | Baja | `DELETE /api/v1/products/{id}` | 204: **retira** el producto hoy (no se borra: pedidos y facturas lo citan); repetirla vuelve a dar 204 |
 
 - **El objeto:** los datos de la ficha (`id`, `company`, `sku`, `name`, `description`, `kind`,
