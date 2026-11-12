@@ -61,9 +61,11 @@ type RegisterProduct struct {
 	DetailsInput
 }
 
-// ChangeProduct sustituye los datos de un producto.
+// ChangeProduct sustituye los datos de un producto. Con Version, sólo si el producto sigue en esa
+// versión (la que se leyó); si otro lo cambió después, es un conflicto (409) y no cambia nada.
 type ChangeProduct struct {
-	ID domain.ProductID `json:"-"`
+	ID      domain.ProductID `json:"-"`
+	Version int64            `json:"-"`
 	DetailsInput
 }
 
@@ -76,9 +78,12 @@ type DiscontinueProduct struct {
 // GetProduct carga un producto.
 type GetProduct struct{ ID domain.ProductID }
 
-// SearchProducts busca en el catálogo del ámbito de quien llama.
+// SearchProducts busca en el catálogo del ámbito de quien llama. Sort es sku (por omisión) o name, y
+// Desc lo invierte.
 type SearchProducts struct {
 	Company, Text, Kind, Category, Barcode string
+	Sort                                   string
+	Desc                                   bool
 	Page, Size                             int
 }
 
@@ -258,6 +263,9 @@ func (s service) productUseCases(svc *Service) {
 			return ProductDTO{}, err
 		}
 		return update(ctx, c.ID, func(ctx context.Context, p *domain.Product) error {
+			if c.Version != 0 && p.Version() != c.Version {
+				return fw.Conflict(domain.ProductKind, p.ID(), c.Version, "the product changed after it was read: read it again")
+			}
 			if err := p.Change(d); err != nil {
 				return err
 			}
@@ -304,10 +312,21 @@ func (s service) productUseCases(svc *Service) {
 		if b := strings.TrimSpace(q.Barcode); b != "" {
 			parts = append(parts, domain.ProdFieldBarcodes.Any(domain.BarcodeFieldValue.Eq(b)))
 		}
+		order := domain.ProdFieldSKU.Asc()
+		switch {
+		case q.Sort == "name" && q.Desc:
+			order = domain.ProdFieldName.Desc()
+		case q.Sort == "name":
+			order = domain.ProdFieldName.Asc()
+		case (q.Sort == "" || q.Sort == "sku") && q.Desc:
+			order = domain.ProdFieldSKU.Desc()
+		case q.Sort != "" && q.Sort != "sku":
+			v.Require(false, "sortBy", "enum", "sku or name")
+		}
 		if err := v.Err(); err != nil {
 			return fw.Page[ProductDTO]{}, err
 		}
-		page, err := s.Products.FindPage(ctx, spec.And(parts...), fw.NewPageRequest(q.Page, q.Size, domain.ProdFieldSKU.Asc()))
+		page, err := s.Products.FindPage(ctx, spec.And(parts...), fw.NewPageRequest(q.Page, q.Size, order, domain.ProdFieldSKU.Asc()))
 		if err != nil {
 			return fw.Page[ProductDTO]{}, err
 		}

@@ -1,0 +1,176 @@
+{
+    "id": "product",
+    "name": "Producto",
+    "namePlural": "Productos",
+    "description": "Catálogo de productos de Karpo Go",
+    "icon": "box",
+    "color": "#8e44ad",
+    "apiEndpoint": "/products",
+    "editable": true,
+    "editType": "direct",
+    "primaryKey": "id",
+    "displayField": "name",
+    "dataSource": {
+        "type": "single",
+        "paginationStrategy": "server",
+        "serverFiltering": {
+            "enabled": true,
+            "fieldMapping": {},
+            "clientOnlyFields": [],
+            "companyFilterField": "company"
+        }
+    },
+
+    "form": {
+        "modalSize": "md",
+        "createTitle": "Nuevo producto",
+        "editTitle": "Editar producto",
+        "saveButtonText": "Guardar",
+        "cancelButtonText": "Cancelar",
+        "sections": [
+            {
+                "id": "main",
+                "title": "Datos del producto",
+                "icon": "box",
+                "collapsible": false,
+                "columns": 2,
+                "fields": [
+                    { "field": "sku", "label": "Referencia", "type": "text", "required": true, "maxLength": 40, "width": 6, "hint": "Única en la empresa; no cambia después del alta." },
+                    { "field": "name", "label": "Nombre", "type": "text", "required": true, "maxLength": 200, "width": 6 },
+                    { "field": "description", "label": "Descripción", "type": "textarea", "required": false, "width": 12 },
+                    {
+                        "field": "kind",
+                        "label": "Naturaleza",
+                        "type": "select",
+                        "required": true,
+                        "width": 6,
+                        "options": [
+                            { "value": "good", "label": "Bien" },
+                            { "value": "service", "label": "Servicio" }
+                        ]
+                    },
+                    { "field": "uom", "label": "Unidad", "type": "text", "required": true, "width": 6, "hint": "Código de unidad: ea, kg, h…" },
+                    { "field": "taxCode", "label": "Código de IVA", "type": "text", "required": false, "width": 6 },
+                    { "field": "basePrice", "label": "Precio base", "type": "number", "required": false, "width": 6 },
+                    { "field": "forSale", "label": "A la venta", "type": "checkbox", "width": 6 },
+                    { "field": "forPurchase", "label": "De compra", "type": "checkbox", "width": 6 }
+                ]
+            }
+        ]
+    },
+
+    "grid": {
+        "columns": [
+            { "field": "sku", "header": "Referencia", "type": "text", "width": 140, "sortable": true, "filterable": true },
+            { "field": "name", "header": "Nombre", "type": "text", "width": 260, "sortable": true, "filterable": true },
+            {
+                "field": "kind",
+                "header": "Naturaleza",
+                "type": "badge",
+                "width": 120,
+                "badgeMap": {
+                    "good": { "label": "Bien", "color": "green" },
+                    "service": { "label": "Servicio", "color": "blue" }
+                }
+            },
+            { "field": "uom", "header": "Unidad", "type": "text", "width": 90 },
+            { "field": "basePrice", "header": "Precio base", "type": "number", "width": 120 },
+            { "field": "discontinued", "header": "Retirado desde", "type": "date", "width": 130, "emptyValue": "-" }
+        ],
+        "defaultSort": { "field": "sku", "direction": "asc" },
+        "pageSize": 25,
+        "pageSizeOptions": [10, 25, 50, 100],
+        "selectable": true,
+        "selectionMode": "multiple",
+        "rowActions": [
+            { "action": "view", "label": "Ver detalle", "icon": "view", "color": "primary" },
+            { "action": "edit", "label": "Editar", "icon": "edit", "color": "warning" },
+            {
+                "action": "delete",
+                "label": "Retirar",
+                "icon": "delete",
+                "color": "danger",
+                "confirm": true,
+                "confirmMessage": "¿Retirar este producto desde hoy? Seguirá en los pedidos y facturas que lo citan."
+            }
+        ]
+    },
+
+    "filters": [
+        {
+            "field": "_search",
+            "serverField": "search",
+            "label": "Buscar",
+            "type": "text",
+            "placeholder": "Nombre o referencia…",
+            "icon": "search",
+            "width": 3,
+            "searchFields": ["name", "sku"]
+        },
+        {
+            "field": "kind",
+            "label": "Naturaleza",
+            "type": "select",
+            "placeholder": "Todas",
+            "icon": "box",
+            "width": 3,
+            "options": [
+                { "value": "good", "label": "Bien" },
+                { "value": "service", "label": "Servicio" }
+            ]
+        }
+    ],
+
+    "detail": {
+        "showHistory": false,
+        "showRelations": false,
+        "showTags": false,
+        "sections": [
+            {
+                "id": "main",
+                "title": "Producto",
+                "icon": "box",
+                "collapsible": true,
+                "collapsed": false,
+                "columns": 2,
+                "fields": [
+                    { "field": "sku", "label": "Referencia", "type": "text", "editable": false },
+                    { "field": "name", "label": "Nombre", "type": "text", "required": true, "editable": true, "maxLength": 200 },
+                    { "field": "description", "label": "Descripción", "type": "text", "editable": true },
+                    {
+                        "field": "kind",
+                        "label": "Naturaleza",
+                        "type": "select",
+                        "editable": true,
+                        "required": true,
+                        "options": [
+                            { "value": "good", "label": "Bien" },
+                            { "value": "service", "label": "Servicio" }
+                        ]
+                    },
+                    { "field": "uom", "label": "Unidad", "type": "text", "editable": true },
+                    { "field": "taxCode", "label": "Código de IVA", "type": "text", "editable": true },
+                    { "field": "basePrice", "label": "Precio base", "type": "number", "editable": true },
+                    { "field": "standardCost", "label": "Coste estándar", "type": "number", "editable": true },
+                    { "field": "forSale", "label": "A la venta", "type": "checkbox", "editable": true },
+                    { "field": "forPurchase", "label": "De compra", "type": "checkbox", "editable": true },
+                    { "field": "blockedSales", "label": "Ventas bloqueadas", "type": "checkbox", "editable": true },
+                    { "field": "discontinued", "label": "Retirado desde", "type": "date", "editable": false }
+                ]
+            }
+        ]
+    },
+
+    "availableViews": ["grid", "detail"],
+    "defaultView": "grid",
+
+    "searchable": true,
+    "searchFields": ["name", "sku"],
+
+    "metadata": {
+        "version": "1.0.0",
+        "author": "Karpo Go",
+        "lastModified": "2026-11-12",
+        "tags": ["products", "karpo-go"]
+    }
+}
