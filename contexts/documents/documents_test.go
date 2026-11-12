@@ -5,9 +5,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -260,6 +262,35 @@ func (h *host) scenario(tag string) {
 	}
 	if _, found, err := h.docs.Register.ByFact(context.Background(), "invoice", id()); err != nil || found {
 		t.Fatalf("port, unknown fact: %v %v", found, err)
+	}
+
+	// Una factura de dos albaranes de dos pedidos (D-146) viene de los dos, y la traza desde
+	// cualquiera de ellos lo trae todo.
+	o2, o3, d2, d3, i2 := id(), id(), id(), id(), id()
+	for i, x := range [][2]string{{o2, d2}, {o3, d3}} {
+		n := fmt.Sprint(i + 2)
+		ok(h.send(tag+"-o"+n, "orders.order-confirmed.v1", day(6, 1), map[string]any{"orderId": x[0], "company": acme, "customer": customer,
+			"number": "PED-2026-00000" + n, "total": "10.00"}))
+		ok(h.send(tag+"-d"+n, "orders.delivery-issued.v1", day(6, 2), map[string]any{"deliveryId": x[1], "orderId": x[0], "company": acme,
+			"customer": customer, "number": "ALB-2026-00000" + n, "date": "2026-06-0" + n, "total": "10.00"}))
+	}
+	ok(h.send(tag+"-i2", "billing.invoice-issued.v1", day(6, 30), map[string]any{"invoiceId": i2, "number": "A-2026-000002", "kind": "ordinary",
+		"sourceType": "orders.delivery", "sourceId": d2, "sources": []map[string]any{{"type": "orders.delivery", "id": d2, "ref": "ALB-2026-000002"},
+			{"type": "orders.delivery", "id": d3, "ref": "ALB-2026-000003"}}, "seller": acme, "customer": customer, "issueDate": "2026-06-30",
+		"total": "20.00"}))
+	h.must(h.get("/api/documents/by-fact/invoice/"+i2, "viewer", &doc), 200, "merged invoice")
+	if doc.OriginID != d2 || len(doc.OtherOrigins) != 1 || doc.OtherOrigins[0].Type != "delivery-note" || doc.OtherOrigins[0].ID != d3 {
+		t.Fatalf("merged invoice: %+v", doc)
+	}
+	h.must(h.get("/api/documents/by-fact/order/"+o3, "viewer", &doc), 200, "second order")
+	var trail []dapp.DocumentDTO
+	h.must(h.get("/api/documents/"+doc.ID+"/trail", "viewer", &trail), 200, "trail of the merged invoice")
+	var numbers []string
+	for _, d := range trail {
+		numbers = append(numbers, d.Number)
+	}
+	if strings.Join(numbers, ",") != "PED-2026-000002,PED-2026-000003,ALB-2026-000002,ALB-2026-000003,A-2026-000002" {
+		t.Fatalf("trail of the merged invoice: %v", numbers)
 	}
 }
 

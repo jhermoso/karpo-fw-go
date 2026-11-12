@@ -68,6 +68,11 @@ func Migrations() sqlrepo.MigrationSet {
 		{Version: 1, Name: "document register", Up: sqlrepo.RenderDDLAll(schemaDDL...)},
 		{Version: 2, Name: "audit log and inbox", Up: technical},
 		{Version: 3, Name: "decimal columns", Run: decimalColumnsV3.Run},
+		// Los demás orígenes de un documento: una factura de varios albaranes viene de todos (D-146).
+		{Version: 4, Name: "other origins", Up: sqlrepo.RenderDDLAll(
+			`CREATE TABLE doc_document_origins (document_id {uuid} NOT NULL, origin_no {int} NOT NULL, origin_type {str:20} NOT NULL,
+	origin_id {str:64} NOT NULL, PRIMARY KEY (document_id, origin_no))`,
+			`CREATE INDEX ix_doc_document_origins_origin ON doc_document_origins (origin_type, origin_id)`)},
 	}}
 }
 
@@ -118,7 +123,7 @@ func DocumentMapping() sqlrepo.Mapping[domain.DocumentID, *domain.Document] {
 			}
 			return sqlrepo.AuditStampValues(v, d.AuditStamp()), nil
 		},
-		Hydrate: func(r *sqlrepo.Row, _ sqlrepo.ChildRows) (*domain.Document, error) {
+		Hydrate: func(r *sqlrepo.Row, children sqlrepo.ChildRows) (*domain.Document, error) {
 			s := domain.DocumentState{Company: domain.OrganizationID{UUID: r.UUID("company")},
 				Fact: domain.Ref{Type: domain.Type(r.String("doc_type")), ID: r.String("fact_id")}, Number: r.String("doc_number"),
 				Reference: r.String("reference"), Date: r.Date("doc_date"), Party: domain.PartyID{UUID: r.UUID("party")},
@@ -127,11 +132,28 @@ func DocumentMapping() sqlrepo.Mapping[domain.DocumentID, *domain.Document] {
 			if !r.IsNull("total") {
 				s.Total, s.HasTotal = r.Decimal("total"), true
 			}
+			for _, o := range children.Of("other_origins") {
+				s.OtherOrigins = append(s.OtherOrigins, domain.Ref{Type: domain.Type(o.String("origin_type")), ID: o.String("origin_id")})
+				if err := o.Err(); err != nil {
+					return nil, err
+				}
+			}
 			if err := r.Err(); err != nil {
 				return nil, err
 			}
 			return domain.ReconstituteDocument(domain.DocumentID{UUID: r.UUID("id")}, s)
 		},
+		Children: []sqlrepo.Child[*domain.Document]{{
+			Name: "other_origins", Table: "doc_document_origins", ForeignKey: "document_id", OrderBy: []string{"origin_no"},
+			Columns: []string{"origin_no", "origin_type", "origin_id"},
+			Dehydrate: func(d *domain.Document) ([]sqlrepo.Values, error) {
+				out := []sqlrepo.Values{}
+				for i, o := range d.State().OtherOrigins {
+					out = append(out, sqlrepo.Values{"origin_no": int64(i + 1), "origin_type": string(o.Type), "origin_id": o.ID})
+				}
+				return out, nil
+			},
+		}},
 	}
 }
 

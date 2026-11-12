@@ -3,9 +3,11 @@
 package application
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/documents/contracts"
 	"github.com/jhermoso/karpo-fw-go/contexts/documents/domain"
@@ -120,21 +122,29 @@ type GetTrail struct{ ID domain.DocumentID }
 
 // DocumentDTO es la forma de transporte de una anotación.
 type DocumentDTO struct {
-	ID           string `json:"id"`
-	Company      string `json:"company"`
-	Type         string `json:"type"`
-	FactID       string `json:"factId"`
-	Number       string `json:"number"`
-	Reference    string `json:"reference,omitempty"`
-	Date         string `json:"date"`
-	Party        string `json:"party,omitempty"`
-	Total        string `json:"total,omitempty"`
-	OriginType   string `json:"originType,omitempty"`
-	OriginID     string `json:"originId,omitempty"`
-	Relation     string `json:"relation,omitempty"`
-	Cancelled    bool   `json:"cancelled"`
-	CancelReason string `json:"cancelReason,omitempty"`
-	Version      int64  `json:"version"`
+	ID         string `json:"id"`
+	Company    string `json:"company"`
+	Type       string `json:"type"`
+	FactID     string `json:"factId"`
+	Number     string `json:"number"`
+	Reference  string `json:"reference,omitempty"`
+	Date       string `json:"date"`
+	Party      string `json:"party,omitempty"`
+	Total      string `json:"total,omitempty"`
+	OriginType string `json:"originType,omitempty"`
+	OriginID   string `json:"originId,omitempty"`
+	// OtherOrigins son los demás documentos de los que viene (D-146: una factura de varios albaranes).
+	OtherOrigins []OriginDTO `json:"otherOrigins,omitempty"`
+	Relation     string      `json:"relation,omitempty"`
+	Cancelled    bool        `json:"cancelled"`
+	CancelReason string      `json:"cancelReason,omitempty"`
+	Version      int64       `json:"version"`
+}
+
+// OriginDTO es un documento del que viene otro.
+type OriginDTO struct {
+	Type string `json:"type"`
+	ID   string `json:"id"`
 }
 
 func documentDTO(d *domain.Document) DocumentDTO {
@@ -144,6 +154,9 @@ func documentDTO(d *domain.Document) DocumentDTO {
 		Cancelled: s.Cancelled, CancelReason: s.CancelReason, Version: d.Version()}
 	if !s.Party.IsZero() {
 		out.Party = s.Party.String()
+	}
+	for _, o := range s.OtherOrigins {
+		out.OtherOrigins = append(out.OtherOrigins, OriginDTO{Type: string(o.Type), ID: o.ID})
 	}
 	if s.HasTotal {
 		out.Total = s.Total.StringFixed(2)
@@ -159,35 +172,41 @@ func (s service) byFact(ctx context.Context, r domain.Ref) (*domain.Document, er
 	return found[0], nil
 }
 
-// trail sube hasta el primer documento y después baja por todo lo que deriva de él.
+// trail es todo lo enlazado con un documento, hacia arriba (de lo que viene) y hacia abajo (lo que
+// viene de él): una factura de albaranes de dos pedidos trae los dos pedidos y sus albaranes.
 func (s service) trail(ctx context.Context, d *domain.Document) ([]*domain.Document, error) {
-	root, seen := d, map[domain.Ref]bool{d.State().Fact: true}
-	for !root.State().Origin.IsZero() && len(seen) < MaxTrail {
-		up, err := s.byFact(ctx, root.State().Origin)
-		if err != nil {
-			return nil, err
+	out, queue := []*domain.Document{d}, []*domain.Document{d}
+	visited := map[domain.Ref]bool{d.State().Fact: true}
+	add := func(x *domain.Document) {
+		if x != nil && !visited[x.State().Fact] && len(out) < MaxTrail {
+			visited[x.State().Fact] = true
+			out, queue = append(out, x), append(queue, x)
 		}
-		if up == nil || seen[up.State().Fact] {
-			break // el origen no está (aún) en el registro, o los datos forman un ciclo
-		}
-		root, seen[up.State().Fact] = up, true
 	}
-	out, queue := []*domain.Document{root}, []*domain.Document{root}
-	visited := map[domain.Ref]bool{root.State().Fact: true}
 	for len(queue) > 0 && len(out) < MaxTrail {
-		derived, err := s.Documents.Find(ctx, domain.DerivedFrom(queue[0].State().Fact), domain.DocFieldDate.Asc())
+		cur := queue[0].State()
+		queue = queue[1:]
+		for _, o := range cur.Origins() {
+			if visited[o] {
+				continue
+			}
+			up, err := s.byFact(ctx, o)
+			if err != nil {
+				return nil, err
+			}
+			add(up) // nil: el origen no está (aún) en el registro
+		}
+		derived, err := s.Documents.Find(ctx, domain.DerivedFrom(cur.Fact), domain.DocFieldDate.Asc())
 		if err != nil {
 			return nil, err
 		}
-		queue = queue[1:]
 		for _, x := range derived {
-			if !visited[x.State().Fact] {
-				visited[x.State().Fact] = true
-				out, queue = append(out, x), append(queue, x)
-			}
+			add(x)
 		}
 	}
-	slices.SortStableFunc(out, func(a, b *domain.Document) int { return a.State().Date.Compare(b.State().Date) })
+	slices.SortStableFunc(out, func(a, b *domain.Document) int { // por fecha y, el mismo día, por número
+		return cmp.Or(a.State().Date.Compare(b.State().Date), strings.Compare(a.State().Number, b.State().Number))
+	})
 	return out, nil
 }
 

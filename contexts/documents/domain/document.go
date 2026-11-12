@@ -69,15 +69,18 @@ func (r Ref) valid() bool {
 
 // DocumentState es el estado persistido de una anotación.
 type DocumentState struct {
-	Company      OrganizationID
-	Fact         Ref
-	Number       string // el número que le dio el contexto emisor
-	Reference    string // el número que le dio otro (el del proveedor, en una factura recibida)
-	Date         vocab.Date
-	Party        PartyID
-	Total        vocab.Decimal
-	HasTotal     bool
-	Origin       Ref // el documento del que viene
+	Company   OrganizationID
+	Fact      Ref
+	Number    string // el número que le dio el contexto emisor
+	Reference string // el número que le dio otro (el del proveedor, en una factura recibida)
+	Date      vocab.Date
+	Party     PartyID
+	Total     vocab.Decimal
+	HasTotal  bool
+	Origin    Ref // el documento del que viene
+	// OtherOrigins son los demás documentos de los que viene, con la misma relación: una factura
+	// de varios albaranes viene de todos (D-146); Origin es el primero.
+	OtherOrigins []Ref
 	Relation     string
 	Cancelled    bool
 	CancelReason string
@@ -107,6 +110,14 @@ func ReconstituteDocument(id DocumentID, s DocumentState) (*Document, error) {
 	v.Require(s.Origin.IsZero() == (s.Relation == ""), "relation", "required", "an origin has a relation, and only an origin")
 	v.Require(s.Origin.IsZero() || (s.Origin.valid() && s.Origin != s.Fact), "origin", "format", "another document")
 	v.Require(s.Relation == "" || s.Relation == OriginatesFrom || s.Relation == Rectifies, "relation", "enum", "originates-from or rectifies")
+	v.Require(len(s.OtherOrigins) == 0 || !s.Origin.IsZero(), "otherOrigins", "required", "other origins come after the first one")
+	v.Require(len(s.OtherOrigins) <= MaxOrigins-1, "otherOrigins", "length", "at most 500 origins")
+	seen := map[Ref]bool{s.Origin: true}
+	for _, o := range s.OtherOrigins {
+		v.Require(o.valid() && o != s.Fact && !seen[o], "otherOrigins", "format", "other documents, each once")
+		seen[o] = true
+	}
+	s.OtherOrigins = slices.Clone(s.OtherOrigins)
 	v.Require(utf8.RuneCountInString(s.CancelReason) <= 200, "cancelReason", "length", "at most 200 characters")
 	if err := v.Err(); err != nil {
 		return nil, err
@@ -145,6 +156,26 @@ func (d *Document) AuditSnapshot() map[string]any {
 	return map[string]any{"type": string(d.s.Fact.Type), "number": d.s.Number, "cancelled": d.s.Cancelled}
 }
 
+// MaxOrigins son los documentos de los que puede venir uno: los albaranes de una factura, que
+// tiene como mucho 500 líneas.
+const MaxOrigins = 500
+
+// Origins son todos los documentos de los que viene, el primero Origin.
+func (s DocumentState) Origins() []Ref {
+	if s.Origin.IsZero() {
+		return nil
+	}
+	return append([]Ref{s.Origin}, s.OtherOrigins...)
+}
+
+// Campos de los otros orígenes de un documento.
+var (
+	OrgFieldType = spec.Comparable("origin_type", func(r Ref) string { return string(r.Type) })
+	OrgFieldID   = spec.Comparable("origin_id", func(r Ref) string { return r.ID })
+	// DocOtherOrigins es la colección de los otros orígenes.
+	DocOtherOrigins = spec.Collection("other_origins", func(d *Document) []Ref { return d.s.OtherOrigins })
+)
+
 // Campos del documento.
 var (
 	DocFieldCompany    = spec.Comparable("company", func(d *Document) OrganizationID { return d.s.Company })
@@ -163,9 +194,10 @@ func ByFact(r Ref) spec.Spec[*Document] {
 	return DocFieldType.Eq(string(r.Type)).And(DocFieldFact.Eq(r.ID))
 }
 
-// DerivedFrom selecciona los documentos que vienen de uno.
+// DerivedFrom selecciona los documentos que vienen de uno, como primer origen o como otro.
 func DerivedFrom(r Ref) spec.Spec[*Document] {
-	return DocFieldOriginType.Eq(string(r.Type)).And(DocFieldOriginID.Eq(r.ID))
+	return DocFieldOriginType.Eq(string(r.Type)).And(DocFieldOriginID.Eq(r.ID)).
+		Or(DocOtherOrigins.Any(OrgFieldType.Eq(string(r.Type)).And(OrgFieldID.Eq(r.ID))))
 }
 
 // NewDocumentID devuelve una identidad nueva.
