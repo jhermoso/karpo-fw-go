@@ -203,6 +203,8 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/products/special-prices", post(svc.SetSpecialPrice.Handle))
 	mux.HandleFunc("POST /api/products/special-prices/remove", post(svc.RemoveSpecialPrice.Handle))
 
+	m.RegisterMaintenanceRoutes(mux) // el contrato de mantenimiento, bajo /api/v1/products
+
 	mux.HandleFunc("GET /api/products/quote", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		out, err := svc.Quote.Handle(r.Context(), papp.GetQuote{Company: q.Get("company"), Customer: q.Get("customer"), Product: q.Get("product"),

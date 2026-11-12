@@ -269,3 +269,27 @@ una de tarifa sean el mismo tipo (`PriceLine`) y la misma lectura.
   valida al facturar).
 - Que Facturación y Compras tomen el código de impuesto y la categoría de gasto del producto.
 - Importar de C#: los productos con su perfil comercial; las tarifas no tienen datos (0 filas).
+
+## El contrato de mantenimiento (front; añadido el 2026-11-12)
+
+Los productos se mantienen también por el **contrato de mantenimiento**, el que lee el motor de
+Angular de Karpo C# (el contrato `crud` del lenguaje de Theros), bajo `/api/v1/products`. Es otra
+puerta a los mismos casos de uso; la configuración de su pantalla está en
+`front/angular/config/entities/products/product.config.json` (ver front/README.md).
+
+| Operación | Ruta | Qué hace |
+|---|---|---|
+| Lista | `GET /api/v1/products?page&pageSize&sortBy&sortOrder&search&company&kind&category&name&sku`, o `POST /api/v1/products/search` con `{filter, pagination: {pageNumber, pageSize, orderBy, ascending}}` | la página del motor: `{items, total, totalCount, pageNumber, pageSize, totalPages}`. Orden por `sku` (por omisión) o `name`; otro, 400. `search`, `name` y `sku` buscan en el nombre y en la referencia. Un filtro que no es de la lista (el motor manda `isActive`) se ignora |
+| Lectura | `GET /api/v1/products/{id}` | el producto |
+| Alta | `POST /api/v1/products` | 201 con `Location`; lo que sobra en el cuerpo se ignora |
+| Cambio | `PUT /api/v1/products/{id}` con lo leído y su `version` | 200; sin `version`, 400; con una que ya no es la suya, 409. Los códigos de barras, componentes y proveedores no viajan y se conservan |
+| Baja | `DELETE /api/v1/products/{id}` | 204: **retira** el producto hoy (no se borra: pedidos y facturas lo citan); repetirla vuelve a dar 204 |
+
+- **El objeto:** los datos de la ficha (`id`, `company`, `sku`, `name`, `description`, `kind`,
+  `uom`, `category`, `taxCode`, `expenseCategory`, `basePrice`, `standardCost`, `forSale`,
+  `forPurchase`, `stocked`, `tracking`, `blockedSales`, `blockedPurchase`, `discontinued`,
+  `version`), sin sus partes.
+- **El error:** RFC 9457 con `errors` como diccionario (campo → mensajes) y `errorCodes`, en el
+  mismo orden; en un 422, `code`. El resto de la API de Productos sigue con la lista del framework.
+- **Permisos y ámbito:** los de siempre (`Products.Product.Read` y `…Update`).
+- **Prueba:** `TestProducts_MaintenanceContract_MemoryThenSQLite`.
