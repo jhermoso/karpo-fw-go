@@ -82,3 +82,30 @@ españoles piden por separado: `number`, `numberQualifier`, `block`, `portal`, `
   propia dirección, como se decidió el 2026-09-27.
 - Migración 4: siete columnas `addr_*` en `fac_facilities`. Ninguna ruta ni evento cambia.
 - Explicación de los campos y de por qué son esos: [PARTIES.md](PARTIES.md) §7.
+
+## El contrato de mantenimiento (front; añadido el 2026-11-13)
+
+Las instalaciones se mantienen también por el **contrato de mantenimiento**, el que lee el motor de
+Angular de Karpo C# (el contrato `crud` del lenguaje de Theros), bajo `/api/v1/facilities`. Es otra
+puerta a los mismos casos de uso; la configuración de su pantalla está en
+`front/angular/config/entities/facilities/facility.config.json` (ver front/README.md). Es el mismo
+contrato que el de Productos (docs/PRODUCTOS.md).
+
+| Operación | Ruta | Qué hace |
+|---|---|---|
+| Lista | `GET /api/v1/facilities?page&pageSize&sortBy&sortOrder&search&name&organization&type&partOf&isActive`, o `POST /api/v1/facilities/search` con `{filter, pagination: {pageNumber, pageSize, orderBy, ascending}}` | la página del motor: `{items, total, totalCount, pageNumber, pageSize, totalPages}`. Orden por `name` (por omisión; una instalación no tiene código), con la identidad para deshacer empates; otro, 400. `search` y `name` buscan en el nombre; `isActive=true` deja sólo las activas. Un filtro que no es de la lista se ignora |
+| Lectura | `GET /api/v1/facilities/{id}` | la instalación |
+| Alta | `POST /api/v1/facilities` | 201 con `Location`; lo que sobra en el cuerpo se ignora. Una instalación nace activa: `active: false` en el alta es 400 (se desactiva después) |
+| Cambio | `PUT /api/v1/facilities/{id}` con lo leído y su `version` | 200; lo que el cuerpo no trae se queda como está. Sin `version`, 400; con una que ya no es la suya, 409. Se traduce a los casos de uso de siempre, sólo los de los campos que cambian: activar, renombrar (`name`), reubicar (`location`, que viaja entera; vacía o null es «no viene» y se queda la que había), mover (`partOf`) y desactivar, en ese orden y cada uno con la versión que dejó el anterior. Todo el cambio es una sola unidad de trabajo: si un paso falla, no queda hecho ninguno. `organization`, `type`, `description` y `areaM2` no los cambia ningún caso de uso: cambiarlos es 400 (se comparan por su valor: identidades sin distinguir mayúsculas, superficie como número) |
+| Baja | `DELETE /api/v1/facilities/{id}` | 204: **desactiva** la instalación (no se borra: otros contextos la citan); repetirla vuelve a dar 204 sin versión nueva, pero exige el mismo permiso de escritura (403 sin él) |
+
+- **El objeto:** `id`, `organization`, `type`, `typeName`, `name`, `description`, `partOf`,
+  `areaM2`, `location` (la ubicación, como en `/api/facilities`), `active`, `version`.
+- **La versión:** los casos de uso de cambio aceptan la versión leída (`Version`, fuera del JSON de
+  `/api/facilities`) y dan conflicto si la instalación ya está en otra, como `ChangeProduct`; con
+  ella el conflicto es definitivo y no se reintenta. Activar o desactivar la que ya lo está no
+  guarda nada.
+- **El error:** RFC 9457 con `errors` como diccionario (campo → mensajes) y `errorCodes`, en el
+  mismo orden; en un 422, `code`. El resto de la API de Instalaciones sigue con la lista del framework.
+- **Permisos y ámbito:** los de siempre (`Facilities.Facility.Read`, `…Create` y `…Update`).
+- **Prueba:** `TestFacilities_MaintenanceContract_MemoryThenSQLite`.

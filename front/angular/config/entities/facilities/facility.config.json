@@ -1,0 +1,131 @@
+{
+    "id": "facility",
+    "name": "Instalación",
+    "namePlural": "Instalaciones",
+    "description": "Instalaciones de las organizaciones internas de Karpo Go",
+    "icon": "building",
+    "color": "#16a085",
+    "apiEndpoint": "/facilities",
+    "editable": true,
+    "editType": "direct",
+    "primaryKey": "id",
+    "displayField": "name",
+    "dataSource": {
+        "type": "single",
+        "paginationStrategy": "server",
+        "serverFiltering": {
+            "enabled": true,
+            "fieldMapping": {},
+            "clientOnlyFields": [],
+            "companyFilterField": "organization"
+        }
+    },
+
+    "form": {
+        "modalSize": "md",
+        "createTitle": "Nueva instalación",
+        "editTitle": "Editar instalación",
+        "saveButtonText": "Guardar",
+        "cancelButtonText": "Cancelar",
+        "sections": [
+            {
+                "id": "main",
+                "title": "Datos de la instalación",
+                "icon": "building",
+                "collapsible": false,
+                "columns": 2,
+                "fields": [
+                    { "field": "name", "label": "Nombre", "type": "text", "required": true, "maxLength": 200, "width": 6 },
+                    { "field": "type", "label": "Tipo", "type": "text", "required": true, "width": 6, "hint": "Identidad del tipo de instalación; no cambia después del alta." },
+                    { "field": "partOf", "label": "Forma parte de", "type": "text", "required": false, "width": 6, "hint": "Identidad de la instalación que la contiene." },
+                    { "field": "active", "label": "Activa", "type": "checkbox", "width": 6 }
+                ]
+            }
+        ]
+    },
+
+    "grid": {
+        "columns": [
+            { "field": "name", "header": "Nombre", "type": "text", "width": 260, "sortable": true, "filterable": true },
+            { "field": "typeName", "header": "Tipo", "type": "text", "width": 160 },
+            { "field": "areaM2", "header": "Superficie (m²)", "type": "number", "width": 130, "emptyValue": "-" },
+            {
+                "field": "active",
+                "header": "Estado",
+                "type": "badge",
+                "width": 110,
+                "badgeMap": {
+                    "true": { "label": "Activa", "color": "green" },
+                    "false": { "label": "Inactiva", "color": "gray" }
+                }
+            }
+        ],
+        "defaultSort": { "field": "name", "direction": "asc" },
+        "pageSize": 25,
+        "pageSizeOptions": [10, 25, 50, 100],
+        "selectable": true,
+        "selectionMode": "multiple",
+        "rowActions": [
+            { "action": "view", "label": "Ver detalle", "icon": "view", "color": "primary" },
+            { "action": "edit", "label": "Editar", "icon": "edit", "color": "warning" },
+            {
+                "action": "delete",
+                "label": "Desactivar",
+                "icon": "delete",
+                "color": "danger",
+                "confirm": true,
+                "confirmMessage": "¿Desactivar esta instalación? No se borra: se puede volver a activar."
+            }
+        ]
+    },
+
+    "filters": [
+        {
+            "field": "_search",
+            "serverField": "search",
+            "label": "Buscar",
+            "type": "text",
+            "placeholder": "Nombre…",
+            "icon": "search",
+            "width": 3,
+            "searchFields": ["name"]
+        }
+    ],
+
+    "detail": {
+        "showHistory": false,
+        "showRelations": false,
+        "showTags": false,
+        "sections": [
+            {
+                "id": "main",
+                "title": "Instalación",
+                "icon": "building",
+                "collapsible": true,
+                "collapsed": false,
+                "columns": 2,
+                "fields": [
+                    { "field": "name", "label": "Nombre", "type": "text", "required": true, "editable": true, "maxLength": 200 },
+                    { "field": "typeName", "label": "Tipo", "type": "text", "editable": false },
+                    { "field": "description", "label": "Descripción", "type": "text", "editable": false },
+                    { "field": "areaM2", "label": "Superficie (m²)", "type": "number", "editable": false },
+                    { "field": "partOf", "label": "Forma parte de", "type": "text", "editable": true },
+                    { "field": "active", "label": "Activa", "type": "checkbox", "editable": true }
+                ]
+            }
+        ]
+    },
+
+    "availableViews": ["grid", "detail"],
+    "defaultView": "grid",
+
+    "searchable": true,
+    "searchFields": ["name"],
+
+    "metadata": {
+        "version": "1.0.0",
+        "author": "Karpo Go",
+        "lastModified": "2026-11-13",
+        "tags": ["facilities", "karpo-go"]
+    }
+}

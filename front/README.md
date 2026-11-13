@@ -9,6 +9,7 @@ lenguaje de Theros).
 | Contexto | Pantalla | Configuración | API |
 |---|---|---|---|
 | Productos | catálogo de productos: rejilla, alta, detalle, retirada | `angular/config/entities/products/product.config.json` | `/api/v1/products` (docs/PRODUCTOS.md, «El contrato de mantenimiento») |
+| Instalaciones | instalaciones de las organizaciones internas: rejilla, alta, detalle, desactivación | `angular/config/entities/facilities/facility.config.json` | `/api/v1/facilities` (docs/INSTALACIONES.md, «El contrato de mantenimiento») |
 
 ## Cómo se ve
 
