@@ -113,6 +113,10 @@ func (c *Carrier) AuditSnapshot() map[string]any {
 var (
 	CarFieldCompany = spec.Comparable("company", func(c *Carrier) OrganizationID { return c.s.Company })
 	CarFieldCode    = spec.Ordered("code", func(c *Carrier) string { return c.s.Code })
+	CarFieldName    = spec.Text("name", func(c *Carrier) string { return c.s.Name })
+	CarFieldBlocked = spec.Comparable("blocked", func(c *Carrier) bool { return c.s.Blocked })
+	// CarFieldIDOrder ordena por la identidad: deshace los empates de una lista paginada.
+	CarFieldIDOrder = spec.Ordered("id", func(c *Carrier) string { return c.ID().String() })
 )
 
 // NewCarrierID devuelve una identidad nueva.

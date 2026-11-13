@@ -47,6 +47,13 @@ type Service struct {
 	RegisterCarrier app.CommandHandler[RegisterCarrier, CarrierDTO]
 	ChangeCarrier   app.CommandHandler[ChangeCarrier, CarrierDTO]
 	SearchCarriers  app.QueryHandler[SearchCarriers, []CarrierDTO]
+	// GetCarrier lee un transportista del ámbito de quien llama.
+	GetCarrier app.QueryHandler[GetCarrier, CarrierDTO]
+	// PageCarriers es la lista paginada, con búsqueda y orden, del contrato de mantenimiento.
+	PageCarriers app.QueryHandler[PageCarriers, fw.Page[CarrierDTO]]
+	// CarrierChangeable comprueba que quien llama puede cambiar un transportista (el permiso y el
+	// ámbito de escritura), aunque el cambio no vaya a cambiar nada.
+	CarrierChangeable app.QueryHandler[GetCarrier, bool]
 }
 
 type service struct {
@@ -153,6 +160,22 @@ func guard[In, Out any](p authz.Permission, fn func(context.Context, In) (Out, e
 
 func changing[In, Out any](uow fw.UnitOfWork, p authz.Permission, fn func(context.Context, In) (Out, error)) app.Handler[In, Out] {
 	return guard(p, fn, pipeline.RetryOnConflict[In, Out](5, 10*time.Millisecond), pipeline.Transactional[In, Out](uow))
+}
+
+// versioned es changing para un cambio que puede traer la versión leída: con ella, un conflicto es
+// definitivo y no se reintenta (y dentro de una transacción ajena, tampoco se debe).
+func versioned[In, Out any](uow fw.UnitOfWork, p authz.Permission, version func(In) int64, fn func(context.Context, In) (Out, error)) app.Handler[In, Out] {
+	retry := pipeline.RetryOnConflict[In, Out](5, 10*time.Millisecond)
+	unlessVersioned := func(next app.Handler[In, Out]) app.Handler[In, Out] {
+		wrapped := retry(next)
+		return app.HandlerFunc[In, Out](func(ctx context.Context, in In) (Out, error) {
+			if version(in) != 0 {
+				return next.Handle(ctx, in)
+			}
+			return wrapped.Handle(ctx, in)
+		})
+	}
+	return guard(p, fn, unlessVersioned, pipeline.Transactional[In, Out](uow))
 }
 
 // NewService conecta los casos de uso.

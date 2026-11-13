@@ -328,6 +328,22 @@ type ChangeCarrier struct {
 	Party       string           `json:"party,omitempty"`
 	TrackingURL string           `json:"trackingUrl,omitempty"`
 	Blocked     bool             `json:"blocked,omitempty"`
+	// Version, si no es cero, es la que se leyó: si el transportista ya está en otra, el cambio es un
+	// conflicto.
+	Version int64 `json:"-"`
+}
+
+// GetCarrier lee un transportista.
+type GetCarrier struct{ ID domain.CarrierID }
+
+// PageCarriers busca, paginado, entre los transportistas del ámbito de quien llama.
+type PageCarriers struct {
+	Company    string
+	Text       string // busca en el nombre
+	ActiveOnly bool   // deja fuera los bloqueados
+	Sort       string // code (por omisión) o name; los empates, por la identidad
+	Desc       bool
+	Page, Size int
 }
 
 // withoutMerged deja fuera de un listado los registros cuya party (cliente) es una party fusionada,
@@ -386,7 +402,7 @@ func (s service) wireCarriers(svc *Service) {
 		}
 		return carrierDTO(car), nil
 	})
-	svc.ChangeCarrier = changing(d.UoW, PermCarrierUpdate, func(ctx context.Context, c ChangeCarrier) (CarrierDTO, error) {
+	svc.ChangeCarrier = versioned(d.UoW, PermCarrierUpdate, func(c ChangeCarrier) int64 { return c.Version }, func(ctx context.Context, c ChangeCarrier) (CarrierDTO, error) {
 		var v fw.Validation
 		party := domain.PartyID{UUID: optionalID(&v, "party", c.Party)}
 		if err := v.Err(); err != nil {
@@ -396,6 +412,9 @@ func (s service) wireCarriers(svc *Service) {
 		car, err := s.carriers.Update(ctx, c.ID, func(_ context.Context, car *domain.Carrier) error {
 			if err := sc.check(domain.CarrierKind, car.ID(), car.State().Company, true); err != nil {
 				return err
+			}
+			if c.Version != 0 && car.Version() != c.Version {
+				return fw.Conflict(domain.CarrierKind, car.ID(), c.Version, "the carrier changed after it was read: read it again")
 			}
 			return car.Change(c.Name, party, c.TrackingURL, c.Blocked)
 		})
@@ -422,5 +441,62 @@ func (s service) wireCarriers(svc *Service) {
 			out = append(out, carrierDTO(c))
 		}
 		return out, nil
+	})
+	// read carga un transportista del ámbito de quien llama (404 fuera de él; 403 si se pide escribir
+	// y es de sólo lectura).
+	read := func(ctx context.Context, id domain.CarrierID, write bool) (*domain.Carrier, error) {
+		c, err := d.Carriers.Get(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		if err := scopeOf(ctx).check(domain.CarrierKind, c.ID(), c.State().Company, write); err != nil {
+			return nil, err
+		}
+		return c, nil
+	}
+	svc.GetCarrier = guard(PermCarrierRead, func(ctx context.Context, q GetCarrier) (CarrierDTO, error) {
+		c, err := read(ctx, q.ID, false)
+		if err != nil {
+			return CarrierDTO{}, err
+		}
+		return carrierDTO(c), nil
+	})
+	svc.CarrierChangeable = guard(PermCarrierUpdate, func(ctx context.Context, q GetCarrier) (bool, error) {
+		_, err := read(ctx, q.ID, true)
+		return err == nil, err
+	})
+	svc.PageCarriers = guard(PermCarrierRead, func(ctx context.Context, q PageCarriers) (fw.Page[CarrierDTO], error) {
+		var v fw.Validation
+		parts := []spec.Specification[*domain.Carrier]{within(scopeOf(ctx), domain.CarFieldCompany)}
+		if q.Company != "" {
+			parts = append(parts, domain.CarFieldCompany.Eq(domain.OrganizationID{UUID: parseID(&v, "company", q.Company)}))
+		}
+		if q.ActiveOnly {
+			parts = append(parts, domain.CarFieldBlocked.Eq(false))
+		}
+		if t := strings.TrimSpace(q.Text); t != "" {
+			parts = append(parts, domain.CarFieldName.ContainsFold(t))
+		}
+		order := domain.CarFieldCode.Asc()
+		switch {
+		case q.Sort == "name" && q.Desc:
+			order = domain.CarFieldName.Desc()
+		case q.Sort == "name":
+			order = domain.CarFieldName.Asc()
+		case q.Sort == "" || q.Sort == "code":
+			if q.Desc {
+				order = domain.CarFieldCode.Desc()
+			}
+		default:
+			v.Add("sort", "enum", "code or name")
+		}
+		if err := v.Err(); err != nil {
+			return fw.Page[CarrierDTO]{}, err
+		}
+		page, err := d.Carriers.FindPage(ctx, spec.And(parts...), fw.NewPageRequest(q.Page, q.Size, order, domain.CarFieldIDOrder.Asc()))
+		if err != nil {
+			return fw.Page[CarrierDTO]{}, err
+		}
+		return fw.MapPage(page, carrierDTO), nil
 	})
 }

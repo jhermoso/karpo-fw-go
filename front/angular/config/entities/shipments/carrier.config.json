@@ -1,0 +1,238 @@
+{
+    "id": "carrier",
+    "name": "Transportista",
+    "namePlural": "Transportistas",
+    "description": "Transportistas de los envíos de las empresas de Karpo Go",
+    "icon": "truck",
+    "color": "#d35400",
+    "apiEndpoint": "/carriers",
+    "editable": true,
+    "editType": "direct",
+    "primaryKey": "id",
+    "displayField": "name",
+    "dataSource": {
+        "type": "single",
+        "paginationStrategy": "server",
+        "serverFiltering": {
+            "enabled": true,
+            "fieldMapping": {},
+            "clientOnlyFields": [],
+            "companyFilterField": "company"
+        }
+    },
+    "form": {
+        "modalSize": "md",
+        "createTitle": "Nuevo transportista",
+        "editTitle": "Editar transportista",
+        "saveButtonText": "Guardar",
+        "cancelButtonText": "Cancelar",
+        "sections": [
+            {
+                "id": "main",
+                "title": "Datos del transportista",
+                "icon": "truck",
+                "collapsible": false,
+                "columns": 2,
+                "fields": [
+                    {
+                        "field": "code",
+                        "label": "Código",
+                        "type": "text",
+                        "required": true,
+                        "maxLength": 20,
+                        "width": 4,
+                        "hint": "Letras, cifras, guiones; no cambia después del alta."
+                    },
+                    {
+                        "field": "name",
+                        "label": "Nombre",
+                        "type": "text",
+                        "required": true,
+                        "maxLength": 120,
+                        "width": 8
+                    },
+                    {
+                        "field": "party",
+                        "label": "Party",
+                        "type": "text",
+                        "width": 6,
+                        "hint": "Identidad del transportista como party, si lo es."
+                    },
+                    {
+                        "field": "trackingUrl",
+                        "label": "Enlace de seguimiento",
+                        "type": "text",
+                        "maxLength": 300,
+                        "width": 6,
+                        "hint": "https, con {tracking} donde va el número."
+                    }
+                ]
+            }
+        ]
+    },
+    "grid": {
+        "columns": [
+            {
+                "field": "code",
+                "header": "Código",
+                "type": "text",
+                "width": 110,
+                "sortable": true,
+                "filterable": true
+            },
+            {
+                "field": "name",
+                "header": "Nombre",
+                "type": "text",
+                "width": 240,
+                "sortable": true,
+                "filterable": true
+            },
+            {
+                "field": "trackingUrl",
+                "header": "Seguimiento",
+                "type": "text",
+                "width": 260
+            },
+            {
+                "field": "blocked",
+                "header": "Estado",
+                "type": "badge",
+                "width": 120,
+                "badgeMap": {
+                    "false": {
+                        "label": "Activo",
+                        "color": "green"
+                    },
+                    "true": {
+                        "label": "Bloqueado",
+                        "color": "gray"
+                    }
+                }
+            }
+        ],
+        "defaultSort": {
+            "field": "code",
+            "direction": "asc"
+        },
+        "pageSize": 25,
+        "pageSizeOptions": [
+            10,
+            25,
+            50,
+            100
+        ],
+        "selectable": true,
+        "selectionMode": "multiple",
+        "rowActions": [
+            {
+                "action": "view",
+                "label": "Ver detalle",
+                "icon": "view",
+                "color": "primary"
+            },
+            {
+                "action": "edit",
+                "label": "Editar",
+                "icon": "edit",
+                "color": "warning"
+            },
+            {
+                "action": "delete",
+                "label": "Bloquear",
+                "icon": "delete",
+                "color": "danger"
+            }
+        ]
+    },
+    "filters": [
+        {
+            "field": "_search",
+            "serverField": "search",
+            "label": "Buscar",
+            "type": "text",
+            "placeholder": "Nombre…",
+            "icon": "search",
+            "width": 3,
+            "searchFields": [
+                "name"
+            ]
+        },
+        {
+            "field": "isActive",
+            "serverField": "isActive",
+            "label": "Sólo activos",
+            "type": "checkbox",
+            "width": 2
+        }
+    ],
+    "detail": {
+        "showHistory": false,
+        "showRelations": false,
+        "showTags": false,
+        "sections": [
+            {
+                "id": "main",
+                "title": "Transportista",
+                "icon": "truck",
+                "collapsible": true,
+                "collapsed": false,
+                "columns": 2,
+                "fields": [
+                    {
+                        "field": "code",
+                        "label": "Código",
+                        "type": "text",
+                        "editable": false
+                    },
+                    {
+                        "field": "name",
+                        "label": "Nombre",
+                        "type": "text",
+                        "required": true,
+                        "editable": true,
+                        "maxLength": 120
+                    },
+                    {
+                        "field": "party",
+                        "label": "Party",
+                        "type": "text",
+                        "editable": true
+                    },
+                    {
+                        "field": "trackingUrl",
+                        "label": "Enlace de seguimiento",
+                        "type": "text",
+                        "editable": true,
+                        "maxLength": 300
+                    },
+                    {
+                        "field": "blocked",
+                        "label": "Bloqueado",
+                        "type": "checkbox",
+                        "editable": true,
+                        "hint": "Un transportista bloqueado no se elige en envíos nuevos."
+                    }
+                ]
+            }
+        ]
+    },
+    "availableViews": [
+        "grid",
+        "detail"
+    ],
+    "defaultView": "grid",
+    "searchable": true,
+    "searchFields": [
+        "name"
+    ],
+    "metadata": {
+        "version": "1.0.0",
+        "author": "Karpo Go",
+        "lastModified": "2026-11-13",
+        "tags": [
+            "shipments",
+            "karpo-go"
+        ]
+    }
+}
