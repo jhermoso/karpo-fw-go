@@ -23,7 +23,10 @@ import (
 
 // Module es el contexto compuesto.
 type Module struct {
-	Service           *sapp.Service
+	Service *sapp.Service
+	// UoW es la unidad de trabajo del contexto: el contrato de mantenimiento hace en una sola el
+	// cambio entero de un transportista.
+	UoW               fw.UnitOfWork
 	IntegrationOutbox application.OutboxStore
 	Audit             application.AuditLog
 	// Consumer recibe los albaranes de Orders que hay que enviar: hay que suscribirlo al transporte.
@@ -60,7 +63,7 @@ func Compose(sw *hotswap.Switch, opts ...Option) *Module {
 	}
 	consumer := messaging.NewConsumer(contracts.Source, hotswap.Inbox(sw, infrastructure.InboxFactory), sw)
 	sapp.Subscribe(consumer, d)
-	return &Module{Service: sapp.NewService(d), IntegrationOutbox: integration, Audit: audit, Consumer: consumer}
+	return &Module{Service: sapp.NewService(d), UoW: sw, IntegrationOutbox: integration, Audit: audit, Consumer: consumer}
 }
 
 // Relay reenvía el Published Language a un transporte.
@@ -145,6 +148,7 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 		distribution.Respond(w, r, out, err, http.StatusOK)
 	})
 	mux.HandleFunc("PUT /api/carriers/{id}", command(cid, func(c *sapp.ChangeCarrier, id domain.CarrierID) { c.ID = id }, svc.ChangeCarrier.Handle))
+	m.RegisterMaintenanceRoutes(mux) // el contrato de mantenimiento, bajo /api/v1/carriers
 }
 
 var _ distribution.EndpointModule = (*Module)(nil)

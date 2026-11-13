@@ -171,3 +171,31 @@ contexts/shipments/
   - registrar el envío en Documentos (carta de porte, CMR).
 - Compras, fase 2: albarán de entrada con cantidades aceptadas y rechazadas.
 - Importar de C#: nada (ningún envío ni transportista con datos).
+
+## El contrato de mantenimiento (front; añadido el 2026-11-13)
+
+Los transportistas se mantienen también por el **contrato de mantenimiento**, el que lee el motor de
+Angular de Karpo C# (el contrato `crud` del lenguaje de Theros), bajo `/api/v1/carriers`. Es otra
+puerta a los mismos casos de uso; la configuración de su pantalla está en
+`front/angular/config/entities/shipments/carrier.config.json` (ver front/README.md). Es el mismo
+contrato que el de Productos, Instalaciones y Activos (docs/PRODUCTOS.md, docs/INSTALACIONES.md,
+docs/ACTIVOS.md).
+
+| Operación | Ruta | Qué hace |
+|---|---|---|
+| Lista | `GET /api/v1/carriers?page&pageSize&sortBy&sortOrder&search&name&company&isActive`, o `POST /api/v1/carriers/search` con `{filter, pagination: {pageNumber, pageSize, orderBy, ascending}}` | la página del motor: `{items, total, totalCount, pageNumber, pageSize, totalPages}`. Orden por `code` (por omisión) o `name`, con la identidad para deshacer empates; otro, 400. `search` y `name` buscan en el nombre; `isActive=true` deja los que no están bloqueados. `company` sólo estrecha el ámbito de quien llama: la de otra organización da una lista vacía. Un filtro que no es de la lista se ignora |
+| Lectura | `GET /api/v1/carriers/{id}` | el transportista |
+| Alta | `POST /api/v1/carriers` | 201 con `Location`; lo que sobra en el cuerpo se ignora. Un transportista nace sin bloquear: `blocked: true` en el alta es 400 |
+| Cambio | `PUT /api/v1/carriers/{id}` con lo leído y su `version` | 200; lo que el cuerpo no trae, o trae como null, se queda como está. Sin `version`, 400; con una que ya no es la suya, 409. Se traduce a `ChangeCarrier` (`name`, `party`, `trackingUrl`, `blocked`), sólo si algo cambia; aun sin cambios exige el permiso y el ámbito de escritura. Todo el cambio es una sola unidad de trabajo. `company` y `code` no los cambia ningún caso de uso: cambiarlos es 400 `immutable` (se comparan por su valor: la identidad y el código sin distinguir mayúsculas ni los espacios de los extremos) |
+| Baja | `DELETE /api/v1/carriers/{id}` | un transportista no se borra (los envíos lo nombran): DELETE lo **bloquea**, y uno bloqueado no se puede elegir en un envío nuevo. 204; sobre uno ya bloqueado, 204 otra vez y sin versión nueva. Siempre exige el permiso y el ámbito de escritura (`Shipments.Carrier.Update`; 403 sin él). Se desbloquea por el PUT con `blocked: false` |
+
+- **El objeto:** `id`, `company`, `code`, `name`, `party`, `trackingUrl`, `blocked`, `version`.
+- **La versión:** `ChangeCarrier` acepta la versión leída (`Version`, fuera del JSON de
+  `/api/carriers`) y da conflicto si el transportista ya está en otra; con ella el conflicto es
+  definitivo y no se reintenta dentro de la transacción. Sin ella, se reintenta como siempre.
+- **El error:** RFC 9457 con `errors` como diccionario (campo → mensajes) y `errorCodes`, en el
+  mismo orden; en un 409 o un 422, `code`. Un cuerpo de más de 1 MiB es 413. El resto de la API de
+  Envíos sigue con la lista del framework.
+- **Permisos y ámbito:** los de siempre (`Shipments.Carrier.Read` y `…Update`).
+- **Sin migración:** el bloqueo ya estaba en `shp_carriers.blocked`; el contrato no añade columnas.
+- **Prueba:** `TestShipments_CarrierMaintenanceContract_MemoryThenSQLite`.
