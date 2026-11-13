@@ -26,6 +26,9 @@ type Module struct {
 	Directory         contracts.Directory
 	IntegrationOutbox application.OutboxStore
 	Audit             application.AuditLog
+	// UoW es la unidad de trabajo del contexto: el contrato de mantenimiento hace en una sola los
+	// varios casos de uso de un cambio.
+	UoW fw.UnitOfWork
 }
 
 // Option configura la composición.
@@ -47,7 +50,7 @@ func Compose(sw *hotswap.Switch, opts ...Option) *Module {
 	for _, o := range opts {
 		o(&deps)
 	}
-	return &Module{Service: fapp.NewService(deps), Directory: fapp.Directory{Facilities: repo}, IntegrationOutbox: integration, Audit: audit}
+	return &Module{Service: fapp.NewService(deps), Directory: fapp.Directory{Facilities: repo}, IntegrationOutbox: integration, Audit: audit, UoW: sw}
 }
 
 // Relay reenvía el Published Language a un transporte.
@@ -162,6 +165,7 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 			out, err := m.Directory.Resolve(r.Context(), body.FacilityIDs)
 			distribution.Respond(w, r, out, err, http.StatusOK)
 		})))
+	m.RegisterMaintenanceRoutes(mux) // el contrato de mantenimiento, bajo /api/v1/facilities
 }
 
 var _ distribution.EndpointModule = (*Module)(nil)

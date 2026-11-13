@@ -4,6 +4,7 @@ package application
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -87,33 +88,44 @@ type RegisterFacility struct {
 type RenameFacility struct {
 	ID   domain.FacilityID `json:"-"`
 	Name string            `json:"name"`
+	// Version, si no es cero, es la que se leyó: si la instalación ya está en otra, el cambio es un conflicto.
+	Version int64 `json:"-"`
 }
 
 // RelocateFacility sustituye la ubicación.
 type RelocateFacility struct {
 	ID       domain.FacilityID `json:"-"`
 	Location LocationDTO       `json:"location"`
+	// Version, si no es cero, es la que se leyó: si la instalación ya está en otra, el cambio es un conflicto.
+	Version int64 `json:"-"`
 }
 
 // MoveFacility hace que una instalación forme parte de otra (PartOf vacío la separa).
 type MoveFacility struct {
 	ID     domain.FacilityID `json:"-"`
 	PartOf string            `json:"partOf"`
+	// Version, si no es cero, es la que se leyó: si la instalación ya está en otra, el cambio es un conflicto.
+	Version int64 `json:"-"`
 }
 
 // SetFacilityActive activa o desactiva una instalación.
 type SetFacilityActive struct {
 	ID     domain.FacilityID `json:"-"`
 	Active bool              `json:"active"`
+	// Version, si no es cero, es la que se leyó: si la instalación ya está en otra, el cambio es un conflicto.
+	Version int64 `json:"-"`
 }
 
 // GetFacility carga una instalación.
 type GetFacility struct{ ID domain.FacilityID }
 
-// SearchFacilities busca instalaciones del alcance del llamante.
+// SearchFacilities busca instalaciones del alcance del llamante. Sort es name (por omisión, la única
+// clave que tiene una instalación); el empate se deshace por la identidad.
 type SearchFacilities struct {
 	Text, Type, Organization, PartOf string
 	ActiveOnly                       bool
+	Sort                             string
+	Desc                             bool
 	Page, Size                       int
 }
 
@@ -192,6 +204,24 @@ func (s scope) check(f *domain.Facility, write bool) error {
 		return fmt.Errorf("%w: the facility is read-only in your organization scope", fw.ErrForbidden)
 	}
 	return nil
+}
+
+// errUnchanged dice, desde dentro de un cambio, que la instalación ya está como se pide: no se guarda
+// nada (ni versión nueva ni evento) y el caso de uso devuelve la instalación como está.
+var errUnchanged = errors.New("facilities: unchanged")
+
+// unlessVersioned aplica mw sólo a los cambios sin versión leída: con ella, un conflicto es
+// definitivo y reintentar no sirve (y dentro de una transacción ajena, tampoco se debe).
+func unlessVersioned[In, Out any](version func(In) int64, mw app.Middleware[In, Out]) app.Middleware[In, Out] {
+	return func(next app.Handler[In, Out]) app.Handler[In, Out] {
+		wrapped := mw(next)
+		return app.HandlerFunc[In, Out](func(ctx context.Context, in In) (Out, error) {
+			if version(in) != 0 {
+				return next.Handle(ctx, in)
+			}
+			return wrapped.Handle(ctx, in)
+		})
+	}
 }
 
 type service struct {
@@ -334,18 +364,29 @@ func NewService(d Deps) *Service {
 	s := service{Deps: d, orch: orchestration.New[domain.FacilityID, *domain.Facility](d.Facilities, d.UoW, opts...)}
 	retry, backoff := 3, 10*time.Millisecond
 
-	update := func(ctx context.Context, id domain.FacilityID, fn func(context.Context, *domain.Facility, map[domain.FacilityTypeID]domain.FacilityType) error) (FacilityDTO, error) {
+	update := func(ctx context.Context, id domain.FacilityID, version int64, fn func(context.Context, *domain.Facility, map[domain.FacilityTypeID]domain.FacilityType) error) (FacilityDTO, error) {
 		types, err := s.types(ctx)
 		if err != nil {
 			return FacilityDTO{}, err
 		}
 		sc := scopeOf(ctx)
+		var same *domain.Facility
 		f, err := s.orch.Update(ctx, id, func(ctx context.Context, f *domain.Facility) error {
 			if err := sc.check(f, true); err != nil {
 				return err
 			}
-			return fn(ctx, f, types)
+			if version != 0 && f.Version() != version {
+				return fw.Conflict(domain.FacilityKind, f.ID(), version, "the facility changed after it was read: read it again")
+			}
+			err := fn(ctx, f, types)
+			if errors.Is(err, errUnchanged) {
+				same = f
+			}
+			return err
 		})
+		if same != nil {
+			return toDTO(same, types), nil
+		}
 		if err != nil {
 			return FacilityDTO{}, err
 		}
@@ -409,23 +450,23 @@ func NewService(d Deps) *Service {
 	}, pipeline.Transactional[RegisterFacility, FacilityDTO](d.UoW))
 
 	svc.Rename = guard(PermUpdate, func(ctx context.Context, c RenameFacility) (FacilityDTO, error) {
-		return update(ctx, c.ID, func(_ context.Context, f *domain.Facility, _ map[domain.FacilityTypeID]domain.FacilityType) error {
+		return update(ctx, c.ID, c.Version, func(_ context.Context, f *domain.Facility, _ map[domain.FacilityTypeID]domain.FacilityType) error {
 			return f.Rename(c.Name)
 		})
-	}, pipeline.RetryOnConflict[RenameFacility, FacilityDTO](retry, backoff))
+	}, unlessVersioned(func(c RenameFacility) int64 { return c.Version }, pipeline.RetryOnConflict[RenameFacility, FacilityDTO](retry, backoff)))
 
 	svc.Relocate = guard(PermUpdate, func(ctx context.Context, c RelocateFacility) (FacilityDTO, error) {
 		loc, err := s.location(ctx, &c.Location)
 		if err != nil {
 			return FacilityDTO{}, err
 		}
-		return update(ctx, c.ID, func(_ context.Context, f *domain.Facility, types map[domain.FacilityTypeID]domain.FacilityType) error {
+		return update(ctx, c.ID, c.Version, func(_ context.Context, f *domain.Facility, types map[domain.FacilityTypeID]domain.FacilityType) error {
 			return f.Relocate(types[f.Type()], loc)
 		})
-	}, pipeline.RetryOnConflict[RelocateFacility, FacilityDTO](retry, backoff))
+	}, unlessVersioned(func(c RelocateFacility) int64 { return c.Version }, pipeline.RetryOnConflict[RelocateFacility, FacilityDTO](retry, backoff)))
 
 	svc.Move = guard(PermUpdate, func(ctx context.Context, c MoveFacility) (FacilityDTO, error) {
-		return update(ctx, c.ID, func(ctx context.Context, f *domain.Facility, _ map[domain.FacilityTypeID]domain.FacilityType) error {
+		return update(ctx, c.ID, c.Version, func(ctx context.Context, f *domain.Facility, _ map[domain.FacilityTypeID]domain.FacilityType) error {
 			parent, err := s.parent(ctx, scopeOf(ctx), f.ID(), f.Owner(), c.PartOf)
 			if err != nil {
 				return err
@@ -435,7 +476,10 @@ func NewService(d Deps) *Service {
 	}, pipeline.Transactional[MoveFacility, FacilityDTO](d.UoW))
 
 	svc.SetActive = guard(PermUpdate, func(ctx context.Context, c SetFacilityActive) (FacilityDTO, error) {
-		return update(ctx, c.ID, func(_ context.Context, f *domain.Facility, _ map[domain.FacilityTypeID]domain.FacilityType) error {
+		return update(ctx, c.ID, c.Version, func(_ context.Context, f *domain.Facility, _ map[domain.FacilityTypeID]domain.FacilityType) error {
+			if f.IsActive() == c.Active {
+				return errUnchanged // repetirlo no es un error ni un cambio
+			}
 			if c.Active {
 				f.Activate()
 			} else {
@@ -443,7 +487,7 @@ func NewService(d Deps) *Service {
 			}
 			return nil
 		})
-	}, pipeline.RetryOnConflict[SetFacilityActive, FacilityDTO](retry, backoff))
+	}, unlessVersioned(func(c SetFacilityActive) int64 { return c.Version }, pipeline.RetryOnConflict[SetFacilityActive, FacilityDTO](retry, backoff)))
 
 	svc.Get = guard(PermRead, func(ctx context.Context, q GetFacility) (FacilityDTO, error) {
 		types, err := s.types(ctx)
@@ -491,7 +535,11 @@ func NewService(d Deps) *Service {
 		if q.ActiveOnly {
 			parts = append(parts, domain.FieldActive.Eq(true))
 		}
-		page, err := d.Facilities.FindPage(ctx, spec.And(parts...), fw.NewPageRequest(q.Page, q.Size, domain.FieldName.Asc()))
+		order := domain.FieldName.Asc()
+		if q.Desc {
+			order = domain.FieldName.Desc()
+		}
+		page, err := d.Facilities.FindPage(ctx, spec.And(parts...), fw.NewPageRequest(q.Page, q.Size, order, domain.FieldIDOrder.Asc()))
 		if err != nil {
 			return fw.Page[FacilityDTO]{}, err
 		}

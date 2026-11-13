@@ -359,6 +359,8 @@ var (
 	FieldName   = spec.Text("name", (*Facility).Name)
 	FieldActive = spec.Comparable("active", (*Facility).IsActive)
 	FieldPartOf = spec.Optional("part_of", (*Facility).PartOf)
+	// FieldIDOrder ordena por la identidad: deshace los empates de una lista paginada.
+	FieldIDOrder = spec.Ordered("id", func(f *Facility) string { return f.ID().String() })
 )
 
 // OwnedBy selecciona las instalaciones de las organizaciones.
