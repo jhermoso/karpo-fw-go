@@ -81,6 +81,7 @@ func compose(t *testing.T) *host {
 		"accountant": {sapp.PermAssetRead, sapp.PermDepreciate, sapp.PermAssetDispose},
 		"viewer":     {sapp.PermAssetRead},
 		"outsider":   sapp.Permissions(),
+		"clerk":      sapp.Permissions(),
 	}
 	for u, perms := range users {
 		h.ids[u] = fw.NewUUID()

@@ -40,9 +40,15 @@ type Deps struct {
 
 // Service expone los casos de uso.
 type Service struct {
-	Register     app.CommandHandler[RegisterAsset, AssetDTO]
-	Change       app.CommandHandler[ChangeAsset, AssetDTO]
-	Dispose      app.CommandHandler[DisposeAsset, AssetDTO]
+	Register app.CommandHandler[RegisterAsset, AssetDTO]
+	Change   app.CommandHandler[ChangeAsset, AssetDTO]
+	Dispose  app.CommandHandler[DisposeAsset, AssetDTO]
+	// Disposed dice si un activo está dado de baja, a quien puede darlo de baja (el permiso y el
+	// ámbito de escritura de Dispose): el DELETE del contrato de mantenimiento lo pregunta.
+	Disposed app.QueryHandler[GetAsset, bool]
+	// Changeable comprueba que quien llama puede cambiar un activo (el permiso y el ámbito de
+	// escritura de Change), aunque el cambio no cambie nada.
+	Changeable   app.QueryHandler[GetAsset, bool]
 	Depreciate   app.CommandHandler[RunDepreciation, RunDTO]
 	GetAsset     app.QueryHandler[GetAsset, AssetDTO]
 	SearchAssets app.QueryHandler[SearchAssets, fw.Page[AssetDTO]]
@@ -127,6 +133,22 @@ func changing[In, Out any](uow fw.UnitOfWork, p authz.Permission, fn func(contex
 	return guard(p, fn, pipeline.RetryOnConflict[In, Out](5, 10*time.Millisecond), pipeline.Transactional[In, Out](uow))
 }
 
+// versioned es changing para un cambio que puede traer la versión leída: con ella, un conflicto es
+// definitivo y no se reintenta (y dentro de una transacción ajena, tampoco se debe).
+func versioned[In, Out any](uow fw.UnitOfWork, p authz.Permission, version func(In) int64, fn func(context.Context, In) (Out, error)) app.Handler[In, Out] {
+	retry := pipeline.RetryOnConflict[In, Out](5, 10*time.Millisecond)
+	unlessVersioned := func(next app.Handler[In, Out]) app.Handler[In, Out] {
+		wrapped := retry(next)
+		return app.HandlerFunc[In, Out](func(ctx context.Context, in In) (Out, error) {
+			if version(in) != 0 {
+				return next.Handle(ctx, in)
+			}
+			return wrapped.Handle(ctx, in)
+		})
+	}
+	return guard(p, fn, unlessVersioned, pipeline.Transactional[In, Out](uow))
+}
+
 // RegisterAsset da de alta un activo en el registro de una empresa.
 type RegisterAsset struct {
 	Company    string     `json:"company"`
@@ -150,6 +172,8 @@ type ChangeAsset struct {
 	Name     string         `json:"name"`
 	Serial   string         `json:"serial,omitempty"`
 	Location string         `json:"location,omitempty"`
+	// Version, si no es cero, es la que se leyó: si el activo ya está en otra, el cambio es un conflicto.
+	Version int64 `json:"-"`
 }
 
 // DisposeAsset vende o desecha un activo en una fecha.
@@ -158,6 +182,8 @@ type DisposeAsset struct {
 	Date     vocab.Date     `json:"date"`
 	Kind     string         `json:"kind"`
 	Proceeds string         `json:"proceeds,omitempty"`
+	// Version, si no es cero, es la que se leyó: si el activo ya está en otra, la baja es un conflicto.
+	Version int64 `json:"-"`
 }
 
 // RunDepreciation carga la amortización de todos los activos de una empresa hasta un mes.
@@ -173,7 +199,10 @@ type GetAsset struct{ ID domain.AssetID }
 // SearchAssets busca en el registro del ámbito de quien llama.
 type SearchAssets struct {
 	Company, Class string
-	InService      bool // no dados de baja
+	InService      bool   // no dados de baja
+	Text           string // en el nombre, sin distinguir mayúsculas
+	Sort           string // code (por omisión) o name; los empates, por la identidad
+	Desc           bool
 	Page, Size     int
 }
 
@@ -298,11 +327,14 @@ func NewService(d Deps) *Service {
 		return assetDTO(a, true), nil
 	})
 
-	update := func(ctx context.Context, id domain.AssetID, fn func(*domain.Asset) error) (AssetDTO, error) {
+	update := func(ctx context.Context, id domain.AssetID, version int64, fn func(*domain.Asset) error) (AssetDTO, error) {
 		sc := scopeOf(ctx)
 		a, err := assets.Update(ctx, id, func(_ context.Context, a *domain.Asset) error {
 			if err := sc.check(domain.AssetKind, a.ID(), a.State().Company, true); err != nil {
 				return err
+			}
+			if version != 0 && a.Version() != version {
+				return fw.Conflict(domain.AssetKind, a.ID(), version, "the asset changed after it was read: read it again")
 			}
 			return fn(a)
 		})
@@ -311,7 +343,7 @@ func NewService(d Deps) *Service {
 		}
 		return assetDTO(a, true), nil
 	}
-	svc.Change = changing(d.UoW, PermAssetUpdate, func(ctx context.Context, c ChangeAsset) (AssetDTO, error) {
+	svc.Change = versioned(d.UoW, PermAssetUpdate, func(c ChangeAsset) int64 { return c.Version }, func(ctx context.Context, c ChangeAsset) (AssetDTO, error) {
 		var v fw.Validation
 		det := domain.Details{Name: c.Name, Serial: c.Serial}
 		if c.Location != "" {
@@ -320,15 +352,35 @@ func NewService(d Deps) *Service {
 		if err := v.Err(); err != nil {
 			return AssetDTO{}, err
 		}
-		return update(ctx, c.ID, func(a *domain.Asset) error { return a.Change(det) })
+		return update(ctx, c.ID, c.Version, func(a *domain.Asset) error { return a.Change(det) })
 	})
-	svc.Dispose = changing(d.UoW, PermAssetDispose, func(ctx context.Context, c DisposeAsset) (AssetDTO, error) {
+	svc.Dispose = versioned(d.UoW, PermAssetDispose, func(c DisposeAsset) int64 { return c.Version }, func(ctx context.Context, c DisposeAsset) (AssetDTO, error) {
 		var v fw.Validation
 		proceeds := parseDecimal(&v, "proceeds", c.Proceeds)
 		if err := v.Err(); err != nil {
 			return AssetDTO{}, err
 		}
-		return update(ctx, c.ID, func(a *domain.Asset) error { return a.Dispose(c.Date, strings.TrimSpace(c.Kind), proceeds) })
+		return update(ctx, c.ID, c.Version, func(a *domain.Asset) error { return a.Dispose(c.Date, strings.TrimSpace(c.Kind), proceeds) })
+	})
+	svc.Changeable = guard(PermAssetUpdate, func(ctx context.Context, q GetAsset) (bool, error) {
+		a, err := d.Assets.Get(ctx, q.ID)
+		if err != nil {
+			return false, err
+		}
+		if err := scopeOf(ctx).check(domain.AssetKind, a.ID(), a.State().Company, true); err != nil {
+			return false, err
+		}
+		return true, nil
+	})
+	svc.Disposed = guard(PermAssetDispose, func(ctx context.Context, q GetAsset) (bool, error) {
+		a, err := d.Assets.Get(ctx, q.ID)
+		if err != nil {
+			return false, err
+		}
+		if err := scopeOf(ctx).check(domain.AssetKind, a.ID(), a.State().Company, true); err != nil {
+			return false, err
+		}
+		return a.Status() == "disposed", nil
 	})
 
 	// La ejecución carga cada activo en su propio paso de la misma unidad de trabajo: todos los meses
@@ -398,10 +450,26 @@ func NewService(d Deps) *Service {
 		if q.InService {
 			parts = append(parts, domain.AstFieldDisposed.Eq(false))
 		}
+		if t := strings.TrimSpace(q.Text); t != "" {
+			parts = append(parts, domain.AstFieldName.ContainsFold(t))
+		}
+		order := domain.AstFieldCode.Asc()
+		switch {
+		case q.Sort == "name" && q.Desc:
+			order = domain.AstFieldName.Desc()
+		case q.Sort == "name":
+			order = domain.AstFieldName.Asc()
+		case q.Sort == "" || q.Sort == "code":
+			if q.Desc {
+				order = domain.AstFieldCode.Desc()
+			}
+		default:
+			v.Add("sort", "enum", "code or name")
+		}
 		if err := v.Err(); err != nil {
 			return fw.Page[AssetDTO]{}, err
 		}
-		page, err := d.Assets.FindPage(ctx, spec.And(parts...), fw.NewPageRequest(q.Page, q.Size, domain.AstFieldCode.Asc()))
+		page, err := d.Assets.FindPage(ctx, spec.And(parts...), fw.NewPageRequest(q.Page, q.Size, order, domain.AstFieldIDOrder.Asc()))
 		if err != nil {
 			return fw.Page[AssetDTO]{}, err
 		}
