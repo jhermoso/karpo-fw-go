@@ -356,6 +356,9 @@ var (
 	AstFieldCode     = spec.Ordered("code", func(a *Asset) string { return a.s.Code })
 	AstFieldClass    = spec.Comparable("asset_class", func(a *Asset) string { return string(a.s.Class) })
 	AstFieldDisposed = spec.Comparable("disposed", func(a *Asset) bool { return !a.s.Disposed.IsZero() })
+	AstFieldName     = spec.Text("name", func(a *Asset) string { return a.s.Name })
+	// AstFieldIDOrder ordena por la identidad: deshace los empates de una lista paginada.
+	AstFieldIDOrder = spec.Ordered("id", func(a *Asset) string { return a.ID().String() })
 )
 
 // Eventos del contexto.

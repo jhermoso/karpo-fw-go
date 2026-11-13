@@ -25,6 +25,9 @@ type Module struct {
 	Service           *uapp.Service
 	IntegrationOutbox application.OutboxStore
 	Audit             application.AuditLog
+	// UoW es la unidad de trabajo del contexto: el contrato de mantenimiento hace en una sola los
+	// varios casos de uso de un cambio.
+	UoW fw.UnitOfWork
 }
 
 // Compose construye el contexto sobre sw.
@@ -36,7 +39,7 @@ func Compose(sw *hotswap.Switch) *Module {
 		Recorder: outbox.Recorders(outbox.NewRecorder(hotswap.Outbox(sw, infrastructure.OutboxFactory)),
 			uapp.Publications(messaging.NewRecorder(contracts.Source, integration))),
 	})
-	return &Module{Service: svc, IntegrationOutbox: integration, Audit: audit}
+	return &Module{Service: svc, IntegrationOutbox: integration, Audit: audit, UoW: sw}
 }
 
 // Relay reenvía el Published Language a un transporte.
@@ -117,6 +120,7 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	})
 	mux.HandleFunc("PUT /api/assets/{id}", command(func(c *uapp.ChangeAsset, id domain.AssetID) { c.ID = id }, svc.Change.Handle))
 	mux.HandleFunc("POST /api/assets/{id}/dispose", command(func(c *uapp.DisposeAsset, id domain.AssetID) { c.ID = id }, svc.Dispose.Handle))
+	m.RegisterMaintenanceRoutes(mux) // el contrato de mantenimiento, bajo /api/v1/assets
 }
 
 var _ distribution.EndpointModule = (*Module)(nil)

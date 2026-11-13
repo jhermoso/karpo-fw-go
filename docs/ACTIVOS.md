@@ -160,3 +160,31 @@ contexts/assets/
 - Ejecutar la amortización de forma programada al cierre de cada mes.
 - Importar de C#: `FixedAsset` solo aporta nombre, tipo y fecha de adquisición; el coste y la vida
   útil hay que cargarlos a mano o desde la contabilidad anterior.
+
+## El contrato de mantenimiento (front; añadido el 2026-11-13)
+
+El registro de inmovilizado se mantiene también por el **contrato de mantenimiento**, el que lee el
+motor de Angular de Karpo C# (el contrato `crud` del lenguaje de Theros), bajo `/api/v1/assets`. Es
+otra puerta a los mismos casos de uso; la configuración de su pantalla está en
+`front/angular/config/entities/assets/asset.config.json` (ver front/README.md). Es el mismo contrato
+que el de Productos e Instalaciones (docs/PRODUCTOS.md, docs/INSTALACIONES.md).
+
+| Operación | Ruta | Qué hace |
+|---|---|---|
+| Lista | `GET /api/v1/assets?page&pageSize&sortBy&sortOrder&search&name&company&class&inService&isActive`, o `POST /api/v1/assets/search` con `{filter, pagination: {pageNumber, pageSize, orderBy, ascending}}` | la página del motor: `{items, total, totalCount, pageNumber, pageSize, totalPages}`. Orden por `code` (por omisión) o `name`, con la identidad para deshacer empates; otro, 400. `search` y `name` buscan en el nombre; `inService=true` (o `isActive=true`) deja los que no están dados de baja. `company` sólo estrecha el ámbito de quien llama: la de otra organización da una lista vacía. Un filtro que no es de la lista se ignora |
+| Lectura | `GET /api/v1/assets/{id}` | el activo (sin sus cuotas, que se leen por `/api/assets/{id}`) |
+| Alta | `POST /api/v1/assets` | 201 con `Location`; lo que sobra en el cuerpo se ignora. Un activo nace en servicio: `disposed` o `disposal` en el alta es 400 |
+| Cambio | `PUT /api/v1/assets/{id}` con lo leído y su `version` | 200; lo que el cuerpo no trae, o trae como null, se queda como está. Sin `version`, 400; con una que ya no es la suya, 409. Se traduce a los casos de uso de siempre, sólo los de lo que cambia: cambiar los datos descriptivos (`name`, `serial`, `location`) y, si un activo en servicio trae `disposed`/`disposal`/`proceeds`, darlo de baja, en ese orden y cada uno con la versión que dejó el anterior. Todo el cambio es una sola unidad de trabajo: si un paso falla, no queda hecho ninguno. `company`, `code`, `class`, `supplier`, `document`, `acquired`, `inService`, `cost`, `residual` y `lifeMonths` no los cambia ningún caso de uso (con ellos se calcularon las cuotas): cambiarlos es 400 `immutable` (se comparan por su valor: identidades, código y clase sin distinguir mayúsculas, importes como números). Una baja hecha tampoco cambia. Los importes calculados (`monthly`, `accumulated`, `netBookValue`, `status`, `result`) se ignoran |
+| Baja | `DELETE /api/v1/assets/{id}` | un activo no se borra: sale del registro **dándolo de baja**, y la baja exige fecha, venta o desecho e importe, que un DELETE no lleva. Sobre uno en servicio, 409 con `code: assets.disposal_requires_data` (se da de baja por el PUT o por `POST /api/assets/{id}/dispose`); sobre uno ya dado de baja, 204, repetible y sin versión nueva. Siempre exige el permiso y el ámbito de escritura de la baja (`Assets.Asset.Dispose`; 403 sin él) |
+
+- **El objeto:** `id`, `company`, `code`, `name`, `class`, `serial`, `location`, `supplier`,
+  `document`, `acquired`, `inService`, `cost`, `residual`, `lifeMonths`, `monthly`, `accumulated`,
+  `netBookValue`, `status`, `disposed`, `disposal`, `proceeds`, `result`, `version`.
+- **La versión:** `ChangeAsset` y `DisposeAsset` aceptan la versión leída (`Version`, fuera del JSON
+  de `/api/assets`) y dan conflicto si el activo ya está en otra; con ella el conflicto es definitivo
+  y no se reintenta dentro de la transacción. Sin ella, se reintenta como siempre.
+- **El error:** RFC 9457 con `errors` como diccionario (campo → mensajes) y `errorCodes`, en el
+  mismo orden; en un 409 o un 422, `code`. Un cuerpo de más de 1 MiB es 413. El resto de la API de
+  Activos sigue con la lista del framework.
+- **Permisos y ámbito:** los de siempre (`Assets.Asset.Read`, `…Update` y `…Dispose`).
+- **Prueba:** `TestAssets_MaintenanceContract_MemoryThenSQLite`.
