@@ -130,8 +130,8 @@ en día no hábil retrocede hasta `BackwardDays` días o, si no encuentra hábil
 2. **Geografía deja de ser solo lectura en esto**, con dos permisos nuevos. No se toca el resto.
    Sugerencia: sí.
 3. **No hay semilla de festivos**: se cargan por la ruta o, desde el mismo día, con la fuente
-   `holidays` de Importación (ver [IMPORTACION.md](IMPORTACION.md), «Fuente del calendario de
-   festivos»).
+   `holidays` de Importación. **Hoy sólo por la ruta:** el contexto de importación se retiró
+   después de este repositorio.
 4. **Sábados y domingos cuentan como no hábiles para cobrar**, y eso lo decide el anfitrión, no
    Geografía. Sugerencia: sí; es el uso bancario en España. Otro sector u otro país lo cambia en
    el adaptador.

@@ -1,6 +1,11 @@
 # Contrato HTTP común de Parties, versión 1 (propuesta)
 
-> **Estado: propuesta, sin aprobar ni revisar.** Escrita el 2026-10-13 en la sesión de Karpo Go.
+> **Estado: propuesta, sin aprobar.** La revisión de Karpo C# está en §7 ter y lo que cambiaron las
+> decisiones del 13 y 14 de octubre, en §7 quater; el estado al día lo lleva el registro de
+> decisiones comunes ([DECISIONES-COMUNES.md](DECISIONES-COMUNES.md) §3). Lo que sigue es el texto
+> de partida.
+>
+> Escrita el 2026-10-13 en la sesión de Karpo Go.
 > Javier eligió ese día que el contrato HTTP común sea **uno nuevo y limpio, escrito una vez**, que
 > sirvan el back de C# y el de Go, empezando por lo que usan las pantallas principales
 > ([CONTRATO-HTTP-PARTIES.md](CONTRATO-HTTP-PARTIES.md), opción C). Falta que lo revisen las

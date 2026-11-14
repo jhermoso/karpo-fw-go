@@ -77,7 +77,7 @@ func (c client) must(got, want int, what string) {
 }
 
 // scenario arranca un anfitrión sobre un backend migrado y recorre lo que sólo hace el conjunto: el
-// primer administrador, una sesión, una importación que da de alta empresas en Parties, una cuenta
+// primer administrador, una sesión, dos empresas dadas de alta en Parties, una cuenta
 // en una de ellas, su exportación escrita por las tareas, los mensajes entregados y la historia
 // leída.
 func scenario(t *testing.T, sw *hotswap.Switch) {

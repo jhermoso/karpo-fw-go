@@ -44,18 +44,18 @@ vez se levanta un PostgreSQL desechable propio: un contenedor de Docker con nomb
 borra solo al pararlo (`--rm`). Nunca se usa para esto un contenedor que ya exista.
 
 ```powershell
-netstat -ano | findstr :55432                     # no debe salir nada: el puerto está libre
+netstat -ano | findstr :55532                     # no debe salir nada: el puerto está libre
 $pg = "humo-pg-$(Get-Random)"                    # un nombre único
 $pw = [guid]::NewGuid().ToString('N')            # una contraseña nueva, sólo para este contenedor
-docker run --rm -d --name $pg -p 127.0.0.1:55432:5432 -e POSTGRES_PASSWORD=$pw postgres:17
+docker run --rm -d --name $pg -p 127.0.0.1:55532:5432 -e POSTGRES_PASSWORD=$pw postgres:17
 do { Start-Sleep 1; docker exec $pg pg_isready -U postgres -h 127.0.0.1 } until ($LASTEXITCODE -eq 0)
 
 $env:KARPO_ENV = 'development'
-$env:KARPO_SMOKE_POSTGRES_URL = "postgres://postgres:$pw@127.0.0.1:55432/postgres?sslmode=disable"
+$env:KARPO_SMOKE_POSTGRES_URL = "postgres://postgres:$pw@127.0.0.1:55532/postgres?sslmode=disable"
 go -C cmd/karpo-smoke-postgres run -tags smoke . -port 8092 -seed
 ```
 
-Debería verse lo mismo que con SQLite, y en el aviso `on PostgreSQL postgres@127.0.0.1:55432/postgres`
+Debería verse lo mismo que con SQLite, y en el aviso `on PostgreSQL postgres@127.0.0.1:55532/postgres`
 (sin la contraseña). El resto de la guía es igual. Para pararlo todo, en esta ventana:
 
 ```powershell
@@ -63,7 +63,7 @@ Debería verse lo mismo que con SQLite, y en el aviso `on PostgreSQL postgres@12
 docker stop $pg                                  # con --rm, el contenedor y sus datos desaparecen
 Remove-Item Env:KARPO_SMOKE_POSTGRES_URL
 docker ps -a --filter "name=$pg"                 # sólo la cabecera: ya no existe
-netstat -ano | findstr :55432                    # ninguna línea LISTENING
+netstat -ano | findstr :55532                    # ninguna línea LISTENING
 ```
 
 Si la cadena apunta a otra máquina se niega sin abrirla (`not on this machine`). Si la base ya

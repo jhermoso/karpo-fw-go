@@ -7,9 +7,9 @@
 > día**, junto con todas las decisiones transmitidas hasta D-47 («confirmo el registro y las
 > decisiones transmitidas»).
 >
-> **Dónde.** Repositorio `jhermoso/karpo-fw-go`, rama `docs/parties-modelo-comun`, fichero
-> `docs/DECISIONES-COMUNES.md` (PR en borrador 11). Cuando se fusione, estará en la rama principal
-> con la misma ruta.
+> **Dónde.** Repositorio `jhermoso/karpo-fw-go`, rama principal, fichero
+> `docs/DECISIONES-COMUNES.md` (desde el 2026-10-15). Cada cambio va en su rama y su PR. Los
+> números de PR anteriores al 2026-10-16 son del repositorio privado `karpo-fw-go-historico`.
 >
 > **Para qué sirve.** Antes de recomendar o decidir algo de modelo común, cada sesión lo lee; y
 > cada sesión comprueba contra él en qué diverge su proyecto.
@@ -501,7 +501,7 @@ empresa es un envío o un trabajo; y cómo se añade un valor de catálogo en SQ
 
 | Qué | Dónde | Estado |
 |---|---|---|
-| Contrato HTTP común de Parties, versión 1 | [CONTRATO-PARTIES-V1.md](CONTRATO-PARTIES-V1.md), rama `docs/contrato-http-parties` (PR 19) | Revisado por Karpo C# y por Trench; doce decisiones abiertas |
+| Contrato HTTP común de Parties, versión 1 | [CONTRATO-PARTIES-V1.md](CONTRATO-PARTIES-V1.md) (llegó por la PR 19, en la rama `docs/contrato-http-parties`) | Revisado por Karpo C# y por Trench; doce decisiones abiertas |
 | Contrato de extensibilidad | Repositorio de Trench, `doc/Contrato_Extensibilidad_Campos_Personalizados_2026-10-13.md` | Revisado por Go; siete decisiones abiertas |
 | Expresión de filtro (`FilterExpressionDto`) | Trench, en su rama principal | Adoptada tal cual en el contrato HTTP; falta acordar si mira sólo los roles vigentes |
 | Lo que falta del modelo de Parties | [PARTIES-MODELO-COMUN.md](PARTIES-MODELO-COMUN.md) §3 | Unas 35 filas sin decidir |
