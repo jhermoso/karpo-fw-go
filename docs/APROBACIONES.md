@@ -5,7 +5,7 @@ exigir aprobación; qué acciones la exigen se configura por empresa; aprueba qu
 aprobar esa acción y no sea quien la pidió. Primer uso: bloquear y desbloquear proveedores y clientes.
 
 Este documento cubre el **paso 1**, el motor en el framework, y el **paso 2**, la configuración por
-empresa en Parties. El paso 3 está pendiente (abajo).
+empresa en Parties, y el **paso 3** en Compras: bloquear y desbloquear proveedores (abajo).
 
 ## Conceptos
 
@@ -89,8 +89,20 @@ Qué acciones exigen aprobación es un ajuste de cada empresa interna, en su per
 El contexto declara en su catálogo de permisos el permiso de aprobar cada acción que admita aprobación
 (`ApprovePermission(acción)`), para que Seguridad pueda concederlo.
 
+## Paso 3 en Compras (hecho)
+
+Como arriba, con estas concreciones (docs/COMPRAS.md, «Aprobación del bloqueo y el desbloqueo»):
+
+- **Al aprobar, la acción se aplica en la misma transacción** que la resolución, no en un suscriptor
+  de `approval.approved`: es lo más sencillo y no deja una solicitud aprobada sin aplicar. Es
+  idempotente: si el objetivo ya está en el estado pedido, no se toca. Los eventos `approval.*` quedan
+  en la auditoría y no salen al outbox.
+- **El aprobador necesita también el ámbito de escritura** de la empresa de la solicitud (404 fuera
+  de él, 403 de sólo lectura), como cualquier otro cambio del contexto.
+- Si el mismo cambio trae otros campos, se aplican y sólo el bloqueo queda pendiente (202 con
+  `pendingApproval`).
+
 ## Pendiente
 
-- **Paso 3**: el primer uso, bloquear y desbloquear proveedores en Compras y clientes en Ventas.
-- Que el aprobador tenga además acceso de escritura a la empresa (`authz.RequireWrite`) se decidirá en el
-  paso 3, cuando se vea cómo se nombra la empresa en esos contextos.
+- **Paso 3 en Ventas**: bloquear y desbloquear clientes, igual que en Compras.
+- El front: enseñar que un cambio quedó pendiente y una bandeja de solicitudes.

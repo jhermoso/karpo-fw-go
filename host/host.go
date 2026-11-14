@@ -232,7 +232,8 @@ func Compose(sw *hotswap.Switch, o Options) (*Host, error) {
 		// las condiciones del cliente en Orders, por sus contratos.
 		billing.WithPricing(bilinfra.ProductsCatalog{Catalog: h.Products.Catalog, Pricing: h.Products.Pricing},
 			bilinfra.OrdersTerms{Customers: h.Orders.Terms}))
-	h.Purchases = purchases.Compose(sw, purinfra.FiscalTaxes{Engine: h.Fiscal.TaxEngine}, purchases.WithMergedParties(merged))
+	h.Purchases = purchases.Compose(sw, purinfra.FiscalTaxes{Engine: h.Fiscal.TaxEngine}, purchases.WithMergedParties(merged),
+		purchases.WithApprovalPolicy(h.Parties.ApprovalPolicy))
 	h.Payments = payments.Compose(sw, payinfra.PayrollNetPay{Remittance: h.Payroll.Remittance}, payments.WithMergedParties(merged), payments.WithToday(zones))
 	h.Treasury = treasury.Compose(sw, treinfra.ReceivablesDueItems{Collectable: h.Receivables.Collectable},
 		treinfra.PaymentsPayables{Payable: h.Payments.Payable}, treinfra.PartiesIdentities{TaxIdentities: h.Parties.TaxIdentities},

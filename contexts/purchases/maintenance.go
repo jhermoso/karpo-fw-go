@@ -40,12 +40,15 @@ type MaintainedSupplier struct {
 	BlockReason     string `json:"blockReason"`
 	UnblockReason   string `json:"unblockReason"`
 	Version         int64  `json:"version"`
+	// PendingApproval es el id de la solicitud que ha dejado el cambio (202): el bloqueo o el
+	// desbloqueo espera aprobación (D-156).
+	PendingApproval string `json:"pendingApproval,omitempty"`
 }
 
 func maintained(s uapp.SupplierDTO) MaintainedSupplier {
 	return MaintainedSupplier{ID: s.ID, Company: s.Company, Supplier: s.Supplier, Category: s.Category, WithholdingRate: s.WithholdingRate,
 		PaymentDays: s.PaymentDays, IBAN: s.IBAN, Blocked: s.Blocked, BlockReason: s.BlockReason, UnblockReason: s.UnblockReason,
-		Version: s.Version}
+		Version: s.Version, PendingApproval: s.PendingApproval}
 }
 
 // maintainedInput es el cuerpo de un alta o de un cambio. Lo que sobra se ignora (un front devuelve
@@ -271,7 +274,7 @@ func (m *Module) RegisterMaintenanceRoutes(mux *http.ServeMux) {
 		if err == nil {
 			w.Header().Set("Location", MaintenanceBase+"/"+s.ID)
 		}
-		respondMaintenance(w, r, maintained(s), err, http.StatusCreated)
+		respondMaintenance(w, r, maintained(s), err, supplierStatus(s, http.StatusCreated))
 	})
 	mux.HandleFunc("PUT "+MaintenanceBase+"/{id}", func(w http.ResponseWriter, r *http.Request) {
 		id, ok := parseID(w, r)
@@ -289,14 +292,15 @@ func (m *Module) RegisterMaintenanceRoutes(mux *http.ServeMux) {
 			s, err = m.change(ctx, id, body)
 			return err
 		})
-		respondMaintenance(w, r, maintained(s), err, http.StatusOK)
+		respondMaintenance(w, r, maintained(s), err, supplierStatus(s, http.StatusOK))
 	})
 	// Un perfil de proveedor no se borra (las facturas registradas nombran al proveedor y el perfil
 	// guarda sus valores por defecto): DELETE lo bloquea, que es su baja en el dominio; a un proveedor
 	// bloqueado no se le registran facturas nuevas. Bloquear exige un motivo: en el cuerpo
 	// {"reason": "..."} o en ?reason=; sin él, 422 purchases.block_reason_required. Sobre uno ya
 	// bloqueado es 204 sin versión nueva, así que se puede repetir. Siempre exige el permiso y el
-	// ámbito de escritura.
+	// ámbito de escritura. Si bloquear exige aprobación en la empresa (D-156), no bloquea: deja la
+	// solicitud y responde 202 con {"pendingApproval": id}.
 	mux.HandleFunc("DELETE "+MaintenanceBase+"/{id}", func(w http.ResponseWriter, r *http.Request) {
 		id, ok := parseID(w, r)
 		if !ok {
@@ -315,6 +319,7 @@ func (m *Module) RegisterMaintenanceRoutes(mux *http.ServeMux) {
 				reason = in.Reason
 			}
 		}
+		var pending string
 		err := m.UoW.Do(r.Context(), func(ctx context.Context) error {
 			if _, err := svc.SupplierChangeable.Handle(ctx, uapp.GetSupplier{ID: id}); err != nil {
 				return err
@@ -323,12 +328,17 @@ func (m *Module) RegisterMaintenanceRoutes(mux *http.ServeMux) {
 			if err != nil || s.Blocked {
 				return err
 			}
-			_, err = svc.ChangeSupplier.Handle(ctx, uapp.ChangeSupplier{ID: id, Category: s.Category, WithholdingRate: s.WithholdingRate,
+			out, err := svc.ChangeSupplier.Handle(ctx, uapp.ChangeSupplier{ID: id, Category: s.Category, WithholdingRate: s.WithholdingRate,
 				PaymentDays: s.PaymentDays, IBAN: s.IBAN, Blocked: true, BlockReason: strings.TrimSpace(reason), Version: s.Version})
+			pending = out.PendingApproval
 			return err
 		})
 		if err != nil {
 			writeMaintenanceError(w, r, err)
+			return
+		}
+		if pending != "" {
+			distribution.WriteJSON(w, http.StatusAccepted, map[string]string{"pendingApproval": pending})
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
