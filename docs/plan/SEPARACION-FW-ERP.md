@@ -78,15 +78,14 @@ Theros prepara la demo (Go, monolito, Parties + Seguridad) contra `3d70d7f`. La 
 rompe mientras Theros no mueva su copia fijada: conviene hacerla **después de la demo** o, si es
 antes, que Theros no mueva su copia hasta terminarla.
 
-## 6. Decisiones para Javier (de producto, irreversibles)
+## 6. Decisiones de Javier (2026-11-14, cerradas)
 
-1. **Licencia de `karpo-fw-go`**: seguir GPL v2 o pasar a una permisiva (Apache 2.0, propuesta en
-   comercialización). Con GPL, toda aplicación que lo use y se distribuya debe ser GPL.
-2. **Historia pública**: reescribirla para quitar el ERP de toda la historia, o dejarla.
-3. **Nombre**: `karpo-erp-go` (propuesto) u otro.
+1. **Licencia de `karpo-fw-go`**: sigue GPL v2.
+2. **Historia pública**: se reescribe para quitar el ERP de toda la historia (respaldo, filter-repo, repositorio viejo archivado en privado, volver a clonar).
+3. **Nombre**: `karpo-erp-go`.
 
 ## 7. Comprobado por el orquestador de Karpo Go (main ea4eba0, 2026-11-14)
 - pkg/ y examples/ no importan contexts/ ni host/: 0 ficheros.
 - integration/ es un módulo Go propio (su go.mod) con 40 ficheros; 35 importan contexts o host y van al ERP. Se quedan en el framework docker-compose.yml, go.mod, go.sum, integration_test.go y run.ps1; los adaptadores por motor viven en pkg/, así que la conformidad se queda entera en el framework.
 - Los cuatro de cmd/ (karpo, karpo-postgres, karpo-smoke, karpo-smoke-postgres) importan el ERP: van todos al ERP.
-- Estado: sólo preparación. No se ha creado el repositorio privado, no se han borrado rutas ni reescrito historia; espera a las tres decisiones de Javier (§6) y a la demo de Theros (§5).
+- Estado: sólo preparación. No se ha creado el repositorio privado, no se han borrado rutas ni reescrito historia; las decisiones de §6 ya están tomadas; lo irreversible espera a la demo de Theros (§5).
