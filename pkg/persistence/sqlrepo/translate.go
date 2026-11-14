@@ -456,8 +456,19 @@ type orderItem struct {
 	desc  bool
 }
 
+// orderBy devuelve la lista de ORDER BY con el identificador como desempate final. Una columna
+// repetida sólo cuenta la primera vez: SQL Server rechaza el ORDER BY con columnas repetidas
+// (error 169), y la segunda aparición no cambia el orden en ningún motor. Así un llamante puede
+// pedir el desempate por id explícitamente sin chocar con el que se añade aquí.
 func (b *Builder) orderBy(items []orderItem) (string, error) {
 	parts := make([]string, 0, len(items)+1)
+	seen := make(map[string]bool, len(items)+1)
+	add := func(expr, dir string) {
+		if !seen[expr] {
+			seen[expr] = true
+			parts = append(parts, expr+dir)
+		}
+	}
 	for _, it := range items {
 		col, name, err := b.column(it.field)
 		if err != nil {
@@ -467,8 +478,8 @@ func (b *Builder) orderBy(items []orderItem) (string, error) {
 		if it.desc {
 			dir = " DESC"
 		}
-		parts = append(parts, orderColumn(b.d, b.scope.tbl, col, name)+dir)
+		add(orderColumn(b.d, b.scope.tbl, col, name), dir)
 	}
-	parts = append(parts, b.scope.alias+"."+b.d.Quote(b.scope.tbl.key)+" ASC")
+	add(orderColumn(b.d, b.scope.tbl, b.scope.alias+"."+b.d.Quote(b.scope.tbl.key), b.scope.tbl.key), " ASC")
 	return strings.Join(parts, ", "), nil
 }

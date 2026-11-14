@@ -185,3 +185,25 @@ func TestAuditStampValues_ZeroStampIsNull(t *testing.T) {
 		t.Fatalf("the system actor has no party id: %#v", vals)
 	}
 }
+
+// TestExplain_OrderByWithoutRepeatedColumns fija que una columna repetida en la ordenación sólo
+// sale una vez, en su primera aparición: el desempate por id que pide el llamante no se duplica
+// con el que añade el repositorio, ni una columna pedida dos veces. SQL Server rechaza el ORDER BY
+// con columnas repetidas (error 169).
+func TestExplain_OrderByWithoutRepeatedColumns(t *testing.T) {
+	page := domain.NewPageRequest(1, 10, rt.FieldPrice.Desc(), spec.Order[*rt.Widget]{Field: "id", Desc: true}, rt.FieldPrice.Asc())
+	for _, d := range []sqlrepo.Dialect{sqlite.New(), postgres.New(), sqlserver.New(), oracle.New(), mysql.New()} {
+		t.Run(d.Name(), func(t *testing.T) {
+			got, _, err := explain(t, d, rt.FieldActive.Eq(true), page)
+			if err != nil {
+				t.Fatal(err)
+			}
+			order := got[strings.Index(got, " ORDER BY "):]
+			id, price := "t0."+d.Quote("id"), "t0."+d.Quote("price")
+			want := " ORDER BY " + price + " DESC, " + id + " DESC "
+			if !strings.HasPrefix(order, want) {
+				t.Fatalf("ORDER BY mismatch\nwant prefix %s\ngot %s", want, order)
+			}
+		})
+	}
+}

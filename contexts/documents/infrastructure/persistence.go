@@ -82,7 +82,7 @@ func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 }
 
 // Tables lista las tablas del contexto (orden de borrado).
-var Tables = []string{"doc_documents", TableAuditLog, TableInbox}
+var Tables = []string{"doc_document_origins", "doc_documents", TableAuditLog, TableInbox}
 
 // DropAll borra las tablas del contexto y su historial de migraciones (sólo para pruebas).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
