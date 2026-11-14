@@ -23,7 +23,10 @@ import (
 
 // Module es el contexto compuesto.
 type Module struct {
-	Service           *uapp.Service
+	Service *uapp.Service
+	// UoW es la unidad de trabajo del contexto: el contrato de mantenimiento hace en una sola el
+	// cambio entero de un proveedor.
+	UoW               fw.UnitOfWork
 	IntegrationOutbox application.OutboxStore
 	Audit             application.AuditLog
 	// Consumer recibe los proveedores que Parties traslada al fusionar fichas: hay que suscribirlo
@@ -56,7 +59,7 @@ func Compose(sw *hotswap.Switch, taxes domain.Taxes, opts ...Option) *Module {
 	}
 	consumer := messaging.NewConsumer(contracts.Source, hotswap.Inbox(sw, infrastructure.InboxFactory), sw)
 	uapp.Subscribe(consumer, d)
-	return &Module{Service: uapp.NewService(d), IntegrationOutbox: integration, Audit: audit, Consumer: consumer}
+	return &Module{Service: uapp.NewService(d), UoW: sw, IntegrationOutbox: integration, Audit: audit, Consumer: consumer}
 }
 
 // Relay reenvía el Published Language a un transporte.
@@ -141,6 +144,7 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 			IncludeMergedParties: r.URL.Query().Get("includeMergedParties") == "true"})
 		distribution.Respond(w, r, out, err, http.StatusOK)
 	})
+	m.RegisterMaintenanceRoutes(mux) // el contrato de mantenimiento, bajo /api/v1/suppliers
 }
 
 var _ distribution.EndpointModule = (*Module)(nil)

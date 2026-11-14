@@ -163,6 +163,12 @@ func TestPurchasesContext(t *testing.T) {
 			if err != nil || prof.BlockReason != "" {
 				t.Fatalf("unblocked: %+v %v", prof, err)
 			}
+			// El listado paginado del mantenimiento: filtros, orden por días de pago y desempate por id.
+			pg, err := svc.PageSuppliers.Handle(actx, uapp.PageSuppliers{Company: acme.ID, Supplier: asesor.ID, Category: "professional-services",
+				ActiveOnly: true, Sort: "paymentDays", Desc: true, Page: 1, Size: 10})
+			if err != nil || pg.Total != 1 || len(pg.Items) != 1 {
+				t.Fatalf("page suppliers: %+v %v", pg, err)
+			}
 
 			// 333.33 de asesoría al 21 % (70.00) con un 7 % retenido (23.33), pagados a la cuenta del perfil.
 			a, err := svc.RegisterInvoice.Handle(actx, uapp.RegisterInvoice{Company: acme.ID, Supplier: asesor.ID, SupplierNumber: "2026/0042",

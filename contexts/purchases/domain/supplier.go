@@ -92,4 +92,10 @@ func (p *SupplierProfile) AuditSnapshot() map[string]any {
 var (
 	SupFieldCompany  = spec.Comparable("company", func(p *SupplierProfile) OrganizationID { return p.s.Company })
 	SupFieldSupplier = spec.Comparable("supplier", func(p *SupplierProfile) PartyID { return p.s.Supplier })
+	SupFieldCategory = spec.Comparable("category", func(p *SupplierProfile) Category { return p.s.Category })
+	SupFieldBlocked  = spec.Comparable("blocked", func(p *SupplierProfile) bool { return p.s.Blocked })
+	// SupFieldPaymentDays ordena por los días de pago, el único orden de la lista de mantenimiento.
+	SupFieldPaymentDays = spec.Ordered("payment_days", func(p *SupplierProfile) int { return p.s.PaymentDays })
+	// SupFieldIDOrder ordena por la identidad: deshace los empates de una lista paginada.
+	SupFieldIDOrder = spec.Ordered("id", func(p *SupplierProfile) string { return p.ID().String() })
 )

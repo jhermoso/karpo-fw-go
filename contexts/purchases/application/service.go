@@ -57,6 +57,12 @@ type Service struct {
 
 	SetSupplier     app.CommandHandler[SetSupplier, SupplierDTO]
 	SearchSuppliers app.QueryHandler[SearchSuppliers, []SupplierDTO]
+	// Lo que usa el contrato de mantenimiento (/api/v1/suppliers).
+	RegisterSupplier   app.CommandHandler[SetSupplier, SupplierDTO]
+	ChangeSupplier     app.CommandHandler[ChangeSupplier, SupplierDTO]
+	GetSupplier        app.QueryHandler[GetSupplier, SupplierDTO]
+	SupplierChangeable app.QueryHandler[GetSupplier, bool]
+	PageSuppliers      app.QueryHandler[PageSuppliers, fw.Page[SupplierDTO]]
 }
 
 type scope struct {
@@ -150,6 +156,22 @@ func guard[In, Out any](p authz.Permission, fn func(context.Context, In) (Out, e
 
 func retry[In, Out any]() app.Middleware[In, Out] {
 	return pipeline.RetryOnConflict[In, Out](5, 10*time.Millisecond)
+}
+
+// versioned es un cambio que puede traer la versión leída: con ella, un conflicto es definitivo y no
+// se reintenta (y dentro de una transacción ajena, tampoco se debe).
+func versioned[In, Out any](uow fw.UnitOfWork, p authz.Permission, version func(In) int64, fn func(context.Context, In) (Out, error)) app.Handler[In, Out] {
+	again := retry[In, Out]()
+	unlessVersioned := func(next app.Handler[In, Out]) app.Handler[In, Out] {
+		wrapped := again(next)
+		return app.HandlerFunc[In, Out](func(ctx context.Context, in In) (Out, error) {
+			if version(in) != 0 {
+				return next.Handle(ctx, in)
+			}
+			return wrapped.Handle(ctx, in)
+		})
+	}
+	return guard(p, fn, unlessVersioned, pipeline.Transactional[In, Out](uow))
 }
 
 // Publications traduce los eventos de dominio al Published Language.
