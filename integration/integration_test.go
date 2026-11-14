@@ -5,10 +5,11 @@
 // Los servidores se arrancan con `docker compose up -d` (véase docker-compose.yml) y se exportan
 // los DSN:
 //
-//	KARPO_PG_DSN      postgres://karpo:karpo@localhost:55433/karpo?sslmode=disable
-//	KARPO_MSSQL_DSN   sqlserver://sa:Karpo_2026!@localhost:51433?database=master
-//	KARPO_ORACLE_DSN  oracle://karpo:karpo@localhost:51521/FREEPDB1
-//	KARPO_MYSQL_DSN   karpo:karpo@tcp(localhost:53306)/karpo?parseTime=true&loc=UTC
+//	KARPO_PG_DSN       postgres://karpo:karpo@localhost:55433/karpo?sslmode=disable
+//	KARPO_SUPABASE_DSN postgres://postgres:karpo@localhost:54433/postgres?sslmode=disable
+//	KARPO_MSSQL_DSN    sqlserver://sa:Karpo_2026!@localhost:51433?database=master
+//	KARPO_ORACLE_DSN   oracle://karpo:karpo@localhost:51521/FREEPDB1
+//	KARPO_MYSQL_DSN    karpo:karpo@tcp(localhost:53306)/karpo?parseTime=true&loc=UTC
 //
 // Los motores sin DSN se saltan.
 package integration

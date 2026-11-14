@@ -78,8 +78,8 @@ tiempo de prueba, participación en el capital) y edición de persona.
   datos entre motores.
 - **Filtros HTTP → especificaciones** (lista blanca de campos) para búsquedas genéricas.
 - ~~**CI en Linux** con `go test -race`~~ ✅ `.github/workflows/ci.yml` (unitarias con `-race`,
-  publicadoras de humo e integración en cuatro motores). **No corre desde el 2026-10-21** (cuenta
-  de GitHub bloqueada): la puerta es local. Le falta Supabase, que sí está en `integration/run.ps1`.
+  publicadoras de humo e integración en cinco motores, Supabase incluido desde el 2026-11-14). **No corre desde el 2026-10-21** (cuenta
+  de GitHub bloqueada): la puerta es local.
 - **Listados sin fichas fusionadas (D-100) con muchas fusionadas.** Cada listado añade «party NOT
   IN (ids fusionados)», un parámetro por ficha (`pkg/application/merged.go`). SQL Server admite 2100
   parámetros por petición, no por lista, así que trocear no basta: con unas 2000 fusionadas los
