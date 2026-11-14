@@ -185,12 +185,17 @@ func (h *host) supplierMaintenance() {
 
 	// DELETE bloquea: exige el permiso y el ámbito de escritura, y se puede repetir sin versión nueva.
 	h.must(status("viewer", "DELETE", base+"/"+id, nil), 403, "delete without the permission")
-	h.must(status("clerk", "DELETE", base+"/"+id, nil), 204, "delete")
+	// Bloquear exige un motivo: sin él, 422 con su código.
+	code, problem, _ = h.raw("DELETE", base+"/"+id, "clerk", map[string]any{"reason": "  "})
+	if code != 422 || problem["code"] != "purchases.block_reason_required" {
+		t.Fatalf("delete without a reason: %d %v", code, problem)
+	}
+	h.must(status("clerk", "DELETE", base+"/"+id, map[string]any{"reason": " impago "}), 204, "delete")
 	_, blocked, _ := h.raw("GET", base+"/"+id, "clerk", nil)
-	if blocked["blocked"] != true || blocked["version"] != v.(float64)+1 || blocked["category"] != "rent" {
+	if blocked["blocked"] != true || blocked["version"] != v.(float64)+1 || blocked["category"] != "rent" || blocked["blockReason"] != "impago" {
 		t.Fatalf("delete blocks: %v", blocked)
 	}
-	h.must(status("clerk", "DELETE", base+"/"+id, nil), 204, "delete again")
+	h.must(status("clerk", "DELETE", base+"/"+id+"?reason=otra", nil), 204, "delete again")
 	if _, again, _ := h.raw("GET", base+"/"+id, "clerk", nil); again["version"] != blocked["version"] {
 		t.Fatalf("delete again changes nothing: %v", again)
 	}
@@ -205,6 +210,20 @@ func (h *host) supplierMaintenance() {
 	h.must(status("outsider", "PUT", base+"/"+id, map[string]any{"version": blocked["version"]}), 403, "change read-only")
 	s.Grants = s.Grants[:len(s.Grants)-1]
 	h.dir.Put(h.ids["outsider"], s)
+
+	// Desbloquear por el PUT exige su motivo, que se guarda; el del bloqueo se borra.
+	code, problem, _ = h.raw("PUT", base+"/"+id, "clerk", map[string]any{"blocked": false, "version": blocked["version"]})
+	if code != 422 || problem["code"] != "purchases.unblock_reason_required" {
+		t.Fatalf("unblock without a reason: %d %v", code, problem)
+	}
+	code, changed, _ = h.raw("PUT", base+"/"+id, "clerk", map[string]any{"blocked": false, "unblockReason": " pagado ", "version": blocked["version"]})
+	if code != 200 || changed["unblockReason"] != "pagado" || changed["blockReason"] != "" {
+		t.Fatalf("unblock: %d %v", code, changed)
+	}
+	h.must(status("clerk", "DELETE", base+"/"+id+"?reason=otra+vez", nil), 204, "block by the query")
+	if _, got, _ = h.raw("GET", base+"/"+id, "clerk", nil); got["blockReason"] != "otra vez" || got["unblockReason"] != "" {
+		t.Fatalf("blocked by the query: %v", got)
+	}
 
 	// Permiso y ámbito.
 	h.must(status("outsider", "GET", base+"/"+id, nil), 404, "another organization")

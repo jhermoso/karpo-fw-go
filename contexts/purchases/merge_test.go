@@ -59,7 +59,7 @@ func TestPurchases_SupplierProfileFollowsAMergedSupplier(t *testing.T) {
 	t.Cleanup(func() { _ = sw.Close(context.Background()) })
 	m := purchases.Compose(sw, nil)
 	company, ceding, receiving, other := fw.NewUUID().String(), fw.NewUUID().String(), fw.NewUUID().String(), fw.NewUUID().String()
-	if _, err := m.Service.SetSupplier.Handle(ctx, uapp.SetSupplier{Company: company, Supplier: ceding, PaymentDays: 60, Blocked: true}); err != nil {
+	if _, err := m.Service.SetSupplier.Handle(ctx, uapp.SetSupplier{Company: company, Supplier: ceding, PaymentDays: 60, Blocked: true, BlockReason: "calidad"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := m.Service.SetSupplier.Handle(ctx, uapp.SetSupplier{Company: company, Supplier: other, PaymentDays: 15}); err != nil {
@@ -84,7 +84,7 @@ func TestPurchases_SupplierProfileFollowsAMergedSupplier(t *testing.T) {
 	}
 	// Al deshacer la fusión la relación vuelve (Ceding la superviviente, Receiving la fusionada): la
 	// fusionada conserva su perfil aunque la superviviente cambiara el suyo.
-	if _, err := m.Service.SetSupplier.Handle(ctx, uapp.SetSupplier{Company: company, Supplier: receiving, PaymentDays: 90}); err != nil {
+	if _, err := m.Service.SetSupplier.Handle(ctx, uapp.SetSupplier{Company: company, Supplier: receiving, PaymentDays: 90, UnblockReason: "pagado"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := m.Consumer.HandleMessage(context.Background(), returned(t, "supplier", company, receiving, ceding)); err != nil {

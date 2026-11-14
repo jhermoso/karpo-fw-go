@@ -155,12 +155,13 @@ func TestPurchasesContext(t *testing.T) {
 			_, err = svc.SetSupplier.Handle(actx, uapp.SetSupplier{Company: acme.ID, Supplier: asesor.ID, Category: "professional-services",
 				WithholdingRate: "7", PaymentDays: 30, IBAN: "ES7921000813610123456789", Blocked: true, BlockReason: "calidad"})
 			must(err)
-			if ss, err := svc.SearchSuppliers.Handle(actx, uapp.SearchSuppliers{Company: acme.ID}); err != nil || len(ss) != 1 || ss[0].BlockReason != "calidad" {
+			if ss, err := svc.SearchSuppliers.Handle(actx, uapp.SearchSuppliers{Company: acme.ID}); err != nil || len(ss) != 1 || ss[0].BlockReason != "calidad" || ss[0].UnblockReason != "" {
 				t.Fatalf("block reason read back: %+v %v", ss, err)
 			}
+			// Migración 6: desbloquear exige motivo, que va y vuelve.
 			prof, err = svc.SetSupplier.Handle(actx, uapp.SetSupplier{Company: acme.ID, Supplier: asesor.ID, Category: "professional-services",
-				WithholdingRate: "7", PaymentDays: 30, IBAN: "ES7921000813610123456789"})
-			if err != nil || prof.BlockReason != "" {
+				WithholdingRate: "7", PaymentDays: 30, IBAN: "ES7921000813610123456789", UnblockReason: "resuelto"})
+			if err != nil || prof.BlockReason != "" || prof.UnblockReason != "resuelto" {
 				t.Fatalf("unblocked: %+v %v", prof, err)
 			}
 			// El listado paginado del mantenimiento: filtros, orden por días de pago y desempate por id.
