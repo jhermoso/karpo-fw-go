@@ -59,8 +59,9 @@ tiempo de prueba, participación en el capital) y edición de persona.
   docs/FACTURACION.md «Los ajustes de la empresa». Falta que Karpo C# y Trench lo adopten.
 
 ### 2b. Framework: siguientes pasos
-- **Migraciones de esquema** por dialecto (equivalente a `IDatabaseSchemaManager`): hoy el DDL
-  vive en cada contexto (`infrastructure.Schema`).
+- ~~**Migraciones de esquema** por dialecto~~ ✅ `sqlrepo.Migrator`: cada contexto lleva su serie
+  en `infrastructure` (`Migrations()`), con historial, checksum y bloqueo
+  ([docs/ESQUEMA-MIGRACIONES.md](docs/ESQUEMA-MIGRACIONES.md)).
 - ~~Componentes transversales de `BusinessEntity`~~ ✅ `pkg/domain/traits`.
 - **Almacén de auditoría a prueba de manipulación** (cadena de hashes verificable) como
   implementación de `application.AuditLog`.
@@ -76,7 +77,9 @@ tiempo de prueba, participación en el capital) y edición de persona.
 - **Herramienta de backfill/dual-write** para acompañar a `hotswap.Swap` cuando haya que mover
   datos entre motores.
 - **Filtros HTTP → especificaciones** (lista blanca de campos) para búsquedas genéricas.
-- **CI en Linux** con `go test -race` (en Windows no hay compilador C) y `integration/run.ps1`.
+- ~~**CI en Linux** con `go test -race`~~ ✅ `.github/workflows/ci.yml` (unitarias con `-race`,
+  publicadoras de humo e integración en cuatro motores). **No corre desde el 2026-10-21** (cuenta
+  de GitHub bloqueada): la puerta es local. Le falta Supabase, que sí está en `integration/run.ps1`.
 - **Listados sin fichas fusionadas (D-100) con muchas fusionadas.** Cada listado añade «party NOT
   IN (ids fusionados)», un parámetro por ficha (`pkg/application/merged.go`). SQL Server admite 2100
   parámetros por petición, no por lista, así que trocear no basta: con unas 2000 fusionadas los
@@ -106,7 +109,8 @@ Pendiente:
   Antes hay que aclarar la licencia (GPL-2.0 del framework frente a Apache-2.0) y medir las
   dependencias que arrastra.
 - **Ejecutable de servicio** que monte la composición (logger de servicio, puerto interno de
-  `/metrics`, relay con telemetría): hoy los contextos se componen en las pruebas.
+  `/metrics`, relay con telemetría). Los programas ya existen (`cmd/karpo`, `cmd/karpo-postgres`,
+  sobre `host/serve`), pero todavía no montan esa telemetría.
 - **Envoltorio de `http.RoundTripper`** que propague `traceparent` y `X-Correlation-ID`, cuando
   haya clientes HTTP (costuras HTTP, resolvedor de autorización en modo `Http`).
 - **Número de pendientes y de aparcados del outbox** como métricas: exige ampliar `OutboxStore`.
@@ -146,7 +150,7 @@ Pendiente:
 ### 2d. Revisión de la integración del 2026-10-11: lo que queda
 Hallazgos menores de la revisión independiente (G-6) que no se arreglaron en la rama
 `integra/2026-10-11`, más lo que dejaron pendiente los arreglos que sí se hicieron (ver
-[docs/integracion-2026-10-11.md](docs/integracion-2026-10-11.md), «Arreglos tras la revisión»).
+[docs/archivo/integracion-2026-10-11.md](docs/archivo/integracion-2026-10-11.md), «Arreglos tras la revisión»).
 
 - **Prefijo reservado para los códigos de catálogo que añade un administrador** (decisión de
   producto, pendiente): la unicidad del código ya la asegura un índice único (migración 29,

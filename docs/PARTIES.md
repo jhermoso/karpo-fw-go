@@ -403,7 +403,8 @@ con la marca «the CIF does not pass its check digits» y el número tal como vi
 | Permiso | `Parties.Party.Update`, y el ámbito de siempre |
 | Esquema | Migración 18: `parties.doc_issue`, `doc_issue_number` y `doc_issue_reason` |
 
-- **Lo que hace la importación** ([IMPORTACION.md](IMPORTACION.md), fuentes de Sage y de Apiscore):
+- **Lo que hacía la importación** (fuentes de Sage y de Apiscore; el contexto de importación se
+  retiró de este repositorio y Go ya no importa: lo que sigue vale para Karpo C# y Trench, D-106):
   un documento español (DNI, NIF, CIF, NIE) con el dígito de control mal se sigue guardando como
   «otro documento», marca a la party, y añade un aviso al informe de la ejecución
   (`sage.wrong_document`, `apiscore.wrong_document`).

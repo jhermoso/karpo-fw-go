@@ -37,3 +37,7 @@ Thumbs.db
 .env
 .env.local
 *.log
+
+# Claude Code: lo local de cada máquina
+.claude/settings.local.json
+.claude/worktrees/

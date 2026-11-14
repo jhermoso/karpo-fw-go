@@ -358,8 +358,8 @@ type Chores struct {
 // tareas tenga su turno.
 const MaxExportsPerRound = 20
 
-// RunChores hace una vez lo que los contextos dejan para un planificador: cierra las importaciones
-// cuyo proceso murió, escribe las exportaciones que esperan y quita los ficheros guardados el tiempo
+// RunChores hace una vez lo que los contextos dejan para un planificador: vuelve a entregar los
+// mensajes pendientes, escribe las exportaciones que esperan y quita los ficheros guardados el tiempo
 // suficiente, y cierra, empresa a empresa, las reservas de divisa y las ofertas cuyo plazo pasó y el
 // periodo de facturación del mes anterior de los clientes mensuales (D-146), y
 // contabiliza lo que Accounting había guardado para cuando pudiera. Una tarea que falla no detiene

@@ -62,7 +62,6 @@ arrancar junto.
 - **`Handler`**: las rutas de sesión son públicas; todo lo demás exige sesión y pasa por los
   permisos y el ámbito de quien llama.
 - **`RunChores`**, lo que estaba pendiente de programar en los documentos de cada contexto:
-  - cierra las importaciones cuyo proceso murió;
   - escribe las exportaciones en espera (veinte por ronda) y borra los ficheros caducados;
   - empresa por empresa, caduca las reservas de divisa y los presupuestos vencidos;
   - asienta lo que Contabilidad tenía aparcado y ya puede asentar;
@@ -248,9 +247,9 @@ Decisiones (aprobadas por Javier el 2026-10-10):
 - **`host`** (en memoria y en SQLite migrada con los 25 esquemas): arranque sin secreto
   rechazado; permisos, módulos y primer administrador, y un segundo arranque que no cambia nada;
   sin sesión 401, token inválido 401, contraseña errónea 401, cambio de contraseña obligatorio
-  (403 antes); los 151 permisos en el catálogo de Seguridad; importación por HTTP que crea dos
-  empresas en Parties y omite con aviso lo que nadie carga; repetirla con el nombre escrito de
-  otra forma no crea nada; cuenta de cliente, exportación pedida por HTTP, escrita por las tareas
+  (403 antes); los 151 permisos en el catálogo de Seguridad; dos empresas dadas de alta en Parties
+  (antes, por la importación por HTTP, que se retiró con su contexto); cuenta de cliente,
+  exportación pedida por HTTP, escrita por las tareas
   y descargada; segunda ronda de tareas sin nada que hacer; mensajes entregados y nada que
   entregar después; tipos con historial y el historial de la cuenta.
 - **`cmd/karpo`** arrancado de verdad: `serve` sin migrar sale con error; `migrate` aplica 76

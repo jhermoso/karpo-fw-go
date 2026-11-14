@@ -397,7 +397,7 @@ suscriptores tipados.
 `integration/` es un módulo aparte (los drivers no entran en el framework). Con Docker:
 
 ```powershell
-./integration/run.ps1 -Down
+./integration/run.ps1 -Slot 4 -Down   # un slot propio: ver integration/CLAUDE.md
 ```
 
 levanta PostgreSQL 17, SQL Server 2022, Oracle 23 Free, MySQL 8.4 y Supabase (su imagen de
