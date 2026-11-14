@@ -47,7 +47,7 @@ jobs:
         run: go vet -tags smoke ./... && go test -tags smoke -count=1 ./...
 
   integration:
-    name: Integration (PostgreSQL, SQL Server, Oracle, MySQL)
+    name: Integration (PostgreSQL, Supabase, SQL Server, Oracle, MySQL)
     runs-on: ubuntu-latest
     needs: test
     services:
@@ -61,6 +61,17 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U karpo"
           --health-interval 5s --health-retries 30
+
+      # Supabase: its PostgreSQL image (extensions, roles and the auth, storage... schemas), a
+      # possible production target. Same image as integration/docker-compose.yml.
+      supabase:
+        image: supabase/postgres:17.11.0.004
+        env:
+          POSTGRES_PASSWORD: karpo
+        ports: ["54433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -h localhost"
+          --health-interval 5s --health-retries 60
 
       sqlserver:
         image: mcr.microsoft.com/mssql/server:2022-latest
@@ -98,6 +109,7 @@ jobs:
 
     env:
       KARPO_PG_DSN: postgres://karpo:karpo@localhost:55433/karpo?sslmode=disable
+      KARPO_SUPABASE_DSN: postgres://postgres:karpo@localhost:54433/postgres?sslmode=disable
       KARPO_MSSQL_DSN: sqlserver://sa:Karpo_2026!@localhost:51433?database=master
       KARPO_ORACLE_DSN: oracle://karpo:karpo@localhost:51521/FREEPDB1
       KARPO_MYSQL_DSN: karpo:karpo@tcp(localhost:53306)/karpo?parseTime=true&loc=UTC
