@@ -8,9 +8,9 @@
 > Escrita el 2026-10-13 en la sesión de Karpo Go.
 > Javier eligió ese día que el contrato HTTP común sea **uno nuevo y limpio, escrito una vez**, que
 > sirvan el back de C# y el de Go, empezando por lo que usan las pantallas principales
-> ([CONTRATO-HTTP-PARTIES.md](archivo/CONTRATO-HTTP-PARTIES.md), opción C). Falta que lo revisen las
-> sesiones de Karpo C# y de Trench, como se hizo con el contrato de extensibilidad, y que
-> Javier conteste las cinco decisiones de §7.
+> ([CONTRATO-HTTP-PARTIES.md](archivo/CONTRATO-HTTP-PARTIES.md), opción C). Lo revisaron el mismo día
+> las sesiones de Trench (§7 bis) y de Karpo C# (§7 ter). Las decisiones que siguen abiertas están
+> en el registro (§3).
 >
 > Las tablas de cada back pueden ser distintas (decisión D-1 del modelo común). Lo que este
 > documento fija es lo que se ve por HTTP.
@@ -537,7 +537,8 @@ Cobros y Compras, o una proyección de lectura que junte la pareja; está sin im
 
 ## 8. Límites
 
-- Nadie de C# ni de Trench ha revisado esto todavía.
+- Estos límites son los del texto de partida. Las revisiones de Trench (§7 bis) y de Karpo C#
+  (§7 ter), del 2026-10-13, llegaron después y mandan sobre lo que digan aquí.
 - No he comprobado que C# pueda servir la fila resumida de §3.3 con sus datos de hoy (por ejemplo,
   `country` y `taxId` salen en C# de otra parte).
 - `GET /api/internal-organizations` existe en los dos con la misma ruta; no he comparado la forma.
