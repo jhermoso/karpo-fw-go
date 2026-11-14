@@ -22,7 +22,7 @@ demás), a veces `distribution/`, y `module.go` en la raíz, que lo monta.
 - **Decisiones:** las de un contexto las aprueba Javier y quedan en su documento; si valen también
   para Karpo C# o Trench, van además al registro (`docs/DECISIONES-COMUNES.md`). Antes de cambiar
   una regla de Parties, Facturación o Pedidos, se mira si el registro la fija.
-- **El contrato de mantenimiento** (`maintenance.go` en assets, facilities, products y shipments;
+- **El contrato de mantenimiento** (`maintenance.go` en assets, facilities, products, purchases y shipments;
   rutas `/api/v1/...`) es el que lee el motor de Angular de Karpo C#: sus rutas, formas y errores
   no cambian sin cambiar también `front/angular/config` (`front/README.md`).
 - **Sectoriales:** `financial` sólo existe para una empresa con el rol de entidad financiera en

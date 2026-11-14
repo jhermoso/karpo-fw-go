@@ -12,6 +12,7 @@ lenguaje de Theros).
 | Instalaciones | instalaciones de las organizaciones internas: rejilla, alta, detalle, desactivación | `angular/config/entities/facilities/facility.config.json` | `/api/v1/facilities` (docs/INSTALACIONES.md, «El contrato de mantenimiento») |
 | Activos | registro de inmovilizado: rejilla, alta, detalle, cambio y baja (por el cambio) | `angular/config/entities/assets/asset.config.json` | `/api/v1/assets` (docs/ACTIVOS.md, «El contrato de mantenimiento») |
 | Envíos | transportistas: rejilla, alta, detalle, cambio y bloqueo | `angular/config/entities/shipments/carrier.config.json` | `/api/v1/carriers` (docs/ENVIOS.md, «El contrato de mantenimiento») |
+| Compras | proveedores (perfil de compra): rejilla, alta, detalle, cambio y bloqueo | `angular/config/entities/purchases/supplier.config.json` | `/api/v1/suppliers` (docs/COMPRAS.md, «El contrato de mantenimiento») |
 
 ## Cómo se ve
 
