@@ -4,7 +4,7 @@
 > si se puede igualar la funcionalidad, si un mismo front puede hablar con los dos backs, y qué
 > debería querer decir «misma estructura». **No decide nada**: las opciones y su coste están en §5.
 >
-> Continúa [PARTIES.md](PARTIES.md) y [PARTIES-UDM.md](PARTIES-UDM.md). Se apoya en el estudio de
+> Continúa [PARTIES.md](../PARTIES.md) y [PARTIES-UDM.md](../PARTIES-UDM.md). Se apoya en el estudio de
 > convergencia de Karpo (`000-Docs/design/Karpo_Estudio_Convergencia_Modelos.md`), cuyas cifras
 > he vuelto a contar aquí sobre el modelo actual.
 
@@ -140,7 +140,7 @@ distintas según el caso:
   del grupo; en C# sólo uno). El alta y la baja del empleado, en RRHH. El porcentaje de
   participación, que en C# está en tres sitios (`party_relationship`, `partnership` y
   `stockholding`), es una columna de `party_relationships` (`share_percent`). El razonamiento,
-  dato a dato, está en [PARTIES-UDM.md](PARTIES-UDM.md) §3 y §5.
+  dato a dato, está en [PARTIES-UDM.md](../PARTIES-UDM.md) §3 y §5.
 
 **Franqueza sobre este punto:** la herencia por tabla no es en sí un error. Es la traducción
 literal del libro de modelos de datos del que sale Parties (UDM), donde cada subtipo es una

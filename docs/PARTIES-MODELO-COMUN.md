@@ -4,7 +4,7 @@
 > decidir** para que los tres guarden los mismos datos y cumplan las mismas reglas (§3). Las
 > tablas pueden seguir siendo distintas: eso ya está decidido (§1, D-1).
 >
-> Continúa [PARTIES-COMPARACION-CON-CSHARP.md](PARTIES-COMPARACION-CON-CSHARP.md). Las filas
+> Continúa [PARTIES-COMPARACION-CON-CSHARP.md](archivo/PARTIES-COMPARACION-CON-CSHARP.md). Las filas
 > salen del estudio de convergencia de Karpo (`Karpo_Estudio_Convergencia_Modelos.md` §3 y §4);
 > entre paréntesis va su número allí (R = Go corrigió, F = a Go le falta, CV = pregunta abierta).
 >

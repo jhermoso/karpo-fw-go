@@ -3,7 +3,7 @@
 - **Un documento por contexto** (`<CONTEXTO>.md`, en español y en mayúsculas) y uno por tema del
   framework. Los de contexto y los temas principales están en el índice de `README.md`; los
   análisis y propuestas de un tema se enlazan desde su documento principal. `plan/` guarda planes
-  de trabajo; `prompts/`, encargos escritos para sesiones de otros repositorios.
+  de trabajo.
 - **Forma de un documento de contexto:** de dónde viene en C#, qué se porta y qué no, las
   decisiones aprobadas por Javier (con la fecha), cómo se usa (rutas, permisos, eventos,
   migraciones), la validación y lo pendiente. Una decisión aprobada no se reescribe: si cambia, se
