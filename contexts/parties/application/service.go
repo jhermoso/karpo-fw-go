@@ -114,6 +114,9 @@ type Service struct {
 	SetInternalOrganizationProfile     app.CommandHandler[SetInternalOrganizationProfile, InternalOrganizationProfileDTO]
 	InternalOrganizationCodePattern    app.QueryHandler[GetInternalOrganizationCodePattern, CodePatternDTO]
 	SetInternalOrganizationCodePattern app.CommandHandler[SetInternalOrganizationCodePattern, CodePatternDTO]
+	// Las acciones que exigen aprobación en la empresa (D-156).
+	InternalOrganizationApprovalActions    app.QueryHandler[GetInternalOrganizationApprovalActions, ApprovalActionsDTO]
+	SetInternalOrganizationApprovalActions app.CommandHandler[SetInternalOrganizationApprovalActions, ApprovalActionsDTO]
 }
 
 type (

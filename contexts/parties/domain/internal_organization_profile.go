@@ -4,12 +4,14 @@ import (
 	"context"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 	_ "time/tzdata" // las zonas IANA, también donde el sistema no las trae (Windows, contenedores mínimos)
 	"unicode/utf8"
 
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
+	"github.com/jhermoso/karpo-fw-go/pkg/domain/approval"
 )
 
 // InternalOrganizationProfileKind es el nombre estable del perfil en el registro de auditoría.
@@ -38,7 +40,30 @@ const (
 	ErrInvalidServiceFulfilmentMode = "Company.InvalidServiceFulfilmentMode"
 	// ErrDirectInvoiceUnavailable: direct_invoice aún no se admite (D-155).
 	ErrDirectInvoiceUnavailable = "Company.DirectInvoiceUnavailable"
+	// ErrInvalidApprovalAction: una acción que exige aprobación no tiene la forma
+	// {contexto}.{recurso}.{verbo} o mide más de 120 caracteres (D-156).
+	ErrInvalidApprovalAction = "Company.InvalidApprovalAction"
 )
+
+// MaxApprovalActionLength es la longitud de la columna action, la misma que en las solicitudes de
+// aprobación (pkg/persistence/approvals).
+const MaxApprovalActionLength = 120
+
+// ParseApprovalActions valida la lista de acciones que exigen aprobación en una empresa (D-156,
+// paso 2): cada una con approval.ParseAction. Devuelve la lista sin repetidas y ordenada; una
+// lista vacía o nil no exige aprobación para nada.
+func ParseApprovalActions(actions []string) ([]string, error) {
+	out := make([]string, 0, len(actions))
+	for _, a := range actions {
+		a = strings.TrimSpace(a)
+		if _, err := approval.ParseAction(a); err != nil || len(a) > MaxApprovalActionLength {
+			return nil, fw.Violation(ErrInvalidApprovalAction, "the approval action "+strconv.Quote(a)+" must be {context}.{resource}.{verb}, in lower case, up to 120 characters")
+		}
+		out = append(out, a)
+	}
+	slices.Sort(out)
+	return slices.Compact(out), nil
+}
 
 // DirectInvoiceAvailable dice si se admite direct_invoice. Facturación aún no factura desde el
 // pedido, así que una línea en direct_invoice no se facturaría nunca (D-155, docs/PEDIDOS.md).
@@ -290,4 +315,9 @@ type InternalOrganizationProfiles interface {
 	CodePattern(ctx context.Context, organization PartyID, kind string) (string, error)
 	// SaveCodePattern guarda el patrón, o lo quita si es "", en la unidad de trabajo de ctx.
 	SaveCodePattern(ctx context.Context, organization PartyID, kind, pattern string) error
+	// ApprovalActions devuelve, ordenadas, las acciones que exigen aprobación en la organización
+	// (D-156); vacía si ninguna.
+	ApprovalActions(ctx context.Context, organization PartyID) ([]string, error)
+	// SaveApprovalActions reemplaza esa lista, en la unidad de trabajo de ctx.
+	SaveApprovalActions(ctx context.Context, organization PartyID, actions []string) error
 }

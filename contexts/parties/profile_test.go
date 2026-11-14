@@ -12,6 +12,8 @@ import (
 	"github.com/jhermoso/karpo-fw-go/contexts/parties/domain"
 	"github.com/jhermoso/karpo-fw-go/contexts/parties/infrastructure"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
+	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
+	dapproval "github.com/jhermoso/karpo-fw-go/pkg/domain/approval"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlite"
 )
@@ -43,6 +45,7 @@ func TestParties_InternalOrganizationProfile(t *testing.T) {
 			e.profile()
 			e.profileSettings()
 			e.profilePricing()
+			e.profileApprovals()
 		})
 	}
 }
@@ -253,5 +256,71 @@ func (e *env) profileSettings() {
 	trail, err := e.mod.Audit.Trail(context.Background(), domain.InternalOrganizationProfileKind, acme.ID)
 	if err != nil || len(trail) != 5 {
 		e.t.Fatalf("audit of the settings and the pattern: %+v %v", trail, err)
+	}
+}
+
+// Las acciones que exigen aprobación en la empresa (D-156, paso 2): se leen con el permiso de leer
+// parties y se cambian con el de modificar la empresa interna; la política que publica el módulo
+// las lee, empresa a empresa.
+func (e *env) profileApprovals() {
+	e.t.Helper()
+	var acme, globex papp.PartyDTO
+	e.must(e.do("POST", "/api/organizations", e.admin, map[string]any{"legalName": "Acme Aprobaciones",
+		"roles": []string{domain.RoleInternalOrganization.String()}}, &acme), 201, "register acme")
+	e.must(e.do("POST", "/api/organizations", e.admin, map[string]any{"legalName": "Globex Aprobaciones",
+		"roles": []string{domain.RoleInternalOrganization.String()}}, &globex), 201, "register globex")
+	e.grant("clerk", authz.Full, acme.ID)
+	e.grant("viewer", authz.ReadOnly, acme.ID)
+	e.grant("reader", authz.Full, acme.ID)
+	e.grant("outsider", authz.Full, globex.ID)
+
+	path := "/api/profiles/internal-organizations/" + acme.ID + "/approval-actions"
+	var got papp.ApprovalActionsDTO
+	e.must(e.do("GET", path, e.viewer, nil, &got), 200, "nothing saved yet")
+	if len(got.Actions) != 0 || got.InternalOrganizationID != acme.ID {
+		e.t.Fatalf("no actions: %+v", got)
+	}
+	e.must(e.do("PUT", path, e.clerk, map[string]any{"actions": []string{"purchases.supplier.block", "billing.invoice.void"}}, &got), 200,
+		"the clerk sets them")
+	e.must(e.do("GET", path, e.reader, nil, &got), 200, "read them back")
+	if strings.Join(got.Actions, ",") != "billing.invoice.void,purchases.supplier.block" {
+		e.t.Fatalf("the actions, sorted: %+v", got)
+	}
+
+	ctx := context.Background()
+	acmeID, _ := fw.ParseUUID(acme.ID)
+	globexID, _ := fw.ParseUUID(globex.ID)
+	for _, c := range []struct {
+		company fw.UUID
+		action  dapproval.Action
+		want    bool
+	}{
+		{acmeID, "purchases.supplier.block", true},
+		{acmeID, "purchases.supplier.unblock", false},
+		{globexID, "purchases.supplier.block", false},
+		{fw.UUID{}, "purchases.supplier.block", false},
+	} {
+		if ok, err := e.mod.ApprovalPolicy.Requires(ctx, c.company, c.action); err != nil || ok != c.want {
+			e.t.Fatalf("policy %v %s: %v %v", c.company, c.action, ok, err)
+		}
+	}
+
+	e.mustProblem(e.problem("PUT", path, e.clerk, map[string]any{"actions": []string{"purchases.block"}}), 422, domain.ErrInvalidApprovalAction,
+		"an action without three segments")
+	e.must(e.do("PUT", path, e.viewer, map[string]any{"actions": []string{}}, nil), 403, "a read-only grant cannot change them")
+	e.must(e.do("PUT", path, e.reader, map[string]any{"actions": []string{}}, nil), 403, "nor can who lacks the update permission")
+	e.must(e.do("GET", path, e.outsider, nil, nil), 404, "another company does not see them")
+	e.must(e.do("PUT", path, e.outsider, map[string]any{"actions": []string{}}, nil), 404, "nor change them")
+	e.must(e.do("GET", path, "", nil, nil), 401, "anonymous callers do not")
+	e.must(e.do("PUT", path, e.clerk, map[string]any{"actions": nil}, &got), 200, "null clears them")
+	if len(got.Actions) != 0 {
+		e.t.Fatalf("cleared: %+v", got)
+	}
+	if ok, err := e.mod.ApprovalPolicy.Requires(ctx, acmeID, "purchases.supplier.block"); err != nil || ok {
+		e.t.Fatalf("cleared policy: %v %v", ok, err)
+	}
+	trail, err := e.mod.Audit.Trail(ctx, domain.InternalOrganizationProfileKind, acme.ID)
+	if err != nil || len(trail) != 2 {
+		e.t.Fatalf("audit of the two changes: %+v %v", trail, err)
 	}
 }

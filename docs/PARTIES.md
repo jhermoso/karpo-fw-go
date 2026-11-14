@@ -1199,6 +1199,21 @@ Karpo C#. Migración 36.
   la zona.
 - **Esquema:** migración 34, que añade las tres columnas al perfil y crea la tabla hija.
 
+### Las acciones que exigen aprobación (D-156)
+
+- **Tabla hija** `internal_org_approval_action` (nombre corto, por los 30 caracteres de Oracle):
+  `internal_organization_id` (clave ajena a `parties`) y `action` `{str:120}`, con clave
+  (`internal_organization_id`, `action`). Sin filas, ninguna acción exige aprobación.
+- **Acción:** `{contexto}.{recurso}.{verbo}` en minúsculas, validada con `approval.ParseAction`;
+  otra da 422 `Company.InvalidApprovalAction`.
+- **API:** `GET` y `PUT /api/profiles/internal-organizations/{id}/approval-actions`, con
+  `{"actions": [...]}`; reemplaza la lista, vacía o nula la borra. Mismos permisos y ámbito que el
+  perfil; cada cambio queda en su auditoría como `approvalActions`.
+- **Para los demás contextos:** `Module.ApprovalPolicy` (`application.ApprovalPolicy`), una
+  `approval.Policy` de `pkg/application/approval`, sin los permisos del usuario
+  (docs/APROBACIONES.md).
+- **Esquema:** migración 37.
+
 ## 26. La vigencia de las identificaciones (D-142)
 
 El modelo de identificaciones es el mismo en Trench, Karpo C# y Go (docs/DECISIONES-COMUNES.md,

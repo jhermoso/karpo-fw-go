@@ -21,6 +21,9 @@ func (m *Module) registerPhase3(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/profiles/internal-organizations/{id}", m.setInternalOrganizationProfile)
 	mux.HandleFunc("GET /api/profiles/internal-organizations/{id}/code-patterns/{codeKind}", m.internalOrganizationCodePattern)
 	mux.HandleFunc("PUT /api/profiles/internal-organizations/{id}/code-patterns/{codeKind}", m.setInternalOrganizationCodePattern)
+	// Las acciones que exigen aprobación en la empresa (D-156).
+	mux.HandleFunc("GET /api/profiles/internal-organizations/{id}/approval-actions", m.internalOrganizationApprovalActions)
+	mux.HandleFunc("PUT /api/profiles/internal-organizations/{id}/approval-actions", m.setInternalOrganizationApprovalActions)
 	mux.HandleFunc("POST /api/parties/{id}/facility-roles", m.assignFacilityRole)
 	mux.HandleFunc("POST /api/parties/{id}/facility-roles/{roleId}/end", m.endFacilityRole)
 	mux.HandleFunc("GET /api/catalogs/facility-role-types", m.facilityRoleTypes)
@@ -159,6 +162,29 @@ func (m *Module) setInternalOrganizationCodePattern(w http.ResponseWriter, r *ht
 	handle(w, r, &c, true, http.StatusOK, func(c papp.SetInternalOrganizationCodePattern) (papp.CodePatternDTO, error) {
 		c.ID, c.Kind = id, r.PathValue("codeKind")
 		return m.svc.SetInternalOrganizationCodePattern.Handle(r.Context(), c)
+	})
+}
+
+func (m *Module) internalOrganizationApprovalActions(w http.ResponseWriter, r *http.Request) {
+	id, err := pathParty(r)
+	if err != nil {
+		distribution.WriteError(w, r, err)
+		return
+	}
+	out, err := m.svc.InternalOrganizationApprovalActions.Handle(r.Context(), papp.GetInternalOrganizationApprovalActions{ID: id})
+	distribution.Respond(w, r, out, err, http.StatusOK)
+}
+
+func (m *Module) setInternalOrganizationApprovalActions(w http.ResponseWriter, r *http.Request) {
+	id, err := pathParty(r)
+	if err != nil {
+		distribution.WriteError(w, r, err)
+		return
+	}
+	c := papp.SetInternalOrganizationApprovalActions{}
+	handle(w, r, &c, true, http.StatusOK, func(c papp.SetInternalOrganizationApprovalActions) (papp.ApprovalActionsDTO, error) {
+		c.ID = id
+		return m.svc.SetInternalOrganizationApprovalActions.Handle(r.Context(), c)
 	})
 }
 
