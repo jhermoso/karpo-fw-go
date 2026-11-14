@@ -112,9 +112,15 @@ func (h *host) maintenance(tag string) {
 		h.must(status("GET", base+q+bad, nil), 400, bad)
 	}
 	code, page, _ = h.raw("POST", base+"/search", "clerk", map[string]any{"filter": map[string]any{"organization": acme.ID, "type": warehouse},
-		"pagination": map[string]any{"pageNumber": 0, "pageSize": 3, "orderBy": "name", "ascending": true}})
+		"pagination": map[string]any{"pageNumber": 1, "pageSize": 3, "orderBy": "name", "ascending": true}})
 	if code != 200 || names(page) != "Almacén Este,Almacén Norte,Almacén Oeste" || page["totalCount"] != float64(4) {
 		t.Fatalf("search by POST: %d %v", code, page)
+	}
+	// Como en GET, una página fuera de rango da 400.
+	for _, n := range []int{0, -1} {
+		if code, _, _ := h.raw("POST", base+"/search", "clerk", map[string]any{"pagination": map[string]any{"pageNumber": n}}); code != 400 {
+			t.Fatalf("search by POST, page %d: %d", n, code)
+		}
 	}
 	h.must(status("POST", base+"/search", map[string]any{"filter": map[string]any{"name": []string{"a"}}}), 400, "a filter that is not a single value")
 

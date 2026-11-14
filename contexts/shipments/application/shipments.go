@@ -488,7 +488,7 @@ func (s service) wireCarriers(svc *Service) {
 				order = domain.CarFieldCode.Desc()
 			}
 		default:
-			v.Add("sort", "enum", "code or name")
+			v.Add("sortBy", "enum", "code or name")
 		}
 		if err := v.Err(); err != nil {
 			return fw.Page[CarrierDTO]{}, err
