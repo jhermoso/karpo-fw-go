@@ -14,10 +14,12 @@ import (
 	"github.com/jhermoso/karpo-fw-go/contexts/purchases/domain"
 	"github.com/jhermoso/karpo-fw-go/contexts/purchases/infrastructure"
 	"github.com/jhermoso/karpo-fw-go/pkg/application"
+	"github.com/jhermoso/karpo-fw-go/pkg/application/approval"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/messaging"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/outbox"
 	"github.com/jhermoso/karpo-fw-go/pkg/distribution"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
+	fwapproval "github.com/jhermoso/karpo-fw-go/pkg/domain/approval"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 )
 
@@ -43,6 +45,12 @@ func WithMergedParties(m application.MergedParties) Option {
 	return func(d *uapp.Deps) { d.Merged = m }
 }
 
+// WithApprovalPolicy dice qué empresas exigen aprobación para bloquear o desbloquear un proveedor
+// (D-156; la de Parties, Module.ApprovalPolicy, en el anfitrión). Sin ella, ninguna.
+func WithApprovalPolicy(p approval.Policy) Option {
+	return func(d *uapp.Deps) { d.Policy = p }
+}
+
 // Compose construye el contexto sobre sw. Purchases necesita el motor de impuestos de Fiscal, un
 // puerto propio.
 func Compose(sw *hotswap.Switch, taxes domain.Taxes, opts ...Option) *Module {
@@ -51,6 +59,7 @@ func Compose(sw *hotswap.Switch, taxes domain.Taxes, opts ...Option) *Module {
 	d := uapp.Deps{
 		Invoices: hotswap.Repository(sw, infrastructure.InvoiceRepositoryFactory), Suppliers: hotswap.Repository(sw, infrastructure.SupplierRepositoryFactory),
 		Counters: hotswap.Repository(sw, infrastructure.CounterRepositoryFactory), Taxes: taxes, UoW: sw, Audit: audit,
+		Approvals: hotswap.Repository(sw, infrastructure.ApprovalRepositoryFactory), Policy: approval.Never{},
 		Recorder: outbox.Recorders(outbox.NewRecorder(hotswap.Outbox(sw, infrastructure.OutboxFactory)),
 			uapp.Publications(messaging.NewRecorder(contracts.Source, integration))),
 	}
@@ -138,13 +147,43 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	})
 	mux.HandleFunc("POST /api/purchases/invoices/{id}/cancel", command(inv, func(c *uapp.CancelInvoice, id domain.InvoiceID) { c.ID = id }, svc.CancelInvoice.Handle))
 
-	mux.HandleFunc("PUT /api/purchases/suppliers", create(http.StatusOK, svc.SetSupplier.Handle))
+	mux.HandleFunc("PUT /api/purchases/suppliers", func(w http.ResponseWriter, r *http.Request) {
+		var c uapp.SetSupplier
+		if err := decode(r, &c); err != nil {
+			distribution.WriteError(w, r, err)
+			return
+		}
+		out, err := svc.SetSupplier.Handle(r.Context(), c)
+		distribution.Respond(w, r, out, err, supplierStatus(out, http.StatusOK))
+	})
 	mux.HandleFunc("GET /api/purchases/suppliers", func(w http.ResponseWriter, r *http.Request) {
 		out, err := svc.SearchSuppliers.Handle(r.Context(), uapp.SearchSuppliers{Company: r.URL.Query().Get("company"),
 			IncludeMergedParties: r.URL.Query().Get("includeMergedParties") == "true"})
 		distribution.Respond(w, r, out, err, http.StatusOK)
 	})
 	m.RegisterMaintenanceRoutes(mux) // el contrato de mantenimiento, bajo /api/v1/suppliers
+
+	// Las solicitudes de aprobación del bloqueo y el desbloqueo (D-156, docs/COMPRAS.md).
+	mux.HandleFunc("GET /api/purchases/approvals", func(w http.ResponseWriter, r *http.Request) {
+		out, err := svc.SearchApprovals.Handle(r.Context(), uapp.SearchApprovals{Company: r.URL.Query().Get("company"), Status: r.URL.Query().Get("status")})
+		distribution.Respond(w, r, out, err, http.StatusOK)
+	})
+	apv := func(s string) (fwapproval.RequestID, error) {
+		u, err := fw.ParseUUID(s)
+		return fwapproval.RequestID{UUID: u}, err
+	}
+	set := func(c *uapp.ResolveApproval, id fwapproval.RequestID) { c.ID = id }
+	mux.HandleFunc("POST /api/purchases/approvals/{id}/approve", command(apv, set, svc.ApproveApproval.Handle))
+	mux.HandleFunc("POST /api/purchases/approvals/{id}/reject", command(apv, set, svc.RejectApproval.Handle))
+	mux.HandleFunc("POST /api/purchases/approvals/{id}/cancel", command(apv, set, svc.CancelApproval.Handle))
+}
+
+// supplierStatus es 202 si el cambio ha dejado una solicitud de aprobación pendiente.
+func supplierStatus(s uapp.SupplierDTO, ok int) int {
+	if s.PendingApproval != "" {
+		return http.StatusAccepted
+	}
+	return ok
 }
 
 var _ distribution.EndpointModule = (*Module)(nil)

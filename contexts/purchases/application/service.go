@@ -11,6 +11,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/contexts/purchases/contracts"
 	"github.com/jhermoso/karpo-fw-go/contexts/purchases/domain"
 	app "github.com/jhermoso/karpo-fw-go/pkg/application"
+	"github.com/jhermoso/karpo-fw-go/pkg/application/approval"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/messaging"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/orchestration"
@@ -40,6 +41,11 @@ type Deps struct {
 	UoW       fw.UnitOfWork
 	Recorder  app.EventRecorder
 	Audit     app.AuditLog
+	// Policy dice si bloquear o desbloquear un proveedor exige aprobación en la empresa (D-156; la
+	// de Parties en el anfitrión). Nil es approval.Never.
+	Policy approval.Policy
+	// Approvals guarda las solicitudes de aprobación (pur_approvals).
+	Approvals approval.Repository
 }
 
 // withoutMerged deja fuera de un listado los registros cuya party (proveedor) es una party fusionada,
@@ -63,6 +69,12 @@ type Service struct {
 	GetSupplier        app.QueryHandler[GetSupplier, SupplierDTO]
 	SupplierChangeable app.QueryHandler[GetSupplier, bool]
 	PageSuppliers      app.QueryHandler[PageSuppliers, fw.Page[SupplierDTO]]
+
+	// Las solicitudes de aprobación del bloqueo y el desbloqueo (D-156).
+	SearchApprovals app.QueryHandler[SearchApprovals, []ApprovalDTO]
+	ApproveApproval app.CommandHandler[ResolveApproval, ApprovalDTO]
+	RejectApproval  app.CommandHandler[ResolveApproval, ApprovalDTO]
+	CancelApproval  app.CommandHandler[ResolveApproval, ApprovalDTO]
 }
 
 type scope struct {
@@ -130,6 +142,7 @@ func NewService(d Deps) *Service {
 	svc := &Service{}
 	s.invoiceUseCases(svc)
 	s.supplierUseCases(svc)
+	s.approvalUseCases(svc)
 	return svc
 }
 

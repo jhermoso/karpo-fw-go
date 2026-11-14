@@ -45,6 +45,9 @@ type SupplierDTO struct {
 	BlockReason     string `json:"blockReason,omitempty"` // D-122
 	UnblockReason   string `json:"unblockReason,omitempty"`
 	Version         int64  `json:"version"`
+	// PendingApproval es el id de la solicitud de aprobación que ha dejado el cambio, si el bloqueo o
+	// el desbloqueo la exige (D-156): el resto del cambio está aplicado y el bloqueo no.
+	PendingApproval string `json:"pendingApproval,omitempty"`
 }
 
 func supplierDTO(p *domain.SupplierProfile) SupplierDTO {
@@ -117,20 +120,19 @@ func (s service) supplierUseCases(svc *Service) {
 			return SupplierDTO{}, err
 		}
 		if len(ps) > 0 {
-			p, err := s.suppliers.Update(ctx, ps[0].ID(), func(_ context.Context, p *domain.SupplierProfile) error { return p.Change(st) })
+			var pending string
+			p, err := s.suppliers.Update(ctx, ps[0].ID(), func(ctx context.Context, p *domain.SupplierProfile) error {
+				if pending, err = s.gate(ctx, p.ID(), p.State(), &st); err != nil {
+					return err
+				}
+				return p.Change(st)
+			})
 			if err != nil {
 				return SupplierDTO{}, err
 			}
-			return supplierDTO(p), nil
+			return withPending(supplierDTO(p), pending), nil
 		}
-		p, err := domain.NewSupplier(domain.NewSupplierID(), st)
-		if err != nil {
-			return SupplierDTO{}, err
-		}
-		if err := s.suppliers.Create(ctx, p); err != nil {
-			return SupplierDTO{}, err
-		}
-		return supplierDTO(p), nil
+		return s.register(ctx, st)
 	}, retry[SetSupplier, SupplierDTO](), pipeline.Transactional[SetSupplier, SupplierDTO](s.UoW))
 
 	svc.SearchSuppliers = guard(PermSupplierRead, func(ctx context.Context, q SearchSuppliers) ([]SupplierDTO, error) {
@@ -174,19 +176,13 @@ func (s service) supplierUseCases(svc *Service) {
 		if dup {
 			return SupplierDTO{}, fw.Violation("purchases.duplicate_supplier", "the company already has a profile for that supplier")
 		}
-		p, err := domain.NewSupplier(domain.NewSupplierID(), st)
-		if err != nil {
-			return SupplierDTO{}, err
-		}
-		if err := s.suppliers.Create(ctx, p); err != nil {
-			return SupplierDTO{}, err
-		}
-		return supplierDTO(p), nil
+		return s.register(ctx, st)
 	}, retry[SetSupplier, SupplierDTO](), pipeline.Transactional[SetSupplier, SupplierDTO](s.UoW))
 
 	svc.ChangeSupplier = versioned(s.UoW, PermSupplierUpdate, func(c ChangeSupplier) int64 { return c.Version }, func(ctx context.Context, c ChangeSupplier) (SupplierDTO, error) {
 		sc := scopeOf(ctx)
-		p, err := s.suppliers.Update(ctx, c.ID, func(_ context.Context, p *domain.SupplierProfile) error {
+		var pending string
+		p, err := s.suppliers.Update(ctx, c.ID, func(ctx context.Context, p *domain.SupplierProfile) error {
 			cur := p.State()
 			if err := sc.check(domain.SupplierKind, p.ID(), cur.Company, true); err != nil {
 				return err
@@ -200,12 +196,15 @@ func (s service) supplierUseCases(svc *Service) {
 			if err != nil {
 				return err
 			}
+			if pending, err = s.gate(ctx, p.ID(), cur, &st); err != nil {
+				return err
+			}
 			return p.Change(st)
 		})
 		if err != nil {
 			return SupplierDTO{}, err
 		}
-		return supplierDTO(p), nil
+		return withPending(supplierDTO(p), pending), nil
 	})
 
 	// read carga un perfil del ámbito de quien llama (404 fuera de él; 403 si se pide escribir y es
@@ -267,4 +266,27 @@ func (s service) supplierUseCases(svc *Service) {
 		}
 		return fw.MapPage(page, supplierDTO), nil
 	})
+}
+
+// register da de alta un perfil. Si nace bloqueado y bloquear exige aprobación, nace sin bloquear y
+// con la solicitud pendiente.
+func (s service) register(ctx context.Context, st domain.SupplierState) (SupplierDTO, error) {
+	id := domain.NewSupplierID()
+	pending, err := s.gate(ctx, id, domain.SupplierState{}, &st)
+	if err != nil {
+		return SupplierDTO{}, err
+	}
+	p, err := domain.NewSupplier(id, st)
+	if err != nil {
+		return SupplierDTO{}, err
+	}
+	if err := s.suppliers.Create(ctx, p); err != nil {
+		return SupplierDTO{}, err
+	}
+	return withPending(supplierDTO(p), pending), nil
+}
+
+func withPending(d SupplierDTO, pending string) SupplierDTO {
+	d.PendingApproval = pending
+	return d
 }

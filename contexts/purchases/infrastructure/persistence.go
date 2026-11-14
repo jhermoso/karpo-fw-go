@@ -10,8 +10,10 @@ import (
 	fiscal "github.com/jhermoso/karpo-fw-go/contexts/fiscal/contracts"
 	"github.com/jhermoso/karpo-fw-go/contexts/purchases/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/application"
+	"github.com/jhermoso/karpo-fw-go/pkg/application/approval"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
+	"github.com/jhermoso/karpo-fw-go/pkg/persistence/approvals"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/memory"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
@@ -31,6 +33,8 @@ const (
 	TableIntegrationOutbox = "purchases_integration_outbox"
 	TableAuditLog          = "purchases_audit_log"
 	TableInbox             = "purchases_inbox"
+	// TableApprovals guarda las solicitudes de aprobación del bloqueo y el desbloqueo (D-156).
+	TableApprovals = "pur_approvals"
 )
 
 const audit = `created_at {ts}, created_by_id {str:64}, created_by_name {str:200}, modified_at {ts}, modified_by_id {str:64}, modified_by_name {str:200}`
@@ -112,6 +116,9 @@ func Migrations() sqlrepo.MigrationSet {
 		// El motivo del último desbloqueo (decisión de 2026-11-14: bloquear y desbloquear exigen
 		// motivo): se guarda con el desbloqueo y se borra al bloquear.
 		{Version: 6, Name: "unblock reason", Up: sqlrepo.RenderDDLAll(`ALTER TABLE pur_suppliers {add:unblock_reason} {str:200}{addEnd}`)},
+		// Las solicitudes de aprobación del bloqueo y el desbloqueo de proveedores (D-156, paso 3;
+		// docs/APROBACIONES.md): la tabla del motor, propia del contexto.
+		{Version: 7, Name: "approval requests", Up: sqlrepo.RenderDDLAll(approvals.DDL(TableApprovals)...)},
 	}}
 }
 
@@ -121,7 +128,7 @@ func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 }
 
 // Tables lista las tablas del contexto, primero las hijas (orden de borrado).
-var Tables = []string{"pur_invoice_accounts", "pur_invoice_taxes", "pur_invoice_lines", "pur_invoices", "pur_suppliers", "pur_counters", TableOutbox,
+var Tables = []string{"pur_invoice_accounts", "pur_invoice_taxes", "pur_invoice_lines", "pur_invoices", "pur_suppliers", "pur_counters", TableApprovals, TableOutbox,
 	TableIntegrationOutbox, TableAuditLog, TableInbox}
 
 // DropAll borra las tablas del contexto y su historial de migraciones (sólo pruebas).
@@ -312,6 +319,11 @@ func SupplierRepositoryFactory(b hotswap.Backend) (domain.SupplierRepository, er
 // CounterRepositoryFactory construye el repositorio de contadores del registro.
 func CounterRepositoryFactory(b hotswap.Backend) (domain.CounterRepository, error) {
 	return repository(b, CounterMapping())
+}
+
+// ApprovalRepositoryFactory construye el repositorio de las solicitudes de aprobación.
+func ApprovalRepositoryFactory(b hotswap.Backend) (approval.Repository, error) {
+	return repository(b, approvals.Mapping(TableApprovals))
 }
 
 // OutboxFactory construye el outbox de eventos de dominio.

@@ -30,8 +30,10 @@ import (
 	uinfra "github.com/jhermoso/karpo-fw-go/contexts/purchases/infrastructure"
 	rinfra "github.com/jhermoso/karpo-fw-go/contexts/receivables/infrastructure"
 	tinfra "github.com/jhermoso/karpo-fw-go/contexts/treasury/infrastructure"
+	"github.com/jhermoso/karpo-fw-go/pkg/application/approval"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
+	fwapproval "github.com/jhermoso/karpo-fw-go/pkg/domain/approval"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 	"github.com/jhermoso/karpo-fw-go/pkg/messaging/inprocess"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
@@ -234,6 +236,39 @@ func TestPurchasesContext(t *testing.T) {
 			reg, err := svc.SearchInvoices.Handle(actx, uapp.SearchInvoices{Company: acme.ID, Supplier: tienda.ID})
 			if err != nil || len(reg.Items) != 3 || reg.Items[2].Corrects != b.ID {
 				t.Fatalf("register of the stationer: %+v %v", reg.Items, err)
+			}
+
+			// Migración 7: bloquear con aprobación (D-156). La solicitud va y vuelve por pur_approvals
+			// y, al aprobarla otro, el perfil queda bloqueado en la misma transacción.
+			gated := purchases.Compose(sw, uinfra.FiscalTaxes{Engine: fm.TaxEngine},
+				purchases.WithApprovalPolicy(approval.Fixed{uapp.ActionBlockSupplier: true})).Service
+			as := func(name string) context.Context {
+				c, err := authz.NewContext(authz.Context{Subject: fw.NewUUID(), SubjectName: name, Kind: authz.Human, ActorPartyID: fw.NewUUID(),
+					Permissions: []authz.Permission{authz.Wildcard}})
+				must(err)
+				c.GlobalAdmin = true
+				return authz.WithContext(ctx, c)
+			}
+			requester, approver := as("clerk"), as("boss")
+			pend, err := gated.SetSupplier.Handle(requester, uapp.SetSupplier{Company: acme.ID, Supplier: asesor.ID, Category: "professional-services",
+				WithholdingRate: "7", PaymentDays: 30, IBAN: "ES7921000813610123456789", Blocked: true, BlockReason: "impago"})
+			if err != nil || pend.PendingApproval == "" || pend.Blocked {
+				t.Fatalf("pending block: %+v %v", pend, err)
+			}
+			if _, err := gated.SetSupplier.Handle(requester, uapp.SetSupplier{Company: acme.ID, Supplier: asesor.ID, Category: "professional-services",
+				WithholdingRate: "7", PaymentDays: 30, IBAN: "ES7921000813610123456789", Blocked: true, BlockReason: "impago"}); !errors.Is(err, fw.ErrConflict) {
+				t.Fatalf("second request: %v", err)
+			}
+			rid := fwapproval.RequestID{UUID: fw.MustParseUUID(pend.PendingApproval)}
+			if _, err := gated.ApproveApproval.Handle(requester, uapp.ResolveApproval{ID: rid}); !errors.Is(err, fw.ErrRuleViolation) {
+				t.Fatalf("self approval: %v", err)
+			}
+			res, err := gated.ApproveApproval.Handle(approver, uapp.ResolveApproval{ID: rid, Comment: "visto"})
+			if err != nil || res.Status != "approved" || res.Comment != "visto" {
+				t.Fatalf("approve: %+v %v", res, err)
+			}
+			if ss, err := svc.SearchSuppliers.Handle(actx, uapp.SearchSuppliers{Company: acme.ID}); err != nil || len(ss) != 1 || !ss[0].Blocked || ss[0].BlockReason != "impago" {
+				t.Fatalf("blocked after approval: %+v %v", ss, err)
 			}
 		})
 	}

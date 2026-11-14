@@ -85,6 +85,7 @@ func compose(t *testing.T, opts ...purchases.Option) *host {
 		"canceller": {uapp.PermInvoiceRead, uapp.PermInvoiceCancel},
 		"viewer":    {uapp.PermInvoiceRead, uapp.PermSupplierRead},
 		"outsider":  all,
+		"approver":  {uapp.PermSupplierRead, uapp.PermSupplierUpdate, uapp.PermApproveBlock, uapp.PermApproveUnblock},
 	}
 	for u, perms := range users {
 		h.ids[u] = fw.NewUUID()

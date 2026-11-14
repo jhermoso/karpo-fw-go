@@ -175,6 +175,56 @@ contexts/purchases/
     `fiscal_inbox`;
   - anulación y registro por proveedor.
 
+## Aprobación del bloqueo y el desbloqueo (D-156, paso 3; 2026-11-14)
+
+Si la empresa tiene la acción en su lista (Parties; docs/APROBACIONES.md, paso 2), bloquear o
+desbloquear un proveedor no se hace en el acto: deja una solicitud que aprueba otra persona.
+
+- **Acciones:** `purchases.supplier.block` y `purchases.supplier.unblock`. **Permisos nuevos**
+  (derivados por el motor): `Purchases.Supplier.ApproveBlock` y `Purchases.Supplier.ApproveUnblock`;
+  el mismo aprueba y rechaza.
+- **Composición:** `purchases.WithApprovalPolicy(policy)`; por omisión `approval.Never` (todo como
+  antes). El anfitrión le pasa `h.Parties.ApprovalPolicy`.
+- **Migración 7:** `pur_approvals`, la tabla del motor (`approvals.DDL`), con su índice
+  `ix_pur_approvals_target`. Repositorio `sqlrepo` o en memoria por el conmutador, como el resto; la
+  solicitud se guarda en la misma transacción que el cambio.
+- **Qué la pide:** cualquier cambio que cambiaría el estado de bloqueo: el alta bloqueada (`PUT
+  /api/purchases/suppliers`, `POST /api/v1/suppliers`), el cambio (`PUT /api/purchases/suppliers`,
+  `PUT /api/v1/suppliers/{id}`) y el `DELETE /api/v1/suppliers/{id}`. Pedirla exige lo mismo que
+  ejecutarla: `Purchases.Supplier.Update`, el ámbito de escritura y el motivo (422 sin él, con los
+  códigos de siempre). La carga útil es `{"supplier", "blocked", "reason"}`.
+- **Respuesta: 202.** El cuerpo es el perfil como queda, con `pendingApproval` (el id de la
+  solicitud); el `DELETE` responde `{"pendingApproval": id}`.
+- **Si el mismo cambio trae otros campos** (decisión técnica): **se aplican, y sólo el bloqueo queda
+  pendiente**. Así un alta bloqueada nace sin bloquear (no hay otra forma de darla de alta) y el
+  usuario no tiene que partir el formulario en dos; el 202 y `pendingApproval` dicen que algo quedó
+  sin aplicar. Aunque el cambio sea sólo de bloqueo, el perfil gana una versión.
+- **Una pendiente por perfil y acción:** la segunda es 409 (`purchases.approval_pending` en el
+  detalle). Sólo se pide la acción que cambia el estado actual.
+- **Rutas de las solicitudes**, junto a las del contexto:
+
+| Ruta | Qué hace |
+|---|---|
+| `GET /api/purchases/approvals?company&status` | las solicitudes del ámbito de quien llama (`Purchases.Supplier.Read`); por omisión las `pending`; `status` admite `approved`, `rejected`, `cancelled` o `all` (otro, 400) |
+| `POST /api/purchases/approvals/{id}/approve` `{comment?}` | aprueba y **aplica el bloqueo o el desbloqueo en la misma transacción**; 403 sin el permiso de aprobar, 422 `approval.self_resolution` si es el solicitante, 422 `approval.already_resolved` si ya está resuelta |
+| `POST /api/purchases/approvals/{id}/reject` `{comment}` | rechaza; el comentario es obligatorio (422 `approval.comment_required`); el perfil no cambia |
+| `POST /api/purchases/approvals/{id}/cancel` `{comment?}` | la retira; sólo el solicitante (422 `approval.not_requester`) |
+
+- **Ámbito del aprobador** (lo que APROBACIONES.md dejaba para el paso 3): resolver exige además el
+  ámbito de escritura en la empresa de la solicitud: fuera de él, 404; de sólo lectura, 403.
+- **Si el perfil cambió entretanto:** al aprobar sólo se aplican el bloqueo (o el desbloqueo) y su
+  motivo; los demás campos se quedan como estén. Si el perfil ya está en el estado pedido (p. ej. se
+  bloqueó por otra vía cuando la empresa aún no exigía aprobación), la solicitud queda aprobada y el
+  perfil no se toca: idempotente.
+- **Auditoría:** la solicitud deja su registro (`approval.request`, al crearse y al resolverse, con
+  el estado, el comentario y el evento) en `purchases_audit_log`, y el cambio del perfil el suyo, con
+  el aprobador como actor. Los eventos `approval.*` no salen al outbox: la acción se aplica en la
+  misma transacción y nadie más los escucha.
+- **Front:** el motor de mantenimiento trata el 202 como un éxito; enseñar que queda pendiente y la
+  bandeja de solicitudes están por hacer.
+- **Pruebas:** `TestPurchases_BlockApprovals_MemoryThenSQLite`, `TestPurchases_BlockWithoutPolicy_IsImmediate`
+  y el final de `TestPurchasesContext` (integration/).
+
 ## Pendiente
 
 - Fase 2:
@@ -208,10 +258,10 @@ contrato que el de Productos, Instalaciones, Activos y Envíos (docs/ENVIOS.md).
 | Lectura | `GET /api/v1/suppliers/{id}` | el perfil |
 | Alta | `POST /api/v1/suppliers` | 201 con `Location`; lo que sobra en el cuerpo se ignora. Si la empresa ya tiene perfil para ese proveedor, 422 `purchases.duplicate_supplier` (el `PUT /api/purchases/suppliers` de siempre, en cambio, lo sustituye) |
 | Cambio | `PUT /api/v1/suppliers/{id}` con lo leído y su `version` | 200; lo que el cuerpo no trae, o trae como null, se queda como está. Sin `version`, 400; con una que ya no es la suya, 409. Se traduce a `ChangeSupplier` (`category`, `withholdingRate`, `paymentDays`, `iban`, `blocked`, `blockReason`, `unblockReason`), sólo si algo cambia (la retención se compara por su valor y la cuenta sin espacios ni mayúsculas); aun sin cambios exige el permiso y el ámbito de escritura. Todo el cambio es una sola unidad de trabajo. Los textos se recortan. `company` y `supplier` no los cambia ningún caso de uso: cambiarlos es 400 `immutable` (se comparan por su valor: la identidad sin distinguir mayúsculas ni los espacios de los extremos) |
-| Baja | `DELETE /api/v1/suppliers/{id}` | un perfil no se borra (sus facturas nombran al proveedor y el dominio no tiene baja, sólo bloqueo): DELETE lo **bloquea** con el motivo de `{"reason": "..."}` en el cuerpo o de `?reason=` (si vienen los dos, manda el del cuerpo), y a un proveedor bloqueado no se le registran facturas nuevas. 204; sin motivo, 422 `purchases.block_reason_required`; sobre uno ya bloqueado, 204 otra vez y sin versión nueva (el motivo no cambia). Siempre exige el permiso y el ámbito de escritura (`Purchases.Supplier.Update`; 403 sin él). Se desbloquea por el PUT con `blocked: false` y `unblockReason` |
+| Baja | `DELETE /api/v1/suppliers/{id}` | un perfil no se borra (sus facturas nombran al proveedor y el dominio no tiene baja, sólo bloqueo): DELETE lo **bloquea** con el motivo de `{"reason": "..."}` en el cuerpo o de `?reason=` (si vienen los dos, manda el del cuerpo), y a un proveedor bloqueado no se le registran facturas nuevas. 204 (202 si bloquear exige aprobación, más abajo); sin motivo, 422 `purchases.block_reason_required`; sobre uno ya bloqueado, 204 otra vez y sin versión nueva (el motivo no cambia). Siempre exige el permiso y el ámbito de escritura (`Purchases.Supplier.Update`; 403 sin él). Se desbloquea por el PUT con `blocked: false` y `unblockReason` |
 
 - **El objeto:** `id`, `company`, `supplier`, `category`, `withholdingRate`, `paymentDays`, `iban`,
-  `blocked`, `blockReason`, `unblockReason`, `version`.
+  `blocked`, `blockReason`, `unblockReason`, `version` y, en un 202, `pendingApproval`.
 - **Casos de uso nuevos:** `RegisterSupplier` (alta sin sustituir), `ChangeSupplier` (por la
   identidad, con la versión leída: con ella el conflicto es definitivo y no se reintenta; sin ella,
   se reintenta como siempre), `GetSupplier`, `SupplierChangeable` y `PageSuppliers`. Los permisos
