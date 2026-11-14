@@ -62,7 +62,7 @@ func TestApplicationContracts_DependOnContractsOnly(t *testing.T) {
 // Regla 3: las implementaciones de aplicación sólo dependen de contratos: nunca de adaptadores
 // de persistencia, de la capa de transporte, de paquetes de base de datos ni de código de terceros.
 func TestApplicationImplementations_DependOnContractsOnly(t *testing.T) {
-	for _, pkg := range []string{"pipeline", "orchestration", "outbox", "hosting", "authorization"} {
+	for _, pkg := range []string{"pipeline", "orchestration", "outbox", "hosting", "authorization", "approval"} {
 		archtest.AssertOnlyImports(t, root(t, "pkg", "application", pkg), true, contracts...)
 	}
 	// messaging reutiliza el motor de reenvío de outbox (una implementación hermana, nunca un adaptador).

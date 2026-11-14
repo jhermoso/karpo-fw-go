@@ -57,7 +57,7 @@ Leyenda: ✅ hecho · 🟡 parcial · ❌ falta · — no aplica en Go (decisió
 | Proyecciones / modelos de lectura (`IAggregateProjection`) | ❌ | ❌ | |
 | Autorización (`AuthorizationContext`, resolvers, `OrganizationAccessLevel`, `PermissionCodes`, `ICurrentActorResolver`) | ✅ `application/authz` | ✅ `authorization` (resolutor, `Authenticators`), `pipeline.RequirePermission`, `distribution.Authorize`, `jwtauth`; `Directory` real en `contexts/security` | Evaluado en `AUTORIZACION.md` y `SEGURIDAD.md`; ❌ modo `Http`, verificador OIDC |
 | Catálogo de permisos (`WellKnownSecurityCatalog`, siembra al arrancar) | ✅ `Permissions()` por contexto | ✅ `security.Module.SyncCatalog` | Cada contexto declara los suyos; ver `SEGURIDAD.md` |
-| Workflow (definiciones, instancias, pasos, motor) | ❌ | ❌ | contexto completo del Fw |
+| Workflow (definiciones, instancias, pasos, motor) | 🟡 sólo aprobaciones: `domain/approval`, `application/approval.Policy` | 🟡 `application/approval.Service`, `persistence/approvals` (SQL ×5), memoria | Evaluado en `APROBACIONES.md` (D-156); ❌ política por empresa (paso 2), ❌ flujos de varios pasos |
 | Gestión de esquema / migraciones (`IDatabaseSchemaManager`) | ✅ `application.SchemaMigrator` | ✅ `sqlrepo.Migrator` (5 motores, bloqueo, checksum, dirty) | Evaluado en `ESQUEMA-MIGRACIONES.md`; ❌ comando `karpo migrate` |
 | Importación y referencias legadas (`ImportRun`, `LegacyReference`) | ❌ | ❌ | |
 | Log de auditoría (`AuditLogEntry`) | ✅ `application.AuditLog` | ✅ memoria, SQL ×5, hotswap; escrito por el orquestador | ❌ almacén a prueba de manipulación |
