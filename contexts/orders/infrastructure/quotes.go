@@ -23,18 +23,18 @@ func QuoteMapping() sqlrepo.Mapping[domain.QuoteID, *domain.Quote] {
 	return sqlrepo.Mapping[domain.QuoteID, *domain.Quote]{
 		Table:    "ord_quotes",
 		Decimals: decimalColumns.Of("ord_quotes"),
-		Columns: sqlrepo.WithAuditColumns("company", "customer", "quote_number", "quote_date", "valid_until", "price_list", "customer_discount", "reference",
+		Columns: sqlrepo.WithAuditColumns("company", "customer", "kind", "quote_number", "quote_date", "valid_until", "price_list", "customer_discount", "reference",
 			"notes", "status", "reason", "order_id"),
 		Dehydrate: func(q *domain.Quote) (sqlrepo.Values, error) {
 			s := q.State()
-			return sqlrepo.AuditStampValues(sqlrepo.Values{"company": s.Company, "customer": s.Customer, "quote_number": opt(s.Number), "quote_date": s.Date,
+			return sqlrepo.AuditStampValues(sqlrepo.Values{"company": s.Company, "customer": s.Customer, "kind": string(s.Kind), "quote_number": opt(s.Number), "quote_date": s.Date,
 				"valid_until": s.ValidUntil, "price_list": optUUID(s.PriceList.UUID), "customer_discount": s.CustomerDiscount.Round(2),
 				"reference": opt(s.Reference), "notes": opt(s.Notes), "status": string(s.Status), "reason": opt(s.Reason), "order_id": optUUID(s.Order.UUID)},
 				q.AuditStamp()), nil
 		},
 		Hydrate: func(r *sqlrepo.Row, children sqlrepo.ChildRows) (*domain.Quote, error) {
 			s := domain.QuoteState{Company: domain.OrganizationID{UUID: r.UUID("company")}, Customer: domain.PartyID{UUID: r.UUID("customer")},
-				Number: r.String("quote_number"), Date: r.Date("quote_date"), ValidUntil: r.Date("valid_until"),
+				Kind: domain.QuoteType(r.String("kind")), Number: r.String("quote_number"), Date: r.Date("quote_date"), ValidUntil: r.Date("valid_until"),
 				PriceList: domain.PriceListID{UUID: r.UUID("price_list")}, CustomerDiscount: r.Decimal("customer_discount"), Reference: r.String("reference"),
 				Notes: r.String("notes"), Status: domain.QuoteStatus(r.String("status")), Reason: r.String("reason"),
 				Order: domain.OrderID{UUID: r.UUID("order_id")}, Audit: r.AuditStamp()}

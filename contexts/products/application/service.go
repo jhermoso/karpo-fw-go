@@ -192,7 +192,7 @@ func productRef(p *domain.Product) contracts.ProductRef {
 	return contracts.ProductRef{ID: p.ID().String(), Company: s.Company.String(), SKU: s.SKU, Name: s.Name, Kind: s.Kind.String(), UoM: s.UoM,
 		TaxCode: s.TaxCode, ExpenseCategory: s.ExpenseCategory, ForSale: s.ForSale, ForPurchase: s.ForPurchase, Stocked: s.Stocked,
 		Tracking: s.Tracking.String(), BlockedSales: s.BlockedSales, BlockedPurchase: s.BlockedPurchase, Discontinued: dateText(s.Discontinued),
-		StandardCost: s.StandardCost.StringFixed(4)}
+		StandardCost: s.StandardCost.StringFixed(4), ServiceFulfilmentMode: s.ServiceFulfilmentMode}
 }
 
 // CatalogPort implementa contracts.Catalog (sirve a otros contextos, no a usuarios).

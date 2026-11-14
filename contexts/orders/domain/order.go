@@ -843,6 +843,35 @@ type Blocks interface {
 	Blocked(ctx context.Context, party PartyID) (bool, error)
 }
 
+// Cómo se sirve una línea de servicio de un pedido (D-155).
+const (
+	// ServiceFulfilmentDeliveryNote: con albarán, sin pedir ni mover stock (lo de siempre).
+	ServiceFulfilmentDeliveryNote = "delivery_note"
+	// ServiceFulfilmentDirectInvoice: no va al albarán; se factura directamente desde el pedido.
+	ServiceFulfilmentDirectInvoice = "direct_invoice"
+)
+
+// ResolveServiceFulfilment decide cómo se sirve un servicio: el ajuste del producto, si lo tiene;
+// si no, el de la empresa; si tampoco, con albarán (D-155).
+func ResolveServiceFulfilment(product, company string) string {
+	if product != "" {
+		return product
+	}
+	if company != "" {
+		return company
+	}
+	return ServiceFulfilmentDeliveryNote
+}
+
+// ServiceFulfilment dice los ajustes de D-155 (un puerto propio de Orders sobre los contratos de
+// Products y de Parties). Services devuelve, de los productos dados, los que son servicios, con su
+// ajuste propio ("" sin ajuste); CompanyMode, el ajuste de la empresa ("" sin ajuste). nil: todos
+// los servicios van con albarán.
+type ServiceFulfilment interface {
+	Services(ctx context.Context, products []ProductID) (map[ProductID]string, error)
+	CompanyMode(ctx context.Context, company OrganizationID) (string, error)
+}
+
 // CreditCheck responde el crédito de un cliente en una fecha; nil: sin control de crédito.
 type CreditCheck interface {
 	Credit(ctx context.Context, company OrganizationID, customer PartyID, on vocab.Date) (Credit, error)

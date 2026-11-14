@@ -1155,6 +1155,24 @@ los de Karpo C#. Migración 35.
   `automatic_pricing` lo usa Facturación para la factura directa, con `host.BillingSettings`
   (docs/FACTURACION.md, «Precio automático»).
 
+### Cómo se sirven los servicios (D-155)
+
+En el mismo perfil y el mismo `PUT`, con los mismos permisos, ámbito y auditoría. El nombre es el de
+Karpo C#. Migración 36.
+
+| Columna | JSON | Valores | Nulo (lo de siempre) | 422 |
+|---|---|---|---|---|
+| `service_fulfilment_mode` `{str:20}` | `serviceFulfilmentMode` | `delivery_note`: las líneas de servicio de un pedido van al albarán, sin mover stock; `direct_invoice`: no van al albarán, se facturan desde el pedido | sin ajuste: el del producto, o con albarán | `Company.InvalidServiceFulfilmentMode`; `Company.DirectInvoiceUnavailable` |
+
+- **`direct_invoice` aún no se admite** (422 `Company.DirectInvoiceUnavailable`): Facturación no
+  factura desde el pedido, así que esas líneas no se facturarían nunca. El valor sigue en el
+  enumerado; habilitarlo es poner a true `domain.DirectInvoiceAvailable`.
+
+- La respuesta da `null` si no hay ajuste. El producto, si tiene el suyo, gana (docs/PRODUCTOS.md);
+  Orders lo resuelve al servir (docs/PEDIDOS.md, «Servicios y proforma»).
+- Los demás contextos lo leen con `contracts.CompanyProfiles.Settings` (`ServiceFulfilmentMode`);
+  el anfitrión se lo lleva a Orders con `ordinfra.ServiceFulfilmentSettings`.
+
 ### El patrón de cada tipo de código (D-129, D-144)
 
 - **Tabla hija** `internal_organization_code_pattern`: `internal_organization_id` (clave ajena a

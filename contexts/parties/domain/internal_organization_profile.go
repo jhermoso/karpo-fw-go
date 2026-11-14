@@ -33,6 +33,23 @@ const (
 	ErrInvalidCodePattern        = "Company.InvalidCodePattern"
 	ErrInvalidDefaultPriceList   = "Company.InvalidDefaultPriceList"
 	ErrUnknownDefaultPriceList   = "Company.UnknownDefaultPriceList"
+	// ErrInvalidServiceFulfilmentMode: el modo de servir los servicios no es delivery_note ni
+	// direct_invoice (D-155).
+	ErrInvalidServiceFulfilmentMode = "Company.InvalidServiceFulfilmentMode"
+	// ErrDirectInvoiceUnavailable: direct_invoice aún no se admite (D-155).
+	ErrDirectInvoiceUnavailable = "Company.DirectInvoiceUnavailable"
+)
+
+// DirectInvoiceAvailable dice si se admite direct_invoice. Facturación aún no factura desde el
+// pedido, así que una línea en direct_invoice no se facturaría nunca (D-155, docs/PEDIDOS.md).
+// Habilitarlo: poner true cuando Facturación facture desde el pedido.
+const DirectInvoiceAvailable = false
+
+// Cómo se sirven las líneas de servicio de un pedido (D-155): con albarán, sin mover stock (el
+// comportamiento de siempre), o facturándolas directamente desde el pedido.
+const (
+	ServiceFulfilmentDeliveryNote  = "delivery_note"
+	ServiceFulfilmentDirectInvoice = "direct_invoice"
 )
 
 // Formas de redondear una línea con descuento (D-128, D-144).
@@ -86,6 +103,24 @@ type InternalOrganizationProfile struct {
 	// AutomaticPricing dice si una línea de factura sin pedido toma sola el precio de la cadena de
 	// Products (D-148); nil, sí.
 	AutomaticPricing *bool
+	// ServiceFulfilmentMode es cómo se sirven las líneas de servicio de los pedidos de la empresa:
+	// ServiceFulfilmentDeliveryNote o ServiceFulfilmentDirectInvoice; vacío, sin ajuste (el del
+	// producto, si lo tiene, o con albarán; D-155).
+	ServiceFulfilmentMode string
+}
+
+// SetServiceFulfilmentMode fija cómo se sirven los servicios: delivery_note, direct_invoice, o
+// vacío para limpiarlo.
+func (p *InternalOrganizationProfile) SetServiceFulfilmentMode(mode string) error {
+	mode = strings.TrimSpace(mode)
+	if mode != "" && mode != ServiceFulfilmentDeliveryNote && mode != ServiceFulfilmentDirectInvoice {
+		return fw.Violation(ErrInvalidServiceFulfilmentMode, "the service fulfilment mode must be delivery_note or direct_invoice")
+	}
+	if mode == ServiceFulfilmentDirectInvoice && !DirectInvoiceAvailable {
+		return fw.Violation(ErrDirectInvoiceUnavailable, "direct invoicing of services is not available yet: billing cannot invoice from the order")
+	}
+	p.ServiceFulfilmentMode = mode
+	return nil
 }
 
 // PricesAutomatically dice si la empresa pone precio sola a una línea de factura sin pedido: el
@@ -125,7 +160,8 @@ func (p InternalOrganizationProfile) Equal(o InternalOrganizationProfile) bool {
 	samePrice := (p.PriceDecimals == nil) == (o.PriceDecimals == nil) && (p.PriceDecimals == nil || *p.PriceDecimals == *o.PriceDecimals)
 	sameAuto := (p.AutomaticPricing == nil) == (o.AutomaticPricing == nil) && (p.AutomaticPricing == nil || *p.AutomaticPricing == *o.AutomaticPricing)
 	return p.Organization == o.Organization && p.TimeZone == o.TimeZone && p.LineRounding == o.LineRounding && samePrice &&
-		p.InstallmentsTiming == o.InstallmentsTiming && p.DefaultPriceList == o.DefaultPriceList && sameAuto
+		p.InstallmentsTiming == o.InstallmentsTiming && p.DefaultPriceList == o.DefaultPriceList && sameAuto &&
+		p.ServiceFulfilmentMode == o.ServiceFulfilmentMode
 }
 
 // SetLineRounding fija la forma de redondear las líneas: once, gross_then_discount, o vacío para

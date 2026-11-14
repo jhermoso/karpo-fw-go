@@ -52,6 +52,8 @@ type DetailsInput struct {
 	Barcodes        []BarcodeInput   `json:"barcodes,omitempty"`
 	Components      []ComponentInput `json:"components,omitempty"`
 	Suppliers       []SupplierInput  `json:"suppliers,omitempty"`
+	// ServiceFulfilmentMode es delivery_note o direct_invoice (D-155); vacío, sin ajuste.
+	ServiceFulfilmentMode string `json:"serviceFulfilmentMode,omitempty"`
 }
 
 // RegisterProduct añade un producto al catálogo de una empresa.
@@ -103,7 +105,7 @@ func productDTO(p *domain.Product) ProductDTO {
 		DetailsInput: DetailsInput{Name: s.Name, Description: s.Description, Kind: s.Kind.String(), UoM: s.UoM, TaxCode: s.TaxCode,
 			ExpenseCategory: s.ExpenseCategory, BasePrice: s.BasePrice.StringFixed(4), StandardCost: s.StandardCost.StringFixed(4), ForSale: s.ForSale,
 			ForPurchase: s.ForPurchase, Stocked: s.Stocked, Tracking: s.Tracking.String(), BlockedSales: s.BlockedSales, BlockedPurchase: s.BlockedPurchase,
-			Barcodes: []BarcodeInput{}, Components: []ComponentInput{}, Suppliers: []SupplierInput{}}}
+			Barcodes: []BarcodeInput{}, Components: []ComponentInput{}, Suppliers: []SupplierInput{}, ServiceFulfilmentMode: s.ServiceFulfilmentMode}}
 	if !s.Category.IsZero() {
 		d.Category = s.Category.String()
 	}
@@ -125,7 +127,7 @@ func details(v *fw.Validation, in DetailsInput) domain.Details {
 	d := domain.Details{Name: in.Name, Description: in.Description, Kind: kind, UoM: strings.TrimSpace(in.UoM), TaxCode: in.TaxCode,
 		ExpenseCategory: strings.TrimSpace(in.ExpenseCategory), BasePrice: parseDecimal(v, "basePrice", in.BasePrice),
 		StandardCost: parseDecimal(v, "standardCost", in.StandardCost), ForSale: in.ForSale, ForPurchase: in.ForPurchase, Stocked: in.Stocked,
-		BlockedSales: in.BlockedSales, BlockedPurchase: in.BlockedPurchase}
+		BlockedSales: in.BlockedSales, BlockedPurchase: in.BlockedPurchase, ServiceFulfilmentMode: in.ServiceFulfilmentMode}
 	if in.Tracking != "" {
 		t, ok := domain.ParseTracking(in.Tracking)
 		v.Require(ok, "tracking", "enum", "none, lot or serial")

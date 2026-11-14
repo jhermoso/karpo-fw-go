@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/orders/domain"
 	app "github.com/jhermoso/karpo-fw-go/pkg/application"
@@ -448,9 +449,21 @@ func (s service) orderUseCases(svc *Service) {
 			if date.Before(os.Date) {
 				return fw.Violation("orders.delivery_date", "a delivery is not before its order")
 			}
+			direct, err := s.directInvoiceLines(ctx, os)
+			if err != nil {
+				return err
+			}
+			for _, p := range picks {
+				if direct[p.Line] {
+					return fw.Violation("orders.service_direct_invoice", fmt.Sprintf("line %d is a service invoiced directly, not delivered", p.Line))
+				}
+			}
 			picks := picks // un reintento vuelve a empezar desde lo que se pidió
 			if len(picks) == 0 {
 				for _, l := range os.Lines {
+					if direct[l.No] {
+						continue // se factura desde el pedido (D-155)
+					}
 					q := l.Pending()
 					if l.Stocked {
 						q = l.Reserved

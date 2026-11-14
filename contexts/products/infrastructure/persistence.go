@@ -105,6 +105,9 @@ func Migrations() sqlrepo.MigrationSet {
 		{Version: 2, Name: "outboxes and audit log", Up: technical},
 		{Version: 3, Name: "decimal columns", Run: decimalColumnsV3.Run},
 		{Version: 4, Name: "special prices", Up: sqlrepo.RenderDDLAll(specialPricesDDL...)},
+		// Cómo se sirve un servicio en un pedido (D-155), con el nombre de Karpo C#: delivery_note o
+		// direct_invoice; nulo, sin ajuste (el de la empresa, o con albarán).
+		{Version: 5, Name: "service fulfilment mode", Up: sqlrepo.RenderDDLAll(`ALTER TABLE prd_products {add:service_fulfilment_mode} {str:20}{addEnd}`)},
 	}}
 }
 
@@ -179,14 +182,16 @@ func ProductMapping() sqlrepo.Mapping[domain.ProductID, *domain.Product] {
 		Table:    "prd_products",
 		Decimals: decimalColumns.Of("prd_products"),
 		Columns: sqlrepo.WithAuditColumns("company", "sku", "name", "description", "kind", "uom", "category_id", "tax_code", "expense_category",
-			"base_price", "standard_cost", "for_sale", "for_purchase", "stocked", "tracking", "blocked_sales", "blocked_purchase", "discontinued"),
+			"base_price", "standard_cost", "for_sale", "for_purchase", "stocked", "tracking", "blocked_sales", "blocked_purchase", "discontinued",
+			"service_fulfilment_mode"),
 		Dehydrate: func(p *domain.Product) (sqlrepo.Values, error) {
 			s := p.State()
 			return sqlrepo.AuditStampValues(sqlrepo.Values{"company": s.Company, "sku": s.SKU, "name": s.Name, "description": opt(s.Description),
 				"kind": int64(s.Kind), "uom": s.UoM, "category_id": optUUID(s.Category.UUID), "tax_code": opt(s.TaxCode),
 				"expense_category": opt(s.ExpenseCategory), "base_price": s.BasePrice.Round(4), "standard_cost": s.StandardCost.Round(4),
 				"for_sale": s.ForSale, "for_purchase": s.ForPurchase, "stocked": s.Stocked, "tracking": int64(s.Tracking), "blocked_sales": s.BlockedSales,
-				"blocked_purchase": s.BlockedPurchase, "discontinued": optDate(s.Discontinued)}, p.AuditStamp()), nil
+				"blocked_purchase": s.BlockedPurchase, "discontinued": optDate(s.Discontinued),
+				"service_fulfilment_mode": opt(s.ServiceFulfilmentMode)}, p.AuditStamp()), nil
 		},
 		Hydrate: func(r *sqlrepo.Row, children sqlrepo.ChildRows) (*domain.Product, error) {
 			s := domain.ProductState{Company: domain.OrganizationID{UUID: r.UUID("company")}, SKU: r.String("sku"), Discontinued: r.Date("discontinued"),
@@ -194,7 +199,8 @@ func ProductMapping() sqlrepo.Mapping[domain.ProductID, *domain.Product] {
 					UoM: r.String("uom"), Category: domain.CategoryID{UUID: r.UUID("category_id")}, TaxCode: r.String("tax_code"),
 					ExpenseCategory: r.String("expense_category"), BasePrice: r.Decimal("base_price"), StandardCost: r.Decimal("standard_cost"),
 					ForSale: r.Bool("for_sale"), ForPurchase: r.Bool("for_purchase"), Stocked: r.Bool("stocked"), Tracking: domain.Tracking(r.Int64("tracking")),
-					BlockedSales: r.Bool("blocked_sales"), BlockedPurchase: r.Bool("blocked_purchase")}}
+					BlockedSales: r.Bool("blocked_sales"), BlockedPurchase: r.Bool("blocked_purchase"),
+					ServiceFulfilmentMode: r.String("service_fulfilment_mode")}}
 			for _, c := range byNo(children.Of("barcodes")) {
 				s.Barcodes = append(s.Barcodes, domain.Barcode{Type: c.String("code_type"), Value: c.String("code_value")})
 			}

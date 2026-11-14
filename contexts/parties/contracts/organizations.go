@@ -78,6 +78,9 @@ type CompanySettings struct {
 	// ajuste automatic_pricing a false. El valor cero, el de una empresa sin perfil o sin el ajuste,
 	// es el acordado: precio automático (D-148).
 	ManualPricing bool
+	// ServiceFulfilmentMode es cómo se sirven las líneas de servicio de un pedido: "delivery_note"
+	// (con albarán) o "direct_invoice" (se facturan desde el pedido); "" sin ajuste (D-155).
+	ServiceFulfilmentMode string
 }
 
 // CompanyProfiles dice los ajustes de facturación de una empresa interna y el patrón (una

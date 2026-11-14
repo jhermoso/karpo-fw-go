@@ -27,6 +27,7 @@ var (
 type DraftQuote struct {
 	Company    string     `json:"company"`
 	Customer   string     `json:"customer"`
+	Kind       string     `json:"kind,omitempty"` // quote (por omisión) o proforma (D-155)
 	Date       vocab.Date `json:"date,omitzero"`
 	ValidUntil vocab.Date `json:"validUntil,omitzero"`
 	Reference  string     `json:"reference,omitempty"`
@@ -34,9 +35,11 @@ type DraftQuote struct {
 }
 
 // ChangeQuote sustituye las fechas, la referencia y las notas de un borrador: lo que no se envía
-// se deja vacío (la validez, otra vez treinta días).
+// se deja vacío (la validez, otra vez treinta días). El tipo, si no se envía, se queda como está;
+// enviado el presupuesto, no cambia (422 orders.quote_kind_locked).
 type ChangeQuote struct {
 	ID         domain.QuoteID `json:"-"`
+	Kind       string         `json:"kind,omitempty"`
 	Date       vocab.Date     `json:"date,omitzero"`
 	ValidUntil vocab.Date     `json:"validUntil,omitzero"`
 	Reference  string         `json:"reference,omitempty"`
@@ -85,9 +88,9 @@ type GetQuote struct{ ID domain.QuoteID }
 
 // SearchQuotes busca presupuestos del ámbito de quien llama, los más recientes primero.
 type SearchQuotes struct {
-	Company, Customer, Status string
-	IncludeMergedParties      bool // también los de clientes fusionados en otra party (D-100)
-	Page, Size                int
+	Company, Customer, Status, Kind string
+	IncludeMergedParties            bool // también los de clientes fusionados en otra party (D-100)
+	Page, Size                      int
 }
 
 // QuoteLineDTO es la forma de transporte de una línea de presupuesto.
@@ -113,6 +116,7 @@ type QuoteDTO struct {
 	ID               string         `json:"id"`
 	Company          string         `json:"company"`
 	Customer         string         `json:"customer"`
+	Kind             string         `json:"kind"` // quote o proforma (D-155)
 	Number           string         `json:"number,omitempty"`
 	Date             string         `json:"date"`
 	ValidUntil       string         `json:"validUntil"`
@@ -141,7 +145,8 @@ type ExpiredQuotesDTO struct {
 
 func quoteDTO(q *domain.Quote) QuoteDTO {
 	s := q.State()
-	d := QuoteDTO{ID: q.ID().String(), Company: s.Company.String(), Customer: s.Customer.String(), Number: s.Number, Date: s.Date.String(),
+	d := QuoteDTO{ID: q.ID().String(), Company: s.Company.String(), Customer: s.Customer.String(), Kind: string(s.Kind), Number: s.Number,
+		Date:       s.Date.String(),
 		ValidUntil: s.ValidUntil.String(), PriceList: optID(s.PriceList.UUID), CustomerDiscount: money(s.CustomerDiscount), Reference: s.Reference,
 		Notes: s.Notes, Status: string(s.Status), Total: money(q.Total()), Reason: s.Reason, Order: optID(s.Order.UUID), Lines: []QuoteLineDTO{},
 		Version: q.Version()}
@@ -206,8 +211,11 @@ func (s service) quoteUseCases(svc *Service) {
 		if err := s.notBlocked(ctx, customer); err != nil {
 			return QuoteDTO{}, err
 		}
-		st := domain.QuoteState{Company: company, Customer: customer, Date: c.Date, ValidUntil: c.ValidUntil, Reference: c.Reference, Notes: c.Notes}
-		var err error
+		kind, err := domain.ParseQuoteType(c.Kind)
+		if err != nil {
+			return QuoteDTO{}, err
+		}
+		st := domain.QuoteState{Company: company, Customer: customer, Kind: kind, Date: c.Date, ValidUntil: c.ValidUntil, Reference: c.Reference, Notes: c.Notes}
 		if st.Date, err = app.OrToday(ctx, s.Today, company.UUID, st.Date); err != nil {
 			return QuoteDTO{}, err
 		}
@@ -234,6 +242,11 @@ func (s service) quoteUseCases(svc *Service) {
 			}
 			if until.IsZero() {
 				until = date.AddDays(domain.DefaultValidityDays)
+			}
+			if c.Kind != "" {
+				if err := q.SetKind(c.Kind); err != nil {
+					return err
+				}
 			}
 			return q.Change(date, until, c.Reference, c.Notes)
 		}))
@@ -386,6 +399,12 @@ func (s service) quoteUseCases(svc *Service) {
 		if c.Status != "" {
 			v.Require(slices.Contains(domain.QuoteStatuses, domain.QuoteStatus(c.Status)), "status", "enum", "a status")
 			parts = append(parts, domain.QuoFieldStatus.Eq(c.Status))
+		}
+		if c.Kind != "" {
+			if _, err := domain.ParseQuoteType(c.Kind); err != nil {
+				return fw.Page[QuoteDTO]{}, err
+			}
+			parts = append(parts, domain.QuoFieldKind.Eq(c.Kind))
 		}
 		if err := v.Err(); err != nil {
 			return fw.Page[QuoteDTO]{}, err

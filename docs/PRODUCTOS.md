@@ -196,6 +196,21 @@ una de tarifa sean el mismo tipo (`PriceLine`) y la misma lectura.
   petición es un `QuoteRequest`: la moneda entra como un campo más y cada nivel mira sólo las listas
   de esa moneda.
 
+## Cómo se sirve un servicio (D-155; añadido el 2026-11-14)
+
+- El producto lleva `serviceFulfilmentMode` (columna `service_fulfilment_mode` `{str:20}` de
+  `prd_products`, nula; migración 5, con el nombre de Karpo C#): `delivery_note` (con albarán, sin
+  mover stock) o `direct_invoice` (se factura desde el pedido); vacío, sin ajuste. Otro valor da 422
+  `products.invalid_service_fulfilment_mode`.
+- **`direct_invoice` aún no se admite** (422 `products.direct_invoice_unavailable`): Facturación no
+  factura desde el pedido, así que esas líneas no se facturarían nunca. El valor sigue en el
+  enumerado; habilitarlo es poner a true `domain.DirectInvoiceAvailable`.
+- Sólo cuenta en los productos de tipo `service`: un servicio es un producto de naturaleza
+  servicio, como en Karpo C#, que nunca está en stock. Se guarda también en un bien, pero no se usa.
+- Se publica en `contracts.ProductRef.ServiceFulfilmentMode` y en el contrato de mantenimiento.
+- Orders lo resuelve: el del producto; si no, el de la empresa (perfil de Parties,
+  docs/PARTIES.md); si no, con albarán (docs/PEDIDOS.md, «Servicios y proforma»).
+
 ## Decisiones (aprobadas por Javier el 2026-10-04)
 
 1. **El catálogo es de cada empresa.** Cada producto pertenece a una organización interna, con
