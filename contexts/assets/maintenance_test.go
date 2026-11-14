@@ -130,9 +130,15 @@ func (h *host) maintenance(tag string) {
 		h.must(status("GET", base+"?company="+acme+bad, nil), 400, bad)
 	}
 	code, page, _ = h.raw("POST", base+"/search", "clerk", map[string]any{"filter": map[string]any{"company": acme, "class": "machinery"},
-		"pagination": map[string]any{"pageNumber": 0, "pageSize": 3, "orderBy": "code", "ascending": false}})
+		"pagination": map[string]any{"pageNumber": 1, "pageSize": 3, "orderBy": "code", "ascending": false}})
 	if code != 200 || names(page) != "Torno Sur,Torno Oeste,Torno Este" || page["totalCount"] != float64(4) {
 		t.Fatalf("search by POST: %d %v", code, page)
+	}
+	// Como en GET, una página fuera de rango da 400.
+	for _, n := range []int{0, -1} {
+		if code, _, _ := h.raw("POST", base+"/search", "clerk", map[string]any{"pagination": map[string]any{"pageNumber": n}}); code != 400 {
+			t.Fatalf("search by POST, page %d: %d", n, code)
+		}
 	}
 	h.must(status("POST", base+"/search", map[string]any{"filter": map[string]any{"name": []string{"a"}}}), 400, "a filter that is not a single value")
 
@@ -149,7 +155,7 @@ func (h *host) maintenance(tag string) {
 		t.Fatalf("an update with only some fields: %d %v", code, changed)
 	}
 	h.must(status("PUT", base+"/"+id, got), 409, "the version read before")
-	for field, value := range map[string]any{"cost": "1300", "lifeMonths": 24, "acquired": "2026-01-11", "company": globex} {
+	for field, value := range map[string]any{"code": "m-01", "cost": "1300", "lifeMonths": 24, "acquired": "2026-01-11", "company": globex} {
 		code, problem, _ = h.raw("PUT", base+"/"+id, "clerk", map[string]any{field: value, "version": changed["version"]})
 		if errs, _ := problem["errors"].(map[string]any); code != 400 || errs[field] == nil || problem["errorCodes"].(map[string]any)[field].([]any)[0] != "immutable" {
 			t.Fatalf("%s, which no use case changes: %d %v", field, code, problem)
@@ -160,10 +166,10 @@ func (h *host) maintenance(tag string) {
 	if errs, _ := problem["errors"].(map[string]any); code != 400 || errs["version"] == nil {
 		t.Fatalf("without a version: %d %v", code, problem)
 	}
-	// Lo que no cambia se compara por su valor: identidad y código en mayúsculas, importes con
-	// otras cifras.
+	// Lo que no cambia se compara por su valor: identidad en mayúsculas, código con espacios en
+	// los extremos, importes con otras cifras.
 	v := changed["version"]
-	code, changed, _ = h.raw("PUT", base+"/"+id, "clerk", map[string]any{"company": strings.ToUpper(acme), "code": "m-01", "cost": "1200.0",
+	code, changed, _ = h.raw("PUT", base+"/"+id, "clerk", map[string]any{"company": strings.ToUpper(acme), "code": " M-01 ", "cost": "1200.0",
 		"residual": "0", "version": v})
 	if code != 200 || changed["version"] != v {
 		t.Fatalf("an update that changes nothing: %d %v", code, changed)

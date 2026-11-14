@@ -121,11 +121,16 @@ func (h *host) carrierMaintenance() {
 	}
 	h.must(status("planner", "GET", base+"?company=nada", nil), 400, "a company that is not an id")
 	code, page, _ = h.raw("POST", base+"/search", "planner", map[string]any{"filter": map[string]any{"company": acme},
-		"pagination": map[string]any{"pageNumber": 0, "pageSize": 3, "orderBy": "code", "ascending": false}})
+		"pagination": map[string]any{"pageNumber": 1, "pageSize": 3, "orderBy": "code", "ascending": false}})
 	if code != 200 || names(page) != "SEUR Norte,DHL Sur,GLS Oeste" || page["totalCount"] != float64(4) {
 		t.Fatalf("search by POST: %d %v", code, page)
 	}
 	h.must(status("planner", "POST", base+"/search", map[string]any{"filter": map[string]any{"name": []string{"a"}}}), 400, "a filter that is not a single value")
+	// Como en GET, una página fuera de rango da 400; sin número se pide la primera.
+	for _, n := range []int{0, -1} {
+		h.must(status("planner", "POST", base+"/search", map[string]any{"pagination": map[string]any{"pageNumber": n}}), 400, "a page out of range")
+	}
+	h.must(status("planner", "POST", base+"/search", map[string]any{"pagination": map[string]any{"pageSize": 3}}), 200, "no page number")
 
 	// Cambio: lo leído con su versión.
 	got["name"] = "SEUR Norte 2"
@@ -141,8 +146,10 @@ func (h *host) carrierMaintenance() {
 		t.Fatalf("an update with only some fields: %d %v", code, changed)
 	}
 	h.must(status("planner", "PUT", base+"/"+id, got), 409, "the version read before")
-	for field, value := range map[string]any{"code": "SEUR2", "company": globex} {
-		code, problem, _ = h.raw("PUT", base+"/"+id, "planner", map[string]any{field: value, "version": changed["version"]})
+	// El código se compara tal cual: cambiarle sólo las mayúsculas también es cambiarlo.
+	for _, c := range []struct{ field, value string }{{"code", "SEUR2"}, {"code", "seur"}, {"company", globex}} {
+		field := c.field
+		code, problem, _ = h.raw("PUT", base+"/"+id, "planner", map[string]any{field: c.value, "version": changed["version"]})
 		if errs, _ := problem["errors"].(map[string]any); code != 400 || errs[field] == nil || problem["errorCodes"].(map[string]any)[field].([]any)[0] != "immutable" {
 			t.Fatalf("%s, which no use case changes: %d %v", field, code, problem)
 		}
@@ -152,10 +159,10 @@ func (h *host) carrierMaintenance() {
 	if errs, _ := problem["errors"].(map[string]any); code != 400 || errs["version"] == nil {
 		t.Fatalf("without a version: %d %v", code, problem)
 	}
-	// Lo que no cambia se compara por su valor: la identidad y el código en otras mayúsculas, el
+	// Lo que no cambia se compara por su valor: la identidad en otras mayúsculas, el código y el
 	// nombre con espacios en los extremos.
 	v := changed["version"]
-	code, changed, _ = h.raw("PUT", base+"/"+id, "planner", map[string]any{"company": strings.ToUpper(acme), "code": " seur ", "name": " SEUR Norte 2 ",
+	code, changed, _ = h.raw("PUT", base+"/"+id, "planner", map[string]any{"company": strings.ToUpper(acme), "code": " SEUR ", "name": " SEUR Norte 2 ",
 		"version": v})
 	if code != 200 || changed["version"] != v {
 		t.Fatalf("an update that changes nothing: %d %v", code, changed)
@@ -172,6 +179,13 @@ func (h *host) carrierMaintenance() {
 	if _, got, _ = h.raw("GET", base+"/"+id, "planner", nil); got["name"] != "SEUR Norte 2" || got["version"] != v {
 		t.Fatalf("nothing of a failing change is kept: %v", got)
 	}
+	// El nombre y el enlace se guardan sin los espacios de los extremos.
+	code, changed, _ = h.raw("PUT", base+"/"+id, "planner", map[string]any{"name": " SEUR Norte 3 ",
+		"trackingUrl": " https://seur.example/s/{tracking} ", "version": v})
+	if code != 200 || changed["name"] != "SEUR Norte 3" || changed["trackingUrl"] != "https://seur.example/s/{tracking}" {
+		t.Fatalf("a change with spaces at the ends: %d %v", code, changed)
+	}
+	v = changed["version"]
 
 	// DELETE bloquea: exige el permiso y el ámbito de escritura, y se puede repetir sin versión nueva.
 	h.must(status("viewer", "DELETE", base+"/"+id, nil), 403, "delete without the permission")

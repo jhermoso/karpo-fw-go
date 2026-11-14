@@ -237,7 +237,7 @@ func (m *Module) RegisterMaintenanceRoutes(mux *http.ServeMux) {
 		var body struct {
 			Filter     map[string]any `json:"filter"`
 			Pagination struct {
-				PageNumber int    `json:"pageNumber"`
+				PageNumber *int   `json:"pageNumber"`
 				PageSize   int    `json:"pageSize"`
 				OrderBy    string `json:"orderBy"`
 				Ascending  *bool  `json:"ascending"`
@@ -247,8 +247,12 @@ func (m *Module) RegisterMaintenanceRoutes(mux *http.ServeMux) {
 			writeMaintenanceError(w, r, err)
 			return
 		}
-		q := listQuery{page: max(body.Pagination.PageNumber, 1), size: body.Pagination.PageSize, sortBy: body.Pagination.OrderBy,
+		q := listQuery{page: 1, size: body.Pagination.PageSize, sortBy: body.Pagination.OrderBy,
 			filters: map[string]string{}}
+		// Sin número de página se pide la primera; uno fuera de rango da 400, como en GET.
+		if body.Pagination.PageNumber != nil {
+			q.page = *body.Pagination.PageNumber
+		}
 		if q.size == 0 {
 			q.size = fw.DefaultPageSize
 		}

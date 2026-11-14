@@ -211,7 +211,7 @@ func (m *Module) RegisterMaintenanceRoutes(mux *http.ServeMux) {
 		var body struct {
 			Filter     map[string]any `json:"filter"`
 			Pagination struct {
-				PageNumber int    `json:"pageNumber"`
+				PageNumber *int   `json:"pageNumber"`
 				PageSize   int    `json:"pageSize"`
 				OrderBy    string `json:"orderBy"`
 				Ascending  *bool  `json:"ascending"`
@@ -221,8 +221,12 @@ func (m *Module) RegisterMaintenanceRoutes(mux *http.ServeMux) {
 			writeMaintenanceError(w, r, err)
 			return
 		}
-		q := listQuery{page: max(body.Pagination.PageNumber, 1), size: body.Pagination.PageSize, sortBy: body.Pagination.OrderBy,
+		q := listQuery{page: 1, size: body.Pagination.PageSize, sortBy: body.Pagination.OrderBy,
 			filters: map[string]string{}}
+		// Sin número de página se pide la primera; uno fuera de rango da 400, como en GET.
+		if body.Pagination.PageNumber != nil {
+			q.page = *body.Pagination.PageNumber
+		}
 		if q.size == 0 {
 			q.size = fw.DefaultPageSize
 		}
@@ -318,9 +322,6 @@ func (m *Module) RegisterMaintenanceRoutes(mux *http.ServeMux) {
 // sameID compara dos identidades sin distinguir mayúsculas.
 func sameID(a, b string) bool { return strings.EqualFold(strings.TrimSpace(a), strings.TrimSpace(b)) }
 
-// sameText compara dos textos sin los espacios de los extremos y sin distinguir mayúsculas.
-func sameText(a, b string) bool { return strings.EqualFold(strings.TrimSpace(a), strings.TrimSpace(b)) }
-
 // change aplica un PUT: mezcla el cuerpo sobre lo que hay y, si algo cambia, llama al caso de uso de
 // siempre con la versión leída. Corre dentro de la unidad de trabajo de quien llama.
 func (m *Module) change(ctx context.Context, id domain.CarrierID, body map[string]json.RawMessage) (sapp.CarrierDTO, error) {
@@ -358,10 +359,11 @@ func (m *Module) change(ctx context.Context, id domain.CarrierID, body map[strin
 		return sapp.CarrierDTO{}, fw.Conflict(domain.CarrierKind, id, *in.Version, "the carrier changed after it was read: read it again")
 	}
 	// Lo que ningún caso de uso cambia no se puede cambiar por aquí: la empresa y el código. Se
-	// compara por su valor: la identidad y el código sin distinguir mayúsculas.
+	// compara por su valor: la identidad sin distinguir mayúsculas y el código tal cual, sin los
+	// espacios de los extremos.
 	var v fw.Validation
 	v.Require(sameID(in.Company, was.Company), "company", "immutable", "the company does not change after registration")
-	v.Require(sameText(in.Code, was.Code), "code", "immutable", "the code does not change after registration")
+	v.Require(strings.TrimSpace(in.Code) == strings.TrimSpace(was.Code), "code", "immutable", "the code does not change after registration")
 	if err := v.Err(); err != nil {
 		return sapp.CarrierDTO{}, err
 	}
@@ -370,6 +372,6 @@ func (m *Module) change(ctx context.Context, id domain.CarrierID, body map[strin
 		return current, nil
 	}
 	// Con la versión, el caso de uso falla sin reintentar si alguien se ha adelantado.
-	return svc.ChangeCarrier.Handle(ctx, sapp.ChangeCarrier{ID: id, Name: in.Name, Party: strings.TrimSpace(in.Party), TrackingURL: in.TrackingURL,
-		Blocked: in.Blocked, Version: current.Version})
+	return svc.ChangeCarrier.Handle(ctx, sapp.ChangeCarrier{ID: id, Name: strings.TrimSpace(in.Name), Party: strings.TrimSpace(in.Party),
+		TrackingURL: strings.TrimSpace(in.TrackingURL), Blocked: in.Blocked, Version: current.Version})
 }

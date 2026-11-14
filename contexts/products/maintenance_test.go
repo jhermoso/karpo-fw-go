@@ -113,9 +113,15 @@ func (h *host) maintenance(tag string) {
 		h.must(func() int { s, _, _ := h.raw("GET", base+q+bad, "cataloguer", nil); return s }(), 400, bad)
 	}
 	status, page, _ = h.raw("POST", base+"/search", "cataloguer", map[string]any{"filter": map[string]any{"company": acme.ID, "isActive": true, "kind": "good"},
-		"pagination": map[string]any{"pageNumber": 0, "pageSize": 3, "orderBy": "name", "ascending": true}})
+		"pagination": map[string]any{"pageNumber": 1, "pageSize": 3, "orderBy": "name", "ascending": true}})
 	if status != 200 || names(page) != "Arandela,Broca,Clavo" || page["totalCount"] != float64(4) {
 		t.Fatalf("search by POST: %d %v", status, page)
+	}
+	// Como en GET, una página fuera de rango da 400.
+	for _, n := range []int{0, -1} {
+		if code, _, _ := h.raw("POST", base+"/search", "cataloguer", map[string]any{"pagination": map[string]any{"pageNumber": n}}); code != 400 {
+			t.Fatalf("search by POST, page %d: %d", n, code)
+		}
 	}
 	h.must(func() int {
 		s, _, _ := h.raw("POST", base+"/search", "cataloguer", map[string]any{"filter": map[string]any{"name": []string{"a"}}})
