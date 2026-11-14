@@ -22,6 +22,8 @@ type SetSupplier struct {
 	Blocked         bool   `json:"blocked,omitempty"`
 	// BlockReason dice por qué se bloquea (D-122); sin bloqueo no se guarda.
 	BlockReason string `json:"blockReason,omitempty"`
+	// UnblockReason dice por qué se desbloquea; desbloquear lo exige.
+	UnblockReason string `json:"unblockReason,omitempty"`
 }
 
 // SearchSuppliers lista los perfiles de proveedor de una empresa.
@@ -41,13 +43,15 @@ type SupplierDTO struct {
 	IBAN            string `json:"iban,omitempty"`
 	Blocked         bool   `json:"blocked"`
 	BlockReason     string `json:"blockReason,omitempty"` // D-122
+	UnblockReason   string `json:"unblockReason,omitempty"`
 	Version         int64  `json:"version"`
 }
 
 func supplierDTO(p *domain.SupplierProfile) SupplierDTO {
 	s := p.State()
 	return SupplierDTO{ID: p.ID().String(), Company: s.Company.String(), Supplier: s.Supplier.String(), Category: string(s.Category),
-		WithholdingRate: money(s.WithholdingRate), PaymentDays: s.PaymentDays, IBAN: s.IBAN.String(), Blocked: s.Blocked, BlockReason: s.BlockReason, Version: p.Version()}
+		WithholdingRate: money(s.WithholdingRate), PaymentDays: s.PaymentDays, IBAN: s.IBAN.String(), Blocked: s.Blocked, BlockReason: s.BlockReason,
+		UnblockReason: s.UnblockReason, Version: p.Version()}
 }
 
 // state valida la orden y la convierte en el estado de un perfil.
@@ -56,7 +60,8 @@ func (c SetSupplier) state() (domain.SupplierState, error) {
 	company := domain.OrganizationID{UUID: parseID(&v, "company", c.Company)}
 	supplier := domain.PartyID{UUID: parseID(&v, "supplier", c.Supplier)}
 	st := domain.SupplierState{Company: company, Supplier: supplier, Category: domain.Category(strings.TrimSpace(c.Category)),
-		WithholdingRate: parseDecimal(&v, "withholdingRate", c.WithholdingRate), PaymentDays: c.PaymentDays, Blocked: c.Blocked, BlockReason: c.BlockReason}
+		WithholdingRate: parseDecimal(&v, "withholdingRate", c.WithholdingRate), PaymentDays: c.PaymentDays, Blocked: c.Blocked, BlockReason: c.BlockReason,
+		UnblockReason: c.UnblockReason}
 	if c.IBAN != "" {
 		iban, err := vocab.NewIBAN(c.IBAN)
 		v.Merge("iban", err)
@@ -75,6 +80,7 @@ type ChangeSupplier struct {
 	IBAN            string            `json:"iban,omitempty"`
 	Blocked         bool              `json:"blocked,omitempty"`
 	BlockReason     string            `json:"blockReason,omitempty"`
+	UnblockReason   string            `json:"unblockReason,omitempty"`
 	// Version, si no es cero, es la que se leyó: si el perfil ya está en otra, el cambio es un
 	// conflicto y no se reintenta.
 	Version int64 `json:"-"`
@@ -117,7 +123,7 @@ func (s service) supplierUseCases(svc *Service) {
 			}
 			return supplierDTO(p), nil
 		}
-		p, err := domain.ReconstituteSupplier(domain.NewSupplierID(), st)
+		p, err := domain.NewSupplier(domain.NewSupplierID(), st)
 		if err != nil {
 			return SupplierDTO{}, err
 		}
@@ -168,7 +174,7 @@ func (s service) supplierUseCases(svc *Service) {
 		if dup {
 			return SupplierDTO{}, fw.Violation("purchases.duplicate_supplier", "the company already has a profile for that supplier")
 		}
-		p, err := domain.ReconstituteSupplier(domain.NewSupplierID(), st)
+		p, err := domain.NewSupplier(domain.NewSupplierID(), st)
 		if err != nil {
 			return SupplierDTO{}, err
 		}
@@ -189,7 +195,8 @@ func (s service) supplierUseCases(svc *Service) {
 				return fw.Conflict(domain.SupplierKind, p.ID(), c.Version, "the supplier changed after it was read: read it again")
 			}
 			st, err := SetSupplier{Company: cur.Company.String(), Supplier: cur.Supplier.String(), Category: c.Category, WithholdingRate: c.WithholdingRate,
-				PaymentDays: c.PaymentDays, IBAN: c.IBAN, Blocked: c.Blocked, BlockReason: c.BlockReason}.state()
+				PaymentDays: c.PaymentDays, IBAN: c.IBAN, Blocked: c.Blocked, BlockReason: c.BlockReason,
+				UnblockReason: c.UnblockReason}.state()
 			if err != nil {
 				return err
 			}

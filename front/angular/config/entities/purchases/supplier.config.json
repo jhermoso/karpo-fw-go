@@ -259,7 +259,16 @@
                         "label": "Motivo del bloqueo",
                         "type": "text",
                         "editable": true,
-                        "maxLength": 200
+                        "maxLength": 200,
+                        "hint": "Obligatorio para bloquear."
+                    },
+                    {
+                        "field": "unblockReason",
+                        "label": "Motivo del desbloqueo",
+                        "type": "text",
+                        "editable": true,
+                        "maxLength": 200,
+                        "hint": "Obligatorio para desbloquear."
                     }
                 ]
             }

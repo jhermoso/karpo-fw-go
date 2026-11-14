@@ -109,7 +109,16 @@ contexts/purchases/
 - **Motivo del bloqueo** (D-122, migración 5): el perfil de proveedor lleva `blockReason` (hasta 200
   caracteres, el `BlockReason` de Trench). Se guarda con el bloqueo y se borra al desbloquear: sin
   bloqueo, el motivo que llegue se descarta. La vista por pareja lo enseña en `blockReason`.
-  `PUT` del perfil lo sustituye entero: reenviar `blocked: true` sin `blockReason` borra el motivo.
+  `PUT` del perfil sustituye el motivo si llega; si no llega, se queda el que había.
+- **Motivo obligatorio para bloquear y desbloquear** (decisión de Javier de 2026-11-14, migración
+  6): bloquear exige `blockReason` no vacío (recortado) y desbloquear exige `unblockReason`; sin él,
+  422 `purchases.block_reason_required` o `purchases.unblock_reason_required`. El perfil guarda
+  el motivo del último desbloqueo en la columna `unblock_reason` (hasta 200), simétrica de
+  `block_reason`: se guarda al desbloquear y se borra al bloquear, igual que el del bloqueo se
+  borra al desbloquear. Se eligió la columna y no sólo la auditoría porque así el motivo vigente se
+  lee con el perfil, sin consultar el registro de auditoría; la auditoría guarda además los dos
+  motivos en su instantánea, y con ella la historia completa. Las filas anteriores conservan su
+  estado sin motivo: la regla se aplica al cambiar de estado, no al leer.
 - **Fusión de fichas** (D-93; [PARTIES.md](PARTIES.md) §17): Compras escucha
   `parties.relationship-transferred.v1`. Cuando la relación de proveedor de una empresa pasa de
   una ficha a otra, copia el perfil de proveedor (categoría, retención, días de pago, IBAN,
@@ -198,11 +207,11 @@ contrato que el de Productos, Instalaciones, Activos y Envíos (docs/ENVIOS.md).
 | Lista | `GET /api/v1/suppliers?page&pageSize&sortBy&sortOrder&company&supplier&category&isActive&includeMergedParties`, o `POST /api/v1/suppliers/search` con `{filter, pagination: {pageNumber, pageSize, orderBy, ascending}}` | la página del motor: `{items, total, totalCount, pageNumber, pageSize, totalPages}`. Sin `pageNumber`, la primera; 0 o negativo, 400. Orden sólo por `paymentDays` (también por omisión), con la identidad para deshacer empates; otro, 400. `isActive=true` deja los que no están bloqueados; los de parties fusionadas quedan fuera salvo `includeMergedParties=true` (D-100). `company` sólo estrecha el ámbito de quien llama. No hay búsqueda de texto: el nombre del proveedor es de Parties; `search` se ignora, como cualquier filtro que no es de la lista |
 | Lectura | `GET /api/v1/suppliers/{id}` | el perfil |
 | Alta | `POST /api/v1/suppliers` | 201 con `Location`; lo que sobra en el cuerpo se ignora. Si la empresa ya tiene perfil para ese proveedor, 422 `purchases.duplicate_supplier` (el `PUT /api/purchases/suppliers` de siempre, en cambio, lo sustituye) |
-| Cambio | `PUT /api/v1/suppliers/{id}` con lo leído y su `version` | 200; lo que el cuerpo no trae, o trae como null, se queda como está. Sin `version`, 400; con una que ya no es la suya, 409. Se traduce a `ChangeSupplier` (`category`, `withholdingRate`, `paymentDays`, `iban`, `blocked`, `blockReason`), sólo si algo cambia (la retención se compara por su valor y la cuenta sin espacios ni mayúsculas); aun sin cambios exige el permiso y el ámbito de escritura. Todo el cambio es una sola unidad de trabajo. Los textos se recortan. `company` y `supplier` no los cambia ningún caso de uso: cambiarlos es 400 `immutable` (se comparan por su valor: la identidad sin distinguir mayúsculas ni los espacios de los extremos) |
-| Baja | `DELETE /api/v1/suppliers/{id}` | un perfil no se borra (sus facturas nombran al proveedor y el dominio no tiene baja, sólo bloqueo): DELETE lo **bloquea**, sin motivo, y a un proveedor bloqueado no se le registran facturas nuevas. 204; sobre uno ya bloqueado, 204 otra vez y sin versión nueva. Siempre exige el permiso y el ámbito de escritura (`Purchases.Supplier.Update`; 403 sin él). Se desbloquea por el PUT con `blocked: false` |
+| Cambio | `PUT /api/v1/suppliers/{id}` con lo leído y su `version` | 200; lo que el cuerpo no trae, o trae como null, se queda como está. Sin `version`, 400; con una que ya no es la suya, 409. Se traduce a `ChangeSupplier` (`category`, `withholdingRate`, `paymentDays`, `iban`, `blocked`, `blockReason`, `unblockReason`), sólo si algo cambia (la retención se compara por su valor y la cuenta sin espacios ni mayúsculas); aun sin cambios exige el permiso y el ámbito de escritura. Todo el cambio es una sola unidad de trabajo. Los textos se recortan. `company` y `supplier` no los cambia ningún caso de uso: cambiarlos es 400 `immutable` (se comparan por su valor: la identidad sin distinguir mayúsculas ni los espacios de los extremos) |
+| Baja | `DELETE /api/v1/suppliers/{id}` | un perfil no se borra (sus facturas nombran al proveedor y el dominio no tiene baja, sólo bloqueo): DELETE lo **bloquea** con el motivo de `{"reason": "..."}` en el cuerpo o de `?reason=` (si vienen los dos, manda el del cuerpo), y a un proveedor bloqueado no se le registran facturas nuevas. 204; sin motivo, 422 `purchases.block_reason_required`; sobre uno ya bloqueado, 204 otra vez y sin versión nueva (el motivo no cambia). Siempre exige el permiso y el ámbito de escritura (`Purchases.Supplier.Update`; 403 sin él). Se desbloquea por el PUT con `blocked: false` y `unblockReason` |
 
 - **El objeto:** `id`, `company`, `supplier`, `category`, `withholdingRate`, `paymentDays`, `iban`,
-  `blocked`, `blockReason`, `version`.
+  `blocked`, `blockReason`, `unblockReason`, `version`.
 - **Casos de uso nuevos:** `RegisterSupplier` (alta sin sustituir), `ChangeSupplier` (por la
   identidad, con la versión leída: con ella el conflicto es definitivo y no se reintenta; sin ella,
   se reintenta como siempre), `GetSupplier`, `SupplierChangeable` y `PageSuppliers`. Los permisos

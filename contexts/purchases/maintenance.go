@@ -38,12 +38,14 @@ type MaintainedSupplier struct {
 	IBAN            string `json:"iban"`
 	Blocked         bool   `json:"blocked"`
 	BlockReason     string `json:"blockReason"`
+	UnblockReason   string `json:"unblockReason"`
 	Version         int64  `json:"version"`
 }
 
 func maintained(s uapp.SupplierDTO) MaintainedSupplier {
 	return MaintainedSupplier{ID: s.ID, Company: s.Company, Supplier: s.Supplier, Category: s.Category, WithholdingRate: s.WithholdingRate,
-		PaymentDays: s.PaymentDays, IBAN: s.IBAN, Blocked: s.Blocked, BlockReason: s.BlockReason, Version: s.Version}
+		PaymentDays: s.PaymentDays, IBAN: s.IBAN, Blocked: s.Blocked, BlockReason: s.BlockReason, UnblockReason: s.UnblockReason,
+		Version: s.Version}
 }
 
 // maintainedInput es el cuerpo de un alta o de un cambio. Lo que sobra se ignora (un front devuelve
@@ -57,6 +59,7 @@ type maintainedInput struct {
 	IBAN            string `json:"iban"`
 	Blocked         bool   `json:"blocked"`
 	BlockReason     string `json:"blockReason"`
+	UnblockReason   string `json:"unblockReason"`
 	Version         *int64 `json:"version"`
 }
 
@@ -290,12 +293,27 @@ func (m *Module) RegisterMaintenanceRoutes(mux *http.ServeMux) {
 	})
 	// Un perfil de proveedor no se borra (las facturas registradas nombran al proveedor y el perfil
 	// guarda sus valores por defecto): DELETE lo bloquea, que es su baja en el dominio; a un proveedor
-	// bloqueado no se le registran facturas nuevas. Sobre uno ya bloqueado es 204 sin versión nueva,
-	// así que se puede repetir. Siempre exige el permiso y el ámbito de escritura.
+	// bloqueado no se le registran facturas nuevas. Bloquear exige un motivo: en el cuerpo
+	// {"reason": "..."} o en ?reason=; sin él, 422 purchases.block_reason_required. Sobre uno ya
+	// bloqueado es 204 sin versión nueva, así que se puede repetir. Siempre exige el permiso y el
+	// ámbito de escritura.
 	mux.HandleFunc("DELETE "+MaintenanceBase+"/{id}", func(w http.ResponseWriter, r *http.Request) {
 		id, ok := parseID(w, r)
 		if !ok {
 			return
+		}
+		reason := r.URL.Query().Get("reason")
+		if r.ContentLength > 0 {
+			var in struct {
+				Reason string `json:"reason"`
+			}
+			if err := readBody(w, r, &in); err != nil {
+				writeMaintenanceError(w, r, err)
+				return
+			}
+			if strings.TrimSpace(in.Reason) != "" {
+				reason = in.Reason
+			}
 		}
 		err := m.UoW.Do(r.Context(), func(ctx context.Context) error {
 			if _, err := svc.SupplierChangeable.Handle(ctx, uapp.GetSupplier{ID: id}); err != nil {
@@ -306,7 +324,7 @@ func (m *Module) RegisterMaintenanceRoutes(mux *http.ServeMux) {
 				return err
 			}
 			_, err = svc.ChangeSupplier.Handle(ctx, uapp.ChangeSupplier{ID: id, Category: s.Category, WithholdingRate: s.WithholdingRate,
-				PaymentDays: s.PaymentDays, IBAN: s.IBAN, Blocked: true, Version: s.Version})
+				PaymentDays: s.PaymentDays, IBAN: s.IBAN, Blocked: true, BlockReason: strings.TrimSpace(reason), Version: s.Version})
 			return err
 		})
 		if err != nil {
@@ -388,17 +406,20 @@ func (m *Module) change(ctx context.Context, id domain.SupplierID, body map[stri
 	if err := v.Err(); err != nil {
 		return uapp.SupplierDTO{}, err
 	}
-	// Sin bloqueo no hay motivo: el dominio lo borra al desbloquear.
-	reason := strings.TrimSpace(in.BlockReason)
-	if !in.Blocked {
+	// Sin bloqueo no hay motivo de bloqueo, y bloqueado no hay motivo de desbloqueo: el dominio los
+	// borra.
+	reason, unblock := strings.TrimSpace(in.BlockReason), strings.TrimSpace(in.UnblockReason)
+	if in.Blocked {
+		unblock = ""
+	} else {
 		reason = ""
 	}
 	if strings.TrimSpace(in.Category) == was.Category && sameRate(in.WithholdingRate, was.WithholdingRate) && in.PaymentDays == was.PaymentDays &&
-		sameIBAN(in.IBAN, was.IBAN) && in.Blocked == was.Blocked && reason == was.BlockReason {
+		sameIBAN(in.IBAN, was.IBAN) && in.Blocked == was.Blocked && reason == was.BlockReason && unblock == was.UnblockReason {
 		return current, nil
 	}
 	// Con la versión, el caso de uso falla sin reintentar si alguien se ha adelantado.
 	return svc.ChangeSupplier.Handle(ctx, uapp.ChangeSupplier{ID: id, Category: strings.TrimSpace(in.Category),
 		WithholdingRate: strings.TrimSpace(in.WithholdingRate), PaymentDays: in.PaymentDays, IBAN: strings.TrimSpace(in.IBAN), Blocked: in.Blocked,
-		BlockReason: reason, Version: current.Version})
+		BlockReason: reason, UnblockReason: unblock, Version: current.Version})
 }

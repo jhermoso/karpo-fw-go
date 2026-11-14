@@ -213,7 +213,7 @@ func TestPairs_MergeMovesThePairToTheSurvivor(t *testing.T) {
 	ok(err)
 	_, err = h.Parties.Service.EstablishRelationship.Handle(actx, parapp.EstablishRelationship{Type: pardomain.RelSupplier.String(), From: acme.ID, To: dup.ID})
 	ok(err)
-	_, err = h.Purchases.Service.SetSupplier.Handle(actx, puapp.SetSupplier{Company: acme.ID, Supplier: dup.ID, Blocked: true})
+	_, err = h.Purchases.Service.SetSupplier.Handle(actx, puapp.SetSupplier{Company: acme.ID, Supplier: dup.ID, Blocked: true, BlockReason: "calidad"})
 	ok(err)
 	survivor, err := h.Parties.Service.RegisterOrganization.Handle(actx, parapp.RegisterOrganization{LegalName: "Talleres Pérez"})
 	ok(err)
