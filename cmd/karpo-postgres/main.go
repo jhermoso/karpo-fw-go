@@ -9,8 +9,8 @@
 //
 //	postgres://user:password@host:5432/database?sslmode=require
 //
-// KARPO_DB_MAX_CONNS limita las conexiones que mantiene (10). El resto de la configuración es la
-// del paquete serve.
+// KARPO_DB_MAX_CONNS limita las conexiones que mantiene (10 si no se da; como mínimo, 2). El
+// resto de la configuración es la del paquete serve.
 //
 // En Supabase se usa la conexión directa o el pooler de sesión (puerto 5432). El pooler de
 // transacción (puerto 6543) da a cada sentencia una conexión distinta: el bloqueo que impide que
