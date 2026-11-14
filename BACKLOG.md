@@ -161,9 +161,10 @@ Hallazgos menores de la revisión independiente (G-6) que no se arreglaron en la
   añadidos.
 - **Historial de números de cliente** — `contexts/parties/application/details.go`: un número que
   se cambia o se retira a un cliente vigente queda libre para otro (`docs/PARTIES.md` §9).
-- **Comentario de `cmd/karpo-postgres`** — `cmd/karpo-postgres/main.go:1`: la revisión señaló el
-  comentario de cabecera; el detalle no venía en el encargo de los arreglos, hay que recuperarlo
-  del informe de la revisión.
+- ~~**Comentario de `cmd/karpo-postgres`**~~ ✅ (2026-11-14). El informe de la revisión no se
+  conserva. Entonces la cabecera estaba en inglés, contra la regla nueva de comentar en español
+  (la bitácora la deja «para Javier»), y D-84 la tradujo el 2026-10-17. Revisada otra vez contra
+  el código, faltaba el mínimo de `KARPO_DB_MAX_CONNS` (2), y ya está.
 
 ### 2e. Varios albaranes en una factura (D-146): lo que queda
 Ver [docs/FACTURACION.md](docs/FACTURACION.md), «Varios albaranes en una factura».
