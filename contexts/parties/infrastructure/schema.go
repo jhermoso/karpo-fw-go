@@ -334,6 +334,11 @@ func Migrations() sqlrepo.MigrationSet {
 		// producto diga otra cosa).
 		{Version: 36, Name: "internal organization profile: service fulfilment mode", Up: sqlrepo.RenderDDLAll(
 			`ALTER TABLE ` + TableInternalOrganizationProfiles + ` {add:service_fulfilment_mode} {str:20}{addEnd}`)},
+		// Qué acciones exigen aprobación en la empresa (D-156, paso 2; docs/APROBACIONES.md): una
+		// tabla hija del perfil, una fila por empresa y acción; sin filas, ninguna.
+		{Version: 37, Name: "internal organization profile: approval actions", Up: sqlrepo.RenderDDLAll(
+			`CREATE TABLE ` + TableInternalOrganizationApprovalActions + ` (internal_organization_id {uuid} NOT NULL, action {str:120} NOT NULL,
+	PRIMARY KEY (internal_organization_id, action), FOREIGN KEY (internal_organization_id) REFERENCES parties (id))`)},
 	}}
 }
 
@@ -836,7 +841,7 @@ func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 
 // DropAll elimina todas las tablas del contexto (sólo para pruebas).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
-	for _, t := range []string{TableInternalOrganizationCodePatterns, TableInternalOrganizationProfiles, TableIdempotencyKeys, TableConsents, "party_relationships", "party_roles", "party_identifications", "party_contacts", "party_affiliations",
+	for _, t := range []string{TableInternalOrganizationApprovalActions, TableInternalOrganizationCodePatterns, TableInternalOrganizationProfiles, TableIdempotencyKeys, TableConsents, "party_relationships", "party_roles", "party_identifications", "party_contacts", "party_affiliations",
 		"party_facility_roles", "facility_role_types", "party_data_quality_issues",
 		"party_classifications", "parties", "relationship_types", "role_types", "country_document_rules",
 		"document_types", "classification_types",

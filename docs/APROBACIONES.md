@@ -4,7 +4,8 @@ Decisión D-156 ([DECISIONES-COMUNES.md](DECISIONES-COMUNES.md)): cualquier acci
 exigir aprobación; qué acciones la exigen se configura por empresa; aprueba quien tenga el permiso de
 aprobar esa acción y no sea quien la pidió. Primer uso: bloquear y desbloquear proveedores y clientes.
 
-Este documento cubre el **paso 1**, el motor en el framework. Los pasos 2 y 3 están pendientes (abajo).
+Este documento cubre el **paso 1**, el motor en el framework, y el **paso 2**, la configuración por
+empresa en Parties. El paso 3 está pendiente (abajo).
 
 ## Conceptos
 
@@ -14,7 +15,7 @@ Este documento cubre el **paso 1**, el motor en el framework. Los pasos 2 y 3 es
 | Solicitud | `approval.Request` (agregado `approval.request`) | Empresa, acción, objetivo (`Target{Type, ID}`), carga útil JSON con lo pedido, motivo, solicitante, estado, quién resolvió, cuándo, comentario y versión |
 | Estado | `approval.Status` | `pending` → `approved`, `rejected` o `cancelled`. Los tres últimos son finales |
 | Eventos | `approval.Requested`, `Approved`, `Rejected`, `Cancelled` | `approval.requested`, `approval.approved`, ... Los de resolución llevan acción, objetivo y carga útil, para aplicar la acción sin releer la solicitud |
-| Política | `pkg/application/approval.Policy` | «¿Esta acción exige aprobación en esta empresa?». Hay `Never` (por defecto) y `Fixed` (lista fija, para pruebas) |
+| Política | `pkg/application/approval.Policy` | «¿Esta acción exige aprobación en esta empresa?». Hay `Never` (por defecto) y `Fixed` (lista fija, para pruebas); la configurable por empresa es la de Parties (paso 2, abajo) |
 | Permiso de aprobar | `approval.ApprovePermission` | Se deriva de la acción con la forma de los permisos de Karpo: `purchases.supplier.block` → `Purchases.Supplier.ApproveBlock`; `sales.credit_limit.raise` → `Sales.CreditLimit.ApproveRaise`. El mismo permiso aprueba y rechaza |
 | Servicio | `approval.Service` | `Request`, `Approve`, `Reject`, `Cancel`. El actor sale del contexto de autorización (`authz.FromContext`) |
 | Persistencia | `pkg/persistence/approvals` | `Mapping(tabla)` para `sqlrepo` y `DDL(tabla)` con los marcadores de dialecto. En memoria, el repositorio genérico `memory.NewRepository` |
@@ -51,6 +52,26 @@ Aquí sólo hace falta un flujo: un paso humano que aprueba o rechaza. Por eso:
   esquema `workflow` compartido: cada contexto guarda sus solicitudes en la misma transacción que su
   acción, sin depender de otro módulo.
 
+## La configuración por empresa (paso 2)
+
+Qué acciones exigen aprobación es un ajuste de cada empresa interna, en su perfil de Parties
+(docs/PARTIES.md §25):
+
+- **Tabla** `internal_org_approval_action` (migración 37 de Parties): `internal_organization_id`
+  (clave ajena a `parties`) y `action` `{str:120}`, con clave compuesta. Una fila por empresa y
+  acción; sin filas, ninguna acción exige aprobación (lo de siempre).
+- **API:** `GET` y `PUT /api/profiles/internal-organizations/{id}/approval-actions`, con
+  `{"actions": ["purchases.supplier.block"]}`; la lista reemplaza a la anterior, vacía o nula la
+  borra. La respuesta lleva `internalOrganizationId` y `actions`, ordenadas y sin repetidas. Se lee
+  con el permiso de leer parties y se cambia con el de modificar la empresa interna, como el resto
+  del perfil. Una acción mal formada (`approval.ParseAction`) da 422 `Company.InvalidApprovalAction`.
+  Cada cambio queda en la auditoría del perfil como `approvalActions`.
+- **La política:** `parties.Module.ApprovalPolicy` es una `approval.Policy` que lee esa lista. Un
+  contexto la recibe en su composición en lugar de `Never`, igual que recibe `CompanyProfiles` para
+  el modo de servir los servicios: p. ej. `purchases.WithApprovalPolicy(h.Parties.ApprovalPolicy)`
+  en `host/host.go`. No va en `contracts/` de Parties porque ese paquete sólo importa la biblioteca
+  estándar; el tipo es el del framework.
+
 ## Cómo lo usará un contexto (paso 3)
 
 1. **Al pedir la acción**, el manejador comprueba el permiso de ejecutarla, como siempre, y pregunta a
@@ -70,8 +91,6 @@ El contexto declara en su catálogo de permisos el permiso de aprobar cada acci�
 
 ## Pendiente
 
-- **Paso 2**: la política configurable por empresa (qué acciones exigen aprobación en cada una), con su
-  tabla y su pantalla. Sustituye a `Never` en la composición.
 - **Paso 3**: el primer uso, bloquear y desbloquear proveedores en Compras y clientes en Ventas.
 - Que el aprobador tenga además acceso de escritura a la empresa (`authz.RequireWrite`) se decidirá en el
   paso 3, cuando se vea cómo se nombra la empresa en esos contextos.

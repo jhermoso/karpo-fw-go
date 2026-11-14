@@ -9,6 +9,7 @@ import (
 	pdist "github.com/jhermoso/karpo-fw-go/contexts/parties/distribution"
 	"github.com/jhermoso/karpo-fw-go/contexts/parties/infrastructure"
 	"github.com/jhermoso/karpo-fw-go/pkg/application"
+	"github.com/jhermoso/karpo-fw-go/pkg/application/approval"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/messaging"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/outbox"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
@@ -16,15 +17,19 @@ import (
 
 // Module es el contexto compuesto.
 type Module struct {
-	Service           *papp.Service
-	Directory         contracts.Directory
-	Organizations     papp.Organizations // Membership, OrganizationHierarchy, InternalOrganizationCatalog
-	TaxIdentities     contracts.TaxIdentities
-	MergedParties     contracts.MergedParties    // las fusionadas, que los listados de los demás dejan fuera (D-100)
-	Trials            contracts.Trials           // si la prueba de un prospect está en vigor
-	Collaborators     contracts.Collaborators    // de quién es un código de promoción
-	CompanyTimeZones  contracts.CompanyTimeZones // la zona horaria que guarda cada empresa interna (D-133)
-	CompanyProfiles   contracts.CompanyProfiles  // sus ajustes de facturación y sus patrones de código (D-144)
+	Service          *papp.Service
+	Directory        contracts.Directory
+	Organizations    papp.Organizations // Membership, OrganizationHierarchy, InternalOrganizationCatalog
+	TaxIdentities    contracts.TaxIdentities
+	MergedParties    contracts.MergedParties    // las fusionadas, que los listados de los demás dejan fuera (D-100)
+	Trials           contracts.Trials           // si la prueba de un prospect está en vigor
+	Collaborators    contracts.Collaborators    // de quién es un código de promoción
+	CompanyTimeZones contracts.CompanyTimeZones // la zona horaria que guarda cada empresa interna (D-133)
+	CompanyProfiles  contracts.CompanyProfiles  // sus ajustes de facturación y sus patrones de código (D-144)
+	// ApprovalPolicy dice qué acciones exigen aprobación en cada empresa interna (D-156): la
+	// approval.Policy que recibe un contexto para preguntar antes de ejecutar una acción. No va en
+	// contracts/, que sólo importa la biblioteca estándar: el tipo es el de pkg/application/approval.
+	ApprovalPolicy    approval.Policy
 	HTTP              *pdist.Module
 	Outbox            application.OutboxStore // eventos de dominio, dentro de Parties
 	IntegrationOutbox application.OutboxStore // Published Language
@@ -81,8 +86,8 @@ func Compose(sw *hotswap.Switch, opts ...Option) *Module {
 	trials := papp.Trials{Relationships: relationships, Catalogs: infrastructure.SwappableCatalogs(sw)}
 	return &Module{Service: svc, Directory: dir, Organizations: orgs, TaxIdentities: papp.TaxIdentities{Parties: parties},
 		MergedParties: papp.MergedParties{Parties: parties}, Trials: trials, CompanyTimeZones: papp.CompanyTimeZones{Profiles: profiles},
-		CompanyProfiles: papp.CompanyProfiles{Profiles: profiles},
-		Collaborators:   papp.Collaborators{Relationships: relationships, Catalogs: infrastructure.SwappableCatalogs(sw)}, HTTP: pdist.NewModule(svc, dir),
+		CompanyProfiles: papp.CompanyProfiles{Profiles: profiles}, ApprovalPolicy: papp.ApprovalPolicy{Profiles: profiles},
+		Collaborators: papp.Collaborators{Relationships: relationships, Catalogs: infrastructure.SwappableCatalogs(sw)}, HTTP: pdist.NewModule(svc, dir),
 		Outbox: domainOutbox, IntegrationOutbox: integrationOutbox, Audit: audit, Ledger: ledger, Consumer: consumer}
 }
 

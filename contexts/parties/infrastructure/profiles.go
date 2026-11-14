@@ -23,6 +23,11 @@ const TableInternalOrganizationProfiles = "internal_organization_profile"
 // código de la empresa (D-144): una fila por (internal_organization_id, code_kind).
 const TableInternalOrganizationCodePatterns = "internal_organization_code_pattern"
 
+// TableInternalOrganizationApprovalActions es la tabla hija del perfil con las acciones que exigen
+// aprobación en la empresa (D-156, paso 2): una fila por (internal_organization_id, action). El
+// nombre se acorta para caber en los 30 caracteres de Oracle.
+const TableInternalOrganizationApprovalActions = "internal_org_approval_action"
+
 // SQLProfiles guarda los perfiles en SQL.
 type SQLProfiles struct{ db *sqlrepo.DB }
 
@@ -133,6 +138,47 @@ func (s SQLProfiles) SaveCodePattern(ctx context.Context, org domain.PartyID, ki
 	return err
 }
 
+// ApprovalActions implementa domain.InternalOrganizationProfiles.
+func (s SQLProfiles) ApprovalActions(ctx context.Context, org domain.PartyID) ([]string, error) {
+	d := s.db.Dialect()
+	rows, err := s.db.QueryContext(ctx, fmt.Sprintf("SELECT %s FROM %s WHERE %s = %s ORDER BY %s", d.Quote("action"),
+		d.Quote(TableInternalOrganizationApprovalActions), d.Quote("internal_organization_id"), d.Placeholder(1), d.Quote("action")),
+		d.UUIDValue(org.UUID))
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	out := []string{}
+	for rows.Next() {
+		var a string
+		if err := rows.Scan(&a); err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+// SaveApprovalActions implementa domain.InternalOrganizationProfiles: borra las filas de la
+// organización y escribe las nuevas. Dos guardados a la vez que compartan alguna acción chocan con
+// la clave primaria y el caso de uso se repite; si no comparten ninguna, pueden quedar las dos
+// listas mezcladas. Se acepta: es un ajuste que cambia un administrador de vez en cuando.
+func (s SQLProfiles) SaveApprovalActions(ctx context.Context, org domain.PartyID, actions []string) error {
+	if _, err := s.db.Delete(ctx, TableInternalOrganizationApprovalActions, sqlrepo.Values{"internal_organization_id": org}); err != nil {
+		return err
+	}
+	for _, a := range actions {
+		err := s.db.Insert(ctx, TableInternalOrganizationApprovalActions, sqlrepo.Values{"internal_organization_id": org, "action": a})
+		if err != nil && s.db.Dialect().IsUniqueViolation(err) {
+			return fmt.Errorf("%w: the approval actions of %s were changed at the same time", fw.ErrConflict, org)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Save implementa domain.InternalOrganizationProfiles: actualiza la fila, o la crea si no hay. Si
 // otra petición la crea a la vez, el INSERT choca con la clave primaria (la única restricción de la
 // tabla) y Save devuelve un conflicto: el caso de uso se repite entero en otra transacción, que ya
@@ -177,6 +223,7 @@ type memoryProfiles struct {
 	mu       sync.Mutex
 	byID     map[domain.PartyID]domain.InternalOrganizationProfile
 	patterns map[patternKey]string
+	actions  map[domain.PartyID][]string
 }
 
 type patternKey struct {
@@ -246,6 +293,28 @@ func (m *memoryProfiles) SaveCodePattern(ctx context.Context, org domain.PartyID
 	return nil
 }
 
+func (m *memoryProfiles) ApprovalActions(_ context.Context, org domain.PartyID) ([]string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]string{}, m.actions[org]...), nil
+}
+
+func (m *memoryProfiles) SaveApprovalActions(ctx context.Context, org domain.PartyID, actions []string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.actions == nil {
+		m.actions = map[domain.PartyID][]string{}
+	}
+	before := m.actions[org]
+	m.actions[org] = append([]string{}, actions...)
+	m.store.OnRollback(ctx, func() {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		m.actions[org] = before
+	})
+	return nil
+}
+
 // ProfilesFor devuelve los perfiles de un backend.
 func ProfilesFor(b hotswap.Backend) (domain.InternalOrganizationProfiles, error) {
 	switch db := b.(type) {
@@ -290,5 +359,19 @@ func (s swappableProfiles) CodePattern(ctx context.Context, org domain.PartyID, 
 func (s swappableProfiles) SaveCodePattern(ctx context.Context, org domain.PartyID, kind, pattern string) error {
 	return s.b.With(ctx, func(ctx context.Context, x domain.InternalOrganizationProfiles) error {
 		return x.SaveCodePattern(ctx, org, kind, pattern)
+	})
+}
+
+func (s swappableProfiles) ApprovalActions(ctx context.Context, org domain.PartyID) (a []string, err error) {
+	err = s.b.With(ctx, func(ctx context.Context, x domain.InternalOrganizationProfiles) error {
+		a, err = x.ApprovalActions(ctx, org)
+		return err
+	})
+	return a, err
+}
+
+func (s swappableProfiles) SaveApprovalActions(ctx context.Context, org domain.PartyID, actions []string) error {
+	return s.b.With(ctx, func(ctx context.Context, x domain.InternalOrganizationProfiles) error {
+		return x.SaveApprovalActions(ctx, org, actions)
 	})
 }

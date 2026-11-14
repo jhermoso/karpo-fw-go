@@ -4,13 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/parties/contracts"
 	"github.com/jhermoso/karpo-fw-go/contexts/parties/domain"
 	app "github.com/jhermoso/karpo-fw-go/pkg/application"
+	"github.com/jhermoso/karpo-fw-go/pkg/application/approval"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/pipeline"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
+	dapproval "github.com/jhermoso/karpo-fw-go/pkg/domain/approval"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/traits"
 )
 
@@ -66,6 +70,25 @@ type CodePatternDTO struct {
 	InternalOrganizationID string  `json:"internalOrganizationId"`
 	CodeKind               string  `json:"codeKind"`
 	Pattern                *string `json:"pattern"`
+}
+
+// GetInternalOrganizationApprovalActions lee las acciones que exigen aprobación en una empresa
+// interna (D-156).
+type GetInternalOrganizationApprovalActions struct {
+	ID domain.PartyID `json:"-"`
+}
+
+// SetInternalOrganizationApprovalActions reemplaza esas acciones; una lista vacía o nula hace que
+// ninguna exija aprobación.
+type SetInternalOrganizationApprovalActions struct {
+	ID      domain.PartyID `json:"-"`
+	Actions []string       `json:"actions"`
+}
+
+// ApprovalActionsDTO es la forma de transporte de las acciones que exigen aprobación, ordenadas.
+type ApprovalActionsDTO struct {
+	InternalOrganizationID string   `json:"internalOrganizationId"`
+	Actions                []string `json:"actions"`
 }
 
 func optional(s string) *string {
@@ -191,6 +214,44 @@ func addProfile(svc *Service, s service) {
 		return out, nil
 	}, pipeline.RetryOnConflict[SetInternalOrganizationCodePattern, CodePatternDTO](3, 10*time.Millisecond),
 		pipeline.Transactional[SetInternalOrganizationCodePattern, CodePatternDTO](s.UoW))
+
+	svc.InternalOrganizationApprovalActions = chain(PermPartyRead, func(ctx context.Context, q GetInternalOrganizationApprovalActions) (ApprovalActionsDTO, error) {
+		if err := s.internalOrganization(ctx, q.ID, false); err != nil {
+			return ApprovalActionsDTO{}, err
+		}
+		actions, err := s.Profiles.ApprovalActions(ctx, q.ID)
+		if err != nil {
+			return ApprovalActionsDTO{}, err
+		}
+		return ApprovalActionsDTO{InternalOrganizationID: q.ID.String(), Actions: actions}, nil
+	})
+
+	svc.SetInternalOrganizationApprovalActions = chain(PermPartyUpdate, func(ctx context.Context, c SetInternalOrganizationApprovalActions) (ApprovalActionsDTO, error) {
+		if err := s.internalOrganization(ctx, c.ID, true); err != nil {
+			return ApprovalActionsDTO{}, err
+		}
+		actions, err := domain.ParseApprovalActions(c.Actions)
+		if err != nil {
+			return ApprovalActionsDTO{}, err
+		}
+		before, err := s.Profiles.ApprovalActions(ctx, c.ID)
+		if err != nil {
+			return ApprovalActionsDTO{}, err
+		}
+		out := ApprovalActionsDTO{InternalOrganizationID: c.ID.String(), Actions: actions}
+		if slices.Equal(before, actions) {
+			return out, nil
+		}
+		if err := s.Profiles.SaveApprovalActions(ctx, c.ID, actions); err != nil {
+			return ApprovalActionsDTO{}, err
+		}
+		const field = "approvalActions"
+		if err := s.profileChanged(ctx, c.ID, map[string]any{field: strings.Join(before, ",")}, map[string]any{field: strings.Join(actions, ",")}); err != nil {
+			return ApprovalActionsDTO{}, err
+		}
+		return out, nil
+	}, pipeline.RetryOnConflict[SetInternalOrganizationApprovalActions, ApprovalActionsDTO](3, 10*time.Millisecond),
+		pipeline.Transactional[SetInternalOrganizationApprovalActions, ApprovalActionsDTO](s.UoW))
 }
 
 // checkDefaultPriceList comprueba una tarifa general nueva o cambiada con el puerto de Products, si
@@ -313,4 +374,26 @@ func (c CompanyProfiles) CodePattern(ctx context.Context, organization, codeKind
 		return "", nil
 	}
 	return c.Profiles.CodePattern(ctx, id, codeKind)
+}
+
+// ApprovalPolicy implementa approval.Policy (D-156, paso 2) sobre los perfiles: una acción exige
+// aprobación en una empresa si está en su lista; una empresa sin lista no exige ninguna. Sirve a
+// otros contextos, sin los permisos del usuario, como CompanyProfiles; lo publica
+// Module.ApprovalPolicy.
+type ApprovalPolicy struct {
+	Profiles domain.InternalOrganizationProfiles
+}
+
+var _ approval.Policy = ApprovalPolicy{}
+
+// Requires implementa approval.Policy.
+func (p ApprovalPolicy) Requires(ctx context.Context, company fw.UUID, action dapproval.Action) (bool, error) {
+	if p.Profiles == nil || company.IsZero() {
+		return false, nil
+	}
+	actions, err := p.Profiles.ApprovalActions(ctx, domain.PartyID{UUID: company})
+	if err != nil {
+		return false, err
+	}
+	return slices.Contains(actions, string(action)), nil
 }

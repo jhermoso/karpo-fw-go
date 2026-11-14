@@ -168,3 +168,22 @@ func TestCodePattern(t *testing.T) {
 		t.Fatal("no match, and quickly")
 	}
 }
+
+// Las acciones que exigen aprobación (D-156): cada una {contexto}.{recurso}.{verbo}; la lista
+// queda ordenada y sin repetidas, y una mal formada da Company.InvalidApprovalAction.
+func TestParseApprovalActions(t *testing.T) {
+	got, err := domain.ParseApprovalActions([]string{"purchases.supplier.block", " billing.invoice.void ", "purchases.supplier.block"})
+	if err != nil || strings.Join(got, ",") != "billing.invoice.void,purchases.supplier.block" {
+		t.Fatalf("%v %v", got, err)
+	}
+	if got, err := domain.ParseApprovalActions(nil); err != nil || len(got) != 0 {
+		t.Fatalf("nil: %v %v", got, err)
+	}
+	for _, bad := range []string{"", "purchases.supplier", "Purchases.supplier.block", "a.b.c.d", "a.b." + strings.Repeat("c", 120)} {
+		_, err := domain.ParseApprovalActions([]string{bad})
+		var v *fw.RuleViolationError
+		if !errors.As(err, &v) || v.Code != domain.ErrInvalidApprovalAction {
+			t.Fatalf("%q: %v", bad, err)
+		}
+	}
+}
