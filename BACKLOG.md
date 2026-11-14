@@ -175,12 +175,12 @@ Ver [docs/FACTURACION.md](docs/FACTURACION.md), «Varios albaranes en una factur
 ### 3. PoC Frontend: Evaluación de Stack Ligero (Svelte 5 / SolidJS)
 - Prototipar la interfaz de listado y ficha de `Parties`.
 - Comparar tamaño de bundle (< 100 KB objetivo vs ~9.4 MB de Angular 20) y velocidad de carga/hidratación.
+- Ampliado el 2026-11-14 (Javier), con §7: evaluar qué frameworks de front pueden ofrecerse para
+  las aplicaciones generadas, como hace Supabase con sus plantillas.
 
-### 4. Convivencia y Enrutamiento en Gateway
-- Configurar Nginx (`060-Deploy/gateway`) para derivar las rutas `/api/parties` al nuevo servicio en Go manteniendo el resto del ERP en .NET.
-
-### 5. Metamodelo & DSL Textual en Grafo
-- Diseñar la gramática / formato de grafo (nodos y aristas) para modelar entidades, agregados y flujos de negocio para que un LLM pueda generar código completo de backend y frontend de forma determinista.
+Los apartados 4 (enrutar `/api/parties` a Go con Nginx) y 5 (metamodelo y DSL en grafo, que hoy
+es Theros) salieron de aquí el 2026-11-14: están en
+[docs/archivo/backlog-retirado-2026-11-14.md](docs/archivo/backlog-retirado-2026-11-14.md).
 
 ### 6. Impuestos indirectos (IVA y equivalentes): cálculo por país y por sector
 
@@ -295,3 +295,18 @@ sector**. En C# nada calculaba el IVA.
 **Otros países (cuando haya clientes):** Portugal (SAF-T, ATCUD, QR), Francia (Factur-X, Chorus
 Pro, e-invoicing 2026), Italia (SDI, FatturaPA), Alemania (XRechnung, ZUGFeRD) y el resto de la UE
 mediante la estructura común de la Directiva 2006/112/CE.
+
+### 7. Estudio: integraciones de terceros, frameworks de front y destinos de despliegue (con Theros)
+
+Pedido por Javier el 2026-11-14. Es un estudio, no una implementación. Lo que salga de él para el
+generador se pide a «Orquestador Theros».
+
+- **Integraciones de terceros:** qué herramientas externas ya hechas pueden integrarse con Theros
+  y con las aplicaciones que genera, al estilo del catálogo de integraciones de Supabase.
+- **Frameworks de front:** cuántos pueden ofrecerse para las aplicaciones generadas, como en el
+  diálogo «Connect to your project» de Supabase. Allí aparecen Next.js, React Router, React, Nuxt,
+  Vue.js, SvelteKit, Solid.js, Astro, Refine y TanStack Start. El mismo diálogo ofrece también
+  otras formas de conectarse: biblioteca cliente, API de servidor, cadena de conexión directa, ORM
+  y MCP. Recoge la PoC de §3.
+- **Destinos de ejecución:** en qué plataformas pueden desplegarse las aplicaciones generadas,
+  según el lenguaje: AWS, Azure y otras.
