@@ -111,6 +111,10 @@ func Migrations() sqlrepo.MigrationSet {
 		{Version: 9, Name: "customer calculation", Up: sqlrepo.RenderDDLAll(
 			`ALTER TABLE ord_terms {add:line_rounding} {str:20}{addEnd}`,
 			`ALTER TABLE ord_terms {add:price_decimals} {int}{addEnd}`)},
+		// El tipo de presupuesto (D-155, el QuoteKind de Karpo C#): quote o proforma. Los que ya
+		// había son presupuestos.
+		{Version: 10, Name: "quote kind", Up: sqlrepo.RenderDDLAll(
+			`ALTER TABLE ord_quotes {add:kind} {str:20} DEFAULT 'quote' NOT NULL{addEnd}`)},
 	}}
 }
 
@@ -517,6 +521,48 @@ func (p ProductsCatalog) Price(ctx context.Context, company domain.OrganizationI
 	}
 	it.UnitPrice, it.Discount = price, discount
 	return it, true, nil
+}
+
+// ServiceFulfilmentSettings adapta el catálogo de Products y los perfiles de empresa de Parties al
+// puerto de D-155 (ACL): qué productos son servicios, con su ajuste, y el ajuste de la empresa.
+type ServiceFulfilmentSettings struct {
+	Catalog  products.Catalog
+	Profiles parties.CompanyProfiles // opcional: sin él, la empresa no tiene ajuste
+}
+
+var _ domain.ServiceFulfilment = ServiceFulfilmentSettings{}
+
+// Services implementa domain.ServiceFulfilment.
+func (f ServiceFulfilmentSettings) Services(ctx context.Context, ids []domain.ProductID) (map[domain.ProductID]string, error) {
+	out := map[domain.ProductID]string{}
+	for chunk := range slices.Chunk(ids, products.MaxBatch) {
+		keys := make([]string, len(chunk))
+		for i, id := range chunk {
+			keys[i] = id.String()
+		}
+		refs, err := f.Catalog.Products(ctx, keys)
+		if err != nil {
+			return nil, err
+		}
+		for _, id := range chunk {
+			if r, ok := refs[id.String()]; ok && r.Kind == "service" {
+				out[id] = r.ServiceFulfilmentMode
+			}
+		}
+	}
+	return out, nil
+}
+
+// CompanyMode implementa domain.ServiceFulfilment.
+func (f ServiceFulfilmentSettings) CompanyMode(ctx context.Context, company domain.OrganizationID) (string, error) {
+	if f.Profiles == nil {
+		return "", nil
+	}
+	st, err := f.Profiles.Settings(ctx, company.String())
+	if err != nil {
+		return "", err
+	}
+	return st.ServiceFulfilmentMode, nil
 }
 
 // PartiesBlocks adapta el contrato de identidades fiscales de Parties al puerto de Orders (ACL).

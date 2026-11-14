@@ -329,6 +329,11 @@ func Migrations() sqlrepo.MigrationSet {
 			Up: sqlrepo.RenderDDLAll(
 				`ALTER TABLE `+TableInternalOrganizationProfiles+` {add:default_price_list} {uuid}{addEnd}`,
 				`ALTER TABLE `+TableInternalOrganizationProfiles+` {add:automatic_pricing} {bool}{addEnd}`)},
+		// Cómo se sirven las líneas de servicio de los pedidos de la empresa (D-155), con el nombre
+		// de Karpo C#: delivery_note o direct_invoice; nulo, sin ajuste (con albarán, salvo que el
+		// producto diga otra cosa).
+		{Version: 36, Name: "internal organization profile: service fulfilment mode", Up: sqlrepo.RenderDDLAll(
+			`ALTER TABLE ` + TableInternalOrganizationProfiles + ` {add:service_fulfilment_mode} {str:20}{addEnd}`)},
 	}}
 }
 

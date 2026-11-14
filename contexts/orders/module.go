@@ -41,6 +41,12 @@ type Option func(*oapp.Deps)
 // WithBlocks dice quién responde si un cliente está bloqueado (Parties, en el anfitrión).
 func WithBlocks(b domain.Blocks) Option { return func(d *oapp.Deps) { d.Blocks = b } }
 
+// WithServiceFulfilment dice cómo se sirven los servicios (D-155): el ajuste del producto
+// (Products) y el de la empresa (Parties), en el anfitrión. Sin él, con albarán.
+func WithServiceFulfilment(f domain.ServiceFulfilment) Option {
+	return func(d *oapp.Deps) { d.Fulfilment = f }
+}
+
 // WithMergedParties dice qué parties están fusionadas en otra (Parties, en el anfitrión): los
 // listados dejan fuera sus registros salvo que se pidan con includeMergedParties (D-100).
 func WithMergedParties(m application.MergedParties) Option {
@@ -174,7 +180,7 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/orders/quotes/expire-due", create(ok, svc.ExpireQuotes.Handle))
 	mux.HandleFunc("GET /api/orders/quotes", func(w http.ResponseWriter, r *http.Request) {
 		s, n := query(r)
-		out, err := svc.SearchQuotes.Handle(r.Context(), oapp.SearchQuotes{Company: s("company"), Customer: s("customer"), Status: s("status"),
+		out, err := svc.SearchQuotes.Handle(r.Context(), oapp.SearchQuotes{Company: s("company"), Customer: s("customer"), Status: s("status"), Kind: s("kind"),
 			IncludeMergedParties: s("includeMergedParties") == "true", Page: n("page"), Size: n("size")})
 		distribution.Respond(w, r, out, err, http.StatusOK)
 	})

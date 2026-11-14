@@ -364,7 +364,49 @@ Unas 665 líneas útiles: una cabecera con siete rutas. La única operación con
   fallido, aceptación con su pedido en la misma unidad de trabajo, rechazo, borrador retirado
   sin número, caducidad con el reloj adelantado, búsquedas y bandeja de salida.
 
+## Servicios y proforma (D-155; añadido el 2026-11-14)
+
+### Cómo se sirven los servicios
+
+- Una línea de servicio es una línea sin stock (`Stocked` a false) de un producto de tipo `service`
+  en Products. Se sirve según un ajuste: el del producto (`serviceFulfilmentMode`,
+  docs/PRODUCTOS.md); si no tiene, el de la empresa (perfil de Parties, docs/PARTIES.md); si
+  tampoco, `delivery_note`, lo de siempre. `domain.ResolveServiceFulfilment` decide.
+- `delivery_note`: la línea va al albarán por lo pendiente, sin pedir ni mover stock.
+- **`direct_invoice` aún no se puede guardar** en la empresa ni en el producto (422
+  `Company.DirectInvoiceUnavailable` y `products.direct_invoice_unavailable`): Facturación no
+  factura desde el pedido, y esas líneas no se facturarían nunca. Orders ya sabe servirlo; se
+  habilita con `DirectInvoiceAvailable` en Parties y en Products.
+- `direct_invoice`: la línea **no va al albarán**. Al servir sin líneas se deja fuera; una línea
+  pedida que es uno de estos servicios da 422 `orders.service_direct_invoice` y no se sirve nada.
+- Orders lo lee al servir, por el puerto propio `domain.ServiceFulfilment`
+  (`orders.WithServiceFulfilment`), que el anfitrión cablea con
+  `infrastructure.ServiceFulfilmentSettings` sobre `contracts.Catalog` de Products y
+  `contracts.CompanyProfiles` de Parties. Sin puerto, todos los servicios van con albarán. Un cambio
+  del ajuste vale desde el albarán siguiente. El puerto sólo se consulta si el pedido tiene líneas sin
+  stock: un pedido sólo de bienes en stock se sirve aunque los ajustes no se puedan leer; con
+  servicios, un fallo al leerlos hace fallar la entrega (500) y no se sirve nada.
+- **Pendiente: facturar estas líneas desde el pedido.** Facturación sólo prepara borradores desde
+  el albarán, y la factura directa con producto no está unida al pedido, así que no hay un camino
+  sencillo: hace falta que Facturación prepare un borrador desde las líneas de servicio de un
+  pedido y que el pedido anote lo facturado. Mientras tanto, esas líneas quedan pendientes en el
+  pedido y no lo cierran.
+
+### La proforma, un tipo de presupuesto
+
+- `ord_quotes.kind` `{str:20}` no nulo, por omisión `quote` (migración 10; los presupuestos que
+  ya había son `quote`): `quote` o `proforma`, el `QuoteKind` de Karpo C# (en Go el tipo se llama
+  `domain.QuoteType`, porque `QuoteKind` ya es el nombre del agregado).
+- Se elige al abrir el borrador (`kind` en `POST /api/orders/quotes`) y se cambia en el borrador con
+  `PUT /api/orders/quotes/{id}` (`kind`; si no se envía, se queda). Enviado el presupuesto, no cambia:
+  422 `orders.quote_kind_locked`. Otro valor: 422 `orders.invalid_quote_kind`.
+- Va en `QuoteDTO.kind` y se filtra en la búsqueda (`GET /api/orders/quotes?kind=proforma`).
+- La numeración no cambia: los dos tipos se numeran al enviarse, con la misma serie `PRE`.
+
 ## Pendiente
+
+- Facturar desde el pedido las líneas de servicio en `direct_invoice` y, después, admitir
+  `direct_invoice` en Parties y Products (D-155; ver «Servicios y proforma»).
 
 - ~~Facturar desde el albarán~~: hecho, ver [FACTURACION.md](FACTURACION.md). Facturación prepara
   el borrador y el albarán anota su factura al emitirse.

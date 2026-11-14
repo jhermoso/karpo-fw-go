@@ -28,24 +28,25 @@ const maxMaintenanceBody = 1 << 20
 // (códigos de barras, componentes y proveedores), que se mantienen por la API de Productos y que un
 // cambio por el contrato conserva.
 type MaintainedProduct struct {
-	ID              string `json:"id"`
-	Company         string `json:"company"`
-	SKU             string `json:"sku"`
-	Name            string `json:"name"`
-	Description     string `json:"description"`
-	Kind            string `json:"kind"`
-	UoM             string `json:"uom"`
-	Category        string `json:"category"`
-	TaxCode         string `json:"taxCode"`
-	ExpenseCategory string `json:"expenseCategory"`
-	BasePrice       string `json:"basePrice"`
-	StandardCost    string `json:"standardCost"`
-	ForSale         bool   `json:"forSale"`
-	ForPurchase     bool   `json:"forPurchase"`
-	Stocked         bool   `json:"stocked"`
-	Tracking        string `json:"tracking"`
-	BlockedSales    bool   `json:"blockedSales"`
-	BlockedPurchase bool   `json:"blockedPurchase"`
+	ID                    string `json:"id"`
+	Company               string `json:"company"`
+	SKU                   string `json:"sku"`
+	Name                  string `json:"name"`
+	Description           string `json:"description"`
+	Kind                  string `json:"kind"`
+	UoM                   string `json:"uom"`
+	Category              string `json:"category"`
+	TaxCode               string `json:"taxCode"`
+	ExpenseCategory       string `json:"expenseCategory"`
+	BasePrice             string `json:"basePrice"`
+	StandardCost          string `json:"standardCost"`
+	ForSale               bool   `json:"forSale"`
+	ForPurchase           bool   `json:"forPurchase"`
+	Stocked               bool   `json:"stocked"`
+	Tracking              string `json:"tracking"`
+	BlockedSales          bool   `json:"blockedSales"`
+	BlockedPurchase       bool   `json:"blockedPurchase"`
+	ServiceFulfilmentMode string `json:"serviceFulfilmentMode"`
 	// Discontinued es el día desde el que está retirado (DELETE lo retira hoy); vacío, no lo está.
 	Discontinued string `json:"discontinued"`
 	Version      int64  `json:"version"`
@@ -55,7 +56,7 @@ func maintained(p papp.ProductDTO) MaintainedProduct {
 	return MaintainedProduct{ID: p.ID, Company: p.Company, SKU: p.SKU, Name: p.Name, Description: p.Description, Kind: p.Kind, UoM: p.UoM,
 		Category: p.Category, TaxCode: p.TaxCode, ExpenseCategory: p.ExpenseCategory, BasePrice: p.BasePrice, StandardCost: p.StandardCost,
 		ForSale: p.ForSale, ForPurchase: p.ForPurchase, Stocked: p.Stocked, Tracking: p.Tracking, BlockedSales: p.BlockedSales,
-		BlockedPurchase: p.BlockedPurchase, Discontinued: p.Discontinued, Version: p.Version}
+		BlockedPurchase: p.BlockedPurchase, ServiceFulfilmentMode: p.ServiceFulfilmentMode, Discontinued: p.Discontinued, Version: p.Version}
 }
 
 // maintainedInput es el cuerpo de un alta o de un cambio. Lo que sobra se ignora (un front devuelve
@@ -79,12 +80,15 @@ type maintainedInput struct {
 	BlockedSales    bool   `json:"blockedSales"`
 	BlockedPurchase bool   `json:"blockedPurchase"`
 	Version         *int64 `json:"version"`
+	// ServiceFulfilmentMode es delivery_note o direct_invoice (D-155); vacío, sin ajuste.
+	ServiceFulfilmentMode string `json:"serviceFulfilmentMode"`
 }
 
 func (in maintainedInput) details() papp.DetailsInput {
 	return papp.DetailsInput{Name: in.Name, Description: in.Description, Kind: in.Kind, UoM: in.UoM, Category: in.Category, TaxCode: in.TaxCode,
 		ExpenseCategory: in.ExpenseCategory, BasePrice: in.BasePrice, StandardCost: in.StandardCost, ForSale: in.ForSale, ForPurchase: in.ForPurchase,
-		Stocked: in.Stocked, Tracking: in.Tracking, BlockedSales: in.BlockedSales, BlockedPurchase: in.BlockedPurchase}
+		Stocked: in.Stocked, Tracking: in.Tracking, BlockedSales: in.BlockedSales, BlockedPurchase: in.BlockedPurchase,
+		ServiceFulfilmentMode: in.ServiceFulfilmentMode}
 }
 
 // maintenancePage es la página con los nombres que lee el motor (total y totalCount valen lo mismo).

@@ -26,6 +26,9 @@ type ProductRef struct {
 	BlockedPurchase bool   `json:"blockedPurchase"`
 	Discontinued    string `json:"discontinued,omitempty"` // fecha civil desde la que está retirado
 	StandardCost    string `json:"standardCost"`
+	// ServiceFulfilmentMode es cómo se sirve en un pedido, si es un servicio: "delivery_note" o
+	// "direct_invoice"; "" sin ajuste (D-155).
+	ServiceFulfilmentMode string `json:"serviceFulfilmentMode,omitempty"`
 }
 
 // MaxBatch es el número máximo de ids por llamada.

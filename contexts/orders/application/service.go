@@ -46,7 +46,8 @@ type Deps struct {
 	Catalog    domain.Catalog
 	Credit     domain.CreditCheck
 	Blocks     domain.Blocks
-	Merged     app.MergedParties // opcional: las parties fusionadas, que los listados dejan fuera (D-100)
+	Fulfilment domain.ServiceFulfilment // opcional: sin él, los servicios van con albarán (D-155)
+	Merged     app.MergedParties        // opcional: las parties fusionadas, que los listados dejan fuera (D-100)
 	UoW        fw.UnitOfWork
 	Today      app.CompanyToday // opcional: sin él, hoy es el de UTC (docs/ARQUITECTURA.md, «Hoy es el de la empresa»)
 	Recorder   app.EventRecorder
@@ -228,6 +229,40 @@ func (s service) notBlocked(ctx context.Context, customer domain.PartyID) error 
 		return fw.Violation("orders.customer_blocked", "the customer is the duplicate of another party: nothing is sold to it")
 	}
 	return nil
+}
+
+// directInvoiceLines dice qué líneas sin stock del pedido son servicios que se facturan
+// directamente (D-155): el ajuste del producto, si no el de la empresa, si no con albarán. Sin el
+// puerto, ninguna.
+func (s service) directInvoiceLines(ctx context.Context, o domain.OrderState) (map[int]bool, error) {
+	if s.Fulfilment == nil {
+		return nil, nil
+	}
+	var products []domain.ProductID
+	for _, l := range o.Lines {
+		if !l.Stocked && !slices.Contains(products, l.Product) {
+			products = append(products, l.Product)
+		}
+	}
+	if len(products) == 0 {
+		return nil, nil
+	}
+	services, err := s.Fulfilment.Services(ctx, products)
+	if err != nil || len(services) == 0 {
+		return nil, err
+	}
+	company, err := s.Fulfilment.CompanyMode(ctx, o.Company)
+	if err != nil {
+		return nil, err
+	}
+	direct := map[int]bool{}
+	for _, l := range o.Lines {
+		if mode, ok := services[l.Product]; ok && !l.Stocked &&
+			domain.ResolveServiceFulfilment(mode, company) == domain.ServiceFulfilmentDirectInvoice {
+			direct[l.No] = true
+		}
+	}
+	return direct, nil
 }
 
 func (s service) termsOf(ctx context.Context, company domain.OrganizationID, customer domain.PartyID) (domain.TermsState, error) {

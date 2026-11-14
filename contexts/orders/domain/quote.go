@@ -46,6 +46,39 @@ const (
 // QuoteStatuses enumera los estados válidos.
 var QuoteStatuses = []QuoteStatus{QuoteDraft, QuoteSent, QuoteAccepted, QuoteRejected, QuoteExpired, QuoteWithdrawn}
 
+// QuoteType es el tipo de documento de un presupuesto (D-155): un presupuesto sin más o una
+// factura proforma, que compromete a entregar a un precio sin haber entregado nada. Los dos se
+// numeran igual, al enviarse. (QuoteKind ya es el nombre del agregado.)
+type QuoteType string
+
+// Tipos de presupuesto.
+const (
+	QuoteTypeQuote    QuoteType = "quote"
+	QuoteTypeProforma QuoteType = "proforma"
+)
+
+// QuoteTypes enumera los tipos válidos.
+var QuoteTypes = []QuoteType{QuoteTypeQuote, QuoteTypeProforma}
+
+// ErrInvalidQuoteKind y ErrQuoteKindLocked son los códigos de un tipo que no existe y de un cambio
+// de tipo de un presupuesto ya enviado.
+const (
+	ErrInvalidQuoteKind = "orders.invalid_quote_kind"
+	ErrQuoteKindLocked  = "orders.quote_kind_locked"
+)
+
+// ParseQuoteType interpreta un tipo; vacío es QuoteTypeQuote.
+func ParseQuoteType(s string) (QuoteType, error) {
+	t := QuoteType(strings.TrimSpace(s))
+	if t == "" {
+		return QuoteTypeQuote, nil
+	}
+	if !slices.Contains(QuoteTypes, t) {
+		return "", fw.Violation(ErrInvalidQuoteKind, "the kind of a quote is quote or proforma")
+	}
+	return t, nil
+}
+
 // QuoteLine es un producto ofrecido a un precio: los mismos precios que tiene una línea de pedido,
 // sin lo que un pedido añade al servirse.
 type QuoteLine struct {
@@ -68,7 +101,8 @@ type QuoteLine struct {
 type QuoteState struct {
 	Company          OrganizationID
 	Customer         PartyID
-	Number           string // se asigna al enviarlo
+	Kind             QuoteType // quote o proforma; vacío, quote
+	Number           string    // se asigna al enviarlo
 	Date             vocab.Date
 	ValidUntil       vocab.Date // el último día en que valen sus precios
 	PriceList        PriceListID
@@ -93,6 +127,9 @@ type Quote struct {
 func ReconstituteQuote(id QuoteID, s QuoteState) (*Quote, error) {
 	base, err := fw.NewBaseAggregateRoot(QuoteKind, id)
 	if err != nil {
+		return nil, err
+	}
+	if s.Kind, err = ParseQuoteType(string(s.Kind)); err != nil {
 		return nil, err
 	}
 	var v fw.Validation
@@ -167,6 +204,22 @@ func (q *Quote) Change(date, validUntil vocab.Date, reference, notes string) err
 		return err
 	}
 	q.s = n.s
+	return nil
+}
+
+// SetKind cambia el tipo de un borrador: quote o proforma. Enviado, ya no cambia.
+func (q *Quote) SetKind(kind string) error {
+	t, err := ParseQuoteType(kind)
+	if err != nil {
+		return err
+	}
+	if t == q.s.Kind {
+		return nil
+	}
+	if err := q.mustBe(QuoteDraft, ErrQuoteKindLocked, "the kind of a quote does not change once it is sent"); err != nil {
+		return err
+	}
+	q.s.Kind = t
 	return nil
 }
 
@@ -293,7 +346,7 @@ func (q *Quote) Expire(today vocab.Date) bool {
 
 // AuditSnapshot implementa traits.Snapshotter.
 func (q *Quote) AuditSnapshot() map[string]any {
-	return map[string]any{"number": q.s.Number, "status": string(q.s.Status), "validUntil": q.s.ValidUntil.String(), "total": q.Total().String(),
+	return map[string]any{"kind": string(q.s.Kind), "number": q.s.Number, "status": string(q.s.Status), "validUntil": q.s.ValidUntil.String(), "total": q.Total().String(),
 		"lines": len(q.s.Lines), "order": q.s.Order.String()}
 }
 
@@ -302,6 +355,7 @@ var (
 	QuoFieldCompany  = spec.Comparable("company", func(q *Quote) OrganizationID { return q.s.Company })
 	QuoFieldCustomer = spec.Comparable("customer", func(q *Quote) PartyID { return q.s.Customer })
 	QuoFieldStatus   = spec.Comparable("status", func(q *Quote) string { return string(q.s.Status) })
+	QuoFieldKind     = spec.Comparable("kind", func(q *Quote) string { return string(q.s.Kind) })
 	QuoFieldDate     = spec.OrderedBy("quote_date", func(q *Quote) vocab.Date { return q.s.Date }, vocab.CompareDates)
 	QuoFieldNumber   = spec.Ordered("quote_number", func(q *Quote) string { return q.s.Number })
 )

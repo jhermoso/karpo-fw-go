@@ -221,7 +221,8 @@ func Compose(sw *hotswap.Switch, o Options) (*Host, error) {
 	h.Inventory = inventory.Compose(sw, invinfra.ProductsCatalog{Catalog: h.Products.Catalog}, inventory.WithToday(zones))
 	h.Orders = orders.Compose(sw, ordinfra.ProductsCatalog{Catalog: h.Products.Catalog, Pricing: h.Products.Pricing},
 		ordinfra.ReceivablesCredit{Exposure: h.Receivables.Credit}, orders.WithBlocks(ordinfra.PartiesBlocks{TaxIdentities: h.Parties.TaxIdentities}),
-		orders.WithMergedParties(merged), orders.WithToday(zones))
+		orders.WithMergedParties(merged), orders.WithToday(zones),
+		orders.WithServiceFulfilment(ordinfra.ServiceFulfilmentSettings{Catalog: h.Products.Catalog, Profiles: h.Parties.CompanyProfiles}))
 	h.Billing = billing.Compose(sw, bilinfra.FiscalTaxes{Engine: h.Fiscal.TaxEngine}, bilinfra.PartiesIdentities{TaxIdentities: h.Parties.TaxIdentities},
 		billing.WithMergedParties(merged), billing.WithZones(zones),
 		// Los ajustes de la empresa (D-144); con with_issue, los vencimientos nacen en la transacción

@@ -29,6 +29,8 @@ type SetInternalOrganizationProfile struct {
 	InstallmentsTiming string         `json:"installmentsTiming"`
 	DefaultPriceList   string         `json:"defaultPriceList"`
 	AutomaticPricing   *bool          `json:"automaticPricing"`
+	// ServiceFulfilmentMode es delivery_note o direct_invoice (D-155); vacío, sin ajuste.
+	ServiceFulfilmentMode string `json:"serviceFulfilmentMode"`
 }
 
 // InternalOrganizationProfileDTO es la forma de transporte del perfil de una empresa interna.
@@ -42,6 +44,7 @@ type InternalOrganizationProfileDTO struct {
 	InstallmentsTiming     *string `json:"installmentsTiming"`
 	DefaultPriceList       *string `json:"defaultPriceList,omitempty"`
 	AutomaticPricing       bool    `json:"automaticPricing"`
+	ServiceFulfilmentMode  *string `json:"serviceFulfilmentMode"`
 }
 
 // GetInternalOrganizationCodePattern lee el patrón de un tipo de código de una empresa interna.
@@ -75,7 +78,8 @@ func optional(s string) *string {
 func profileDTO(p domain.InternalOrganizationProfile) InternalOrganizationProfileDTO {
 	return InternalOrganizationProfileDTO{InternalOrganizationID: p.Organization.String(), TimeZone: optional(p.TimeZone),
 		LineRounding: optional(p.LineRounding), PriceDecimals: p.PriceDecimals, InstallmentsTiming: optional(p.InstallmentsTiming),
-		DefaultPriceList: optional(p.DefaultPriceList), AutomaticPricing: p.PricesAutomatically()}
+		DefaultPriceList: optional(p.DefaultPriceList), AutomaticPricing: p.PricesAutomatically(),
+		ServiceFulfilmentMode: optional(p.ServiceFulfilmentMode)}
 }
 
 // profileAudit son los campos del perfil tal como quedan en el registro de auditoría.
@@ -89,7 +93,8 @@ func profileAudit(p domain.InternalOrganizationProfile) map[string]any {
 		automatic = *p.AutomaticPricing
 	}
 	return map[string]any{"timeZone": p.TimeZone, "lineRounding": p.LineRounding, "priceDecimals": decimals,
-		"installmentsTiming": p.InstallmentsTiming, "defaultPriceList": p.DefaultPriceList, "automaticPricing": automatic}
+		"installmentsTiming": p.InstallmentsTiming, "defaultPriceList": p.DefaultPriceList, "automaticPricing": automatic,
+		"serviceFulfilmentMode": p.ServiceFulfilmentMode}
 }
 
 // addProfile conecta los casos de uso del perfil de la empresa interna (D-133, D-144) y de sus
@@ -120,7 +125,8 @@ func addProfile(svc *Service, s service) {
 		before := p
 		p.SetAutomaticPricing(c.AutomaticPricing)
 		if err := errors.Join(p.SetTimeZone(c.TimeZone), p.SetLineRounding(c.LineRounding), p.SetPriceDecimals(c.PriceDecimals),
-			p.SetInstallmentsTiming(c.InstallmentsTiming), p.SetDefaultPriceList(c.DefaultPriceList)); err != nil {
+			p.SetInstallmentsTiming(c.InstallmentsTiming), p.SetDefaultPriceList(c.DefaultPriceList),
+			p.SetServiceFulfilmentMode(c.ServiceFulfilmentMode)); err != nil {
 			return InternalOrganizationProfileDTO{}, firstError(err)
 		}
 		if p.Equal(before) {
@@ -297,7 +303,7 @@ func (c CompanyProfiles) Settings(ctx context.Context, organization string) (con
 		return contracts.CompanySettings{}, err
 	}
 	return contracts.CompanySettings{LineRounding: p.LineRounding, PriceDecimals: p.PriceDecimals, InstallmentsTiming: p.InstallmentsTiming,
-		DefaultPriceList: p.DefaultPriceList, ManualPricing: !p.PricesAutomatically()}, nil
+		DefaultPriceList: p.DefaultPriceList, ManualPricing: !p.PricesAutomatically(), ServiceFulfilmentMode: p.ServiceFulfilmentMode}, nil
 }
 
 // CodePattern implementa contracts.CompanyProfiles.

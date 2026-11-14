@@ -106,6 +106,39 @@ func validBarcode(b Barcode) bool {
 	return b.Type == "internal" && b.Value != "" && len(b.Value) <= 30 && !strings.ContainsAny(b.Value, " \t\n")
 }
 
+// Cómo se sirve una línea de servicio de un pedido (D-155): con albarán, sin mover stock, o
+// facturándola directamente desde el pedido. Vacío, sin ajuste: el de la empresa, o con albarán.
+const (
+	ServiceFulfilmentDeliveryNote  = "delivery_note"
+	ServiceFulfilmentDirectInvoice = "direct_invoice"
+)
+
+// ErrInvalidServiceFulfilmentMode es el código de un modo de servir que no es ninguno de los dos.
+const ErrInvalidServiceFulfilmentMode = "products.invalid_service_fulfilment_mode"
+
+// ErrDirectInvoiceUnavailable es el código de direct_invoice mientras no se admite (D-155).
+const ErrDirectInvoiceUnavailable = "products.direct_invoice_unavailable"
+
+// DirectInvoiceAvailable dice si se admite direct_invoice. Facturación aún no factura desde el
+// pedido, así que una línea en direct_invoice no se facturaría nunca (D-155, docs/PEDIDOS.md).
+// Habilitarlo: poner true cuando Facturación facture desde el pedido.
+const DirectInvoiceAvailable = false
+
+// checkServiceFulfilment normaliza y comprueba el modo de servir los servicios.
+func checkServiceFulfilment(d *Details) error {
+	d.ServiceFulfilmentMode = strings.TrimSpace(d.ServiceFulfilmentMode)
+	switch d.ServiceFulfilmentMode {
+	case "", ServiceFulfilmentDeliveryNote:
+		return nil
+	case ServiceFulfilmentDirectInvoice:
+		if DirectInvoiceAvailable {
+			return nil
+		}
+		return fw.Violation(ErrDirectInvoiceUnavailable, "direct invoicing of services is not available yet: billing cannot invoice from the order")
+	}
+	return fw.Violation(ErrInvalidServiceFulfilmentMode, "the service fulfilment mode must be delivery_note or direct_invoice")
+}
+
 // Component es un producto del que está hecho un kit.
 type Component struct {
 	Product  ProductID
@@ -140,6 +173,9 @@ type Details struct {
 	Barcodes        []Barcode
 	Components      []Component
 	Suppliers       []SupplierItem
+	// ServiceFulfilmentMode es cómo se sirve el producto, si es un servicio, en un pedido:
+	// ServiceFulfilmentDeliveryNote o ServiceFulfilmentDirectInvoice; vacío, sin ajuste (D-155).
+	ServiceFulfilmentMode string
 }
 
 // ProductState es el estado persistido de un producto.
@@ -230,6 +266,9 @@ func ReconstituteProduct(id ProductID, s ProductState) (*Product, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := checkServiceFulfilment(&s.Details); err != nil {
+		return nil, err
+	}
 	var v fw.Validation
 	v.Require(!s.Company.IsZero(), "company", "required", "the company is required")
 	s.SKU = NormalizeSKU(s.SKU)
@@ -272,6 +311,9 @@ func (p *Product) Change(d Details) error {
 	}
 	if d.Kind != p.s.Kind {
 		return fw.Violation("products.kind_fixed", "the kind of a product does not change")
+	}
+	if err := checkServiceFulfilment(&d); err != nil {
+		return err
 	}
 	var v fw.Validation
 	checkDetails(&v, p.ID(), &d)
