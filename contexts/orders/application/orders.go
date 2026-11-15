@@ -30,6 +30,9 @@ type SetTerms struct {
 	// facturas del cliente; sin ellos, el de la empresa (cascada cliente > empresa, D-150).
 	LineRounding  string `json:"lineRounding,omitempty"`
 	PriceDecimals *int   `json:"priceDecimals,omitempty"`
+	// PartialBillingPolicy (allow_partial o require_complete_order) gana a la de la empresa; sin
+	// ella, la de la empresa (D-153).
+	PartialBillingPolicy string `json:"partialBillingPolicy,omitempty"`
 }
 
 // SearchTerms enumera las condiciones de cliente de una empresa; las de una party fusionada, sólo
@@ -56,7 +59,9 @@ type TermsDTO struct {
 	// LineRounding y PriceDecimals, sólo si el cliente no usa los de la empresa (D-150).
 	LineRounding  string `json:"lineRounding,omitempty"`
 	PriceDecimals *int   `json:"priceDecimals,omitempty"`
-	Version       int64  `json:"version"`
+	// PartialBillingPolicy, sólo si el cliente no usa la de la empresa (D-153).
+	PartialBillingPolicy string `json:"partialBillingPolicy,omitempty"`
+	Version              int64  `json:"version"`
 	// PendingApproval es el id de la solicitud que ha dejado bloquear o desbloquear, si la empresa
 	// exige aprobación: las condiciones no han cambiado.
 	PendingApproval string `json:"pendingApproval,omitempty"`
@@ -66,7 +71,8 @@ func termsDTO(t *domain.Terms) TermsDTO {
 	s := t.State()
 	return TermsDTO{ID: t.ID().String(), Company: s.Company.String(), Customer: s.Customer.String(), PriceList: optID(s.PriceList.UUID),
 		Discount: money(s.Discount), BlockOrders: s.BlockOrders, BlockDelivery: s.BlockDelivery, BlockReason: s.BlockReason, UnblockReason: s.UnblockReason,
-		BillingPeriodicity: string(s.BillingPeriodicity), LineRounding: s.LineRounding, PriceDecimals: s.PriceDecimals, Version: t.Version()}
+		BillingPeriodicity: string(s.BillingPeriodicity), LineRounding: s.LineRounding, PriceDecimals: s.PriceDecimals,
+		PartialBillingPolicy: s.PartialBillingPolicy, Version: t.Version()}
 }
 
 // DraftOrder abre un pedido en borrador de un cliente, con la tarifa y el descuento de sus
@@ -255,7 +261,8 @@ func (s service) termsUseCases(svc *Service) {
 		company := domain.OrganizationID{UUID: parseID(&v, "company", c.Company)}
 		customer := domain.PartyID{UUID: parseID(&v, "customer", c.Customer)}
 		st := domain.TermsState{Company: company, Customer: customer, Discount: parseDecimal(&v, "discount", c.Discount),
-			BillingPeriodicity: domain.BillingPeriodicity(c.BillingPeriodicity), LineRounding: c.LineRounding, PriceDecimals: c.PriceDecimals}
+			BillingPeriodicity: domain.BillingPeriodicity(c.BillingPeriodicity), LineRounding: c.LineRounding, PriceDecimals: c.PriceDecimals,
+			PartialBillingPolicy: c.PartialBillingPolicy}
 		if c.PriceList != "" {
 			st.PriceList = domain.PriceListID{UUID: parseID(&v, "priceList", c.PriceList)}
 		}

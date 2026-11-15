@@ -653,6 +653,57 @@ como el de la factura. Lo que cambia en Facturación:
   en `contexts/orders` (pedido, albarán y factura emitida, 926,25 y 1120,76 con IVA); el caso
   `descuento-encadenado`; en los motores, el final de `TestOrdersInvoicing`.
 
+## Facturar parte de un pedido (D-153; añadido el 2026-11-15)
+
+Facturar parte de un pedido es lo normal, y es configurable. La política es `allow_partial` (por
+defecto: cada albarán se factura en cuanto se emite) o `require_complete_order` (los albaranes de
+un pedido esperan a que no le quede nada pendiente de servir). Se fija en la empresa (perfil de
+Parties, `partialBillingPolicy`) y en las condiciones del cliente (Orders, `partialBillingPolicy`);
+gana el cliente (`domain.ResolvePartialBilling`). El albarán sigue yendo entero (D-152).
+
+- **Qué sabe Facturación del pedido.** `bil_source_orders` (migración 14; el
+  `invoicing_source_order` de Trench, una fila por albarán porque en Go un albarán sirve un pedido):
+  el albarán, su pedido y `order_complete`. La escribe al recibir `orders.delivery-issued.v1` (con
+  su `orderComplete`) y la cambian `orders.sales-order-serving-completed.v1` y `…-reopened.v1`.
+  Facturación no lee las tablas de Orders. Un albarán sin fila (de antes) no espera.
+- **Al preparar el borrador desde el albarán.** Con `require_complete_order` y el pedido sin
+  servir entero, el albarán no tiene borrador: queda en `bil_pending_deliveries` con
+  `billing_periodicity` = `per_delivery` (la columna es nueva; los pendientes que había son
+  `monthly`). Cuando el pedido queda servido (su último albarán o el evento de servido), los
+  albaranes por albarán que esperaban tienen su borrador. `GET /api/billing/pending-deliveries` los
+  lista con `periodicity`; con `upTo`, sólo los mensuales (los que facturaría un cierre).
+- **En el cierre del periodo**, los albaranes mensuales de un pedido sin servir entero se quedan
+  pendientes, sin fallo: entran en el primer cierre después de servirse el pedido.
+- **Al unir borradores.** Si alguno de los albaranes es de un pedido que no está servido entero
+  (reabierto, o la política cambió después de preparar los borradores), 422
+  `orders.partial_billing_not_allowed`.
+- **Pedirlo a mano:** `POST /api/billing/pending-deliveries/{id}/draft` prepara el borrador de un
+  albarán pendiente (mensual o que espera a su pedido). Si la política lo impide, 422
+  `orders.partial_billing_not_allowed`.
+- **Saltar la política en una operación concreta:** en el `draft` y en el `merge`,
+  `{"overridePartialBilling": true, "reason": "…"}`, con el permiso propio
+  `Billing.Invoice.OverridePartialBilling` (sin él, 403) y un motivo de 1 a 200 caracteres (sin él,
+  400). Sólo se mira si la política lo impide. Queda en la auditoría de la factura: operación
+  `partial_billing_overridden`, con `reason` y `deliveries`.
+- **Código de error:** `orders.partial_billing_not_allowed` es el `Orders.PartialBillingNotAllowed`
+  de Trench, en el estilo de Go (minúsculas, como los demás de Orders). Lo da Facturación, que es
+  quien aplica la política, con el prefijo del dueño del concepto, como en Trench.
+- **El orden de los mensajes no importa.** Un albarán sólo pasa su pedido de incompleto a completo,
+  nunca al revés (eso sólo lo hace el evento de reabierto), así que un mensaje entregado dos veces
+  no vuelve a dejar esperando un albarán. Los eventos de servido y reabierto dejan además una fila
+  del propio pedido (id = el pedido): un albarán que llega después (un pedido cerrado antes de que
+  llegue su albarán, un reintento) nace completo y, si la política lo deja, tiene su borrador.
+- **Cambiar de `require_complete_order` a `allow_partial` no libera los pendientes `per_delivery`
+  que ya esperaban**: siguen esperando hasta que su pedido se sirve entero o se piden a mano
+  (`…/draft`, que ya no lo impide). Los albaranes nuevos sí se facturan en cuanto llegan.
+- **Diferencias con Trench:** Trench también la comprueba al emitir; Go no, porque un borrador de
+  albarán sólo nace cuando la política lo deja (y unir la vuelve a mirar). Trench tiene una fila por
+  albarán y pedido; Go, una por albarán.
+- **Pruebas:** `TestBilling_PartialBillingPolicy` (en memoria y en SQLite: por defecto, empresa,
+  último albarán, evento de servido, el cliente gana en los dos sentidos, 422, 403, 400, salto con
+  motivo en la auditoría, unir un pedido reabierto, cierre mensual); de punta a punta, en
+  `contexts/orders` y en `TestOrdersInvoicing` (docs/PEDIDOS.md).
+
 ## Pendiente
 
 - Todo el cálculo de impuestos que falta, por país y por sector: punto 6 de

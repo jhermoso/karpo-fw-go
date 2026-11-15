@@ -339,6 +339,11 @@ func Migrations() sqlrepo.MigrationSet {
 		{Version: 37, Name: "internal organization profile: approval actions", Up: sqlrepo.RenderDDLAll(
 			`CREATE TABLE ` + TableInternalOrganizationApprovalActions + ` (internal_organization_id {uuid} NOT NULL, action {str:120} NOT NULL,
 	PRIMARY KEY (internal_organization_id, action), FOREIGN KEY (internal_organization_id) REFERENCES parties (id))`)},
+		// La política de facturación parcial de la empresa (D-153): allow_partial o
+		// require_complete_order; nulo, sin ajuste (allow_partial, salvo que el cliente diga otra
+		// cosa en las condiciones de Orders).
+		{Version: 38, Name: "internal organization profile: partial billing policy", Up: sqlrepo.RenderDDLAll(
+			`ALTER TABLE ` + TableInternalOrganizationProfiles + ` {add:partial_billing_policy} {str:30}{addEnd}`)},
 	}}
 }
 

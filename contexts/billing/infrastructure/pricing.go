@@ -79,7 +79,7 @@ func (o OrdersTerms) Terms(ctx context.Context, company domain.OrganizationID, c
 		return domain.Terms{}, err
 	}
 	out := domain.Terms{PriceList: t.PriceList, Discount: vocab.DecimalFromInt(0), Rounding: domain.LineRounding(t.LineRounding),
-		PriceDecimals: t.PriceDecimals}
+		PriceDecimals: t.PriceDecimals, PartialBilling: domain.PartialBillingPolicy(t.PartialBillingPolicy)}
 	if t.Discount != "" {
 		if out.Discount, err = vocab.ParseDecimal(t.Discount); err != nil {
 			return domain.Terms{}, fmt.Errorf("billing: invalid terms from Orders: %+v", t)

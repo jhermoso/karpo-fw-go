@@ -1174,6 +1174,20 @@ Karpo C#. Migración 36.
 - Los demás contextos lo leen con `contracts.CompanyProfiles.Settings` (`ServiceFulfilmentMode`);
   el anfitrión se lo lleva a Orders con `ordinfra.ServiceFulfilmentSettings`.
 
+### La política de facturación parcial (D-153)
+
+En el mismo perfil y el mismo `PUT`, con los mismos permisos, ámbito y auditoría. Migración 38.
+
+| Columna | JSON | Valores | Nulo (lo de siempre) | 422 |
+|---|---|---|---|---|
+| `partial_billing_policy` `{str:30}` | `partialBillingPolicy` | `allow_partial`: cada albarán se factura aunque su pedido tenga algo pendiente de servir; `require_complete_order`: los albaranes de un pedido esperan a que se sirva entero | sin ajuste: el del cliente, o `allow_partial` | `Company.InvalidPartialBillingPolicy` |
+
+- Es el `Billing.PartialBillingPolicy` de Trench (`AllowPartial` y `RequireCompleteOrder`). La del
+  cliente, en las condiciones de Orders (`ord_terms.partial_billing_policy`), le gana (D-144).
+- Los demás contextos la leen con `contracts.CompanyProfiles.Settings` (`PartialBillingPolicy`); el
+  anfitrión se la lleva a Facturación con `host.BillingSettings` (docs/FACTURACION.md, «Facturar
+  parte de un pedido»).
+
 ### El patrón de cada tipo de código (D-129, D-144)
 
 - **Tabla hija** `internal_organization_code_pattern`: `internal_organization_id` (clave ajena a

@@ -403,6 +403,7 @@ func (o *Order) Deliver(picks []Pick) ([]DeliveryLine, error) {
 	o.s.Lines = lines
 	if !slices.ContainsFunc(lines, func(l Line) bool { return l.Pending().IsPositive() }) {
 		o.s.Status = Delivered
+		o.servingCompleted()
 	}
 	return out, nil
 }
@@ -437,7 +438,7 @@ func (o *Order) Cancel(reason string) error {
 }
 
 // Close termina un pedido entregado en parte: lo pendiente no se servirá y lo que retiene se
-// libera.
+// libera. Ya no queda nada pendiente de servir: el pedido queda servido (D-153).
 func (o *Order) Close(reason string) error {
 	if err := o.mustBe(Confirmed, "orders.not_confirmed", "only a confirmed order is closed"); err != nil {
 		return err
@@ -445,7 +446,33 @@ func (o *Order) Close(reason string) error {
 	if !slices.ContainsFunc(o.s.Lines, func(l Line) bool { return l.Delivered.IsPositive() }) {
 		return fw.Violation("orders.nothing_delivered", "nothing was delivered: cancel it instead")
 	}
-	return o.end(Closed, reason)
+	if err := o.end(Closed, reason); err != nil {
+		return err
+	}
+	o.servingCompleted()
+	return nil
+}
+
+// ServedEntirely dice si al pedido no le queda nada pendiente de servir: entregado entero, o
+// cerrado con lo pendiente que ya no se servirá (D-153).
+func (o *Order) ServedEntirely() bool { return o.s.Status == Delivered || o.s.Status == Closed }
+
+// servingCompleted lanza SalesOrderServingCompleted: el pedido pasa a no tener nada pendiente de
+// servir (D-153).
+func (o *Order) servingCompleted() {
+	o.Raise(SalesOrderServingCompleted{EventMeta: o.NewEventMeta(), Company: o.s.Company.String(), Customer: o.s.Customer.String(), Number: o.s.Number})
+}
+
+// ReopenServing lanza SalesOrderServingReopened si el pedido estaba servido entero (D-153). En el
+// dominio de Go aún no hay nada que reabra un pedido: no hay devoluciones de venta, las líneas no
+// cambian después de confirmar y entregado, cerrado y anulado son finales. Es el punto por el que
+// se reabrirá (la devolución de venta, cuando llegue, lo llamará después de devolver a pendiente lo
+// que vuelve); hoy sólo lo usan las pruebas.
+func (o *Order) ReopenServing() {
+	if !o.ServedEntirely() {
+		return
+	}
+	o.Raise(SalesOrderServingReopened{EventMeta: o.NewEventMeta(), Company: o.s.Company.String(), Customer: o.s.Customer.String(), Number: o.s.Number})
 }
 
 // AuditSnapshot implementa traits.Snapshotter.
@@ -534,7 +561,8 @@ func (d *Delivery) MarkInvoiced(invoice, number string) {
 
 // IssueDelivery emite el albarán de lo que un pedido acaba de entregar. No cambia nunca. El evento
 // lleva la periodicidad de facturación del cliente (D-146), para que Billing sepa si prepara su
-// borrador o lo deja pendiente del cierre del periodo.
+// borrador o lo deja pendiente del cierre del periodo, y si el pedido queda servido entero con
+// él (OrderComplete, D-153).
 func IssueDelivery(id DeliveryID, o *Order, number string, date vocab.Date, lines []DeliveryLine, billing BillingPeriodicity) (*Delivery, error) {
 	os := o.State()
 	d, err := ReconstituteDelivery(id, DeliveryState{Company: os.Company, Customer: os.Customer, Order: o.ID(), OrderNumber: os.Number, Number: number,
@@ -545,7 +573,7 @@ func IssueDelivery(id DeliveryID, o *Order, number string, date vocab.Date, line
 	if billing == "" {
 		billing = PerDelivery
 	}
-	d.Raise(DeliveryIssued{EventMeta: d.NewEventMeta(), Snapshot: d.s, BillingPeriodicity: billing})
+	d.Raise(DeliveryIssued{EventMeta: d.NewEventMeta(), Snapshot: d.s, BillingPeriodicity: billing, OrderComplete: o.ServedEntirely()})
 	return d, nil
 }
 
@@ -602,8 +630,18 @@ type TermsState struct {
 	// 6 decimales en el precio. Vacío y nil, los de la empresa.
 	LineRounding  string
 	PriceDecimals *int
-	Audit         traits.AuditStamp
+	// PartialBillingPolicy es la política de facturación parcial del cliente, que gana a la de la
+	// empresa (D-153, cascada de D-144): allow_partial o require_complete_order; vacía, la de la
+	// empresa.
+	PartialBillingPolicy string
+	Audit                traits.AuditStamp
 }
+
+// Políticas de facturación parcial de un pedido (D-153), las de la empresa en Parties.
+const (
+	PartialBillingAllowPartial         = "allow_partial"
+	PartialBillingRequireCompleteOrder = "require_complete_order"
+)
 
 // Redondeos de la línea que puede pedir un cliente (los de la empresa, D-144).
 const (
@@ -653,6 +691,8 @@ func ReconstituteTerms(id TermsID, s TermsState) (*Terms, error) {
 	v.Require(s.BillingPeriodicity == PerDelivery || s.BillingPeriodicity == Monthly, "billingPeriodicity", "enum", "per_delivery or monthly")
 	v.Require(s.LineRounding == "" || s.LineRounding == RoundOnce || s.LineRounding == RoundGrossThenDiscount, "lineRounding", "enum",
 		"once or gross_then_discount")
+	v.Require(s.PartialBillingPolicy == "" || s.PartialBillingPolicy == PartialBillingAllowPartial || s.PartialBillingPolicy == PartialBillingRequireCompleteOrder,
+		"partialBillingPolicy", "enum", "allow_partial or require_complete_order")
 	if s.PriceDecimals != nil {
 		n := *s.PriceDecimals // una copia: el agregado no comparte memoria con quien lo llama
 		s.PriceDecimals = &n
@@ -833,6 +873,9 @@ func (t *Terms) AuditSnapshot() map[string]any {
 	if t.s.PriceDecimals != nil {
 		s["priceDecimals"] = *t.s.PriceDecimals
 	}
+	if t.s.PartialBillingPolicy != "" {
+		s["partialBillingPolicy"] = t.s.PartialBillingPolicy
+	}
 	return s
 }
 
@@ -917,6 +960,24 @@ type (
 		fw.EventMeta
 		Snapshot           DeliveryState      `json:"snapshot"`
 		BillingPeriodicity BillingPeriodicity `json:"billingPeriodicity"`
+		// OrderComplete dice si al pedido no le queda nada pendiente de servir tras el albarán (D-153).
+		OrderComplete bool `json:"orderComplete"`
+	}
+	// SalesOrderServingCompleted se lanza cuando a un pedido deja de quedarle nada pendiente de
+	// servir: por su último albarán o al cerrarlo con lo pendiente (D-153).
+	SalesOrderServingCompleted struct {
+		fw.EventMeta
+		Company  string `json:"company"`
+		Customer string `json:"customer"`
+		Number   string `json:"number"`
+	}
+	// SalesOrderServingReopened se lanza cuando un pedido servido entero vuelve a tener algo
+	// pendiente de servir (D-153).
+	SalesOrderServingReopened struct {
+		fw.EventMeta
+		Company  string `json:"company"`
+		Customer string `json:"customer"`
+		Number   string `json:"number"`
 	}
 )
 
@@ -925,6 +986,12 @@ func (OrderConfirmed) EventType() string { return "orders.order_confirmed" }
 func (StockRequested) EventType() string { return "orders.stock_requested" }
 func (OrderClosed) EventType() string    { return "orders.order_closed" }
 func (DeliveryIssued) EventType() string { return "orders.delivery_issued" }
+func (SalesOrderServingCompleted) EventType() string {
+	return "orders.sales_order_serving_completed"
+}
+func (SalesOrderServingReopened) EventType() string {
+	return "orders.sales_order_serving_reopened"
+}
 
 // Identidades nuevas e interpretación.
 func NewOrderID() OrderID       { return OrderID{fw.NewUUID()} }

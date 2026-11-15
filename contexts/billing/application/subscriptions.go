@@ -26,6 +26,7 @@ const Monthly = "monthly"
 // DeliveryIssued es la copia en Billing de orders.delivery-issued.v1 (sólo los campos que necesita).
 type DeliveryIssued struct {
 	DeliveryID  string `json:"deliveryId"`
+	OrderID     string `json:"orderId"`
 	OrderNumber string `json:"orderNumber"`
 	Company     string `json:"company"`
 	Customer    string `json:"customer"`
@@ -33,7 +34,9 @@ type DeliveryIssued struct {
 	Date        string `json:"date"`
 	// BillingPeriodicity es per_delivery (o vacía, en los albaranes de antes de D-146) o monthly.
 	BillingPeriodicity string `json:"billingPeriodicity"`
-	Lines              []struct {
+	// OrderComplete dice si al pedido no le queda nada pendiente de servir tras el albarán (D-153).
+	OrderComplete bool `json:"orderComplete"`
+	Lines         []struct {
 		SKU         string `json:"sku"`
 		Description string `json:"description"`
 		TaxCode     string `json:"taxCode"`
@@ -138,9 +141,12 @@ func deliveryLine(quantity, unitPrice, discount, netPrice string) (domain.LineIn
 // código de impuesto, con la fecha de entrega como fecha de la operación; una
 // persona lo revisa y lo emite en una serie. Un borrador por albarán: los mensajes entregados otra
 // vez no hacen daño. El albarán de un cliente con facturación mensual no tiene borrador: queda
-// pendiente hasta el cierre del periodo (ClosePeriod, D-146).
+// pendiente hasta el cierre del periodo (ClosePeriod, D-146). Con require_complete_order, el
+// albarán de un pedido que aún tiene algo pendiente de servir tampoco tiene borrador: queda
+// pendiente hasta que el pedido se sirve entero (D-153).
 func Subscribe(c *messaging.Consumer, d Deps) {
 	s := newService(d)
+	subscribeServing(c, s)
 	messaging.Handle(c, func(ctx context.Context, e DeliveryIssued, _ app.Envelope) error {
 		seller, err1 := fw.ParseUUID(e.Company)
 		customer, err2 := fw.ParseUUID(e.Customer)
@@ -159,6 +165,18 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 			lines = append(lines, line)
 		}
 		sid := domain.OrganizationID{UUID: seller}
+		// El pedido del albarán y si queda servido entero (D-153); si queda, los albaranes que
+		// esperaban por él dejan de esperar.
+		if order, err := fw.ParseUUID(e.OrderID); err == nil && !order.IsZero() {
+			if err := s.recordSourceOrder(ctx, delivery, sid, order, e.OrderComplete); err != nil {
+				return err
+			}
+			if e.OrderComplete {
+				if err := s.servingChanged(ctx, sid, order, true); err != nil {
+					return err
+				}
+			}
+		}
 		done, err := s.Invoices.Exists(ctx, spec.And(domain.InvFieldSeller.Eq(sid), domain.FromSource(DeliverySource, e.DeliveryID)))
 		if err != nil || done {
 			return err
@@ -167,7 +185,15 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 		if err != nil {
 			return err
 		}
+		periodicity := domain.PeriodicityPerDelivery
 		if e.BillingPeriodicity == Monthly {
+			periodicity = domain.PeriodicityMonthly
+		}
+		billable, err := s.billable(ctx, sid, domain.PartyID{UUID: customer}, []string{e.DeliveryID})
+		if err != nil {
+			return err
+		}
+		if periodicity == domain.PeriodicityMonthly || !billable {
 			id := domain.PendingDeliveryID{UUID: delivery}
 			if _, err := s.Pending.Get(ctx, id); !errors.Is(err, fw.ErrNotFound) {
 				return err // ya pendiente (nil) o un error
@@ -181,7 +207,7 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 				return err
 			}
 			p, err := domain.ReconstitutePendingDelivery(id, domain.PendingDeliveryState{Seller: sid, Customer: domain.PartyID{UUID: customer},
-				Number: e.Number, OrderNumber: e.OrderNumber, Date: date, Lines: lines})
+				Number: e.Number, OrderNumber: e.OrderNumber, Date: date, Lines: lines, Periodicity: periodicity})
 			if err != nil {
 				return err
 			}

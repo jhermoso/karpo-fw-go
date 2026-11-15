@@ -63,6 +63,9 @@ type Terms struct {
 	// empresa (la cascada cliente > empresa de D-144, D-150); vacío y nil, el de la empresa.
 	Rounding      LineRounding
 	PriceDecimals *int
+	// PartialBilling es la política de facturación parcial del cliente; vacía, la de la empresa
+	// (D-153).
+	PartialBilling PartialBillingPolicy
 }
 
 // Over es el cálculo de las facturas del cliente: el de la empresa con lo que el cliente cambia.

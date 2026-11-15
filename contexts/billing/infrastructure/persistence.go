@@ -162,6 +162,43 @@ var pendingDiscountDDL = []string{
 	`ALTER TABLE bil_pending_delivery_lines {add:discount} {dec:7,4}{addEnd}`,
 }
 
+// partialBillingDDL guarda lo que necesita la política de facturación parcial (D-153): la
+// periodicidad de cada albarán pendiente (los que ya hay son de clientes mensuales; los de un
+// cliente por albarán sólo esperan aquí a que su pedido se sirva entero) y el pedido de cada
+// albarán con si ya está servido entero (el invoicing_source_order de Trench; sin clave ajena: el
+// pedido es de Orders).
+var partialBillingDDL = []string{
+	`ALTER TABLE bil_pending_deliveries {add:billing_periodicity} {str:20}{addEnd}`,
+	`UPDATE bil_pending_deliveries SET billing_periodicity = 'monthly'`,
+	`CREATE TABLE bil_source_orders (id {uuid} NOT NULL PRIMARY KEY, version {bigint} NOT NULL, seller {uuid} NOT NULL, order_id {uuid} NOT NULL,
+	order_complete {bool} NOT NULL)`,
+	`CREATE INDEX ix_bil_source_orders_order ON bil_source_orders (order_id)`,
+}
+
+// SourceOrderMapping mapea SourceOrder a bil_source_orders.
+func SourceOrderMapping() sqlrepo.Mapping[domain.SourceOrderID, *domain.SourceOrder] {
+	return sqlrepo.Mapping[domain.SourceOrderID, *domain.SourceOrder]{
+		Table:   "bil_source_orders",
+		Columns: []string{"seller", "order_id", "order_complete"},
+		Dehydrate: func(o *domain.SourceOrder) (sqlrepo.Values, error) {
+			s := o.State()
+			return sqlrepo.Values{"seller": s.Seller, "order_id": s.Order, "order_complete": s.Complete}, nil
+		},
+		Hydrate: func(r *sqlrepo.Row, _ sqlrepo.ChildRows) (*domain.SourceOrder, error) {
+			s := domain.SourceOrderState{Seller: domain.OrganizationID{UUID: r.UUID("seller")}, Order: r.UUID("order_id"), Complete: r.Bool("order_complete")}
+			if err := r.Err(); err != nil {
+				return nil, err
+			}
+			return domain.ReconstituteSourceOrder(domain.SourceOrderID{UUID: r.UUID("id")}, s)
+		},
+	}
+}
+
+// SourceOrderRepositoryFactory construye el repositorio del pedido de cada albarán.
+func SourceOrderRepositoryFactory(b hotswap.Backend) (domain.SourceOrderRepository, error) {
+	return repository(b, SourceOrderMapping())
+}
+
 // errSourceTaken es un conflicto: otra factura ya tiene ese documento (dos cierres a la vez).
 var errSourceTaken = fmt.Errorf("%w: billing: the document is already in another invoice", fw.ErrConflict)
 
@@ -205,6 +242,7 @@ func Migrations() sqlrepo.MigrationSet {
 		{Version: 11, Name: "delivery notes pending of the period close", Up: sqlrepo.RenderDDLAll(pendingDDL...)},
 		{Version: 12, Name: "product and price source of an invoice line", Up: sqlrepo.RenderDDLAll(productDDL...)},
 		{Version: 13, Name: "discount of a pending delivery line", Up: sqlrepo.RenderDDLAll(pendingDiscountDDL...)},
+		{Version: 14, Name: "partial billing policy: periodicity of a pending delivery and order of each delivery", Up: sqlrepo.RenderDDLAll(partialBillingDDL...)},
 	}}
 }
 
@@ -214,7 +252,7 @@ func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 }
 
 // Tables lista las tablas del contexto, las hijas primero (orden de borrado).
-var Tables = []string{"bil_pending_delivery_lines", "bil_pending_deliveries", "bil_invoice_sources", "bil_invoice_taxes", "bil_invoice_lines", "bil_invoices",
+var Tables = []string{"bil_source_orders", "bil_pending_delivery_lines", "bil_pending_deliveries", "bil_invoice_sources", "bil_invoice_taxes", "bil_invoice_lines", "bil_invoices",
 	"bil_series", TableOutbox, TableIntegrationOutbox, TableAuditLog, TableInbox}
 
 // DropAll borra las tablas del contexto y su historial de migraciones (sólo para pruebas).
@@ -420,15 +458,16 @@ func InvoiceMapping() sqlrepo.Mapping[domain.InvoiceID, *domain.Invoice] {
 func PendingDeliveryMapping() sqlrepo.Mapping[domain.PendingDeliveryID, *domain.PendingDelivery] {
 	return sqlrepo.Mapping[domain.PendingDeliveryID, *domain.PendingDelivery]{
 		Table:   "bil_pending_deliveries",
-		Columns: sqlrepo.WithAuditColumns("seller", "customer", "delivery_number", "order_number", "delivery_date"),
+		Columns: sqlrepo.WithAuditColumns("seller", "customer", "delivery_number", "order_number", "delivery_date", "billing_periodicity"),
 		Dehydrate: func(p *domain.PendingDelivery) (sqlrepo.Values, error) {
 			s := p.State()
 			return sqlrepo.AuditStampValues(sqlrepo.Values{"seller": s.Seller, "customer": s.Customer, "delivery_number": s.Number,
-				"order_number": opt(s.OrderNumber), "delivery_date": s.Date}, p.AuditStamp()), nil
+				"order_number": opt(s.OrderNumber), "delivery_date": s.Date, "billing_periodicity": s.Periodicity}, p.AuditStamp()), nil
 		},
 		Hydrate: func(r *sqlrepo.Row, children sqlrepo.ChildRows) (*domain.PendingDelivery, error) {
 			s := domain.PendingDeliveryState{Seller: domain.OrganizationID{UUID: r.UUID("seller")}, Customer: domain.PartyID{UUID: r.UUID("customer")},
-				Number: r.String("delivery_number"), OrderNumber: r.String("order_number"), Date: r.Date("delivery_date"), Audit: r.AuditStamp()}
+				Number: r.String("delivery_number"), OrderNumber: r.String("order_number"), Date: r.Date("delivery_date"),
+				Periodicity: r.String("billing_periodicity"), Audit: r.AuditStamp()}
 			rows := slices.Clone(children.Of("lines"))
 			slices.SortFunc(rows, func(a, b *sqlrepo.Row) int { return int(a.Int64("line_no") - b.Int64("line_no")) })
 			for _, c := range rows {

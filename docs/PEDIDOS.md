@@ -451,8 +451,38 @@ Unas 665 líneas útiles: una cabecera con siete rutas. La única operación con
 - Va en `QuoteDTO.kind` y se filtra en la búsqueda (`GET /api/orders/quotes?kind=proforma`).
 - La numeración no cambia: los dos tipos se numeran al enviarse, con la misma serie `PRE`.
 
+## Pedido servido entero y facturación parcial (D-153; añadido el 2026-11-15)
+
+- **La política del cliente** va en sus condiciones: `ord_terms.partial_billing_policy` `{str:30}`
+  (migración 13), `partialBillingPolicy` en `PUT /api/orders/terms` y en su respuesta:
+  `allow_partial` o `require_complete_order`; nula, la de la empresa (perfil de Parties,
+  docs/PARTIES.md); si tampoco, `allow_partial`. Gana el cliente (D-144). Otro valor, 400
+  (`partialBillingPolicy`, enum), como los demás campos de las condiciones. Facturación la lee con
+  `contracts.CustomerTerms` (`TermsRef.PartialBillingPolicy`). Orders no la aplica: la aplica
+  Facturación (docs/FACTURACION.md, «Facturar parte de un pedido»).
+- **El albarán dice si el pedido queda servido entero**: `orders.delivery-issued.v1` lleva
+  `orderComplete` (true si, tras él, al pedido no le queda nada pendiente de servir). En Go un
+  albarán sirve un solo pedido, así que es un booleano y no una lista por pedido como en Trench.
+  Los eventos de antes no lo llevan (false).
+- **`orders.sales-order-serving-completed.v1`** (`orderId`, `company`, `customer`, `number`; el
+  `SalesOrderServingCompleted` de Trench) se publica cuando al pedido deja de quedarle nada
+  pendiente de servir: con su último albarán (estado `delivered`) o al **cerrarlo** con lo
+  pendiente (`closed`: lo pendiente ya no se servirá). Anular no lo publica: no se entregó nada.
+- **`orders.sales-order-serving-reopened.v1`** (los mismos campos; `SalesOrderServingReopened`)
+  existe en el contrato y en el dominio (`Order.ReopenServing`), pero **en Go aún no lo lanza
+  nada**: no hay devoluciones de venta, las líneas no cambian después de confirmar y `delivered`,
+  `closed` y `cancelled` son finales. Lo reabrirá la devolución de venta, cuando llegue, después
+  de devolver a pendiente lo que vuelve. Facturación ya lo consume.
+- No cambia D-152: el albarán sigue facturándose entero.
+- **Pruebas:** `TestOrder_ServingCompletedAndReopened` y `TestTerms_PartialBillingPolicy` (dominio);
+  de punta a punta, en memoria y en SQLite, el final del escenario de
+  `TestOrders_DeliveryNotesAreInvoiced_MemoryThenSQLite` (el albarán de 1 de 3 espera, el último
+  completa el pedido y los dos tienen borrador; otro pedido se completa al cerrarlo); en los
+  motores, el final de `TestOrdersInvoicing`.
+
 ## Pendiente
 
+- La devolución de venta, que reabrirá el pedido servido (`ReopenServing`, D-153).
 - Facturar desde el pedido las líneas de servicio en `direct_invoice` y, después, admitir
   `direct_invoice` en Parties y Products (D-155; ver «Servicios y proforma»).
 

@@ -18,6 +18,9 @@ type TermsRef struct {
 	// facturas del cliente cuando no es el de la empresa (D-150); vacío y nil, el de la empresa.
 	LineRounding  string `json:"lineRounding,omitempty"`
 	PriceDecimals *int   `json:"priceDecimals,omitempty"`
+	// PartialBillingPolicy (allow_partial o require_complete_order) es la política de facturación
+	// parcial del cliente, que gana a la de la empresa (D-153); vacía, la de la empresa.
+	PartialBillingPolicy string `json:"partialBillingPolicy,omitempty"`
 }
 
 // CustomerTerms dice las condiciones de venta de una empresa con un cliente; las de cero si no
@@ -99,21 +102,54 @@ type DeliveryLine struct {
 // BillingPeriodicity es la del cliente al emitirlo (D-146): per_delivery, Billing prepara su
 // borrador; monthly, lo deja pendiente hasta el cierre del periodo. Falta en los de antes.
 type DeliveryIssuedV1 struct {
-	DeliveryID         string         `json:"deliveryId"`
-	OrderID            string         `json:"orderId"`
-	OrderNumber        string         `json:"orderNumber"`
-	Company            string         `json:"company"`
-	Customer           string         `json:"customer"`
-	Warehouse          string         `json:"warehouse,omitempty"`
-	Number             string         `json:"number"`
-	Date               string         `json:"date"`
-	BillingPeriodicity string         `json:"billingPeriodicity,omitempty"`
-	Total              string         `json:"total"`
-	Lines              []DeliveryLine `json:"lines"`
+	DeliveryID         string `json:"deliveryId"`
+	OrderID            string `json:"orderId"`
+	OrderNumber        string `json:"orderNumber"`
+	Company            string `json:"company"`
+	Customer           string `json:"customer"`
+	Warehouse          string `json:"warehouse,omitempty"`
+	Number             string `json:"number"`
+	Date               string `json:"date"`
+	BillingPeriodicity string `json:"billingPeriodicity,omitempty"`
+	// OrderComplete dice si al pedido no le queda nada pendiente de servir tras este albarán
+	// (D-153). Falta (false) en los de antes.
+	OrderComplete bool           `json:"orderComplete"`
+	Total         string         `json:"total"`
+	Lines         []DeliveryLine `json:"lines"`
 }
 
 // IntegrationEventType implementa application.IntegrationEvent.
 func (DeliveryIssuedV1) IntegrationEventType() string { return "orders.delivery-issued.v1" }
+
+// SalesOrderServingCompletedV1 se publica cuando a un pedido deja de quedarle nada pendiente de
+// servir: con su último albarán o al cerrarlo con lo pendiente (D-153; SalesOrderServingCompleted
+// de Trench). Billing factura entonces los albaranes que esperaban el pedido completo.
+type SalesOrderServingCompletedV1 struct {
+	OrderID  string `json:"orderId"`
+	Company  string `json:"company"`
+	Customer string `json:"customer"`
+	Number   string `json:"number"`
+}
+
+// IntegrationEventType implementa application.IntegrationEvent.
+func (SalesOrderServingCompletedV1) IntegrationEventType() string {
+	return "orders.sales-order-serving-completed.v1"
+}
+
+// SalesOrderServingReopenedV1 se publica cuando un pedido servido entero vuelve a tener algo
+// pendiente de servir (D-153; SalesOrderServingReopened de Trench). En Go aún no lo lanza nada:
+// no hay devoluciones de venta ni cambios de línea después de confirmar (docs/PEDIDOS.md).
+type SalesOrderServingReopenedV1 struct {
+	OrderID  string `json:"orderId"`
+	Company  string `json:"company"`
+	Customer string `json:"customer"`
+	Number   string `json:"number"`
+}
+
+// IntegrationEventType implementa application.IntegrationEvent.
+func (SalesOrderServingReopenedV1) IntegrationEventType() string {
+	return "orders.sales-order-serving-reopened.v1"
+}
 
 // QuoteSentV1 se publica al enviar un presupuesto a un cliente, con su número. Date y ValidUntil
 // son días (YYYY-MM-DD); Total es antes de impuestos.

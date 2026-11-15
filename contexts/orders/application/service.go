@@ -313,7 +313,7 @@ func (p TermsPort) Terms(ctx context.Context, company, customer string) (contrac
 		return contracts.TermsRef{}, err
 	}
 	return contracts.TermsRef{PriceList: optID(st.PriceList.UUID), Discount: st.Discount.String(), LineRounding: st.LineRounding,
-		PriceDecimals: st.PriceDecimals}, nil
+		PriceDecimals: st.PriceDecimals, PartialBillingPolicy: st.PartialBillingPolicy}, nil
 }
 
 // Publications traduce los eventos de dominio al Published Language.
@@ -345,7 +345,7 @@ func Publications(r *messaging.Recorder) *messaging.Recorder {
 		d := e.Snapshot
 		out := contracts.DeliveryIssuedV1{DeliveryID: e.AggregateID, OrderID: d.Order.String(), OrderNumber: d.OrderNumber, Company: d.Company.String(),
 			Customer: d.Customer.String(), Warehouse: optID(d.Warehouse.UUID), Number: d.Number, Date: d.Date.String(),
-			BillingPeriodicity: string(e.BillingPeriodicity)}
+			BillingPeriodicity: string(e.BillingPeriodicity), OrderComplete: e.OrderComplete}
 		total := vocab.DecimalFromInt(0)
 		for _, l := range d.Lines {
 			total = total.Add(l.Amount)
@@ -355,6 +355,14 @@ func Publications(r *messaging.Recorder) *messaging.Recorder {
 		}
 		out.Total = money(total)
 		return []app.IntegrationEvent{out}, nil
+	})
+	messaging.On(r, func(_ context.Context, e domain.SalesOrderServingCompleted) ([]app.IntegrationEvent, error) {
+		return []app.IntegrationEvent{contracts.SalesOrderServingCompletedV1{OrderID: e.AggregateID, Company: e.Company, Customer: e.Customer,
+			Number: e.Number}}, nil
+	})
+	messaging.On(r, func(_ context.Context, e domain.SalesOrderServingReopened) ([]app.IntegrationEvent, error) {
+		return []app.IntegrationEvent{contracts.SalesOrderServingReopenedV1{OrderID: e.AggregateID, Company: e.Company, Customer: e.Customer,
+			Number: e.Number}}, nil
 	})
 	return r
 }
