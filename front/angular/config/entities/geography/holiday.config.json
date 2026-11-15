@@ -1,0 +1,132 @@
+{
+    "id": "holiday",
+    "name": "Festivo",
+    "namePlural": "Festivos",
+    "description": "Calendario de festivos de Karpo Go: un día en un lugar (país, región, provincia, municipio), que vale para todo lo que contiene",
+    "icon": "calendar",
+    "color": "#c0392b",
+    "apiEndpoint": "/holidays",
+    "editable": true,
+    "editType": "direct",
+    "primaryKey": "id",
+    "displayField": "name",
+    "dataSource": {
+        "type": "single",
+        "paginationStrategy": "server",
+        "serverFiltering": {
+            "enabled": true,
+            "fieldMapping": {},
+            "clientOnlyFields": []
+        }
+    },
+
+    "form": {
+        "modalSize": "md",
+        "createTitle": "Nuevo festivo",
+        "editTitle": "Editar festivo",
+        "saveButtonText": "Guardar",
+        "cancelButtonText": "Cancelar",
+        "sections": [
+            {
+                "id": "main",
+                "title": "Festivo",
+                "icon": "calendar",
+                "collapsible": false,
+                "columns": 2,
+                "fields": [
+                    { "field": "name", "label": "Nombre", "type": "text", "required": true, "maxLength": 120, "width": 12 },
+                    { "field": "date", "label": "Día", "type": "date", "required": true, "width": 6, "hint": "No cambia después del alta: para otro día, se quita y se declara de nuevo." },
+                    { "field": "boundary", "label": "Lugar", "type": "text", "required": true, "width": 6, "hint": "Identidad de la delimitación (país, región, provincia o municipio); no cambia después del alta." }
+                ]
+            }
+        ]
+    },
+
+    "grid": {
+        "columns": [
+            { "field": "date", "header": "Día", "type": "date", "width": 130, "sortable": true },
+            { "field": "name", "header": "Nombre", "type": "text", "width": 260, "sortable": true, "filterable": true },
+            { "field": "boundaryName", "header": "Lugar", "type": "text", "width": 200 }
+        ],
+        "defaultSort": { "field": "date", "direction": "asc" },
+        "pageSize": 25,
+        "pageSizeOptions": [10, 25, 50, 100],
+        "selectable": true,
+        "selectionMode": "multiple",
+        "rowActions": [
+            { "action": "view", "label": "Ver detalle", "icon": "view", "color": "primary" },
+            { "action": "edit", "label": "Editar", "icon": "edit", "color": "warning" },
+            {
+                "action": "delete",
+                "label": "Quitar",
+                "icon": "delete",
+                "color": "danger",
+                "confirm": true,
+                "confirmMessage": "¿Quitar este festivo del calendario? Se borra."
+            }
+        ]
+    },
+
+    "filters": [
+        {
+            "field": "_search",
+            "serverField": "search",
+            "label": "Buscar",
+            "type": "text",
+            "placeholder": "Nombre…",
+            "icon": "search",
+            "width": 3,
+            "searchFields": ["name"]
+        },
+        {
+            "field": "year",
+            "serverField": "year",
+            "label": "Año",
+            "type": "number",
+            "width": 2
+        },
+        {
+            "field": "boundary",
+            "serverField": "boundary",
+            "label": "Lugar",
+            "type": "text",
+            "placeholder": "Identidad de la delimitación",
+            "width": 3
+        }
+    ],
+
+    "detail": {
+        "showHistory": false,
+        "showRelations": false,
+        "showTags": false,
+        "sections": [
+            {
+                "id": "main",
+                "title": "Festivo",
+                "icon": "calendar",
+                "collapsible": true,
+                "collapsed": false,
+                "columns": 2,
+                "fields": [
+                    { "field": "name", "label": "Nombre", "type": "text", "required": true, "editable": true, "maxLength": 120 },
+                    { "field": "date", "label": "Día", "type": "date", "editable": false },
+                    { "field": "boundaryName", "label": "Lugar", "type": "text", "editable": false },
+                    { "field": "boundary", "label": "Identidad del lugar", "type": "text", "editable": false }
+                ]
+            }
+        ]
+    },
+
+    "availableViews": ["grid", "detail"],
+    "defaultView": "grid",
+
+    "searchable": true,
+    "searchFields": ["name"],
+
+    "metadata": {
+        "version": "1.0.0",
+        "author": "Karpo Go",
+        "lastModified": "2026-11-15",
+        "tags": ["geography", "holidays", "karpo-go"]
+    }
+}

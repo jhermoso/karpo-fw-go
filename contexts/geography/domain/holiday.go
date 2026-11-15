@@ -65,8 +65,24 @@ func (h *Holiday) AuditSnapshot() map[string]any {
 	return map[string]any{"boundary": h.s.Boundary.String(), "date": h.s.Date.String(), "name": h.s.Name}
 }
 
+// Rename cambia el nombre del festivo (recortado, de 1 a 120 caracteres). El lugar y el día no
+// cambian: un festivo en otro sitio u otro día es otro festivo.
+func (h *Holiday) Rename(name string) error {
+	name = strings.Join(strings.Fields(name), " ")
+	if name == "" || utf8.RuneCountInString(name) > 120 {
+		var v fw.Validation
+		v.Add("name", "length", "a name of 1 to 120 characters")
+		return v.Err()
+	}
+	h.s.Name = name
+	return nil
+}
+
 // Campos de los festivos.
 var (
+	HolidayFieldName = spec.Text("name", func(h *Holiday) string { return h.s.Name })
+	// HolidayFieldIDOrder ordena por la identidad: deshace los empates de una lista paginada.
+	HolidayFieldIDOrder  = spec.Ordered("id", func(h *Holiday) string { return h.ID().String() })
 	HolidayFieldBoundary = spec.Comparable("boundary", func(h *Holiday) BoundaryID { return h.s.Boundary })
 	HolidayFieldDate     = spec.OrderedBy("holiday_date", func(h *Holiday) vocab.Date { return h.s.Date }, vocab.CompareDates)
 )

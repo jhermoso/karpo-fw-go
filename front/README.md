@@ -13,6 +13,8 @@ lenguaje de Theros).
 | Activos | registro de inmovilizado: rejilla, alta, detalle, cambio y baja (por el cambio) | `angular/config/entities/assets/asset.config.json` | `/api/v1/assets` (docs/ACTIVOS.md, «El contrato de mantenimiento») |
 | Envíos | transportistas: rejilla, alta, detalle, cambio e historial de bloqueos | `angular/config/entities/shipments/carrier.config.json` | `/api/v1/carriers` (docs/ENVIOS.md, «El contrato de mantenimiento») |
 | Compras | proveedores (perfil de compra): rejilla, alta, detalle, cambio e historial de bloqueos | `angular/config/entities/purchases/supplier.config.json` | `/api/v1/suppliers` (docs/COMPRAS.md, «El contrato de mantenimiento») |
+| Geografía | países: rejilla y detalle, sólo lectura (llegan con las migraciones) | `angular/config/entities/geography/country.config.json` | `/api/v1/countries` (docs/GEOGRAFIA.md, «El contrato de mantenimiento») |
+| Geografía | calendario de festivos: rejilla, alta, detalle, cambio del nombre y baja (borra) | `angular/config/entities/geography/holiday.config.json` | `/api/v1/holidays` (docs/GEOGRAFIA.md, «El contrato de mantenimiento») |
 
 ## Cómo se ve
 

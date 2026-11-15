@@ -1,0 +1,116 @@
+{
+    "id": "country",
+    "name": "País",
+    "namePlural": "Países",
+    "description": "Países (ISO 3166) de Karpo Go: datos de referencia que llegan con las migraciones; sólo se consultan",
+    "icon": "globe",
+    "color": "#2980b9",
+    "apiEndpoint": "/countries",
+    "editable": false,
+    "editType": "direct",
+    "primaryKey": "id",
+    "displayField": "name",
+    "dataSource": {
+        "type": "single",
+        "paginationStrategy": "server",
+        "serverFiltering": {
+            "enabled": true,
+            "fieldMapping": {},
+            "clientOnlyFields": []
+        }
+    },
+
+    "grid": {
+        "columns": [
+            { "field": "alpha2", "header": "ISO", "type": "text", "width": 80, "sortable": true },
+            { "field": "alpha3", "header": "ISO-3", "type": "text", "width": 90, "sortable": true },
+            { "field": "name", "header": "Nombre", "type": "text", "width": 260, "sortable": true, "filterable": true },
+            { "field": "callingCode", "header": "Prefijo", "type": "text", "width": 100, "emptyValue": "-" },
+            {
+                "field": "eu",
+                "header": "UE",
+                "type": "badge",
+                "width": 90,
+                "badgeMap": {
+                    "true": { "label": "Sí", "color": "blue" },
+                    "false": { "label": "No", "color": "gray" }
+                }
+            },
+            {
+                "field": "eurozone",
+                "header": "Euro",
+                "type": "badge",
+                "width": 90,
+                "badgeMap": {
+                    "true": { "label": "Sí", "color": "blue" },
+                    "false": { "label": "No", "color": "gray" }
+                }
+            }
+        ],
+        "defaultSort": { "field": "alpha2", "direction": "asc" },
+        "pageSize": 25,
+        "pageSizeOptions": [10, 25, 50, 100],
+        "selectable": false,
+        "selectionMode": "single",
+        "rowActions": [
+            { "action": "view", "label": "Ver detalle", "icon": "view", "color": "primary" }
+        ]
+    },
+
+    "filters": [
+        {
+            "field": "_search",
+            "serverField": "search",
+            "label": "Buscar",
+            "type": "text",
+            "placeholder": "Nombre o código ISO…",
+            "icon": "search",
+            "width": 3,
+            "searchFields": ["name", "alpha2", "alpha3"]
+        }
+    ],
+
+    "detail": {
+        "showHistory": false,
+        "showRelations": false,
+        "showTags": false,
+        "sections": [
+            {
+                "id": "main",
+                "title": "País",
+                "icon": "globe",
+                "collapsible": true,
+                "collapsed": false,
+                "columns": 2,
+                "fields": [
+                    { "field": "name", "label": "Nombre", "type": "text", "editable": false },
+                    { "field": "alpha2", "label": "ISO alfa-2", "type": "text", "editable": false },
+                    { "field": "alpha3", "label": "ISO alfa-3", "type": "text", "editable": false },
+                    { "field": "numeric", "label": "ISO numérico", "type": "number", "editable": false },
+                    { "field": "callingCode", "label": "Prefijo telefónico", "type": "text", "editable": false },
+                    { "field": "defaultLocale", "label": "Idioma por omisión", "type": "text", "editable": false },
+                    { "field": "eu", "label": "Unión Europea", "type": "checkbox", "editable": false },
+                    { "field": "eea", "label": "Espacio Económico Europeo", "type": "checkbox", "editable": false },
+                    { "field": "eurozone", "label": "Zona euro", "type": "checkbox", "editable": false },
+                    { "field": "sepa", "label": "SEPA", "type": "checkbox", "editable": false },
+                    { "field": "ibanLength", "label": "Longitud del IBAN", "type": "number", "editable": false },
+                    { "field": "postalCodePattern", "label": "Formato del código postal", "type": "text", "editable": false },
+                    { "field": "postalCodeRequired", "label": "Código postal obligatorio", "type": "checkbox", "editable": false }
+                ]
+            }
+        ]
+    },
+
+    "availableViews": ["grid", "detail"],
+    "defaultView": "grid",
+
+    "searchable": true,
+    "searchFields": ["name", "alpha2", "alpha3"],
+
+    "metadata": {
+        "version": "1.0.0",
+        "author": "Karpo Go",
+        "lastModified": "2026-11-15",
+        "tags": ["geography", "karpo-go"]
+    }
+}
