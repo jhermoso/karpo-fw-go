@@ -2,7 +2,6 @@ package integration
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -155,9 +154,13 @@ func TestOrdersInvoicing(t *testing.T) {
 				t.Fatalf("draft from the delivery note: %+v", drafts.Items)
 			}
 			iid, _ := bdomain.ParseInvoiceID(drafts.Items[0].ID)
-			if _, err := bm.Service.Discard.Handle(actx, bapp.DiscardInvoice{ID: iid}); !errors.Is(err, fw.ErrRuleViolation) {
-				t.Fatalf("discard a sourced draft: %v", err)
-			}
+			// Descartado, el albarán vuelve a pendiente (D-154, migración 15 de Billing) y se prepara otra vez.
+			_, err = bm.Service.Discard.Handle(actx, bapp.DiscardInvoice{ID: iid})
+			must(err)
+			pid, _ := bdomain.ParsePendingDeliveryID(note.ID)
+			redrafted, err := bm.Service.DraftPendingDelivery.Handle(actx, bapp.DraftPendingDelivery{ID: pid})
+			must(err)
+			iid, _ = bdomain.ParseInvoiceID(redrafted.ID)
 			inv, err := bm.Service.Issue.Handle(actx, bapp.IssueInvoice{ID: iid, Series: series.ID, Date: vocab.MustDate(2026, 10, 6)})
 			must(err)
 			deliver()

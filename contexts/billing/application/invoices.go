@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/billing/contracts"
@@ -459,15 +460,40 @@ func (s service) invoiceUseCases(svc *Service) {
 		return out, s.dispatchIssued(ctx, issued)
 	}, issueRetry[IssueInvoice, InvoiceDTO](), pipeline.Transactional[IssueInvoice, InvoiceDTO](s.UoW))
 
+	// Discard borra un borrador y, en la misma unidad de trabajo, devuelve sus albaranes a pendientes
+	// de facturar (D-154, como Trench). Un albarán facturado antes de que Facturación guardara su
+	// copia no se puede devolver: ese borrador se emite, como antes.
 	svc.Discard = guard(PermInvoiceUpdate, func(ctx context.Context, c DiscardInvoice) (struct{}, error) {
 		sc := scopeOf(ctx)
-		return struct{}{}, s.invoices.Delete(ctx, c.ID, func(_ context.Context, i *domain.Invoice) error {
+		var sources []domain.Source
+		err := s.invoices.Delete(ctx, c.ID, func(_ context.Context, i *domain.Invoice) error {
 			if err := sc.check(domain.InvoiceKind, i.ID(), i.State().Seller, true); err != nil {
 				return err
 			}
+			sources = i.State().Sources
 			return i.Discard()
 		})
-	})
+		if err != nil {
+			return struct{}{}, err
+		}
+		for _, src := range sources {
+			if src.Type != DeliverySource {
+				continue
+			}
+			id, err := domain.ParsePendingDeliveryID(src.ID)
+			if err == nil {
+				_, err = s.pending.Update(ctx, id, func(_ context.Context, p *domain.PendingDelivery) error { p.Release(); return nil })
+			}
+			if errors.Is(err, fw.ErrNotFound) {
+				return struct{}{}, fw.Violation("billing.sourced_draft", "the delivery note "+src.Ref+
+					" was drafted before its copy was kept: the draft is issued, not discarded")
+			}
+			if err != nil {
+				return struct{}{}, err
+			}
+		}
+		return struct{}{}, nil
+	}, retry[DiscardInvoice, struct{}](), pipeline.Transactional[DiscardInvoice, struct{}](s.UoW))
 
 	svc.GetInvoice = guard(PermInvoiceRead, func(ctx context.Context, q GetInvoice) (InvoiceDTO, error) {
 		i, err := s.Invoices.Get(ctx, q.ID)

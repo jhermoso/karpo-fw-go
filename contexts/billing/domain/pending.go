@@ -30,7 +30,10 @@ type PendingDeliveryState struct {
 	// antes de D-153), que espera al cierre del periodo, o PeriodicityPerDelivery, que sólo está
 	// aquí mientras espera a que su pedido quede servido entero (D-153).
 	Periodicity string
-	Audit       traits.AuditStamp
+	// Drafted dice que el albarán ya está en un borrador o una factura: la fila se queda como la
+	// copia del albarán en Facturación y vuelve a pendiente si ese borrador se descarta (D-154).
+	Drafted bool
+	Audit   traits.AuditStamp
 }
 
 // Periodicidades de facturación de un albarán pendiente (D-146, D-153).
@@ -84,9 +87,15 @@ func (p *PendingDelivery) State() PendingDeliveryState {
 	return s
 }
 
+// MarkDrafted lo da por facturado: está en un borrador.
+func (p *PendingDelivery) MarkDrafted() { p.s.Drafted = true }
+
+// Release lo devuelve a pendiente de facturar: su borrador se ha descartado (D-154).
+func (p *PendingDelivery) Release() { p.s.Drafted = false }
+
 // AuditSnapshot implementa traits.Snapshotter.
 func (p *PendingDelivery) AuditSnapshot() map[string]any {
-	return map[string]any{"number": p.s.Number, "date": p.s.Date.String(), "lines": len(p.s.Lines), "periodicity": p.s.Periodicity}
+	return map[string]any{"number": p.s.Number, "date": p.s.Date.String(), "lines": len(p.s.Lines), "periodicity": p.s.Periodicity, "drafted": p.s.Drafted}
 }
 
 // Campos del albarán pendiente.
@@ -96,6 +105,7 @@ var (
 	PdFieldDate     = spec.OrderedBy("delivery_date", func(p *PendingDelivery) vocab.Date { return p.s.Date }, vocab.CompareDates)
 	PdFieldNumber   = spec.Ordered("delivery_number", func(p *PendingDelivery) string { return p.s.Number })
 	PdFieldPeriod   = spec.Comparable("billing_periodicity", func(p *PendingDelivery) string { return p.s.Periodicity })
+	PdFieldDrafted  = spec.Comparable("drafted", func(p *PendingDelivery) bool { return p.s.Drafted })
 )
 
 // ParsePendingDeliveryID interpreta una identidad en texto.

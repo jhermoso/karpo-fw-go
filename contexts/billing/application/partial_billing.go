@@ -237,7 +237,7 @@ func (s service) servingChanged(ctx context.Context, seller domain.OrganizationI
 			return err
 		}
 		st := p.State()
-		if st.Periodicity != domain.PeriodicityPerDelivery {
+		if st.Periodicity != domain.PeriodicityPerDelivery || st.Drafted {
 			continue
 		}
 		ok, err := s.billable(ctx, st.Seller, st.Customer, []string{p.ID().String()})
@@ -254,10 +254,25 @@ func (s service) servingChanged(ctx context.Context, seller domain.OrganizationI
 	return nil
 }
 
-// draftPending prepara el borrador de un albarán pendiente y lo borra de los pendientes.
+// errAlreadyDrafted corta la marca de un albarán que otro ya ha facturado a la vez.
+var errAlreadyDrafted = errors.New("billing: the delivery note is already drafted")
+
+// draftPending prepara el borrador de un albarán pendiente y lo marca como facturado (D-154). Uno
+// que ya lo estaba no se prepara otra vez: devuelve nil.
 func (s service) draftPending(ctx context.Context, p *domain.PendingDelivery) (*domain.Invoice, error) {
 	st := p.State()
-	if err := s.pending.Delete(ctx, p.ID(), nil); err != nil {
+	if st.Drafted {
+		return nil, nil
+	}
+	if _, err := s.pending.Update(ctx, p.ID(), func(_ context.Context, p *domain.PendingDelivery) error {
+		if p.State().Drafted {
+			return errAlreadyDrafted
+		}
+		p.MarkDrafted()
+		return nil
+	}); errors.Is(err, errAlreadyDrafted) {
+		return nil, nil
+	} else if err != nil {
 		return nil, err
 	}
 	done, err := s.Invoices.Exists(ctx, domain.FromSource(DeliverySource, p.ID().String()))

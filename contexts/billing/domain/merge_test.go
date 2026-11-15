@@ -38,8 +38,8 @@ func TestInvoice_Merge(t *testing.T) {
 		st.Description != "Albaranes A-1, A-2, A-3" || !a.Net().Equal(dec("30")) {
 		t.Fatalf("merged: %+v", st)
 	}
-	if err := a.Discard(); !isViolation(err, "billing.sourced_draft") {
-		t.Fatalf("a merged draft is not discarded: %v", err)
+	if err := a.Discard(); err != nil { // sus albaranes vuelven a pendientes (D-154)
+		t.Fatalf("a merged draft is discarded: %v", err)
 	}
 
 	issued := draft("A-9", 1, nil)

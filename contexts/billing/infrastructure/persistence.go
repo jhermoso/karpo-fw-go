@@ -162,6 +162,13 @@ var pendingDiscountDDL = []string{
 	`ALTER TABLE bil_pending_delivery_lines {add:discount} {dec:7,4}{addEnd}`,
 }
 
+// draftedDDL marca los albaranes que ya están en un borrador o una factura (D-154): la fila no se
+// borra al facturarlo, para devolverlo a pendiente si su borrador se descarta. Los que ya hay están
+// todos pendientes; los facturados antes de esta versión no tienen copia.
+var draftedDDL = []string{
+	`ALTER TABLE bil_pending_deliveries {add:drafted} {bool} DEFAULT {false} NOT NULL{addEnd}`,
+}
+
 // partialBillingDDL guarda lo que necesita la política de facturación parcial (D-153): la
 // periodicidad de cada albarán pendiente (los que ya hay son de clientes mensuales; los de un
 // cliente por albarán sólo esperan aquí a que su pedido se sirva entero) y el pedido de cada
@@ -243,6 +250,7 @@ func Migrations() sqlrepo.MigrationSet {
 		{Version: 12, Name: "product and price source of an invoice line", Up: sqlrepo.RenderDDLAll(productDDL...)},
 		{Version: 13, Name: "discount of a pending delivery line", Up: sqlrepo.RenderDDLAll(pendingDiscountDDL...)},
 		{Version: 14, Name: "partial billing policy: periodicity of a pending delivery and order of each delivery", Up: sqlrepo.RenderDDLAll(partialBillingDDL...)},
+		{Version: 15, Name: "drafted delivery notes are kept to be released", Up: sqlrepo.RenderDDLAll(draftedDDL...)},
 	}}
 }
 
@@ -458,16 +466,16 @@ func InvoiceMapping() sqlrepo.Mapping[domain.InvoiceID, *domain.Invoice] {
 func PendingDeliveryMapping() sqlrepo.Mapping[domain.PendingDeliveryID, *domain.PendingDelivery] {
 	return sqlrepo.Mapping[domain.PendingDeliveryID, *domain.PendingDelivery]{
 		Table:   "bil_pending_deliveries",
-		Columns: sqlrepo.WithAuditColumns("seller", "customer", "delivery_number", "order_number", "delivery_date", "billing_periodicity"),
+		Columns: sqlrepo.WithAuditColumns("seller", "customer", "delivery_number", "order_number", "delivery_date", "billing_periodicity", "drafted"),
 		Dehydrate: func(p *domain.PendingDelivery) (sqlrepo.Values, error) {
 			s := p.State()
 			return sqlrepo.AuditStampValues(sqlrepo.Values{"seller": s.Seller, "customer": s.Customer, "delivery_number": s.Number,
-				"order_number": opt(s.OrderNumber), "delivery_date": s.Date, "billing_periodicity": s.Periodicity}, p.AuditStamp()), nil
+				"order_number": opt(s.OrderNumber), "delivery_date": s.Date, "billing_periodicity": s.Periodicity, "drafted": s.Drafted}, p.AuditStamp()), nil
 		},
 		Hydrate: func(r *sqlrepo.Row, children sqlrepo.ChildRows) (*domain.PendingDelivery, error) {
 			s := domain.PendingDeliveryState{Seller: domain.OrganizationID{UUID: r.UUID("seller")}, Customer: domain.PartyID{UUID: r.UUID("customer")},
 				Number: r.String("delivery_number"), OrderNumber: r.String("order_number"), Date: r.Date("delivery_date"),
-				Periodicity: r.String("billing_periodicity"), Audit: r.AuditStamp()}
+				Periodicity: r.String("billing_periodicity"), Drafted: r.Bool("drafted"), Audit: r.AuditStamp()}
 			rows := slices.Clone(children.Of("lines"))
 			slices.SortFunc(rows, func(a, b *sqlrepo.Row) int { return int(a.Int64("line_no") - b.Int64("line_no")) })
 			for _, c := range rows {

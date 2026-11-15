@@ -190,9 +190,17 @@ func (c *chain) scenario(tag string) {
 		t.Fatalf("draft from the delivery note: %+v", inv)
 	}
 	iid, _ := bdomain.ParseInvoiceID(inv.ID)
-	if _, err := c.bm.Service.Discard.Handle(ctx, bapp.DiscardInvoice{ID: iid}); !isViolation(err, "billing.sourced_draft") {
-		t.Fatalf("a draft from a delivery note is not discarded: %v", err)
+	// Descartado, el albarán vuelve a pendiente de facturar (D-154) y se prepara otra vez.
+	_, err = c.bm.Service.Discard.Handle(ctx, bapp.DiscardInvoice{ID: iid})
+	c.ok(err)
+	pend, err := c.bm.Service.SearchPendingDeliveries.Handle(ctx, bapp.SearchPendingDeliveries{Seller: acme.ID})
+	if err != nil || len(pend.Items) != 1 || pend.Items[0].Delivery != note.ID {
+		t.Fatalf("released delivery note: %+v %v", pend.Items, err)
 	}
+	pid, _ := bdomain.ParsePendingDeliveryID(note.ID)
+	inv, err = c.bm.Service.DraftPendingDelivery.Handle(ctx, bapp.DraftPendingDelivery{ID: pid})
+	c.ok(err)
+	iid, _ = bdomain.ParseInvoiceID(inv.ID)
 	open, err := c.om.Service.SearchDeliveries.Handle(ctx, oapp.SearchDeliveries{Company: acme.ID, Uninvoiced: true})
 	if err != nil || len(open.Items) != 1 {
 		t.Fatalf("delivery notes to invoice: %+v %v", open.Items, err)

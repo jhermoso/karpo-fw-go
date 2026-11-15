@@ -169,7 +169,7 @@ func (s service) groupingUseCases(svc *Service) {
 		var v fw.Validation
 		seller := domain.OrganizationID{UUID: parseID(&v, "seller", c.Seller)}
 		parts := []spec.Specification[*domain.PendingDelivery]{domain.PdFieldSeller.Eq(seller), domain.PdFieldDate.Le(c.UpTo),
-			domain.PdFieldPeriod.Eq(domain.PeriodicityMonthly)}
+			domain.PdFieldPeriod.Eq(domain.PeriodicityMonthly), domain.PdFieldDrafted.Eq(false)}
 		if c.Customer != "" {
 			parts = append(parts, domain.PdFieldCustomer.Eq(domain.PartyID{UUID: parseID(&v, "customer", c.Customer)}))
 		}
@@ -238,7 +238,7 @@ func (s service) groupingUseCases(svc *Service) {
 
 	svc.SearchPendingDeliveries = guard(PermInvoiceRead, func(ctx context.Context, q SearchPendingDeliveries) (fw.Page[PendingDeliveryDTO], error) {
 		var v fw.Validation
-		parts := []spec.Specification[*domain.PendingDelivery]{within(scopeOf(ctx), domain.PdFieldSeller)}
+		parts := []spec.Specification[*domain.PendingDelivery]{within(scopeOf(ctx), domain.PdFieldSeller), domain.PdFieldDrafted.Eq(false)}
 		if q.Seller != "" {
 			parts = append(parts, domain.PdFieldSeller.Eq(domain.OrganizationID{UUID: parseID(&v, "seller", q.Seller)}))
 		}
@@ -302,7 +302,8 @@ func (s service) closeCustomerHandler() app.Handler[closeCustomer, []*domain.Inv
 			return nil, err
 		}
 		pending, err := s.Pending.Find(ctx, spec.And(domain.PdFieldSeller.Eq(c.seller), domain.PdFieldCustomer.Eq(c.customer),
-			domain.PdFieldDate.Le(c.upTo), domain.PdFieldPeriod.Eq(domain.PeriodicityMonthly)), domain.PdFieldDate.Asc(), domain.PdFieldNumber.Asc())
+			domain.PdFieldDate.Le(c.upTo), domain.PdFieldPeriod.Eq(domain.PeriodicityMonthly), domain.PdFieldDrafted.Eq(false)),
+			domain.PdFieldDate.Asc(), domain.PdFieldNumber.Asc())
 		if err != nil {
 			return nil, err
 		}
@@ -328,9 +329,17 @@ func (s service) closeCustomerHandler() app.Handler[closeCustomer, []*domain.Inv
 					continue
 				}
 			}
-			err = s.pending.Delete(ctx, p.ID(), nil)
+			// No se borra: se marca, y se queda como la copia del albarán para devolverlo a pendiente si
+			// su borrador se descarta (D-154). Uno que otro cierre marcó a la vez se salta.
+			_, err = s.pending.Update(ctx, p.ID(), func(_ context.Context, p *domain.PendingDelivery) error {
+				if p.State().Drafted {
+					return errAlreadyDrafted
+				}
+				p.MarkDrafted()
+				return nil
+			})
 			switch {
-			case errors.Is(err, fw.ErrNotFound):
+			case errors.Is(err, fw.ErrNotFound), errors.Is(err, errAlreadyDrafted):
 				continue
 			case err != nil:
 				return nil, err
