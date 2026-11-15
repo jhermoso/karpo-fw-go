@@ -13,14 +13,16 @@ import (
 
 // SetTerms crea o sustituye las condiciones de venta de un cliente en una empresa.
 type SetTerms struct {
-	Company       string `json:"company"`
-	Customer      string `json:"customer"`
-	PriceList     string `json:"priceList,omitempty"`
-	Discount      string `json:"discount,omitempty"`
-	BlockOrders   bool   `json:"blockOrders,omitempty"`
-	BlockDelivery bool   `json:"blockDelivery,omitempty"`
-	// BlockReason dice por qué se bloquea (D-122); sin bloqueo no se guarda.
-	BlockReason string `json:"blockReason,omitempty"`
+	Company   string `json:"company"`
+	Customer  string `json:"customer"`
+	PriceList string `json:"priceList,omitempty"`
+	Discount  string `json:"discount,omitempty"`
+	// BlockOrders, BlockDelivery y BlockReason no cambian el bloqueo (D-156: tiene sus órdenes,
+	// BlockTerms y UnblockTerms); si llegan y piden otro estado u otro motivo, es 422
+	// orders.block_change_requires_command. Las condiciones nuevas nacen sin bloquear.
+	BlockOrders   *bool  `json:"blockOrders,omitempty"`
+	BlockDelivery *bool  `json:"blockDelivery,omitempty"`
+	BlockReason   string `json:"blockReason,omitempty"`
 	// BillingPeriodicity es per_delivery (por omisión, un borrador por albarán) o monthly (una
 	// factura al cerrar el periodo en Billing), D-146.
 	BillingPeriodicity string `json:"billingPeriodicity,omitempty"`
@@ -47,18 +49,23 @@ type TermsDTO struct {
 	BlockOrders   bool   `json:"blockOrders"`
 	BlockDelivery bool   `json:"blockDelivery"`
 	BlockReason   string `json:"blockReason,omitempty"` // D-122
+	// UnblockReason es el motivo del último desbloqueo (D-156).
+	UnblockReason string `json:"unblockReason,omitempty"`
 	// BillingPeriodicity: per_delivery o monthly (D-146).
 	BillingPeriodicity string `json:"billingPeriodicity"`
 	// LineRounding y PriceDecimals, sólo si el cliente no usa los de la empresa (D-150).
 	LineRounding  string `json:"lineRounding,omitempty"`
 	PriceDecimals *int   `json:"priceDecimals,omitempty"`
 	Version       int64  `json:"version"`
+	// PendingApproval es el id de la solicitud que ha dejado bloquear o desbloquear, si la empresa
+	// exige aprobación: las condiciones no han cambiado.
+	PendingApproval string `json:"pendingApproval,omitempty"`
 }
 
 func termsDTO(t *domain.Terms) TermsDTO {
 	s := t.State()
 	return TermsDTO{ID: t.ID().String(), Company: s.Company.String(), Customer: s.Customer.String(), PriceList: optID(s.PriceList.UUID),
-		Discount: money(s.Discount), BlockOrders: s.BlockOrders, BlockDelivery: s.BlockDelivery, BlockReason: s.BlockReason,
+		Discount: money(s.Discount), BlockOrders: s.BlockOrders, BlockDelivery: s.BlockDelivery, BlockReason: s.BlockReason, UnblockReason: s.UnblockReason,
 		BillingPeriodicity: string(s.BillingPeriodicity), LineRounding: s.LineRounding, PriceDecimals: s.PriceDecimals, Version: t.Version()}
 }
 
@@ -247,9 +254,8 @@ func (s service) termsUseCases(svc *Service) {
 		var v fw.Validation
 		company := domain.OrganizationID{UUID: parseID(&v, "company", c.Company)}
 		customer := domain.PartyID{UUID: parseID(&v, "customer", c.Customer)}
-		st := domain.TermsState{Company: company, Customer: customer, Discount: parseDecimal(&v, "discount", c.Discount), BlockOrders: c.BlockOrders,
-			BlockDelivery: c.BlockDelivery, BlockReason: c.BlockReason, BillingPeriodicity: domain.BillingPeriodicity(c.BillingPeriodicity),
-			LineRounding: c.LineRounding, PriceDecimals: c.PriceDecimals}
+		st := domain.TermsState{Company: company, Customer: customer, Discount: parseDecimal(&v, "discount", c.Discount),
+			BillingPeriodicity: domain.BillingPeriodicity(c.BillingPeriodicity), LineRounding: c.LineRounding, PriceDecimals: c.PriceDecimals}
 		if c.PriceList != "" {
 			st.PriceList = domain.PriceListID{UUID: parseID(&v, "priceList", c.PriceList)}
 		}
@@ -264,11 +270,19 @@ func (s service) termsUseCases(svc *Service) {
 			return TermsDTO{}, err
 		}
 		if len(ts) > 0 {
-			t, err := s.terms.Update(ctx, ts[0].ID(), func(_ context.Context, t *domain.Terms) error { return t.Change(st) })
+			t, err := s.terms.Update(ctx, ts[0].ID(), func(_ context.Context, t *domain.Terms) error {
+				if err := sameBlock(c, t.State()); err != nil {
+					return err
+				}
+				return t.Change(st)
+			})
 			if err != nil {
 				return TermsDTO{}, err
 			}
 			return termsDTO(t), nil
+		}
+		if err := sameBlock(c, domain.TermsState{}); err != nil {
+			return TermsDTO{}, err
 		}
 		t, err := domain.ReconstituteTerms(domain.NewTermsID(), st)
 		if err != nil {

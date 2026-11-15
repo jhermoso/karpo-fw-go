@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -72,9 +73,13 @@ func compose(t *testing.T, opts ...receivables.Option) *host {
 	h := &host{t: t, sw: sw, dir: dir, ids: map[string]fw.UUID{}, tokens: map[string]string{}, rec: rm, billing: bm, fiscal: fm, parties: pm}
 	perms := []authz.Permission{rapp.PermTermsRead, rapp.PermTermsUpdate, rapp.PermCreditRead, rapp.PermCreditUpdate, rapp.PermReceivableRead,
 		rapp.PermCollectionRead, rapp.PermCollectionWrite}
-	for _, u := range []string{"clerk", "outsider"} {
+	for _, u := range []string{"clerk", "outsider", "approver"} {
 		h.ids[u] = fw.NewUUID()
-		dir.Put(h.ids[u], authz.Subject{Active: true, Permissions: perms})
+		granted := perms
+		if u == "approver" { // quien aprueba el bloqueo y el desbloqueo del crédito (D-156)
+			granted = append(slices.Clone(perms), rapp.PermApproveBlock, rapp.PermApproveUnblock)
+		}
+		dir.Put(h.ids[u], authz.Subject{Active: true, Permissions: granted})
 		tok, _ := jwt.Issue(jwtauth.Claims{Subject: h.ids[u].String(), Username: u, PartyID: fw.NewUUID().String(), ExpiresAt: fw.Now().Add(time.Hour).Unix()})
 		h.tokens[u] = "Bearer " + tok
 	}

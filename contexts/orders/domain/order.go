@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -587,8 +588,13 @@ type TermsState struct {
 	BlockOrders   bool
 	BlockDelivery bool
 	// BlockReason dice por qué están bloqueados los pedidos o las entregas (D-122); se borra al
-	// desbloquear los dos.
-	BlockReason string
+	// desbloquear los dos. UnblockReason dice por qué se desbloqueó la última vez; se borra al
+	// bloquear (D-156).
+	BlockReason   string
+	UnblockReason string
+	// BlockEvents es el historial de bloqueos y desbloqueos (ord_terms_block_events), del más
+	// antiguo al más reciente.
+	BlockEvents []BlockEvent
 	// BillingPeriodicity dice cuándo se le factura lo entregado (D-146); vacía, PerDelivery.
 	BillingPeriodicity BillingPeriodicity
 	// LineRounding y PriceDecimals son el cálculo de las facturas del cliente cuando no es el de la
@@ -655,21 +661,30 @@ func ReconstituteTerms(id TermsID, s TermsState) (*Terms, error) {
 	if !s.BlockOrders && !s.BlockDelivery {
 		s.BlockReason = ""
 	}
-	s.BlockReason = strings.TrimSpace(s.BlockReason)
-	v.Require(utf8.RuneCountInString(s.BlockReason) <= MaxBlockReason, "blockReason", "length", "the block reason has at most 200 characters")
-	v.Require(!strings.ContainsFunc(s.BlockReason, unicode.IsControl), "blockReason", "format", "no control characters")
+	s.BlockReason, s.UnblockReason = strings.TrimSpace(s.BlockReason), strings.TrimSpace(s.UnblockReason)
+	checkReason(&v, "blockReason", s.BlockReason)
+	checkReason(&v, "unblockReason", s.UnblockReason)
+	s.BlockEvents = slices.Clone(s.BlockEvents)
 	if err := v.Err(); err != nil {
 		return nil, err
 	}
 	return &Terms{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
+func checkReason(v *fw.Validation, field, r string) {
+	v.Require(utf8.RuneCountInString(r) <= MaxBlockReason, field, "length", "the reason has at most 200 characters")
+	v.Require(!strings.ContainsFunc(r, unicode.IsControl), field, "format", "no control characters")
+}
+
 // State devuelve el estado.
 func (t *Terms) State() TermsState { return t.s }
 
-// Change sustituye las condiciones (empresa y cliente se quedan).
+// Change sustituye las condiciones (empresa y cliente se quedan). El bloqueo no cambia aquí: tiene
+// sus órdenes, Block y Unblock (D-156).
 func (t *Terms) Change(s TermsState) error {
 	s.Company, s.Customer, s.Audit = t.s.Company, t.s.Customer, t.s.Audit
+	s.BlockOrders, s.BlockDelivery, s.BlockReason, s.UnblockReason, s.BlockEvents = t.s.BlockOrders, t.s.BlockDelivery, t.s.BlockReason,
+		t.s.UnblockReason, t.s.BlockEvents
 	n, err := ReconstituteTerms(t.ID(), s)
 	if err != nil {
 		return err
@@ -678,12 +693,139 @@ func (t *Terms) Change(s TermsState) error {
 	return nil
 }
 
+// BlockScope es lo que se bloquea de un cliente: los pedidos, las entregas o los dos (el
+// CommercialBlockScope de Trench, con sus nombres).
+type BlockScope struct {
+	Orders   bool
+	Delivery bool
+}
+
+// Ámbitos del bloqueo, como se escriben.
+const (
+	ScopeOrders   = "orders"
+	ScopeDelivery = "delivery"
+)
+
+// ParseBlockScope lee los ámbitos ("orders", "delivery"); ninguno es el ámbito vacío.
+func ParseBlockScope(texts []string) (BlockScope, error) {
+	var s BlockScope
+	for _, t := range texts {
+		switch strings.ToLower(strings.TrimSpace(t)) {
+		case ScopeOrders:
+			s.Orders = true
+		case ScopeDelivery:
+			s.Delivery = true
+		default:
+			var v fw.Validation
+			v.Add("scopes", "enum", "orders or delivery")
+			return BlockScope{}, v.Err()
+		}
+	}
+	return s, nil
+}
+
+// Texts devuelve los ámbitos como se escriben.
+func (s BlockScope) Texts() []string {
+	out := []string{}
+	if s.Orders {
+		out = append(out, ScopeOrders)
+	}
+	if s.Delivery {
+		out = append(out, ScopeDelivery)
+	}
+	return out
+}
+
+// Empty dice si no hay ningún ámbito.
+func (s BlockScope) Empty() bool { return !s.Orders && !s.Delivery }
+
+// BlockEvent es un bloqueo o un desbloqueo efectivo (D-156 ampliada; el commercial_block_event de
+// Trench): qué ámbitos cambiaron, quién, cuándo y por qué. Si pasó por aprobación, Approval es la
+// solicitud y By, quien la aprobó.
+type BlockEvent struct {
+	Blocked  bool
+	Scope    BlockScope
+	Reason   string
+	At       time.Time
+	By       vocab.Actor
+	Approval fw.UUID
+}
+
+// Códigos de las infracciones del bloqueo (D-156).
+const (
+	CodeBlockReasonRequired        = "orders.block_reason_required"
+	CodeUnblockReasonRequired      = "orders.unblock_reason_required"
+	CodeBlockScopeRequired         = "orders.block_scope_required"
+	CodeBlockChangeRequiresCommand = "orders.block_change_requires_command"
+)
+
+// CheckBlock comprueba una orden de bloquear (blocked) o desbloquear: el motivo es obligatorio,
+// de 200 caracteres como mucho y sin caracteres de control; bloquear pide al menos un ámbito
+// (desbloquear sin ámbito es desbloquear todo).
+func CheckBlock(blocked bool, scope BlockScope, reason string) error {
+	reason = strings.TrimSpace(reason)
+	switch {
+	case blocked && scope.Empty():
+		return fw.Violation(CodeBlockScopeRequired, "say what to block: orders, delivery or both")
+	case reason == "" && blocked:
+		return fw.Violation(CodeBlockReasonRequired, "blocking a customer needs a reason")
+	case reason == "":
+		return fw.Violation(CodeUnblockReasonRequired, "unblocking a customer needs a reason")
+	}
+	var v fw.Validation
+	checkReason(&v, "reason", reason)
+	return v.Err()
+}
+
+// Changes devuelve los ámbitos que una orden de bloquear (blocked) o desbloquear cambiaría de
+// verdad; desbloquear sin ámbito es desbloquear lo que esté bloqueado.
+func (t *Terms) Changes(blocked bool, scope BlockScope) BlockScope {
+	if !blocked && scope.Empty() {
+		scope = BlockScope{Orders: true, Delivery: true}
+	}
+	return BlockScope{Orders: scope.Orders && t.s.BlockOrders != blocked, Delivery: scope.Delivery && t.s.BlockDelivery != blocked}
+}
+
+// SetBlocked bloquea (blocked) o desbloquea los ámbitos con su motivo, que es obligatorio, y deja
+// el cambio en el historial con quién, cuándo y la solicitud aprobada, si la hubo. Devuelve lo que
+// ha cambiado de verdad (vacío si ya estaba así). Bloquear sustituye el motivo vigente; desbloquear
+// guarda el suyo y borra el del bloqueo cuando no queda nada bloqueado.
+func (t *Terms) SetBlocked(blocked bool, scope BlockScope, reason string, by vocab.Actor, at time.Time, approval fw.UUID) (BlockScope, error) {
+	if err := CheckBlock(blocked, scope, reason); err != nil {
+		return BlockScope{}, err
+	}
+	reason = strings.TrimSpace(reason)
+	changed := t.Changes(blocked, scope)
+	if changed.Empty() {
+		return changed, nil
+	}
+	if changed.Orders {
+		t.s.BlockOrders = blocked
+	}
+	if changed.Delivery {
+		t.s.BlockDelivery = blocked
+	}
+	if blocked {
+		t.s.BlockReason, t.s.UnblockReason = reason, ""
+	} else {
+		t.s.UnblockReason = reason
+		if !t.s.BlockOrders && !t.s.BlockDelivery {
+			t.s.BlockReason = ""
+		}
+	}
+	t.s.BlockEvents = append(slices.Clone(t.s.BlockEvents), BlockEvent{Blocked: blocked, Scope: changed, Reason: reason, At: at, By: by, Approval: approval})
+	return changed, nil
+}
+
 // AuditSnapshot implementa traits.Snapshotter.
 func (t *Terms) AuditSnapshot() map[string]any {
 	s := map[string]any{"discount": t.s.Discount.String(), "blockOrders": t.s.BlockOrders, "blockDelivery": t.s.BlockDelivery,
 		"billingPeriodicity": string(t.s.BillingPeriodicity)}
 	if t.s.BlockReason != "" {
 		s["blockReason"] = t.s.BlockReason
+	}
+	if t.s.UnblockReason != "" {
+		s["unblockReason"] = t.s.UnblockReason
 	}
 	if t.s.LineRounding != "" {
 		s["lineRounding"] = t.s.LineRounding

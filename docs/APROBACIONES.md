@@ -127,7 +127,21 @@ bloqueo y desbloqueo efectivo queda en una tabla de historial propia, en la mism
 La empresa de la política es la del transportista (cada transportista es de una empresa) y la
 entidad de la cuenta.
 
+## Paso 3 en Ventas: los clientes (hecho, 2026-11-15)
+
+Lo mismo para los dos bloqueos del cliente: el **crédito** de Cobros (docs/COBROS.md, «El bloqueo»)
+y las **condiciones de venta** de Pedidos, que bloquean pedidos y entregas con un único motivo
+(docs/PEDIDOS.md, «El bloqueo»). En Pedidos hay dos órdenes, bloquear y desbloquear, con los ámbitos
+(`scopes`: `orders`, `delivery`), como Trench: una sola acción por sentido. Las dos tablas de
+solicitudes llevan `pending_key` con índice único, como Compras.
+
+| Contexto | Acciones | Solicitudes | Historial | Bandeja |
+|---|---|---|---|---|
+| Cobros | `receivables.credit.block`, `.unblock` | `rec_approvals` | `rec_credit_block_events` | `/api/receivables/approvals` |
+| Pedidos | `orders.customer_terms.block`, `.unblock` | `ord_approvals` | `ord_terms_block_events` | `/api/orders/approvals` |
+
+La empresa de la política es la del vendedor (Cobros) y la de las condiciones (Pedidos).
+
 ## Pendiente
 
-- **Paso 3 en Ventas**: bloquear y desbloquear clientes, igual que en Compras.
 - El front: enseñar que un cambio quedó pendiente y una bandeja de solicitudes.

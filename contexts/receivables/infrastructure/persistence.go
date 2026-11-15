@@ -95,6 +95,8 @@ func Migrations() sqlrepo.MigrationSet {
 		// El motivo del bloqueo de crédito de la pareja (docs/DECISIONES-COMUNES.md, D-122; el BlockReason
 		// de 200 de Trench): se guarda con el bloqueo y se borra al desbloquear.
 		{Version: 4, Name: "block reason", Up: sqlrepo.RenderDDLAll(`ALTER TABLE rec_credit_profiles {add:block_reason} {str:200}{addEnd}`)},
+		// Bloquear y desbloquear son órdenes con motivo, historial y aprobación (D-156 ampliada).
+		{Version: 5, Name: "block history and approval requests", Up: sqlrepo.RenderDDLAll(blockDDL...)},
 	}}
 }
 
@@ -104,8 +106,8 @@ func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 }
 
 // Tables lista las tablas del contexto, primero las hijas (orden de borrado).
-var Tables = []string{"rec_allocations", "rec_collections", "rec_installments", "rec_receivables", "rec_credit_profiles", "rec_terms",
-	TableOutbox, TableIntegrationOutbox, TableAuditLog, TableInbox}
+var Tables = []string{"rec_allocations", "rec_collections", "rec_installments", "rec_receivables", TableCreditBlockEvents, "rec_credit_profiles", "rec_terms",
+	TableApprovals, TableOutbox, TableIntegrationOutbox, TableAuditLog, TableInbox}
 
 // DropAll borra las tablas del contexto y su historial de migraciones (sólo pruebas).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
@@ -189,10 +191,12 @@ func CreditMapping() sqlrepo.Mapping[domain.CreditProfileID, *domain.CreditProfi
 	return sqlrepo.Mapping[domain.CreditProfileID, *domain.CreditProfile]{
 		Table:    "rec_credit_profiles",
 		Decimals: decimalColumns.Of("rec_credit_profiles"),
-		Columns:  sqlrepo.WithAuditColumns("seller", "customer", "terms_id", "limited", "credit_limit", "blocked", "block_reason"),
+		Columns:  sqlrepo.WithAuditColumns("seller", "customer", "terms_id", "limited", "credit_limit", "blocked", "block_reason", "unblock_reason"),
+		Children: []sqlrepo.Child[*domain.CreditProfile]{blockEventsChild},
 		Dehydrate: func(p *domain.CreditProfile) (sqlrepo.Values, error) {
 			s := p.State()
-			v := sqlrepo.Values{"seller": s.Seller, "customer": s.Customer, "terms_id": nil, "limited": s.Limited, "credit_limit": nil, "blocked": s.Blocked, "block_reason": nullString(s.BlockReason)}
+			v := sqlrepo.Values{"seller": s.Seller, "customer": s.Customer, "terms_id": nil, "limited": s.Limited, "credit_limit": nil, "blocked": s.Blocked,
+				"block_reason": nullString(s.BlockReason), "unblock_reason": nullString(s.UnblockReason)}
 			if !s.Terms.IsZero() {
 				v["terms_id"] = s.Terms
 			}
@@ -201,10 +205,15 @@ func CreditMapping() sqlrepo.Mapping[domain.CreditProfileID, *domain.CreditProfi
 			}
 			return sqlrepo.AuditStampValues(v, p.AuditStamp()), nil
 		},
-		Hydrate: func(r *sqlrepo.Row, _ sqlrepo.ChildRows) (*domain.CreditProfile, error) {
+		Hydrate: func(r *sqlrepo.Row, children sqlrepo.ChildRows) (*domain.CreditProfile, error) {
 			s := domain.CreditProfileState{Seller: domain.OrganizationID{UUID: r.UUID("seller")}, Customer: domain.PartyID{UUID: r.UUID("customer")},
 				Terms: domain.TermsID{UUID: r.UUID("terms_id")}, Limited: r.Bool("limited"), Limit: r.Decimal("credit_limit"), Blocked: r.Bool("blocked"), BlockReason: r.String("block_reason"),
-				Audit: r.AuditStamp()}
+				UnblockReason: r.String("unblock_reason"), Audit: r.AuditStamp()}
+			events, err := blockEvents(children.Of("blocks"))
+			if err != nil {
+				return nil, err
+			}
+			s.BlockEvents = events
 			if err := r.Err(); err != nil {
 				return nil, err
 			}

@@ -14,10 +14,12 @@ import (
 	"github.com/jhermoso/karpo-fw-go/contexts/orders/domain"
 	"github.com/jhermoso/karpo-fw-go/contexts/orders/infrastructure"
 	"github.com/jhermoso/karpo-fw-go/pkg/application"
+	"github.com/jhermoso/karpo-fw-go/pkg/application/approval"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/messaging"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/outbox"
 	"github.com/jhermoso/karpo-fw-go/pkg/distribution"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
+	fwapproval "github.com/jhermoso/karpo-fw-go/pkg/domain/approval"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 )
 
@@ -59,6 +61,13 @@ func WithToday(t application.CompanyToday) Option {
 	return func(d *oapp.Deps) { d.Today = t }
 }
 
+// WithApprovalPolicy dice qué empresas exigen aprobación para bloquear o desbloquear los pedidos o
+// las entregas de un cliente (D-156; la de Parties, Module.ApprovalPolicy, en el anfitrión). Sin
+// ella, ninguna.
+func WithApprovalPolicy(p approval.Policy) Option {
+	return func(d *oapp.Deps) { d.Policy = p }
+}
+
 // Compose construye el contexto sobre sw. Orders necesita el catálogo y los precios de Products y,
 // cuando se controla el crédito, el riesgo de Receivables (nil: sin control de crédito): puertos
 // propios. Las opciones son los puertos de Parties: bloqueos y fusionadas.
@@ -69,7 +78,8 @@ func Compose(sw *hotswap.Switch, catalog domain.Catalog, credit domain.CreditChe
 		Orders: hotswap.Repository(sw, infrastructure.OrderRepositoryFactory), Deliveries: hotswap.Repository(sw, infrastructure.DeliveryRepositoryFactory),
 		Terms: hotswap.Repository(sw, infrastructure.TermsRepositoryFactory), Counters: hotswap.Repository(sw, infrastructure.CounterRepositoryFactory),
 		Quotes:  hotswap.Repository(sw, infrastructure.QuoteRepositoryFactory),
-		Catalog: catalog, Credit: credit, UoW: sw, Audit: audit,
+		Catalog: catalog, Credit: credit, UoW: sw, Audit: audit, Approvals: hotswap.Repository(sw, infrastructure.ApprovalRepositoryFactory),
+		Policy: approval.Never{},
 		Recorder: outbox.Recorders(outbox.NewRecorder(hotswap.Outbox(sw, infrastructure.OutboxFactory)),
 			oapp.Publications(messaging.NewRecorder(contracts.Source, integration))),
 	}
@@ -149,6 +159,57 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 			IncludeMergedParties: r.URL.Query().Get("includeMergedParties") == "true"})
 		distribution.Respond(w, r, out, err, http.StatusOK)
 	})
+	// Bloquear y desbloquear pedidos o entregas son órdenes propias, con ámbitos, motivo y versión
+	// (D-156). Con aprobación, 202 y pendingApproval.
+	trm := func(s string) (domain.TermsID, error) {
+		u, err := fw.ParseUUID(s)
+		return domain.TermsID{UUID: u}, err
+	}
+	block := func(run func(context.Context, oapp.SetTermsBlock) (oapp.TermsDTO, error)) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			id, err := trm(r.PathValue("id"))
+			if err != nil {
+				badID(w, r)
+				return
+			}
+			var c oapp.SetTermsBlock
+			if err := decode(r, &c); err != nil {
+				distribution.WriteError(w, r, err)
+				return
+			}
+			c.ID = id
+			out, err := run(r.Context(), c)
+			code := http.StatusOK
+			if out.PendingApproval != "" {
+				code = http.StatusAccepted
+			}
+			distribution.Respond(w, r, out, err, code)
+		}
+	}
+	mux.HandleFunc("POST /api/orders/terms/{id}/block", block(svc.BlockTerms.Handle))
+	mux.HandleFunc("POST /api/orders/terms/{id}/unblock", block(svc.UnblockTerms.Handle))
+	mux.HandleFunc("GET /api/orders/terms/{id}/block-history", func(w http.ResponseWriter, r *http.Request) {
+		id, err := trm(r.PathValue("id"))
+		if err != nil {
+			badID(w, r)
+			return
+		}
+		out, err := svc.TermsBlockHistory.Handle(r.Context(), oapp.GetTerms{ID: id})
+		distribution.Respond(w, r, out, err, http.StatusOK)
+	})
+	// Las solicitudes de aprobación del bloqueo y el desbloqueo.
+	mux.HandleFunc("GET /api/orders/approvals", func(w http.ResponseWriter, r *http.Request) {
+		out, err := svc.SearchApprovals.Handle(r.Context(), oapp.SearchApprovals{Company: r.URL.Query().Get("company"), Status: r.URL.Query().Get("status")})
+		distribution.Respond(w, r, out, err, http.StatusOK)
+	})
+	apv := func(s string) (fwapproval.RequestID, error) {
+		u, err := fw.ParseUUID(s)
+		return fwapproval.RequestID{UUID: u}, err
+	}
+	resolve := func(c *oapp.ResolveApproval, id fwapproval.RequestID) { c.ID = id }
+	mux.HandleFunc("POST /api/orders/approvals/{id}/approve", command(http.StatusOK, apv, resolve, svc.ApproveApproval.Handle))
+	mux.HandleFunc("POST /api/orders/approvals/{id}/reject", command(http.StatusOK, apv, resolve, svc.RejectApproval.Handle))
+	mux.HandleFunc("POST /api/orders/approvals/{id}/cancel", command(http.StatusOK, apv, resolve, svc.CancelApproval.Handle))
 
 	mux.HandleFunc("POST /api/orders/orders", create(http.StatusCreated, svc.DraftOrder.Handle))
 	mux.HandleFunc("GET /api/orders/orders", func(w http.ResponseWriter, r *http.Request) {

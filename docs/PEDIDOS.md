@@ -130,7 +130,7 @@ contexts/inventory/  # + suscripción a Pedidos (migración 3: inventory_inbox),
   200 caracteres, el `BlockReason` de Trench), uno para los dos bloqueos (pedidos y entregas). Se
   guarda mientras alguno está puesto y se borra al quitar los dos. La vista por pareja lo enseña en
   `blockReason`, junto al del crédito de Cobros.
-  Fijar las condiciones las sustituye enteras: reenviar un bloqueo sin `blockReason` borra el motivo.
+  Desde D-156 el bloqueo y su motivo no se fijan aquí: ver «El bloqueo».
 - **Cálculo de las facturas del cliente** (D-150, migración 9): las condiciones pueden llevar
   `lineRounding` (`once` o `gross_then_discount`) y `priceDecimals` (0 a 6), las columnas
   `ord_terms.line_rounding` y `ord_terms.price_decimals`, nulas por omisión. Cuando están, ganan
@@ -149,9 +149,56 @@ contexts/inventory/  # + suscripción a Pedidos (migración 3: inventory_inbox),
   [FACTURACION.md](FACTURACION.md), «Varios albaranes en una factura».
 - **Fusión de fichas** (D-93; [PARTIES.md](PARTIES.md) §17): Pedidos escucha
   `parties.relationship-transferred.v1`. Cuando la relación de cliente de una empresa pasa de una
-  ficha a otra, copia las condiciones de venta (tarifa, descuento, bloqueos) de (empresa, la que
+  ficha a otra, copia las condiciones de venta (tarifa, descuento, bloqueos y su único motivo, sin el
+  historial: el bloqueo pasa a la superviviente sin entrada de historial y queda en el de la ficha
+  que cede) de (empresa, la que
   cede) a (empresa, la que recibe) si ésta no tiene unas. Las de la que cede no se tocan. Al deshacer la
   fusión (`returning: true`) no se copia nada.
+
+## El bloqueo (D-156 ampliada; desde el 2026-11-15)
+
+Las condiciones tienen **dos bloqueos, pedidos y entregas, con un único motivo vigente**. Bloquear y
+desbloquear son órdenes propias con motivo obligatorio y la versión leída, como en Compras, Envíos y
+Cuentas. **Decisión: dos órdenes (bloquear y desbloquear) que dicen qué ámbitos tocan, no cuatro
+(una por bloqueo y sentido).** Es lo que hace Trench desde su PR 151 (`scopes: ["orders",
+"delivery"]` con un `reason`, y una fila de `commercial_block_event` con los ámbitos que cambiaron):
+un solo motivo cubre los dos bloqueos, así que una orden que los ponga a la vez evita dos motivos y
+dos aprobaciones para un mismo hecho, y la política de aprobación queda en dos acciones.
+
+| Orden | Petición | Respuesta |
+|---|---|---|
+| Bloquear | `POST /api/orders/terms/{id}/block` `{scopes, reason, version?}` | 200 con las condiciones; 202 con `pendingApproval` si hay que aprobarlo |
+| Desbloquear | `POST /api/orders/terms/{id}/unblock` `{scopes?, reason, version?}` | igual |
+| Historial | `GET /api/orders/terms/{id}/block-history` | `[{blocked, scopes, reason, at, by, byName, approval?}]`, del más antiguo al más reciente |
+
+- Hay un solo motivo vigente para los dos ámbitos: no hay motivo por ámbito.
+- `scopes` es `["orders"]`, `["delivery"]` o los dos. Bloquear pide al menos uno (422
+  `orders.block_scope_required`); desbloquear sin ninguno desbloquea lo que esté bloqueado. Un ámbito
+  desconocido es 422 de validación.
+- Sin motivo, 422 `orders.block_reason_required` / `orders.unblock_reason_required` (también si ya
+  está así o si pasa por aprobación); con otra versión, 409. Si nada cambia, no se toca.
+- Bloquear sustituye el motivo vigente (`block_reason`) y borra el del último desbloqueo;
+  desbloquear guarda el suyo (`unblock_reason`) y borra el del bloqueo cuando no queda nada
+  bloqueado. El historial guarda sólo los ámbitos que cambiaron de verdad.
+- `PUT /api/orders/terms` **no toca el bloqueo**: `blockOrders`, `blockDelivery` u otro
+  `blockReason` distintos de los vigentes son 422 `orders.block_change_requires_command`; los
+  mismos, o ninguno, se ignoran. Unas condiciones nuevas nacen sin bloquear. De bloqueado sólo se
+  sale desbloqueando con motivo.
+- Historial en `ord_terms_block_events` (una fila por cambio efectivo, en la misma transacción:
+  ámbitos, quién —el usuario del contexto de autorización—, cuándo, motivo y la solicitud aprobada,
+  si la hubo).
+- **Aprobación** ([APROBACIONES.md](APROBACIONES.md)): acciones `orders.customer_terms.block` y
+  `orders.customer_terms.unblock`, por empresa con la política de Parties; permisos
+  `Orders.CustomerTerms.ApproveBlock` y `Orders.CustomerTerms.ApproveUnblock`. Solicitudes en
+  `ord_approvals` (una sola pendiente por condiciones, sea bloquear o desbloquear y cualquier ámbito: `pending_key` con índice único
+  `ux_ord_approvals_pending`, 409 `orders.approval_pending`). Bandeja: `GET
+  /api/orders/approvals?company=&status=` y `POST /api/orders/approvals/{id}/approve`, `/reject`
+  (con `comment`) y `/cancel` (sólo el solicitante).
+- Migración 11: `unblock_reason`, `ord_terms_block_events`, `ord_approvals` con `pending_key` y su
+  índice. Confirmar y servir siguen leyendo `blockOrders` y `blockDelivery` (422
+  `orders.customer_blocked` y `orders.delivery_blocked`); Facturación lee las condiciones por el
+  contrato `CustomerTerms`, que no cambia.
+
 
 ## Importe como el de la factura (D-149; añadido el 2026-11-08)
 

@@ -3,6 +3,7 @@ package domain_test
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/orders/domain"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
@@ -265,15 +266,42 @@ func TestTermsAndCounter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := tr.Change(domain.TermsState{Discount: dec("5"), BlockDelivery: true}); err != nil || tr.State().Customer != customer || !tr.State().BlockDelivery {
-		t.Fatalf("change: %v", err)
+	// El cambio general no toca el bloqueo: tiene sus órdenes (D-156).
+	if err := tr.Change(domain.TermsState{Discount: dec("5"), BlockDelivery: true}); err != nil || tr.State().Customer != customer || tr.State().BlockDelivery {
+		t.Fatalf("change: %v %+v", err, tr.State())
+	}
+	by := vocab.Actor{Name: "Ana"}
+	orders, delivery := domain.BlockScope{Orders: true}, domain.BlockScope{Delivery: true}
+	if _, err := tr.SetBlocked(true, domain.BlockScope{}, "impagos", by, time.Now(), fw.UUID{}); !errors.Is(err, fw.ErrRuleViolation) {
+		t.Fatalf("blocking needs a scope: %v", err)
+	}
+	if _, err := tr.SetBlocked(true, orders, " ", by, time.Now(), fw.UUID{}); !errors.Is(err, fw.ErrRuleViolation) || tr.State().BlockOrders {
+		t.Fatalf("blocking needs a reason: %v", err)
 	}
 	// El motivo del bloqueo se guarda con el bloqueo y se borra al desbloquear los dos (D-122).
-	if err := tr.Change(domain.TermsState{BlockOrders: true, BlockReason: " impagos "}); err != nil || tr.State().BlockReason != "impagos" {
+	if ch, err := tr.SetBlocked(true, orders, " impagos ", by, time.Now(), fw.UUID{}); err != nil || !ch.Orders || tr.State().BlockReason != "impagos" {
 		t.Fatalf("reason: %v %+v", err, tr.State())
 	}
-	if err := tr.Change(domain.TermsState{BlockReason: "impagos"}); err != nil || tr.State().BlockReason != "" {
+	if ch, err := tr.SetBlocked(true, domain.BlockScope{Orders: true, Delivery: true}, "sin almacén", by, time.Now(), fw.UUID{}); err != nil ||
+		ch.Orders || !ch.Delivery || tr.State().BlockReason != "sin almacén" {
+		t.Fatalf("only what changes is recorded: %v %+v %+v", err, ch, tr.State())
+	}
+	// De bloqueado no se sale salvo por desbloquear con motivo.
+	if err := tr.Change(domain.TermsState{Discount: dec("5")}); err != nil || !tr.State().BlockOrders || !tr.State().BlockDelivery {
+		t.Fatalf("the general change keeps the block: %v %+v", err, tr.State())
+	}
+	if _, err := tr.SetBlocked(false, delivery, "", by, time.Now(), fw.UUID{}); !errors.Is(err, fw.ErrRuleViolation) || !tr.State().BlockDelivery {
+		t.Fatalf("unblocking needs a reason: %v", err)
+	}
+	if _, err := tr.SetBlocked(false, delivery, "repuesto", by, time.Now(), fw.UUID{}); err != nil || tr.State().BlockDelivery ||
+		tr.State().BlockReason != "sin almacén" || tr.State().UnblockReason != "repuesto" {
+		t.Fatalf("partial unblock keeps the block reason: %v %+v", err, tr.State())
+	}
+	if ch, err := tr.SetBlocked(false, domain.BlockScope{}, "pagado", by, time.Now(), fw.UUID{}); err != nil || !ch.Orders || tr.State().BlockReason != "" {
 		t.Fatalf("unblocked: %v %+v", err, tr.State())
+	}
+	if ev := tr.State().BlockEvents; len(ev) != 4 || ev[1].Scope != delivery || ev[3].Blocked || ev[3].Reason != "pagado" {
+		t.Fatalf("history: %+v", ev)
 	}
 	// La periodicidad de facturación (D-146): por albarán si no se dice; mensual; nada más.
 	if tr.State().BillingPeriodicity != domain.PerDelivery {

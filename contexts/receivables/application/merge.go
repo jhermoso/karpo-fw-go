@@ -56,7 +56,7 @@ func SubscribeParties(c *messaging.Consumer, d Deps) {
 			return err
 		}
 		st := from[0].State()
-		st.Customer, st.Audit = domain.PartyID{UUID: receiving}, traits.AuditStamp{}
+		st.Customer, st.Audit, st.BlockEvents = domain.PartyID{UUID: receiving}, traits.AuditStamp{}, nil // el historial es del perfil que cede
 		p, err := domain.ReconstituteCreditProfile(domain.NewCreditProfileID(), st)
 		if err != nil {
 			return err

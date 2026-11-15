@@ -217,11 +217,11 @@ func Compose(sw *hotswap.Switch, o Options) (*Host, error) {
 		hr.WithFacilities(hrinfra.FacilitiesDirectory{Directory: h.Facilities.Directory}), hr.WithMergedParties(merged), hr.WithToday(zones))
 	h.Payroll = payroll.Compose(sw, prlinfra.HRStaff{Staff: h.HR.Staff}, payroll.WithMergedParties(merged), payroll.WithToday(zones))
 	h.Receivables = receivables.Compose(sw, &SellerCalendar{Parties: h.Parties, Geography: h.Geography, system: func() context.Context { return h.system }},
-		receivables.WithMergedParties(merged), receivables.WithToday(zones))
+		receivables.WithMergedParties(merged), receivables.WithToday(zones), receivables.WithApprovalPolicy(h.Parties.ApprovalPolicy))
 	h.Inventory = inventory.Compose(sw, invinfra.ProductsCatalog{Catalog: h.Products.Catalog}, inventory.WithToday(zones))
 	h.Orders = orders.Compose(sw, ordinfra.ProductsCatalog{Catalog: h.Products.Catalog, Pricing: h.Products.Pricing},
 		ordinfra.ReceivablesCredit{Exposure: h.Receivables.Credit}, orders.WithBlocks(ordinfra.PartiesBlocks{TaxIdentities: h.Parties.TaxIdentities}),
-		orders.WithMergedParties(merged), orders.WithToday(zones),
+		orders.WithMergedParties(merged), orders.WithToday(zones), orders.WithApprovalPolicy(h.Parties.ApprovalPolicy),
 		orders.WithServiceFulfilment(ordinfra.ServiceFulfilmentSettings{Catalog: h.Products.Catalog, Profiles: h.Parties.CompanyProfiles}))
 	h.Billing = billing.Compose(sw, bilinfra.FiscalTaxes{Engine: h.Fiscal.TaxEngine}, bilinfra.PartiesIdentities{TaxIdentities: h.Parties.TaxIdentities},
 		billing.WithMergedParties(merged), billing.WithZones(zones),

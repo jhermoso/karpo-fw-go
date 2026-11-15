@@ -1,7 +1,9 @@
 package domain
 
 import (
+	"slices"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -22,10 +24,33 @@ type CreditProfileState struct {
 	Limit    vocab.Decimal // límite de riesgo; sólo tiene sentido cuando Limited
 	Limited  bool          // false: sin límite (el C# leía MaxRisk = 0 como «sin límite» en un sitio y como «límite 0» en otro)
 	Blocked  bool          // se rechazan los pedidos
-	// BlockReason dice por qué está bloqueado (D-122); se borra al desbloquear.
-	BlockReason string
+	// BlockReason dice por qué está bloqueado (D-122); se borra al desbloquear. UnblockReason dice
+	// por qué se desbloqueó la última vez; se borra al bloquear (D-156).
+	BlockReason   string
+	UnblockReason string
+	// BlockEvents es el historial de bloqueos y desbloqueos (rec_credit_block_events), del más
+	// antiguo al más reciente.
+	BlockEvents []BlockEvent
 	Audit       traits.AuditStamp
 }
+
+// BlockEvent es un bloqueo o un desbloqueo efectivo (D-156 ampliada; el commercial_block_event de
+// Trench): quién, cuándo y por qué. Si pasó por aprobación, Approval es la solicitud y By, quien la
+// aprobó.
+type BlockEvent struct {
+	Blocked  bool
+	Reason   string
+	At       time.Time
+	By       vocab.Actor
+	Approval fw.UUID
+}
+
+// Códigos de las infracciones del bloqueo (D-156).
+const (
+	CodeBlockReasonRequired        = "receivables.block_reason_required"
+	CodeUnblockReasonRequired      = "receivables.unblock_reason_required"
+	CodeBlockChangeRequiresCommand = "receivables.block_change_requires_command"
+)
 
 // CreditProfile es la relación de crédito de un vendedor con un cliente: condiciones por defecto,
 // límite de riesgo y bloqueo (el MaxRisk, BlockOrders y DefaultPaymentCondition del perfil comercial
@@ -40,13 +65,23 @@ func (s CreditProfileState) check(v *fw.Validation) {
 	v.Require(!s.Seller.IsZero() && !s.Customer.IsZero(), "customer", "required", "seller and customer are required")
 	v.Require(!s.Limited || (!s.Limit.IsNegative() && s.Limit.Equal(s.Limit.Round(2))), "limit", "range", "a non-negative limit in cents")
 	v.Require(s.Limited || s.Limit.IsZero(), "limit", "unlimited", "an unlimited profile has no limit amount")
-	v.Require(utf8.RuneCountInString(s.BlockReason) <= MaxBlockReason, "blockReason", "length", "the block reason has at most 200 characters")
-	v.Require(!strings.ContainsFunc(s.BlockReason, unicode.IsControl), "blockReason", "format", "no control characters")
+	checkReason(v, "blockReason", s.BlockReason)
+	checkReason(v, "unblockReason", s.UnblockReason)
+}
+
+func checkReason(v *fw.Validation, field, r string) {
+	v.Require(utf8.RuneCountInString(r) <= MaxBlockReason, field, "length", "the reason has at most 200 characters")
+	v.Require(!strings.ContainsFunc(r, unicode.IsControl), field, "format", "no control characters")
 }
 
 // ReconstituteCreditProfile reconstruye un perfil de crédito.
 func ReconstituteCreditProfile(id CreditProfileID, s CreditProfileState) (*CreditProfile, error) {
 	s.BlockReason = blockReason(s.Blocked, s.BlockReason)
+	if s.Blocked {
+		s.UnblockReason = ""
+	}
+	s.UnblockReason = strings.TrimSpace(s.UnblockReason)
+	s.BlockEvents = slices.Clone(s.BlockEvents)
 	base, err := fw.NewBaseAggregateRoot(CreditProfileKind, id)
 	if err != nil {
 		return nil, err
@@ -62,10 +97,10 @@ func ReconstituteCreditProfile(id CreditProfileID, s CreditProfileState) (*Credi
 // State devuelve el estado.
 func (p *CreditProfile) State() CreditProfileState { return p.s }
 
-// Set sustituye las condiciones, el límite y el bloqueo con su motivo (que se borra al desbloquear).
-func (p *CreditProfile) Set(terms TermsID, limited bool, limit vocab.Decimal, blocked bool, reason string) error {
+// Set sustituye las condiciones y el límite. El bloqueo no cambia aquí: tiene sus órdenes (D-156).
+func (p *CreditProfile) Set(terms TermsID, limited bool, limit vocab.Decimal) error {
 	s := p.s
-	s.Terms, s.Limited, s.Limit, s.Blocked, s.BlockReason = terms, limited, limit, blocked, blockReason(blocked, reason)
+	s.Terms, s.Limited, s.Limit = terms, limited, limit
 	var v fw.Validation
 	s.check(&v)
 	if err := v.Err(); err != nil {
@@ -73,6 +108,42 @@ func (p *CreditProfile) Set(terms TermsID, limited bool, limit vocab.Decimal, bl
 	}
 	p.s = s
 	return nil
+}
+
+// CheckBlockReason comprueba el motivo de bloquear (blocked) o desbloquear: obligatorio, de 200
+// caracteres como mucho y sin caracteres de control.
+func CheckBlockReason(blocked bool, reason string) error {
+	reason = strings.TrimSpace(reason)
+	switch {
+	case reason == "" && blocked:
+		return fw.Violation(CodeBlockReasonRequired, "blocking a customer's credit needs a reason")
+	case reason == "":
+		return fw.Violation(CodeUnblockReasonRequired, "unblocking a customer's credit needs a reason")
+	}
+	var v fw.Validation
+	checkReason(&v, "reason", reason)
+	return v.Err()
+}
+
+// SetBlocked bloquea (blocked) o desbloquea el crédito con su motivo, que es obligatorio, y deja el
+// cambio en el historial con quién, cuándo y la solicitud aprobada, si la hubo. Si ya está así, no
+// cambia nada y devuelve false.
+func (p *CreditProfile) SetBlocked(blocked bool, reason string, by vocab.Actor, at time.Time, approval fw.UUID) (bool, error) {
+	if err := CheckBlockReason(blocked, reason); err != nil {
+		return false, err
+	}
+	reason = strings.TrimSpace(reason)
+	if p.s.Blocked == blocked {
+		return false, nil
+	}
+	p.s.Blocked = blocked
+	if blocked {
+		p.s.BlockReason, p.s.UnblockReason = reason, ""
+	} else {
+		p.s.BlockReason, p.s.UnblockReason = "", reason
+	}
+	p.s.BlockEvents = append(slices.Clone(p.s.BlockEvents), BlockEvent{Blocked: blocked, Reason: reason, At: at, By: by, Approval: approval})
+	return true, nil
 }
 
 // Available devuelve lo que aún se puede vender a crédito dada la exposición abierta (ok false: sin
@@ -89,6 +160,9 @@ func (p *CreditProfile) AuditSnapshot() map[string]any {
 	s := map[string]any{"terms": p.s.Terms.String(), "limited": p.s.Limited, "limit": p.s.Limit.String(), "blocked": p.s.Blocked}
 	if p.s.BlockReason != "" {
 		s["blockReason"] = p.s.BlockReason
+	}
+	if p.s.UnblockReason != "" {
+		s["unblockReason"] = p.s.UnblockReason
 	}
 	return s
 }
