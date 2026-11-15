@@ -185,12 +185,6 @@
                 "label": "Editar",
                 "icon": "edit",
                 "color": "warning"
-            },
-            {
-                "action": "delete",
-                "label": "Bloquear",
-                "icon": "delete",
-                "color": "danger"
             }
         ]
     },
@@ -271,6 +265,47 @@
                         "hint": "Obligatorio para desbloquear. Lo pone la orden, no la edición de la ficha."
                     }
                 ]
+            }
+        ],
+        "childGrids": [
+            {
+                "id": "block-history",
+                "label": "Bloqueos",
+                "title": "Historial de bloqueos",
+                "icon": "history",
+                "entityId": "supplier-block-event",
+                "apiEndpoint": "/suppliers/{id}/block-history",
+                "foreignKey": "supplierId",
+                "columns": [
+                    {
+                        "field": "at",
+                        "header": "Fecha",
+                        "type": "datetime",
+                        "width": 170
+                    },
+                    {
+                        "field": "blocked",
+                        "header": "Operación",
+                        "type": "boolean",
+                        "width": 120,
+                        "trueLabel": "Bloqueo",
+                        "falseLabel": "Desbloqueo"
+                    },
+                    {
+                        "field": "reason",
+                        "header": "Motivo",
+                        "type": "text",
+                        "width": 320
+                    },
+                    {
+                        "field": "userName",
+                        "header": "Usuario",
+                        "type": "text",
+                        "width": 180
+                    }
+                ],
+                "emptyMessage": "Sin bloqueos ni desbloqueos registrados.",
+                "pageSize": 25
             }
         ]
     },
