@@ -116,9 +116,6 @@ func TestBilling_MergeDeliveryDrafts(t *testing.T) {
 	if _, err := bs.GetInvoice.Handle(actx, bapp.GetInvoice{ID: bdomain.InvoiceID{UUID: fw.MustParseUUID(by["A-1"].ID)}}); !errors.Is(err, fw.ErrNotFound) {
 		t.Fatalf("the merged draft is gone: %v", err)
 	}
-	if _, err := bs.Discard.Handle(actx, bapp.DiscardInvoice{ID: bdomain.InvoiceID{UUID: fw.MustParseUUID(got.ID)}}); !violation(err, "billing.sourced_draft") {
-		t.Fatalf("a merged draft is not discarded: %v", err)
-	}
 	// El mismo albarán, entregado otra vez, no vuelve a tener borrador.
 	data, _ := json.Marshal(map[string]any{"deliveryId": a1, "orderNumber": "P-A-1", "company": acme, "customer": ana, "number": "A-1",
 		"date": "2026-10-03", "lines": []map[string]any{{"sku": "T", "description": "Tornillo", "taxCode": "G21", "quantity": "1", "netPrice": "10"}}})
@@ -126,6 +123,24 @@ func TestBilling_MergeDeliveryDrafts(t *testing.T) {
 		Source: "orders", Data: data}))
 	if n := len(h.drafts(acme)); n != 4 {
 		t.Fatalf("drafts after the merge: %d", n)
+	}
+	// Descartado, sus dos albaranes vuelven a pendientes (D-154, como Trench); entregados otra vez,
+	// siguen sin borrador; y se pueden preparar de nuevo.
+	if _, err := bs.Discard.Handle(actx, bapp.DiscardInvoice{ID: bdomain.InvoiceID{UUID: fw.MustParseUUID(got.ID)}}); err != nil {
+		t.Fatalf("a merged draft is discarded: %v", err)
+	}
+	h.ok(h.billing.Consumer.HandleMessage(context.Background(), application.Envelope{ID: fw.NewUUID().String(), Type: "orders.delivery-issued.v1",
+		Source: "orders", Data: data}))
+	pending, err := bs.SearchPendingDeliveries.Handle(actx, bapp.SearchPendingDeliveries{Seller: acme})
+	if err != nil || len(pending.Items) != 2 || len(h.drafts(acme)) != 3 {
+		t.Fatalf("released delivery notes: %+v %d %v", pending.Items, len(h.drafts(acme)), err)
+	}
+	if _, err := bs.DraftPendingDelivery.Handle(actx, bapp.DraftPendingDelivery{ID: bdomain.PendingDeliveryID{UUID: fw.MustParseUUID(a1)}}); err != nil {
+		t.Fatalf("a released delivery note is drafted again: %v", err)
+	}
+	if pending, err := bs.SearchPendingDeliveries.Handle(actx, bapp.SearchPendingDeliveries{Seller: acme}); err != nil || len(pending.Items) != 1 ||
+		len(h.drafts(acme)) != 4 {
+		t.Fatalf("after drafting again: %+v %v", pending.Items, err)
 	}
 }
 
@@ -275,7 +290,8 @@ func TestBilling_ClosePeriodPerCustomer(t *testing.T) {
 	if none, err := bs.SearchPendingDeliveries.Handle(actx, bapp.SearchPendingDeliveries{Seller: acme, UpTo: "2026-10-09"}); err != nil || len(none.Items) != 0 {
 		t.Fatalf("nothing before the 10th: %+v %v", none.Items, err)
 	}
-	// Un pendiente que ya está en una factura: llegó como mensual y otra vez como por albarán.
+	// Un albarán que llega otra vez, aunque diga otra periodicidad, no hace nada: ya tiene copia
+	// (D-154) y la cierra el cierre mensual.
 	twice := h.pendingDelivery(acme, ana, "T-1", "G21", 1)
 	data, _ := json.Marshal(map[string]any{"deliveryId": twice, "orderNumber": "P-T-1", "company": acme, "customer": ana, "number": "T-1",
 		"date": "2026-10-10", "billingPeriodicity": "per_delivery", "lines": []map[string]any{{"sku": "T", "description": "Tornillo", "taxCode": "G21",
@@ -299,7 +315,7 @@ func TestBilling_ClosePeriodPerCustomer(t *testing.T) {
 	if x := by[bad]; len(x) != 1 || x[0].SourceRef != "X-2" {
 		t.Fatalf("the customer with a refused delivery note still closes: %+v", x)
 	}
-	if len(by[ana]) != 0 || len(res.Failed) != 1 || res.Failed[0].Customer != old || res.Failed[0].Code != "billing.close_invalid_line" {
+	if len(by[ana]) != 1 || by[ana][0].SourceRef != "T-1" || len(res.Failed) != 1 || res.Failed[0].Customer != old || res.Failed[0].Code != "billing.close_invalid_line" {
 		t.Fatalf("the failed customer: %+v", res.Failed)
 	}
 	page, err := bs.SearchPendingDeliveries.Handle(actx, bapp.SearchPendingDeliveries{Seller: acme})

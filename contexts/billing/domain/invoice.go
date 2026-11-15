@@ -480,16 +480,10 @@ func (i *Invoice) Issue(x Issuance) error {
 }
 
 // Discard comprueba que un borrador puede borrarse (una factura emitida, nunca). Un borrador hecho a
-// partir de un albarán tampoco se descarta: lo entregado se factura, y un error se corrige después
-// de emitirlo. Sólo desaparece al unirse a otro (Merge).
+// partir de albaranes también: sus albaranes vuelven a pendientes de facturar, como en Trench
+// (D-154); eso lo hace la aplicación en la misma unidad de trabajo.
 func (i *Invoice) Discard() error {
-	if err := i.mustBeDraft(); err != nil {
-		return err
-	}
-	if len(i.s.Sources) > 0 {
-		return fw.Violation("billing.sourced_draft", "the draft comes from "+refs(i.s.Sources)+": it is issued, not discarded")
-	}
-	return nil
+	return i.mustBeDraft()
 }
 
 // Merge une a este borrador otros borradores de documentos (albaranes) del mismo vendedor y cliente

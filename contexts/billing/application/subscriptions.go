@@ -181,6 +181,11 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 		if err != nil || done {
 			return err
 		}
+		// Un albarán que ya tiene copia ya llegó: está pendiente, o se facturó y su borrador se
+		// descartó y volvió a pendiente (D-154). Entregado otra vez, no hace nada.
+		if _, err := s.Pending.Get(ctx, domain.PendingDeliveryID{UUID: delivery}); !errors.Is(err, fw.ErrNotFound) {
+			return err
+		}
 		calc, err := s.deliveryCalculation(ctx, sid, domain.PartyID{UUID: customer})
 		if err != nil {
 			return err
@@ -195,9 +200,6 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 		}
 		if periodicity == domain.PeriodicityMonthly || !billable {
 			id := domain.PendingDeliveryID{UUID: delivery}
-			if _, err := s.Pending.Get(ctx, id); !errors.Is(err, fw.ErrNotFound) {
-				return err // ya pendiente (nil) o un error
-			}
 			// Se prepara su borrador sin guardarlo, para validar sus líneas: un albarán que no se
 			// podría facturar se rechaza ahora, como el de un cliente por albarán, y no queda pendiente
 			// bloqueando el cierre de su cliente.
@@ -216,6 +218,17 @@ func Subscribe(c *messaging.Consumer, d Deps) {
 		sources := []domain.Source{{Type: DeliverySource, ID: e.DeliveryID, Ref: e.Number}}
 		inv, err := s.deliveryDraft(ctx, sid, domain.PartyID{UUID: customer}, calc, deliveryDescription(e.Number, e.OrderNumber, sources), date, sources, lines)
 		if err != nil {
+			return err
+		}
+		// La copia del albarán, ya facturada, para devolverlo a pendiente si su borrador se
+		// descarta (D-154).
+		cp, err := domain.ReconstitutePendingDelivery(domain.PendingDeliveryID{UUID: delivery}, domain.PendingDeliveryState{Seller: sid,
+			Customer: domain.PartyID{UUID: customer}, Number: e.Number, OrderNumber: e.OrderNumber, Date: date, Lines: lines,
+			Periodicity: periodicity, Drafted: true})
+		if err != nil {
+			return err
+		}
+		if err := s.pending.Create(ctx, cp); err != nil {
 			return err
 		}
 		return s.invoices.Create(ctx, inv)
