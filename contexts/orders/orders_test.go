@@ -81,10 +81,11 @@ func compose(t *testing.T, opts ...orders.Option) *host {
 	h := &host{t: t, sw: sw, dir: dir, ids: map[string]fw.UUID{}, tokens: map[string]string{}, ord: om, inv: im, prod: dm, rec: rm, parties: pm,
 		broker: broker}
 	all := []authz.Permission{oapp.PermOrderRead, oapp.PermOrderUpdate, oapp.PermOrderConfirm, oapp.PermOrderDeliver, oapp.PermOrderCancel,
-		oapp.PermTermsRead, oapp.PermTermsUpdate}
+		oapp.PermOrderInvoiceServices, oapp.PermTermsRead, oapp.PermTermsUpdate}
 	users := map[string][]authz.Permission{"seller": {oapp.PermOrderRead, oapp.PermOrderUpdate, oapp.PermTermsRead},
 		"manager":    {oapp.PermOrderRead, oapp.PermOrderUpdate, oapp.PermOrderConfirm, oapp.PermOrderCancel, oapp.PermTermsRead, oapp.PermTermsUpdate},
 		"dispatcher": {oapp.PermOrderRead, oapp.PermOrderDeliver}, "outsider": all,
+		"biller":   {oapp.PermOrderRead, oapp.PermOrderInvoiceServices},                  // pide la factura de los servicios (D-155)
 		"approver": {oapp.PermTermsRead, oapp.PermApproveBlock, oapp.PermApproveUnblock}} // aprueba el bloqueo (D-156)
 	for u, perms := range users {
 		h.ids[u] = fw.NewUUID()

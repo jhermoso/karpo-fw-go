@@ -37,6 +37,8 @@ type SetInternalOrganizationProfile struct {
 	ServiceFulfilmentMode string `json:"serviceFulfilmentMode"`
 	// PartialBillingPolicy es allow_partial o require_complete_order (D-153); vacío, sin ajuste.
 	PartialBillingPolicy string `json:"partialBillingPolicy"`
+	// ServiceInvoicingMoment es on_serve, on_confirm o manual (D-155); vacío, sin ajuste (al servir).
+	ServiceInvoicingMoment string `json:"serviceInvoicingMoment"`
 }
 
 // InternalOrganizationProfileDTO es la forma de transporte del perfil de una empresa interna.
@@ -52,6 +54,7 @@ type InternalOrganizationProfileDTO struct {
 	AutomaticPricing       bool    `json:"automaticPricing"`
 	ServiceFulfilmentMode  *string `json:"serviceFulfilmentMode"`
 	PartialBillingPolicy   *string `json:"partialBillingPolicy"`
+	ServiceInvoicingMoment *string `json:"serviceInvoicingMoment"`
 }
 
 // GetInternalOrganizationCodePattern lee el patrón de un tipo de código de una empresa interna.
@@ -105,7 +108,8 @@ func profileDTO(p domain.InternalOrganizationProfile) InternalOrganizationProfil
 	return InternalOrganizationProfileDTO{InternalOrganizationID: p.Organization.String(), TimeZone: optional(p.TimeZone),
 		LineRounding: optional(p.LineRounding), PriceDecimals: p.PriceDecimals, InstallmentsTiming: optional(p.InstallmentsTiming),
 		DefaultPriceList: optional(p.DefaultPriceList), AutomaticPricing: p.PricesAutomatically(),
-		ServiceFulfilmentMode: optional(p.ServiceFulfilmentMode), PartialBillingPolicy: optional(p.PartialBillingPolicy)}
+		ServiceFulfilmentMode: optional(p.ServiceFulfilmentMode), PartialBillingPolicy: optional(p.PartialBillingPolicy),
+		ServiceInvoicingMoment: optional(p.ServiceInvoicingMoment)}
 }
 
 // profileAudit son los campos del perfil tal como quedan en el registro de auditoría.
@@ -120,7 +124,8 @@ func profileAudit(p domain.InternalOrganizationProfile) map[string]any {
 	}
 	return map[string]any{"timeZone": p.TimeZone, "lineRounding": p.LineRounding, "priceDecimals": decimals,
 		"installmentsTiming": p.InstallmentsTiming, "defaultPriceList": p.DefaultPriceList, "automaticPricing": automatic,
-		"serviceFulfilmentMode": p.ServiceFulfilmentMode, "partialBillingPolicy": p.PartialBillingPolicy}
+		"serviceFulfilmentMode": p.ServiceFulfilmentMode, "partialBillingPolicy": p.PartialBillingPolicy,
+		"serviceInvoicingMoment": p.ServiceInvoicingMoment}
 }
 
 // addProfile conecta los casos de uso del perfil de la empresa interna (D-133, D-144) y de sus
@@ -152,7 +157,8 @@ func addProfile(svc *Service, s service) {
 		p.SetAutomaticPricing(c.AutomaticPricing)
 		if err := errors.Join(p.SetTimeZone(c.TimeZone), p.SetLineRounding(c.LineRounding), p.SetPriceDecimals(c.PriceDecimals),
 			p.SetInstallmentsTiming(c.InstallmentsTiming), p.SetDefaultPriceList(c.DefaultPriceList),
-			p.SetServiceFulfilmentMode(c.ServiceFulfilmentMode), p.SetPartialBillingPolicy(c.PartialBillingPolicy)); err != nil {
+			p.SetServiceFulfilmentMode(c.ServiceFulfilmentMode), p.SetPartialBillingPolicy(c.PartialBillingPolicy),
+			p.SetServiceInvoicingMoment(c.ServiceInvoicingMoment)); err != nil {
 			return InternalOrganizationProfileDTO{}, firstError(err)
 		}
 		if p.Equal(before) {
@@ -368,7 +374,7 @@ func (c CompanyProfiles) Settings(ctx context.Context, organization string) (con
 	}
 	return contracts.CompanySettings{LineRounding: p.LineRounding, PriceDecimals: p.PriceDecimals, InstallmentsTiming: p.InstallmentsTiming,
 		DefaultPriceList: p.DefaultPriceList, ManualPricing: !p.PricesAutomatically(), ServiceFulfilmentMode: p.ServiceFulfilmentMode,
-		PartialBillingPolicy: p.PartialBillingPolicy}, nil
+		PartialBillingPolicy: p.PartialBillingPolicy, ServiceInvoicingMoment: p.ServiceInvoicingMoment}, nil
 }
 
 // CodePattern implementa contracts.CompanyProfiles.

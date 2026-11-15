@@ -46,6 +46,21 @@ const (
 	// ErrInvalidPartialBillingPolicy: la política de facturación parcial no es allow_partial ni
 	// require_complete_order (D-153).
 	ErrInvalidPartialBillingPolicy = "Company.InvalidPartialBillingPolicy"
+	// ErrInvalidServiceInvoicingMoment: el momento de facturar los servicios no es on_serve,
+	// on_confirm ni manual (D-155).
+	ErrInvalidServiceInvoicingMoment = "Company.InvalidServiceInvoicingMoment"
+)
+
+// Cuándo se facturan las líneas de servicio que se facturan directamente desde el pedido (D-155;
+// Javier, 2026-11-15: las tres configurables, por defecto al servir).
+const (
+	// ServiceInvoicingOnServe: lo que se sirve de esas líneas va a un borrador de factura propio al
+	// servir el pedido (también sin ajuste).
+	ServiceInvoicingOnServe = "on_serve"
+	// ServiceInvoicingOnConfirm: al confirmar el pedido se factura la cantidad entera.
+	ServiceInvoicingOnConfirm = "on_confirm"
+	// ServiceInvoicingManual: quedan pendientes hasta que alguien pide su factura en Orders.
+	ServiceInvoicingManual = "manual"
 )
 
 // Políticas de facturación parcial de un pedido (D-153; Billing.PartialBillingPolicy de Trench:
@@ -79,10 +94,9 @@ func ParseApprovalActions(actions []string) ([]string, error) {
 	return slices.Compact(out), nil
 }
 
-// DirectInvoiceAvailable dice si se admite direct_invoice. Facturación aún no factura desde el
-// pedido, así que una línea en direct_invoice no se facturaría nunca (D-155, docs/PEDIDOS.md).
-// Habilitarlo: poner true cuando Facturación facture desde el pedido.
-const DirectInvoiceAvailable = false
+// DirectInvoiceAvailable dice si se admite direct_invoice: Orders factura esas líneas desde el
+// pedido y Facturación prepara su borrador (D-155, docs/PEDIDOS.md).
+const DirectInvoiceAvailable = true
 
 // Cómo se sirven las líneas de servicio de un pedido (D-155): con albarán, sin mover stock (el
 // comportamiento de siempre), o facturándolas directamente desde el pedido.
@@ -149,6 +163,21 @@ type InternalOrganizationProfile struct {
 	// PartialBillingPolicy es PartialBillingAllowPartial o PartialBillingRequireCompleteOrder;
 	// vacío, sin ajuste (allow_partial, salvo que el cliente diga otra cosa; D-153).
 	PartialBillingPolicy string
+	// ServiceInvoicingMoment es cuándo se facturan los servicios en direct_invoice:
+	// ServiceInvoicingOnServe, ServiceInvoicingOnConfirm o ServiceInvoicingManual; vacío, sin
+	// ajuste (al servir; D-155).
+	ServiceInvoicingMoment string
+}
+
+// SetServiceInvoicingMoment fija cuándo se facturan los servicios en direct_invoice: on_serve,
+// on_confirm, manual, o vacío para limpiarlo.
+func (p *InternalOrganizationProfile) SetServiceInvoicingMoment(moment string) error {
+	moment = strings.TrimSpace(moment)
+	if moment != "" && moment != ServiceInvoicingOnServe && moment != ServiceInvoicingOnConfirm && moment != ServiceInvoicingManual {
+		return fw.Violation(ErrInvalidServiceInvoicingMoment, "the service invoicing moment must be on_serve, on_confirm or manual")
+	}
+	p.ServiceInvoicingMoment = moment
+	return nil
 }
 
 // SetPartialBillingPolicy fija la política de facturación parcial: allow_partial,
@@ -214,7 +243,8 @@ func (p InternalOrganizationProfile) Equal(o InternalOrganizationProfile) bool {
 	sameAuto := (p.AutomaticPricing == nil) == (o.AutomaticPricing == nil) && (p.AutomaticPricing == nil || *p.AutomaticPricing == *o.AutomaticPricing)
 	return p.Organization == o.Organization && p.TimeZone == o.TimeZone && p.LineRounding == o.LineRounding && samePrice &&
 		p.InstallmentsTiming == o.InstallmentsTiming && p.DefaultPriceList == o.DefaultPriceList && sameAuto &&
-		p.ServiceFulfilmentMode == o.ServiceFulfilmentMode && p.PartialBillingPolicy == o.PartialBillingPolicy
+		p.ServiceFulfilmentMode == o.ServiceFulfilmentMode && p.PartialBillingPolicy == o.PartialBillingPolicy &&
+		p.ServiceInvoicingMoment == o.ServiceInvoicingMoment
 }
 
 // SetLineRounding fija la forma de redondear las líneas: once, gross_then_discount, o vacío para

@@ -18,6 +18,80 @@ import (
 // DeliverySource es el tipo de origen de las facturas preparadas a partir de albaranes de Orders.
 const DeliverySource = "orders.delivery"
 
+// ServiceInvoicingSource es el tipo de origen de los borradores de los servicios que Orders factura
+// directamente desde el pedido (D-155). Su id es "pedido|emisión" y su referencia, el número del
+// pedido.
+const ServiceInvoicingSource = "orders.service-invoicing"
+
+// ServicesInvoiceable es la copia en Billing de orders.services-invoiceable.v1 (D-155).
+type ServicesInvoiceable struct {
+	InvoicingID string `json:"invoicingId"`
+	OrderID     string `json:"orderId"`
+	OrderNumber string `json:"orderNumber"`
+	Company     string `json:"company"`
+	Customer    string `json:"customer"`
+	Date        string `json:"date"`
+	Lines       []struct {
+		Product     string `json:"product"`
+		SKU         string `json:"sku"`
+		Description string `json:"description"`
+		TaxCode     string `json:"taxCode"`
+		Quantity    string `json:"quantity"`
+		UnitPrice   string `json:"unitPrice"`
+		Discount    string `json:"discount"`
+	} `json:"lines"`
+}
+
+// IntegrationEventType implementa application.IntegrationEvent.
+func (ServicesInvoiceable) IntegrationEventType() string { return "orders.services-invoiceable.v1" }
+
+// subscribeServices prepara un borrador ordinario por cada emisión de servicios de un pedido
+// (D-155), con el mismo cálculo y las mismas validaciones que el de un albarán. No espera a nada:
+// el momento lo ha decidido ya la empresa (on_serve, on_confirm o manual), así que ni la
+// facturación mensual (D-146) ni require_complete_order (D-153) lo retienen. Como el de un albarán,
+// se prepara aunque el cliente sea un duplicado: emitir una factura ordinaria se lo impide (D-70,
+// billing.customer_blocked). No se une con otros (billing.merge_unsourced). Una emisión que ya
+// tiene borrador o factura no hace nada.
+func subscribeServices(c *messaging.Consumer, s service) {
+	messaging.Handle(c, func(ctx context.Context, e ServicesInvoiceable, _ app.Envelope) error {
+		seller, err1 := fw.ParseUUID(e.Company)
+		customer, err2 := fw.ParseUUID(e.Customer)
+		date, err3 := vocab.ParseDate(e.Date)
+		_, err4 := fw.ParseUUID(e.InvoicingID)
+		_, err5 := fw.ParseUUID(e.OrderID)
+		if err := errors.Join(err1, err2, err3, err4, err5); err != nil || len(e.Lines) == 0 {
+			return fw.Violation("billing.invalid_event", "orders.services-invoiceable.v1: "+e.InvoicingID)
+		}
+		sid, cid := domain.OrganizationID{UUID: seller}, domain.PartyID{UUID: customer}
+		source := domain.Source{Type: ServiceInvoicingSource, ID: e.OrderID + "|" + e.InvoicingID, Ref: e.OrderNumber}
+		done, err := s.Invoices.Exists(ctx, spec.And(domain.InvFieldSeller.Eq(sid), domain.FromSource(source.Type, source.ID)))
+		if err != nil || done {
+			return err
+		}
+		var lines []domain.LineInput
+		for _, l := range e.Lines {
+			line, err := deliveryLine(l.Quantity, l.UnitPrice, l.Discount, "")
+			if err != nil {
+				return fw.Violation("billing.invalid_event", "orders.services-invoiceable.v1: "+err.Error())
+			}
+			line.Description, line.TaxCode = strings.TrimSpace(l.SKU+" "+l.Description), l.TaxCode
+			if p, err := fw.ParseUUID(l.Product); err == nil {
+				line.Product = domain.ProductID{UUID: p}
+			}
+			lines = append(lines, line)
+		}
+		calc, err := s.deliveryCalculation(ctx, sid, cid)
+		if err != nil {
+			return err
+		}
+		inv, err := s.deliveryDraft(ctx, sid, cid, calc, "Servicios del pedido "+e.OrderNumber, date, []domain.Source{source}, lines)
+		if err != nil {
+			return err
+		}
+		return s.invoices.Create(ctx, inv)
+	})
+}
+
 // Monthly es la periodicidad de facturación de un cliente que recibe una factura al cerrar el
 // periodo, con todos sus albaranes; la otra, per_delivery, un borrador por albarán (D-146). La
 // decide Orders en las condiciones del cliente y la lleva el albarán.
@@ -147,6 +221,7 @@ func deliveryLine(quantity, unitPrice, discount, netPrice string) (domain.LineIn
 func Subscribe(c *messaging.Consumer, d Deps) {
 	s := newService(d)
 	subscribeServing(c, s)
+	subscribeServices(c, s)
 	messaging.Handle(c, func(ctx context.Context, e DeliveryIssued, _ app.Envelope) error {
 		seller, err1 := fw.ParseUUID(e.Company)
 		customer, err2 := fw.ParseUUID(e.Customer)

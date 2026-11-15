@@ -344,6 +344,10 @@ func Migrations() sqlrepo.MigrationSet {
 		// cosa en las condiciones de Orders).
 		{Version: 38, Name: "internal organization profile: partial billing policy", Up: sqlrepo.RenderDDLAll(
 			`ALTER TABLE ` + TableInternalOrganizationProfiles + ` {add:partial_billing_policy} {str:30}{addEnd}`)},
+		// Cuándo se facturan los servicios que se facturan desde el pedido (D-155): on_serve,
+		// on_confirm o manual; nulo, sin ajuste (al servir).
+		{Version: 39, Name: "internal organization profile: service invoicing moment", Up: sqlrepo.RenderDDLAll(
+			`ALTER TABLE ` + TableInternalOrganizationProfiles + ` {add:service_invoicing_moment} {str:20}{addEnd}`)},
 	}}
 }
 

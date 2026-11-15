@@ -24,6 +24,7 @@ import (
 	ddomain "github.com/jhermoso/karpo-fw-go/contexts/products/domain"
 	dinfra "github.com/jhermoso/karpo-fw-go/contexts/products/infrastructure"
 	rinfra "github.com/jhermoso/karpo-fw-go/contexts/receivables/infrastructure"
+	"github.com/jhermoso/karpo-fw-go/pkg/application"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlite"
@@ -53,13 +54,21 @@ func violation(t *testing.T, err error, code string) {
 }
 
 // fakeFulfilment hace de Products y Parties: qué productos son servicios, con su ajuste, y el de la
-// empresa. direct_invoice aún no se puede guardar en ninguno de los dos, así que se inyecta aquí.
+// empresa, y cuándo factura la empresa los servicios en direct_invoice (D-155).
 type fakeFulfilment struct {
 	mu       sync.Mutex
 	services map[odomain.ProductID]string
 	company  string
+	moment   string
 	fail     error
 	calls    int
+}
+
+func (f *fakeFulfilment) CompanyInvoicingMoment(context.Context, odomain.OrganizationID) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls++
+	return f.moment, f.fail
 }
 
 func (f *fakeFulfilment) Services(_ context.Context, ids []odomain.ProductID) (map[odomain.ProductID]string, error) {
@@ -125,8 +134,9 @@ func (h *host) mustCode(status int, code string, wantStatus int, wantCode, what 
 	}
 }
 
-// fulfilmentScenario: direct_invoice no se admite aún en la empresa ni en el producto; inyectado
-// por el puerto, los servicios en direct_invoice no van al albarán y pedirlos da 422.
+// fulfilmentScenario: direct_invoice se admite en la empresa y en el producto, con su momento de
+// facturar; los servicios en direct_invoice se sirven sin albarán y se envían a facturar al servir
+// (on_serve, también sin ajuste), al confirmar (on_confirm) o a petición (manual), sólo lo que toca.
 func (h *host) fulfilmentScenario(tag string, f *fakeFulfilment) {
 	t := h.t
 	ctx := h.adminCtx
@@ -138,16 +148,31 @@ func (h *host) fulfilmentScenario(tag string, f *fakeFulfilment) {
 	h.grant("seller", acme.ID)
 	h.grant("manager", acme.ID)
 	h.grant("dispatcher", acme.ID)
+	h.grant("biller", acme.ID)
 	acmeID, _ := pdomain.ParsePartyID(acme.ID)
 
-	// La empresa: un valor desconocido no vale, direct_invoice aún no, delivery_note sí.
-	set := func(mode string) error {
-		_, err := h.parties.Service.SetInternalOrganizationProfile.Handle(ctx, papp.SetInternalOrganizationProfile{ID: acmeID, ServiceFulfilmentMode: mode})
+	// La empresa: un valor desconocido no vale; direct_invoice y delivery_note, sí. El momento de
+	// facturar: on_serve, on_confirm o manual; otro valor, 422; vacío, sin ajuste.
+	set := func(mode, moment string) error {
+		_, err := h.parties.Service.SetInternalOrganizationProfile.Handle(ctx, papp.SetInternalOrganizationProfile{ID: acmeID, ServiceFulfilmentMode: mode,
+			ServiceInvoicingMoment: moment})
 		return err
 	}
-	violation(t, set("factura"), pdomain.ErrInvalidServiceFulfilmentMode)
-	violation(t, set("direct_invoice"), pdomain.ErrDirectInvoiceUnavailable)
-	h.ok(set("delivery_note"))
+	violation(t, set("factura", ""), pdomain.ErrInvalidServiceFulfilmentMode)
+	violation(t, set("direct_invoice", "luego"), pdomain.ErrInvalidServiceInvoicingMoment)
+	for _, m := range []string{"on_serve", "on_confirm", "manual"} {
+		h.ok(set("direct_invoice", m))
+		p, err := h.parties.Service.InternalOrganizationProfile.Handle(ctx, papp.GetInternalOrganizationProfile{ID: acmeID})
+		h.ok(err)
+		if p.ServiceInvoicingMoment == nil || *p.ServiceInvoicingMoment != m || p.ServiceFulfilmentMode == nil || *p.ServiceFulfilmentMode != "direct_invoice" {
+			t.Fatalf("profile with %s: %+v", m, p)
+		}
+		st, err := h.parties.CompanyProfiles.Settings(ctx, acme.ID)
+		if err != nil || st.ServiceInvoicingMoment != m {
+			t.Fatalf("settings port with %s: %+v %v", m, st, err)
+		}
+	}
+	h.ok(set("delivery_note", ""))
 
 	// El producto, igual.
 	register := func(sku, kind, mode string, stocked bool) (dapp.ProductDTO, error) {
@@ -157,7 +182,7 @@ func (h *host) fulfilmentScenario(tag string, f *fakeFulfilment) {
 	_, err = register("BAD", "service", "albaran", false)
 	violation(t, err, ddomain.ErrInvalidServiceFulfilmentMode)
 	_, err = register("DIR", "service", "direct_invoice", false)
-	violation(t, err, ddomain.ErrDirectInvoiceUnavailable)
+	h.ok(err)
 	product := func(sku, kind, mode string, stocked bool) dapp.ProductDTO {
 		p, err := register(sku, kind, mode, stocked)
 		h.ok(err)
@@ -196,31 +221,115 @@ func (h *host) fulfilmentScenario(tag string, f *fakeFulfilment) {
 	}
 	all := map[string]any{"date": "2026-10-05"}
 
-	// Sin ajuste de empresa: montaje y revisión van al albarán; soporte, no.
+	invoiced := func(o oapp.OrderDTO) []string {
+		var got oapp.OrderDTO
+		h.must(h.do("GET", "/api/orders/orders/"+o.ID, "seller", nil, &got), 200, "get order")
+		out := []string{}
+		for _, l := range got.Lines {
+			out = append(out, l.Invoiced)
+		}
+		return out
+	}
+	same := func(got []string, want ...string) bool {
+		if len(got) != len(want) {
+			return false
+		}
+		for i := range got {
+			if got[i] != want[i] {
+				return false
+			}
+		}
+		return true
+	}
+
+	// Sin ajuste de empresa ni de momento: montaje y revisión van al albarán; soporte se sirve sin
+	// albarán y se envía a facturar al servirlo (on_serve). Servido sólo él, no hay albarán.
 	o := order(montaje.ID, soporte.ID, revision.ID)
-	s, c := deliver(o, pick(2), nil)
-	h.mustCode(s, c, 422, "orders.service_direct_invoice", "pick a direct invoice service")
 	var note oapp.DeliveryDTO
+	s, c := deliver(o, pick(2), &note)
+	h.mustCode(s, c, 201, "", "serve a direct invoice service")
+	if note.ID != "" || len(note.Lines) != 0 || note.ServicesInvoicing == "" || note.OrderStatus != "confirmed" {
+		t.Fatalf("serving only a service: %+v", note)
+	}
+	if got := invoiced(o); !same(got, "0", "1", "0") {
+		t.Fatalf("invoiced on serve: %v", got)
+	}
+	served := note.ServicesInvoicing
+	note = oapp.DeliveryDTO{}
 	s, c = deliver(o, all, &note)
 	h.mustCode(s, c, 201, "", "deliver")
-	if len(note.Lines) != 2 || note.Lines[0].Line != 1 || note.Lines[1].Line != 3 {
-		t.Fatalf("delivery without company setting: %+v", note.Lines)
+	if len(note.Lines) != 2 || note.Lines[0].Line != 1 || note.Lines[1].Line != 3 || note.ServicesInvoicing != "" || note.OrderStatus != "delivered" {
+		t.Fatalf("delivery without company setting: %+v", note)
+	}
+	// Lo ya facturado no se pide otra vez.
+	s, c = h.call("POST", "/api/orders/orders/"+o.ID+"/invoice-services", "biller", map[string]any{}, nil)
+	h.mustCode(s, c, 422, "orders.nothing_to_invoice", "nothing left to invoice")
+	// Facturación descarta su borrador: vuelve a pendiente (dos veces, igual) y se pide otra vez.
+	for range 2 {
+		data, _ := json.Marshal(map[string]any{"invoiceId": fw.NewUUID().String(), "sources": []map[string]any{
+			{"type": "orders.delivery", "id": fw.NewUUID().String()}, {"type": "orders.service-invoicing", "id": o.ID + "|" + served}}})
+		h.ok(h.ord.Consumer.HandleMessage(context.Background(), application.Envelope{ID: fw.NewUUID().String(), Type: "billing.draft-discarded.v1",
+			Source: "billing", Data: data}))
+	}
+	if got := invoiced(o); !same(got, "0", "0", "0") {
+		t.Fatalf("released by the discarded draft: %v", got)
+	}
+	s, c = h.call("POST", "/api/orders/orders/"+o.ID+"/invoice-services", "biller", map[string]any{}, nil)
+	h.mustCode(s, c, 200, "", "invoice the released services")
+	if got := invoiced(o); !same(got, "0", "1", "0") {
+		t.Fatalf("invoiced again: %v", got)
 	}
 
 	// La empresa factura directamente: el montaje (sin ajuste) deja de ir al albarán; la revisión,
 	// que lo dice el producto, sigue yendo.
 	f.set(func(f *fakeFulfilment) { f.company = "direct_invoice" })
 	o = order(montaje.ID, revision.ID)
-	s, c = deliver(o, pick(1), nil)
-	h.mustCode(s, c, 422, "orders.service_direct_invoice", "pick a service of a direct invoice company")
+	note = oapp.DeliveryDTO{}
 	s, c = deliver(o, all, &note)
 	h.mustCode(s, c, 201, "", "deliver")
-	if len(note.Lines) != 1 || note.Lines[0].Line != 2 {
-		t.Fatalf("delivery with direct_invoice company: %+v", note.Lines)
+	if len(note.Lines) != 1 || note.Lines[0].Line != 2 || note.ServicesInvoicing == "" {
+		t.Fatalf("delivery with direct_invoice company: %+v", note)
 	}
 
+	// on_confirm: al confirmar se factura la cantidad entera; servir no factura nada más.
+	f.set(func(f *fakeFulfilment) { f.moment = "on_confirm" })
+	o = order(soporte.ID)
+	if got := invoiced(o); !same(got, "1") {
+		t.Fatalf("invoiced on confirm: %v", got)
+	}
+	note = oapp.DeliveryDTO{}
+	s, c = deliver(o, all, &note)
+	h.mustCode(s, c, 201, "", "serve after confirm")
+	if note.ServicesInvoicing != "" || note.OrderStatus != "delivered" {
+		t.Fatalf("serving a service invoiced on confirm: %+v", note)
+	}
+
+	// manual: servir no factura; la factura se pide con su permiso, y sólo una vez.
+	f.set(func(f *fakeFulfilment) { f.moment = "manual" })
+	o = order(soporte.ID)
+	note = oapp.DeliveryDTO{}
+	s, c = deliver(o, all, &note)
+	h.mustCode(s, c, 201, "", "serve with manual invoicing")
+	if note.ServicesInvoicing != "" || !same(invoiced(o), "0") {
+		t.Fatalf("serving with manual invoicing: %+v %v", note, invoiced(o))
+	}
+	s, c = h.call("POST", "/api/orders/orders/"+o.ID+"/invoice-services", "dispatcher", map[string]any{}, nil)
+	if s != http.StatusForbidden {
+		t.Fatalf("invoice services without permission: %d %s", s, c)
+	}
+	var after oapp.OrderDTO
+	s, c = h.call("POST", "/api/orders/orders/"+o.ID+"/invoice-services", "biller", map[string]any{"date": "2026-10-06"}, &after)
+	h.mustCode(s, c, 200, "", "invoice services")
+	if len(after.Lines) != 1 || after.Lines[0].Invoiced != "1" {
+		t.Fatalf("invoiced by request: %+v", after.Lines)
+	}
+	s, c = h.call("POST", "/api/orders/orders/"+o.ID+"/invoice-services", "biller", map[string]any{}, nil)
+	h.mustCode(s, c, 422, "orders.nothing_to_invoice", "invoice services twice")
+	f.set(func(f *fakeFulfilment) { f.moment = "" })
+
 	// Si los ajustes no se pueden leer: un pedido sin líneas sin stock no los consulta (falla por
-	// lo suyo, que nada está retenido); uno con servicios falla.
+	// lo suyo, que nada está retenido); uno con servicios falla al servirlo y al confirmarlo.
+	o = order(montaje.ID)
 	f.set(func(f *fakeFulfilment) { f.fail, f.calls = errors.New("settings unavailable"), 0 })
 	goods := order(tornillo.ID)
 	s, c = deliver(goods, pick(1), nil)
@@ -228,9 +337,14 @@ func (h *host) fulfilmentScenario(tag string, f *fakeFulfilment) {
 	if f.calls != 0 {
 		t.Fatalf("settings consulted for an order with only stocked lines: %d calls", f.calls)
 	}
-	o = order(montaje.ID)
 	if s, _ := deliver(o, all, nil); s != http.StatusInternalServerError {
 		t.Fatalf("delivery with failing settings: %d, want 500", s)
+	}
+	var draft oapp.OrderDTO
+	h.must(h.do("POST", "/api/orders/orders", "seller", map[string]any{"company": acme.ID, "customer": ana.ID, "date": "2026-10-04"}, &draft), 201, "draft")
+	h.must(h.do("POST", "/api/orders/orders/"+draft.ID+"/lines", "seller", map[string]any{"product": montaje.ID, "quantity": "1"}, nil), 200, "line")
+	if s := h.do("POST", "/api/orders/orders/"+draft.ID+"/confirm", "manager", nil, nil); s != http.StatusInternalServerError {
+		t.Fatalf("confirm with failing settings: %d, want 500", s)
 	}
 	f.set(func(f *fakeFulfilment) { f.fail = nil })
 }

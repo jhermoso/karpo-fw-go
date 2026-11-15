@@ -84,6 +84,10 @@ type CompanySettings struct {
 	// PartialBillingPolicy es la política de facturación parcial de la empresa: "allow_partial" o
 	// "require_complete_order"; "" sin ajuste (D-153). La del cliente, en Orders, le gana.
 	PartialBillingPolicy string
+	// ServiceInvoicingMoment es cuándo se facturan los servicios en "direct_invoice": "on_serve"
+	// (al servir), "on_confirm" (al confirmar el pedido) o "manual" (a petición); "" sin ajuste, al
+	// servir (D-155).
+	ServiceInvoicingMoment string
 }
 
 // CompanyProfiles dice los ajustes de facturación de una empresa interna y el patrón (una

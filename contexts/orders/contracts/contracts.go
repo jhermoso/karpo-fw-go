@@ -121,6 +121,37 @@ type DeliveryIssuedV1 struct {
 // IntegrationEventType implementa application.IntegrationEvent.
 func (DeliveryIssuedV1) IntegrationEventType() string { return "orders.delivery-issued.v1" }
 
+// ServiceLine es la cantidad de una línea de servicio de un pedido que se envía a facturar, con su
+// precio (hasta cuatro decimales) y el descuento que se aplica (porcentaje con hasta cuatro
+// decimales), como una línea de albarán (D-149).
+type ServiceLine struct {
+	Line        int    `json:"line"`
+	Product     string `json:"product"`
+	SKU         string `json:"sku"`
+	Description string `json:"description"`
+	TaxCode     string `json:"taxCode,omitempty"`
+	Quantity    string `json:"quantity"`
+	UnitPrice   string `json:"unitPrice"`
+	Discount    string `json:"discount"`
+}
+
+// ServicesInvoiceableV1 se publica cuando un pedido envía a facturar sus servicios en
+// direct_invoice (D-155): al servirlos (on_serve), al confirmarlo (on_confirm) o a petición
+// (manual). Lleva sólo lo que toca ahora, nunca dos veces lo mismo; InvoicingID es nuevo en cada
+// emisión. Billing prepara un borrador con origen orders.service-invoicing, id "pedido|emisión".
+type ServicesInvoiceableV1 struct {
+	InvoicingID string        `json:"invoicingId"`
+	OrderID     string        `json:"orderId"`
+	OrderNumber string        `json:"orderNumber"`
+	Company     string        `json:"company"`
+	Customer    string        `json:"customer"`
+	Date        string        `json:"date"`
+	Lines       []ServiceLine `json:"lines"`
+}
+
+// IntegrationEventType implementa application.IntegrationEvent.
+func (ServicesInvoiceableV1) IntegrationEventType() string { return "orders.services-invoiceable.v1" }
+
 // SalesOrderServingCompletedV1 se publica cuando a un pedido deja de quedarle nada pendiente de
 // servir: con su último albarán o al cerrarlo con lo pendiente (D-153; SalesOrderServingCompleted
 // de Trench). Billing factura entonces los albaranes que esperaban el pedido completo.

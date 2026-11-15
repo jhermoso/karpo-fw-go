@@ -187,3 +187,27 @@ func TestParseApprovalActions(t *testing.T) {
 		}
 	}
 }
+
+// El momento de facturar los servicios en direct_invoice (D-155): on_serve, on_confirm o manual;
+// vacío lo limpia (al servir); otro valor, Company.InvalidServiceInvoicingMoment. direct_invoice ya
+// se admite.
+func TestInternalOrganizationProfile_ServiceInvoicingMoment(t *testing.T) {
+	p := domain.InternalOrganizationProfile{Organization: domain.NewPartyID()}
+	for _, m := range []string{"on_serve", " on_confirm ", "manual", ""} {
+		if err := p.SetServiceInvoicingMoment(m); err != nil || p.ServiceInvoicingMoment != strings.TrimSpace(m) {
+			t.Fatalf("%q: %q %v", m, p.ServiceInvoicingMoment, err)
+		}
+	}
+	var v *fw.RuleViolationError
+	if err := p.SetServiceInvoicingMoment("later"); !errors.As(err, &v) || v.Code != domain.ErrInvalidServiceInvoicingMoment {
+		t.Fatalf("an unknown moment: %v", err)
+	}
+	if err := p.SetServiceFulfilmentMode("direct_invoice"); err != nil {
+		t.Fatalf("direct_invoice is available: %v", err)
+	}
+	q := p
+	q.ServiceInvoicingMoment = "manual"
+	if p.Equal(q) {
+		t.Fatal("the moment is part of the profile")
+	}
+}

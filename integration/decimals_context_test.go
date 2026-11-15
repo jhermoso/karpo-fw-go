@@ -136,9 +136,14 @@ func TestContextDecimalColumns(t *testing.T) {
 				}
 			}
 			nullable := map[string]bool{}
+			later := map[string]bool{} // tablas que crea una migración posterior (ord_service_invoicings, D-155)
 			for table, cols := range columns {
 				if len(cols) == 0 {
 					continue // sin decimales; puede llegar en una migración posterior (bil_invoice_sources)
+				}
+				if !tableExists(ctx, db, table) {
+					later[table] = true
+					continue
 				}
 				present := columnsOf(t, ctx, db, table)
 				for c := range cols {
@@ -160,7 +165,7 @@ func TestContextDecimalColumns(t *testing.T) {
 					if !got.numeric || got.precision != dc.Precision || got.scale != dc.Scale {
 						t.Errorf("%s.%s is %s(%d,%d), want a numeric %s", table, c, got.typ, got.precision, got.scale, dc)
 					}
-					if got.nullable != nullable[table+"."+c] {
+					if !later[table] && got.nullable != nullable[table+"."+c] {
 						t.Errorf("%s.%s: nullable %v, before the migration %v", table, c, got.nullable, nullable[table+"."+c])
 					}
 				}
@@ -310,6 +315,16 @@ func insertAsText[ID fw.Identifier, T fw.AggregateRoot[ID]](t *testing.T, ctx co
 }
 
 // columnsOf devuelve las columnas que tiene hoy una tabla, en minúsculas.
+// tableExists dice si la tabla ya está en la base.
+func tableExists(ctx context.Context, db *sqlrepo.DB, table string) bool {
+	rows, err := db.QueryContext(ctx, "SELECT * FROM "+table+" WHERE 1 = 0")
+	if err != nil {
+		return false
+	}
+	_ = rows.Close()
+	return true
+}
+
 func columnsOf(t *testing.T, ctx context.Context, db *sqlrepo.DB, table string) map[string]bool {
 	t.Helper()
 	rows, err := db.QueryContext(ctx, "SELECT * FROM "+table+" WHERE 1 = 0")

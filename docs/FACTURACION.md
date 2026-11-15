@@ -159,6 +159,11 @@ factura, sin que ningún contexto escriba en el otro.
   factura para ese cliente con las líneas del albarán, con su precio, su descuento encadenado
   (D-149) y su código de impuesto. La fecha de operación es la del albarán y la descripción cita el albarán y el pedido.
   Una persona lo revisa y lo emite en una serie; la emisión sigue siendo un permiso aparte.
+- **Los servicios que se facturan desde el pedido** (D-155) llegan con
+  `orders.services-invoiceable.v1`: un borrador por emisión, origen `orders.service-invoicing` (id
+  `pedido|emisión`), el mismo cálculo; descartarlo publica `billing.draft-discarded.v1` y Pedidos
+  devuelve esas cantidades a pendiente. Detalle en [PEDIDOS.md](PEDIDOS.md), «Facturar los
+  servicios desde el pedido».
 - **La factura recuerda su origen** (tipo, Id y número del documento). Hay un borrador por
   albarán: un mensaje repetido no crea otro.
 - **Un borrador que viene de un albarán no se descarta** (422): lo entregado se factura, y un
