@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/receivables/contracts"
@@ -89,9 +90,19 @@ type SetCredit struct {
 	Customer string  `json:"customer"`
 	Terms    string  `json:"terms,omitempty"`
 	Limit    *string `json:"limit,omitempty"` // ausente: sin límite
-	Blocked  bool    `json:"blocked,omitempty"`
-	// BlockReason dice por qué se bloquea (D-122); sin bloqueo no se guarda.
+	// Blocked y BlockReason no cambian el bloqueo (D-156: tiene sus órdenes, BlockCredit y
+	// UnblockCredit); si llegan y piden otro estado u otro motivo, es 422
+	// receivables.block_change_requires_command. El perfil nuevo nace sin bloquear.
+	Blocked     *bool  `json:"blocked,omitempty"`
 	BlockReason string `json:"blockReason,omitempty"`
+}
+
+// sameBlock comprueba que el cambio general no pide otro bloqueo ni otro motivo que los que hay.
+func sameBlock(c SetCredit, blocked bool, reason string) error {
+	if (c.Blocked != nil && *c.Blocked != blocked) || (strings.TrimSpace(c.BlockReason) != "" && strings.TrimSpace(c.BlockReason) != reason) {
+		return fw.Violation(domain.CodeBlockChangeRequiresCommand, "blocking or unblocking a customer's credit is its own command, with a reason")
+	}
+	return nil
 }
 
 // GetExposure devuelve la situación de crédito de un cliente.
@@ -117,11 +128,18 @@ type CreditDTO struct {
 	Limit       string `json:"limit,omitempty"`
 	Blocked     bool   `json:"blocked"`
 	BlockReason string `json:"blockReason,omitempty"` // D-122
+	// UnblockReason es el motivo del último desbloqueo (D-156).
+	UnblockReason string `json:"unblockReason,omitempty"`
+	Version       int64  `json:"version"`
+	// PendingApproval es el id de la solicitud que ha dejado bloquear o desbloquear, si la empresa
+	// exige aprobación: el perfil no ha cambiado.
+	PendingApproval string `json:"pendingApproval,omitempty"`
 }
 
 func creditDTO(p *domain.CreditProfile) CreditDTO {
 	s := p.State()
-	d := CreditDTO{ID: p.ID().String(), Seller: s.Seller.String(), Customer: s.Customer.String(), Limited: s.Limited, Blocked: s.Blocked, BlockReason: s.BlockReason}
+	d := CreditDTO{ID: p.ID().String(), Seller: s.Seller.String(), Customer: s.Customer.String(), Limited: s.Limited, Blocked: s.Blocked, BlockReason: s.BlockReason,
+		UnblockReason: s.UnblockReason, Version: p.Version()}
 	if !s.Terms.IsZero() {
 		d.Terms = s.Terms.String()
 	}
@@ -282,8 +300,11 @@ func (s service) termsUseCases(svc *Service) {
 			return CreditDTO{}, err
 		}
 		if len(ps) == 0 {
+			if err := sameBlock(c, false, ""); err != nil {
+				return CreditDTO{}, err
+			}
 			p, err := domain.ReconstituteCreditProfile(domain.NewCreditProfileID(), domain.CreditProfileState{Seller: seller, Customer: customer,
-				Terms: terms, Limited: limited, Limit: limit, Blocked: c.Blocked, BlockReason: c.BlockReason})
+				Terms: terms, Limited: limited, Limit: limit})
 			if err != nil {
 				return CreditDTO{}, err
 			}
@@ -293,7 +314,10 @@ func (s service) termsUseCases(svc *Service) {
 			return creditDTO(p), nil
 		}
 		p, err := s.credit.Update(ctx, ps[0].ID(), func(_ context.Context, p *domain.CreditProfile) error {
-			return p.Set(terms, limited, limit, c.Blocked, c.BlockReason)
+			if err := sameBlock(c, p.State().Blocked, p.State().BlockReason); err != nil {
+				return err
+			}
+			return p.Set(terms, limited, limit)
 		})
 		if err != nil {
 			return CreditDTO{}, err

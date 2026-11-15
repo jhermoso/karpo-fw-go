@@ -115,6 +115,8 @@ func Migrations() sqlrepo.MigrationSet {
 		// había son presupuestos.
 		{Version: 10, Name: "quote kind", Up: sqlrepo.RenderDDLAll(
 			`ALTER TABLE ord_quotes {add:kind} {str:20} DEFAULT 'quote' NOT NULL{addEnd}`)},
+		// Bloquear y desbloquear son órdenes con motivo, historial y aprobación (D-156 ampliada).
+		{Version: 11, Name: "block history and approval requests", Up: sqlrepo.RenderDDLAll(blockDDL...)},
 	}}
 }
 
@@ -221,7 +223,7 @@ func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 }
 
 // Tables enumera las tablas del contexto, las hijas primero (orden de borrado).
-var Tables = []string{"ord_quote_lines", "ord_quotes", "ord_delivery_lines", "ord_deliveries", "ord_order_lines", "ord_orders", "ord_terms", "ord_counters", TableOutbox,
+var Tables = []string{"ord_quote_lines", "ord_quotes", "ord_delivery_lines", "ord_deliveries", "ord_order_lines", "ord_orders", TableTermsBlockEvents, "ord_terms", "ord_counters", TableApprovals, TableOutbox,
 	TableIntegrationOutbox, TableAuditLog, TableInbox}
 
 // DropAll borra las tablas del contexto y su historial de migraciones (sólo para pruebas).
@@ -258,20 +260,26 @@ func TermsMapping() sqlrepo.Mapping[domain.TermsID, *domain.Terms] {
 		Table:    "ord_terms",
 		Decimals: decimalColumns.Of("ord_terms"),
 		Columns: sqlrepo.WithAuditColumns("company", "customer", "price_list", "discount", "block_orders", "block_delivery", "block_reason",
-			"billing_periodicity", "line_rounding", "price_decimals"),
+			"billing_periodicity", "line_rounding", "price_decimals", "unblock_reason"),
+		Children: []sqlrepo.Child[*domain.Terms]{blockEventsChild},
 		Dehydrate: func(t *domain.Terms) (sqlrepo.Values, error) {
 			s := t.State()
 			return sqlrepo.AuditStampValues(sqlrepo.Values{"company": s.Company, "customer": s.Customer, "price_list": optUUID(s.PriceList.UUID),
 				"discount": s.Discount.Round(2), "block_orders": s.BlockOrders, "block_delivery": s.BlockDelivery, "block_reason": nullString(s.BlockReason),
-				"billing_periodicity": string(s.BillingPeriodicity), "line_rounding": nullString(s.LineRounding),
+				"unblock_reason": nullString(s.UnblockReason), "billing_periodicity": string(s.BillingPeriodicity), "line_rounding": nullString(s.LineRounding),
 				"price_decimals": optInt(s.PriceDecimals)}, t.AuditStamp()), nil
 		},
-		Hydrate: func(r *sqlrepo.Row, _ sqlrepo.ChildRows) (*domain.Terms, error) {
+		Hydrate: func(r *sqlrepo.Row, children sqlrepo.ChildRows) (*domain.Terms, error) {
 			s := domain.TermsState{Company: domain.OrganizationID{UUID: r.UUID("company")}, Customer: domain.PartyID{UUID: r.UUID("customer")},
 				PriceList: domain.PriceListID{UUID: r.UUID("price_list")}, Discount: r.Decimal("discount"), BlockOrders: r.Bool("block_orders"),
-				BlockDelivery: r.Bool("block_delivery"), BlockReason: r.String("block_reason"),
+				BlockDelivery: r.Bool("block_delivery"), BlockReason: r.String("block_reason"), UnblockReason: r.String("unblock_reason"),
 				BillingPeriodicity: domain.BillingPeriodicity(r.String("billing_periodicity")), LineRounding: r.String("line_rounding"),
 				PriceDecimals: intPtr(r.NullInt64("price_decimals")), Audit: r.AuditStamp()}
+			events, err := blockEvents(children.Of("blocks"))
+			if err != nil {
+				return nil, err
+			}
+			s.BlockEvents = events
 			if err := r.Err(); err != nil {
 				return nil, err
 			}

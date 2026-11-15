@@ -14,10 +14,12 @@ import (
 	"github.com/jhermoso/karpo-fw-go/contexts/receivables/domain"
 	"github.com/jhermoso/karpo-fw-go/contexts/receivables/infrastructure"
 	"github.com/jhermoso/karpo-fw-go/pkg/application"
+	"github.com/jhermoso/karpo-fw-go/pkg/application/approval"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/messaging"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/outbox"
 	"github.com/jhermoso/karpo-fw-go/pkg/distribution"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
+	fwapproval "github.com/jhermoso/karpo-fw-go/pkg/domain/approval"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 )
 
@@ -51,6 +53,12 @@ func WithToday(t application.CompanyToday) Option {
 	return func(d *rapp.Deps) { d.Today = t }
 }
 
+// WithApprovalPolicy dice qué empresas exigen aprobación para bloquear o desbloquear el crédito de
+// un cliente (D-156; la de Parties, Module.ApprovalPolicy, en el anfitrión). Sin ella, ninguna.
+func WithApprovalPolicy(p approval.Policy) Option {
+	return func(d *rapp.Deps) { d.Policy = p }
+}
+
 // Compose construye el contexto sobre sw. cal puede ser nil (sin festivos).
 func Compose(sw *hotswap.Switch, cal domain.Calendar, opts ...Option) *Module {
 	integration := hotswap.Outbox(sw, infrastructure.IntegrationOutboxFactory)
@@ -58,7 +66,7 @@ func Compose(sw *hotswap.Switch, cal domain.Calendar, opts ...Option) *Module {
 	d := rapp.Deps{
 		Terms: hotswap.Repository(sw, infrastructure.TermsRepositoryFactory), Receivables: hotswap.Repository(sw, infrastructure.ReceivableRepositoryFactory),
 		Collections: hotswap.Repository(sw, infrastructure.CollectionRepositoryFactory), Credit: hotswap.Repository(sw, infrastructure.CreditRepositoryFactory),
-		Calendar: cal, UoW: sw, Audit: audit,
+		Calendar: cal, UoW: sw, Audit: audit, Approvals: hotswap.Repository(sw, infrastructure.ApprovalRepositoryFactory), Policy: approval.Never{},
 		Recorder: outbox.Recorders(outbox.NewRecorder(hotswap.Outbox(sw, infrastructure.OutboxFactory)),
 			rapp.Publications(messaging.NewRecorder(contracts.Source, integration))),
 	}
@@ -159,6 +167,53 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 		out, err := svc.GetExposure.Handle(r.Context(), rapp.GetExposure{Seller: s("seller"), Customer: s("customer"), On: s("on")})
 		distribution.Respond(w, r, out, err, http.StatusOK)
 	})
+	// Bloquear y desbloquear el crédito son órdenes propias, con motivo y versión (D-156).
+	cred := domain.ParseCreditProfileID
+	block := func(run func(context.Context, rapp.SetCreditBlock) (rapp.CreditDTO, error)) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			id, err := cred(r.PathValue("id"))
+			if err != nil {
+				badID(w, r)
+				return
+			}
+			var c rapp.SetCreditBlock
+			if err := decode(r, &c); err != nil {
+				distribution.WriteError(w, r, err)
+				return
+			}
+			c.ID = id
+			out, err := run(r.Context(), c)
+			code := http.StatusOK
+			if out.PendingApproval != "" {
+				code = http.StatusAccepted // queda pendiente de aprobación: el perfil no ha cambiado
+			}
+			distribution.Respond(w, r, out, err, code)
+		}
+	}
+	mux.HandleFunc("POST /api/receivables/credit/{id}/block", block(svc.BlockCredit.Handle))
+	mux.HandleFunc("POST /api/receivables/credit/{id}/unblock", block(svc.UnblockCredit.Handle))
+	mux.HandleFunc("GET /api/receivables/credit/{id}/block-history", func(w http.ResponseWriter, r *http.Request) {
+		id, err := cred(r.PathValue("id"))
+		if err != nil {
+			badID(w, r)
+			return
+		}
+		out, err := svc.CreditBlockHistory.Handle(r.Context(), rapp.GetCredit{ID: id})
+		distribution.Respond(w, r, out, err, http.StatusOK)
+	})
+	// Las solicitudes de aprobación del bloqueo y el desbloqueo.
+	mux.HandleFunc("GET /api/receivables/approvals", func(w http.ResponseWriter, r *http.Request) {
+		out, err := svc.SearchApprovals.Handle(r.Context(), rapp.SearchApprovals{Company: r.URL.Query().Get("company"), Status: r.URL.Query().Get("status")})
+		distribution.Respond(w, r, out, err, http.StatusOK)
+	})
+	apv := func(s string) (fwapproval.RequestID, error) {
+		u, err := fw.ParseUUID(s)
+		return fwapproval.RequestID{UUID: u}, err
+	}
+	resolve := func(c *rapp.ResolveApproval, id fwapproval.RequestID) { c.ID = id }
+	mux.HandleFunc("POST /api/receivables/approvals/{id}/approve", command(apv, resolve, svc.ApproveApproval.Handle))
+	mux.HandleFunc("POST /api/receivables/approvals/{id}/reject", command(apv, resolve, svc.RejectApproval.Handle))
+	mux.HandleFunc("POST /api/receivables/approvals/{id}/cancel", command(apv, resolve, svc.CancelApproval.Handle))
 
 	mux.HandleFunc("GET /api/receivables/invoices", func(w http.ResponseWriter, r *http.Request) {
 		s, n := query(r)

@@ -14,6 +14,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/contexts/orders/contracts"
 	"github.com/jhermoso/karpo-fw-go/contexts/orders/domain"
 	app "github.com/jhermoso/karpo-fw-go/pkg/application"
+	"github.com/jhermoso/karpo-fw-go/pkg/application/approval"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/messaging"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/orchestration"
@@ -52,6 +53,11 @@ type Deps struct {
 	Today      app.CompanyToday // opcional: sin él, hoy es el de UTC (docs/ARQUITECTURA.md, «Hoy es el de la empresa»)
 	Recorder   app.EventRecorder
 	Audit      app.AuditLog
+	// Policy dice qué empresas exigen aprobación para bloquear o desbloquear a un cliente (la de
+	// Parties en el anfitrión). Nil es approval.Never.
+	Policy approval.Policy
+	// Approvals guarda las solicitudes de aprobación (ord_approvals).
+	Approvals approval.Repository
 }
 
 // withoutMerged deja fuera de un listado los registros cuyo cliente es una party fusionada,
@@ -64,6 +70,17 @@ func withoutMerged[T any](ctx context.Context, m app.MergedParties, include bool
 type Service struct {
 	SetTerms    app.CommandHandler[SetTerms, TermsDTO]
 	SearchTerms app.QueryHandler[SearchTerms, []TermsDTO]
+	// BlockTerms y UnblockTerms bloquean y desbloquean pedidos o entregas con motivo (D-156); con
+	// aprobación, la respuesta trae PendingApproval y las condiciones no cambian.
+	BlockTerms   app.CommandHandler[SetTermsBlock, TermsDTO]
+	UnblockTerms app.CommandHandler[SetTermsBlock, TermsDTO]
+	// TermsBlockHistory es el historial de bloqueos y desbloqueos.
+	TermsBlockHistory app.QueryHandler[GetTerms, []BlockEventDTO]
+
+	SearchApprovals app.QueryHandler[SearchApprovals, []ApprovalDTO]
+	ApproveApproval app.CommandHandler[ResolveApproval, ApprovalDTO]
+	RejectApproval  app.CommandHandler[ResolveApproval, ApprovalDTO]
+	CancelApproval  app.CommandHandler[ResolveApproval, ApprovalDTO]
 
 	DraftOrder   app.CommandHandler[DraftOrder, OrderDTO]
 	AddLine      app.CommandHandler[AddLine, OrderDTO]
@@ -160,6 +177,7 @@ func NewService(d Deps) *Service {
 	s := newService(d)
 	svc := &Service{}
 	s.termsUseCases(svc)
+	s.blockUseCases(svc)
 	s.orderUseCases(svc)
 	s.quoteUseCases(svc)
 	return svc

@@ -84,7 +84,8 @@ func compose(t *testing.T, opts ...orders.Option) *host {
 		oapp.PermTermsRead, oapp.PermTermsUpdate}
 	users := map[string][]authz.Permission{"seller": {oapp.PermOrderRead, oapp.PermOrderUpdate, oapp.PermTermsRead},
 		"manager":    {oapp.PermOrderRead, oapp.PermOrderUpdate, oapp.PermOrderConfirm, oapp.PermOrderCancel, oapp.PermTermsRead, oapp.PermTermsUpdate},
-		"dispatcher": {oapp.PermOrderRead, oapp.PermOrderDeliver}, "outsider": all}
+		"dispatcher": {oapp.PermOrderRead, oapp.PermOrderDeliver}, "outsider": all,
+		"approver": {oapp.PermTermsRead, oapp.PermApproveBlock, oapp.PermApproveUnblock}} // aprueba el bloqueo (D-156)
 	for u, perms := range users {
 		h.ids[u] = fw.NewUUID()
 		dir.Put(h.ids[u], authz.Subject{Active: true, Permissions: perms})
@@ -358,12 +359,47 @@ func (h *host) scenario(tag string) {
 	var o3 oapp.OrderDTO
 	h.must(h.do("POST", "/api/orders/orders", "seller", draft, &o3), 201, "third draft")
 	h.must(h.do("POST", "/api/orders/orders/"+o3.ID+"/lines", "seller", map[string]any{"product": montaje.ID, "quantity": "1"}, nil), 200, "its line")
-	h.must(h.do("PUT", "/api/orders/terms", "manager", map[string]any{"company": acme.ID, "customer": ana.ID, "blockOrders": true}, nil), 200, "block orders")
+	// Bloquear y desbloquear son órdenes propias con ámbitos y motivo (D-156): el cambio general no
+	// toca el bloqueo.
+	var all []oapp.TermsDTO
+	h.must(h.do("GET", "/api/orders/terms?company="+acme.ID, "manager", nil, &all), 200, "the terms")
+	var anaTerms oapp.TermsDTO
+	for _, x := range all {
+		if x.Customer == ana.ID {
+			anaTerms = x
+		}
+	}
+	block := func(verb string, body map[string]any, want int, what string) {
+		h.t.Helper()
+		var out oapp.TermsDTO
+		h.must(h.do("POST", "/api/orders/terms/"+anaTerms.ID+"/"+verb, "manager", body, &out), want, what)
+		if want < 300 {
+			anaTerms = out
+		}
+	}
+	h.must(h.do("PUT", "/api/orders/terms", "manager", map[string]any{"company": acme.ID, "customer": ana.ID, "discount": anaTerms.Discount, "blockOrders": true}, nil),
+		422, "the general change does not block")
+	block("block", map[string]any{"scopes": []string{"orders"}}, 422, "blocking needs a reason")
+	block("block", map[string]any{"reason": "impagos"}, 422, "blocking needs a scope")
+	block("block", map[string]any{"scopes": []string{"orders"}, "reason": "impagos", "version": anaTerms.Version}, 200, "block orders")
 	h.must(h.do("POST", "/api/orders/orders/"+o3.ID+"/confirm", "manager", nil, nil), 422, "blocked for orders")
-	h.must(h.do("PUT", "/api/orders/terms", "manager", map[string]any{"company": acme.ID, "customer": ana.ID, "blockDelivery": true}, nil), 200, "block deliveries")
+	block("block", map[string]any{"scopes": []string{"delivery"}, "reason": "sin almacén"}, 200, "block deliveries")
+	block("unblock", map[string]any{"scopes": []string{"orders"}}, 422, "unblocking needs a reason")
+	h.must(h.do("PUT", "/api/orders/terms", "manager", map[string]any{"company": acme.ID, "customer": ana.ID, "discount": anaTerms.Discount, "blockOrders": false}, nil),
+		422, "the general change does not unblock")
+	block("unblock", map[string]any{"scopes": []string{"orders"}, "reason": "pagado"}, 200, "unblock orders")
+	if anaTerms.BlockOrders || !anaTerms.BlockDelivery || anaTerms.BlockReason != "sin almacén" || anaTerms.UnblockReason != "pagado" {
+		t.Fatalf("orders unblocked, deliveries still blocked: %+v", anaTerms)
+	}
 	h.must(h.do("POST", "/api/orders/orders/"+o3.ID+"/confirm", "manager", nil, &o3), 200, "confirm the third")
 	h.must(h.do("POST", "/api/orders/orders/"+o3.ID+"/deliveries", "dispatcher", nil, nil), 422, "blocked for deliveries")
-	h.must(h.do("PUT", "/api/orders/terms", "manager", map[string]any{"company": acme.ID, "customer": ana.ID}, nil), 200, "unblock")
+	block("unblock", map[string]any{"reason": "repuesto"}, 200, "unblock everything")
+	var history []oapp.BlockEventDTO
+	h.must(h.do("GET", "/api/orders/terms/"+anaTerms.ID+"/block-history", "manager", nil, &history), 200, "block history")
+	if len(history) != 4 || !history[0].Blocked || history[0].Scopes[0] != "orders" || history[3].Blocked || history[3].Scopes[0] != "delivery" ||
+		history[3].Reason != "repuesto" || anaTerms.BlockReason != "" {
+		t.Fatalf("block history: %+v %+v", history, anaTerms)
+	}
 	today(func() {
 		h.must(h.do("POST", "/api/orders/orders/"+o3.ID+"/deliveries", "dispatcher", nil, &note), 201, "deliver the service")
 	})

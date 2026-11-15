@@ -94,12 +94,48 @@ contexts/receivables/
   caracteres, el `BlockReason` de Trench) en `PUT /api/receivables/credit` y en su respuesta. Se guarda con el
   bloqueo y se borra al desbloquear: sin bloqueo, el motivo que llegue se descarta. La vista por
   pareja lo enseña en `blockReason` ([CONTRATO-PARTIES-V1.md](CONTRATO-PARTIES-V1.md) §7 quinquies).
-  Fijar el perfil lo sustituye entero: reenviar `blocked: true` sin `blockReason` borra el motivo.
+  Desde D-156 el motivo no se fija aquí: ver «El bloqueo».
 - **Fusión de fichas** (D-93; [PARTIES.md](PARTIES.md) §17): Cobros escucha
   `parties.relationship-transferred.v1`. Cuando la relación de cliente de un vendedor pasa de una
-  ficha a otra, copia el perfil de crédito (condiciones, límite, bloqueo) de (vendedor, la que
+  ficha a otra, copia el perfil de crédito (condiciones, límite, bloqueo y motivos, sin el
+  historial: el bloqueo pasa a la superviviente sin entrada de historial y queda en el de la ficha
+  que cede) de (vendedor, la que
   cede) a (vendedor, la que recibe) si ésta no tiene uno. El de la que cede no se toca. Al deshacer la
   fusión (`returning: true`) no se copia nada.
+
+## El bloqueo (D-156 ampliada; desde el 2026-11-15)
+
+Bloquear y desbloquear el crédito de un cliente son **órdenes propias**, con motivo obligatorio y la
+versión leída, como en Compras, Envíos y Cuentas (el `commercial_block_event` de Trench, PR 151):
+
+| Orden | Petición | Respuesta |
+|---|---|---|
+| Bloquear | `POST /api/receivables/credit/{id}/block` `{reason, version?}` | 200 con el perfil; 202 con `pendingApproval` si hay que aprobarlo |
+| Desbloquear | `POST /api/receivables/credit/{id}/unblock` `{reason, version?}` | igual |
+| Historial | `GET /api/receivables/credit/{id}/block-history` | `[{blocked, reason, at, by, byName, approval?}]`, del más antiguo al más reciente |
+
+- `{id}` es el del perfil (`PUT /api/receivables/credit` lo crea y lo devuelve, con su `version`).
+  Un perfil nuevo nace sin bloquear.
+- Sin motivo, 422 `receivables.block_reason_required` / `receivables.unblock_reason_required`
+  (también si ya está así o si pasa por aprobación); con otra versión, 409. Si ya está así, no cambia
+  nada.
+- `PUT /api/receivables/credit` **no toca el bloqueo**: `blocked` u otro `blockReason` distintos de
+  los vigentes son 422 `receivables.block_change_requires_command`; los mismos, o ninguno, se
+  ignoran. De bloqueado sólo se sale desbloqueando con motivo.
+- Motivos vigentes en `rec_credit_profiles`: `block_reason` (se borra al desbloquear) y
+  `unblock_reason` (el del último desbloqueo; se borra al bloquear). La respuesta los lleva en
+  `blockReason` y `unblockReason`.
+- Historial en `rec_credit_block_events` (una fila por cambio efectivo, en la misma transacción: quién
+  —el usuario del contexto de autorización—, cuándo, motivo y la solicitud aprobada, si la hubo).
+- **Aprobación** ([APROBACIONES.md](APROBACIONES.md)): acciones `receivables.credit.block` y
+  `receivables.credit.unblock`, por empresa (la del vendedor) con la política de Parties; permisos
+  `Receivables.Credit.ApproveBlock` y `Receivables.Credit.ApproveUnblock`. Solicitudes en
+  `rec_approvals` (una sola pendiente por perfil, sea bloquear o desbloquear: `pending_key` con índice único
+  `ux_rec_approvals_pending`, 409 `receivables.approval_pending`). Bandeja: `GET
+  /api/receivables/approvals?company=&status=` y `POST /api/receivables/approvals/{id}/approve`,
+  `/reject` (con `comment`) y `/cancel` (sólo el solicitante).
+- Migración 5: `unblock_reason`, `rec_credit_block_events`, `rec_approvals` con `pending_key` y su
+  índice. Pedidos y Facturación leen el bloqueo por el puerto `Credit.Exposure`, que no cambia.
 
 ## Decisiones (aprobadas por Javier el 2026-09-28)
 

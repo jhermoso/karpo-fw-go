@@ -9,6 +9,7 @@ import (
 	pdomain "github.com/jhermoso/karpo-fw-go/contexts/parties/domain"
 	"github.com/jhermoso/karpo-fw-go/contexts/receivables"
 	rapp "github.com/jhermoso/karpo-fw-go/contexts/receivables/application"
+	"github.com/jhermoso/karpo-fw-go/contexts/receivables/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/application"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
@@ -60,7 +61,11 @@ func TestReceivables_CreditFollowsAMergedCustomer(t *testing.T) {
 	m := receivables.Compose(sw, nil)
 	seller, ceding, receiving, other := fw.NewUUID().String(), fw.NewUUID().String(), fw.NewUUID().String(), fw.NewUUID().String()
 	limit := "5000"
-	if _, err := m.Service.SetCredit.Handle(ctx, rapp.SetCredit{Seller: seller, Customer: ceding, Limit: &limit, Blocked: true}); err != nil {
+	p, err := m.Service.SetCredit.Handle(ctx, rapp.SetCredit{Seller: seller, Customer: ceding, Limit: &limit})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.Service.BlockCredit.Handle(ctx, rapp.SetCreditBlock{ID: domain.CreditProfileID{UUID: fw.MustParseUUID(p.ID)}, Reason: "impagos"}); err != nil {
 		t.Fatal(err)
 	}
 	small := "10"

@@ -2,15 +2,18 @@ package host_test
 
 import (
 	"context"
+	"errors"
 	"net/http/httptest"
 	"testing"
 
 	orapp "github.com/jhermoso/karpo-fw-go/contexts/orders/application"
+	ordomain "github.com/jhermoso/karpo-fw-go/contexts/orders/domain"
 	parapp "github.com/jhermoso/karpo-fw-go/contexts/parties/application"
 	pardomain "github.com/jhermoso/karpo-fw-go/contexts/parties/domain"
 	puapp "github.com/jhermoso/karpo-fw-go/contexts/purchases/application"
 	pudomain "github.com/jhermoso/karpo-fw-go/contexts/purchases/domain"
 	reapp "github.com/jhermoso/karpo-fw-go/contexts/receivables/application"
+	redomain "github.com/jhermoso/karpo-fw-go/contexts/receivables/domain"
 	"github.com/jhermoso/karpo-fw-go/contexts/security"
 	secapp "github.com/jhermoso/karpo-fw-go/contexts/security/application"
 	"github.com/jhermoso/karpo-fw-go/host"
@@ -80,13 +83,20 @@ func TestPairs_CustomerAndSupplierRelationships(t *testing.T) {
 	limit := "5000"
 	_, err = h.Receivables.Service.SetCredit.Handle(actx, reapp.SetCredit{Seller: acme.ID, Customer: talleres.ID, Limit: &limit})
 	ok(err)
-	_, err = h.Receivables.Service.SetCredit.Handle(actx, reapp.SetCredit{Seller: acme.ID, Customer: ferreteria.ID, Blocked: true, BlockReason: "impagos"})
+	fc, err := h.Receivables.Service.SetCredit.Handle(actx, reapp.SetCredit{Seller: acme.ID, Customer: ferreteria.ID})
 	ok(err)
-	_, err = h.Orders.Service.SetTerms.Handle(actx, orapp.SetTerms{Company: acme.ID, Customer: talleres.ID, BlockDelivery: true, BlockReason: "dirección dudosa"})
+	_, err = h.Receivables.Service.BlockCredit.Handle(actx, reapp.SetCreditBlock{ID: redomain.CreditProfileID{UUID: fw.MustParseUUID(fc.ID)}, Reason: "impagos"})
 	ok(err)
-	// Sin bloqueo no hay motivo (D-122): se descarta.
+	tt, err := h.Orders.Service.SetTerms.Handle(actx, orapp.SetTerms{Company: acme.ID, Customer: talleres.ID})
+	ok(err)
+	_, err = h.Orders.Service.BlockTerms.Handle(actx, orapp.SetTermsBlock{ID: ordomain.TermsID{UUID: fw.MustParseUUID(tt.ID)},
+		Scopes: []string{ordomain.ScopeDelivery}, Reason: "dirección dudosa"})
+	ok(err)
+	// El cambio general no bloquea ni pone motivo (D-156).
 	_, err = h.Receivables.Service.SetCredit.Handle(actx, reapp.SetCredit{Seller: acme.ID, Customer: talleres.ID, Limit: &limit, BlockReason: "nada"})
-	ok(err)
+	if !errors.Is(err, fw.ErrRuleViolation) {
+		t.Fatalf("the general change does not set a block reason: %v", err)
+	}
 
 	type page struct {
 		Items []host.PairRow `json:"items"`

@@ -7,6 +7,7 @@ import (
 
 	"github.com/jhermoso/karpo-fw-go/contexts/orders"
 	oapp "github.com/jhermoso/karpo-fw-go/contexts/orders/application"
+	"github.com/jhermoso/karpo-fw-go/contexts/orders/domain"
 	parties "github.com/jhermoso/karpo-fw-go/contexts/parties/contracts"
 	pdomain "github.com/jhermoso/karpo-fw-go/contexts/parties/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/application"
@@ -59,7 +60,12 @@ func TestOrders_TermsFollowAMergedCustomer(t *testing.T) {
 	t.Cleanup(func() { _ = sw.Close(context.Background()) })
 	m := orders.Compose(sw, nil, nil)
 	company, ceding, receiving, other := fw.NewUUID().String(), fw.NewUUID().String(), fw.NewUUID().String(), fw.NewUUID().String()
-	if _, err := m.Service.SetTerms.Handle(ctx, oapp.SetTerms{Company: company, Customer: ceding, Discount: "5", BlockDelivery: true}); err != nil {
+	ct, err := m.Service.SetTerms.Handle(ctx, oapp.SetTerms{Company: company, Customer: ceding, Discount: "5"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.Service.BlockTerms.Handle(ctx, oapp.SetTermsBlock{ID: domain.TermsID{UUID: fw.MustParseUUID(ct.ID)}, Scopes: []string{domain.ScopeDelivery},
+		Reason: "sin almacén"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := m.Service.SetTerms.Handle(ctx, oapp.SetTerms{Company: company, Customer: other, Discount: "1"}); err != nil {

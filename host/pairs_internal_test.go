@@ -5,9 +5,11 @@ import (
 	"testing"
 
 	orapp "github.com/jhermoso/karpo-fw-go/contexts/orders/application"
+	ordomain "github.com/jhermoso/karpo-fw-go/contexts/orders/domain"
 	parapp "github.com/jhermoso/karpo-fw-go/contexts/parties/application"
 	pardomain "github.com/jhermoso/karpo-fw-go/contexts/parties/domain"
 	reapp "github.com/jhermoso/karpo-fw-go/contexts/receivables/application"
+	redomain "github.com/jhermoso/karpo-fw-go/contexts/receivables/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
@@ -49,9 +51,14 @@ func TestPairs_ScopeAndUnreadableContexts(t *testing.T) {
 	_, err = h.Parties.Service.EstablishRelationship.Handle(actx, parapp.EstablishRelationship{Type: pardomain.RelCustomer.String(), From: acme.ID, To: levante.ID})
 	ok(err)
 	limit := "100"
-	_, err = h.Receivables.Service.SetCredit.Handle(actx, reapp.SetCredit{Seller: acme.ID, Customer: talleres.ID, Limit: &limit, Blocked: true})
+	cred, err := h.Receivables.Service.SetCredit.Handle(actx, reapp.SetCredit{Seller: acme.ID, Customer: talleres.ID, Limit: &limit})
 	ok(err)
-	_, err = h.Orders.Service.SetTerms.Handle(actx, orapp.SetTerms{Company: acme.ID, Customer: talleres.ID, BlockDelivery: true})
+	_, err = h.Receivables.Service.BlockCredit.Handle(actx, reapp.SetCreditBlock{ID: redomain.CreditProfileID{UUID: fw.MustParseUUID(cred.ID)}, Reason: "impagos"})
+	ok(err)
+	terms, err := h.Orders.Service.SetTerms.Handle(actx, orapp.SetTerms{Company: acme.ID, Customer: talleres.ID})
+	ok(err)
+	_, err = h.Orders.Service.BlockTerms.Handle(actx, orapp.SetTermsBlock{ID: ordomain.TermsID{UUID: fw.MustParseUUID(terms.ID)},
+		Scopes: []string{ordomain.ScopeDelivery}, Reason: "sin almacén"})
 	ok(err)
 
 	// Alguien de Acme que lee parties y condiciones de venta, pero no el crédito de Cobros.

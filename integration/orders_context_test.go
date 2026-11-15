@@ -117,19 +117,35 @@ func TestOrdersContext(t *testing.T) {
 
 			terms, err := svc.SetTerms.Handle(actx, oapp.SetTerms{Company: acme.ID, Customer: ana.ID, PriceList: list.ID, Discount: "10"})
 			must(err)
-			terms, err = svc.SetTerms.Handle(actx, oapp.SetTerms{Company: acme.ID, Customer: ana.ID, PriceList: list.ID, Discount: "10", BlockDelivery: false})
+			no := false
+			terms, err = svc.SetTerms.Handle(actx, oapp.SetTerms{Company: acme.ID, Customer: ana.ID, PriceList: list.ID, Discount: "10", BlockDelivery: &no})
 			if err != nil || terms.Version != 2 || terms.PriceList != list.ID || terms.Discount != "10.00" {
 				t.Fatalf("terms round trip: %+v %v", terms, err)
 			}
-			// Migración 6: el motivo del bloqueo va y vuelve, y se borra al desbloquear (D-122).
-			_, err = svc.SetTerms.Handle(actx, oapp.SetTerms{Company: acme.ID, Customer: ana.ID, PriceList: list.ID, Discount: "10", BlockOrders: true, BlockReason: "impagos"})
+			// Migraciones 6 y 11: bloquear y desbloquear son órdenes con motivo (D-156); los motivos y el
+			// historial, con sus ámbitos, van y vuelven, y la solicitud de aprobación tiene su tabla.
+			tid := odomain.TermsID{UUID: fw.MustParseUUID(terms.ID)}
+			_, err = svc.BlockTerms.Handle(actx, oapp.SetTermsBlock{ID: tid, Scopes: []string{odomain.ScopeOrders}, Reason: "impagos", Version: terms.Version})
 			must(err)
-			if ts, err := svc.SearchTerms.Handle(actx, oapp.SearchTerms{Company: acme.ID}); err != nil || len(ts) != 1 || ts[0].BlockReason != "impagos" {
+			if ts, err := svc.SearchTerms.Handle(actx, oapp.SearchTerms{Company: acme.ID}); err != nil || len(ts) != 1 || ts[0].BlockReason != "impagos" || !ts[0].BlockOrders {
 				t.Fatalf("block reason read back: %+v %v", ts, err)
 			}
-			terms, err = svc.SetTerms.Handle(actx, oapp.SetTerms{Company: acme.ID, Customer: ana.ID, PriceList: list.ID, Discount: "10"})
-			if err != nil || terms.BlockReason != "" {
+			yes := true
+			if _, err := svc.SetTerms.Handle(actx, oapp.SetTerms{Company: acme.ID, Customer: ana.ID, PriceList: list.ID, Discount: "10", BlockOrders: &no}); !errors.Is(err, fw.ErrRuleViolation) {
+				t.Fatalf("the general change does not unblock: %v", err)
+			}
+			_, err = svc.SetTerms.Handle(actx, oapp.SetTerms{Company: acme.ID, Customer: ana.ID, PriceList: list.ID, Discount: "10", BlockOrders: &yes})
+			must(err)
+			terms, err = svc.UnblockTerms.Handle(actx, oapp.SetTermsBlock{ID: tid, Reason: "pagado"})
+			if err != nil || terms.BlockReason != "" || terms.UnblockReason != "pagado" || terms.BlockOrders {
 				t.Fatalf("unblocked: %+v %v", terms, err)
+			}
+			if hist, err := svc.TermsBlockHistory.Handle(actx, oapp.GetTerms{ID: tid}); err != nil || len(hist) != 2 || hist[0].Scopes[0] != "orders" ||
+				hist[1].Reason != "pagado" {
+				t.Fatalf("block history read back: %+v %v", hist, err)
+			}
+			if _, err := svc.SearchApprovals.Handle(actx, oapp.SearchApprovals{Status: "all"}); err != nil {
+				t.Fatalf("approval requests: %v", err)
 			}
 			// Migración 9: el cálculo de las facturas del cliente va y vuelve, también el cero (D-150).
 			zero := 0

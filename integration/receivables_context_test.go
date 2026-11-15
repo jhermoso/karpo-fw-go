@@ -110,14 +110,25 @@ func TestReceivablesContext(t *testing.T) {
 				t.Fatalf("terms round trip: %+v %v", got, err)
 			}
 			limit := "1000"
-			// Migración 4: el motivo del bloqueo va y vuelve, y se borra al desbloquear (D-122).
-			_, err = rsvc.SetCredit.Handle(actx, rapp.SetCredit{Seller: acme.ID, Customer: ana.ID, Terms: terms.ID, Limit: &limit, Blocked: true, BlockReason: "impagos"})
+			// Migraciones 4 y 5: bloquear y desbloquear son órdenes con motivo (D-156); los motivos y el
+			// historial van y vuelven, y la solicitud de aprobación tiene su tabla.
+			cred, err := rsvc.SetCredit.Handle(actx, rapp.SetCredit{Seller: acme.ID, Customer: ana.ID, Terms: terms.ID, Limit: &limit})
+			must(err)
+			pid := rdomain.CreditProfileID{UUID: fw.MustParseUUID(cred.ID)}
+			_, err = rsvc.BlockCredit.Handle(actx, rapp.SetCreditBlock{ID: pid, Reason: "impagos", Version: cred.Version})
 			must(err)
 			if cs, err := rsvc.SearchCredit.Handle(actx, rapp.SearchCredit{Seller: acme.ID}); err != nil || len(cs) != 1 || cs[0].BlockReason != "impagos" {
 				t.Fatalf("block reason read back: %+v %v", cs, err)
 			}
-			_, err = rsvc.SetCredit.Handle(actx, rapp.SetCredit{Seller: acme.ID, Customer: ana.ID, Terms: terms.ID, Limit: &limit})
-			must(err)
+			if cr, err := rsvc.UnblockCredit.Handle(actx, rapp.SetCreditBlock{ID: pid, Reason: "pagado"}); err != nil || cr.Blocked || cr.UnblockReason != "pagado" {
+				t.Fatalf("unblocked: %+v %v", cr, err)
+			}
+			if hist, err := rsvc.CreditBlockHistory.Handle(actx, rapp.GetCredit{ID: pid}); err != nil || len(hist) != 2 || hist[1].Reason != "pagado" {
+				t.Fatalf("block history read back: %+v %v", hist, err)
+			}
+			if _, err := rsvc.SearchApprovals.Handle(actx, rapp.SearchApprovals{Status: "all"}); err != nil {
+				t.Fatalf("approval requests: %v", err)
+			}
 
 			issue := func(d bapp.DraftInvoice, series, qty, price string) bapp.InvoiceDTO {
 				inv, err := bm.Service.DraftInvoice.Handle(actx, d)

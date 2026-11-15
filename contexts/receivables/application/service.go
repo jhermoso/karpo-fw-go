@@ -12,6 +12,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/contexts/receivables/contracts"
 	"github.com/jhermoso/karpo-fw-go/contexts/receivables/domain"
 	app "github.com/jhermoso/karpo-fw-go/pkg/application"
+	"github.com/jhermoso/karpo-fw-go/pkg/application/approval"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/messaging"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/orchestration"
@@ -44,6 +45,11 @@ type Deps struct {
 	Today       app.CompanyToday // opcional: sin él, hoy es el de UTC (docs/ARQUITECTURA.md, «Hoy es el de la empresa»)
 	Recorder    app.EventRecorder
 	Audit       app.AuditLog
+	// Policy dice qué empresas exigen aprobación para bloquear o desbloquear el crédito de un
+	// cliente (la de Parties en el anfitrión). Nil es approval.Never.
+	Policy approval.Policy
+	// Approvals guarda las solicitudes de aprobación (rec_approvals).
+	Approvals approval.Repository
 }
 
 // withoutMerged deja fuera de un listado los registros cuya party (cliente o pagador) es una party fusionada,
@@ -62,6 +68,17 @@ type Service struct {
 	SetCredit    app.CommandHandler[SetCredit, CreditDTO]
 	SearchCredit app.QueryHandler[SearchCredit, []CreditDTO]
 	GetExposure  app.QueryHandler[GetExposure, contracts.Exposure]
+	// BlockCredit y UnblockCredit bloquean y desbloquean con motivo (D-156); con aprobación, la
+	// respuesta trae PendingApproval y el perfil no cambia.
+	BlockCredit   app.CommandHandler[SetCreditBlock, CreditDTO]
+	UnblockCredit app.CommandHandler[SetCreditBlock, CreditDTO]
+	// CreditBlockHistory es el historial de bloqueos y desbloqueos.
+	CreditBlockHistory app.QueryHandler[GetCredit, []BlockEventDTO]
+
+	SearchApprovals app.QueryHandler[SearchApprovals, []ApprovalDTO]
+	ApproveApproval app.CommandHandler[ResolveApproval, ApprovalDTO]
+	RejectApproval  app.CommandHandler[ResolveApproval, ApprovalDTO]
+	CancelApproval  app.CommandHandler[ResolveApproval, ApprovalDTO]
 
 	GetReceivable     app.QueryHandler[GetReceivable, ReceivableDTO]
 	SearchReceivables app.QueryHandler[SearchReceivables, fw.Page[ReceivableDTO]]
@@ -165,6 +182,7 @@ func NewService(d Deps) *Service {
 	s.termsUseCases(svc)
 	s.receivableUseCases(svc)
 	s.collectionUseCases(svc)
+	s.blockUseCases(svc)
 	return svc
 }
 

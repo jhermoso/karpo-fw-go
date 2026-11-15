@@ -192,18 +192,36 @@ func TestCollectionAndCredit(t *testing.T) {
 	if _, limited := cp.Available(dec("1000")); limited {
 		t.Fatal("no limit")
 	}
-	_ = cp.Set(domain.TermsID{}, true, dec("0"), false, "")
+	_ = cp.Set(domain.TermsID{}, true, dec("0"))
 	if av, limited := cp.Available(dec("10")); !limited || !av.Equal(dec("-10")) {
 		t.Fatal("a limit of zero is a limit")
 	}
-	// El motivo del bloqueo se guarda con el bloqueo y se borra al desbloquear (D-122).
-	if err := cp.Set(domain.TermsID{}, false, dec("0"), true, "  impagos  "); err != nil || cp.State().BlockReason != "impagos" {
+	// Bloquear y desbloquear exigen motivo y dejan historial (D-156); el motivo vigente se guarda
+	// con el bloqueo y el del desbloqueo, al desbloquear.
+	by := vocab.Actor{Name: "Ana"}
+	if _, err := cp.SetBlocked(true, "  ", by, time.Now(), fw.UUID{}); !errors.Is(err, fw.ErrRuleViolation) || cp.State().Blocked {
+		t.Fatalf("blocking needs a reason: %v", err)
+	}
+	if ok, err := cp.SetBlocked(true, "  impagos  ", by, time.Now(), fw.UUID{}); err != nil || !ok || cp.State().BlockReason != "impagos" {
 		t.Fatalf("the block keeps its reason: %v %+v", err, cp.State())
 	}
-	if err := cp.Set(domain.TermsID{}, false, dec("0"), false, "impagos"); err != nil || cp.State().BlockReason != "" {
-		t.Fatalf("unblocking clears the reason: %v %+v", err, cp.State())
+	if ok, err := cp.SetBlocked(true, "otra vez", by, time.Now(), fw.UUID{}); err != nil || ok || cp.State().BlockReason != "impagos" {
+		t.Fatalf("blocking a blocked profile changes nothing: %v %+v", err, cp.State())
 	}
-	if err := cp.Set(domain.TermsID{}, false, dec("0"), true, strings.Repeat("x", 201)); err == nil {
+	// De bloqueado no se sale con el cambio general: Set no toca el bloqueo.
+	if err := cp.Set(domain.TermsID{}, false, dec("0")); err != nil || !cp.State().Blocked {
+		t.Fatalf("the general change keeps the block: %v %+v", err, cp.State())
+	}
+	if _, err := cp.SetBlocked(false, "", by, time.Now(), fw.UUID{}); !errors.Is(err, fw.ErrRuleViolation) || !cp.State().Blocked {
+		t.Fatalf("unblocking needs a reason: %v", err)
+	}
+	if ok, err := cp.SetBlocked(false, "pagado", by, time.Now(), fw.UUID{}); err != nil || !ok || cp.State().BlockReason != "" || cp.State().UnblockReason != "pagado" {
+		t.Fatalf("unblocking clears the block reason and keeps its own: %v %+v", err, cp.State())
+	}
+	if ev := cp.State().BlockEvents; len(ev) != 2 || !ev[0].Blocked || ev[1].Blocked || ev[1].Reason != "pagado" || ev[1].By.Name != "Ana" {
+		t.Fatalf("the history: %+v", ev)
+	}
+	if _, err := cp.SetBlocked(true, strings.Repeat("x", 201), by, time.Now(), fw.UUID{}); err == nil {
 		t.Fatal("a reason longer than 200 is refused")
 	}
 }
