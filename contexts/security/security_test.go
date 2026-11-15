@@ -877,7 +877,7 @@ func TestPasswordHasher(t *testing.T) {
 	}
 }
 
-// Cada contexto delimitado declara sus permisos y el anfitrión los pasa al catálogo: los 166
+// Cada contexto delimitado declara sus permisos y el anfitrión los pasa al catálogo: los 167
 // códigos que comprueban los veinticinco contextos de negocio, más los ocho de Security y el comodín.
 func TestCatalog_EveryContextDeclaresItsPermissions(t *testing.T) {
 	declared := map[string][]authz.Permission{
@@ -897,7 +897,7 @@ func TestCatalog_EveryContextDeclaresItsPermissions(t *testing.T) {
 			all = append(all, p)
 		}
 	}
-	if len(all) != 166+len(sapp.Permissions()) || len(sapp.Permissions()) != 8 {
+	if len(all) != 167+len(sapp.Permissions()) || len(sapp.Permissions()) != 8 {
 		t.Fatalf("declared permissions: %d", len(all))
 	}
 

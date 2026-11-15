@@ -35,15 +35,17 @@ var (
 
 // Deps son los puertos que necesitan los casos de uso; Recorder y Audit son opcionales.
 type Deps struct {
-	Series     domain.SeriesRepository
-	Invoices   domain.InvoiceRepository
-	Pending    domain.PendingDeliveryRepository // los albaranes que esperan al cierre del periodo (D-146)
-	Taxes      domain.Taxes
-	Identities domain.Identities
-	Blocks     domain.Blocks     // opcional
-	Merged     app.MergedParties // opcional: las parties fusionadas, que los listados dejan fuera (D-100)
-	Zones      Zones             // opcional: sin él, la fecha de hoy es la de UTC
-	Settings   Settings          // opcional: sin él, los ajustes de siempre (D-144)
+	Series   domain.SeriesRepository
+	Invoices domain.InvoiceRepository
+	Pending  domain.PendingDeliveryRepository // los albaranes que esperan al cierre del periodo (D-146) o a su pedido (D-153)
+	// SourceOrders es el pedido de cada albarán y si está servido entero (D-153).
+	SourceOrders domain.SourceOrderRepository
+	Taxes        domain.Taxes
+	Identities   domain.Identities
+	Blocks       domain.Blocks     // opcional
+	Merged       app.MergedParties // opcional: las parties fusionadas, que los listados dejan fuera (D-100)
+	Zones        Zones             // opcional: sin él, la fecha de hoy es la de UTC
+	Settings     Settings          // opcional: sin él, los ajustes de siempre (D-144)
 	// Catalog y Terms ponen precio a una línea con producto (D-148): los productos y la cadena de
 	// precios de Products, y la tarifa y el descuento del cliente en Orders. Opcionales: sin ellos,
 	// una línea con producto se rechaza (422 billing.automatic_pricing_unavailable).
@@ -89,6 +91,9 @@ type CompanySettings struct {
 	// ManualPricing dice que una línea con producto lleva el precio escrito a mano: el ajuste
 	// automatic_pricing a false (D-148). Por omisión, el precio es automático.
 	ManualPricing bool
+	// PartialBilling es la política de facturación parcial de la empresa (D-153); vacía,
+	// allow_partial. La del cliente le gana.
+	PartialBilling domain.PartialBillingPolicy
 }
 
 // settings son los ajustes del vendedor; los de siempre sin Settings.
@@ -148,6 +153,8 @@ type Service struct {
 	ClosePeriod             app.CommandHandler[ClosePeriod, ClosePeriodResult]
 	CloseDuePeriods         app.CommandHandler[CloseDuePeriods, ClosePeriodResult]
 	SearchPendingDeliveries app.QueryHandler[SearchPendingDeliveries, fw.Page[PendingDeliveryDTO]]
+	// DraftPendingDelivery prepara a petición el borrador de un albarán pendiente (D-153).
+	DraftPendingDelivery app.CommandHandler[DraftPendingDelivery, InvoiceDTO]
 }
 
 type scope struct {
@@ -275,6 +282,7 @@ func NewService(d Deps) *Service {
 	s.invoiceUseCases(svc)
 	s.invoicePDFUseCase(svc)
 	s.groupingUseCases(svc)
+	s.partialBillingUseCases(svc)
 	return svc
 }
 

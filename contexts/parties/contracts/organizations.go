@@ -81,6 +81,9 @@ type CompanySettings struct {
 	// ServiceFulfilmentMode es cómo se sirven las líneas de servicio de un pedido: "delivery_note"
 	// (con albarán) o "direct_invoice" (se facturan desde el pedido); "" sin ajuste (D-155).
 	ServiceFulfilmentMode string
+	// PartialBillingPolicy es la política de facturación parcial de la empresa: "allow_partial" o
+	// "require_complete_order"; "" sin ajuste (D-153). La del cliente, en Orders, le gana.
+	PartialBillingPolicy string
 }
 
 // CompanyProfiles dice los ajustes de facturación de una empresa interna y el patrón (una

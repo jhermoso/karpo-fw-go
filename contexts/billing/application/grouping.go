@@ -21,6 +21,9 @@ import (
 // quitar un borrador de albarán.
 type MergeDrafts struct {
 	Invoices []string `json:"invoices"`
+	// Con require_complete_order, unir borradores de albaranes de un pedido que aún tiene algo
+	// pendiente de servir da 422 orders.partial_billing_not_allowed, salvo que se salte (D-153).
+	PartialBillingOverride
 }
 
 // ClosePeriod cierra el periodo de facturación de un vendedor (D-146): prepara para cada cliente un
@@ -78,6 +81,9 @@ type PendingDeliveryDTO struct {
 	Date        string `json:"date"`
 	Lines       int    `json:"lines"`
 	Net         string `json:"net"`
+	// Periodicity es monthly (espera al cierre) o per_delivery (espera a que su pedido se sirva
+	// entero, D-153).
+	Periodicity string `json:"periodicity"`
 }
 
 func (s service) groupingUseCases(svc *Service) {
@@ -109,6 +115,8 @@ func (s service) groupingUseCases(svc *Service) {
 			others = append(others, o)
 		}
 		var all []domain.Source
+		var reason string
+		var deliveries []string
 		inv, err := s.invoices.Update(ctx, ids[0], func(ctx context.Context, i *domain.Invoice) error {
 			if err := sc.check(domain.InvoiceKind, i.ID(), i.State().Seller, true); err != nil {
 				return err
@@ -117,9 +125,19 @@ func (s service) groupingUseCases(svc *Service) {
 			for _, o := range others {
 				all = append(all, o.State().Sources...)
 			}
+			deliveries = deliveries[:0]
 			for _, src := range all {
 				if src.Type != DeliverySource {
 					return fw.Violation("billing.merge_unsourced", "only drafts prepared from delivery notes are merged")
+				}
+				deliveries = append(deliveries, src.ID)
+			}
+			// La política de facturación parcial del cliente (D-153), si todos son del mismo; si
+			// no, Merge lo rechaza.
+			if !slices.ContainsFunc(others, func(o *domain.Invoice) bool { return o.State().Customer != i.State().Customer }) {
+				var err error
+				if reason, err = s.checkPartial(ctx, i.State().Seller, i.State().Customer, deliveries, c.PartialBillingOverride); err != nil {
+					return err
 				}
 			}
 			if err := i.Merge(others, deliveryDescription("", "", all)); err != nil {
@@ -141,13 +159,17 @@ func (s service) groupingUseCases(svc *Service) {
 		if err != nil {
 			return InvoiceDTO{}, err
 		}
+		if err := s.auditOverride(ctx, inv, reason, deliveries); err != nil {
+			return InvoiceDTO{}, err
+		}
 		return invoiceDTO(inv), nil
 	}, retry[MergeDrafts, InvoiceDTO](), pipeline.Transactional[MergeDrafts, InvoiceDTO](s.UoW))
 
 	svc.ClosePeriod = guard(PermInvoiceCreate, func(ctx context.Context, c ClosePeriod) (ClosePeriodResult, error) {
 		var v fw.Validation
 		seller := domain.OrganizationID{UUID: parseID(&v, "seller", c.Seller)}
-		parts := []spec.Specification[*domain.PendingDelivery]{domain.PdFieldSeller.Eq(seller), domain.PdFieldDate.Le(c.UpTo)}
+		parts := []spec.Specification[*domain.PendingDelivery]{domain.PdFieldSeller.Eq(seller), domain.PdFieldDate.Le(c.UpTo),
+			domain.PdFieldPeriod.Eq(domain.PeriodicityMonthly)}
 		if c.Customer != "" {
 			parts = append(parts, domain.PdFieldCustomer.Eq(domain.PartyID{UUID: parseID(&v, "customer", c.Customer)}))
 		}
@@ -226,7 +248,7 @@ func (s service) groupingUseCases(svc *Service) {
 		if q.UpTo != "" { // lo que facturaría un cierre hasta ese día
 			d, err := vocab.ParseDate(q.UpTo)
 			v.Require(err == nil, "upTo", "format", "a date YYYY-MM-DD is required")
-			parts = append(parts, domain.PdFieldDate.Le(d))
+			parts = append(parts, domain.PdFieldDate.Le(d), domain.PdFieldPeriod.Eq(domain.PeriodicityMonthly))
 		}
 		if err := v.Err(); err != nil {
 			return fw.Page[PendingDeliveryDTO]{}, err
@@ -280,7 +302,14 @@ func (s service) closeCustomerHandler() app.Handler[closeCustomer, []*domain.Inv
 			return nil, err
 		}
 		pending, err := s.Pending.Find(ctx, spec.And(domain.PdFieldSeller.Eq(c.seller), domain.PdFieldCustomer.Eq(c.customer),
-			domain.PdFieldDate.Le(c.upTo)), domain.PdFieldDate.Asc(), domain.PdFieldNumber.Asc())
+			domain.PdFieldDate.Le(c.upTo), domain.PdFieldPeriod.Eq(domain.PeriodicityMonthly)), domain.PdFieldDate.Asc(), domain.PdFieldNumber.Asc())
+		if err != nil {
+			return nil, err
+		}
+		// Con require_complete_order, los albaranes de un pedido que aún tiene algo pendiente de
+		// servir siguen pendientes: entrarán en el cierre siguiente al que su pedido esté servido
+		// (D-153).
+		policy, err := s.partialPolicy(ctx, c.seller, c.customer)
 		if err != nil {
 			return nil, err
 		}
@@ -289,6 +318,15 @@ func (s service) closeCustomerHandler() app.Handler[closeCustomer, []*domain.Inv
 			done, err := s.Invoices.Exists(ctx, domain.FromSource(DeliverySource, p.ID().String()))
 			if err != nil {
 				return nil, err
+			}
+			if !done && policy == domain.RequireCompleteOrder {
+				wait, err := s.waiting(ctx, []string{p.ID().String()})
+				if err != nil {
+					return nil, err
+				}
+				if wait {
+					continue
+				}
 			}
 			err = s.pending.Delete(ctx, p.ID(), nil)
 			switch {
@@ -378,5 +416,5 @@ func pendingDTO(p *domain.PendingDelivery, calc domain.Calculation) PendingDeliv
 		net = net.Add(calc.Net(l.Quantity, l.UnitPrice, l.Discount))
 	}
 	return PendingDeliveryDTO{Delivery: p.ID().String(), Seller: s.Seller.String(), Customer: s.Customer.String(), Number: s.Number,
-		OrderNumber: s.OrderNumber, Date: s.Date.String(), Lines: len(s.Lines), Net: money(net)}
+		OrderNumber: s.OrderNumber, Date: s.Date.String(), Lines: len(s.Lines), Net: money(net), Periodicity: s.Periodicity}
 }

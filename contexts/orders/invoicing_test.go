@@ -66,7 +66,8 @@ func composeChain(t *testing.T) *chain {
 	rm := receivables.Compose(sw, nil)
 	om := orders.Compose(sw, oinfra.ProductsCatalog{Catalog: dm.Catalog, Pricing: dm.Pricing}, oinfra.ReceivablesCredit{Exposure: rm.Credit},
 		orders.WithBlocks(oinfra.PartiesBlocks{TaxIdentities: pm.TaxIdentities}))
-	bm := billing.Compose(sw, binfra.FiscalTaxes{Engine: fm.TaxEngine}, binfra.PartiesIdentities{TaxIdentities: pm.TaxIdentities})
+	bm := billing.Compose(sw, binfra.FiscalTaxes{Engine: fm.TaxEngine}, binfra.PartiesIdentities{TaxIdentities: pm.TaxIdentities},
+		billing.WithPricing(nil, binfra.OrdersTerms{Customers: om.Terms})) // las condiciones del cliente (D-150, D-153)
 	broker := inprocess.NewBroker()
 	broker.Subscribe("inventory", im.Consumer)
 	broker.Subscribe("orders", om.Consumer)
@@ -220,6 +221,58 @@ func (c *chain) scenario(tag string) {
 	}
 	if _, err := order(map[string]string{tornillo.ID: "40", montaje.ID: "1"}); err != nil {
 		t.Fatalf("75.00 fits: %v", err)
+	}
+
+	// D-153: Dani exige el pedido completo en sus condiciones. Su primer albarán (1 de 3) espera;
+	// el segundo (2 más) deja el pedido servido y los dos tienen borrador. En otro pedido, el
+	// albarán espera hasta que se cierra lo pendiente (SalesOrderServingCompleted).
+	dani, err := c.pm.Service.RegisterPerson.Handle(ctx, papp.RegisterPerson{GivenName: "Dani", FirstSurname: "Completo " + tag})
+	c.ok(err)
+	_, err = c.om.Service.SetTerms.Handle(ctx, oapp.SetTerms{Company: acme.ID, Customer: dani.ID, PartialBillingPolicy: "require_complete_order"})
+	c.ok(err)
+	if _, err := c.om.Service.SetTerms.Handle(ctx, oapp.SetTerms{Company: acme.ID, Customer: dani.ID, PartialBillingPolicy: "require_complete"}); !errors.Is(err, fw.ErrValidation) {
+		t.Fatalf("an unknown partial billing policy: %v", err)
+	}
+	serviceOrder := func(qty string) odomain.OrderID {
+		o, err := c.om.Service.DraftOrder.Handle(ctx, oapp.DraftOrder{Company: acme.ID, Customer: dani.ID, Date: vocab.MustDate(2026, 10, 1)})
+		c.ok(err)
+		id, _ := odomain.ParseOrderID(o.ID)
+		_, err = c.om.Service.AddLine.Handle(ctx, oapp.AddLine{ID: id, Product: montaje.ID, Quantity: qty})
+		c.ok(err)
+		_, err = c.om.Service.Confirm.Handle(ctx, oapp.ConfirmOrder{ID: id})
+		c.ok(err)
+		c.deliver()
+		return id
+	}
+	serve := func(id odomain.OrderID, qty string) {
+		_, err := c.om.Service.Deliver.Handle(ctx, oapp.Deliver{ID: id, Date: vocab.MustDate(2026, 10, 7), Lines: []oapp.PickInput{{Line: 1, Quantity: qty}}})
+		c.ok(err)
+		c.deliver()
+	}
+	daniDrafts := func() int {
+		page, err := c.bm.Service.SearchInvoices.Handle(ctx, bapp.SearchInvoices{Seller: acme.ID, Customer: dani.ID, Status: "draft"})
+		c.ok(err)
+		return len(page.Items)
+	}
+	d1 := serviceOrder("3")
+	serve(d1, "1")
+	if n := daniDrafts(); n != 0 {
+		t.Fatalf("a delivery note of an incomplete order waits: %d drafts", n)
+	}
+	serve(d1, "2")
+	if n := daniDrafts(); n != 2 {
+		t.Fatalf("the last delivery note completes the order: %d drafts", n)
+	}
+	d2 := serviceOrder("2")
+	serve(d2, "1")
+	if n := daniDrafts(); n != 2 {
+		t.Fatalf("a delivery note of another incomplete order waits: %d drafts", n)
+	}
+	_, err = c.om.Service.Close.Handle(ctx, oapp.EndOrder{ID: d2, Reason: "No se sirve el resto"})
+	c.ok(err)
+	c.deliver()
+	if n := daniDrafts(); n != 3 {
+		t.Fatalf("closing the pending serves the order: %d drafts", n)
 	}
 }
 

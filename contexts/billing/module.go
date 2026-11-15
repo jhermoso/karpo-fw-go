@@ -76,8 +76,9 @@ func Compose(sw *hotswap.Switch, taxes domain.Taxes, identities domain.Identitie
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
 	d := bapp.Deps{
 		Series: hotswap.Repository(sw, infrastructure.SeriesRepositoryFactory), Invoices: hotswap.Repository(sw, infrastructure.InvoiceRepositoryFactory),
-		Pending: hotswap.Repository(sw, infrastructure.PendingDeliveryRepositoryFactory),
-		Taxes:   taxes, Identities: identities, UoW: sw, Audit: audit,
+		Pending:      hotswap.Repository(sw, infrastructure.PendingDeliveryRepositoryFactory),
+		SourceOrders: hotswap.Repository(sw, infrastructure.SourceOrderRepositoryFactory),
+		Taxes:        taxes, Identities: identities, UoW: sw, Audit: audit,
 		Recorder: outbox.Recorders(outbox.NewRecorder(hotswap.Outbox(sw, infrastructure.OutboxFactory)),
 			bapp.Publications(messaging.NewRecorder(contracts.Source, integration))),
 	}
@@ -181,6 +182,11 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 			Page: atoi("page"), Size: atoi("size")})
 		distribution.Respond(w, r, page, err, http.StatusOK)
 	})
+	// El borrador de un albarán pendiente, a petición (D-153): con require_complete_order y su
+	// pedido sin servir entero, 422 orders.partial_billing_not_allowed salvo que se salte con
+	// {"overridePartialBilling": true, "reason": "..."} y el permiso Billing.Invoice.OverridePartialBilling.
+	mux.HandleFunc("POST /api/billing/pending-deliveries/{id}/draft", command(domain.ParsePendingDeliveryID,
+		func(c *bapp.DraftPendingDelivery, id domain.PendingDeliveryID) { c.ID = id }, svc.DraftPendingDelivery.Handle))
 	mux.HandleFunc("POST /api/billing/periods/close", func(w http.ResponseWriter, r *http.Request) {
 		var c bapp.ClosePeriod
 		if err := decode(r, &c); err != nil {

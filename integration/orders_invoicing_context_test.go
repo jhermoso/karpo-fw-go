@@ -74,7 +74,9 @@ func TestOrdersInvoicing(t *testing.T) {
 			im := inventory.Compose(sw, iinfra.ProductsCatalog{Catalog: dm.Catalog})
 			rm := receivables.Compose(sw, nil)
 			om := orders.Compose(sw, oinfra.ProductsCatalog{Catalog: dm.Catalog, Pricing: dm.Pricing}, oinfra.ReceivablesCredit{Exposure: rm.Credit})
-			bm := billing.Compose(sw, binfra.FiscalTaxes{Engine: fm.TaxEngine}, binfra.PartiesIdentities{TaxIdentities: pm.TaxIdentities})
+			// Las condiciones de cada cliente en Orders (D-150, D-153), como en el anfitrión.
+			bm := billing.Compose(sw, binfra.FiscalTaxes{Engine: fm.TaxEngine}, binfra.PartiesIdentities{TaxIdentities: pm.TaxIdentities},
+				billing.WithPricing(nil, binfra.OrdersTerms{Customers: om.Terms}))
 			broker := inprocess.NewBroker()
 			broker.Subscribe("inventory", im.Consumer)
 			broker.Subscribe("orders", om.Consumer)
@@ -292,6 +294,40 @@ func TestOrdersInvoicing(t *testing.T) {
 			if err != nil || len(cres.Drafts) != 1 || cres.Drafts[0].Net != "926.25" || cres.Drafts[0].Lines[0].UnitPrice != "1" ||
 				cres.Drafts[0].Lines[0].Discount != "7.375" {
 				t.Fatalf("the invoice of the delivery note with a chained discount: %+v %v", cres, err)
+			}
+
+			// D-153: Dani exige el pedido completo. El albarán de 1 de 2 espera, sin borrador; al
+			// cerrar el pedido con lo pendiente, Orders publica el pedido servido y Billing prepara
+			// el borrador del albarán que esperaba.
+			dani, err := pm.Service.RegisterPerson.Handle(actx, papp.RegisterPerson{GivenName: "Dani", FirstSurname: "Completo"})
+			must(err)
+			_, err = om.Service.SetTerms.Handle(actx, oapp.SetTerms{Company: acme.ID, Customer: dani.ID, PartialBillingPolicy: "require_complete_order"})
+			must(err)
+			do, err := om.Service.DraftOrder.Handle(actx, oapp.DraftOrder{Company: acme.ID, Customer: dani.ID, Date: vocab.MustDate(2026, 10, 1)})
+			must(err)
+			doid, _ := odomain.ParseOrderID(do.ID)
+			_, err = om.Service.AddLine.Handle(actx, oapp.AddLine{ID: doid, Product: montaje.ID, Quantity: "2"})
+			must(err)
+			_, err = om.Service.Confirm.Handle(actx, oapp.ConfirmOrder{ID: doid})
+			must(err)
+			deliver()
+			_, err = om.Service.Deliver.Handle(actx, oapp.Deliver{ID: doid, Date: vocab.MustDate(2026, 10, 21), Lines: []oapp.PickInput{{Line: 1, Quantity: "1"}}})
+			must(err)
+			deliver()
+			daniDrafts := func() int {
+				t.Helper()
+				page, err := bm.Service.SearchInvoices.Handle(actx, bapp.SearchInvoices{Seller: acme.ID, Customer: dani.ID, Status: "draft"})
+				must(err)
+				return len(page.Items)
+			}
+			if n := daniDrafts(); n != 0 {
+				t.Fatalf("a delivery note of an incomplete order waits: %d drafts", n)
+			}
+			_, err = om.Service.Close.Handle(actx, oapp.EndOrder{ID: doid, Reason: "No se sirve el resto"})
+			must(err)
+			deliver()
+			if n := daniDrafts(); n != 1 {
+				t.Fatalf("the order served by its close: %d drafts", n)
 			}
 		})
 	}

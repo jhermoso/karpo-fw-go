@@ -74,5 +74,6 @@ func (b BillingSettings) Settings(ctx context.Context, company string) (bilapp.C
 		calc.PriceDecimals = *st.PriceDecimals
 	}
 	return bilapp.CompanySettings{Calculation: calc, SeriesPattern: pattern,
-		InstallmentsWithIssue: st.InstallmentsTiming == pdomain.InstallmentsWithIssue, ManualPricing: st.ManualPricing}, nil
+		InstallmentsWithIssue: st.InstallmentsTiming == pdomain.InstallmentsWithIssue, ManualPricing: st.ManualPricing,
+		PartialBilling: bildomain.PartialBillingPolicy(st.PartialBillingPolicy)}, nil
 }

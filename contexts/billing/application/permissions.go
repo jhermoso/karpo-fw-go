@@ -6,6 +6,6 @@ import "github.com/jhermoso/karpo-fw-go/pkg/application/authz"
 func Permissions() []authz.Permission {
 	return []authz.Permission{
 		PermInvoiceRead, PermInvoiceCreate, PermInvoiceUpdate, PermInvoiceIssue, PermSeriesRead,
-		PermSeriesUpdate,
+		PermSeriesUpdate, PermOverridePartialBilling,
 	}
 }

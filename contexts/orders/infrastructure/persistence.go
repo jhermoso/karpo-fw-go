@@ -122,6 +122,9 @@ func Migrations() sqlrepo.MigrationSet {
 		// La clave de la solicitud pendiente pasa al motor común (pkg/persistence/approvals):
 		// «block:tipo:id», recalculada en las filas que ya hubiera; el índice único no cambia.
 		{Version: 12, Name: "common pending key", Run: approvals.FillPendingKeys(TableApprovals, fwapproval.GroupBlock)},
+		// La política de facturación parcial del cliente (D-153), que gana a la de la empresa:
+		// allow_partial o require_complete_order; nula, la de la empresa.
+		{Version: 13, Name: "partial billing policy", Up: sqlrepo.RenderDDLAll(`ALTER TABLE ord_terms {add:partial_billing_policy} {str:30}{addEnd}`)},
 	}}
 }
 
@@ -265,21 +268,21 @@ func TermsMapping() sqlrepo.Mapping[domain.TermsID, *domain.Terms] {
 		Table:    "ord_terms",
 		Decimals: decimalColumns.Of("ord_terms"),
 		Columns: sqlrepo.WithAuditColumns("company", "customer", "price_list", "discount", "block_orders", "block_delivery", "block_reason",
-			"billing_periodicity", "line_rounding", "price_decimals", "unblock_reason"),
+			"billing_periodicity", "line_rounding", "price_decimals", "unblock_reason", "partial_billing_policy"),
 		Children: []sqlrepo.Child[*domain.Terms]{blockEventsChild},
 		Dehydrate: func(t *domain.Terms) (sqlrepo.Values, error) {
 			s := t.State()
 			return sqlrepo.AuditStampValues(sqlrepo.Values{"company": s.Company, "customer": s.Customer, "price_list": optUUID(s.PriceList.UUID),
 				"discount": s.Discount.Round(2), "block_orders": s.BlockOrders, "block_delivery": s.BlockDelivery, "block_reason": nullString(s.BlockReason),
 				"unblock_reason": nullString(s.UnblockReason), "billing_periodicity": string(s.BillingPeriodicity), "line_rounding": nullString(s.LineRounding),
-				"price_decimals": optInt(s.PriceDecimals)}, t.AuditStamp()), nil
+				"price_decimals": optInt(s.PriceDecimals), "partial_billing_policy": nullString(s.PartialBillingPolicy)}, t.AuditStamp()), nil
 		},
 		Hydrate: func(r *sqlrepo.Row, children sqlrepo.ChildRows) (*domain.Terms, error) {
 			s := domain.TermsState{Company: domain.OrganizationID{UUID: r.UUID("company")}, Customer: domain.PartyID{UUID: r.UUID("customer")},
 				PriceList: domain.PriceListID{UUID: r.UUID("price_list")}, Discount: r.Decimal("discount"), BlockOrders: r.Bool("block_orders"),
 				BlockDelivery: r.Bool("block_delivery"), BlockReason: r.String("block_reason"), UnblockReason: r.String("unblock_reason"),
 				BillingPeriodicity: domain.BillingPeriodicity(r.String("billing_periodicity")), LineRounding: r.String("line_rounding"),
-				PriceDecimals: intPtr(r.NullInt64("price_decimals")), Audit: r.AuditStamp()}
+				PriceDecimals: intPtr(r.NullInt64("price_decimals")), PartialBillingPolicy: r.String("partial_billing_policy"), Audit: r.AuditStamp()}
 			events, err := blockEvents(children.Of("blocks"))
 			if err != nil {
 				return nil, err

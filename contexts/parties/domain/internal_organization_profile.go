@@ -43,6 +43,20 @@ const (
 	// ErrInvalidApprovalAction: una acción que exige aprobación no tiene la forma
 	// {contexto}.{recurso}.{verbo} o mide más de 120 caracteres (D-156).
 	ErrInvalidApprovalAction = "Company.InvalidApprovalAction"
+	// ErrInvalidPartialBillingPolicy: la política de facturación parcial no es allow_partial ni
+	// require_complete_order (D-153).
+	ErrInvalidPartialBillingPolicy = "Company.InvalidPartialBillingPolicy"
+)
+
+// Políticas de facturación parcial de un pedido (D-153; Billing.PartialBillingPolicy de Trench:
+// AllowPartial y RequireCompleteOrder).
+const (
+	// PartialBillingAllowPartial: cada albarán se factura aunque su pedido tenga algo pendiente de
+	// servir (lo de siempre).
+	PartialBillingAllowPartial = "allow_partial"
+	// PartialBillingRequireCompleteOrder: los albaranes de un pedido esperan a que no quede nada
+	// pendiente de servir.
+	PartialBillingRequireCompleteOrder = "require_complete_order"
 )
 
 // MaxApprovalActionLength es la longitud de la columna action, la misma que en las solicitudes de
@@ -132,6 +146,20 @@ type InternalOrganizationProfile struct {
 	// ServiceFulfilmentDeliveryNote o ServiceFulfilmentDirectInvoice; vacío, sin ajuste (el del
 	// producto, si lo tiene, o con albarán; D-155).
 	ServiceFulfilmentMode string
+	// PartialBillingPolicy es PartialBillingAllowPartial o PartialBillingRequireCompleteOrder;
+	// vacío, sin ajuste (allow_partial, salvo que el cliente diga otra cosa; D-153).
+	PartialBillingPolicy string
+}
+
+// SetPartialBillingPolicy fija la política de facturación parcial: allow_partial,
+// require_complete_order, o vacío para limpiarla.
+func (p *InternalOrganizationProfile) SetPartialBillingPolicy(policy string) error {
+	policy = strings.TrimSpace(policy)
+	if policy != "" && policy != PartialBillingAllowPartial && policy != PartialBillingRequireCompleteOrder {
+		return fw.Violation(ErrInvalidPartialBillingPolicy, "the partial billing policy must be allow_partial or require_complete_order")
+	}
+	p.PartialBillingPolicy = policy
+	return nil
 }
 
 // SetServiceFulfilmentMode fija cómo se sirven los servicios: delivery_note, direct_invoice, o
@@ -186,7 +214,7 @@ func (p InternalOrganizationProfile) Equal(o InternalOrganizationProfile) bool {
 	sameAuto := (p.AutomaticPricing == nil) == (o.AutomaticPricing == nil) && (p.AutomaticPricing == nil || *p.AutomaticPricing == *o.AutomaticPricing)
 	return p.Organization == o.Organization && p.TimeZone == o.TimeZone && p.LineRounding == o.LineRounding && samePrice &&
 		p.InstallmentsTiming == o.InstallmentsTiming && p.DefaultPriceList == o.DefaultPriceList && sameAuto &&
-		p.ServiceFulfilmentMode == o.ServiceFulfilmentMode
+		p.ServiceFulfilmentMode == o.ServiceFulfilmentMode && p.PartialBillingPolicy == o.PartialBillingPolicy
 }
 
 // SetLineRounding fija la forma de redondear las líneas: once, gross_then_discount, o vacío para
