@@ -108,6 +108,39 @@ func TestGeographyContext(t *testing.T) {
 			if err != nil || len(countries) != 248 {
 				t.Fatalf("countries: %d %v", len(countries), err)
 			}
+
+			// El contrato de mantenimiento de los festivos: la página con lugar, año y nombre, por
+			// nombre descendente, y el cambio de nombre con versión.
+			keeper, _ := authz.NewContext(authz.Context{Subject: fw.NewUUID(), SubjectName: "keeper", Kind: authz.Service,
+				Permissions: []authz.Permission{gapp.PermBoundaryRead, gapp.PermHolidayRead, gapp.PermHolidayUpdate}})
+			kctx := authz.WithContext(context.Background(), keeper)
+			h := mod.Holidays
+			var first gapp.HolidayDTO
+			for _, d := range []struct{ date, name string }{{"2031-01-01", "Año Nuevo"}, {"2031-01-06", "Epifanía"}, {"2031-12-25", "Navidad"}, {"2030-12-25", "Navidad"}} {
+				x, err := h.Register(kctx, gapp.RegisterHoliday{Boundary: es.Boundary, Date: d.date, Name: d.name})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if first.ID == "" {
+					first = x
+				}
+			}
+			page, err := h.Page(kctx, gapp.PageHolidays{Boundary: es.Boundary, Year: 2031, Text: "a", ByName: true, Desc: true, Page: 1, Size: 2})
+			if err != nil || page.Total != 3 || len(page.Items) != 2 || page.Items[0].Name != "Navidad" || page.Items[1].Name != "Epifanía" {
+				t.Fatalf("holidays page: %+v %v", page, err)
+			}
+			id, _ := gdomain.ParseHolidayID(first.ID)
+			renamed, err := h.Rename(kctx, gapp.RenameHoliday{ID: id, Name: " Año  Nuevo 2031 ", Version: first.Version})
+			if err != nil || renamed.Name != "Año Nuevo 2031" || renamed.Version != first.Version+1 {
+				t.Fatalf("rename: %+v %v", renamed, err)
+			}
+			if _, err := h.Rename(kctx, gapp.RenameHoliday{ID: id, Name: "Otro", Version: first.Version}); !errors.Is(err, fw.ErrConflict) {
+				t.Fatalf("a stale version: %v", err)
+			}
+			if again, err := h.Get(kctx, id); err != nil || again.Name != "Año Nuevo 2031" || again.Version != renamed.Version {
+				t.Fatalf("read back: %+v %v", again, err)
+			}
+
 			if err := m.Verify(ctx); err != nil {
 				t.Fatal(err)
 			}

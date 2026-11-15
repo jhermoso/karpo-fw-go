@@ -63,8 +63,7 @@ func compose(t *testing.T) *env {
 	sw := hotswap.New(store)
 	mod := geography.Compose(sw)
 	mux := http.NewServeMux()
-	mod.HTTP.RegisterRoutes(mux)
-	mod.HolidaysHTTP.RegisterRoutes(mux)
+	mod.RegisterRoutes(mux)
 	srv := httptest.NewServer(distribution.Chain(mux, distribution.Authorize(jwt, authorization.NewResolver(dir, authorization.Options{}))))
 	t.Cleanup(srv.Close)
 	t.Cleanup(func() { _ = sw.Close(ctx) })
@@ -239,6 +238,7 @@ func TestGeography_MemoryThenSQLite(t *testing.T) {
 	e := compose(t)
 	e.scenario()
 	e.holidays()
+	e.maintenance()
 
 	ctx := context.Background()
 	raw, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "geo.db")+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)")
@@ -262,6 +262,7 @@ func TestGeography_MemoryThenSQLite(t *testing.T) {
 	}
 	e.scenario()
 	e.holidays()
+	e.maintenance()
 }
 
 func TestGeography_LayersRespectTheArchitecture(t *testing.T) {

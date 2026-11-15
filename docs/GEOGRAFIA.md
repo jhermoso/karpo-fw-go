@@ -146,6 +146,55 @@ en día no hábil retrocede hasta `BackwardDays` días o, si no encuentra hábil
 9. **El calendario es de la instalación, no de cada empresa**: quien tenga el permiso lo mantiene
    para todas. Sugerencia: sí; los festivos no dependen de quién pregunte.
 
+## El contrato de mantenimiento (front; añadido el 2026-11-15)
+
+Países y festivos se ven también por el **contrato de mantenimiento**, el que lee el motor de
+Angular de Karpo C# (el contrato `crud` del lenguaje de Theros), escrito a mano en
+`contexts/geography/maintenance.go` sobre los casos de uso de siempre. La configuración de las
+pantallas está en `front/angular/config/entities/geography/` (ver front/README.md). Es el mismo
+contrato que el de Instalaciones (docs/INSTALACIONES.md).
+
+**Qué entidades.** Sólo dos. Los países, porque son lo que un usuario busca y consulta; los
+festivos, porque son lo único del contexto que se mantiene a mano. Las delimitaciones, los códigos
+postales y los catálogos pequeños (monedas, idiomas, husos, tipos de vía) son datos de la semilla
+y siguen en `/api/geography` y `/api/reference`: no tienen alta ni cambio.
+
+**Países (`/api/v1/countries`): sólo lectura.** Son ISO 3166 con sus formatos (IBAN, código postal)
+y llegan con las migraciones; ningún caso de uso escribe en ellos. La identidad del contrato es el
+código alfa-2 (`ES`), la que usan las demás rutas y los demás contextos. `POST`, `PUT` y `DELETE`
+responden **409** con la vía («vienen con las migraciones»), después de exigir
+`Geography.Reference.Read` (403 sin él): un 409 con `detail` explica por qué no se puede; un 405
+sin cuerpo, no.
+
+| Operación | Ruta | Qué hace |
+|---|---|---|
+| Lista | `GET /api/v1/countries?page&pageSize&sortBy&sortOrder&search&name&eu&eurozone&sepa`, o `POST /api/v1/countries/search` | la página del motor. Orden por `alpha2` (por omisión), `alpha3` o `name`, con `alpha2` para deshacer empates; otro, 400. `search` busca en el nombre o es un código alfa-2 o alfa-3 exacto; `eu`, `eurozone` y `sepa` valen `true` o `false` (otro valor, 400). Los países son unos 250: se leen todos con `ListCountries` y se filtran y paginan en memoria |
+| Lectura | `GET /api/v1/countries/{alfa-2}` | el país con todos sus datos (los de `/api/reference/countries/{alpha2}` más `id`) |
+| Alta, cambio, baja | `POST`, `PUT …/{id}`, `DELETE …/{id}` | 409 con la vía |
+
+**Festivos (`/api/v1/holidays`).**
+
+| Operación | Ruta | Qué hace |
+|---|---|---|
+| Lista | `GET /api/v1/holidays?page&pageSize&sortBy&sortOrder&search&name&boundary&year`, o `POST /api/v1/holidays/search` | la página del motor. Orden por `date` (por omisión) o `name`, con la identidad para deshacer empates; otro, 400. `boundary` deja los declarados en esa delimitación (sólo los suyos; los heredados siguen en `/api/geography/holidays?inherited=true`); `year`, los de un año (1900–2200; otro, 400); `search` y `name` buscan en el nombre |
+| Lectura | `GET /api/v1/holidays/{id}` | el festivo, con `boundaryName` |
+| Alta | `POST /api/v1/holidays` con `{boundary, date, name}` | 201 con `Location`; un solo día (la declaración por lotes sigue en `/api/geography/holidays`). Si el lugar ya tiene festivo ese día, 409 (el lote, en cambio, lo deja como está) |
+| Cambio | `PUT /api/v1/holidays/{id}` con lo leído y su `version` | 200; lo que el cuerpo no trae se queda. Sin `version`, 400; desfasada, 409, sin reintento. Sólo cambia el **nombre** (recortado, 1–120). `boundary` y `date` no cambian: se comparan por su valor (identidad sin mayúsculas, día como fecha) y, si difieren, 400; un festivo en otro sitio u otro día es otro festivo. Un cambio sin cambios no gasta versión, pero exige `Geography.Holiday.Update`. Todo en una unidad de trabajo |
+| Baja | `DELETE /api/v1/holidays/{id}` | 204: **borra** el festivo. Nadie lo cita (los vencimientos preguntan a `Calendar` cada vez) y uno declarado por error no tiene historia que guardar; la auditoría deja constancia. Repetirla da 204, pero exige `Geography.Holiday.Update` (403 sin él) |
+
+- **El objeto:** `id`, `boundary`, `boundaryName`, `date` (YYYY-MM-DD), `name`, `version`. La
+  `version` aparece también en las respuestas de `/api/geography/holidays`.
+- **Casos de uso nuevos** en `Holidays`: `Get`, `Page`, `Register` (uno) y `Rename` (versión
+  obligatoria); en el dominio, `Holiday.Rename` y los campos `HolidayFieldName` y
+  `HolidayFieldIDOrder`. Permisos, los de siempre.
+- **Consultas nuevas en `sqlrepo`:** la página de `geo_holidays` (`FindPage` con filtro por
+  `boundary`, rango de `holiday_date` y `name` sin mayúsculas; orden por `holiday_date` o `name` y
+  después `id`) y el `UPDATE` del nombre. Probadas en memoria y SQLite; falta pasarlas por los
+  motores de `integration/`.
+- **El error:** RFC 9457 con `errors` como diccionario (campo → mensajes) y `errorCodes`; cuerpo de
+  más de 1 MiB, 413.
+- **Prueba:** `TestGeography_MemoryThenSQLite` (escenario `maintenance`, en memoria y en SQLite).
+
 ## Aportaciones al framework
 
 - `vocab.IBAN`.
@@ -179,5 +228,7 @@ en día no hábil retrocede hasta `BackwardDays` días o, si no encuentra hábil
 
 - Mantenimiento de la geografía (altas y cambios de municipios) como casos de uso, cuando haga
   falta; hoy se hace por migración.
+- Pasar por los motores de `integration/` la página y el cambio de nombre de `geo_holidays` del
+  contrato de mantenimiento (hoy, memoria y SQLite).
 - Unificar los 9 tipos de organización supranacional en uno (cambio de datos, con migración).
 - Validación de IBAN en las cuentas bancarias de Parties, cuando se porten.

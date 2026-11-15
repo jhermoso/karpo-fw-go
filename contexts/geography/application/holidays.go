@@ -70,6 +70,7 @@ type (
 		BoundaryName string `json:"boundaryName,omitempty"`
 		Date         string `json:"date"`
 		Name         string `json:"name"`
+		Version      int64  `json:"version"`
 	}
 )
 
@@ -205,7 +206,8 @@ func (h *Holidays) Remove(ctx context.Context, c RemoveHoliday) error {
 
 func holidayDTO(h *domain.Holiday, names map[string]string) HolidayDTO {
 	s := h.State()
-	return HolidayDTO{ID: h.ID().String(), Boundary: s.Boundary.String(), BoundaryName: names[s.Boundary.String()], Date: s.Date.String(), Name: s.Name}
+	return HolidayDTO{ID: h.ID().String(), Boundary: s.Boundary.String(), BoundaryName: names[s.Boundary.String()], Date: s.Date.String(), Name: s.Name,
+		Version: h.Version()}
 }
 
 // Search lista los festivos de un límite en un año, en el orden del calendario.
@@ -266,4 +268,178 @@ func (h *Holidays) IsHoliday(ctx context.Context, boundary, day string) (bool, e
 		return false, err
 	}
 	return h.holidays.Exists(ctx, spec.And(domain.HolidayFieldBoundary.In(ids...), domain.HolidayFieldDate.Eq(date)))
+}
+
+// Comandos y consultas de uno en uno, los del contrato de mantenimiento.
+type (
+	// RegisterHoliday declara un solo festivo; si el lugar ya lo tiene ese día, es un conflicto.
+	RegisterHoliday struct {
+		Boundary string
+		Date     string // YYYY-MM-DD
+		Name     string
+	}
+	// RenameHoliday cambia el nombre de un festivo, con la versión que se leyó (obligatoria).
+	RenameHoliday struct {
+		ID      domain.HolidayID
+		Name    string
+		Version int64
+	}
+	// PageHolidays es una página de festivos: de un límite (sólo los suyos) y de un año, si se
+	// dicen, y con un texto en el nombre. Se ordena por día (o por nombre) y después por identidad.
+	PageHolidays struct {
+		Boundary, Text string
+		Year           int
+		ByName, Desc   bool
+		Page, Size     int
+	}
+)
+
+// names devuelve los nombres de los límites de unos festivos.
+func (h *Holidays) names(ctx context.Context, hs []*domain.Holiday) (map[string]string, error) {
+	ids := make([]string, 0, len(hs))
+	for _, x := range hs {
+		ids = append(ids, x.State().Boundary.String())
+	}
+	refs, err := h.ports.Resolve(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]string{}
+	for id, r := range refs {
+		out[id] = r.Name
+	}
+	return out, nil
+}
+
+// Get lee un festivo.
+func (h *Holidays) Get(ctx context.Context, id domain.HolidayID) (HolidayDTO, error) {
+	if err := require(ctx, PermHolidayRead); err != nil {
+		return HolidayDTO{}, err
+	}
+	x, err := h.holidays.Get(ctx, id)
+	if err != nil {
+		return HolidayDTO{}, err
+	}
+	names, err := h.names(ctx, []*domain.Holiday{x})
+	if err != nil {
+		return HolidayDTO{}, err
+	}
+	return holidayDTO(x, names), nil
+}
+
+// Page lista los festivos por páginas.
+func (h *Holidays) Page(ctx context.Context, q PageHolidays) (fw.Page[HolidayDTO], error) {
+	if err := require(ctx, PermHolidayRead); err != nil {
+		return fw.Page[HolidayDTO]{}, err
+	}
+	var parts []spec.Specification[*domain.Holiday]
+	var v fw.Validation
+	if q.Boundary != "" {
+		bid, err := domain.ParseBoundaryID(q.Boundary)
+		if v.Require(err == nil && !bid.IsZero(), "boundary", "format", "the identity of a boundary"); err == nil {
+			parts = append(parts, domain.HolidayFieldBoundary.Eq(bid))
+		}
+	}
+	if q.Year != 0 {
+		if v.Require(q.Year >= 1900 && q.Year <= 2200, "year", "range", "a year from 1900 to 2200"); q.Year >= 1900 && q.Year <= 2200 {
+			parts = append(parts, domain.HolidayFieldDate.Between(vocab.MustDate(q.Year, 1, 1), vocab.MustDate(q.Year, 12, 31)))
+		}
+	}
+	if err := v.Err(); err != nil {
+		return fw.Page[HolidayDTO]{}, err
+	}
+	if t := strings.TrimSpace(q.Text); t != "" {
+		parts = append(parts, domain.HolidayFieldName.ContainsFold(t))
+	}
+	order := domain.HolidayFieldDate.Asc()
+	switch {
+	case q.ByName && q.Desc:
+		order = domain.HolidayFieldName.Desc()
+	case q.ByName:
+		order = domain.HolidayFieldName.Asc()
+	case q.Desc:
+		order = domain.HolidayFieldDate.Desc()
+	}
+	page, err := h.holidays.FindPage(ctx, spec.And(parts...), fw.NewPageRequest(q.Page, q.Size, order, domain.HolidayFieldIDOrder.Asc()))
+	if err != nil {
+		return fw.Page[HolidayDTO]{}, err
+	}
+	names, err := h.names(ctx, page.Items)
+	if err != nil {
+		return fw.Page[HolidayDTO]{}, err
+	}
+	return fw.MapPage(page, func(x *domain.Holiday) HolidayDTO { return holidayDTO(x, names) }), nil
+}
+
+// Register declara un festivo.
+func (h *Holidays) Register(ctx context.Context, c RegisterHoliday) (HolidayDTO, error) {
+	if err := require(ctx, PermHolidayUpdate); err != nil {
+		return HolidayDTO{}, err
+	}
+	bid, err := h.boundary(ctx, c.Boundary)
+	if err != nil {
+		return HolidayDTO{}, err
+	}
+	date, err := vocab.ParseDate(strings.TrimSpace(c.Date))
+	if err != nil {
+		var v fw.Validation
+		v.Add("date", "format", "a day written YYYY-MM-DD")
+		return HolidayDTO{}, v.Err()
+	}
+	x, err := domain.ReconstituteHoliday(domain.NewHolidayID(), domain.HolidayState{Boundary: bid, Date: date, Name: c.Name})
+	if err != nil {
+		return HolidayDTO{}, err
+	}
+	known, err := h.holidays.Exists(ctx, spec.And(domain.HolidayFieldBoundary.Eq(bid), domain.HolidayFieldDate.Eq(date)))
+	if err != nil {
+		return HolidayDTO{}, err
+	}
+	if known {
+		return HolidayDTO{}, fw.Conflict(domain.HolidayKind, x.ID(), 0, "that place already has a holiday on "+date.String())
+	}
+	if err := h.orch.Create(ctx, x); err != nil {
+		return HolidayDTO{}, err
+	}
+	names, err := h.names(ctx, []*domain.Holiday{x})
+	if err != nil {
+		return HolidayDTO{}, err
+	}
+	return holidayDTO(x, names), nil
+}
+
+// Rename cambia el nombre de un festivo. Con la versión desfasada es un conflicto, sin reintento;
+// con el mismo nombre no se guarda nada, pero se exige el mismo permiso.
+func (h *Holidays) Rename(ctx context.Context, c RenameHoliday) (HolidayDTO, error) {
+	if err := require(ctx, PermHolidayUpdate); err != nil {
+		return HolidayDTO{}, err
+	}
+	stale := func(x *domain.Holiday) error {
+		if x.Version() != c.Version {
+			return fw.Conflict(domain.HolidayKind, c.ID, c.Version, "the holiday changed after it was read: read it again")
+		}
+		return nil
+	}
+	x, err := h.holidays.Get(ctx, c.ID)
+	if err != nil {
+		return HolidayDTO{}, err
+	}
+	if err := stale(x); err != nil {
+		return HolidayDTO{}, err
+	}
+	if strings.Join(strings.Fields(c.Name), " ") != x.State().Name {
+		x, err = h.orch.Update(ctx, c.ID, func(_ context.Context, x *domain.Holiday) error {
+			if err := stale(x); err != nil {
+				return err
+			}
+			return x.Rename(c.Name)
+		})
+		if err != nil {
+			return HolidayDTO{}, err
+		}
+	}
+	names, err := h.names(ctx, []*domain.Holiday{x})
+	if err != nil {
+		return HolidayDTO{}, err
+	}
+	return holidayDTO(x, names), nil
 }
