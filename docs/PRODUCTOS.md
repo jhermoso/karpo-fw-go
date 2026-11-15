@@ -202,9 +202,8 @@ una de tarifa sean el mismo tipo (`PriceLine`) y la misma lectura.
   `prd_products`, nula; migración 5, con el nombre de Karpo C#): `delivery_note` (con albarán, sin
   mover stock) o `direct_invoice` (se factura desde el pedido); vacío, sin ajuste. Otro valor da 422
   `products.invalid_service_fulfilment_mode`.
-- **`direct_invoice` aún no se admite** (422 `products.direct_invoice_unavailable`): Facturación no
-  factura desde el pedido, así que esas líneas no se facturarían nunca. El valor sigue en el
-  enumerado; habilitarlo es poner a true `domain.DirectInvoiceAvailable`.
+- `direct_invoice` se admite desde 2026-11-15 (`domain.DirectInvoiceAvailable`): Orders factura
+  esas líneas desde el pedido, en el momento que diga la empresa (docs/PEDIDOS.md).
 - Sólo cuenta en los productos de tipo `service`: un servicio es un producto de naturaleza
   servicio, como en Karpo C#, que nunca está en stock. Se guarda también en un bien, pero no se usa.
 - Se publica en `contracts.ProductRef.ServiceFulfilmentMode` y en el contrato de mantenimiento.

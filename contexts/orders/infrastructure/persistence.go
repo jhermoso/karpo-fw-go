@@ -125,6 +125,13 @@ func Migrations() sqlrepo.MigrationSet {
 		// La política de facturación parcial del cliente (D-153), que gana a la de la empresa:
 		// allow_partial o require_complete_order; nula, la de la empresa.
 		{Version: 13, Name: "partial billing policy", Up: sqlrepo.RenderDDLAll(`ALTER TABLE ord_terms {add:partial_billing_policy} {str:30}{addEnd}`)},
+		// Los servicios que se facturan desde el pedido (D-155): lo ya enviado a facturar de cada
+		// línea y, por emisión, lo que envió cada una, para devolverlo a pendiente si su borrador se
+		// descarta. Nula, nada facturado (las líneas de antes).
+		{Version: 14, Name: "service invoicing from the order", Up: sqlrepo.RenderDDLAll(
+			`ALTER TABLE ord_order_lines {add:invoiced} {dec:18,4}{addEnd}`,
+			`CREATE TABLE `+TableServiceInvoicings+` (order_id {uuid} NOT NULL, invoicing_id {uuid} NOT NULL, line_no {int} NOT NULL,
+	quantity {dec:18,4} NOT NULL, PRIMARY KEY (order_id, invoicing_id, line_no), FOREIGN KEY (order_id) REFERENCES ord_orders (id))`)},
 	}}
 }
 
@@ -231,8 +238,11 @@ func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 }
 
 // Tables enumera las tablas del contexto, las hijas primero (orden de borrado).
-var Tables = []string{"ord_quote_lines", "ord_quotes", "ord_delivery_lines", "ord_deliveries", "ord_order_lines", "ord_orders", TableTermsBlockEvents, "ord_terms", "ord_counters", TableApprovals, TableOutbox,
+var Tables = []string{"ord_quote_lines", "ord_quotes", "ord_delivery_lines", "ord_deliveries", TableServiceInvoicings, "ord_order_lines", "ord_orders", TableTermsBlockEvents, "ord_terms", "ord_counters", TableApprovals, TableOutbox,
 	TableIntegrationOutbox, TableAuditLog, TableInbox}
+
+// TableServiceInvoicings guarda lo que envió a facturar cada emisión de servicios de un pedido (D-155).
+const TableServiceInvoicings = "ord_service_invoicings"
 
 // DropAll borra las tablas del contexto y su historial de migraciones (sólo para pruebas).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
@@ -319,7 +329,14 @@ func OrderMapping() sqlrepo.Mapping[domain.OrderID, *domain.Order] {
 					Description: c.String("description"), UoM: c.String("uom"), TaxCode: c.String("tax_code"), Stocked: c.Bool("stocked"),
 					Quantity: c.Decimal("quantity"), UnitPrice: c.Decimal("unit_price"), Discount: c.Decimal("discount"),
 					ChainedDiscount: chainedDiscount(c, r), NetPrice: c.Decimal("net_price"), Amount: c.Decimal("amount"),
-					Reserved: c.Decimal("reserved"), Delivered: c.Decimal("delivered")})
+					Reserved: c.Decimal("reserved"), Delivered: c.Decimal("delivered"), Invoiced: c.Decimal("invoiced")})
+				if err := c.Err(); err != nil {
+					return nil, err
+				}
+			}
+			for _, c := range children.Of("invoicings") {
+				s.ServiceInvoicings = append(s.ServiceInvoicings, domain.ServiceInvoicing{ID: c.UUID("invoicing_id"), Line: int(c.Int64("line_no")),
+					Quantity: c.Decimal("quantity")})
 				if err := c.Err(); err != nil {
 					return nil, err
 				}
@@ -332,7 +349,7 @@ func OrderMapping() sqlrepo.Mapping[domain.OrderID, *domain.Order] {
 		Children: []sqlrepo.Child[*domain.Order]{{
 			Name: "lines", Table: "ord_order_lines", ForeignKey: "order_id", OrderBy: []string{"line_no"},
 			Columns: []string{"line_no", "product", "sku", "description", "uom", "tax_code", "stocked", "quantity", "unit_price", "discount",
-				"chained_discount", "net_price", "amount", "reserved", "delivered"},
+				"chained_discount", "net_price", "amount", "reserved", "delivered", "invoiced"},
 			Decimals: decimalColumns.Of("ord_order_lines"),
 			Dehydrate: func(o *domain.Order) ([]sqlrepo.Values, error) {
 				out := []sqlrepo.Values{}
@@ -340,7 +357,18 @@ func OrderMapping() sqlrepo.Mapping[domain.OrderID, *domain.Order] {
 					out = append(out, sqlrepo.Values{"line_no": int64(l.No), "product": l.Product, "sku": l.SKU, "description": l.Description, "uom": l.UoM,
 						"tax_code": opt(l.TaxCode), "stocked": l.Stocked, "quantity": l.Quantity, "unit_price": l.UnitPrice.Round(4),
 						"discount": l.Discount.Round(2), "chained_discount": l.ChainedDiscount.Round(4), "net_price": l.NetPrice.Round(4),
-						"amount": l.Amount.Round(2), "reserved": l.Reserved, "delivered": l.Delivered})
+						"amount": l.Amount.Round(2), "reserved": l.Reserved, "delivered": l.Delivered, "invoiced": l.Invoiced})
+				}
+				return out, nil
+			},
+		}, {
+			Name: "invoicings", Table: TableServiceInvoicings, ForeignKey: "order_id", OrderBy: []string{"invoicing_id", "line_no"},
+			Columns:  []string{"invoicing_id", "line_no", "quantity"},
+			Decimals: decimalColumns.Of(TableServiceInvoicings),
+			Dehydrate: func(o *domain.Order) ([]sqlrepo.Values, error) {
+				out := []sqlrepo.Values{}
+				for _, r := range o.State().ServiceInvoicings {
+					out = append(out, sqlrepo.Values{"invoicing_id": r.ID, "line_no": int64(r.Line), "quantity": r.Quantity})
 				}
 				return out, nil
 			},
@@ -579,6 +607,18 @@ func (f ServiceFulfilmentSettings) CompanyMode(ctx context.Context, company doma
 		return "", err
 	}
 	return st.ServiceFulfilmentMode, nil
+}
+
+// CompanyInvoicingMoment implementa domain.ServiceFulfilment.
+func (f ServiceFulfilmentSettings) CompanyInvoicingMoment(ctx context.Context, company domain.OrganizationID) (string, error) {
+	if f.Profiles == nil {
+		return "", nil
+	}
+	st, err := f.Profiles.Settings(ctx, company.String())
+	if err != nil {
+		return "", err
+	}
+	return st.ServiceInvoicingMoment, nil
 }
 
 // PartiesBlocks adapta el contrato de identidades fiscales de Parties al puerto de Orders (ACL).

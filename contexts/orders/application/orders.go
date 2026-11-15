@@ -2,7 +2,6 @@ package application
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/orders/domain"
 	app "github.com/jhermoso/karpo-fw-go/pkg/application"
@@ -123,6 +122,14 @@ type Deliver struct {
 	Lines []PickInput    `json:"lines,omitempty"`
 }
 
+// InvoiceServices envía a facturar todo lo pendiente de los servicios del pedido que se facturan
+// desde el pedido (D-155): en la empresa con service_invoicing_moment manual, o lo que volvió a
+// pendiente al descartarse su borrador. Sin fecha, hoy de la empresa.
+type InvoiceServices struct {
+	ID   domain.OrderID `json:"-"`
+	Date vocab.Date     `json:"date,omitzero"`
+}
+
 // EndOrder anula o cierra un pedido, con un motivo.
 type EndOrder struct {
 	ID     domain.OrderID `json:"-"`
@@ -170,8 +177,10 @@ type LineDTO struct {
 	Amount          string `json:"amount"`
 	Reserved        string `json:"reserved"`
 	Delivered       string `json:"delivered"`
-	Pending         string `json:"pending"`
-	Short           string `json:"short"`
+	// Invoiced es lo ya enviado a facturar de un servicio que se factura desde el pedido (D-155).
+	Invoiced string `json:"invoiced"`
+	Pending  string `json:"pending"`
+	Short    string `json:"short"`
 }
 
 // OrderDTO es la forma de transporte de un pedido.
@@ -204,7 +213,7 @@ func orderDTO(o *domain.Order) OrderDTO {
 		d.Lines = append(d.Lines, LineDTO{No: l.No, Product: l.Product.String(), SKU: l.SKU, Description: l.Description, UoM: l.UoM, TaxCode: l.TaxCode,
 			Stocked: l.Stocked, Quantity: l.Quantity.String(), UnitPrice: l.UnitPrice.StringFixed(4), Discount: money(l.Discount),
 			ChainedDiscount: l.ChainedDiscount.StringFixed(4), NetPrice: l.NetPrice.StringFixed(4), Amount: money(l.Amount),
-			Reserved: l.Reserved.String(), Delivered: l.Delivered.String(),
+			Reserved: l.Reserved.String(), Delivered: l.Delivered.String(), Invoiced: l.Invoiced.String(),
 			Pending: l.Pending().String(), Short: l.Short().String()})
 	}
 	return d
@@ -240,6 +249,10 @@ type DeliveryDTO struct {
 	Invoice     string            `json:"invoice,omitempty"` // la factura de Billing que lo factura
 	InvoiceNo   string            `json:"invoiceNumber,omitempty"`
 	Lines       []DeliveryLineDTO `json:"lines"`
+	// ServicesInvoicing es el id de la emisión que envió a facturar los servicios servidos (D-155,
+	// on_serve), cuando se acaba de servir. Si sólo se sirvieron servicios no hay albarán: Id,
+	// Number y Lines van vacíos.
+	ServicesInvoicing string `json:"servicesInvoicing,omitempty"`
 }
 
 func deliveryDTO(d *domain.Delivery) DeliveryDTO {
@@ -432,7 +445,44 @@ func (s service) orderUseCases(svc *Service) {
 			if err != nil {
 				return err
 			}
-			return o.Confirm(number)
+			if err := o.Confirm(number); err != nil {
+				return err
+			}
+			// on_confirm: los servicios en direct_invoice se facturan enteros al confirmar (D-155).
+			direct, err := s.directInvoiceLines(ctx, os)
+			if err != nil || len(direct) == 0 {
+				return err
+			}
+			moment, err := s.invoicingMoment(ctx, os.Company)
+			if err != nil || moment != domain.ServiceInvoicingOnConfirm {
+				return err
+			}
+			_, err = o.InvoiceServices(direct, fw.NewUUID(), os.Date, false)
+			return err
+		})
+	})
+
+	svc.InvoiceServices = changing(s, PermOrderInvoiceServices, func(ctx context.Context, c InvoiceServices) (OrderDTO, error) {
+		return update(ctx, c.ID, func(ctx context.Context, o *domain.Order) error {
+			os := o.State()
+			if err := s.notBlocked(ctx, os.Customer); err != nil {
+				return err
+			}
+			date, err := app.OrToday(ctx, s.Today, os.Company.UUID, c.Date)
+			if err != nil {
+				return err
+			}
+			direct, err := s.directInvoiceLines(ctx, os)
+			if err != nil {
+				return err
+			}
+			// on_serve nunca factura lo no servido; on_confirm y manual, la cantidad entera.
+			moment, err := s.invoicingMoment(ctx, os.Company)
+			if err != nil {
+				return err
+			}
+			_, err = o.InvoiceServices(direct, fw.NewUUID(), date, moment == domain.ServiceInvoicingOnServe)
+			return err
 		})
 	})
 
@@ -451,6 +501,7 @@ func (s service) orderUseCases(svc *Service) {
 		}
 		sc := scopeOf(ctx)
 		var note *domain.Delivery
+		var invoicing string
 		o, err := s.orders.Update(ctx, c.ID, func(ctx context.Context, o *domain.Order) error {
 			os := o.State()
 			if err := sc.check(domain.OrderKind, o.ID(), os.Company, true); err != nil {
@@ -474,17 +525,11 @@ func (s service) orderUseCases(svc *Service) {
 			if err != nil {
 				return err
 			}
-			for _, p := range picks {
-				if direct[p.Line] {
-					return fw.Violation("orders.service_direct_invoice", fmt.Sprintf("line %d is a service invoiced directly, not delivered", p.Line))
-				}
-			}
-			picks := picks // un reintento vuelve a empezar desde lo que se pidió
+			// Un reintento vuelve a empezar desde lo que se pidió.
+			note, invoicing = nil, ""
+			picks := picks
 			if len(picks) == 0 {
 				for _, l := range os.Lines {
-					if direct[l.No] {
-						continue // se factura desde el pedido (D-155)
-					}
 					q := l.Pending()
 					if l.Stocked {
 						q = l.Reserved
@@ -494,9 +539,31 @@ func (s service) orderUseCases(svc *Service) {
 					}
 				}
 			}
-			lines, err := o.Deliver(picks)
+			served, err := o.Deliver(picks)
 			if err != nil {
 				return err
+			}
+			// Los servicios en direct_invoice se sirven sin albarán (D-155): al servirlos, on_serve,
+			// lo servido se envía a facturar.
+			var lines []domain.DeliveryLine
+			for _, l := range served {
+				if !direct[l.Line] {
+					lines = append(lines, l)
+				}
+			}
+			if len(lines) < len(served) {
+				moment, err := s.invoicingMoment(ctx, os.Company)
+				if err != nil {
+					return err
+				}
+				if moment == domain.ServiceInvoicingOnServe {
+					if id := o.InvoiceServedServices(direct, fw.NewUUID(), date); !id.IsZero() {
+						invoicing = id.String()
+					}
+				}
+			}
+			if len(lines) == 0 {
+				return nil
 			}
 			number, err := s.number(ctx, os.Company, "ALB", date.Year())
 			if err != nil {
@@ -510,8 +577,13 @@ func (s service) orderUseCases(svc *Service) {
 		if err != nil {
 			return DeliveryDTO{}, err
 		}
-		out := deliveryDTO(note)
-		out.OrderStatus = o.State().Status.String()
+		os := o.State()
+		out := DeliveryDTO{Company: os.Company.String(), Customer: os.Customer.String(), Order: o.ID().String(), OrderNumber: os.Number,
+			Lines: []DeliveryLineDTO{}}
+		if note != nil {
+			out = deliveryDTO(note)
+		}
+		out.OrderStatus, out.ServicesInvoicing = os.Status.String(), invoicing
 		return out, nil
 	})
 

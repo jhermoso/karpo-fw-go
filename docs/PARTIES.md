@@ -1163,15 +1163,17 @@ Karpo C#. Migración 36.
 
 | Columna | JSON | Valores | Nulo (lo de siempre) | 422 |
 |---|---|---|---|---|
-| `service_fulfilment_mode` `{str:20}` | `serviceFulfilmentMode` | `delivery_note`: las líneas de servicio de un pedido van al albarán, sin mover stock; `direct_invoice`: no van al albarán, se facturan desde el pedido | sin ajuste: el del producto, o con albarán | `Company.InvalidServiceFulfilmentMode`; `Company.DirectInvoiceUnavailable` |
+| `service_fulfilment_mode` `{str:20}` | `serviceFulfilmentMode` | `delivery_note`: las líneas de servicio de un pedido van al albarán, sin mover stock; `direct_invoice`: no van al albarán, se facturan desde el pedido | sin ajuste: el del producto, o con albarán | `Company.InvalidServiceFulfilmentMode` |
+| `service_invoicing_moment` `{str:20}` (migración 39) | `serviceInvoicingMoment` | cuándo se facturan los servicios en `direct_invoice`: `on_serve` (al servir), `on_confirm` (al confirmar el pedido) o `manual` (a petición, en Orders) | sin ajuste: al servir | `Company.InvalidServiceInvoicingMoment` |
 
-- **`direct_invoice` aún no se admite** (422 `Company.DirectInvoiceUnavailable`): Facturación no
-  factura desde el pedido, así que esas líneas no se facturarían nunca. El valor sigue en el
-  enumerado; habilitarlo es poner a true `domain.DirectInvoiceAvailable`.
+- `direct_invoice` se admite desde 2026-11-15 (`domain.DirectInvoiceAvailable`), cuando Orders
+  empezó a facturar esas líneas (docs/PEDIDOS.md, «Facturar los servicios desde el pedido»). El
+  momento es sólo de la empresa (Javier, 2026-11-15).
 
 - La respuesta da `null` si no hay ajuste. El producto, si tiene el suyo, gana (docs/PRODUCTOS.md);
   Orders lo resuelve al servir (docs/PEDIDOS.md, «Servicios y proforma»).
-- Los demás contextos lo leen con `contracts.CompanyProfiles.Settings` (`ServiceFulfilmentMode`);
+- Los demás contextos lo leen con `contracts.CompanyProfiles.Settings` (`ServiceFulfilmentMode` y
+  `ServiceInvoicingMoment`);
   el anfitrión se lo lleva a Orders con `ordinfra.ServiceFulfilmentSettings`.
 
 ### La política de facturación parcial (D-153)

@@ -243,6 +243,10 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/orders/orders/{id}/confirm", command(ok, ord, func(c *oapp.ConfirmOrder, id domain.OrderID) { c.ID = id }, svc.Confirm.Handle))
 	mux.HandleFunc("POST /api/orders/orders/{id}/request-stock", command(ok, ord, func(c *oapp.RequestStock, id domain.OrderID) { c.ID = id }, svc.RequestStock.Handle))
 	mux.HandleFunc("POST /api/orders/orders/{id}/deliveries", command(http.StatusCreated, ord, func(c *oapp.Deliver, id domain.OrderID) { c.ID = id }, svc.Deliver.Handle))
+	// Pide la factura de los servicios que se facturan desde el pedido (D-155): los de una empresa
+	// con service_invoicing_moment manual, o los que volvieron a pendiente al descartarse su borrador.
+	mux.HandleFunc("POST /api/orders/orders/{id}/invoice-services", command(ok, ord, func(c *oapp.InvoiceServices, id domain.OrderID) { c.ID = id },
+		svc.InvoiceServices.Handle))
 	mux.HandleFunc("POST /api/orders/orders/{id}/cancel", command(ok, ord, func(c *oapp.EndOrder, id domain.OrderID) { c.ID = id }, svc.Cancel.Handle))
 	mux.HandleFunc("POST /api/orders/orders/{id}/close", command(ok, ord, func(c *oapp.EndOrder, id domain.OrderID) { c.ID = id }, svc.Close.Handle))
 

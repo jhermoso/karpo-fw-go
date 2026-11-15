@@ -119,10 +119,9 @@ const ErrInvalidServiceFulfilmentMode = "products.invalid_service_fulfilment_mod
 // ErrDirectInvoiceUnavailable es el código de direct_invoice mientras no se admite (D-155).
 const ErrDirectInvoiceUnavailable = "products.direct_invoice_unavailable"
 
-// DirectInvoiceAvailable dice si se admite direct_invoice. Facturación aún no factura desde el
-// pedido, así que una línea en direct_invoice no se facturaría nunca (D-155, docs/PEDIDOS.md).
-// Habilitarlo: poner true cuando Facturación facture desde el pedido.
-const DirectInvoiceAvailable = false
+// DirectInvoiceAvailable dice si se admite direct_invoice: Orders factura esas líneas desde el
+// pedido y Facturación prepara su borrador (D-155, docs/PEDIDOS.md).
+const DirectInvoiceAvailable = true
 
 // checkServiceFulfilment normaliza y comprueba el modo de servir los servicios.
 func checkServiceFulfilment(d *Details) error {

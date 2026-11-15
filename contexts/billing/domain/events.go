@@ -14,6 +14,17 @@ type InvoiceIssued struct {
 // EventType implementa domain.Event.
 func (InvoiceIssued) EventType() string { return "billing.invoice_issued" }
 
+// DraftDiscarded se lanza cuando se descarta un borrador, con sus orígenes: lo que venía de ellos
+// vuelve a pendiente de facturar (D-154, D-155).
+type DraftDiscarded struct {
+	fw.EventMeta
+	Seller  string   `json:"seller"`
+	Sources []Source `json:"sources"`
+}
+
+// EventType implementa domain.Event.
+func (DraftDiscarded) EventType() string { return "billing.draft_discarded" }
+
 // Identidades nuevas e interpretación.
 func NewSeriesID() SeriesID   { return SeriesID{fw.NewUUID()} }
 func NewInvoiceID() InvoiceID { return InvoiceID{fw.NewUUID()} }

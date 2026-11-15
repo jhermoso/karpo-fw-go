@@ -483,7 +483,11 @@ func (i *Invoice) Issue(x Issuance) error {
 // partir de albaranes también: sus albaranes vuelven a pendientes de facturar, como en Trench
 // (D-154); eso lo hace la aplicación en la misma unidad de trabajo.
 func (i *Invoice) Discard() error {
-	return i.mustBeDraft()
+	if err := i.mustBeDraft(); err != nil {
+		return err
+	}
+	i.Raise(DraftDiscarded{EventMeta: i.NewEventMeta(), Seller: i.s.Seller.String(), Sources: slices.Clone(i.s.Sources)})
+	return nil
 }
 
 // Merge une a este borrador otros borradores de documentos (albaranes) del mismo vendedor y cliente

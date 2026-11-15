@@ -41,4 +41,8 @@ var decimalColumns = append(slices.Clone(decimalColumnsV5),
 	sqlrepo.DecimalChange{Table: "ord_order_lines", Column: "chained_discount", Type: sqlrepo.Dec(7, 4)},
 	sqlrepo.DecimalChange{Table: "ord_quote_lines", Column: "chained_discount", Type: sqlrepo.Dec(7, 4)},
 	sqlrepo.DecimalChange{Table: "ord_delivery_lines", Column: "unit_price", Type: sqlrepo.Dec(18, 4)},
-	sqlrepo.DecimalChange{Table: "ord_delivery_lines", Column: "discount", Type: sqlrepo.Dec(7, 4)})
+	sqlrepo.DecimalChange{Table: "ord_delivery_lines", Column: "discount", Type: sqlrepo.Dec(7, 4)},
+	// Las de la migración 14 (D-155): lo facturado de un servicio desde el pedido, por línea y por
+	// emisión.
+	sqlrepo.DecimalChange{Table: "ord_order_lines", Column: "invoiced", Type: sqlrepo.Dec(18, 4)},
+	sqlrepo.DecimalChange{Table: "ord_service_invoicings", Column: "quantity", Type: sqlrepo.Dec(18, 4), NotNull: true})

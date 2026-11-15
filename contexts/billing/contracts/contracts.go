@@ -55,6 +55,18 @@ type InvoiceIssuedV1 struct {
 // IntegrationEventType implementa application.IntegrationEvent.
 func (InvoiceIssuedV1) IntegrationEventType() string { return "billing.invoice-issued.v1" }
 
+// DraftDiscardedV1 se publica cuando se descarta un borrador preparado a partir de servicios de un
+// pedido (orders.service-invoicing, D-155): Orders devuelve esas cantidades a pendiente de
+// facturar. Sources son todos los documentos del borrador.
+type DraftDiscardedV1 struct {
+	InvoiceID string     `json:"invoiceId"`
+	Seller    string     `json:"seller"`
+	Sources   []SourceV1 `json:"sources"`
+}
+
+// IntegrationEventType implementa application.IntegrationEvent.
+func (DraftDiscardedV1) IntegrationEventType() string { return "billing.draft-discarded.v1" }
+
 // SourceV1 es un documento del que se preparó una factura: un albarán de Orders (orders.delivery),
 // con su Id y su número.
 type SourceV1 struct {

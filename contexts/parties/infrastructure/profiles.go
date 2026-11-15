@@ -34,23 +34,23 @@ type SQLProfiles struct{ db *sqlrepo.DB }
 // Get implementa domain.InternalOrganizationProfiles: lee la fila de la organización.
 func (s SQLProfiles) Get(ctx context.Context, org domain.PartyID) (domain.InternalOrganizationProfile, error) {
 	d := s.db.Dialect()
-	rows, err := s.db.QueryContext(ctx, fmt.Sprintf("SELECT %s, %s, %s, %s, %s, %s, %s, %s FROM %s WHERE %s = %s", d.Quote("time_zone"), d.Quote("line_rounding"),
+	rows, err := s.db.QueryContext(ctx, fmt.Sprintf("SELECT %s, %s, %s, %s, %s, %s, %s, %s, %s FROM %s WHERE %s = %s", d.Quote("time_zone"), d.Quote("line_rounding"),
 		d.Quote("price_decimals"), d.Quote("installments_timing"), d.Quote("default_price_list"), d.Quote("automatic_pricing"),
-		d.Quote("service_fulfilment_mode"), d.Quote("partial_billing_policy"), d.Quote(TableInternalOrganizationProfiles), d.Quote("internal_organization_id"), d.Placeholder(1)), d.UUIDValue(org.UUID))
+		d.Quote("service_fulfilment_mode"), d.Quote("partial_billing_policy"), d.Quote("service_invoicing_moment"), d.Quote(TableInternalOrganizationProfiles), d.Quote("internal_organization_id"), d.Placeholder(1)), d.UUIDValue(org.UUID))
 	if err != nil {
 		return domain.InternalOrganizationProfile{}, err
 	}
 	defer func() { _ = rows.Close() }()
 	p := domain.InternalOrganizationProfile{Organization: org}
 	if rows.Next() {
-		var tz, rounding, timing, fulfilment, partial sql.NullString
+		var tz, rounding, timing, fulfilment, partial, moment sql.NullString
 		var decimals sql.NullInt64
 		var list, automatic any
-		if err := rows.Scan(&tz, &rounding, &decimals, &timing, &list, &automatic, &fulfilment, &partial); err != nil {
+		if err := rows.Scan(&tz, &rounding, &decimals, &timing, &list, &automatic, &fulfilment, &partial, &moment); err != nil {
 			return domain.InternalOrganizationProfile{}, err
 		}
 		p.TimeZone, p.LineRounding, p.InstallmentsTiming = tz.String, rounding.String, timing.String
-		p.ServiceFulfilmentMode, p.PartialBillingPolicy = fulfilment.String, partial.String
+		p.ServiceFulfilmentMode, p.PartialBillingPolicy, p.ServiceInvoicingMoment = fulfilment.String, partial.String, moment.String
 		if decimals.Valid {
 			n := int(decimals.Int64)
 			p.PriceDecimals = &n
@@ -203,7 +203,8 @@ func (s SQLProfiles) Save(ctx context.Context, p domain.InternalOrganizationProf
 	}
 	set := sqlrepo.Values{"time_zone": nullable(p.TimeZone), "line_rounding": nullable(p.LineRounding), "price_decimals": decimals,
 		"installments_timing": nullable(p.InstallmentsTiming), "default_price_list": list, "automatic_pricing": automatic,
-		"service_fulfilment_mode": nullable(p.ServiceFulfilmentMode), "partial_billing_policy": nullable(p.PartialBillingPolicy)}
+		"service_fulfilment_mode": nullable(p.ServiceFulfilmentMode), "partial_billing_policy": nullable(p.PartialBillingPolicy),
+		"service_invoicing_moment": nullable(p.ServiceInvoicingMoment)}
 	n, err := s.db.Update(ctx, TableInternalOrganizationProfiles, set, sqlrepo.Values{"internal_organization_id": p.Organization})
 	if err != nil || n > 0 {
 		return err

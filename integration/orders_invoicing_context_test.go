@@ -72,7 +72,9 @@ func TestOrdersInvoicing(t *testing.T) {
 			dm := products.Compose(sw)
 			im := inventory.Compose(sw, iinfra.ProductsCatalog{Catalog: dm.Catalog})
 			rm := receivables.Compose(sw, nil)
-			om := orders.Compose(sw, oinfra.ProductsCatalog{Catalog: dm.Catalog, Pricing: dm.Pricing}, oinfra.ReceivablesCredit{Exposure: rm.Credit})
+			// Los ajustes de D-155 (servicios con albarán o facturados desde el pedido), como en el anfitrión.
+			om := orders.Compose(sw, oinfra.ProductsCatalog{Catalog: dm.Catalog, Pricing: dm.Pricing}, oinfra.ReceivablesCredit{Exposure: rm.Credit},
+				orders.WithServiceFulfilment(oinfra.ServiceFulfilmentSettings{Catalog: dm.Catalog, Profiles: pm.CompanyProfiles}))
 			// Las condiciones de cada cliente en Orders (D-150, D-153), como en el anfitrión.
 			bm := billing.Compose(sw, binfra.FiscalTaxes{Engine: fm.TaxEngine}, binfra.PartiesIdentities{TaxIdentities: pm.TaxIdentities},
 				billing.WithPricing(nil, binfra.OrdersTerms{Customers: om.Terms}))
@@ -331,6 +333,56 @@ func TestOrdersInvoicing(t *testing.T) {
 			deliver()
 			if n := daniDrafts(); n != 1 {
 				t.Fatalf("the order served by its close: %d drafts", n)
+			}
+
+			// D-155, on_serve (sin ajuste de momento): el soporte se factura desde el pedido. Servir
+			// 1 de 2 no emite albarán; Billing prepara su borrador (origen orders.service-invoicing,
+			// migración 14 de Orders y 39 de Parties). Descartado, vuelve a pendiente en Orders y se
+			// pide a mano: con on_serve, sólo lo servido (1, otra vez 20,00), nunca lo no servido.
+			soporte, err := dm.Service.RegisterProduct.Handle(actx, dapp.RegisterProduct{Company: acme.ID, SKU: "SOP", DetailsInput: dapp.DetailsInput{
+				Name: "Soporte", Kind: "service", UoM: "h", TaxCode: "G21", BasePrice: "20", ForSale: true, ServiceFulfilmentMode: "direct_invoice"}})
+			must(err)
+			eva, err := pm.Service.RegisterPerson.Handle(actx, papp.RegisterPerson{GivenName: "Eva", FirstSurname: "Servicios"})
+			must(err)
+			eo, err := om.Service.DraftOrder.Handle(actx, oapp.DraftOrder{Company: acme.ID, Customer: eva.ID, Date: vocab.MustDate(2026, 10, 1)})
+			must(err)
+			eoid, _ := odomain.ParseOrderID(eo.ID)
+			_, err = om.Service.AddLine.Handle(actx, oapp.AddLine{ID: eoid, Product: soporte.ID, Quantity: "2"})
+			must(err)
+			_, err = om.Service.Confirm.Handle(actx, oapp.ConfirmOrder{ID: eoid})
+			must(err)
+			deliver()
+			served, err := om.Service.Deliver.Handle(actx, oapp.Deliver{ID: eoid, Date: vocab.MustDate(2026, 10, 22), Lines: []oapp.PickInput{{Line: 1, Quantity: "1"}}})
+			if err != nil || served.ID != "" || served.ServicesInvoicing == "" {
+				t.Fatalf("serving a direct invoice service: %+v %v", served, err)
+			}
+			deliver()
+			evaDrafts := func() []bapp.InvoiceDTO {
+				t.Helper()
+				page, err := bm.Service.SearchInvoices.Handle(actx, bapp.SearchInvoices{Seller: acme.ID, Customer: eva.ID, Status: "draft"})
+				must(err)
+				return page.Items
+			}
+			ed := evaDrafts()
+			if len(ed) != 1 || ed[0].SourceType != "orders.service-invoicing" || ed[0].SourceID != eo.ID+"|"+served.ServicesInvoicing ||
+				ed[0].Net != "20.00" || ed[0].OperationDate != "2026-10-22" {
+				t.Fatalf("the draft of the served service: %+v", ed)
+			}
+			edid, _ := bdomain.ParseInvoiceID(ed[0].ID)
+			_, err = bm.Service.Discard.Handle(actx, bapp.DiscardInvoice{ID: edid})
+			must(err)
+			deliver()
+			eo, err = om.Service.GetOrder.Handle(actx, oapp.GetOrder{ID: eoid})
+			if err != nil || eo.Lines[0].Invoiced != "0" || len(evaDrafts()) != 0 {
+				t.Fatalf("the discarded draft returns the service to pending: %+v %v", eo, err)
+			}
+			eo, err = om.Service.InvoiceServices.Handle(actx, oapp.InvoiceServices{ID: eoid, Date: vocab.MustDate(2026, 10, 23)})
+			if err != nil || eo.Lines[0].Invoiced != "1" {
+				t.Fatalf("invoicing the services on request: %+v %v", eo, err)
+			}
+			deliver()
+			if ed := evaDrafts(); len(ed) != 1 || ed[0].Net != "20.00" || ed[0].OperationDate != "2026-10-23" {
+				t.Fatalf("the draft of the services on request: %+v", ed)
 			}
 		})
 	}

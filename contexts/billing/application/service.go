@@ -422,6 +422,18 @@ func Publications(r *messaging.Recorder) *messaging.Recorder {
 	messaging.On(r, func(_ context.Context, e domain.InvoiceIssued) ([]app.IntegrationEvent, error) {
 		return []app.IntegrationEvent{issuedV1(e.AggregateID, e.Invoice)}, nil
 	})
+	// Sólo el descarte de un borrador con servicios de un pedido interesa fuera (D-155); los
+	// albaranes vuelven a pendientes dentro de Facturación (D-154).
+	messaging.On(r, func(_ context.Context, e domain.DraftDiscarded) ([]app.IntegrationEvent, error) {
+		if !slices.ContainsFunc(e.Sources, func(s domain.Source) bool { return s.Type == ServiceInvoicingSource }) {
+			return nil, nil
+		}
+		out := contracts.DraftDiscardedV1{InvoiceID: e.AggregateID, Seller: e.Seller}
+		for _, s := range e.Sources {
+			out.Sources = append(out.Sources, contracts.SourceV1{Type: s.Type, ID: s.ID, Ref: s.Ref})
+		}
+		return []app.IntegrationEvent{out}, nil
+	})
 	return r
 }
 

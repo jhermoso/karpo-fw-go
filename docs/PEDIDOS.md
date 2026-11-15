@@ -421,12 +421,12 @@ Unas 665 líneas útiles: una cabecera con siete rutas. La única operación con
   docs/PRODUCTOS.md); si no tiene, el de la empresa (perfil de Parties, docs/PARTIES.md); si
   tampoco, `delivery_note`, lo de siempre. `domain.ResolveServiceFulfilment` decide.
 - `delivery_note`: la línea va al albarán por lo pendiente, sin pedir ni mover stock.
-- **`direct_invoice` aún no se puede guardar** en la empresa ni en el producto (422
-  `Company.DirectInvoiceUnavailable` y `products.direct_invoice_unavailable`): Facturación no
-  factura desde el pedido, y esas líneas no se facturarían nunca. Orders ya sabe servirlo; se
-  habilita con `DirectInvoiceAvailable` en Parties y en Products.
-- `direct_invoice`: la línea **no va al albarán**. Al servir sin líneas se deja fuera; una línea
-  pedida que es uno de estos servicios da 422 `orders.service_direct_invoice` y no se sirve nada.
+- `direct_invoice` (se admite en la empresa y en el producto desde 2026-11-15): la línea **se
+  sirve sin albarán** y se factura desde el pedido. Servir sin líneas la sirve por lo pendiente,
+  como las demás; también se puede pedir. Si sólo se sirven estos servicios no se emite albarán: la
+  respuesta de `POST .../deliveries` (201) lleva `id`, `number` y `lines` vacíos, `orderStatus` y,
+  si se facturó al servir, `servicesInvoicing` (el id de la emisión). Servidas, cuentan para que el
+  pedido quede entregado y servido entero (D-153).
 - Orders lo lee al servir, por el puerto propio `domain.ServiceFulfilment`
   (`orders.WithServiceFulfilment`), que el anfitrión cablea con
   `infrastructure.ServiceFulfilmentSettings` sobre `contracts.Catalog` de Products y
@@ -434,11 +434,56 @@ Unas 665 líneas útiles: una cabecera con siete rutas. La única operación con
   del ajuste vale desde el albarán siguiente. El puerto sólo se consulta si el pedido tiene líneas sin
   stock: un pedido sólo de bienes en stock se sirve aunque los ajustes no se puedan leer; con
   servicios, un fallo al leerlos hace fallar la entrega (500) y no se sirve nada.
-- **Pendiente: facturar estas líneas desde el pedido.** Facturación sólo prepara borradores desde
-  el albarán, y la factura directa con producto no está unida al pedido, así que no hay un camino
-  sencillo: hace falta que Facturación prepare un borrador desde las líneas de servicio de un
-  pedido y que el pedido anote lo facturado. Mientras tanto, esas líneas quedan pendientes en el
-  pedido y no lo cierran.
+
+### Facturar los servicios desde el pedido (D-155; añadido el 2026-11-15)
+
+Javier, 2026-11-15: el momento de facturar se configura, con tres valores, y por defecto es al
+servir. Es `service_invoicing_moment` del perfil de la empresa en Parties (migración 39 de Parties,
+docs/PARTIES.md), sólo por empresa, y llega a Orders por el mismo puerto de ajustes
+(`ServiceFulfilment.CompanyInvoicingMoment`):
+
+| Valor | Cuándo se envía a facturar |
+|---|---|
+| `on_serve` (y sin ajuste) | Al servir: lo servido de esas líneas y aún no facturado |
+| `on_confirm` | Al confirmar el pedido: la cantidad entera de esas líneas |
+| `manual` | Cuando alguien lo pide: `POST /api/orders/orders/{id}/invoice-services` (cuerpo opcional `{"date": "AAAA-MM-DD"}`, sin fecha hoy de la empresa), con el permiso propio `Orders.Order.InvoiceServices`. Devuelve el pedido (200) |
+
+- **El pedido lleva lo facturado.** Cada línea guarda `invoiced` (columna nueva de
+  `ord_order_lines`, `{dec:18,4}`, nula = nada; en la respuesta, `lines[].invoiced`), y cada emisión
+  sus cantidades por línea en `ord_service_invoicings` (`order_id`, `invoicing_id`, `line_no`,
+  `quantity`), hija del pedido. Migración 14 de Orders.
+- **Sólo la diferencia, nunca dos veces lo mismo.** Cada emisión factura de cada línea lo que va de
+  `invoiced` a lo que toca (lo servido en `on_serve`; la cantidad, o lo servido si el pedido se
+  cerró, en `on_confirm` y a petición) y publica, en la misma transacción y por el outbox de
+  integración, `orders.services-invoiceable.v1` con un id de emisión nuevo (`invoicingId`), el
+  pedido (`orderId`, `orderNumber`), empresa, cliente, fecha (la de servir, la del pedido o la
+  pedida) y sus líneas (`quantity` = lo que toca ahora, `unitPrice`, `discount` encadenado, `taxCode`,
+  `sku`, `description`, `product`).
+- `invoice-services` vale en cualquier momento configurado: es como se vuelve a pedir lo que quedó
+  pendiente. Sin nada pendiente, 422 `orders.nothing_to_invoice`; un borrador o un pedido anulado,
+  422 `orders.not_confirmed`; un duplicado, 422 `orders.customer_blocked` (D-70).
+- **Facturación** prepara un borrador ordinario por emisión (`Servicios del pedido N`), con origen
+  `orders.service-invoicing`, id `pedido|emisión` y referencia el número del pedido: el índice único
+  de `bil_invoice_sources` y la comprobación previa hacen que una emisión entregada otra vez no
+  prepare otro. Mismo cálculo y validaciones que el borrador de un albarán (`deliveryDraft`); no
+  espera a la facturación mensual (D-146) ni a `require_complete_order` (D-153): el momento ya lo
+  decidió la empresa. A un duplicado no se le emite (D-70), como a los albaranes.
+- **Descartar ese borrador lo devuelve a pendiente** (como D-154 con los albaranes): Facturación
+  publica `billing.draft-discarded.v1` (sólo si el borrador tiene algún origen de servicios) con sus
+  orígenes; Orders resta de `invoiced` lo de esa emisión y borra sus filas (una emisión que ya no
+  está no hace nada). No se vuelve a facturar solo: se pide con `invoice-services`.
+- Con `on_serve`, `invoice-services` sólo envía lo servido y aún no facturado (lo que volvió de un
+  borrador descartado), nunca lo no servido; con `on_confirm` y `manual`, la cantidad entera.
+- Anular un pedido con servicios ya enviados a facturar da 422 `orders.services_invoiced`: se
+  descarta antes su borrador o se rectifica la factura. **Límite conocido:** cerrar (`close`) no lo
+  comprueba; un pedido cerrado con servicios facturados por encima de lo servido (`on_confirm` o
+  `manual`) conserva esa factura y se corrige con una rectificativa.
+- El id de origen lleva el pedido (`pedido|emisión`, como el `pedido|línea` de Inventory) para que
+  el descarte llegue al pedido sin buscarlo por número.
+- Pruebas: `contexts/orders/domain/services_test.go` (la diferencia, la emisión y el descarte),
+  `TestServiceFulfilment_*` en `contexts/orders` (las tres modalidades, el permiso, el descarte
+  repetido), `TestBilling_ServicesInvoicedFromTheOrder` (borrador, idempotencia, evento de descarte)
+  y, en los motores, el final de `TestOrdersInvoicing` (`on_serve`, descarte y petición).
 
 ### La proforma, un tipo de presupuesto
 
@@ -483,8 +528,8 @@ Unas 665 líneas útiles: una cabecera con siete rutas. La única operación con
 ## Pendiente
 
 - La devolución de venta, que reabrirá el pedido servido (`ReopenServing`, D-153).
-- Facturar desde el pedido las líneas de servicio en `direct_invoice` y, después, admitir
-  `direct_invoice` en Parties y Products (D-155; ver «Servicios y proforma»).
+- ~~Facturar desde el pedido las líneas de servicio en `direct_invoice`~~: hecho (D-155, ver
+  «Facturar los servicios desde el pedido»).
 
 - ~~Facturar desde el albarán~~: hecho, ver [FACTURACION.md](FACTURACION.md). Facturación prepara
   el borrador y el albarán anota su factura al emitirse.

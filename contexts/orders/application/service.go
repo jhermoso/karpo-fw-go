@@ -32,8 +32,10 @@ var (
 	PermOrderConfirm = authz.MustPermission("Orders.Order.Confirm")
 	PermOrderDeliver = authz.MustPermission("Orders.Order.Deliver")
 	PermOrderCancel  = authz.MustPermission("Orders.Order.Cancel")
-	PermTermsRead    = authz.MustPermission("Orders.Terms.Read")
-	PermTermsUpdate  = authz.MustPermission("Orders.Terms.Update")
+	// PermOrderInvoiceServices pide la factura de los servicios de un pedido (D-155, manual).
+	PermOrderInvoiceServices = authz.MustPermission("Orders.Order.InvoiceServices")
+	PermTermsRead            = authz.MustPermission("Orders.Terms.Read")
+	PermTermsUpdate          = authz.MustPermission("Orders.Terms.Update")
 )
 
 // Deps son los puertos que necesitan los casos de uso; Credit, Blocks, Recorder y Audit son
@@ -88,10 +90,12 @@ type Service struct {
 	Confirm      app.CommandHandler[ConfirmOrder, OrderDTO]
 	RequestStock app.CommandHandler[RequestStock, OrderDTO]
 	Deliver      app.CommandHandler[Deliver, DeliveryDTO]
-	Cancel       app.CommandHandler[EndOrder, OrderDTO]
-	Close        app.CommandHandler[EndOrder, OrderDTO]
-	GetOrder     app.QueryHandler[GetOrder, OrderDTO]
-	SearchOrders app.QueryHandler[SearchOrders, fw.Page[OrderDTO]]
+	// InvoiceServices envía a facturar lo pendiente de los servicios en direct_invoice (D-155).
+	InvoiceServices app.CommandHandler[InvoiceServices, OrderDTO]
+	Cancel          app.CommandHandler[EndOrder, OrderDTO]
+	Close           app.CommandHandler[EndOrder, OrderDTO]
+	GetOrder        app.QueryHandler[GetOrder, OrderDTO]
+	SearchOrders    app.QueryHandler[SearchOrders, fw.Page[OrderDTO]]
 
 	DraftQuote      app.CommandHandler[DraftQuote, QuoteDTO]
 	ChangeQuote     app.CommandHandler[ChangeQuote, QuoteDTO]
@@ -283,6 +287,19 @@ func (s service) directInvoiceLines(ctx context.Context, o domain.OrderState) (m
 	return direct, nil
 }
 
+// invoicingMoment es cuándo factura la empresa sus servicios en direct_invoice (D-155): su
+// ajuste, o al servir.
+func (s service) invoicingMoment(ctx context.Context, company domain.OrganizationID) (string, error) {
+	if s.Fulfilment == nil {
+		return domain.ServiceInvoicingOnServe, nil
+	}
+	m, err := s.Fulfilment.CompanyInvoicingMoment(ctx, company)
+	if m == "" {
+		m = domain.ServiceInvoicingOnServe
+	}
+	return m, err
+}
+
 func (s service) termsOf(ctx context.Context, company domain.OrganizationID, customer domain.PartyID) (domain.TermsState, error) {
 	return termsOf(ctx, s.Terms, company, customer)
 }
@@ -360,6 +377,15 @@ func Publications(r *messaging.Recorder) *messaging.Recorder {
 		return []app.IntegrationEvent{contracts.SalesOrderServingCompletedV1{OrderID: e.AggregateID, Company: e.Company, Customer: e.Customer,
 			Number: e.Number}}, nil
 	})
+	messaging.On(r, func(_ context.Context, e domain.ServicesInvoiceable) ([]app.IntegrationEvent, error) {
+		out := contracts.ServicesInvoiceableV1{InvoicingID: e.Invoicing, OrderID: e.AggregateID, OrderNumber: e.Number, Company: e.Company,
+			Customer: e.Customer, Date: e.Date}
+		for _, l := range e.Lines {
+			out.Lines = append(out.Lines, contracts.ServiceLine{Line: l.Line, Product: l.Product, SKU: l.SKU, Description: l.Description,
+				TaxCode: l.TaxCode, Quantity: l.Quantity, UnitPrice: l.UnitPrice, Discount: l.Discount})
+		}
+		return []app.IntegrationEvent{out}, nil
+	})
 	messaging.On(r, func(_ context.Context, e domain.SalesOrderServingReopened) ([]app.IntegrationEvent, error) {
 		return []app.IntegrationEvent{contracts.SalesOrderServingReopenedV1{OrderID: e.AggregateID, Company: e.Company, Customer: e.Customer,
 			Number: e.Number}}, nil
@@ -404,12 +430,46 @@ type InvoiceSource struct {
 // IntegrationEventType implementa application.IntegrationEvent.
 func (InvoiceIssued) IntegrationEventType() string { return "billing.invoice-issued.v1" }
 
+// ServiceInvoicingSource es el tipo de origen que Billing da a los borradores de los servicios
+// facturados desde el pedido (D-155); el id de origen es "pedido|emisión".
+const ServiceInvoicingSource = "orders.service-invoicing"
+
+// DraftDiscarded es la copia de Orders de billing.draft-discarded.v1 (D-155).
+type DraftDiscarded struct {
+	InvoiceID string          `json:"invoiceId"`
+	Sources   []InvoiceSource `json:"sources"`
+}
+
+// IntegrationEventType implementa application.IntegrationEvent.
+func (DraftDiscarded) IntegrationEventType() string { return "billing.draft-discarded.v1" }
+
 // Subscribe registra en cada línea de pedido las existencias que Inventory retiene para ella (las
 // reservas de otros orígenes se ignoran). Una línea de un pedido que ya no espera también las
 // ignora: su cierre ya pidió a Inventory que liberara lo que retiene. También registra en cada
 // albarán la factura que Billing emitió para él.
 func Subscribe(c *messaging.Consumer, d Deps) {
 	s := newService(d)
+	// Descartado el borrador de unos servicios, lo que envió esa emisión vuelve a pendiente de
+	// facturar (D-155); se vuelve a pedir con InvoiceServices. Un pedido o una emisión que ya no
+	// están no hacen nada.
+	messaging.Handle(c, func(ctx context.Context, e DraftDiscarded, _ app.Envelope) error {
+		for _, src := range e.Sources {
+			if src.Type != ServiceInvoicingSource {
+				continue
+			}
+			order, invoicing, ok := strings.Cut(src.ID, "|")
+			id, err1 := domain.ParseOrderID(order)
+			inv, err2 := fw.ParseUUID(invoicing)
+			if err := errors.Join(err1, err2); err != nil || !ok {
+				return fw.Violation("orders.invalid_event", "billing.draft-discarded.v1: "+src.ID)
+			}
+			_, err := s.orders.Update(ctx, id, func(_ context.Context, o *domain.Order) error { o.ReleaseServiceInvoicing(inv); return nil })
+			if err != nil && !errors.Is(err, fw.ErrNotFound) {
+				return err
+			}
+		}
+		return nil
+	})
 	messaging.Handle(c, func(ctx context.Context, e InvoiceIssued, _ app.Envelope) error {
 		sources := e.Sources
 		if len(sources) == 0 && e.SourceType != "" { // un evento de antes de D-146

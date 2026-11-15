@@ -136,6 +136,9 @@ type Line struct {
 	Amount          vocab.Decimal // LineAmount(cantidad, precio, ChainedDiscount), en céntimos
 	Reserved        vocab.Decimal // retenido por Inventory y aún no entregado
 	Delivered       vocab.Decimal
+	// Invoiced es, en un servicio que se factura desde el pedido (D-155), la cantidad ya enviada a
+	// Facturación; cero en las demás líneas.
+	Invoiced vocab.Decimal
 }
 
 // Pending devuelve lo que queda por entregar.
@@ -173,7 +176,18 @@ type OrderState struct {
 	Status           Status
 	Lines            []Line
 	CloseReason      string
-	Audit            traits.AuditStamp
+	// ServiceInvoicings son las cantidades de servicios enviadas a Facturación (D-155), una fila
+	// por emisión y línea; las de un borrador descartado se quitan.
+	ServiceInvoicings []ServiceInvoicing
+	Audit             traits.AuditStamp
+}
+
+// ServiceInvoicing es la cantidad de una línea de servicio que una emisión envió a Facturación
+// (D-155).
+type ServiceInvoicing struct {
+	ID       fw.UUID
+	Line     int
+	Quantity vocab.Decimal
 }
 
 // Order es un pedido de venta.
@@ -207,11 +221,12 @@ func ReconstituteOrder(id OrderID, s OrderState) (*Order, error) {
 		v.Require(discount4(l.ChainedDiscount), f+".chainedDiscount", "range", "a discount from 0 to 100 with up to 4 decimals")
 		v.Require(!l.Delivered.IsNegative() && !l.Delivered.GreaterThan(l.Quantity) && !l.Reserved.IsNegative() && !l.Reserved.GreaterThan(l.Pending()),
 			f+".delivered", "range", "delivered within the quantity, reserved within what is pending")
+		v.Require(!l.Invoiced.IsNegative() && !l.Invoiced.GreaterThan(l.Quantity), f+".invoiced", "range", "invoiced within the quantity")
 	}
 	if err := v.Err(); err != nil {
 		return nil, err
 	}
-	s.Lines = slices.Clone(s.Lines)
+	s.Lines, s.ServiceInvoicings = slices.Clone(s.Lines), slices.Clone(s.ServiceInvoicings)
 	return &Order{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
@@ -224,7 +239,7 @@ func DraftOrder(id OrderID, s OrderState) (*Order, error) {
 // State devuelve el estado (las líneas son una copia).
 func (o *Order) State() OrderState {
 	s := o.s
-	s.Lines = slices.Clone(s.Lines)
+	s.Lines, s.ServiceInvoicings = slices.Clone(s.Lines), slices.Clone(s.ServiceInvoicings)
 	return s
 }
 
@@ -266,7 +281,7 @@ func (o *Order) AddLine(l Line) (int, error) {
 	for _, x := range o.s.Lines {
 		l.No = max(l.No, x.No+1)
 	}
-	l.Reserved, l.Delivered = zero(), zero()
+	l.Reserved, l.Delivered, l.Invoiced = zero(), zero(), zero()
 	s := o.s
 	s.Lines = append(slices.Clone(o.s.Lines), price(l, o.s.CustomerDiscount))
 	if _, err := ReconstituteOrder(o.ID(), s); err != nil {
@@ -434,6 +449,11 @@ func (o *Order) Cancel(reason string) error {
 	if slices.ContainsFunc(o.s.Lines, func(l Line) bool { return l.Delivered.IsPositive() }) {
 		return fw.Violation("orders.delivered", "part of the order was delivered: close it instead")
 	}
+	// Servicios ya enviados a facturar (D-155, on_confirm o a petición): anular dejaría una
+	// factura sin pedido. Se descarta antes su borrador o se rectifica la factura.
+	if slices.ContainsFunc(o.s.Lines, func(l Line) bool { return l.Invoiced.IsPositive() }) {
+		return fw.Violation("orders.services_invoiced", "services of the order were invoiced: discard their draft or correct the invoice first")
+	}
 	return o.end(Cancelled, reason)
 }
 
@@ -473,6 +493,90 @@ func (o *Order) ReopenServing() {
 		return
 	}
 	o.Raise(SalesOrderServingReopened{EventMeta: o.NewEventMeta(), Company: o.s.Company.String(), Customer: o.s.Customer.String(), Number: o.s.Number})
+}
+
+// Cuándo se facturan los servicios que se facturan desde el pedido (D-155; Javier, 2026-11-15:
+// las tres configurables, por defecto al servir). Es el ajuste de la empresa en Parties.
+const (
+	ServiceInvoicingOnServe   = "on_serve"
+	ServiceInvoicingOnConfirm = "on_confirm"
+	ServiceInvoicingManual    = "manual"
+)
+
+// InvoiceServedServices envía a Facturación lo servido y aún no facturado de las líneas de
+// servicio direct (al servir, on_serve). Devuelve el id de la emisión, o cero si no había nada.
+func (o *Order) InvoiceServedServices(direct map[int]bool, id fw.UUID, date vocab.Date) fw.UUID {
+	return o.invoiceServices(direct, id, date, func(l Line) vocab.Decimal { return l.Delivered })
+}
+
+// InvoiceServices envía a Facturación lo aún no facturado de las líneas de servicio direct: la
+// cantidad entera (on_confirm y manual), o sólo lo servido si onlyServed (on_serve: nunca lo no
+// servido) o si el pedido se cerró con algo pendiente. Sólo un pedido confirmado, entregado o
+// cerrado; sin nada que facturar, 422 orders.nothing_to_invoice.
+func (o *Order) InvoiceServices(direct map[int]bool, id fw.UUID, date vocab.Date, onlyServed bool) (fw.UUID, error) {
+	switch o.s.Status {
+	case Confirmed, Delivered, Closed:
+	default:
+		return fw.UUID{}, fw.Violation("orders.not_confirmed", "only a confirmed order invoices its services")
+	}
+	served := onlyServed || o.s.Status == Closed
+	got := o.invoiceServices(direct, id, date, func(l Line) vocab.Decimal {
+		if served {
+			return l.Delivered
+		}
+		return l.Quantity
+	})
+	if got.IsZero() {
+		return got, fw.Violation("orders.nothing_to_invoice", "the order has no service pending to invoice")
+	}
+	return got, nil
+}
+
+// invoiceServices factura de cada línea direct lo que va de lo ya facturado a upTo: sólo esa
+// diferencia, nunca dos veces lo mismo, y lanza ServicesInvoiceable con el id de la emisión.
+func (o *Order) invoiceServices(direct map[int]bool, id fw.UUID, date vocab.Date, upTo func(Line) vocab.Decimal) fw.UUID {
+	lines := slices.Clone(o.s.Lines)
+	var out []ServiceInvoiceLine
+	var rows []ServiceInvoicing
+	for k := range lines {
+		l := &lines[k]
+		q := upTo(*l).Sub(l.Invoiced)
+		if !direct[l.No] || !q.IsPositive() {
+			continue
+		}
+		l.Invoiced = l.Invoiced.Add(q)
+		rows = append(rows, ServiceInvoicing{ID: id, Line: l.No, Quantity: q})
+		out = append(out, ServiceInvoiceLine{Line: l.No, Product: l.Product.String(), SKU: l.SKU, Description: l.Description, TaxCode: l.TaxCode,
+			Quantity: q.String(), UnitPrice: l.UnitPrice.StringFixed(4), Discount: l.ChainedDiscount.StringFixed(4)})
+	}
+	if len(out) == 0 {
+		return fw.UUID{}
+	}
+	o.s.Lines, o.s.ServiceInvoicings = lines, append(slices.Clone(o.s.ServiceInvoicings), rows...)
+	o.Raise(ServicesInvoiceable{EventMeta: o.NewEventMeta(), Invoicing: id.String(), Company: o.s.Company.String(), Customer: o.s.Customer.String(),
+		Number: o.s.Number, Date: date.String(), Lines: out})
+	return id
+}
+
+// ReleaseServiceInvoicing devuelve a pendiente de facturar lo que envió una emisión cuyo borrador
+// se ha descartado en Facturación (D-155, como D-154 con los albaranes). Una emisión que ya no
+// está (descartada antes) no hace nada.
+func (o *Order) ReleaseServiceInvoicing(id fw.UUID) {
+	lines := slices.Clone(o.s.Lines)
+	var keep []ServiceInvoicing
+	for _, r := range o.s.ServiceInvoicings {
+		if r.ID != id {
+			keep = append(keep, r)
+			continue
+		}
+		if k := slices.IndexFunc(lines, func(l Line) bool { return l.No == r.Line }); k >= 0 {
+			lines[k].Invoiced = lines[k].Invoiced.Sub(r.Quantity)
+			if lines[k].Invoiced.IsNegative() {
+				lines[k].Invoiced = zero()
+			}
+		}
+	}
+	o.s.Lines, o.s.ServiceInvoicings = lines, keep
 }
 
 // AuditSnapshot implementa traits.Snapshotter.
@@ -971,6 +1075,29 @@ type (
 		Customer string `json:"customer"`
 		Number   string `json:"number"`
 	}
+	// ServiceInvoiceLine es la cantidad de una línea de servicio que se envía a facturar, con su
+	// precio y el descuento que se aplica (D-155).
+	ServiceInvoiceLine struct {
+		Line        int    `json:"line"`
+		Product     string `json:"product"`
+		SKU         string `json:"sku"`
+		Description string `json:"description"`
+		TaxCode     string `json:"taxCode"`
+		Quantity    string `json:"quantity"`
+		UnitPrice   string `json:"unitPrice"`
+		Discount    string `json:"discount"`
+	}
+	// ServicesInvoiceable se lanza cuando un pedido envía a facturar sus servicios (D-155): sólo lo
+	// que toca ahora, con el id de la emisión.
+	ServicesInvoiceable struct {
+		fw.EventMeta
+		Invoicing string               `json:"invoicing"`
+		Company   string               `json:"company"`
+		Customer  string               `json:"customer"`
+		Number    string               `json:"number"`
+		Date      string               `json:"date"`
+		Lines     []ServiceInvoiceLine `json:"lines"`
+	}
 	// SalesOrderServingReopened se lanza cuando un pedido servido entero vuelve a tener algo
 	// pendiente de servir (D-153).
 	SalesOrderServingReopened struct {
@@ -989,6 +1116,7 @@ func (DeliveryIssued) EventType() string { return "orders.delivery_issued" }
 func (SalesOrderServingCompleted) EventType() string {
 	return "orders.sales_order_serving_completed"
 }
+func (ServicesInvoiceable) EventType() string { return "orders.services_invoiceable" }
 func (SalesOrderServingReopened) EventType() string {
 	return "orders.sales_order_serving_reopened"
 }
@@ -1076,9 +1204,13 @@ func ResolveServiceFulfilment(product, company string) string {
 // Products y de Parties). Services devuelve, de los productos dados, los que son servicios, con su
 // ajuste propio ("" sin ajuste); CompanyMode, el ajuste de la empresa ("" sin ajuste). nil: todos
 // los servicios van con albarán.
+//
+// CompanyInvoicingMoment es cuándo factura la empresa esos servicios: ServiceInvoicingOnServe,
+// ServiceInvoicingOnConfirm o ServiceInvoicingManual ("" sin ajuste: al servir).
 type ServiceFulfilment interface {
 	Services(ctx context.Context, products []ProductID) (map[ProductID]string, error)
 	CompanyMode(ctx context.Context, company OrganizationID) (string, error)
+	CompanyInvoicingMoment(ctx context.Context, company OrganizationID) (string, error)
 }
 
 // CreditCheck responde el crédito de un cliente en una fecha; nil: sin control de crédito.

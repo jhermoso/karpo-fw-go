@@ -322,6 +322,7 @@ importes al céntimo (18,2), cantidades (18,4). Nunca es menor que la escala del
 | | `ord_order_lines.discount`, `ord_quote_lines.discount` | 7,4 | order_item.LineDiscountPercent |
 | | `ord_order_lines.chained_discount`, `ord_quote_lines.chained_discount`, `ord_delivery_lines.discount` (v8, anulables) | 7,4 | el descuento encadenado, como `bil_invoice_lines.discount` (D-149) |
 | | `ord_delivery_lines.unit_price` (v8, anulable) | 18,4 | el de `ord_order_lines` (D-149) |
+| | `ord_order_lines.invoiced` (v14, anulable), `ord_service_invoicings.quantity` (v14) | 18,4 | dominio, como la cantidad: lo facturado de un servicio desde el pedido (D-155) |
 | Parties (v26) | `party_relationships.share_percent` | 5,2 | party_relationship.DirectOwnershipPercent |
 | Payments (v3) | `pay_payables.amount`, `paid`; `pay_payable_accounts.amount` | 18,2 | dominio |
 | | `pay_payments.amount`; `pay_allocations.amount` | 19,4 | payment_header.Amount, payment_application.AmountApplied |
