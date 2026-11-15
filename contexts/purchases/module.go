@@ -23,6 +23,12 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 )
 
+// Rutas de las solicitudes de aprobación (D-156): la de siempre y su alias /api/v1.
+const (
+	ApprovalsBase   = "/api/purchases/approvals"
+	ApprovalsBaseV1 = "/api/v1/purchases/approvals"
+)
+
 // Module es el contexto compuesto.
 type Module struct {
 	Service *uapp.Service
@@ -165,18 +171,22 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	m.RegisterMaintenanceRoutes(mux) // el contrato de mantenimiento, bajo /api/v1/suppliers
 
 	// Las solicitudes de aprobación del bloqueo y el desbloqueo (D-156, docs/COMPRAS.md).
-	mux.HandleFunc("GET /api/purchases/approvals", func(w http.ResponseWriter, r *http.Request) {
-		out, err := svc.SearchApprovals.Handle(r.Context(), uapp.SearchApprovals{Company: r.URL.Query().Get("company"), Status: r.URL.Query().Get("status")})
-		distribution.Respond(w, r, out, err, http.StatusOK)
-	})
-	apv := func(s string) (fwapproval.RequestID, error) {
-		u, err := fw.ParseUUID(s)
-		return fwapproval.RequestID{UUID: u}, err
+	// También bajo /api/v1, la forma de las rutas que llama el motor de Angular de Karpo C#
+	// (front/README.md): mismas rutas y respuestas.
+	for _, base := range []string{ApprovalsBase, ApprovalsBaseV1} {
+		mux.HandleFunc("GET "+base, func(w http.ResponseWriter, r *http.Request) {
+			out, err := svc.SearchApprovals.Handle(r.Context(), uapp.SearchApprovals{Company: r.URL.Query().Get("company"), Status: r.URL.Query().Get("status")})
+			distribution.Respond(w, r, out, err, http.StatusOK)
+		})
+		apv := func(s string) (fwapproval.RequestID, error) {
+			u, err := fw.ParseUUID(s)
+			return fwapproval.RequestID{UUID: u}, err
+		}
+		set := func(c *uapp.ResolveApproval, id fwapproval.RequestID) { c.ID = id }
+		mux.HandleFunc("POST "+base+"/{id}/approve", command(apv, set, svc.ApproveApproval.Handle))
+		mux.HandleFunc("POST "+base+"/{id}/reject", command(apv, set, svc.RejectApproval.Handle))
+		mux.HandleFunc("POST "+base+"/{id}/cancel", command(apv, set, svc.CancelApproval.Handle))
 	}
-	set := func(c *uapp.ResolveApproval, id fwapproval.RequestID) { c.ID = id }
-	mux.HandleFunc("POST /api/purchases/approvals/{id}/approve", command(apv, set, svc.ApproveApproval.Handle))
-	mux.HandleFunc("POST /api/purchases/approvals/{id}/reject", command(apv, set, svc.RejectApproval.Handle))
-	mux.HandleFunc("POST /api/purchases/approvals/{id}/cancel", command(apv, set, svc.CancelApproval.Handle))
 }
 
 // supplierStatus es 202 si la orden ha dejado una solicitud de aprobación pendiente.

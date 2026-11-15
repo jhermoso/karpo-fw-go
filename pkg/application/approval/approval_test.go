@@ -125,3 +125,28 @@ func TestNoAuthorizationContext(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+// Dos pendientes del mismo grupo sobre el mismo objetivo chocan (también en memoria); al
+// resolverse la primera, se puede pedir otra.
+func TestRequest_OnePendingPerGroupAndTarget(t *testing.T) {
+	svc := app.Service{Repo: memory.NewRepository[approval.RequestID, *approval.Request](memory.NewStore("t"))}
+	requester := domain.NewUUID()
+	ctx := as(t, requester)
+	in := func(a approval.Action) app.RequestInput {
+		return app.RequestInput{Company: domain.NewUUID(), Action: a, Group: approval.GroupBlock,
+			Target: approval.Target{Type: "purchases.supplier", ID: "42"}}
+	}
+	first, err := svc.Request(ctx, in("purchases.supplier.block"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Request(ctx, in("purchases.supplier.unblock")); !errors.Is(err, approval.ErrPending) || !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("second = %v", err)
+	}
+	if _, err := svc.Cancel(ctx, first.ID(), ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Request(ctx, in("purchases.supplier.unblock")); err != nil {
+		t.Fatalf("after cancel: %v", err)
+	}
+}

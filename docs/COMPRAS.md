@@ -233,14 +233,14 @@ desbloquear un proveedor no se hace en el acto: deja una solicitud que aprueba o
   (el id de la solicitud); el `DELETE` responde `{"pendingApproval": id}`. Así desaparecen los dos
   menores de la PR #102: la versión subía sin cambios, y un 409 por solicitud repetida tiraba los
   demás cambios del formulario.
-- **Una pendiente por perfil y acción:** la segunda es 409 (`purchases.approval_pending` en el
-  detalle). Lo comprueba el código y, en SQL, la base (migraciones 8 y 9): `pur_approvals` gana
-  `pending_key`, que vale `acción:perfil` mientras la solicitud está pendiente y su id después, y un
-  índice único `ux_pur_approvals_pending`. Nunca es NULL, así que el índice vale igual en los cinco
-  motores (SQL Server no admite dos NULL en un índice único); la migración 8 rellena la clave de las
-  solicitudes que ya hubiera. El mapeo es el del motor más esa columna
-  (`infrastructure.ApprovalMapping`); el choque se responde 409 como el del código. En memoria sólo
-  lo comprueba el código.
+- **Una pendiente por perfil, sea bloquear o desbloquear:** la segunda es 409
+  (`purchases.approval_pending` en el detalle). Lo comprueba el motor y, en SQL, la base:
+  `pur_approvals` gana `pending_key` (migración 8) con el índice único `ux_pur_approvals_pending`
+  (migración 9). Desde la migración 10 la clave es la del motor común (docs/APROBACIONES.md, «Una
+  sola pendiente»): `block:purchases.supplier_profile:<perfil>` mientras está pendiente y su id
+  después; antes era `acción:perfil`, y bloquear y desbloquear podían convivir. La 10 recalcula las
+  claves que ya hubiera (si dos pendientes chocan, la más antigua se queda la clave). El mapeo es el
+  del motor (`approvals.Mapping`).
 - **Rutas de las solicitudes**, junto a las del contexto:
 
 | Ruta | Qué hace |
@@ -249,6 +249,9 @@ desbloquear un proveedor no se hace en el acto: deja una solicitud que aprueba o
 | `POST /api/purchases/approvals/{id}/approve` `{comment?}` | aprueba y **aplica el bloqueo o el desbloqueo en la misma transacción**; 403 sin el permiso de aprobar, 422 `approval.self_resolution` si es el solicitante, 422 `approval.already_resolved` si ya está resuelta |
 | `POST /api/purchases/approvals/{id}/reject` `{comment}` | rechaza; el comentario es obligatorio (422 `approval.comment_required`); el perfil no cambia |
 | `POST /api/purchases/approvals/{id}/cancel` `{comment?}` | la retira; sólo el solicitante (422 `approval.not_requester`) |
+
+Las cuatro, también bajo `/api/v1/purchases/approvals`, la forma de las rutas que llama el motor de
+Angular de Karpo C# (front/README.md).
 
 - **Ámbito del aprobador** (lo que APROBACIONES.md dejaba para el paso 3): resolver exige además el
   ámbito de escritura en la empresa de la solicitud: fuera de él, 404; de sólo lectura, 403.

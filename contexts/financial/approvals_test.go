@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/financial"
@@ -53,6 +54,12 @@ func (h *host) approvals() {
 	h.must(h.do("POST", path+"/block", "officer", map[string]any{"reason": "otra"}, nil), 409, "a second pending block")
 	var list []fapp.ApprovalDTO
 	h.must(h.do("GET", apv, "approver", nil, &list), 200, "list")
+	// El alias /api/v1 del motor de Angular responde lo mismo.
+	var alias []fapp.ApprovalDTO
+	h.must(h.do("GET", financial.ApprovalsBaseV1, "approver", nil, &alias), 200, "list by /api/v1")
+	if !reflect.DeepEqual(alias, list) {
+		h.t.Fatalf("/api/v1 list = %+v, want %+v", alias, list)
+	}
 	if len(list) != 1 || list[0].ID != first || list[0].Action != "financial.account.block" || list[0].TargetID != acc.ID {
 		t.Fatalf("list = %+v", list)
 	}
@@ -77,7 +84,7 @@ func (h *host) approvals() {
 
 	h.must(h.do("POST", path+"/unblock", "officer", map[string]any{"reason": "Levantada"}, &out), 202, "unblock with approval")
 	h.must(h.do("POST", apv+"/"+out.PendingApproval+"/cancel", "approver", nil, nil), 422, "only the requester cancels")
-	h.must(h.do("POST", apv+"/"+out.PendingApproval+"/approve", "approver", nil, &res), 200, "approve the unblock")
+	h.must(h.do("POST", financial.ApprovalsBaseV1+"/"+out.PendingApproval+"/approve", "approver", nil, &res), 200, "approve the unblock by /api/v1")
 	if a := get(); a.Status != "active" || a.UnblockReason != "Levantada" || history() != 2 {
 		t.Fatalf("unblocked: %+v", a)
 	}

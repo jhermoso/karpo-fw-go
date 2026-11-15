@@ -5,14 +5,12 @@ package infrastructure
 // índice único, como en Compras).
 
 import (
-	"fmt"
 	"slices"
 	"strings"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/orders/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/approval"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
-	fwapproval "github.com/jhermoso/karpo-fw-go/pkg/domain/approval"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/approvals"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
@@ -44,39 +42,9 @@ var blockDDL = slices.Concat([]string{
 	`CREATE UNIQUE INDEX ` + uxPending + ` ON ` + TableApprovals + ` (pending_key)`,
 })
 
-// pendingKey es la clave de unicidad de una solicitud: el destino mientras está pendiente (una sola
-// pendiente por destino, sea bloquear o desbloquear);
-// después, su id, que no choca con nada.
-func pendingKey(status, _, target, id string) string {
-	if status == string(fwapproval.StatusPending) {
-		return "block:" + target
-	}
-	return id
-}
-
-// ApprovalMapping es el mapeo del motor (pkg/persistence/approvals) con la clave pending_key y su
-// índice único: dos solicitudes pendientes para las mismas condiciones y acción chocan (409).
-func ApprovalMapping() sqlrepo.Mapping[fwapproval.RequestID, *fwapproval.Request] {
-	m := approvals.Mapping(TableApprovals)
-	m.Columns = append(slices.Clone(m.Columns), "pending_key")
-	dehydrate := m.Dehydrate
-	m.Dehydrate = func(r *fwapproval.Request) (sqlrepo.Values, error) {
-		v, err := dehydrate(r)
-		if err != nil {
-			return nil, err
-		}
-		st := r.State()
-		v["pending_key"] = pendingKey(string(st.Status), string(st.Action), st.Target.ID, r.ID().String())
-		return v, nil
-	}
-	m.Unique = append(m.Unique, sqlrepo.UniqueIndex{Name: uxPending, Columns: []string{"pending_key"},
-		Err: fmt.Errorf("%w: orders.approval_pending: there is already a pending request for these customer terms", fw.ErrConflict)})
-	return m
-}
-
 // ApprovalRepositoryFactory construye el repositorio de las solicitudes de aprobación.
 func ApprovalRepositoryFactory(b hotswap.Backend) (approval.Repository, error) {
-	return repository(b, ApprovalMapping())
+	return repository(b, approvals.Mapping(TableApprovals))
 }
 
 // blockEventsChild mapea el historial de bloqueos de las condiciones.

@@ -136,6 +136,9 @@ func Migrations() sqlrepo.MigrationSet {
 		// Server no admite dos NULL en un índice único), así que el índice es portable.
 		{Version: 9, Name: "one pending request per target", Up: sqlrepo.RenderDDLAll(
 			`CREATE UNIQUE INDEX ` + uxPending + ` ON ` + TableApprovals + ` (pending_key)`)},
+		// La clave pasa al motor común (pkg/persistence/approvals): «block:tipo:perfil» para
+		// bloquear y desbloquear, que ya no conviven pendientes. El índice de la 9 es el del motor.
+		{Version: 10, Name: "common pending key", Run: approvals.FillPendingKeys(TableApprovals, fwapproval.GroupBlock)},
 	}}
 }
 
@@ -339,11 +342,11 @@ func CounterRepositoryFactory(b hotswap.Backend) (domain.CounterRepository, erro
 	return repository(b, CounterMapping())
 }
 
-// uxPending es el índice único de la solicitud pendiente.
+// uxPending es el índice único de la solicitud pendiente (el del motor, ux_<tabla>_pending).
 const uxPending = "ux_pur_approvals_pending"
 
-// pendingKey es la clave de unicidad de una solicitud: acción y destino mientras está pendiente;
-// después, su id, que no choca con nada.
+// pendingKey es la clave de unicidad de una solicitud en la migración 8: acción y destino mientras
+// está pendiente; después, su id. La migración 10 la pasa al formato del motor.
 func pendingKey(status, action, target, id string) string {
 	if status == string(fwapproval.StatusPending) {
 		return action + ":" + target
@@ -370,29 +373,9 @@ func fillPendingKeys(ctx context.Context, db *sqlrepo.DB) error {
 	return nil
 }
 
-// ApprovalMapping es el mapeo del motor (pkg/persistence/approvals) con la clave pending_key y su
-// índice único: dos solicitudes pendientes para el mismo perfil y acción chocan (409).
-func ApprovalMapping() sqlrepo.Mapping[fwapproval.RequestID, *fwapproval.Request] {
-	m := approvals.Mapping(TableApprovals)
-	m.Columns = append(slices.Clone(m.Columns), "pending_key")
-	dehydrate := m.Dehydrate
-	m.Dehydrate = func(r *fwapproval.Request) (sqlrepo.Values, error) {
-		v, err := dehydrate(r)
-		if err != nil {
-			return nil, err
-		}
-		st := r.State()
-		v["pending_key"] = pendingKey(string(st.Status), string(st.Action), st.Target.ID, r.ID().String())
-		return v, nil
-	}
-	m.Unique = append(m.Unique, sqlrepo.UniqueIndex{Name: uxPending, Columns: []string{"pending_key"},
-		Err: fmt.Errorf("%w: purchases.approval_pending: there is already a pending request for this supplier and action", fw.ErrConflict)})
-	return m
-}
-
 // ApprovalRepositoryFactory construye el repositorio de las solicitudes de aprobación.
 func ApprovalRepositoryFactory(b hotswap.Backend) (approval.Repository, error) {
-	return repository(b, ApprovalMapping())
+	return repository(b, approvals.Mapping(TableApprovals))
 }
 
 // BlockEventMapping mapea el historial de bloqueos a pur_supplier_block_events.

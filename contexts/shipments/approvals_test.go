@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/shipments"
@@ -57,6 +58,12 @@ func (h *host) carrierApprovals() {
 	h.must(status("planner", "DELETE", base+"/"+id+"?reason=otra", nil), 409, "a second pending block")
 	var list []sapp.ApprovalDTO
 	h.must(h.do("GET", apv, "approver", nil, &list), 200, "list")
+	// El alias /api/v1 del motor de Angular responde lo mismo.
+	var alias []sapp.ApprovalDTO
+	h.must(h.do("GET", shipments.ApprovalsBaseV1, "approver", nil, &alias), 200, "list by /api/v1")
+	if !reflect.DeepEqual(alias, list) {
+		h.t.Fatalf("/api/v1 list = %+v, want %+v", alias, list)
+	}
 	if len(list) != 1 || list[0].ID != first || list[0].Action != "shipments.carrier.block" || list[0].Reason != "Pierde paquetes" || list[0].TargetID != id {
 		t.Fatalf("list = %+v", list)
 	}
@@ -95,7 +102,7 @@ func (h *host) carrierApprovals() {
 	if code != 202 || p["pendingApproval"] == nil || p["blocked"] != true {
 		t.Fatalf("unblock with approval: %d %v", code, p)
 	}
-	h.must(h.do("POST", apv+"/"+p["pendingApproval"].(string)+"/approve", "approver", nil, &res), 200, "approve the unblock")
+	h.must(h.do("POST", shipments.ApprovalsBaseV1+"/"+p["pendingApproval"].(string)+"/approve", "approver", nil, &res), 200, "approve the unblock by /api/v1")
 	if c := get(id); c["blocked"] != false || c["unblockReason"] != "Ya entrega" || history(id) != 2 {
 		t.Fatalf("unblocked: %v", c)
 	}

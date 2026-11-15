@@ -228,11 +228,14 @@ la política de aprobaciones es la suya.
   aprobar `Shipments.Carrier.ApproveBlock` y `Shipments.Carrier.ApproveUnblock`. La política es la de
   Parties (`shipments.WithApprovalPolicy(h.Parties.ApprovalPolicy)` en `host/host.go`; sin ella,
   ninguna). Con la acción en la lista de la empresa, la orden deja la solicitud en `shp_approvals` y
-  responde 202 con `pendingApproval` sin guardar el transportista; otra igual pendiente es 409
-  `shipments.approval_pending`. Bandeja: `GET /api/shipments/approvals?company&status` y `POST
-  /api/shipments/approvals/{id}/approve|reject|cancel`, como en Compras (docs/APROBACIONES.md). Al
+  responde 202 con `pendingApproval` sin guardar el transportista; otra pendiente sobre el mismo
+  transportista, sea bloquear o desbloquear, es 409 `shipments.approval_pending` (en SQL, además, el
+  índice único de `pending_key`; docs/APROBACIONES.md). Bandeja: `GET /api/shipments/approvals?company&status` y `POST
+  /api/shipments/approvals/{id}/approve|reject|cancel`, como en Compras (docs/APROBACIONES.md), y
+  las mismas bajo `/api/v1/shipments/approvals`. Al
   aprobar, el bloqueo se aplica en la misma transacción, de forma idempotente, y escribe el historial.
-- **Migraciones:** 4 (`block_reason`, `unblock_reason` y `shp_carrier_block_events`) y 5
-  (`shp_approvals`).
+- **Migraciones:** 4 (`block_reason`, `unblock_reason` y `shp_carrier_block_events`), 5
+  (`shp_approvals`), 6 (`pending_key`, rellenada en las solicitudes que ya hubiera) y 7 (su índice
+  único `ux_shp_approvals_pending`).
 - **Pruebas:** `TestShipments_CarrierMaintenanceContract_MemoryThenSQLite` (motivo, versión,
   historial, DELETE con motivo, PUT que bloquea 422) y `TestShipments_CarrierApprovals_MemoryThenSQLite`.

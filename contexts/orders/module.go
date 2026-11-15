@@ -23,6 +23,12 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 )
 
+// Rutas de las solicitudes de aprobación (D-156): la de siempre y su alias /api/v1.
+const (
+	ApprovalsBase   = "/api/orders/approvals"
+	ApprovalsBaseV1 = "/api/v1/orders/approvals"
+)
+
 // Module es el contexto compuesto.
 type Module struct {
 	Service           *oapp.Service
@@ -198,18 +204,22 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 		distribution.Respond(w, r, out, err, http.StatusOK)
 	})
 	// Las solicitudes de aprobación del bloqueo y el desbloqueo.
-	mux.HandleFunc("GET /api/orders/approvals", func(w http.ResponseWriter, r *http.Request) {
-		out, err := svc.SearchApprovals.Handle(r.Context(), oapp.SearchApprovals{Company: r.URL.Query().Get("company"), Status: r.URL.Query().Get("status")})
-		distribution.Respond(w, r, out, err, http.StatusOK)
-	})
-	apv := func(s string) (fwapproval.RequestID, error) {
-		u, err := fw.ParseUUID(s)
-		return fwapproval.RequestID{UUID: u}, err
+	// También bajo /api/v1, la forma de las rutas que llama el motor de Angular de Karpo C#
+	// (front/README.md): mismas rutas y respuestas.
+	for _, base := range []string{ApprovalsBase, ApprovalsBaseV1} {
+		mux.HandleFunc("GET "+base, func(w http.ResponseWriter, r *http.Request) {
+			out, err := svc.SearchApprovals.Handle(r.Context(), oapp.SearchApprovals{Company: r.URL.Query().Get("company"), Status: r.URL.Query().Get("status")})
+			distribution.Respond(w, r, out, err, http.StatusOK)
+		})
+		apv := func(s string) (fwapproval.RequestID, error) {
+			u, err := fw.ParseUUID(s)
+			return fwapproval.RequestID{UUID: u}, err
+		}
+		resolve := func(c *oapp.ResolveApproval, id fwapproval.RequestID) { c.ID = id }
+		mux.HandleFunc("POST "+base+"/{id}/approve", command(http.StatusOK, apv, resolve, svc.ApproveApproval.Handle))
+		mux.HandleFunc("POST "+base+"/{id}/reject", command(http.StatusOK, apv, resolve, svc.RejectApproval.Handle))
+		mux.HandleFunc("POST "+base+"/{id}/cancel", command(http.StatusOK, apv, resolve, svc.CancelApproval.Handle))
 	}
-	resolve := func(c *oapp.ResolveApproval, id fwapproval.RequestID) { c.ID = id }
-	mux.HandleFunc("POST /api/orders/approvals/{id}/approve", command(http.StatusOK, apv, resolve, svc.ApproveApproval.Handle))
-	mux.HandleFunc("POST /api/orders/approvals/{id}/reject", command(http.StatusOK, apv, resolve, svc.RejectApproval.Handle))
-	mux.HandleFunc("POST /api/orders/approvals/{id}/cancel", command(http.StatusOK, apv, resolve, svc.CancelApproval.Handle))
 
 	mux.HandleFunc("POST /api/orders/orders", create(http.StatusCreated, svc.DraftOrder.Handle))
 	mux.HandleFunc("GET /api/orders/orders", func(w http.ResponseWriter, r *http.Request) {

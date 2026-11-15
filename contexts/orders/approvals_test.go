@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	iinfra "github.com/jhermoso/karpo-fw-go/contexts/inventory/infrastructure"
@@ -46,6 +47,12 @@ func (h *host) termsApprovals() {
 	post(base+"/block", "manager", map[string]any{"scopes": []string{"orders"}, "reason": "otra"}, 409, "one pending request per terms, any scope")
 	var list []oapp.ApprovalDTO
 	h.must(h.do("GET", apv, "approver", nil, &list), 200, "list")
+	// El alias /api/v1 del motor de Angular responde lo mismo.
+	var alias []oapp.ApprovalDTO
+	h.must(h.do("GET", orders.ApprovalsBaseV1, "approver", nil, &alias), 200, "list by /api/v1")
+	if !reflect.DeepEqual(alias, list) {
+		h.t.Fatalf("/api/v1 list = %+v, want %+v", alias, list)
+	}
 	if len(list) != 1 || list[0].Action != "orders.customer_terms.block" || list[0].TargetID != terms.ID {
 		t.Fatalf("list = %+v", list)
 	}
@@ -69,7 +76,7 @@ func (h *host) termsApprovals() {
 	}
 	got = post(base+"/unblock", "manager", map[string]any{"reason": "repuesto"}, 202, "unblock with approval")
 	post(base+"/block", "manager", map[string]any{"scopes": []string{"orders"}, "reason": "otra"}, 409, "no block while an unblock is pending")
-	h.must(h.do("POST", apv+"/"+got.PendingApproval+"/approve", "approver", nil, nil), 200, "approve the unblock")
+	h.must(h.do("POST", orders.ApprovalsBaseV1+"/"+got.PendingApproval+"/approve", "approver", nil, nil), 200, "approve the unblock by /api/v1")
 	h.must(h.do("GET", base+"/block-history", "manager", nil, &hist), 200, "history")
 	if len(hist) != 2 || hist[1].Blocked || hist[1].Reason != "repuesto" {
 		t.Fatalf("unblocked: %+v", hist)
