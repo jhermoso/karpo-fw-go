@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 )
@@ -69,11 +70,18 @@ func WithActor(ctx context.Context, a vocab.Actor) context.Context {
 	return context.WithValue(ctx, actorKey, a)
 }
 
-// ActorFrom devuelve el actor guardado en ctx, o vocab.SystemActor si no hay ninguno
-// (el modismo de C# "ActorContext.Current ?? Actor.System").
+// ActorFrom devuelve el actor guardado en ctx; si no hay ninguno, el del contexto de
+// autorización (una llamada directa al caso de uso, sin HTTP, como un trabajo o la integración);
+// y si tampoco, vocab.SystemActor (el modismo de C# "ActorContext.Current ?? Actor.System").
 func ActorFrom(ctx context.Context) vocab.Actor {
 	if a, ok := ctx.Value(actorKey).(vocab.Actor); ok && !a.IsZero() {
 		return a
+	}
+	// Sólo un humano: los principales de servicio y el sistema siguen siendo System (no son una party).
+	if c, ok := authz.FromContext(ctx); ok && c.Kind != authz.Service && c.Kind != authz.System {
+		if a := c.Actor(); !a.IsZero() {
+			return a
+		}
 	}
 	return vocab.SystemActor
 }
