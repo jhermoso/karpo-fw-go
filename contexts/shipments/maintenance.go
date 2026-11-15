@@ -35,12 +35,18 @@ type MaintainedCarrier struct {
 	Party       string `json:"party"`
 	TrackingURL string `json:"trackingUrl"`
 	Blocked     bool   `json:"blocked"`
-	Version     int64  `json:"version"`
+	// BlockReason y UnblockReason son de sólo lectura: el bloqueo cambia con POST …/block y
+	// …/unblock (D-156).
+	BlockReason   string `json:"blockReason"`
+	UnblockReason string `json:"unblockReason"`
+	Version       int64  `json:"version"`
+	// PendingApproval es el id de la solicitud que ha dejado bloquear o desbloquear (202).
+	PendingApproval string `json:"pendingApproval,omitempty"`
 }
 
 func maintained(c sapp.CarrierDTO) MaintainedCarrier {
 	return MaintainedCarrier{ID: c.ID, Company: c.Company, Code: c.Code, Name: c.Name, Party: c.Party, TrackingURL: c.TrackingURL,
-		Blocked: c.Blocked, Version: c.Version}
+		Blocked: c.Blocked, BlockReason: c.BlockReason, UnblockReason: c.UnblockReason, Version: c.Version, PendingApproval: c.PendingApproval}
 }
 
 // maintainedInput es el cuerpo de un alta o de un cambio. Lo que sobra se ignora (un front devuelve
@@ -292,30 +298,72 @@ func (m *Module) RegisterMaintenanceRoutes(mux *http.ServeMux) {
 		respondMaintenance(w, r, maintained(c), err, http.StatusOK)
 	})
 	// Un transportista no se borra (los envíos lo nombran): DELETE lo bloquea, que es su baja; un
-	// bloqueado no se puede elegir en un envío nuevo. Sobre uno ya bloqueado es 204 sin versión
-	// nueva, así que se puede repetir. Siempre exige el permiso y el ámbito de escritura.
+	// bloqueado no se puede elegir en un envío nuevo. El motivo va en el cuerpo, {"reason": "..."}, o
+	// en ?reason=; sin él, 422 shipments.block_reason_required. Sobre uno ya bloqueado es 204 sin
+	// versión nueva, así que se puede repetir. Si la empresa exige aprobación, deja la solicitud y
+	// responde 202 con {"pendingApproval": id}. Siempre exige el permiso y el ámbito de escritura.
 	mux.HandleFunc("DELETE "+MaintenanceBase+"/{id}", func(w http.ResponseWriter, r *http.Request) {
 		id, ok := parseID(w, r)
 		if !ok {
 			return
 		}
-		err := m.UoW.Do(r.Context(), func(ctx context.Context) error {
-			if _, err := svc.CarrierChangeable.Handle(ctx, sapp.GetCarrier{ID: id}); err != nil {
-				return err
+		reason := r.URL.Query().Get("reason")
+		if r.ContentLength != 0 {
+			var in struct {
+				Reason string `json:"reason"`
 			}
-			c, err := svc.GetCarrier.Handle(ctx, sapp.GetCarrier{ID: id})
-			if err != nil || c.Blocked {
-				return err
+			if err := readBody(w, r, &in); err != nil {
+				writeMaintenanceError(w, r, err)
+				return
 			}
-			_, err = svc.ChangeCarrier.Handle(ctx, sapp.ChangeCarrier{ID: id, Name: c.Name, Party: c.Party, TrackingURL: c.TrackingURL,
-				Blocked: true, Version: c.Version})
-			return err
-		})
-		if err != nil {
+			if strings.TrimSpace(in.Reason) != "" {
+				reason = in.Reason
+			}
+		}
+		c, err := svc.BlockCarrier.Handle(r.Context(), sapp.SetCarrierBlock{ID: id, Reason: reason})
+		switch {
+		case err != nil:
 			writeMaintenanceError(w, r, err)
+		case c.PendingApproval != "":
+			distribution.WriteJSON(w, http.StatusAccepted, map[string]string{"pendingApproval": c.PendingApproval})
+		default:
+			w.WriteHeader(http.StatusNoContent)
+		}
+	})
+	// Bloquear y desbloquear son órdenes propias (D-156): {"reason": "...", "version": n}; el motivo
+	// es obligatorio y la versión, la leída (sin ella no se comprueba). 200 con el transportista, o
+	// 202 con pendingApproval si la empresa exige aprobación.
+	blockRoute := func(run func(context.Context, sapp.SetCarrierBlock) (sapp.CarrierDTO, error)) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			id, ok := parseID(w, r)
+			if !ok {
+				return
+			}
+			var in sapp.SetCarrierBlock
+			if r.ContentLength != 0 {
+				if err := readBody(w, r, &in); err != nil {
+					writeMaintenanceError(w, r, err)
+					return
+				}
+			}
+			in.ID = id
+			c, err := run(r.Context(), in)
+			status := http.StatusOK
+			if c.PendingApproval != "" {
+				status = http.StatusAccepted
+			}
+			respondMaintenance(w, r, maintained(c), err, status)
+		}
+	}
+	mux.HandleFunc("POST "+MaintenanceBase+"/{id}/block", blockRoute(svc.BlockCarrier.Handle))
+	mux.HandleFunc("POST "+MaintenanceBase+"/{id}/unblock", blockRoute(svc.UnblockCarrier.Handle))
+	mux.HandleFunc("GET "+MaintenanceBase+"/{id}/block-history", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := parseID(w, r)
+		if !ok {
 			return
 		}
-		w.WriteHeader(http.StatusNoContent)
+		out, err := svc.CarrierBlockHistory.Handle(r.Context(), sapp.GetCarrier{ID: id})
+		respondMaintenance(w, r, out, err, http.StatusOK)
 	})
 }
 
@@ -372,6 +420,7 @@ func (m *Module) change(ctx context.Context, id domain.CarrierID, body map[strin
 		return current, nil
 	}
 	// Con la versión, el caso de uso falla sin reintentar si alguien se ha adelantado.
+	// Un bloqueado distinto es 422 shipments.block_change_requires_command: el bloqueo tiene sus órdenes.
 	return svc.ChangeCarrier.Handle(ctx, sapp.ChangeCarrier{ID: id, Name: strings.TrimSpace(in.Name), Party: strings.TrimSpace(in.Party),
-		TrackingURL: strings.TrimSpace(in.TrackingURL), Blocked: in.Blocked, Version: current.Version})
+		TrackingURL: strings.TrimSpace(in.TrackingURL), Blocked: &in.Blocked, Version: current.Version})
 }

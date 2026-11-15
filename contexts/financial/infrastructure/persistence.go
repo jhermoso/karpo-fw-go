@@ -9,8 +9,11 @@ import (
 
 	"github.com/jhermoso/karpo-fw-go/contexts/financial/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/application"
+	"github.com/jhermoso/karpo-fw-go/pkg/application/approval"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
+	dapproval "github.com/jhermoso/karpo-fw-go/pkg/domain/approval"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
+	"github.com/jhermoso/karpo-fw-go/pkg/persistence/approvals"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/memory"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
@@ -29,7 +32,21 @@ const (
 	TableOutbox            = "financial_outbox"
 	TableIntegrationOutbox = "financial_integration_outbox"
 	TableAuditLog          = "financial_audit_log"
+	// TableApprovals guarda las solicitudes de aprobación del bloqueo y el desbloqueo (D-156).
+	TableApprovals = "fin_approvals"
+	// TableAccountBlockEvents es el historial de bloqueos y desbloqueos de las cuentas.
+	TableAccountBlockEvents = "fin_account_block_events"
 )
+
+// blockDDL añade los motivos del bloqueo y su historial (D-156): una fila por bloqueo o desbloqueo
+// efectivo, con quién y cuándo. Los motivos miden 800 porque Oracle cuenta bytes.
+var blockDDL = []string{
+	`ALTER TABLE fin_accounts {add:block_reason} {str:800}{addEnd}`,
+	`ALTER TABLE fin_accounts {add:unblock_reason} {str:800}{addEnd}`,
+	`CREATE TABLE ` + TableAccountBlockEvents + ` (account_id {uuid} NOT NULL, line_no {int} NOT NULL, blocked {bool} NOT NULL,
+	reason {str:800} NOT NULL, changed_at {ts} NOT NULL, changed_by_id {str:64}, changed_by_name {str:200},
+	PRIMARY KEY (account_id, line_no), FOREIGN KEY (account_id) REFERENCES fin_accounts (id))`,
+}
 
 const audit = `created_at {ts}, created_by_id {str:64}, created_by_name {str:200}, modified_at {ts}, modified_by_id {str:64}, modified_by_name {str:200}`
 
@@ -75,11 +92,14 @@ func Migrations() sqlrepo.MigrationSet {
 		{Version: 1, Name: "customer accounts, their holders and uses", Up: sqlrepo.RenderDDLAll(schemaDDL...)},
 		{Version: 2, Name: "outboxes and audit log", Up: technical},
 		{Version: 3, Name: "products, agreements and the agreement of an account", Up: sqlrepo.RenderDDLAll(catalogDDL...)},
+		{Version: 4, Name: "account block reasons and history", Up: sqlrepo.RenderDDLAll(blockDDL...)},
+		{Version: 5, Name: "approval requests", Up: sqlrepo.RenderDDLAll(approvals.DDL(TableApprovals)...)},
 	}}
 }
 
 // Tables enumera las tablas del contexto, las hijas primero (orden de borrado).
-var Tables = []string{"fin_account_uses", "fin_account_holders", "fin_accounts", "fin_agreements", "fin_products", TableOutbox, TableIntegrationOutbox, TableAuditLog}
+var Tables = []string{"fin_account_uses", "fin_account_holders", TableAccountBlockEvents, "fin_accounts", "fin_agreements", "fin_products", TableApprovals,
+	TableOutbox, TableIntegrationOutbox, TableAuditLog}
 
 // DropAll quita las tablas del contexto y su historial de migraciones (sólo pruebas).
 func DropAll(ctx context.Context, db *sqlrepo.DB) {
@@ -122,17 +142,19 @@ func AccountMapping() sqlrepo.Mapping[domain.AccountID, *domain.Account] {
 	return sqlrepo.Mapping[domain.AccountID, *domain.Account]{
 		Table: "fin_accounts",
 		Columns: sqlrepo.WithAuditColumns("company", "account_number", "virtual_account", "bic", "currency", "account_name", "product", "agreement", "status",
-			"demo", "opened_on", "closed_on", "reason"),
+			"demo", "opened_on", "closed_on", "reason", "block_reason", "unblock_reason"),
 		Dehydrate: func(a *domain.Account) (sqlrepo.Values, error) {
 			s := a.State()
 			return sqlrepo.AuditStampValues(sqlrepo.Values{"company": s.Company, "account_number": s.Number, "virtual_account": s.Virtual, "bic": opt(s.BIC),
 				"currency": s.Currency.String(), "account_name": opt(s.Name), "product": optUUID(s.Product), "agreement": optUUID(s.Agreement), "status": string(s.Status), "demo": s.Demo,
-				"opened_on": s.Opened, "closed_on": optDate(s.Closed), "reason": opt(s.Reason)}, a.AuditStamp()), nil
+				"opened_on": s.Opened, "closed_on": optDate(s.Closed), "reason": opt(s.Reason), "block_reason": opt(s.BlockReason),
+				"unblock_reason": opt(s.UnblockReason)}, a.AuditStamp()), nil
 		},
 		Hydrate: func(r *sqlrepo.Row, children sqlrepo.ChildRows) (*domain.Account, error) {
 			s := domain.AccountState{Company: domain.OrganizationID{UUID: r.UUID("company")}, Number: r.String("account_number"), Virtual: r.Bool("virtual_account"),
 				BIC: r.String("bic"), Name: r.String("account_name"), Product: r.UUID("product"), Agreement: r.UUID("agreement"), Status: domain.Status(r.String("status")), Demo: r.Bool("demo"),
-				Opened: r.Date("opened_on"), Closed: r.Date("closed_on"), Reason: r.String("reason"), Audit: r.AuditStamp()}
+				Opened: r.Date("opened_on"), Closed: r.Date("closed_on"), Reason: r.String("reason"), BlockReason: r.String("block_reason"),
+				UnblockReason: r.String("unblock_reason"), Audit: r.AuditStamp()}
 			var err error
 			if s.Currency, err = vocab.NewCurrencyCode(r.String("currency")); err != nil {
 				return nil, err
@@ -154,6 +176,17 @@ func AccountMapping() sqlrepo.Mapping[domain.AccountID, *domain.Account] {
 				if err := c.Err(); err != nil {
 					return nil, err
 				}
+			}
+			for _, c := range byNo(children.Of("blocks")) {
+				e := domain.BlockEvent{Blocked: c.Bool("blocked"), Reason: c.String("reason"), At: c.Time("changed_at"),
+					By: vocab.Actor{Name: c.String("changed_by_name")}}
+				if id := c.String("changed_by_id"); id != "" {
+					e.By.PartyID, _ = fw.ParseUUID(id)
+				}
+				if err := c.Err(); err != nil {
+					return nil, err
+				}
+				s.BlockEvents = append(s.BlockEvents, e)
 			}
 			if err := r.Err(); err != nil {
 				return nil, err
@@ -182,6 +215,21 @@ func AccountMapping() sqlrepo.Mapping[domain.AccountID, *domain.Account] {
 				}
 				return out, nil
 			},
+		}, {
+			Name: "blocks", Table: TableAccountBlockEvents, ForeignKey: "account_id", OrderBy: []string{"line_no"},
+			Columns: []string{"line_no", "blocked", "reason", "changed_at", "changed_by_id", "changed_by_name"},
+			Dehydrate: func(a *domain.Account) ([]sqlrepo.Values, error) {
+				out := []sqlrepo.Values{}
+				for i, e := range a.State().BlockEvents {
+					var by any
+					if !e.By.PartyID.IsZero() {
+						by = e.By.PartyID.String()
+					}
+					out = append(out, sqlrepo.Values{"line_no": int64(i + 1), "blocked": e.Blocked, "reason": e.Reason, "changed_at": e.At,
+						"changed_by_id": by, "changed_by_name": opt(e.By.Name)})
+				}
+				return out, nil
+			},
 		}},
 	}
 }
@@ -195,6 +243,17 @@ func AccountRepositoryFactory(b hotswap.Backend) (domain.AccountRepository, erro
 		return sqlrepo.NewRepository(db, AccountMapping())
 	case *memory.Store:
 		return memory.NewRepository[domain.AccountID, *domain.Account](db), nil
+	}
+	return nil, unsupported(b)
+}
+
+// ApprovalRepositoryFactory construye el repositorio de las solicitudes de aprobación.
+func ApprovalRepositoryFactory(b hotswap.Backend) (approval.Repository, error) {
+	switch db := b.(type) {
+	case *sqlrepo.DB:
+		return sqlrepo.NewRepository(db, approvals.Mapping(TableApprovals))
+	case *memory.Store:
+		return memory.NewRepository[dapproval.RequestID, *dapproval.Request](db), nil
 	}
 	return nil, unsupported(b)
 }

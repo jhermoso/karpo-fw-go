@@ -14,10 +14,12 @@ import (
 	"github.com/jhermoso/karpo-fw-go/contexts/shipments/domain"
 	"github.com/jhermoso/karpo-fw-go/contexts/shipments/infrastructure"
 	"github.com/jhermoso/karpo-fw-go/pkg/application"
+	"github.com/jhermoso/karpo-fw-go/pkg/application/approval"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/messaging"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/outbox"
 	"github.com/jhermoso/karpo-fw-go/pkg/distribution"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
+	fwapproval "github.com/jhermoso/karpo-fw-go/pkg/domain/approval"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 )
 
@@ -48,13 +50,19 @@ func WithToday(t application.CompanyToday) Option {
 	return func(d *sapp.Deps) { d.Today = t }
 }
 
+// WithApprovalPolicy dice qué empresas exigen aprobación para bloquear o desbloquear un
+// transportista (D-156; la de Parties, Module.ApprovalPolicy, en el anfitrión). Sin ella, ninguna.
+func WithApprovalPolicy(p approval.Policy) Option {
+	return func(d *sapp.Deps) { d.Policy = p }
+}
+
 // Compose construye el contexto sobre sw.
 func Compose(sw *hotswap.Switch, opts ...Option) *Module {
 	integration := hotswap.Outbox(sw, infrastructure.IntegrationOutboxFactory)
 	audit := hotswap.AuditLog(sw, infrastructure.AuditLogFactory)
 	d := sapp.Deps{
 		Shipments: hotswap.Repository(sw, infrastructure.ShipmentRepositoryFactory), Carriers: hotswap.Repository(sw, infrastructure.CarrierRepositoryFactory),
-		UoW: sw, Audit: audit,
+		UoW: sw, Audit: audit, Approvals: hotswap.Repository(sw, infrastructure.ApprovalRepositoryFactory), Policy: approval.Never{},
 		Recorder: outbox.Recorders(outbox.NewRecorder(hotswap.Outbox(sw, infrastructure.OutboxFactory)),
 			sapp.Publications(messaging.NewRecorder(contracts.Source, integration))),
 	}
@@ -149,6 +157,41 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	})
 	mux.HandleFunc("PUT /api/carriers/{id}", command(cid, func(c *sapp.ChangeCarrier, id domain.CarrierID) { c.ID = id }, svc.ChangeCarrier.Handle))
 	m.RegisterMaintenanceRoutes(mux) // el contrato de mantenimiento, bajo /api/v1/carriers
+
+	// Las solicitudes de aprobación del bloqueo y el desbloqueo (D-156, docs/ENVIOS.md).
+	mux.HandleFunc("GET /api/shipments/approvals", func(w http.ResponseWriter, r *http.Request) {
+		out, err := svc.SearchApprovals.Handle(r.Context(), sapp.SearchApprovals{Company: r.URL.Query().Get("company"), Status: r.URL.Query().Get("status")})
+		distribution.Respond(w, r, out, err, http.StatusOK)
+	})
+	apv := func(s string) (fwapproval.RequestID, error) {
+		u, err := fw.ParseUUID(s)
+		return fwapproval.RequestID{UUID: u}, err
+	}
+	set := func(c *sapp.ResolveApproval, id fwapproval.RequestID) { c.ID = id }
+	mux.HandleFunc("POST /api/shipments/approvals/{id}/approve", optionalBody(apv, set, svc.ApproveApproval.Handle))
+	mux.HandleFunc("POST /api/shipments/approvals/{id}/reject", optionalBody(apv, set, svc.RejectApproval.Handle))
+	mux.HandleFunc("POST /api/shipments/approvals/{id}/cancel", optionalBody(apv, set, svc.CancelApproval.Handle))
+}
+
+// optionalBody es command con el cuerpo opcional.
+func optionalBody[ID, In, Out any](parse func(string) (ID, error), set func(*In, ID), run func(context.Context, In) (Out, error)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, err := parse(r.PathValue("id"))
+		if err != nil {
+			badID(w, r)
+			return
+		}
+		var c In
+		if r.ContentLength != 0 {
+			if err := decode(r, &c); err != nil {
+				distribution.WriteError(w, r, err)
+				return
+			}
+		}
+		set(&c, id)
+		out, err := run(r.Context(), c)
+		distribution.Respond(w, r, out, err, http.StatusOK)
+	}
 }
 
 var _ distribution.EndpointModule = (*Module)(nil)

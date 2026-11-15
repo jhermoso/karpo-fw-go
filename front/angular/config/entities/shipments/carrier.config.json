@@ -210,8 +210,20 @@
                         "field": "blocked",
                         "label": "Bloqueado",
                         "type": "checkbox",
-                        "editable": true,
-                        "hint": "Un transportista bloqueado no se elige en envíos nuevos."
+                        "editable": false,
+                        "hint": "Un transportista bloqueado no se elige en envíos nuevos. Se bloquea y desbloquea con motivo (POST …/block y …/unblock)."
+                    },
+                    {
+                        "field": "blockReason",
+                        "label": "Motivo del bloqueo",
+                        "type": "text",
+                        "editable": false
+                    },
+                    {
+                        "field": "unblockReason",
+                        "label": "Motivo del último desbloqueo",
+                        "type": "text",
+                        "editable": false
                     }
                 ]
             }
@@ -229,7 +241,7 @@
     "metadata": {
         "version": "1.0.0",
         "author": "Karpo Go",
-        "lastModified": "2026-11-13",
+        "lastModified": "2026-11-15",
         "tags": [
             "shipments",
             "karpo-go"

@@ -13,6 +13,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/contexts/financial/contracts"
 	"github.com/jhermoso/karpo-fw-go/contexts/financial/domain"
 	app "github.com/jhermoso/karpo-fw-go/pkg/application"
+	"github.com/jhermoso/karpo-fw-go/pkg/application/approval"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/messaging"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/orchestration"
@@ -34,7 +35,7 @@ var (
 
 // Permissions devuelve los permisos que este contexto declara al catálogo de Security.
 func Permissions() []authz.Permission {
-	return []authz.Permission{PermAccountRead, PermAccountCreate, PermAccountUpdate, PermAccountBlock, PermAccountClose,
+	return []authz.Permission{PermAccountRead, PermAccountCreate, PermAccountUpdate, PermAccountBlock, PermAccountClose, PermApproveBlock, PermApproveUnblock,
 		PermProductRead, PermProductUpdate, PermAgreementRead, PermAgreementUpdate}
 }
 
@@ -50,6 +51,11 @@ type Deps struct {
 	Recorder     app.EventRecorder
 	Audit        app.AuditLog
 	Merged       app.MergedParties // opcional: las parties fusionadas, que los listados dejan fuera (D-100)
+	// Policy dice qué empresas exigen aprobación para bloquear o desbloquear una cuenta (la de
+	// Parties en el anfitrión). Nil es approval.Never.
+	Policy approval.Policy
+	// Approvals guarda las solicitudes de aprobación (fin_approvals).
+	Approvals approval.Repository
 }
 
 // withoutMerged deja fuera de un listado los registros cuya party (cliente) es una party fusionada,
@@ -99,6 +105,9 @@ type (
 		BIC       string           `json:"bic,omitempty"`
 		Product   string           `json:"product,omitempty"`
 		Agreement string           `json:"agreement,omitempty"`
+		// Status no cambia el estado: si llega y es otro, es 422
+		// financial.block_change_requires_command (bloquear, liberar, apartar y cerrar son órdenes).
+		Status string `json:"status,omitempty"`
 	}
 	// RelateParty da a una party un papel en una cuenta.
 	RelateParty struct {
@@ -131,6 +140,9 @@ type (
 		ID     domain.AccountID `json:"-"`
 		Reason string           `json:"reason,omitempty"`
 		On     vocab.Date       `json:"on,omitzero"` // del cierre
+		// Version, si no es cero, es la que se leyó (bloquear y desbloquear): si la cuenta ya está en
+		// otra, es un conflicto.
+		Version int64 `json:"version,omitempty"`
 	}
 	// GetAccount lee una cuenta por su identidad, o por su número en una empresa.
 	GetAccount struct {
@@ -163,24 +175,30 @@ type (
 		Thru string `json:"thru,omitempty"`
 	}
 	AccountDTO struct {
-		ID        string      `json:"id"`
-		Company   string      `json:"company"`
-		Number    string      `json:"number"`
-		Virtual   bool        `json:"virtual"`
-		BIC       string      `json:"bic,omitempty"`
-		Currency  string      `json:"currency"`
-		Name      string      `json:"name,omitempty"`
-		Product   string      `json:"product,omitempty"`
-		Agreement string      `json:"agreement,omitempty"`
-		Status    string      `json:"status"`
-		Demo      bool        `json:"demo"`
-		Opened    string      `json:"opened"`
-		Closed    string      `json:"closed,omitempty"`
-		Reason    string      `json:"reason,omitempty"`
-		Holder    string      `json:"holder,omitempty"` // a nombre de quién está archivada
-		Holders   []HolderDTO `json:"holders"`
-		Uses      []UseDTO    `json:"uses"`
-		Version   int64       `json:"version"`
+		ID        string `json:"id"`
+		Company   string `json:"company"`
+		Number    string `json:"number"`
+		Virtual   bool   `json:"virtual"`
+		BIC       string `json:"bic,omitempty"`
+		Currency  string `json:"currency"`
+		Name      string `json:"name,omitempty"`
+		Product   string `json:"product,omitempty"`
+		Agreement string `json:"agreement,omitempty"`
+		Status    string `json:"status"`
+		Demo      bool   `json:"demo"`
+		Opened    string `json:"opened"`
+		Closed    string `json:"closed,omitempty"`
+		Reason    string `json:"reason,omitempty"`
+		// BlockReason es el motivo del último bloqueo y UnblockReason el del último desbloqueo (D-156).
+		BlockReason   string `json:"blockReason,omitempty"`
+		UnblockReason string `json:"unblockReason,omitempty"`
+		// PendingApproval es el id de la solicitud que ha dejado bloquear o desbloquear, si la empresa
+		// exige aprobación: la cuenta no ha cambiado.
+		PendingApproval string      `json:"pendingApproval,omitempty"`
+		Holder          string      `json:"holder,omitempty"` // a nombre de quién está archivada
+		Holders         []HolderDTO `json:"holders"`
+		Uses            []UseDTO    `json:"uses"`
+		Version         int64       `json:"version"`
 	}
 	// StatsDTO cuenta las cuentas de una empresa: todas, y por estado, moneda y uso actual. Las
 	// cuentas de demostración se cuentan aparte.
@@ -205,10 +223,19 @@ type Service struct {
 	Block     app.CommandHandler[ChangeStatus, AccountDTO]
 	Abandon   app.CommandHandler[ChangeStatus, AccountDTO]
 	Release   app.CommandHandler[ChangeStatus, AccountDTO]
-	Close     app.CommandHandler[ChangeStatus, AccountDTO]
-	Get       app.QueryHandler[GetAccount, AccountDTO]
-	Search    app.QueryHandler[SearchAccounts, fw.Page[AccountDTO]]
-	Stats     app.QueryHandler[GetStats, StatsDTO]
+	// Unblock desbloquea una cuenta bloqueada, con su motivo (D-156).
+	Unblock app.CommandHandler[ChangeStatus, AccountDTO]
+	Close   app.CommandHandler[ChangeStatus, AccountDTO]
+	// BlockHistory es el historial de bloqueos y desbloqueos de una cuenta.
+	BlockHistory app.QueryHandler[GetAccount, []BlockEventDTO]
+
+	SearchApprovals app.QueryHandler[SearchApprovals, []ApprovalDTO]
+	ApproveApproval app.CommandHandler[ResolveApproval, ApprovalDTO]
+	RejectApproval  app.CommandHandler[ResolveApproval, ApprovalDTO]
+	CancelApproval  app.CommandHandler[ResolveApproval, ApprovalDTO]
+	Get             app.QueryHandler[GetAccount, AccountDTO]
+	Search          app.QueryHandler[SearchAccounts, fw.Page[AccountDTO]]
+	Stats           app.QueryHandler[GetStats, StatsDTO]
 
 	DefineProduct      app.CommandHandler[DefineProduct, ProductDTO]
 	ChangeProduct      app.CommandHandler[ChangeProduct, ProductDTO]
@@ -298,6 +325,7 @@ func accountDTO(a *domain.Account) AccountDTO {
 	s := a.State()
 	d := AccountDTO{ID: a.ID().String(), Company: s.Company.String(), Number: s.Number, Virtual: s.Virtual, BIC: s.BIC, Currency: s.Currency.String(),
 		Name: s.Name, Product: optID(s.Product), Agreement: optID(s.Agreement), Status: string(s.Status), Demo: s.Demo, Opened: s.Opened.String(), Closed: optDate(s.Closed), Reason: s.Reason,
+		BlockReason: s.BlockReason, UnblockReason: s.UnblockReason,
 		Holder: optID(a.PrimaryHolder().UUID), Holders: []HolderDTO{}, Uses: []UseDTO{}, Version: a.Version()}
 	for _, h := range s.Holders {
 		d.Holders = append(d.Holders, HolderDTO{Party: h.Party.String(), Role: h.Role, From: h.From.String(), Thru: optDate(h.Thru), Primary: h.Primary})
@@ -417,6 +445,9 @@ func NewService(d Deps) *Service {
 		}
 		return s.update(ctx, c.ID, func(a *domain.Account) error {
 			st, holders := a.State(), []domain.PartyID{}
+			if c.Status != "" && c.Status != string(st.Status) {
+				return fw.Violation(domain.CodeBlockChangeRequiresCommand, "the status changes with its own commands: block, unblock, abandon, release, close")
+			}
 			for _, h := range st.Holders {
 				if h.Current() && h.Role == domain.RoleHolder {
 					holders = append(holders, h.Party)
@@ -509,13 +540,18 @@ func NewService(d Deps) *Service {
 	})
 
 	svc.Block = changing(d.UoW, PermAccountBlock, func(ctx context.Context, c ChangeStatus) (AccountDTO, error) {
-		return s.update(ctx, c.ID, func(a *domain.Account) error { return a.Block(c.Reason) })
+		return s.setBlock(ctx, c, true, false)
 	})
+	svc.Unblock = changing(d.UoW, PermAccountBlock, func(ctx context.Context, c ChangeStatus) (AccountDTO, error) {
+		return s.setBlock(ctx, c, false, false)
+	})
+	svc.BlockHistory = guard(PermAccountRead, s.blockHistory)
+	s.approvalUseCases(svc)
 	svc.Abandon = changing(d.UoW, PermAccountBlock, func(ctx context.Context, c ChangeStatus) (AccountDTO, error) {
 		return s.update(ctx, c.ID, func(a *domain.Account) error { return a.Abandon(c.Reason) })
 	})
 	svc.Release = changing(d.UoW, PermAccountBlock, func(ctx context.Context, c ChangeStatus) (AccountDTO, error) {
-		return s.update(ctx, c.ID, func(a *domain.Account) error { return a.Release() })
+		return s.setBlock(ctx, c, false, true)
 	})
 	svc.Close = changing(d.UoW, PermAccountClose, func(ctx context.Context, c ChangeStatus) (AccountDTO, error) {
 		return s.update(ctx, c.ID, func(a *domain.Account) error {

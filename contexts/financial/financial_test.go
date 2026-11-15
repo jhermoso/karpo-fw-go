@@ -65,6 +65,7 @@ func compose(t *testing.T, opts ...financial.Option) *host {
 		"officer":  {fapp.PermAccountRead, fapp.PermAccountBlock},
 		"closer":   {fapp.PermAccountRead, fapp.PermAccountClose},
 		"viewer":   {fapp.PermAccountRead, fapp.PermProductRead, fapp.PermAgreementRead},
+		"approver": {fapp.PermAccountRead, fapp.PermAccountBlock, fapp.PermApproveBlock, fapp.PermApproveUnblock},
 		"outsider": fapp.Permissions(),
 	}
 	for u, perms := range users {
@@ -318,6 +319,25 @@ func (h *host) scenario() {
 		t.Fatalf("blocked: %+v", acc)
 	}
 	h.must(h.do("POST", path(acc, "block"), "officer", why, nil), 422, "blocked twice")
+	// Desbloquear exige motivo (D-156) y admite la versión leída; el cambio general no toca el estado.
+	h.must(h.do("POST", path(acc, "unblock"), "officer", map[string]any{}, nil), 422, "unblocking needs a reason")
+	h.must(h.do("POST", path(acc, "release"), "officer", nil, nil), 422, "releasing a blocked account needs a reason")
+	h.must(h.do("POST", path(acc, "unblock"), "officer", map[string]any{"reason": "Levantada", "version": acc.Version - 1}, nil), 409, "an old version")
+	h.must(h.do("PUT", "/api/financial/accounts/"+acc.ID, "opener", map[string]any{"name": acc.Name, "status": "active"}, nil), 422, "the change does not unblock")
+	h.must(h.do("POST", path(acc, "unblock"), "officer", map[string]any{"reason": "Levantada la orden", "version": acc.Version}, &acc), 200, "unblock")
+	if acc.Status != "active" || acc.BlockReason != "" || acc.UnblockReason != "Levantada la orden" {
+		t.Fatalf("unblocked: %+v", acc)
+	}
+	var hist []fapp.BlockEventDTO
+	h.must(h.do("GET", path(acc, "block-history"), "viewer", nil, &hist), 200, "history")
+	if len(hist) != 2 || !hist[0].Blocked || hist[0].Reason != "Orden judicial 123/2026" || hist[1].Blocked || hist[1].ByName != "officer" {
+		t.Fatalf("history: %+v", hist)
+	}
+	h.must(h.do("GET", path(acc, "block-history"), "outsider", nil, nil), 404, "history outside")
+	h.must(h.do("POST", path(acc, "block"), "officer", why, &acc), 200, "block again")
+	// De bloqueada no se aparta: abandonar y liberar se saltaría el desbloqueo.
+	h.must(h.do("POST", path(acc, "abandon"), "officer", map[string]any{"reason": "Sin movimientos en 6 años"}, nil), 422, "abandon a blocked account")
+	h.must(h.do("POST", path(acc, "unblock"), "officer", map[string]any{"reason": "Revisada"}, &acc), 200, "unblock before abandoning")
 	h.must(h.do("POST", path(acc, "abandon"), "officer", map[string]any{"reason": "Sin movimientos en 6 años"}, &acc), 200, "abandoned")
 	h.must(h.do("POST", path(acc, "release"), "officer", nil, &acc), 200, "release")
 	if acc.Status != "active" || acc.Reason != "" {
@@ -409,7 +429,7 @@ func (h *host) scenario() {
 
 	// Dos acuerdos firmados y uno terminado; tres cuentas abiertas; bloqueada, abandonada y
 	// liberada; el monedero bloqueado y cerrado.
-	if n, err := h.fin.Relay(inprocess.NewBroker()).RelayOnce(context.Background()); err != nil || n != 11 {
+	if n, err := h.fin.Relay(inprocess.NewBroker()).RelayOnce(context.Background()); err != nil || n != 14 {
 		t.Fatalf("published: %d %v", n, err)
 	}
 }
@@ -479,7 +499,7 @@ func TestAccount_Rules(t *testing.T) {
 	if err := a.Abandon("sin uso"); err != nil || a.State().Status != domain.Abandoned {
 		t.Fatalf("abandon: %v", err)
 	}
-	violates(a.Block("x"), "financial.transition")
+	violates(a.Block("x", vocab.Actor{}, time.Time{}), "financial.transition")
 	violates(a.Abandon("x"), "financial.transition")
 	violates(a.Close(day("2026-01-09"), ""), "financial.closing_date")
 	// Cerrada el día en que se abrió: lo que empezó después termina el día en que empezó.
@@ -490,7 +510,7 @@ func TestAccount_Rules(t *testing.T) {
 	if s.Status != domain.Closed || s.Holders[0].Thru != day("2026-01-10") || s.Holders[1].Thru != day("2026-02-01") || !a.PrimaryHolder().IsZero() || a.Used("agent") {
 		t.Fatalf("closed: %+v", s)
 	}
-	violates(a.Release(), "financial.transition")
+	violates(a.Release("", vocab.Actor{}, time.Time{}), "financial.transition")
 	violates(a.Assign("player", day("2026-03-01")), "financial.closed")
 	if _, err := domain.ReconstituteAccount(a.ID(), s); err != nil {
 		t.Fatalf("a closed account is rebuilt: %v", err)

@@ -14,5 +14,6 @@ var (
 
 // Permissions devuelve los permisos que este contexto declara al catálogo de Security.
 func Permissions() []authz.Permission {
-	return []authz.Permission{PermShipmentRead, PermShipmentUpdate, PermShipmentDispatch, PermCarrierRead, PermCarrierUpdate}
+	return []authz.Permission{PermShipmentRead, PermShipmentUpdate, PermShipmentDispatch, PermCarrierRead, PermCarrierUpdate,
+		PermApproveBlock, PermApproveUnblock}
 }

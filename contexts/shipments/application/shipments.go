@@ -327,7 +327,9 @@ type ChangeCarrier struct {
 	Name        string           `json:"name"`
 	Party       string           `json:"party,omitempty"`
 	TrackingURL string           `json:"trackingUrl,omitempty"`
-	Blocked     bool             `json:"blocked,omitempty"`
+	// Blocked no cambia el bloqueo (D-156: tiene sus órdenes); si llega y pide otro estado, es 422
+	// shipments.block_change_requires_command.
+	Blocked *bool `json:"blocked,omitempty"`
 	// Version, si no es cero, es la que se leyó: si el transportista ya está en otra, el cambio es un
 	// conflicto.
 	Version int64 `json:"-"`
@@ -364,13 +366,19 @@ type CarrierDTO struct {
 	Party       string `json:"party,omitempty"`
 	TrackingURL string `json:"trackingUrl,omitempty"`
 	Blocked     bool   `json:"blocked"`
-	Version     int64  `json:"version"`
+	// BlockReason es el motivo del bloqueo vigente; UnblockReason, el del último desbloqueo (D-156).
+	BlockReason   string `json:"blockReason,omitempty"`
+	UnblockReason string `json:"unblockReason,omitempty"`
+	Version       int64  `json:"version"`
+	// PendingApproval es el id de la solicitud que ha dejado bloquear o desbloquear, si la empresa
+	// exige aprobación: el transportista no ha cambiado.
+	PendingApproval string `json:"pendingApproval,omitempty"`
 }
 
 func carrierDTO(c *domain.Carrier) CarrierDTO {
 	s := c.State()
 	return CarrierDTO{ID: c.ID().String(), Company: s.Company.String(), Code: s.Code, Name: s.Name, Party: optID(s.Party.UUID),
-		TrackingURL: s.TrackingURL, Blocked: s.Blocked, Version: c.Version()}
+		TrackingURL: s.TrackingURL, Blocked: s.Blocked, BlockReason: s.BlockReason, UnblockReason: s.UnblockReason, Version: c.Version()}
 }
 
 func (s service) wireCarriers(svc *Service) {
@@ -416,7 +424,10 @@ func (s service) wireCarriers(svc *Service) {
 			if c.Version != 0 && car.Version() != c.Version {
 				return fw.Conflict(domain.CarrierKind, car.ID(), c.Version, "the carrier changed after it was read: read it again")
 			}
-			return car.Change(c.Name, party, c.TrackingURL, c.Blocked)
+			if c.Blocked != nil && *c.Blocked != car.State().Blocked {
+				return fw.Violation(domain.CodeBlockChangeRequiresCommand, "blocking or unblocking a carrier is its own command, with a reason")
+			}
+			return car.Change(c.Name, party, c.TrackingURL)
 		})
 		if err != nil {
 			return CarrierDTO{}, err

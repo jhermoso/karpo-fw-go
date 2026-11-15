@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
@@ -105,10 +106,36 @@ type AccountState struct {
 	Opened    vocab.Date
 	Closed    vocab.Date
 	Reason    string // del bloqueo, el abandono o el cierre
-	Holders   []Holder
-	Uses      []Use
-	Audit     traits.AuditStamp
+	// BlockReason es el motivo del último bloqueo (se borra al desbloquear) y UnblockReason el del
+	// último desbloqueo (se borra al bloquear) (D-156).
+	BlockReason   string
+	UnblockReason string
+	// BlockEvents es el historial de bloqueos y desbloqueos, del más antiguo al más reciente.
+	BlockEvents []BlockEvent
+	Holders     []Holder
+	Uses        []Use
+	Audit       traits.AuditStamp
 }
+
+// BlockEvent es un bloqueo o un desbloqueo efectivo: quién, cuándo y por qué.
+type BlockEvent struct {
+	Blocked bool
+	Reason  string
+	At      time.Time
+	By      vocab.Actor
+}
+
+// Códigos de las infracciones del bloqueo (D-156).
+const (
+	CodeBlockReasonRequired        = "financial.block_reason_required"
+	CodeUnblockReasonRequired      = "financial.unblock_reason_required"
+	CodeBlockChangeRequiresCommand = "financial.block_change_requires_command"
+	// CodeAccountBlocked: de bloqueada sólo se sale desbloqueando (con motivo) o cerrando; apartarla
+	// como abandonada y luego liberarla se saltaría el desbloqueo.
+	CodeAccountBlocked = "financial.account_blocked"
+	// CodeApprovalNotApplicable: al aprobar, la cuenta ya no admite lo pedido (apartada o cerrada).
+	CodeApprovalNotApplicable = "financial.approval_not_applicable"
+)
 
 // Account es una cuenta que una entidad lleva a sus clientes.
 type Account struct {
@@ -154,7 +181,10 @@ func ReconstituteAccount(id AccountID, s AccountState) (*Account, error) {
 	}
 	s.Number, s.BIC = NormalizeNumber(s.Number), strings.ToUpper(strings.TrimSpace(s.BIC))
 	s.Name, s.Reason = strings.TrimSpace(s.Name), strings.TrimSpace(s.Reason)
+	s.BlockReason, s.UnblockReason = strings.TrimSpace(s.BlockReason), strings.TrimSpace(s.UnblockReason)
 	var v fw.Validation
+	v.Require(utf8.RuneCountInString(s.BlockReason) <= 200 && utf8.RuneCountInString(s.UnblockReason) <= 200, "reason", "length",
+		"a reason of at most 200 characters")
 	v.Require(!s.Company.IsZero(), "company", "required", "the institution that keeps the account")
 	if s.Virtual {
 		v.Require(s.IBAN.IsZero() && validNumber(s.Number), "number", "format", "an identifier of 8 to 34 letters, digits and dashes")
@@ -257,7 +287,7 @@ func Open(id AccountID, o Opening) (*Account, error) {
 // State devuelve el estado (los slices son copias).
 func (a *Account) State() AccountState {
 	s := a.s
-	s.Holders, s.Uses = slices.Clone(s.Holders), slices.Clone(s.Uses)
+	s.Holders, s.Uses, s.BlockEvents = slices.Clone(s.Holders), slices.Clone(s.Uses), slices.Clone(s.BlockEvents)
 	return s
 }
 
@@ -397,20 +427,62 @@ func reasoned(reason string) error {
 	return nil
 }
 
-// Block impide operar a una cuenta activa, diciendo por qué.
-func (a *Account) Block(reason string) error {
-	if a.s.Status != Active {
+// CheckBlock comprueba, sin cambiar nada, que la cuenta se puede bloquear (blocked: de activa a
+// bloqueada) o desbloquear (de bloqueada a activa) con ese motivo, que es obligatorio (D-156).
+func (a *Account) CheckBlock(blocked bool, reason string) error {
+	reason = strings.TrimSpace(reason)
+	switch {
+	case blocked && a.s.Status != Active:
 		return fw.Violation("financial.transition", "only an active account is blocked; this one is "+string(a.s.Status))
+	case !blocked && a.s.Status != Blocked:
+		return fw.Violation("financial.transition", "only a blocked account is unblocked; this one is "+string(a.s.Status))
+	case blocked && reason == "":
+		return fw.Violation(CodeBlockReasonRequired, "blocking an account needs a reason")
+	case reason == "":
+		return fw.Violation(CodeUnblockReasonRequired, "unblocking an account needs a reason")
+	case utf8.RuneCountInString(reason) > 200:
+		var v fw.Validation
+		v.Add("reason", "length", "a reason of at most 200 characters")
+		return v.Err()
 	}
-	if err := reasoned(reason); err != nil {
+	return nil
+}
+
+// Block impide operar a una cuenta activa, diciendo por qué; queda en el historial con quién y
+// cuándo.
+func (a *Account) Block(reason string, by vocab.Actor, at time.Time) error {
+	if err := a.CheckBlock(true, reason); err != nil {
 		return err
 	}
-	return a.become(Blocked, reason, vocab.Date{})
+	reason = strings.TrimSpace(reason)
+	if err := a.become(Blocked, reason, vocab.Date{}); err != nil {
+		return err
+	}
+	a.s.BlockReason, a.s.UnblockReason = reason, ""
+	a.s.BlockEvents = append(a.s.BlockEvents, BlockEvent{Blocked: true, Reason: reason, At: at, By: by})
+	return nil
+}
+
+// Unblock deja que una cuenta bloqueada vuelva a operar, diciendo por qué; queda en el historial.
+func (a *Account) Unblock(reason string, by vocab.Actor, at time.Time) error {
+	if err := a.CheckBlock(false, reason); err != nil {
+		return err
+	}
+	reason = strings.TrimSpace(reason)
+	if err := a.become(Active, "", vocab.Date{}); err != nil {
+		return err
+	}
+	a.s.BlockReason, a.s.UnblockReason = "", reason
+	a.s.BlockEvents = append(a.s.BlockEvents, BlockEvent{Blocked: false, Reason: reason, At: at, By: by})
+	return nil
 }
 
 // Abandon aparta una cuenta que su titular dejó de usar, diciendo por qué.
 func (a *Account) Abandon(reason string) error {
-	if a.s.Status != Active && a.s.Status != Blocked {
+	if a.s.Status == Blocked {
+		return fw.Violation(CodeAccountBlocked, "a blocked account is unblocked (with its reason) or closed, not set apart as abandoned")
+	}
+	if a.s.Status != Active {
 		return fw.Violation("financial.transition", "an account "+string(a.s.Status)+" is not set apart as abandoned")
 	}
 	if err := reasoned(reason); err != nil {
@@ -419,12 +491,16 @@ func (a *Account) Abandon(reason string) error {
 	return a.become(Abandoned, reason, vocab.Date{})
 }
 
-// Release deja que una cuenta bloqueada o abandonada vuelva a operar.
-func (a *Account) Release() error {
-	if a.s.Status != Blocked && a.s.Status != Abandoned {
-		return fw.Violation("financial.transition", "only a blocked or abandoned account is released; this one is "+string(a.s.Status))
+// Release deja que una cuenta abandonada vuelva a operar. Liberar una bloqueada es desbloquearla, con
+// su motivo (Unblock).
+func (a *Account) Release(reason string, by vocab.Actor, at time.Time) error {
+	switch a.s.Status {
+	case Blocked:
+		return a.Unblock(reason, by, at)
+	case Abandoned:
+		return a.become(Active, "", vocab.Date{})
 	}
-	return a.become(Active, "", vocab.Date{})
+	return fw.Violation("financial.transition", "only a blocked or abandoned account is released; this one is "+string(a.s.Status))
 }
 
 // Close termina la cuenta en un día: sus titulares y sus usos terminan con ella, y ya no cambia más.
