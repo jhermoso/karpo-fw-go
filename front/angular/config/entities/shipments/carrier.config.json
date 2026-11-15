@@ -136,12 +136,6 @@
                 "label": "Editar",
                 "icon": "edit",
                 "color": "warning"
-            },
-            {
-                "action": "delete",
-                "label": "Bloquear",
-                "icon": "delete",
-                "color": "danger"
             }
         ]
     },
@@ -226,6 +220,47 @@
                         "editable": false
                     }
                 ]
+            }
+        ],
+        "childGrids": [
+            {
+                "id": "block-history",
+                "label": "Bloqueos",
+                "title": "Historial de bloqueos",
+                "icon": "history",
+                "entityId": "carrier-block-event",
+                "apiEndpoint": "/carriers/{id}/block-history",
+                "foreignKey": "carrierId",
+                "columns": [
+                    {
+                        "field": "at",
+                        "header": "Fecha",
+                        "type": "datetime",
+                        "width": 170
+                    },
+                    {
+                        "field": "blocked",
+                        "header": "Operación",
+                        "type": "boolean",
+                        "width": 120,
+                        "trueLabel": "Bloqueo",
+                        "falseLabel": "Desbloqueo"
+                    },
+                    {
+                        "field": "reason",
+                        "header": "Motivo",
+                        "type": "text",
+                        "width": 320
+                    },
+                    {
+                        "field": "byName",
+                        "header": "Usuario",
+                        "type": "text",
+                        "width": 180
+                    }
+                ],
+                "emptyMessage": "Sin bloqueos ni desbloqueos registrados.",
+                "pageSize": 25
             }
         ]
     },
