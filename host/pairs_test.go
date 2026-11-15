@@ -9,6 +9,7 @@ import (
 	parapp "github.com/jhermoso/karpo-fw-go/contexts/parties/application"
 	pardomain "github.com/jhermoso/karpo-fw-go/contexts/parties/domain"
 	puapp "github.com/jhermoso/karpo-fw-go/contexts/purchases/application"
+	pudomain "github.com/jhermoso/karpo-fw-go/contexts/purchases/domain"
 	reapp "github.com/jhermoso/karpo-fw-go/contexts/receivables/application"
 	"github.com/jhermoso/karpo-fw-go/contexts/security"
 	secapp "github.com/jhermoso/karpo-fw-go/contexts/security/application"
@@ -149,7 +150,11 @@ func TestPairs_CustomerAndSupplierRelationships(t *testing.T) {
 	ok(err)
 	_, err = h.Parties.Service.EstablishRelationship.Handle(actx, parapp.EstablishRelationship{Type: pardomain.RelSupplier.String(), From: acme.ID, To: supplier.ID})
 	ok(err)
-	_, err = h.Purchases.Service.SetSupplier.Handle(actx, puapp.SetSupplier{Company: acme.ID, Supplier: supplier.ID, Blocked: true, BlockReason: "calidad"})
+	sp, err := h.Purchases.Service.SetSupplier.Handle(actx, puapp.SetSupplier{Company: acme.ID, Supplier: supplier.ID})
+	ok(err)
+	spID, err := pudomain.ParseSupplierID(sp.ID)
+	ok(err)
+	_, err = h.Purchases.Service.BlockSupplier.Handle(actx, puapp.BlockSupplier{ID: spID, Blocked: true, Reason: "calidad"})
 	ok(err)
 	supRel, err := h.Parties.Service.Relationships.Handle(actx, parapp.PartyRelationships{PartyID: mustParty(t, supplier.ID)})
 	ok(err)
@@ -213,7 +218,11 @@ func TestPairs_MergeMovesThePairToTheSurvivor(t *testing.T) {
 	ok(err)
 	_, err = h.Parties.Service.EstablishRelationship.Handle(actx, parapp.EstablishRelationship{Type: pardomain.RelSupplier.String(), From: acme.ID, To: dup.ID})
 	ok(err)
-	_, err = h.Purchases.Service.SetSupplier.Handle(actx, puapp.SetSupplier{Company: acme.ID, Supplier: dup.ID, Blocked: true, BlockReason: "calidad"})
+	dsp, err := h.Purchases.Service.SetSupplier.Handle(actx, puapp.SetSupplier{Company: acme.ID, Supplier: dup.ID})
+	ok(err)
+	dspID, err := pudomain.ParseSupplierID(dsp.ID)
+	ok(err)
+	_, err = h.Purchases.Service.BlockSupplier.Handle(actx, puapp.BlockSupplier{ID: dspID, Blocked: true, Reason: "calidad"})
 	ok(err)
 	survivor, err := h.Parties.Service.RegisterOrganization.Handle(actx, parapp.RegisterOrganization{LegalName: "Talleres Pérez"})
 	ok(err)

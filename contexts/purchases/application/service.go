@@ -46,6 +46,8 @@ type Deps struct {
 	Policy approval.Policy
 	// Approvals guarda las solicitudes de aprobación (pur_approvals).
 	Approvals approval.Repository
+	// BlockEvents guarda el historial de bloqueos (pur_supplier_block_events).
+	BlockEvents domain.BlockEventRepository
 }
 
 // withoutMerged deja fuera de un listado los registros cuya party (proveedor) es una party fusionada,
@@ -69,6 +71,10 @@ type Service struct {
 	GetSupplier        app.QueryHandler[GetSupplier, SupplierDTO]
 	SupplierChangeable app.QueryHandler[GetSupplier, bool]
 	PageSuppliers      app.QueryHandler[PageSuppliers, fw.Page[SupplierDTO]]
+	// BlockSupplier bloquea o desbloquea (BlockSupplier.Blocked); SupplierBlockHistory lee el
+	// historial (D-156 ampliada).
+	BlockSupplier        app.CommandHandler[BlockSupplier, SupplierDTO]
+	SupplierBlockHistory app.QueryHandler[SupplierBlockHistory, []BlockEventDTO]
 
 	// Las solicitudes de aprobación del bloqueo y el desbloqueo (D-156).
 	SearchApprovals app.QueryHandler[SearchApprovals, []ApprovalDTO]

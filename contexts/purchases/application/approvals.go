@@ -1,10 +1,10 @@
 package application
 
-// Aprobación del bloqueo y del desbloqueo de proveedores (D-156, paso 3; docs/COMPRAS.md
-// «Aprobaciones»). Si la empresa tiene la acción en su lista (la política de Parties), un cambio que
-// bloquearía o desbloquearía un perfil no lo hace: deja una solicitud pendiente en pur_approvals, en
-// la misma transacción, y el resto del cambio se aplica. Al aprobarse, el bloqueo se aplica en la
-// misma transacción que la resolución.
+// Aprobación del bloqueo y del desbloqueo de proveedores (D-156; docs/COMPRAS.md «Aprobaciones»).
+// Si la empresa tiene la acción en su lista (la política de Parties), la orden de bloquear o
+// desbloquear no cambia el perfil: deja una solicitud pendiente en pur_approvals, en la misma
+// transacción. Al aprobarse, el bloqueo se aplica (con su entrada en el historial) en la misma
+// transacción que la resolución.
 
 import (
 	"context"
@@ -58,39 +58,33 @@ var (
 	apvFieldStatus     = spec.Comparable("status", func(r *dapproval.Request) string { return string(r.Status()) })
 )
 
-// gate decide si el cambio de bloqueo de st respecto de cur pasa por aprobación. Si la política lo
-// exige, crea la solicitud, deja st con el bloqueo (y los motivos) de cur y devuelve el id de la
-// solicitud; si no, devuelve "" y st queda como estaba. cur es el estado vacío en un alta.
-func (s service) gate(ctx context.Context, id domain.SupplierID, cur domain.SupplierState, st *domain.SupplierState) (string, error) {
-	if st.Blocked == cur.Blocked || s.Policy == nil {
+// gate decide si bloquear (blocked) o desbloquear el perfil id pasa por aprobación. Si la política
+// lo exige, crea la solicitud y devuelve su id; si no, devuelve "". El motivo ya está validado.
+// Sólo puede haber una solicitud pendiente por perfil y acción: lo comprueba aquí y, en SQL, el
+// índice único de pending_key (migración 9).
+func (s service) gate(ctx context.Context, id domain.SupplierID, company domain.OrganizationID, blocked bool, reason string) (string, error) {
+	if s.Policy == nil {
 		return "", nil
 	}
-	action, reason := ActionUnblockSupplier, strings.TrimSpace(st.UnblockReason)
-	if st.Blocked {
-		action, reason = ActionBlockSupplier, strings.TrimSpace(st.BlockReason)
+	action := ActionUnblockSupplier
+	if blocked {
+		action = ActionBlockSupplier
 	}
-	required, err := s.Policy.Requires(ctx, st.Company.UUID, action)
+	required, err := s.Policy.Requires(ctx, company.UUID, action)
 	if err != nil || !required {
 		return "", err
 	}
-	// El motivo se exige ya al pedir, con los mismos códigos que sin aprobación.
-	switch {
-	case reason == "" && st.Blocked:
-		return "", fw.Violation(domain.CodeBlockReasonRequired, "blocking a supplier needs a reason")
-	case reason == "":
-		return "", fw.Violation(domain.CodeUnblockReasonRequired, "unblocking a supplier needs a reason")
-	}
+	reason = strings.TrimSpace(reason)
 	dup, err := s.Approvals.Exists(ctx, spec.And(apvFieldTargetType.Eq(domain.SupplierKind), apvFieldTargetID.Eq(id.String()),
 		apvFieldAction.Eq(string(action)), apvFieldStatus.Eq(string(dapproval.StatusPending))))
 	if err != nil {
 		return "", err
 	}
 	if dup {
-		return "", fmt.Errorf("%w: %s: there is already a pending request to %s this supplier", fw.ErrConflict, CodeApprovalPending,
-			strings.TrimPrefix(string(action), "purchases.supplier."))
+		return "", ErrApprovalPending(action)
 	}
-	payload, _ := json.Marshal(blockPayload{Supplier: id.String(), Blocked: st.Blocked, Reason: reason})
-	r, err := approval.Service{Repo: s.Approvals}.Request(ctx, approval.RequestInput{Company: st.Company.UUID, Action: action,
+	payload, _ := json.Marshal(blockPayload{Supplier: id.String(), Blocked: blocked, Reason: reason})
+	r, err := approval.Service{Repo: s.Approvals}.Request(ctx, approval.RequestInput{Company: company.UUID, Action: action,
 		Target: dapproval.Target{Type: domain.SupplierKind, ID: id.String()}, Payload: payload, Reason: reason})
 	if err != nil {
 		return "", err
@@ -98,8 +92,14 @@ func (s service) gate(ctx context.Context, id domain.SupplierID, cur domain.Supp
 	if err := s.auditApproval(ctx, r, app.AuditCreated, ""); err != nil {
 		return "", err
 	}
-	st.Blocked, st.BlockReason, st.UnblockReason = cur.Blocked, cur.BlockReason, cur.UnblockReason
 	return r.ID().String(), nil
+}
+
+// ErrApprovalPending es el 409 cuando ya hay una solicitud pendiente para el mismo perfil y la
+// misma acción.
+func ErrApprovalPending(action dapproval.Action) error {
+	return fmt.Errorf("%w: %s: there is already a pending request to %s this supplier", fw.ErrConflict, CodeApprovalPending,
+		strings.TrimPrefix(string(action), "purchases.supplier."))
 }
 
 // auditApproval deja la solicitud en la auditoría del contexto, como el resto de agregados. Sus
@@ -261,9 +261,9 @@ func (s service) approvalUseCases(svc *Service) {
 	})
 }
 
-// applyBlock aplica una solicitud aprobada al perfil. Es idempotente: si el perfil ya está en el
-// estado pedido (otro lo cambió entretanto), no lo toca y la solicitud queda aprobada igualmente.
-// Sólo cambia el bloqueo y su motivo: lo demás que haya cambiado entretanto se respeta.
+// applyBlock aplica una solicitud aprobada al perfil, con su entrada en el historial. Es
+// idempotente: si el perfil ya está en el estado pedido (otro lo cambió entretanto), no lo toca y la
+// solicitud queda aprobada igualmente. Sólo cambia el bloqueo y su motivo.
 func (s service) applyBlock(ctx context.Context, r *dapproval.Request) error {
 	var p blockPayload
 	if err := json.Unmarshal(r.State().Payload, &p); err != nil {
@@ -280,15 +280,6 @@ func (s service) applyBlock(ctx context.Context, r *dapproval.Request) error {
 	if cur.State().Blocked == p.Blocked {
 		return nil
 	}
-	_, err = s.suppliers.Update(ctx, id, func(_ context.Context, sp *domain.SupplierProfile) error {
-		st := sp.State()
-		st.Blocked = p.Blocked
-		if p.Blocked {
-			st.BlockReason = p.Reason
-		} else {
-			st.UnblockReason = p.Reason
-		}
-		return sp.Change(st)
-	})
+	_, err = s.setBlocked(ctx, id, p.Blocked, p.Reason, 0, r.ID().UUID)
 	return err
 }

@@ -48,6 +48,12 @@ const MaxBlockReason = 200
 const (
 	CodeBlockReasonRequired   = "purchases.block_reason_required"
 	CodeUnblockReasonRequired = "purchases.unblock_reason_required"
+	// CodeBlockChangeRequiresCommand: el alta y el cambio general no bloquean ni desbloquean; eso
+	// son las órdenes de bloquear y desbloquear (D-156 ampliada; Parties.BlockChangeRequiresCommand
+	// de Trench).
+	CodeBlockChangeRequiresCommand = "purchases.block_change_requires_command"
+	CodeAlreadyBlocked             = "purchases.supplier_already_blocked"
+	CodeNotBlocked                 = "purchases.supplier_not_blocked"
 )
 
 // ReconstituteSupplier reconstruye un perfil.
@@ -78,42 +84,65 @@ func ReconstituteSupplier(id SupplierID, s SupplierState) (*SupplierProfile, err
 	return &SupplierProfile{BaseAggregateRoot: base, Audited: traits.RestoredAudit(s.Audit), s: s}, nil
 }
 
-// NewSupplier da de alta un perfil: si nace bloqueado, con su motivo.
+// NewSupplier da de alta un perfil, que nace sin bloquear: bloquearlo es una orden aparte.
 func NewSupplier(id SupplierID, s SupplierState) (*SupplierProfile, error) {
-	s.UnblockReason = ""
-	p, err := ReconstituteSupplier(id, s)
-	if err != nil {
-		return nil, err
+	if s.Blocked {
+		return nil, fw.Violation(CodeBlockChangeRequiresCommand, "a supplier is blocked with the block command, not at registration")
 	}
-	if p.s.Blocked && p.s.BlockReason == "" {
-		return nil, fw.Violation(CodeBlockReasonRequired, "blocking a supplier needs a reason")
-	}
-	return p, nil
+	s.BlockReason, s.UnblockReason = "", ""
+	return ReconstituteSupplier(id, s)
 }
 
 // State devuelve el estado.
 func (p *SupplierProfile) State() SupplierState { return p.s }
 
-// Change sustituye los valores por defecto (la empresa y el proveedor se mantienen). Bloquear exige
-// el motivo del bloqueo y desbloquear el del desbloqueo; si el estado no cambia, el motivo que no
-// llega se queda como estaba.
+// Change sustituye los valores por defecto. La empresa, el proveedor, el bloqueo y sus motivos se
+// mantienen: el bloqueo sólo cambia con Block y Unblock.
 func (p *SupplierProfile) Change(s SupplierState) error {
 	s.Company, s.Supplier, s.Audit = p.s.Company, p.s.Supplier, p.s.Audit
+	s.Blocked, s.BlockReason, s.UnblockReason = p.s.Blocked, p.s.BlockReason, p.s.UnblockReason
 	n, err := ReconstituteSupplier(p.ID(), s)
 	if err != nil {
 		return err
 	}
-	switch {
-	case n.s.Blocked && !p.s.Blocked && n.s.BlockReason == "":
-		return fw.Violation(CodeBlockReasonRequired, "blocking a supplier needs a reason")
-	case !n.s.Blocked && p.s.Blocked && n.s.UnblockReason == "":
-		return fw.Violation(CodeUnblockReasonRequired, "unblocking a supplier needs a reason")
-	case n.s.Blocked && n.s.BlockReason == "":
-		n.s.BlockReason = p.s.BlockReason
-	case !n.s.Blocked && n.s.UnblockReason == "":
-		n.s.UnblockReason = p.s.UnblockReason
-	}
 	p.s = n.s
+	return nil
+}
+
+// CheckReason valida el motivo de un bloqueo (blocked) o de un desbloqueo: obligatorio, de hasta
+// MaxBlockReason caracteres y sin caracteres de control. Devuelve el motivo sin espacios en los
+// extremos.
+func CheckReason(blocked bool, reason string) (string, error) {
+	reason = strings.TrimSpace(reason)
+	switch {
+	case reason == "" && blocked:
+		return "", fw.Violation(CodeBlockReasonRequired, "blocking a supplier needs a reason")
+	case reason == "":
+		return "", fw.Violation(CodeUnblockReasonRequired, "unblocking a supplier needs a reason")
+	}
+	var v fw.Validation
+	v.Require(utf8.RuneCountInString(reason) <= MaxBlockReason, "reason", "length", "the reason has at most 200 characters")
+	v.Require(!strings.ContainsFunc(reason, unicode.IsControl), "reason", "format", "no control characters")
+	return reason, v.Err()
+}
+
+// SetBlocked bloquea (blocked) o desbloquea el perfil con su motivo. Bloquear uno bloqueado o
+// desbloquear uno sin bloquear es una infracción.
+func (p *SupplierProfile) SetBlocked(blocked bool, reason string) error {
+	reason, err := CheckReason(blocked, reason)
+	if err != nil {
+		return err
+	}
+	switch {
+	case blocked && p.s.Blocked:
+		return fw.Violation(CodeAlreadyBlocked, "the supplier is already blocked")
+	case !blocked && !p.s.Blocked:
+		return fw.Violation(CodeNotBlocked, "the supplier is not blocked")
+	case blocked:
+		p.s.Blocked, p.s.BlockReason, p.s.UnblockReason = true, reason, ""
+	default:
+		p.s.Blocked, p.s.BlockReason, p.s.UnblockReason = false, "", reason
+	}
 	return nil
 }
 
