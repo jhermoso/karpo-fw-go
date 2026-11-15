@@ -133,9 +133,11 @@ versión leída, como en Compras, Envíos y Cuentas (el `commercial_block_event`
   `rec_approvals` (una sola pendiente por perfil, sea bloquear o desbloquear: `pending_key` con índice único
   `ux_rec_approvals_pending`, 409 `receivables.approval_pending`). Bandeja: `GET
   /api/receivables/approvals?company=&status=` y `POST /api/receivables/approvals/{id}/approve`,
-  `/reject` (con `comment`) y `/cancel` (sólo el solicitante).
+  `/reject` (con `comment`) y `/cancel` (sólo el solicitante); las mismas bajo
+  `/api/v1/receivables/approvals`.
 - Migración 5: `unblock_reason`, `rec_credit_block_events`, `rec_approvals` con `pending_key` y su
-  índice. Pedidos y Facturación leen el bloqueo por el puerto `Credit.Exposure`, que no cambia.
+  índice. Migración 6: la clave pasa al formato del motor común
+  (`block:receivables.credit_profile:<perfil>`; docs/APROBACIONES.md), recalculada en las que hubiera. Pedidos y Facturación leen el bloqueo por el puerto `Credit.Exposure`, que no cambia.
 
 ## Decisiones (aprobadas por Javier el 2026-09-28)
 

@@ -12,6 +12,7 @@ package application
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -172,8 +173,8 @@ func (s service) setBlocked(ctx context.Context, id domain.TermsID, blocked bool
 }
 
 // gate pregunta a la política si el cambio pasa por aprobación. Si la exige, crea la solicitud y
-// devuelve su id; si no, "". Sólo puede haber una solicitud pendiente por condiciones y acción: lo
-// comprueba aquí y, en SQL, el índice único de pending_key.
+// devuelve su id; si no, "". Sólo puede haber una solicitud pendiente por destino, sea bloquear o desbloquear: lo
+// comprueba el motor (grupo dapproval.GroupBlock) y, en SQL, el índice único de pending_key.
 func (s service) gate(ctx context.Context, id domain.TermsID, company domain.OrganizationID, blocked bool, scope domain.BlockScope, reason string) (string, error) {
 	if s.Policy == nil {
 		return "", nil
@@ -186,18 +187,14 @@ func (s service) gate(ctx context.Context, id domain.TermsID, company domain.Org
 	if err != nil || !required {
 		return "", err
 	}
-	dup, err := s.Approvals.Exists(ctx, spec.And(apvFieldTargetType.Eq(domain.TermsKind), apvFieldTargetID.Eq(id.String()),
-		apvFieldStatus.Eq(string(dapproval.StatusPending)))) // una sola pendiente por destino, bloquear o desbloquear
-	if err != nil {
-		return "", err
-	}
-	if dup {
+	payload, _ := json.Marshal(blockPayload{Terms: id.String(), Blocked: blocked, Scopes: scope.Texts(), Reason: reason})
+	r, err := approval.Service{Repo: s.Approvals}.Request(ctx, approval.RequestInput{Company: company.UUID, Action: action,
+		Target: dapproval.Target{Type: domain.TermsKind, ID: id.String()}, Payload: payload, Reason: reason, Group: dapproval.GroupBlock})
+	if errors.Is(err, dapproval.ErrPending) {
+		// Una sola pendiente por destino, sea bloquear o desbloquear (el grupo "block").
 		return "", fmt.Errorf("%w: %s: there is already a pending request to %s this customer", fw.ErrConflict, CodeApprovalPending,
 			strings.TrimPrefix(string(action), "orders.customer_terms."))
 	}
-	payload, _ := json.Marshal(blockPayload{Terms: id.String(), Blocked: blocked, Scopes: scope.Texts(), Reason: reason})
-	r, err := approval.Service{Repo: s.Approvals}.Request(ctx, approval.RequestInput{Company: company.UUID, Action: action,
-		Target: dapproval.Target{Type: domain.TermsKind, ID: id.String()}, Payload: payload, Reason: reason})
 	if err != nil {
 		return "", err
 	}

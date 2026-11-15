@@ -5,6 +5,7 @@ package infrastructure
 import (
 	"context"
 	"fmt"
+	fwapproval "github.com/jhermoso/karpo-fw-go/pkg/domain/approval"
 	"slices"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/financial/domain"
@@ -94,6 +95,12 @@ func Migrations() sqlrepo.MigrationSet {
 		{Version: 3, Name: "products, agreements and the agreement of an account", Up: sqlrepo.RenderDDLAll(catalogDDL...)},
 		{Version: 4, Name: "account block reasons and history", Up: sqlrepo.RenderDDLAll(blockDDL...)},
 		{Version: 5, Name: "approval requests", Up: sqlrepo.RenderDDLAll(approvals.DDL(TableApprovals)...)},
+		// Una sola solicitud pendiente por destino, sea bloquear o desbloquear, también en la base
+		// (motor común, pkg/persistence/approvals): la columna pending_key, rellenada en las filas
+		// que ya hubiera, y en la 7 su índice único.
+		{Version: 6, Name: "pending key", Up: sqlrepo.RenderDDLAll(approvals.PendingKeyColumnDDL(TableApprovals)),
+			Run: approvals.FillPendingKeys(TableApprovals, fwapproval.GroupBlock)},
+		{Version: 7, Name: "one pending request per target", Up: sqlrepo.RenderDDLAll(approvals.PendingKeyIndexDDL(TableApprovals))},
 	}}
 }
 

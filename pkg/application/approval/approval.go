@@ -17,6 +17,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain"
 	dom "github.com/jhermoso/karpo-fw-go/pkg/domain/approval"
+	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
 )
 
 // Policy dice si una acción exige aprobación en una empresa. La configuración por empresa es el
@@ -74,6 +75,9 @@ type RequestInput struct {
 	Target  dom.Target
 	Payload json.RawMessage
 	Reason  string
+	// Group agrupa las acciones que no pueden estar pendientes a la vez sobre el mismo objetivo
+	// (dom.GroupBlock para bloquear y desbloquear); vacío, la propia acción.
+	Group string
 }
 
 func actor(ctx context.Context) (*authz.Context, domain.UUID, error) {
@@ -84,16 +88,28 @@ func actor(ctx context.Context) (*authz.Context, domain.UUID, error) {
 	return c, c.Actor().PartyID, nil
 }
 
-// Request crea una solicitud pendiente a nombre del actor. Quien llama ya ha comprobado que el
+// PendingKeyField es la clave de unicidad (dom.Request.PendingKey) como campo de especificación,
+// sobre la columna pending_key de pkg/persistence/approvals.
+var PendingKeyField = spec.Comparable("pending_key", func(r *dom.Request) string { return r.PendingKey() })
+
+// Request crea una solicitud pendiente a nombre del actor. Si ya hay una pendiente del mismo grupo
+// sobre el mismo objetivo, devuelve dom.ErrPending (409); en SQL lo garantiza además el índice único. Quien llama ya ha comprobado que el
 // actor puede pedir la acción (el mismo permiso que ejecutarla).
 func (s Service) Request(ctx context.Context, in RequestInput) (*dom.Request, error) {
 	_, by, err := actor(ctx)
 	if err != nil {
 		return nil, err
 	}
-	r, err := dom.New(dom.NewRequestID(), in.Company, in.Action, in.Target, in.Payload, in.Reason, by)
+	r, err := dom.New(dom.NewRequestID(), in.Company, in.Action, in.Target, in.Payload, in.Reason, by, dom.InGroup(in.Group))
 	if err != nil {
 		return nil, err
+	}
+	dup, err := s.Repo.Exists(ctx, PendingKeyField.Eq(r.PendingKey()))
+	if err != nil {
+		return nil, err
+	}
+	if dup {
+		return nil, dom.ErrPending
 	}
 	if err := s.Repo.Save(ctx, r); err != nil {
 		return nil, err

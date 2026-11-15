@@ -10,6 +10,7 @@ package application
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -70,7 +71,6 @@ type blockPayload struct {
 // Campos de las solicitudes (los nombres son las columnas de pkg/persistence/approvals).
 var (
 	apvFieldCompany    = spec.Comparable("company", func(r *dapproval.Request) fw.UUID { return r.Company() })
-	apvFieldAction     = spec.Comparable("action", func(r *dapproval.Request) string { return string(r.Action()) })
 	apvFieldTargetType = spec.Comparable("target_type", func(r *dapproval.Request) string { return r.State().Target.Type })
 	apvFieldTargetID   = spec.Comparable("target_id", func(r *dapproval.Request) string { return r.State().Target.ID })
 	apvFieldStatus     = spec.Comparable("status", func(r *dapproval.Request) string { return string(r.Status()) })
@@ -144,18 +144,14 @@ func (s service) gate(ctx context.Context, id domain.CarrierID, company domain.O
 	if err != nil || !required {
 		return "", err
 	}
-	dup, err := s.Approvals.Exists(ctx, spec.And(apvFieldTargetType.Eq(domain.CarrierKind), apvFieldTargetID.Eq(id.String()),
-		apvFieldAction.Eq(string(action)), apvFieldStatus.Eq(string(dapproval.StatusPending))))
-	if err != nil {
-		return "", err
-	}
-	if dup {
+	payload, _ := json.Marshal(blockPayload{Carrier: id.String(), Blocked: blocked, Reason: reason})
+	r, err := approval.Service{Repo: s.Approvals}.Request(ctx, approval.RequestInput{Company: company.UUID, Action: action,
+		Target: dapproval.Target{Type: domain.CarrierKind, ID: id.String()}, Payload: payload, Reason: reason, Group: dapproval.GroupBlock})
+	if errors.Is(err, dapproval.ErrPending) {
+		// Una sola pendiente por destino, sea bloquear o desbloquear (el grupo "block").
 		return "", fmt.Errorf("%w: %s: there is already a pending request to %s this carrier", fw.ErrConflict, CodeApprovalPending,
 			strings.TrimPrefix(string(action), "shipments.carrier."))
 	}
-	payload, _ := json.Marshal(blockPayload{Carrier: id.String(), Blocked: blocked, Reason: reason})
-	r, err := approval.Service{Repo: s.Approvals}.Request(ctx, approval.RequestInput{Company: company.UUID, Action: action,
-		Target: dapproval.Target{Type: domain.CarrierKind, ID: id.String()}, Payload: payload, Reason: reason})
 	if err != nil {
 		return "", err
 	}

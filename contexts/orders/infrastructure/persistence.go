@@ -6,6 +6,8 @@ package infrastructure
 import (
 	"context"
 	"fmt"
+	fwapproval "github.com/jhermoso/karpo-fw-go/pkg/domain/approval"
+	"github.com/jhermoso/karpo-fw-go/pkg/persistence/approvals"
 	"slices"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/orders/domain"
@@ -117,6 +119,9 @@ func Migrations() sqlrepo.MigrationSet {
 			`ALTER TABLE ord_quotes {add:kind} {str:20} DEFAULT 'quote' NOT NULL{addEnd}`)},
 		// Bloquear y desbloquear son órdenes con motivo, historial y aprobación (D-156 ampliada).
 		{Version: 11, Name: "block history and approval requests", Up: sqlrepo.RenderDDLAll(blockDDL...)},
+		// La clave de la solicitud pendiente pasa al motor común (pkg/persistence/approvals):
+		// «block:tipo:id», recalculada en las filas que ya hubiera; el índice único no cambia.
+		{Version: 12, Name: "common pending key", Run: approvals.FillPendingKeys(TableApprovals, fwapproval.GroupBlock)},
 	}}
 }
 

@@ -18,7 +18,8 @@ empresa en Parties, y el **paso 3** en Compras: bloquear y desbloquear proveedor
 | Política | `pkg/application/approval.Policy` | «¿Esta acción exige aprobación en esta empresa?». Hay `Never` (por defecto) y `Fixed` (lista fija, para pruebas); la configurable por empresa es la de Parties (paso 2, abajo) |
 | Permiso de aprobar | `approval.ApprovePermission` | Se deriva de la acción con la forma de los permisos de Karpo: `purchases.supplier.block` → `Purchases.Supplier.ApproveBlock`; `sales.credit_limit.raise` → `Sales.CreditLimit.ApproveRaise`. El mismo permiso aprueba y rechaza |
 | Servicio | `approval.Service` | `Request`, `Approve`, `Reject`, `Cancel`. El actor sale del contexto de autorización (`authz.FromContext`) |
-| Persistencia | `pkg/persistence/approvals` | `Mapping(tabla)` para `sqlrepo` y `DDL(tabla)` con los marcadores de dialecto. En memoria, el repositorio genérico `memory.NewRepository` |
+| Persistencia | `pkg/persistence/approvals` | `Mapping(tabla)` para `sqlrepo`, `DDL(tabla)` y `PendingKeyDDL(tabla)` con los marcadores de dialecto. En memoria, el repositorio genérico `memory.NewRepository` |
+| Grupo y clave | `approval.InGroup`, `RequestInput.Group`, `Request.PendingKey` | Una sola solicitud pendiente por grupo y objetivo (abajo, «Una sola pendiente») |
 
 Reglas, en el dominio: una solicitud se resuelve una sola vez (`approval.already_resolved`); quien la
 pidió no la aprueba ni la rechaza (`approval.self_resolution`), aunque tenga el permiso; sólo quien la
@@ -29,6 +30,45 @@ Las cuatro son `domain.Violation` (422).
 `Service.Request` tampoco comprueba ninguno: lo comprueba el caso de uso que crea la solicitud, con el
 permiso de la acción original (p. ej. el de bloquear el proveedor). En aplicación: aprobar o rechazar sin el permiso es
 `ErrForbidden` (403); sin contexto de autorización, `ErrUnauthorized` (401).
+
+## Una sola pendiente (la clave común)
+
+Sobre un mismo objetivo no puede haber dos solicitudes pendientes del mismo **grupo**. El grupo lo
+decide quien crea la solicitud (`RequestInput.Group`, o `approval.InGroup` en `approval.New`); sin
+él, el grupo es la propia acción (una pendiente por acción y objetivo). Para bloqueos se usa
+`approval.GroupBlock` (`"block"`), de modo que bloquear y desbloquear el mismo objetivo no conviven.
+
+- **La clave** (`Request.PendingKey`) vale `grupo:tipo:id` del objetivo mientras la solicitud está
+  pendiente (`block:purchases.supplier_profile:<id>`) y su propio id al aprobarse, rechazarse o
+  cancelarse. Nunca es NULL, así que un índice único normal vale en los cinco motores (SQL Server no
+  admite dos NULL en uno).
+- **En la base**, la columna `pending_key` `{str:200}` con el índice único `ux_<tabla>_pending`
+  (por eso la tabla mide como mucho 19 caracteres, `approvals.MaxTableLen`). El grupo no tiene
+  columna: se lee del principio de la clave mientras está pendiente.
+- **El conflicto** es `approval.ErrPending` (envuelve `domain.ErrConflict`, 409): lo devuelve
+  `Service.Request` si ya hay una pendiente (también en memoria, con `approval.PendingKeyField`) y
+  `Save` si choca con el índice. Cada contexto lo traduce a su código con `errors.Is`
+  (`purchases.approval_pending`, ...).
+- **Migraciones.** Tabla nueva: `DDL(t)` y `PendingKeyDDL(t)` en la misma migración. Tabla que ya
+  existía sin la columna: `PendingKeyColumnDDL(t)` con `Run: FillPendingKeys(t, grupo)` y, en la
+  siguiente, `PendingKeyIndexDDL(t)`. Con la columna en otro formato: sólo `Run: FillPendingKeys`.
+  `FillPendingKeys` recalcula todas las filas; si dos pendientes chocan, la más antigua se queda la
+  clave y las demás su id (siguen pendientes y se pueden resolver).
+
+| Contexto | Tabla | Migraciones de la clave común |
+|---|---|---|
+| Compras | `pur_approvals` | 10 (recalcula; columna e índice de las 8 y 9) |
+| Envíos | `shp_approvals` | 6 (columna y relleno) y 7 (índice) |
+| Cuentas | `fin_approvals` | 6 (columna y relleno) y 7 (índice) |
+| Cobros | `rec_approvals` | 6 (recalcula; columna e índice de la 5) |
+| Pedidos | `ord_approvals` | 12 (recalcula; columna e índice de la 11) |
+
+## Las rutas bajo `/api/v1`
+
+Los cinco contextos publican su bandeja en `/api/<contexto>/approvals` (`GET`, y `POST
+/{id}/approve|reject|cancel`) y, con las mismas rutas y respuestas, en
+`/api/v1/<contexto>/approvals`, porque el motor de Angular de Karpo C# sólo llama a rutas con `/v1`
+(front/README.md). Las constantes son `ApprovalsBase` y `ApprovalsBaseV1` de cada módulo.
 
 ## Diferencias con Karpo C# y por qué
 
@@ -48,7 +88,7 @@ Aquí sólo hace falta un flujo: un paso humano que aprueba o rechaza. Por eso:
   historial lo da el registro de auditoría y los eventos; los reintentos de aplicar la acción los da el
   outbox, que reentrega el evento `approval.approved`.
 - **Sin `SignalExternal`**: aprobar, rechazar y cancelar son las únicas señales.
-- **La tabla es de cada contexto**, como su outbox, con el nombre `<prefijo-del-contexto>_approvals` (p. ej. `pur_approvals`; como mucho 23 caracteres, para que el índice quepa en los 30 de Oracle), y no un
+- **La tabla es de cada contexto**, como su outbox, con el nombre `<prefijo-del-contexto>_approvals` (p. ej. `pur_approvals`; como mucho 19 caracteres, para que el índice `ux_<tabla>_pending` quepa en los 30 de Oracle), y no un
   esquema `workflow` compartido: cada contexto guarda sus solicitudes en la misma transacción que su
   acción, sin depender de otro módulo.
 
@@ -104,12 +144,9 @@ Como arriba, con estas concreciones (docs/COMPRAS.md, «Aprobación del bloqueo 
   Con política, la orden responde 202 con `pendingApproval` y **no guarda el perfil** (ni sube su
   versión). Al aprobar, el bloqueo deja su fila en el historial (`pur_supplier_block_events`) con el
   id de la solicitud.
-- **Una pendiente por objetivo y acción, también en la base:** el contexto añade a su tabla una
-  columna `pending_key` (`acción:objetivo` mientras está pendiente, el id de la solicitud después;
-  nunca NULL) con un índice único, portable a los cinco motores. El mapeo del motor se amplía en el
-  contexto (`infrastructure.ApprovalMapping` de Compras), sin tocar `pkg/persistence/approvals`.
-  Otro contexto que use aprobaciones puede copiar el patrón; si lo usan varios, conviene subirlo al
-  paquete del motor.
+- **Una pendiente por objetivo, sea bloquear o desbloquear, también en la base:** la clave común
+  del motor (arriba, «Una sola pendiente»), con el grupo `block`. Empezó en Compras con un mapeo
+  propio y la clave `acción:objetivo`; desde 2026-11-15 es la del motor en los cinco contextos.
 
 ## Paso 3 en Envíos y en Cuentas (hecho, 2026-11-15)
 
@@ -133,7 +170,7 @@ Lo mismo para los dos bloqueos del cliente: el **crédito** de Cobros (docs/COBR
 y las **condiciones de venta** de Pedidos, que bloquean pedidos y entregas con un único motivo
 (docs/PEDIDOS.md, «El bloqueo»). En Pedidos hay dos órdenes, bloquear y desbloquear, con los ámbitos
 (`scopes`: `orders`, `delivery`), como Trench: una sola acción por sentido. Las dos tablas de
-solicitudes llevan `pending_key` con índice único, como Compras.
+solicitudes llevan la clave común con índice único, como Compras.
 
 | Contexto | Acciones | Solicitudes | Historial | Bandeja |
 |---|---|---|---|---|

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/purchases"
@@ -59,6 +60,12 @@ func (h *host) approvals() {
 	// Las pendientes del ámbito.
 	var list []uapp.ApprovalDTO
 	h.must(h.do("GET", apv, "approver", nil, &list), 200, "list")
+	// El alias /api/v1 del motor de Angular responde lo mismo.
+	var alias []uapp.ApprovalDTO
+	h.must(h.do("GET", purchases.ApprovalsBaseV1, "approver", nil, &alias), 200, "list by /api/v1")
+	if !reflect.DeepEqual(alias, list) {
+		h.t.Fatalf("/api/v1 list = %+v, want %+v", alias, list)
+	}
 	if len(list) != 1 || list[0].ID != first || list[0].Action != "purchases.supplier.block" || list[0].Reason != "impago" || list[0].TargetID != id {
 		t.Fatalf("list = %+v", list)
 	}
@@ -125,7 +132,7 @@ func (h *host) approvals() {
 	if code != 202 || p["blocked"] != true || p["version"] != cur["version"] {
 		t.Fatalf("unblock: %d %v", code, p)
 	}
-	h.must(status("approver", "POST", apv+"/"+p["pendingApproval"].(string)+"/approve", nil), 200, "approve the unblock")
+	h.must(status("approver", "POST", purchases.ApprovalsBaseV1+"/"+p["pendingApproval"].(string)+"/approve", nil), 200, "approve the unblock by /api/v1")
 	if got := get(id); got["blocked"] != false || got["unblockReason"] != "pagado" {
 		t.Fatalf("unblocked: %v", got)
 	}
@@ -179,8 +186,9 @@ func TestPurchases_BlockWithoutPolicy_IsImmediate(t *testing.T) {
 	}
 }
 
-// En SQL la base también impide dos solicitudes pendientes para el mismo perfil y acción (el índice
-// único de pending_key, migración 9), aunque el código no lo comprobara; resuelta una, cabe otra.
+// En SQL la base también impide dos solicitudes pendientes del mismo grupo para el mismo perfil (el
+// índice único de pending_key del motor), aunque el código no lo comprobara: bloquear y desbloquear
+// no conviven; resuelta una, cabe otra.
 func TestPurchases_OnePendingApprovalInTheDatabase(t *testing.T) {
 	ctx := context.Background()
 	raw, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "pending.db")+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)")
@@ -202,18 +210,18 @@ func TestPurchases_OnePendingApprovalInTheDatabase(t *testing.T) {
 		t.Fatal(err)
 	}
 	company, by, target := fw.NewUUID(), fw.NewUUID(), dapproval.Target{Type: "purchases.supplier_profile", ID: fw.NewUUID().String()}
-	request := func() *dapproval.Request {
-		r, err := dapproval.New(dapproval.NewRequestID(), company, uapp.ActionBlockSupplier, target, nil, "impago", by)
+	request := func(a dapproval.Action) *dapproval.Request {
+		r, err := dapproval.New(dapproval.NewRequestID(), company, a, target, nil, "impago", by, dapproval.InGroup(dapproval.GroupBlock))
 		if err != nil {
 			t.Fatal(err)
 		}
 		return r
 	}
-	r1 := request()
+	r1 := request(uapp.ActionBlockSupplier)
 	if err := repo.Save(ctx, r1); err != nil {
 		t.Fatal(err)
 	}
-	if err := repo.Save(ctx, request()); !errors.Is(err, fw.ErrConflict) {
+	if err := repo.Save(ctx, request(uapp.ActionUnblockSupplier)); !errors.Is(err, dapproval.ErrPending) || !errors.Is(err, fw.ErrConflict) {
 		t.Fatalf("a second pending request: %v", err)
 	}
 	if err := r1.Cancel(by, ""); err != nil {
@@ -222,7 +230,7 @@ func TestPurchases_OnePendingApprovalInTheDatabase(t *testing.T) {
 	if err := repo.Save(ctx, r1); err != nil {
 		t.Fatal(err)
 	}
-	if err := repo.Save(ctx, request()); err != nil {
+	if err := repo.Save(ctx, request(uapp.ActionUnblockSupplier)); err != nil {
 		t.Fatalf("a new request after the first is resolved: %v", err)
 	}
 }

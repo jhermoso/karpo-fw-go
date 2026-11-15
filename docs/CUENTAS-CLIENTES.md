@@ -256,14 +256,16 @@ abandonar y liberar se saltaría el desbloqueo).
   `Financial.Account.Block`. La empresa de la política es la entidad de la cuenta (la de Parties,
   `financial.WithApprovalPolicy` en `host/host.go`; sin ella, ninguna). Con la acción en su lista, la
   orden responde 202 con `pendingApproval`, deja la solicitud en `fin_approvals` y no guarda la
-  cuenta; otra igual pendiente es 409 `financial.approval_pending`. Bandeja: `GET
+  cuenta; otra pendiente sobre la misma cuenta, sea bloquear o
+  desbloquear, es 409 `financial.approval_pending` (en SQL, además, el índice único de `pending_key`). Bandeja: `GET
   /api/financial/approvals?company&status` y `POST /api/financial/approvals/{id}/approve|reject|cancel`
-  (docs/APROBACIONES.md). Al aprobar se aplica en la misma transacción, idempotente, y en el historial
+  (docs/APROBACIONES.md), y las mismas bajo `/api/v1/financial/approvals`. Al aprobar se aplica en la misma transacción, idempotente, y en el historial
   figura el aprobador. Si al aprobar ya no se puede aplicar (la cuenta está apartada o cerrada), 422
   `financial.approval_not_applicable`: no se aprueba nada y la solicitud sigue pendiente, para que
   el aprobador la rechace o el solicitante la cancele.
-- **Migraciones:** 4 (`block_reason`, `unblock_reason`, `fin_account_block_events`) y 5
-  (`fin_approvals`).
+- **Migraciones:** 4 (`block_reason`, `unblock_reason`, `fin_account_block_events`), 5
+  (`fin_approvals`), 6 (`pending_key`, rellenada en las solicitudes que ya hubiera) y 7 (su índice
+  único `ux_fin_approvals_pending`).
 
 ## Pendiente
 

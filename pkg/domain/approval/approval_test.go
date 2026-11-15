@@ -133,3 +133,28 @@ func TestResolvedOnlyOnce(t *testing.T) {
 		t.Fatal("status changed")
 	}
 }
+
+func TestPendingKey(t *testing.T) {
+	r := pending(t)
+	if r.Group() != "purchases.supplier.block" || r.PendingKey() != "purchases.supplier.block:purchases.supplier:42" {
+		t.Fatalf("default group %q key %q", r.Group(), r.PendingKey())
+	}
+	g, err := approval.New(approval.NewRequestID(), company, "purchases.supplier.unblock",
+		approval.Target{Type: "purchases.supplier", ID: "42"}, nil, "", requester, approval.InGroup(approval.GroupBlock))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g.PendingKey() != "block:purchases.supplier:42" {
+		t.Fatalf("key %q", g.PendingKey())
+	}
+	if err := g.Cancel(requester, ""); err != nil {
+		t.Fatal(err)
+	}
+	if g.PendingKey() != g.ID().String() {
+		t.Fatalf("resolved key %q", g.PendingKey())
+	}
+	if _, err := approval.New(approval.NewRequestID(), company, "purchases.supplier.block",
+		approval.Target{Type: "t", ID: "1"}, nil, "", requester, approval.InGroup("Bad:group")); !errors.Is(err, domain.ErrValidation) {
+		t.Fatalf("bad group = %v", err)
+	}
+}

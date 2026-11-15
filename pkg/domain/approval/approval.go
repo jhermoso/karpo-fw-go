@@ -114,11 +114,57 @@ type State struct {
 	ResolvedBy  domain.UUID // party de quien resolvió (o canceló)
 	ResolvedAt  time.Time
 	Comment     string // comentario de la resolución
+	// Group agrupa las acciones que no pueden estar pendientes a la vez sobre el mismo objetivo
+	// (p. ej. GroupBlock para bloquear y desbloquear). Vacío vale la propia acción: una pendiente
+	// por acción y objetivo. Sólo cuenta mientras la solicitud está pendiente.
+	Group string
 }
 
-// New crea una solicitud pendiente y lanza Requested.
-func New(id RequestID, company domain.UUID, action Action, target Target, payload json.RawMessage, reason string, by domain.UUID) (*Request, error) {
+// GroupBlock es el grupo de bloquear y desbloquear: no conviven dos pendientes sobre el mismo
+// objetivo, sea cual sea el sentido.
+const GroupBlock = "block"
+
+// ErrPending es el conflicto de pedir una acción cuando ya hay una solicitud pendiente del mismo
+// grupo sobre el mismo objetivo. Lo devuelven Service.Request y el índice único de pending_key
+// (pkg/persistence/approvals); cada contexto lo traduce a su código con errors.Is.
+var ErrPending = fmt.Errorf("%w: approval.pending: there is already a pending request for this target", domain.ErrConflict)
+
+// Option ajusta una solicitud nueva.
+type Option func(*State)
+
+// InGroup pone la solicitud en el grupo g ([a-z][a-z0-9_]*; véase State.Group).
+func InGroup(g string) Option { return func(s *State) { s.Group = g } }
+
+// PendingKeyFor es la clave de unicidad de una solicitud pendiente: "grupo:tipo:id" del objetivo.
+func PendingKeyFor(group string, t Target) string { return group + ":" + t.Type + ":" + t.ID }
+
+// PendingKey es la clave de unicidad de la solicitud: PendingKeyFor mientras está pendiente y su
+// propio id después, que no choca con nada (nunca vacía, para que un índice único normal valga
+// también en SQL Server).
+func (r *Request) PendingKey() string {
+	if r.s.Status != StatusPending {
+		return r.ID().String()
+	}
+	return PendingKeyFor(r.Group(), r.s.Target)
+}
+
+// Group devuelve el grupo de la solicitud (la acción si no se dio otro).
+func (r *Request) Group() string {
+	if r.s.Group == "" {
+		return string(r.s.Action)
+	}
+	return r.s.Group
+}
+
+// New crea una solicitud pendiente y lanza Requested. opts admite InGroup.
+func New(id RequestID, company domain.UUID, action Action, target Target, payload json.RawMessage, reason string, by domain.UUID, opts ...Option) (*Request, error) {
+	var o State
+	for _, opt := range opts {
+		opt(&o)
+	}
 	var v domain.Validation
+	v.Require(o.Group == "" || validSegment(o.Group), "group", "invalid", "group must match [a-z][a-z0-9_]*")
+	v.Require(!strings.Contains(target.Type, ":"), "target", "invalid", "target type cannot contain ':'")
 	v.Require(!company.IsZero(), "company", "required", "company is required")
 	if _, err := ParseAction(string(action)); err != nil {
 		v.Add("action", "invalid", err.Error())
@@ -135,7 +181,7 @@ func New(id RequestID, company domain.UUID, action Action, target Target, payloa
 	}
 	r := &Request{BaseAggregateRoot: base, s: State{
 		Company: company, Action: action, Target: target, Payload: append(json.RawMessage(nil), payload...),
-		Reason: strings.TrimSpace(reason), RequestedBy: by, RequestedAt: domain.Now(), Status: StatusPending,
+		Reason: strings.TrimSpace(reason), RequestedBy: by, RequestedAt: domain.Now(), Status: StatusPending, Group: o.Group,
 	}}
 	r.Raise(Requested{EventMeta: r.NewEventMeta(), Company: company, Action: action, Target: target,
 		Payload: r.s.Payload, Reason: r.s.Reason, RequestedBy: by})

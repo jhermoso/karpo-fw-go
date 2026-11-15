@@ -193,9 +193,10 @@ dos aprobaciones para un mismo hecho, y la política de aprobación queda en dos
   `ord_approvals` (una sola pendiente por condiciones, sea bloquear o desbloquear y cualquier ámbito: `pending_key` con índice único
   `ux_ord_approvals_pending`, 409 `orders.approval_pending`). Bandeja: `GET
   /api/orders/approvals?company=&status=` y `POST /api/orders/approvals/{id}/approve`, `/reject`
-  (con `comment`) y `/cancel` (sólo el solicitante).
+  (con `comment`) y `/cancel` (sólo el solicitante); las mismas bajo `/api/v1/orders/approvals`.
 - Migración 11: `unblock_reason`, `ord_terms_block_events`, `ord_approvals` con `pending_key` y su
-  índice. Confirmar y servir siguen leyendo `blockOrders` y `blockDelivery` (422
+  índice. Migración 12: la clave pasa al formato del motor común
+  (`block:orders.customer_terms:<condiciones>`; docs/APROBACIONES.md), recalculada en las que hubiera. Confirmar y servir siguen leyendo `blockOrders` y `blockDelivery` (422
   `orders.customer_blocked` y `orders.delivery_blocked`); Facturación lee las condiciones por el
   contrato `CustomerTerms`, que no cambia.
 
