@@ -1,0 +1,238 @@
+{
+    "id": "work-center",
+    "name": "Centro de trabajo",
+    "namePlural": "Centros de trabajo",
+    "description": "Centros de trabajo de los empleadores de Karpo Go: instalaciones dadas de alta ante la autoridad laboral",
+    "icon": "building",
+    "color": "#8e44ad",
+    "apiEndpoint": "/work-centers",
+    "editable": true,
+    "editType": "direct",
+    "primaryKey": "id",
+    "displayField": "code",
+    "dataSource": {
+        "type": "single",
+        "paginationStrategy": "server",
+        "serverFiltering": {
+            "enabled": true,
+            "fieldMapping": {},
+            "clientOnlyFields": [],
+            "companyFilterField": "employer"
+        }
+    },
+    "form": {
+        "modalSize": "md",
+        "createTitle": "Nuevo centro de trabajo",
+        "editTitle": "Editar centro de trabajo",
+        "saveButtonText": "Guardar",
+        "cancelButtonText": "Cancelar",
+        "sections": [
+            {
+                "id": "main",
+                "title": "Centro de trabajo",
+                "icon": "building",
+                "collapsible": false,
+                "columns": 2,
+                "fields": [
+                    {
+                        "field": "employer",
+                        "label": "Empleador (organización)",
+                        "type": "text",
+                        "required": true,
+                        "width": 6,
+                        "hint": "Identidad de la organización interna; no cambia después del alta."
+                    },
+                    {
+                        "field": "facility",
+                        "label": "Instalación",
+                        "type": "text",
+                        "required": true,
+                        "width": 6,
+                        "hint": "Identidad de una instalación activa del empleador; no cambia después del alta."
+                    },
+                    {
+                        "field": "code",
+                        "label": "Código",
+                        "type": "text",
+                        "required": true,
+                        "maxLength": 60,
+                        "width": 4,
+                        "hint": "Código de la autoridad laboral; se guarda en mayúsculas y no cambia."
+                    },
+                    {
+                        "field": "opened",
+                        "label": "Apertura",
+                        "type": "date",
+                        "required": true,
+                        "width": 4
+                    },
+                    {
+                        "field": "headquarters",
+                        "label": "Sede",
+                        "type": "checkbox",
+                        "width": 4,
+                        "hint": "Una sola sede abierta por empleador: marcar ésta la quita a la otra."
+                    }
+                ]
+            }
+        ]
+    },
+    "grid": {
+        "columns": [
+            {
+                "field": "code",
+                "header": "Código",
+                "type": "text",
+                "width": 140,
+                "sortable": true
+            },
+            {
+                "field": "facility",
+                "header": "Instalación",
+                "type": "text",
+                "width": 280
+            },
+            {
+                "field": "opened",
+                "header": "Apertura",
+                "type": "date",
+                "width": 120
+            },
+            {
+                "field": "headquarters",
+                "header": "Sede",
+                "type": "boolean",
+                "width": 90
+            },
+            {
+                "field": "active",
+                "header": "Estado",
+                "type": "badge",
+                "width": 120,
+                "badgeMap": {
+                    "true": {
+                        "label": "Abierto",
+                        "color": "green"
+                    },
+                    "false": {
+                        "label": "Cerrado",
+                        "color": "gray"
+                    }
+                }
+            }
+        ],
+        "defaultSort": {
+            "field": "code",
+            "direction": "asc"
+        },
+        "pageSize": 25,
+        "pageSizeOptions": [
+            10,
+            25,
+            50,
+            100
+        ],
+        "selectable": true,
+        "selectionMode": "multiple",
+        "rowActions": [
+            {
+                "action": "view",
+                "label": "Ver detalle",
+                "icon": "view",
+                "color": "primary"
+            },
+            {
+                "action": "edit",
+                "label": "Editar",
+                "icon": "edit",
+                "color": "warning"
+            },
+            {
+                "action": "delete",
+                "label": "Cerrar",
+                "icon": "delete",
+                "color": "danger"
+            }
+        ]
+    },
+    "filters": [
+        {
+            "field": "isActive",
+            "serverField": "isActive",
+            "label": "Sólo abiertos",
+            "type": "checkbox",
+            "width": 2
+        }
+    ],
+    "detail": {
+        "showHistory": false,
+        "showRelations": false,
+        "showTags": false,
+        "sections": [
+            {
+                "id": "main",
+                "title": "Centro de trabajo",
+                "icon": "building",
+                "collapsible": true,
+                "collapsed": false,
+                "columns": 2,
+                "fields": [
+                    {
+                        "field": "code",
+                        "label": "Código",
+                        "type": "text",
+                        "editable": false
+                    },
+                    {
+                        "field": "employer",
+                        "label": "Empleador (organización)",
+                        "type": "text",
+                        "editable": false
+                    },
+                    {
+                        "field": "facility",
+                        "label": "Instalación",
+                        "type": "text",
+                        "editable": false
+                    },
+                    {
+                        "field": "opened",
+                        "label": "Apertura",
+                        "type": "date",
+                        "editable": false
+                    },
+                    {
+                        "field": "headquarters",
+                        "label": "Sede",
+                        "type": "checkbox",
+                        "editable": true,
+                        "hint": "Se puede hacer sede; deja de serlo cuando otro centro pasa a ser la sede."
+                    },
+                    {
+                        "field": "closed",
+                        "label": "Cierre",
+                        "type": "date",
+                        "editable": true,
+                        "hint": "Cerrar no se deshace. Falla si hay contratos en vigor después de la fecha."
+                    }
+                ]
+            }
+        ]
+    },
+    "availableViews": [
+        "grid",
+        "detail"
+    ],
+    "defaultView": "grid",
+    "searchable": false,
+    "searchFields": [],
+    "metadata": {
+        "version": "1.0.0",
+        "author": "Karpo Go",
+        "lastModified": "2026-11-15",
+        "tags": [
+            "hr",
+            "karpo-go"
+        ]
+    }
+}

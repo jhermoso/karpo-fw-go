@@ -160,3 +160,38 @@ contexts/hr/
 - Importar los datos de C#: el rol `Employee`, `LaborContract` y `WorkCenter`, con estos casos
   de uso.
 - ~~Contexto Nóminas~~: hecho en [NOMINAS.md](NOMINAS.md); consume `Staff` por el adaptador `HRStaff`.
+
+## El contrato de mantenimiento (front; añadido el 2026-11-15)
+
+Los centros de trabajo se mantienen también por el **contrato de mantenimiento**, el que lee el
+motor de Angular de Karpo C# (el contrato `crud` del lenguaje de Theros), bajo
+`/api/v1/work-centers`. Es otra puerta a los mismos centros; la configuración de su pantalla está en
+`front/angular/config/entities/hr/work-center.config.json` (ver front/README.md). Es el mismo
+contrato que el de Productos, Instalaciones, Activos, Envíos y Compras (docs/COMPRAS.md). Se
+escogió el centro de trabajo porque es el maestro de RRHH con menos dependencias (un empleador y
+una instalación) y ya tenía alta, lectura y lista paginada; no tiene bloqueo ni acciones con motivo.
+
+| Operación | Ruta | Qué hace |
+|---|---|---|
+| Lista | `GET /api/v1/work-centers?page&pageSize&sortBy&sortOrder&employer&company&isActive`, o `POST /api/v1/work-centers/search` con `{filter, pagination: {pageNumber, pageSize, orderBy, ascending}}` | la página del motor: `{items, total, totalCount, pageNumber, pageSize, totalPages}`. Sin `pageNumber`, la primera; 0 o negativo, 400. Orden sólo por `code` (también por omisión); otro, 400. `isActive=true` deja los abiertos. `employer` (o `company`, el filtro de empresa del motor) sólo estrecha el ámbito de quien llama. No hay búsqueda de texto; los filtros que no son de la lista se ignoran |
+| Lectura | `GET /api/v1/work-centers/{id}` | el centro |
+| Alta | `POST /api/v1/work-centers` | 201 con `Location`; lo que sobra en el cuerpo se ignora. Las reglas de `OpenWorkCenter`: código repetido en el empleador, 422 `hr.duplicate_work_center_code`; instalación ya abierta como centro, 422 `hr.facility_already_work_center`. `opened` es AAAA-MM-DD (otra cosa, 400 `format`); con `closed`, 400 `unsupported` (nace abierto) |
+| Cambio | `PUT /api/v1/work-centers/{id}` con lo leído y su `version` | 200; lo que el cuerpo no trae, o trae como null, se queda como está. Sin `version`, 400; con una que ya no es la suya, 409. Sólo cambian dos cosas: `headquarters` a true (`SetHeadquarters`, que quita la sede a la otra; a false es 400 `unsupported`: deja de ser sede cuando otro lo es) y `closed` con una fecha (`CloseWorkCenter`; un cerrado no se reabre, 400 `immutable`). Cada paso lleva la versión que dejó el anterior y todo es una sola unidad de trabajo. `employer`, `facility`, `code` y `opened` no los cambia ningún caso de uso: cambiarlos es 400 `immutable` (se comparan por su valor: identidades sin distinguir mayúsculas, el código en mayúsculas y sin espacios, las fechas como fechas). Aun sin cambios exige el permiso y el ámbito de escritura |
+| Baja | `DELETE /api/v1/work-centers/{id}` | un centro no se borra (los contratos lo citan): DELETE lo **cierra** hoy (el hoy del empleador) o en `?on=AAAA-MM-DD`. 204; con contratos en vigor después, 422 `hr.work_center_in_use`; sobre uno ya cerrado, 204 otra vez y sin versión nueva. Siempre exige el permiso y el ámbito de escritura (`HR.WorkCenter.Update`; 403 sin él) |
+
+- **El objeto:** `id`, `employer`, `facility`, `code`, `headquarters`, `opened`, `closed` (vacío
+  mientras está abierto), `active` (abierto) y `version`.
+- **Casos de uso:** `SetHeadquarters` y `CloseWorkCenter` aceptan la versión leída (con ella, si el
+  centro ya está en otra, 409, también sobre uno ya cerrado); `CloseWorkCenter` sin fecha cierra hoy
+  y, sobre uno ya cerrado, no guarda nada; `SearchWorkCenters` ordena también de mayor a menor (`Desc`); nuevo
+  `WorkCenterChangeable`. Los permisos son los de siempre (`HR.WorkCenter.Read` y `…Update`,
+  `…Create` para el alta).
+- **Cambia la ruta antigua:** `POST /api/hr/work-centers/{id}/close` usa el mismo caso de uso, así
+  que sin `on` ahora cierra hoy (antes era 422, porque la fecha cero no pasaba la validación) y
+  repetirla sobre un centro ya cerrado responde 200 sin subir la versión (antes la subía).
+- **El error:** RFC 9457 con `errors` como diccionario (campo → mensajes) y `errorCodes`, en el
+  mismo orden; en un 409 o un 422, `code`. Un cuerpo de más de 1 MiB es 413. El resto de la API de
+  RRHH (`/api/hr/...`) sigue con la lista del framework.
+- **Sin migración:** el contrato no añade columnas ni índices; la lista es la consulta paginada que
+  ya había sobre `hr_work_centers`, con el orden por código en los dos sentidos.
+- **Prueba:** `TestHR_WorkCenterMaintenanceContract_MemoryThenSQLite`.
