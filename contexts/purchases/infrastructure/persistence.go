@@ -12,6 +12,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/pkg/application"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/approval"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
+	fwapproval "github.com/jhermoso/karpo-fw-go/pkg/domain/approval"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/approvals"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
@@ -35,6 +36,8 @@ const (
 	TableInbox             = "purchases_inbox"
 	// TableApprovals guarda las solicitudes de aprobación del bloqueo y el desbloqueo (D-156).
 	TableApprovals = "pur_approvals"
+	// TableBlockEvents es el historial de bloqueos y desbloqueos de los perfiles (D-156 ampliada).
+	TableBlockEvents = "pur_supplier_block_events"
 )
 
 const audit = `created_at {ts}, created_by_id {str:64}, created_by_name {str:200}, modified_at {ts}, modified_by_id {str:64}, modified_by_name {str:200}`
@@ -119,6 +122,20 @@ func Migrations() sqlrepo.MigrationSet {
 		// Las solicitudes de aprobación del bloqueo y el desbloqueo de proveedores (D-156, paso 3;
 		// docs/APROBACIONES.md): la tabla del motor, propia del contexto.
 		{Version: 7, Name: "approval requests", Up: sqlrepo.RenderDDLAll(approvals.DDL(TableApprovals)...)},
+		// D-156 ampliada: el historial de bloqueos en tabla propia (el commercial_block_event de
+		// Trench) y la clave de la solicitud pendiente, que la migración 9 hace única. Run rellena la
+		// clave de las solicitudes que ya hubiera.
+		{Version: 8, Name: "block history and pending key", Up: sqlrepo.RenderDDLAll(
+			`CREATE TABLE `+TableBlockEvents+` (id {uuid} NOT NULL PRIMARY KEY, version {bigint} NOT NULL, profile_id {uuid} NOT NULL,
+	company {uuid} NOT NULL, supplier {uuid} NOT NULL, blocked {bool} NOT NULL, reason {str:200} NOT NULL, user_id {uuid}, user_name {str:200},
+	occurred_at {ts} NOT NULL, approval_id {uuid})`,
+			`CREATE INDEX ix_pur_sup_block_events ON `+TableBlockEvents+` (profile_id, occurred_at)`,
+			`ALTER TABLE `+TableApprovals+` {add:pending_key} {str:200}{addEnd}`), Run: fillPendingKeys},
+		// Una sola solicitud pendiente por perfil y acción, también en la base: pending_key vale
+		// «acción:perfil» mientras está pendiente y el id de la solicitud después, nunca NULL (SQL
+		// Server no admite dos NULL en un índice único), así que el índice es portable.
+		{Version: 9, Name: "one pending request per target", Up: sqlrepo.RenderDDLAll(
+			`CREATE UNIQUE INDEX ` + uxPending + ` ON ` + TableApprovals + ` (pending_key)`)},
 	}}
 }
 
@@ -128,7 +145,8 @@ func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 }
 
 // Tables lista las tablas del contexto, primero las hijas (orden de borrado).
-var Tables = []string{"pur_invoice_accounts", "pur_invoice_taxes", "pur_invoice_lines", "pur_invoices", "pur_suppliers", "pur_counters", TableApprovals, TableOutbox,
+var Tables = []string{"pur_invoice_accounts", "pur_invoice_taxes", "pur_invoice_lines", "pur_invoices", "pur_suppliers", "pur_counters", TableApprovals,
+	TableBlockEvents, TableOutbox,
 	TableIntegrationOutbox, TableAuditLog, TableInbox}
 
 // DropAll borra las tablas del contexto y su historial de migraciones (sólo pruebas).
@@ -321,9 +339,93 @@ func CounterRepositoryFactory(b hotswap.Backend) (domain.CounterRepository, erro
 	return repository(b, CounterMapping())
 }
 
+// uxPending es el índice único de la solicitud pendiente.
+const uxPending = "ux_pur_approvals_pending"
+
+// pendingKey es la clave de unicidad de una solicitud: acción y destino mientras está pendiente;
+// después, su id, que no choca con nada.
+func pendingKey(status, action, target, id string) string {
+	if status == string(fwapproval.StatusPending) {
+		return action + ":" + target
+	}
+	return id
+}
+
+// fillPendingKeys rellena pending_key en las solicitudes anteriores a la migración 8.
+func fillPendingKeys(ctx context.Context, db *sqlrepo.DB) error {
+	rows, err := db.Select(ctx, TableApprovals, []string{"id", "action", "target_id", "status"})
+	if err != nil {
+		return err
+	}
+	for _, r := range rows {
+		id := r.UUID("id")
+		key := pendingKey(r.String("status"), r.String("action"), r.String("target_id"), id.String())
+		if err := r.Err(); err != nil {
+			return err
+		}
+		if _, err := db.Update(ctx, TableApprovals, sqlrepo.Values{"pending_key": key}, sqlrepo.Values{"id": id}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ApprovalMapping es el mapeo del motor (pkg/persistence/approvals) con la clave pending_key y su
+// índice único: dos solicitudes pendientes para el mismo perfil y acción chocan (409).
+func ApprovalMapping() sqlrepo.Mapping[fwapproval.RequestID, *fwapproval.Request] {
+	m := approvals.Mapping(TableApprovals)
+	m.Columns = append(slices.Clone(m.Columns), "pending_key")
+	dehydrate := m.Dehydrate
+	m.Dehydrate = func(r *fwapproval.Request) (sqlrepo.Values, error) {
+		v, err := dehydrate(r)
+		if err != nil {
+			return nil, err
+		}
+		st := r.State()
+		v["pending_key"] = pendingKey(string(st.Status), string(st.Action), st.Target.ID, r.ID().String())
+		return v, nil
+	}
+	m.Unique = append(m.Unique, sqlrepo.UniqueIndex{Name: uxPending, Columns: []string{"pending_key"},
+		Err: fmt.Errorf("%w: purchases.approval_pending: there is already a pending request for this supplier and action", fw.ErrConflict)})
+	return m
+}
+
 // ApprovalRepositoryFactory construye el repositorio de las solicitudes de aprobación.
 func ApprovalRepositoryFactory(b hotswap.Backend) (approval.Repository, error) {
-	return repository(b, approvals.Mapping(TableApprovals))
+	return repository(b, ApprovalMapping())
+}
+
+// BlockEventMapping mapea el historial de bloqueos a pur_supplier_block_events.
+func BlockEventMapping() sqlrepo.Mapping[domain.BlockEventID, *domain.BlockEvent] {
+	optID := func(u fw.UUID) any {
+		if u.IsZero() {
+			return nil
+		}
+		return u
+	}
+	return sqlrepo.Mapping[domain.BlockEventID, *domain.BlockEvent]{
+		Table:   TableBlockEvents,
+		Columns: []string{"profile_id", "company", "supplier", "blocked", "reason", "user_id", "user_name", "occurred_at", "approval_id"},
+		Dehydrate: func(e *domain.BlockEvent) (sqlrepo.Values, error) {
+			s := e.State()
+			return sqlrepo.Values{"profile_id": s.Profile, "company": s.Company, "supplier": s.Supplier, "blocked": s.Blocked, "reason": s.Reason,
+				"user_id": optID(s.UserID), "user_name": opt(s.UserName), "occurred_at": s.At, "approval_id": optID(s.Approval)}, nil
+		},
+		Hydrate: func(r *sqlrepo.Row, _ sqlrepo.ChildRows) (*domain.BlockEvent, error) {
+			s := domain.BlockEventState{Profile: domain.SupplierID{UUID: r.UUID("profile_id")}, Company: domain.OrganizationID{UUID: r.UUID("company")},
+				Supplier: domain.PartyID{UUID: r.UUID("supplier")}, Blocked: r.Bool("blocked"), Reason: r.String("reason"), UserID: r.UUID("user_id"),
+				UserName: r.String("user_name"), At: r.Time("occurred_at"), Approval: r.UUID("approval_id")}
+			if err := r.Err(); err != nil {
+				return nil, err
+			}
+			return domain.NewBlockEvent(domain.BlockEventID{UUID: r.UUID("id")}, s)
+		},
+	}
+}
+
+// BlockEventRepositoryFactory construye el repositorio del historial de bloqueos.
+func BlockEventRepositoryFactory(b hotswap.Backend) (domain.BlockEventRepository, error) {
+	return repository(b, BlockEventMapping())
 }
 
 // OutboxFactory construye el outbox de eventos de dominio.

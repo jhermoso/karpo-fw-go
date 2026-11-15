@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/purchases"
+	uapp "github.com/jhermoso/karpo-fw-go/contexts/purchases/application"
 	uinfra "github.com/jhermoso/karpo-fw-go/contexts/purchases/infrastructure"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
@@ -211,18 +212,53 @@ func (h *host) supplierMaintenance() {
 	s.Grants = s.Grants[:len(s.Grants)-1]
 	h.dir.Put(h.ids["outsider"], s)
 
-	// Desbloquear por el PUT exige su motivo, que se guarda; el del bloqueo se borra.
-	code, problem, _ = h.raw("PUT", base+"/"+id, "clerk", map[string]any{"blocked": false, "version": blocked["version"]})
+	// El PUT no bloquea ni desbloquea (D-156 ampliada): pedir otro estado es 422; el mismo, o
+	// ningún estado, se ignora con sus motivos.
+	code, problem, _ = h.raw("PUT", base+"/"+id, "clerk", map[string]any{"blocked": false, "unblockReason": "pagado", "version": blocked["version"]})
+	if code != 422 || problem["code"] != "purchases.block_change_requires_command" {
+		t.Fatalf("unblock by the PUT: %d %v", code, problem)
+	}
+	code, changed, _ = h.raw("PUT", base+"/"+id, "clerk", map[string]any{"blocked": true, "blockReason": "otro", "paymentDays": 46, "version": blocked["version"]})
+	if code != 200 || changed["blockReason"] != "impago" || changed["paymentDays"] != float64(46) {
+		t.Fatalf("the same block by the PUT: %d %v", code, changed)
+	}
+	// La orden de desbloquear: versión y motivo obligatorios.
+	unblock := base + "/" + id + "/unblock"
+	code, problem, _ = h.raw("POST", unblock, "clerk", map[string]any{"version": changed["version"]})
 	if code != 422 || problem["code"] != "purchases.unblock_reason_required" {
 		t.Fatalf("unblock without a reason: %d %v", code, problem)
 	}
-	code, changed, _ = h.raw("PUT", base+"/"+id, "clerk", map[string]any{"blocked": false, "unblockReason": " pagado ", "version": blocked["version"]})
-	if code != 200 || changed["unblockReason"] != "pagado" || changed["blockReason"] != "" {
+	h.must(status("clerk", "POST", unblock, map[string]any{"reason": "pagado"}), 400, "unblock without a version")
+	h.must(status("clerk", "POST", unblock, map[string]any{"reason": "pagado", "version": blocked["version"]}), 409, "unblock an old version")
+	h.must(status("viewer", "POST", unblock, map[string]any{"reason": "pagado", "version": changed["version"]}), 403, "unblock without the permission")
+	code, changed, _ = h.raw("POST", unblock, "clerk", map[string]any{"reason": " pagado ", "version": changed["version"]})
+	if code != 200 || changed["blocked"] != false || changed["unblockReason"] != "pagado" || changed["blockReason"] != "" {
 		t.Fatalf("unblock: %d %v", code, changed)
+	}
+	code, problem, _ = h.raw("POST", unblock, "clerk", map[string]any{"reason": "otra", "version": changed["version"]})
+	if code != 422 || problem["code"] != "purchases.supplier_not_blocked" {
+		t.Fatalf("unblock twice: %d %v", code, problem)
 	}
 	h.must(status("clerk", "DELETE", base+"/"+id+"?reason=otra+vez", nil), 204, "block by the query")
 	if _, got, _ = h.raw("GET", base+"/"+id, "clerk", nil); got["blockReason"] != "otra vez" || got["unblockReason"] != "" {
 		t.Fatalf("blocked by the query: %v", got)
+	}
+	code, problem, _ = h.raw("POST", base+"/"+id+"/block", "clerk", map[string]any{"reason": "x", "version": got["version"]})
+	if code != 422 || problem["code"] != "purchases.supplier_already_blocked" {
+		t.Fatalf("block twice: %d %v", code, problem)
+	}
+	// El historial: una fila por bloqueo y desbloqueo efectivo, con quién y por qué.
+	var history []uapp.BlockEventDTO
+	h.must(h.do("GET", base+"/"+id+"/block-history", "viewer", nil, &history), 200, "history")
+	if len(history) != 3 || !history[0].Blocked || history[0].Reason != "impago" || history[1].Blocked || history[1].Reason != "pagado" ||
+		!history[2].Blocked || history[2].Reason != "otra vez" || history[0].UserName == "" || history[0].Approval != "" {
+		t.Fatalf("history = %+v", history)
+	}
+	h.must(status("outsider", "GET", base+"/"+id+"/block-history", nil), 404, "history in another organization")
+	// El alta no nace bloqueada.
+	code, problem, _ = h.raw("POST", base, "clerk", map[string]any{"company": acme, "supplier": fw.NewUUID().String(), "blocked": true, "blockReason": "x"})
+	if code != 422 || problem["code"] != "purchases.block_change_requires_command" {
+		t.Fatalf("born blocked: %d %v", code, problem)
 	}
 
 	// Permiso y ámbito.

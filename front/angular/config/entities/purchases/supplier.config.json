@@ -251,24 +251,24 @@
                         "field": "blocked",
                         "label": "Bloqueado",
                         "type": "checkbox",
-                        "editable": true,
-                        "hint": "A un proveedor bloqueado no se le registran facturas nuevas."
+                        "editable": false,
+                        "hint": "A un proveedor bloqueado no se le registran facturas nuevas. Se bloquea con POST /api/v1/suppliers/{id}/block y se desbloquea con POST /api/v1/suppliers/{id}/unblock, con {version, reason}; el historial, en GET /api/v1/suppliers/{id}/block-history."
                     },
                     {
                         "field": "blockReason",
                         "label": "Motivo del bloqueo",
                         "type": "text",
-                        "editable": true,
+                        "editable": false,
                         "maxLength": 200,
-                        "hint": "Obligatorio para bloquear."
+                        "hint": "Obligatorio para bloquear. Lo pone la orden, no la edición de la ficha."
                     },
                     {
                         "field": "unblockReason",
                         "label": "Motivo del desbloqueo",
                         "type": "text",
-                        "editable": true,
+                        "editable": false,
                         "maxLength": 200,
-                        "hint": "Obligatorio para desbloquear."
+                        "hint": "Obligatorio para desbloquear. Lo pone la orden, no la edición de la ficha."
                     }
                 ]
             }
@@ -284,7 +284,7 @@
     "metadata": {
         "version": "1.0.0",
         "author": "Karpo Go",
-        "lastModified": "2026-11-14",
+        "lastModified": "2026-11-15",
         "tags": [
             "purchases",
             "karpo-go"

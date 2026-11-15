@@ -153,16 +153,16 @@ func TestPurchasesContext(t *testing.T) {
 			if err != nil || prof.WithholdingRate != "7.00" || prof.Version != 2 {
 				t.Fatalf("supplier profile upsert: %+v %v", prof, err)
 			}
-			// Migración 5: el motivo del bloqueo va y vuelve, y se borra al desbloquear (D-122).
-			_, err = svc.SetSupplier.Handle(actx, uapp.SetSupplier{Company: acme.ID, Supplier: asesor.ID, Category: "professional-services",
-				WithholdingRate: "7", PaymentDays: 30, IBAN: "ES7921000813610123456789", Blocked: true, BlockReason: "calidad"})
+			// Migraciones 5 y 6: el motivo del bloqueo y el del desbloqueo van y vuelven; bloquear y
+			// desbloquear son órdenes propias (D-156 ampliada).
+			sid, err := udomain.ParseSupplierID(prof.ID)
+			must(err)
+			_, err = svc.BlockSupplier.Handle(actx, uapp.BlockSupplier{ID: sid, Blocked: true, Reason: "calidad", Version: prof.Version})
 			must(err)
 			if ss, err := svc.SearchSuppliers.Handle(actx, uapp.SearchSuppliers{Company: acme.ID}); err != nil || len(ss) != 1 || ss[0].BlockReason != "calidad" || ss[0].UnblockReason != "" {
 				t.Fatalf("block reason read back: %+v %v", ss, err)
 			}
-			// Migración 6: desbloquear exige motivo, que va y vuelve.
-			prof, err = svc.SetSupplier.Handle(actx, uapp.SetSupplier{Company: acme.ID, Supplier: asesor.ID, Category: "professional-services",
-				WithholdingRate: "7", PaymentDays: 30, IBAN: "ES7921000813610123456789", UnblockReason: "resuelto"})
+			prof, err = svc.BlockSupplier.Handle(actx, uapp.BlockSupplier{ID: sid, Blocked: false, Reason: "resuelto"})
 			if err != nil || prof.BlockReason != "" || prof.UnblockReason != "resuelto" {
 				t.Fatalf("unblocked: %+v %v", prof, err)
 			}
@@ -238,8 +238,10 @@ func TestPurchasesContext(t *testing.T) {
 				t.Fatalf("register of the stationer: %+v %v", reg.Items, err)
 			}
 
-			// Migración 7: bloquear con aprobación (D-156). La solicitud va y vuelve por pur_approvals
-			// y, al aprobarla otro, el perfil queda bloqueado en la misma transacción.
+			// Migraciones 7 a 9: bloquear con aprobación (D-156 ampliada). La orden deja la solicitud en
+			// pur_approvals sin tocar el perfil; la segunda choca (también con el índice único de
+			// pending_key); al aprobarla otro, el perfil queda bloqueado y el historial
+			// (pur_supplier_block_events) gana una fila, en la misma transacción.
 			gated := purchases.Compose(sw, uinfra.FiscalTaxes{Engine: fm.TaxEngine},
 				purchases.WithApprovalPolicy(approval.Fixed{uapp.ActionBlockSupplier: true})).Service
 			as := func(name string) context.Context {
@@ -250,13 +252,16 @@ func TestPurchasesContext(t *testing.T) {
 				return authz.WithContext(ctx, c)
 			}
 			requester, approver := as("clerk"), as("boss")
-			pend, err := gated.SetSupplier.Handle(requester, uapp.SetSupplier{Company: acme.ID, Supplier: asesor.ID, Category: "professional-services",
-				WithholdingRate: "7", PaymentDays: 30, IBAN: "ES7921000813610123456789", Blocked: true, BlockReason: "impago"})
-			if err != nil || pend.PendingApproval == "" || pend.Blocked {
+			profile, err := gated.SetSupplier.Handle(requester, uapp.SetSupplier{Company: acme.ID, Supplier: asesor.ID, Category: "professional-services",
+				WithholdingRate: "7", PaymentDays: 30, IBAN: "ES7921000813610123456789"})
+			must(err)
+			pid, err := udomain.ParseSupplierID(profile.ID)
+			must(err)
+			pend, err := gated.BlockSupplier.Handle(requester, uapp.BlockSupplier{ID: pid, Blocked: true, Reason: "impago", Version: profile.Version})
+			if err != nil || pend.PendingApproval == "" || pend.Blocked || pend.Version != profile.Version {
 				t.Fatalf("pending block: %+v %v", pend, err)
 			}
-			if _, err := gated.SetSupplier.Handle(requester, uapp.SetSupplier{Company: acme.ID, Supplier: asesor.ID, Category: "professional-services",
-				WithholdingRate: "7", PaymentDays: 30, IBAN: "ES7921000813610123456789", Blocked: true, BlockReason: "impago"}); !errors.Is(err, fw.ErrConflict) {
+			if _, err := gated.BlockSupplier.Handle(requester, uapp.BlockSupplier{ID: pid, Blocked: true, Reason: "impago"}); !errors.Is(err, fw.ErrConflict) {
 				t.Fatalf("second request: %v", err)
 			}
 			rid := fwapproval.RequestID{UUID: fw.MustParseUUID(pend.PendingApproval)}
@@ -269,6 +274,10 @@ func TestPurchasesContext(t *testing.T) {
 			}
 			if ss, err := svc.SearchSuppliers.Handle(actx, uapp.SearchSuppliers{Company: acme.ID}); err != nil || len(ss) != 1 || !ss[0].Blocked || ss[0].BlockReason != "impago" {
 				t.Fatalf("blocked after approval: %+v %v", ss, err)
+			}
+			if hs, err := svc.SupplierBlockHistory.Handle(actx, uapp.SupplierBlockHistory{ID: pid}); err != nil || len(hs) != 3 || !hs[0].Blocked || hs[1].Blocked ||
+				!hs[2].Blocked || hs[2].Reason != "impago" || hs[2].Approval != pend.PendingApproval || hs[2].UserName != "boss" || hs[0].Approval != "" {
+				t.Fatalf("block history: %+v %v", hs, err)
 			}
 		})
 	}

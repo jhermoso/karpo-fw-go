@@ -60,6 +60,7 @@ func Compose(sw *hotswap.Switch, taxes domain.Taxes, opts ...Option) *Module {
 		Invoices: hotswap.Repository(sw, infrastructure.InvoiceRepositoryFactory), Suppliers: hotswap.Repository(sw, infrastructure.SupplierRepositoryFactory),
 		Counters: hotswap.Repository(sw, infrastructure.CounterRepositoryFactory), Taxes: taxes, UoW: sw, Audit: audit,
 		Approvals: hotswap.Repository(sw, infrastructure.ApprovalRepositoryFactory), Policy: approval.Never{},
+		BlockEvents: hotswap.Repository(sw, infrastructure.BlockEventRepositoryFactory),
 		Recorder: outbox.Recorders(outbox.NewRecorder(hotswap.Outbox(sw, infrastructure.OutboxFactory)),
 			uapp.Publications(messaging.NewRecorder(contracts.Source, integration))),
 	}
@@ -154,7 +155,7 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 			return
 		}
 		out, err := svc.SetSupplier.Handle(r.Context(), c)
-		distribution.Respond(w, r, out, err, supplierStatus(out, http.StatusOK))
+		distribution.Respond(w, r, out, err, http.StatusOK)
 	})
 	mux.HandleFunc("GET /api/purchases/suppliers", func(w http.ResponseWriter, r *http.Request) {
 		out, err := svc.SearchSuppliers.Handle(r.Context(), uapp.SearchSuppliers{Company: r.URL.Query().Get("company"),
@@ -178,7 +179,7 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/purchases/approvals/{id}/cancel", command(apv, set, svc.CancelApproval.Handle))
 }
 
-// supplierStatus es 202 si el cambio ha dejado una solicitud de aprobación pendiente.
+// supplierStatus es 202 si la orden ha dejado una solicitud de aprobación pendiente.
 func supplierStatus(s uapp.SupplierDTO, ok int) int {
 	if s.PendingApproval != "" {
 		return http.StatusAccepted

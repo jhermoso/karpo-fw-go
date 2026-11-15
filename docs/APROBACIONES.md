@@ -99,8 +99,17 @@ Como arriba, con estas concreciones (docs/COMPRAS.md, «Aprobación del bloqueo 
   en la auditoría y no salen al outbox.
 - **El aprobador necesita también el ámbito de escritura** de la empresa de la solicitud (404 fuera
   de él, 403 de sólo lectura), como cualquier otro cambio del contexto.
-- Si el mismo cambio trae otros campos, se aplican y sólo el bloqueo queda pendiente (202 con
-  `pendingApproval`).
+- **Sólo se engancha a las órdenes de bloquear y desbloquear** (D-156 ampliada, 2026-11-15): el
+  cambio general de la ficha ya no toca el bloqueo (422 `purchases.block_change_requires_command`).
+  Con política, la orden responde 202 con `pendingApproval` y **no guarda el perfil** (ni sube su
+  versión). Al aprobar, el bloqueo deja su fila en el historial (`pur_supplier_block_events`) con el
+  id de la solicitud.
+- **Una pendiente por objetivo y acción, también en la base:** el contexto añade a su tabla una
+  columna `pending_key` (`acción:objetivo` mientras está pendiente, el id de la solicitud después;
+  nunca NULL) con un índice único, portable a los cinco motores. El mapeo del motor se amplía en el
+  contexto (`infrastructure.ApprovalMapping` de Compras), sin tocar `pkg/persistence/approvals`.
+  Otro contexto que use aprobaciones puede copiar el patrón; si lo usan varios, conviene subirlo al
+  paquete del motor.
 
 ## Paso 3 en Envíos y en Cuentas (hecho, 2026-11-15)
 

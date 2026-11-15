@@ -40,8 +40,8 @@ type MaintainedSupplier struct {
 	BlockReason     string `json:"blockReason"`
 	UnblockReason   string `json:"unblockReason"`
 	Version         int64  `json:"version"`
-	// PendingApproval es el id de la solicitud que ha dejado el cambio (202): el bloqueo o el
-	// desbloqueo espera aprobación (D-156).
+	// PendingApproval es el id de la solicitud que ha dejado la orden de bloquear o desbloquear
+	// (202): espera aprobación y el perfil no ha cambiado (D-156).
 	PendingApproval string `json:"pendingApproval,omitempty"`
 }
 
@@ -53,6 +53,8 @@ func maintained(s uapp.SupplierDTO) MaintainedSupplier {
 
 // maintainedInput es el cuerpo de un alta o de un cambio. Lo que sobra se ignora (un front devuelve
 // en el cambio lo que leyó); lo que falta es un valor vacío. Version es obligatoria en el cambio.
+// Blocked no cambia el bloqueo: distinto del actual (o true en el alta) es 422
+// purchases.block_change_requires_command; los motivos se ignoran (D-156 ampliada).
 type maintainedInput struct {
 	Company         string `json:"company"`
 	Supplier        string `json:"supplier"`
@@ -270,7 +272,7 @@ func (m *Module) RegisterMaintenanceRoutes(mux *http.ServeMux) {
 		}
 		s, err := svc.RegisterSupplier.Handle(r.Context(), uapp.SetSupplier{Company: strings.TrimSpace(in.Company), Supplier: strings.TrimSpace(in.Supplier),
 			Category: strings.TrimSpace(in.Category), WithholdingRate: strings.TrimSpace(in.WithholdingRate), PaymentDays: in.PaymentDays,
-			IBAN: strings.TrimSpace(in.IBAN), Blocked: in.Blocked, BlockReason: strings.TrimSpace(in.BlockReason)})
+			IBAN: strings.TrimSpace(in.IBAN), Blocked: &in.Blocked})
 		if err == nil {
 			w.Header().Set("Location", MaintenanceBase+"/"+s.ID)
 		}
@@ -292,15 +294,54 @@ func (m *Module) RegisterMaintenanceRoutes(mux *http.ServeMux) {
 			s, err = m.change(ctx, id, body)
 			return err
 		})
-		respondMaintenance(w, r, maintained(s), err, supplierStatus(s, http.StatusOK))
+		respondMaintenance(w, r, maintained(s), err, http.StatusOK)
+	})
+	// Bloquear y desbloquear son órdenes propias (D-156 ampliada): {"version": n, "reason": "..."},
+	// los dos obligatorios. 200 con el perfil; 202 con el perfil sin cambiar y pendingApproval si la
+	// empresa exige aprobación; 422 sin motivo (purchases.block_reason_required o
+	// purchases.unblock_reason_required) o si ya está en ese estado; 409 si la versión no es la
+	// vigente o ya hay una solicitud pendiente.
+	blockRoute := func(blocked bool) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			id, ok := parseID(w, r)
+			if !ok {
+				return
+			}
+			var in struct {
+				Version *int64 `json:"version"`
+				Reason  string `json:"reason"`
+			}
+			if err := readBody(w, r, &in); err != nil {
+				writeMaintenanceError(w, r, err)
+				return
+			}
+			if in.Version == nil {
+				writeMaintenanceError(w, r, fieldError("version", "required", "the version that was read is required"))
+				return
+			}
+			s, err := svc.BlockSupplier.Handle(r.Context(), uapp.BlockSupplier{ID: id, Blocked: blocked, Reason: in.Reason, Version: *in.Version})
+			respondMaintenance(w, r, maintained(s), err, supplierStatus(s, http.StatusOK))
+		}
+	}
+	mux.HandleFunc("POST "+MaintenanceBase+"/{id}/block", blockRoute(true))
+	mux.HandleFunc("POST "+MaintenanceBase+"/{id}/unblock", blockRoute(false))
+	// El historial de bloqueos del perfil, del más antiguo al más reciente.
+	mux.HandleFunc("GET "+MaintenanceBase+"/{id}/block-history", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := parseID(w, r)
+		if !ok {
+			return
+		}
+		out, err := svc.SupplierBlockHistory.Handle(r.Context(), uapp.SupplierBlockHistory{ID: id})
+		respondMaintenance(w, r, out, err, http.StatusOK)
 	})
 	// Un perfil de proveedor no se borra (las facturas registradas nombran al proveedor y el perfil
 	// guarda sus valores por defecto): DELETE lo bloquea, que es su baja en el dominio; a un proveedor
-	// bloqueado no se le registran facturas nuevas. Bloquear exige un motivo: en el cuerpo
-	// {"reason": "..."} o en ?reason=; sin él, 422 purchases.block_reason_required. Sobre uno ya
-	// bloqueado es 204 sin versión nueva, así que se puede repetir. Siempre exige el permiso y el
-	// ámbito de escritura. Si bloquear exige aprobación en la empresa (D-156), no bloquea: deja la
-	// solicitud y responde 202 con {"pendingApproval": id}.
+	// bloqueado no se le registran facturas nuevas. Es la orden de bloquear (BlockSupplier) con la
+	// versión vigente. Bloquear exige un motivo: en el cuerpo {"reason": "..."} o en ?reason=; sin
+	// él, 422 purchases.block_reason_required. Sobre uno ya bloqueado es 204 sin versión nueva, así
+	// que se puede repetir. Siempre exige el permiso y el ámbito de escritura. Si bloquear exige
+	// aprobación en la empresa (D-156), no bloquea: deja la solicitud y responde 202 con
+	// {"pendingApproval": id}.
 	mux.HandleFunc("DELETE "+MaintenanceBase+"/{id}", func(w http.ResponseWriter, r *http.Request) {
 		id, ok := parseID(w, r)
 		if !ok {
@@ -328,8 +369,7 @@ func (m *Module) RegisterMaintenanceRoutes(mux *http.ServeMux) {
 			if err != nil || s.Blocked {
 				return err
 			}
-			out, err := svc.ChangeSupplier.Handle(ctx, uapp.ChangeSupplier{ID: id, Category: s.Category, WithholdingRate: s.WithholdingRate,
-				PaymentDays: s.PaymentDays, IBAN: s.IBAN, Blocked: true, BlockReason: strings.TrimSpace(reason), Version: s.Version})
+			out, err := svc.BlockSupplier.Handle(ctx, uapp.BlockSupplier{ID: id, Blocked: true, Reason: reason, Version: s.Version})
 			pending = out.PendingApproval
 			return err
 		})
@@ -416,20 +456,16 @@ func (m *Module) change(ctx context.Context, id domain.SupplierID, body map[stri
 	if err := v.Err(); err != nil {
 		return uapp.SupplierDTO{}, err
 	}
-	// Sin bloqueo no hay motivo de bloqueo, y bloqueado no hay motivo de desbloqueo: el dominio los
-	// borra.
-	reason, unblock := strings.TrimSpace(in.BlockReason), strings.TrimSpace(in.UnblockReason)
-	if in.Blocked {
-		unblock = ""
-	} else {
-		reason = ""
+	// El bloqueo no cambia por aquí: pedir otro estado es 422; los motivos se ignoran.
+	if in.Blocked != was.Blocked {
+		return uapp.SupplierDTO{}, fw.Violation(domain.CodeBlockChangeRequiresCommand, "block and unblock a supplier with their own commands")
 	}
 	if strings.TrimSpace(in.Category) == was.Category && sameRate(in.WithholdingRate, was.WithholdingRate) && in.PaymentDays == was.PaymentDays &&
-		sameIBAN(in.IBAN, was.IBAN) && in.Blocked == was.Blocked && reason == was.BlockReason && unblock == was.UnblockReason {
+		sameIBAN(in.IBAN, was.IBAN) {
 		return current, nil
 	}
 	// Con la versión, el caso de uso falla sin reintentar si alguien se ha adelantado.
 	return svc.ChangeSupplier.Handle(ctx, uapp.ChangeSupplier{ID: id, Category: strings.TrimSpace(in.Category),
-		WithholdingRate: strings.TrimSpace(in.WithholdingRate), PaymentDays: in.PaymentDays, IBAN: strings.TrimSpace(in.IBAN), Blocked: in.Blocked,
-		BlockReason: reason, UnblockReason: unblock, Version: current.Version})
+		WithholdingRate: strings.TrimSpace(in.WithholdingRate), PaymentDays: in.PaymentDays, IBAN: strings.TrimSpace(in.IBAN),
+		Version: current.Version})
 }

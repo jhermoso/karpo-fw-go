@@ -160,32 +160,40 @@ func TestSupplierProfile(t *testing.T) {
 	if err := p.Change(domain.SupplierState{PaymentDays: 400}); !errors.Is(err, fw.ErrValidation) {
 		t.Fatalf("days: %v", err)
 	}
-	// El motivo del bloqueo se guarda con el bloqueo y se borra al desbloquear (D-122).
-	if err := p.Change(domain.SupplierState{Blocked: true, BlockReason: "calidad"}); err != nil || p.State().BlockReason != "calidad" {
-		t.Fatalf("reason: %v %+v", err, p.State())
+	// El cambio general no toca el bloqueo (D-156 ampliada).
+	if err := p.Change(domain.SupplierState{Blocked: true, BlockReason: "calidad", PaymentDays: 10}); err != nil || p.State().Blocked ||
+		p.State().BlockReason != "" || p.State().PaymentDays != 10 {
+		t.Fatalf("change ignores the block: %v %+v", err, p.State())
 	}
-	// Desbloquear exige su motivo, que se guarda; el del bloqueo se borra.
-	if err := p.Change(domain.SupplierState{BlockReason: "calidad", UnblockReason: "  "}); !isViolation(err, domain.CodeUnblockReasonRequired) {
-		t.Fatalf("unblock without a reason: %v", err)
-	}
-	if err := p.Change(domain.SupplierState{BlockReason: "calidad", UnblockReason: " resuelto "}); err != nil || p.State().BlockReason != "" ||
-		p.State().UnblockReason != "resuelto" {
-		t.Fatalf("unblocked: %v %+v", err, p.State())
-	}
-	// Sin cambio de estado, el motivo que no llega se queda.
-	if err := p.Change(domain.SupplierState{PaymentDays: 10}); err != nil || p.State().UnblockReason != "resuelto" {
-		t.Fatalf("still unblocked: %v %+v", err, p.State())
-	}
-	// Bloquear exige su motivo; el del desbloqueo se borra.
-	if err := p.Change(domain.SupplierState{Blocked: true}); !isViolation(err, domain.CodeBlockReasonRequired) {
+	// Bloquear exige su motivo, que se guarda; desbloquear uno sin bloquear es una infracción.
+	if err := p.SetBlocked(true, "  "); !isViolation(err, domain.CodeBlockReasonRequired) {
 		t.Fatalf("block without a reason: %v", err)
 	}
-	if err := p.Change(domain.SupplierState{Category: domain.ProfessionalServices, WithholdingRate: dec("15"), Blocked: true, BlockReason: "impago"}); err != nil ||
-		p.State().Supplier != supplier || !p.State().Blocked || p.State().UnblockReason != "" {
+	if err := p.SetBlocked(false, "pagado"); !isViolation(err, domain.CodeNotBlocked) {
+		t.Fatalf("unblock an unblocked one: %v", err)
+	}
+	if err := p.SetBlocked(true, " calidad "); err != nil || !p.State().Blocked || p.State().BlockReason != "calidad" {
+		t.Fatalf("blocked: %v %+v", err, p.State())
+	}
+	if err := p.SetBlocked(true, "otra"); !isViolation(err, domain.CodeAlreadyBlocked) {
+		t.Fatalf("block twice: %v", err)
+	}
+	// Con el bloqueo, el cambio general mantiene el bloqueo y su motivo.
+	if err := p.Change(domain.SupplierState{Category: domain.ProfessionalServices, WithholdingRate: dec("15")}); err != nil ||
+		p.State().Supplier != supplier || !p.State().Blocked || p.State().BlockReason != "calidad" {
 		t.Fatalf("change: %v %+v", err, p.State())
 	}
-	if _, err := domain.NewSupplier(domain.NewSupplierID(), domain.SupplierState{Company: company, Supplier: supplier, Blocked: true}); !isViolation(err, domain.CodeBlockReasonRequired) {
-		t.Fatalf("born blocked without a reason: %v", err)
+	// Desbloquear exige su motivo, que se guarda; el del bloqueo se borra.
+	if err := p.SetBlocked(false, ""); !isViolation(err, domain.CodeUnblockReasonRequired) {
+		t.Fatalf("unblock without a reason: %v", err)
+	}
+	if err := p.SetBlocked(false, " resuelto "); err != nil || p.State().Blocked || p.State().BlockReason != "" || p.State().UnblockReason != "resuelto" {
+		t.Fatalf("unblocked: %v %+v", err, p.State())
+	}
+	// El alta nace sin bloquear.
+	if _, err := domain.NewSupplier(domain.NewSupplierID(), domain.SupplierState{Company: company, Supplier: supplier, Blocked: true,
+		BlockReason: "x"}); !isViolation(err, domain.CodeBlockChangeRequiresCommand) {
+		t.Fatalf("born blocked: %v", err)
 	}
 }
 
