@@ -28,6 +28,9 @@ type Module struct {
 	Positions         contracts.Positions
 	IntegrationOutbox application.OutboxStore
 	Audit             application.AuditLog
+	// UoW es la unidad de trabajo del contexto: el contrato de mantenimiento hace en una sola el
+	// cambio de un centro de trabajo.
+	UoW fw.UnitOfWork
 }
 
 // Option configura la composición.
@@ -70,7 +73,7 @@ func Compose(sw *hotswap.Switch, opts ...Option) *Module {
 		o(&deps)
 	}
 	return &Module{Service: happ.NewService(deps), Staff: happ.Staff{Employments: employments},
-		Positions: happ.PositionDirectory{Positions: positions}, IntegrationOutbox: integration, Audit: audit}
+		Positions: happ.PositionDirectory{Positions: positions}, IntegrationOutbox: integration, Audit: audit, UoW: sw}
 }
 
 // Relay reenvía el Published Language a un transporte.
@@ -272,6 +275,7 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 			out, err := m.Positions.Resolve(r.Context(), body.PositionIDs)
 			distribution.Respond(w, r, out, err, http.StatusOK)
 		})))
+	m.RegisterMaintenanceRoutes(mux) // el contrato de mantenimiento de los centros de trabajo, bajo /api/v1/work-centers
 }
 
 var _ distribution.EndpointModule = (*Module)(nil)

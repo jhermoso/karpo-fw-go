@@ -15,6 +15,7 @@ lenguaje de Theros).
 | Compras | proveedores (perfil de compra): rejilla, alta, detalle, cambio e historial de bloqueos | `angular/config/entities/purchases/supplier.config.json` | `/api/v1/suppliers` (docs/COMPRAS.md, «El contrato de mantenimiento») |
 | Geografía | países: rejilla y detalle, sólo lectura (llegan con las migraciones) | `angular/config/entities/geography/country.config.json` | `/api/v1/countries` (docs/GEOGRAFIA.md, «El contrato de mantenimiento») |
 | Geografía | calendario de festivos: rejilla, alta, detalle, cambio del nombre y baja (borra) | `angular/config/entities/geography/holiday.config.json` | `/api/v1/holidays` (docs/GEOGRAFIA.md, «El contrato de mantenimiento») |
+| RRHH | centros de trabajo: rejilla, alta, detalle, cambio (sede y cierre) y baja (cierra) | `angular/config/entities/hr/work-center.config.json` | `/api/v1/work-centers` (docs/RRHH.md, «El contrato de mantenimiento») |
 
 ## Cómo se ve
 

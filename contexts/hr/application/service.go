@@ -106,11 +106,14 @@ type Service struct {
 	GetEmployment     app.QueryHandler[GetEmployment, EmploymentDTO]
 	SearchEmployments app.QueryHandler[SearchEmployments, fw.Page[EmploymentDTO]]
 
-	OpenWorkCenter    app.CommandHandler[OpenWorkCenter, WorkCenterDTO]
-	SetHeadquarters   app.CommandHandler[SetHeadquarters, WorkCenterDTO]
-	CloseWorkCenter   app.CommandHandler[CloseWorkCenter, WorkCenterDTO]
-	GetWorkCenter     app.QueryHandler[GetWorkCenter, WorkCenterDTO]
-	SearchWorkCenters app.QueryHandler[SearchWorkCenters, fw.Page[WorkCenterDTO]]
+	OpenWorkCenter  app.CommandHandler[OpenWorkCenter, WorkCenterDTO]
+	SetHeadquarters app.CommandHandler[SetHeadquarters, WorkCenterDTO]
+	CloseWorkCenter app.CommandHandler[CloseWorkCenter, WorkCenterDTO]
+	GetWorkCenter   app.QueryHandler[GetWorkCenter, WorkCenterDTO]
+	// WorkCenterChangeable dice si quien llama puede cambiar el centro de trabajo (el permiso y el
+	// ámbito de escritura); si no, el error que daría el cambio.
+	WorkCenterChangeable app.QueryHandler[GetWorkCenter, bool]
+	SearchWorkCenters    app.QueryHandler[SearchWorkCenters, fw.Page[WorkCenterDTO]]
 
 	PositionTypes    app.QueryHandler[ListPositionTypes, []domain.PositionType]
 	PositionStatuses app.QueryHandler[ListPositionStatuses, []domain.PositionStatus]

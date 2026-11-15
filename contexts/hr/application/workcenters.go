@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/hr/domain"
+	app "github.com/jhermoso/karpo-fw-go/pkg/application"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/pipeline"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/spec"
@@ -22,12 +23,17 @@ type OpenWorkCenter struct {
 // SetHeadquarters hace de un centro de trabajo la sede del empleador.
 type SetHeadquarters struct {
 	ID domain.WorkCenterID `json:"-"`
+	// Version, si no es cero, es la que se leyó: si el centro ya está en otra, el cambio es un conflicto.
+	Version int64 `json:"-"`
 }
 
-// CloseWorkCenter cierra un centro de trabajo sin contratos en vigor después de la fecha.
+// CloseWorkCenter cierra un centro de trabajo sin contratos en vigor después de la fecha. Sin
+// fecha, cierra hoy (el hoy del empleador).
 type CloseWorkCenter struct {
 	ID domain.WorkCenterID `json:"-"`
 	On vocab.Date          `json:"on"`
+	// Version, si no es cero, es la que se leyó: si el centro ya está en otra, el cambio es un conflicto.
+	Version int64 `json:"-"`
 }
 
 // GetWorkCenter carga un centro de trabajo.
@@ -35,8 +41,10 @@ type GetWorkCenter struct{ ID domain.WorkCenterID }
 
 // SearchWorkCenters busca centros de trabajo del ámbito del que llama.
 type SearchWorkCenters struct {
-	Employer   string
-	OpenOnly   bool
+	Employer string
+	OpenOnly bool
+	// Desc ordena por código de mayor a menor (el único orden de la lista).
+	Desc       bool
 	Page, Size int
 }
 
@@ -131,6 +139,9 @@ func (s service) workCenterUseCases(svc *Service) {
 			if err := sc.check(domain.WorkCenterKind, w.ID(), w.Employer(), true); err != nil {
 				return err
 			}
+			if c.Version != 0 && w.Version() != c.Version {
+				return fw.Conflict(domain.WorkCenterKind, w.ID(), c.Version, "the work center changed after it was read: read it again")
+			}
 			return w.MarkHeadquarters(true)
 		})
 		if err != nil {
@@ -144,9 +155,32 @@ func (s service) workCenterUseCases(svc *Service) {
 
 	svc.CloseWorkCenter = guard(PermWorkCenterUpdate, func(ctx context.Context, c CloseWorkCenter) (WorkCenterDTO, error) {
 		sc := scopeOf(ctx)
+		// Cerrar uno ya cerrado no cambia nada (ni la versión), pero exige el mismo ámbito y, con
+		// una versión leída que ya no es la suya, es un conflicto.
+		if w, err := s.WorkCenters.Get(ctx, c.ID); err != nil {
+			return WorkCenterDTO{}, err
+		} else if !w.IsOpen() {
+			if err := sc.check(domain.WorkCenterKind, w.ID(), w.Employer(), true); err != nil {
+				return WorkCenterDTO{}, err
+			}
+			if c.Version != 0 && w.Version() != c.Version {
+				return WorkCenterDTO{}, fw.Conflict(domain.WorkCenterKind, w.ID(), c.Version, "the work center changed after it was read: read it again")
+			}
+			return workCenterDTO(w), nil
+		}
 		w, err := s.workCenters.Update(ctx, c.ID, func(ctx context.Context, w *domain.WorkCenter) error {
 			if err := sc.check(domain.WorkCenterKind, w.ID(), w.Employer(), true); err != nil {
 				return err
+			}
+			if c.Version != 0 && w.Version() != c.Version {
+				return fw.Conflict(domain.WorkCenterKind, w.ID(), c.Version, "the work center changed after it was read: read it again")
+			}
+			if c.On.IsZero() {
+				today, err := app.TodayOf(ctx, s.Today, w.Employer().UUID)
+				if err != nil {
+					return err
+				}
+				c.On = today
 			}
 			es, err := s.Employments.Find(ctx, domain.EmpFieldEmployer.Eq(w.Employer()).And(domain.EmpFieldEnded.Eq(false),
 				domain.EmpFieldContracts.Any(domain.ContractFieldWorkCenter.Eq(w.ID()))))
@@ -179,6 +213,17 @@ func (s service) workCenterUseCases(svc *Service) {
 		return workCenterDTO(w), nil
 	})
 
+	svc.WorkCenterChangeable = guard(PermWorkCenterUpdate, func(ctx context.Context, q GetWorkCenter) (bool, error) {
+		w, err := s.WorkCenters.Get(ctx, q.ID)
+		if err != nil {
+			return false, err
+		}
+		if err := scopeOf(ctx).check(domain.WorkCenterKind, w.ID(), w.Employer(), true); err != nil {
+			return false, err
+		}
+		return true, nil
+	})
+
 	svc.SearchWorkCenters = guard(PermWorkCenterRead, func(ctx context.Context, q SearchWorkCenters) (fw.Page[WorkCenterDTO], error) {
 		var v fw.Validation
 		parts := []spec.Specification[*domain.WorkCenter]{within(scopeOf(ctx), domain.WCFieldEmployer)}
@@ -191,7 +236,11 @@ func (s service) workCenterUseCases(svc *Service) {
 		if err := v.Err(); err != nil {
 			return fw.Page[WorkCenterDTO]{}, err
 		}
-		page, err := s.WorkCenters.FindPage(ctx, spec.And(parts...), fw.NewPageRequest(q.Page, q.Size, domain.WCFieldCode.Asc()))
+		order := domain.WCFieldCode.Asc()
+		if q.Desc {
+			order = domain.WCFieldCode.Desc()
+		}
+		page, err := s.WorkCenters.FindPage(ctx, spec.And(parts...), fw.NewPageRequest(q.Page, q.Size, order))
 		if err != nil {
 			return fw.Page[WorkCenterDTO]{}, err
 		}
