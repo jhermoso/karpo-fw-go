@@ -117,9 +117,27 @@ func TestShipment_Rules(t *testing.T) {
 		t.Fatalf("carrier: %v %s", err, c.TrackingLink("AB 123/9"))
 	}
 	for _, url := range []string{"http://seur.example/{tracking}", "https://seur.example/track", "https://x/{tracking}/{tracking}"} {
-		if err := c.Change("SEUR", domain.PartyID{}, url, false); !errors.Is(err, fw.ErrValidation) {
+		if err := c.Change("SEUR", domain.PartyID{}, url); !errors.Is(err, fw.ErrValidation) {
 			t.Fatalf("link %s: %v", url, err)
 		}
+	}
+	// Bloquear y desbloquear exigen motivo; cada cambio efectivo queda en el historial (D-156).
+	who, at := vocab.Actor{Name: "Ana"}, time.Date(2026, 5, 6, 10, 0, 0, 0, time.UTC)
+	if _, err := c.SetBlocked(true, " ", who, at); !isViolation(err, domain.CodeBlockReasonRequired) {
+		t.Fatalf("block without a reason: %v", err)
+	}
+	if changed, err := c.SetBlocked(true, "Pierde paquetes", who, at); err != nil || !changed || c.State().BlockReason != "Pierde paquetes" {
+		t.Fatalf("block: %v", err)
+	}
+	if changed, err := c.SetBlocked(true, "otra vez", who, at); err != nil || changed || len(c.State().BlockEvents) != 1 {
+		t.Fatalf("block twice: %v", err)
+	}
+	if _, err := c.SetBlocked(false, "", who, at); !isViolation(err, domain.CodeUnblockReasonRequired) {
+		t.Fatalf("unblock without a reason: %v", err)
+	}
+	if changed, err := c.SetBlocked(false, "Ya entrega", who, at); err != nil || !changed || c.State().BlockReason != "" ||
+		c.State().UnblockReason != "Ya entrega" || len(c.State().BlockEvents) != 2 || c.State().BlockEvents[1].By.Name != "Ana" {
+		t.Fatalf("unblock: %v %+v", err, c.State())
 	}
 }
 
@@ -150,6 +168,7 @@ func compose(t *testing.T, opts ...shipments.Option) *host {
 		"planner":  {sapp.PermShipmentRead, sapp.PermShipmentUpdate, sapp.PermCarrierRead, sapp.PermCarrierUpdate},
 		"dock":     {sapp.PermShipmentRead, sapp.PermShipmentDispatch},
 		"viewer":   {sapp.PermShipmentRead, sapp.PermCarrierRead},
+		"approver": {sapp.PermCarrierRead, sapp.PermCarrierUpdate, sapp.PermApproveBlock, sapp.PermApproveUnblock},
 		"outsider": sapp.Permissions(),
 	}
 	for u, perms := range users {
@@ -229,7 +248,8 @@ func (h *host) scenario(tag string) {
 	h.must(h.do("POST", "/api/carriers", "planner", seurBody, &seur), 201, "carrier")
 	h.must(h.do("POST", "/api/carriers", "planner", seurBody, nil), 422, "code used once")
 	h.must(h.do("POST", "/api/carriers", "planner", map[string]any{"company": acme, "code": "OLD", "name": "Transportes Viejos"}, &old), 201, "old carrier")
-	h.must(h.do("PUT", "/api/carriers/"+old.ID, "planner", map[string]any{"name": "Transportes Viejos", "blocked": true}, &old), 200, "block")
+	h.must(h.do("PUT", "/api/carriers/"+old.ID, "planner", map[string]any{"name": "Transportes Viejos", "blocked": true}, nil), 422, "the change does not block")
+	h.must(h.do("POST", shipments.MaintenanceBase+"/"+old.ID+"/block", "planner", map[string]any{"reason": "Pierde paquetes"}, &old), 200, "block")
 	var carriers []sapp.CarrierDTO
 	h.must(h.do("GET", "/api/carriers?company="+acme, "viewer", nil, &carriers), 200, "carriers")
 	if len(carriers) != 2 || carriers[0].Code != "OLD" || !carriers[0].Blocked || carriers[1].Code != "SEUR" {

@@ -186,16 +186,53 @@ docs/ACTIVOS.md).
 | Lista | `GET /api/v1/carriers?page&pageSize&sortBy&sortOrder&search&name&company&isActive`, o `POST /api/v1/carriers/search` con `{filter, pagination: {pageNumber, pageSize, orderBy, ascending}}` | la página del motor: `{items, total, totalCount, pageNumber, pageSize, totalPages}`. Orden por `code` (por omisión) o `name`, con la identidad para deshacer empates; otro, 400. `search` y `name` buscan en el nombre; `isActive=true` deja los que no están bloqueados. `company` sólo estrecha el ámbito de quien llama: la de otra organización da una lista vacía. Un filtro que no es de la lista se ignora |
 | Lectura | `GET /api/v1/carriers/{id}` | el transportista |
 | Alta | `POST /api/v1/carriers` | 201 con `Location`; lo que sobra en el cuerpo se ignora. Un transportista nace sin bloquear: `blocked: true` en el alta es 400 |
-| Cambio | `PUT /api/v1/carriers/{id}` con lo leído y su `version` | 200; lo que el cuerpo no trae, o trae como null, se queda como está. Sin `version`, 400; con una que ya no es la suya, 409. Se traduce a `ChangeCarrier` (`name`, `party`, `trackingUrl`, `blocked`), sólo si algo cambia; aun sin cambios exige el permiso y el ámbito de escritura. Todo el cambio es una sola unidad de trabajo. `company` y `code` no los cambia ningún caso de uso: cambiarlos es 400 `immutable` (se comparan por su valor: la identidad y el código sin distinguir mayúsculas ni los espacios de los extremos) |
-| Baja | `DELETE /api/v1/carriers/{id}` | un transportista no se borra (los envíos lo nombran): DELETE lo **bloquea**, y uno bloqueado no se puede elegir en un envío nuevo. 204; sobre uno ya bloqueado, 204 otra vez y sin versión nueva. Siempre exige el permiso y el ámbito de escritura (`Shipments.Carrier.Update`; 403 sin él). Se desbloquea por el PUT con `blocked: false` |
+| Cambio | `PUT /api/v1/carriers/{id}` con lo leído y su `version` | 200; lo que el cuerpo no trae, o trae como null, se queda como está. Sin `version`, 400; con una que ya no es la suya, 409. Se traduce a `ChangeCarrier` (`name`, `party`, `trackingUrl`), sólo si algo cambia; un `blocked` distinto del actual es 422 `shipments.block_change_requires_command` (D-156: el bloqueo tiene sus órdenes); aun sin cambios exige el permiso y el ámbito de escritura. Todo el cambio es una sola unidad de trabajo. `company` y `code` no los cambia ningún caso de uso: cambiarlos es 400 `immutable` (se comparan por su valor: la identidad y el código sin distinguir mayúsculas ni los espacios de los extremos) |
+| Baja | `DELETE /api/v1/carriers/{id}` | un transportista no se borra (los envíos lo nombran): DELETE lo **bloquea**, y uno bloqueado no se puede elegir en un envío nuevo. El motivo es obligatorio, en el cuerpo `{"reason": "..."}` o en `?reason=` (sin él, 422 `shipments.block_reason_required`). 204; sobre uno ya bloqueado, 204 otra vez y sin versión nueva; si la empresa exige aprobación, 202 con `{"pendingApproval": id}`. Siempre exige el permiso y el ámbito de escritura (`Shipments.Carrier.Update`; 403 sin él) |
+| Bloquear | `POST /api/v1/carriers/{id}/block` con `{"reason", "version"}` | D-156: motivo obligatorio (422 `shipments.block_reason_required`) y la versión leída (409 si ya no es la suya; sin ella no se comprueba). 200 con el transportista; si ya está bloqueado, 200 sin cambios. Con aprobación, 202 con `pendingApproval` y el transportista sin tocar |
+| Desbloquear | `POST /api/v1/carriers/{id}/unblock` con `{"reason", "version"}` | igual, con 422 `shipments.unblock_reason_required` |
+| Historial | `GET /api/v1/carriers/{id}/block-history` | los bloqueos y desbloqueos efectivos, del más antiguo al más reciente: `blocked`, `reason`, `at`, `by`, `byName` |
 
-- **El objeto:** `id`, `company`, `code`, `name`, `party`, `trackingUrl`, `blocked`, `version`.
+- **El objeto:** `id`, `company`, `code`, `name`, `party`, `trackingUrl`, `blocked`, `blockReason`
+  (el del bloqueo vigente), `unblockReason` (el del último desbloqueo), `version` y, en un 202,
+  `pendingApproval`. Los dos motivos son de sólo lectura.
 - **La versión:** `ChangeCarrier` acepta la versión leída (`Version`, fuera del JSON de
   `/api/carriers`) y da conflicto si el transportista ya está en otra; con ella el conflicto es
   definitivo y no se reintenta dentro de la transacción. Sin ella, se reintenta como siempre.
 - **El error:** RFC 9457 con `errors` como diccionario (campo → mensajes) y `errorCodes`, en el
   mismo orden; en un 409 o un 422, `code`. Un cuerpo de más de 1 MiB es 413. El resto de la API de
   Envíos sigue con la lista del framework.
-- **Permisos y ámbito:** los de siempre (`Shipments.Carrier.Read` y `…Update`).
-- **Sin migración:** el bloqueo ya estaba en `shp_carriers.blocked`; el contrato no añade columnas.
+- **Permisos y ámbito:** los de siempre (`Shipments.Carrier.Read` y `…Update`), más
+  `Shipments.Carrier.ApproveBlock` y `…ApproveUnblock` para aprobar (D-156).
+- **Migración:** el contrato no añadió columnas; el motivo del bloqueo sí (abajo, «El bloqueo»).
 - **Prueba:** `TestShipments_CarrierMaintenanceContract_MemoryThenSQLite`.
+
+## El bloqueo: motivo, historial y aprobación (D-156, añadido el 2026-11-15)
+
+Un transportista es **de una empresa** (`shp_carriers.company`), no un catálogo global: la empresa de
+la política de aprobaciones es la suya.
+
+- **Órdenes propias.** Bloquear y desbloquear son `BlockCarrier` y `UnblockCarrier`
+  (`SetCarrierBlock{ID, Reason, Version}`), con motivo obligatorio (422
+  `shipments.block_reason_required` / `shipments.unblock_reason_required`; 200 caracteres como
+  mucho) y la versión leída. `ChangeCarrier` ya no bloquea: su `blocked` es opcional y, si pide
+  otro estado, 422 `shipments.block_change_requires_command`. Rutas: `POST /api/v1/carriers/{id}/block`,
+  `…/unblock`, `GET …/block-history` y `DELETE` con motivo (arriba). `PUT /api/carriers/{id}` sigue,
+  sin bloquear.
+- **Motivos vigentes.** `block_reason` (se borra al desbloquear) y `unblock_reason` (se borra al
+  bloquear), en la ficha y en la auditoría.
+- **Historial.** `shp_carrier_block_events` (`carrier_id`, `line_no`, `blocked`, `reason`,
+  `changed_at`, `changed_by_id`, `changed_by_name`): una fila por bloqueo o desbloqueo efectivo, hija
+  del agregado, así que se escribe en la misma transacción. Al aprobar una solicitud, quien figura es
+  el aprobador; el solicitante queda en la solicitud.
+- **Aprobación.** Acciones `shipments.carrier.block` y `shipments.carrier.unblock`; permisos de
+  aprobar `Shipments.Carrier.ApproveBlock` y `Shipments.Carrier.ApproveUnblock`. La política es la de
+  Parties (`shipments.WithApprovalPolicy(h.Parties.ApprovalPolicy)` en `host/host.go`; sin ella,
+  ninguna). Con la acción en la lista de la empresa, la orden deja la solicitud en `shp_approvals` y
+  responde 202 con `pendingApproval` sin guardar el transportista; otra igual pendiente es 409
+  `shipments.approval_pending`. Bandeja: `GET /api/shipments/approvals?company&status` y `POST
+  /api/shipments/approvals/{id}/approve|reject|cancel`, como en Compras (docs/APROBACIONES.md). Al
+  aprobar, el bloqueo se aplica en la misma transacción, de forma idempotente, y escribe el historial.
+- **Migraciones:** 4 (`block_reason`, `unblock_reason` y `shp_carrier_block_events`) y 5
+  (`shp_approvals`).
+- **Pruebas:** `TestShipments_CarrierMaintenanceContract_MemoryThenSQLite` (motivo, versión,
+  historial, DELETE con motivo, PUT que bloquea 422) y `TestShipments_CarrierApprovals_MemoryThenSQLite`.

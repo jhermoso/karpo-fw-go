@@ -91,9 +91,15 @@ func TestShipmentsContext(t *testing.T) {
 			old, err := svc.RegisterCarrier.Handle(actx, sapp.RegisterCarrier{Company: acme, Code: "OLD", Name: "Transportes Viejos", Party: customer})
 			must(err)
 			oid, _ := sdomain.ParseCarrierID(old.ID)
-			old, err = svc.ChangeCarrier.Handle(actx, sapp.ChangeCarrier{ID: oid, Name: "Transportes Viejos", Party: customer, Blocked: true})
-			if err != nil || !old.Blocked || old.Version != 2 || old.Party != customer || old.TrackingURL != "" {
+			_, err = svc.BlockCarrier.Handle(actx, sapp.SetCarrierBlock{ID: oid})
+			violates(err, "blocking needs a reason")
+			old, err = svc.BlockCarrier.Handle(actx, sapp.SetCarrierBlock{ID: oid, Reason: "Pierde paquetes", Version: old.Version})
+			if err != nil || !old.Blocked || old.BlockReason != "Pierde paquetes" || old.Version != 2 || old.Party != customer || old.TrackingURL != "" {
 				t.Fatalf("carrier round trip: %+v %v", old, err)
+			}
+			if hist, err := svc.CarrierBlockHistory.Handle(actx, sapp.GetCarrier{ID: oid}); err != nil || len(hist) != 1 || !hist[0].Blocked ||
+				hist[0].Reason != "Pierde paquetes" || hist[0].At.IsZero() {
+				t.Fatalf("block history: %+v %v", hist, err)
 			}
 
 			_, err = svc.Move.Handle(actx, sapp.MoveShipment{ID: sid, To: "in-transit", On: day(7)})

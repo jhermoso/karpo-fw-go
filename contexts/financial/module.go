@@ -14,10 +14,12 @@ import (
 	"github.com/jhermoso/karpo-fw-go/contexts/financial/domain"
 	"github.com/jhermoso/karpo-fw-go/contexts/financial/infrastructure"
 	"github.com/jhermoso/karpo-fw-go/pkg/application"
+	"github.com/jhermoso/karpo-fw-go/pkg/application/approval"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/messaging"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/outbox"
 	"github.com/jhermoso/karpo-fw-go/pkg/distribution"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
+	fwapproval "github.com/jhermoso/karpo-fw-go/pkg/domain/approval"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 )
 
@@ -45,6 +47,12 @@ func WithToday(t application.CompanyToday) Option {
 	return func(d *fapp.Deps) { d.Today = t }
 }
 
+// WithApprovalPolicy dice qué empresas exigen aprobación para bloquear o desbloquear una cuenta
+// (D-156; la de Parties, Module.ApprovalPolicy, en el anfitrión). Sin ella, ninguna.
+func WithApprovalPolicy(p approval.Policy) Option {
+	return func(d *fapp.Deps) { d.Policy = p }
+}
+
 // Compose monta el contexto sobre sw. Es el sector financiero de Karpo: institutions dice qué
 // empresas son entidades financieras, las únicas para las que existe (nil: ninguna).
 func Compose(sw *hotswap.Switch, institutions domain.Institutions, opts ...Option) *Module {
@@ -53,6 +61,7 @@ func Compose(sw *hotswap.Switch, institutions domain.Institutions, opts ...Optio
 	accounts := hotswap.Repository(sw, infrastructure.AccountRepositoryFactory)
 	d := fapp.Deps{Accounts: accounts, Products: hotswap.Repository(sw, infrastructure.ProductRepositoryFactory),
 		Agreements: hotswap.Repository(sw, infrastructure.AgreementRepositoryFactory), Institutions: institutions, UoW: sw, Audit: audit,
+		Approvals: hotswap.Repository(sw, infrastructure.ApprovalRepositoryFactory), Policy: approval.Never{},
 		Recorder: outbox.Recorders(outbox.NewRecorder(hotswap.Outbox(sw, infrastructure.OutboxFactory)),
 			fapp.Publications(messaging.NewRecorder(contracts.Source, integration)))}
 	for _, o := range opts {
@@ -131,9 +140,25 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 		out, err := svc.Stats.Handle(r.Context(), fapp.GetStats{Company: r.URL.Query().Get("company")})
 		distribution.Respond(w, r, out, err, http.StatusOK)
 	})
-	mux.HandleFunc("GET /api/financial/accounts/by-number/{number}", func(w http.ResponseWriter, r *http.Request) {
-		out, err := svc.Get.Handle(r.Context(), fapp.GetAccount{Company: r.URL.Query().Get("company"), Number: r.PathValue("number")})
-		distribution.Respond(w, r, out, err, http.StatusOK)
+	// GET …/by-number/{number} y GET …/{id}/block-history comparten patrón: el enrutador de Go no
+	// admite los dos (ninguno es más específico que el otro).
+	mux.HandleFunc("GET /api/financial/accounts/{first}/{second}", func(w http.ResponseWriter, r *http.Request) {
+		first, second := r.PathValue("first"), r.PathValue("second")
+		switch {
+		case first == "by-number":
+			out, err := svc.Get.Handle(r.Context(), fapp.GetAccount{Company: r.URL.Query().Get("company"), Number: second})
+			distribution.Respond(w, r, out, err, http.StatusOK)
+		case second == "block-history":
+			id, err := domain.ParseAccountID(first)
+			if err != nil || id.IsZero() {
+				badID(w, r)
+				return
+			}
+			out, err := svc.BlockHistory.Handle(r.Context(), fapp.GetAccount{ID: id})
+			distribution.Respond(w, r, out, err, http.StatusOK)
+		default:
+			http.NotFound(w, r)
+		}
 	})
 	mux.HandleFunc("GET /api/financial/accounts/{id}", func(w http.ResponseWriter, r *http.Request) {
 		id, err := domain.ParseAccountID(r.PathValue("id"))
@@ -151,9 +176,12 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/financial/accounts/{id}/uses", on(func(c *fapp.ChangeUse, id domain.AccountID) { c.ID = id }, svc.Assign.Handle))
 	mux.HandleFunc("POST /api/financial/accounts/{id}/uses/end", on(func(c *fapp.ChangeUse, id domain.AccountID) { c.ID = id }, svc.Withdraw.Handle))
 	status := func(c *fapp.ChangeStatus, id domain.AccountID) { c.ID = id }
-	mux.HandleFunc("POST /api/financial/accounts/{id}/block", on(status, svc.Block.Handle))
+	// Bloquear y desbloquear (D-156): {"reason": "...", "version": n}; 202 con pendingApproval si la
+	// empresa exige aprobación.
+	mux.HandleFunc("POST /api/financial/accounts/{id}/block", pending(status, svc.Block.Handle))
+	mux.HandleFunc("POST /api/financial/accounts/{id}/unblock", pending(status, svc.Unblock.Handle))
 	mux.HandleFunc("POST /api/financial/accounts/{id}/abandon", on(status, svc.Abandon.Handle))
-	mux.HandleFunc("POST /api/financial/accounts/{id}/release", on(status, svc.Release.Handle))
+	mux.HandleFunc("POST /api/financial/accounts/{id}/release", pending(status, svc.Release.Handle))
 	mux.HandleFunc("POST /api/financial/accounts/{id}/close", on(status, svc.Close.Handle))
 
 	create := func(w http.ResponseWriter, r *http.Request, run func(*http.Request) (any, error)) {
@@ -205,6 +233,45 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/financial/agreements/{id}", at(agr, func(c *fapp.ChangeAgreement, id domain.AgreementID) { c.ID = id }, svc.ChangeAgreement.Handle))
 	mux.HandleFunc("POST /api/financial/agreements/{id}/terminate", at(agr, func(c *fapp.TerminateAgreement, id domain.AgreementID) { c.ID = id },
 		svc.TerminateAgreement.Handle))
+
+	// Las solicitudes de aprobación del bloqueo y el desbloqueo (D-156, docs/CUENTAS-CLIENTES.md).
+	mux.HandleFunc("GET /api/financial/approvals", func(w http.ResponseWriter, r *http.Request) {
+		out, err := svc.SearchApprovals.Handle(r.Context(), fapp.SearchApprovals{Company: r.URL.Query().Get("company"), Status: r.URL.Query().Get("status")})
+		distribution.Respond(w, r, out, err, http.StatusOK)
+	})
+	apv := func(s string) (fwapproval.RequestID, error) {
+		u, err := fw.ParseUUID(s)
+		return fwapproval.RequestID{UUID: u}, err
+	}
+	set := func(c *fapp.ResolveApproval, id fwapproval.RequestID) { c.ID = id }
+	mux.HandleFunc("POST /api/financial/approvals/{id}/approve", at(apv, set, svc.ApproveApproval.Handle))
+	mux.HandleFunc("POST /api/financial/approvals/{id}/reject", at(apv, set, svc.RejectApproval.Handle))
+	mux.HandleFunc("POST /api/financial/approvals/{id}/cancel", at(apv, set, svc.CancelApproval.Handle))
+}
+
+// pending es on para bloquear y desbloquear: 202 si la orden ha dejado una solicitud de aprobación.
+func pending(set func(*fapp.ChangeStatus, domain.AccountID), run func(context.Context, fapp.ChangeStatus) (fapp.AccountDTO, error)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, err := domain.ParseAccountID(r.PathValue("id"))
+		if err != nil || id.IsZero() {
+			badID(w, r)
+			return
+		}
+		var c fapp.ChangeStatus
+		if r.ContentLength != 0 {
+			if err := decode(r, &c); err != nil {
+				distribution.WriteError(w, r, err)
+				return
+			}
+		}
+		set(&c, id)
+		out, err := run(r.Context(), c)
+		code := http.StatusOK
+		if out.PendingApproval != "" {
+			code = http.StatusAccepted
+		}
+		distribution.Respond(w, r, out, err, code)
+	}
 }
 
 var _ distribution.EndpointModule = (*Module)(nil)

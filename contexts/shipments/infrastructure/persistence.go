@@ -9,8 +9,10 @@ import (
 
 	"github.com/jhermoso/karpo-fw-go/contexts/shipments/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/application"
+	"github.com/jhermoso/karpo-fw-go/pkg/application/approval"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/domain/vocab"
+	"github.com/jhermoso/karpo-fw-go/pkg/persistence/approvals"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/hotswap"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/memory"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
@@ -30,6 +32,10 @@ const (
 	TableIntegrationOutbox = "shipments_integration_outbox"
 	TableAuditLog          = "shipments_audit_log"
 	TableInbox             = "shipments_inbox"
+	// TableApprovals guarda las solicitudes de aprobación del bloqueo y el desbloqueo (D-156).
+	TableApprovals = "shp_approvals"
+	// TableCarrierBlockEvents es el historial de bloqueos y desbloqueos de los transportistas.
+	TableCarrierBlockEvents = "shp_carrier_block_events"
 )
 
 const audit = `created_at {ts}, created_by_id {str:64}, created_by_name {str:200}, modified_at {ts}, modified_by_id {str:64}, modified_by_name {str:200}`
@@ -67,6 +73,16 @@ func technicalDDL(d string) []string {
 	return nil
 }
 
+// blockDDL añade los motivos vigentes del bloqueo y su historial (D-156): una fila por bloqueo o
+// desbloqueo efectivo, con quién y cuándo. Los motivos miden 800 porque Oracle cuenta bytes.
+var blockDDL = []string{
+	`ALTER TABLE shp_carriers {add:block_reason} {str:800}{addEnd}`,
+	`ALTER TABLE shp_carriers {add:unblock_reason} {str:800}{addEnd}`,
+	`CREATE TABLE ` + TableCarrierBlockEvents + ` (carrier_id {uuid} NOT NULL, line_no {int} NOT NULL, blocked {bool} NOT NULL,
+	reason {str:800} NOT NULL, changed_at {ts} NOT NULL, changed_by_id {str:64}, changed_by_name {str:200},
+	PRIMARY KEY (carrier_id, line_no), FOREIGN KEY (carrier_id) REFERENCES shp_carriers (id))`,
+}
+
 // Migrations es el esquema versionado del contexto.
 func Migrations() sqlrepo.MigrationSet {
 	technical := map[string][]string{}
@@ -77,6 +93,8 @@ func Migrations() sqlrepo.MigrationSet {
 		{Version: 1, Name: "carriers and shipments", Up: sqlrepo.RenderDDLAll(schemaDDL...)},
 		{Version: 2, Name: "outboxes, audit log and inbox", Up: technical},
 		{Version: 3, Name: "decimal columns", Run: decimalColumnsV3.Run},
+		{Version: 4, Name: "carrier block reasons and history", Up: sqlrepo.RenderDDLAll(blockDDL...)},
+		{Version: 5, Name: "approval requests", Up: sqlrepo.RenderDDLAll(approvals.DDL(TableApprovals)...)},
 	}}
 }
 
@@ -86,7 +104,7 @@ func Migrator(db *sqlrepo.DB) (*sqlrepo.Migrator, error) {
 }
 
 // Tables lista las tablas del contexto, primero las hijas (orden de borrado).
-var Tables = []string{"shp_shipment_history", "shp_shipment_lines", "shp_shipments", "shp_carriers", TableOutbox, TableIntegrationOutbox,
+var Tables = []string{"shp_shipment_history", "shp_shipment_lines", "shp_shipments", TableCarrierBlockEvents, "shp_carriers", TableApprovals, TableOutbox, TableIntegrationOutbox,
 	TableAuditLog, TableInbox}
 
 // DropAll borra las tablas del contexto y su historial de migraciones (sólo pruebas).
@@ -200,21 +218,58 @@ func ShipmentMapping() sqlrepo.Mapping[domain.ShipmentID, *domain.Shipment] {
 func CarrierMapping() sqlrepo.Mapping[domain.CarrierID, *domain.Carrier] {
 	return sqlrepo.Mapping[domain.CarrierID, *domain.Carrier]{
 		Table:   "shp_carriers",
-		Columns: sqlrepo.WithAuditColumns("company", "code", "name", "party", "tracking_url", "blocked"),
+		Columns: sqlrepo.WithAuditColumns("company", "code", "name", "party", "tracking_url", "blocked", "block_reason", "unblock_reason"),
 		Dehydrate: func(c *domain.Carrier) (sqlrepo.Values, error) {
 			s := c.State()
 			return sqlrepo.AuditStampValues(sqlrepo.Values{"company": s.Company, "code": s.Code, "name": s.Name, "party": optUUID(s.Party.UUID),
-				"tracking_url": opt(s.TrackingURL), "blocked": s.Blocked}, c.AuditStamp()), nil
+				"tracking_url": opt(s.TrackingURL), "blocked": s.Blocked, "block_reason": opt(s.BlockReason), "unblock_reason": opt(s.UnblockReason)},
+				c.AuditStamp()), nil
 		},
-		Hydrate: func(r *sqlrepo.Row, _ sqlrepo.ChildRows) (*domain.Carrier, error) {
+		Hydrate: func(r *sqlrepo.Row, children sqlrepo.ChildRows) (*domain.Carrier, error) {
 			s := domain.CarrierState{Company: domain.OrganizationID{UUID: r.UUID("company")}, Code: r.String("code"), Name: r.String("name"),
-				Party: domain.PartyID{UUID: r.UUID("party")}, TrackingURL: r.String("tracking_url"), Blocked: r.Bool("blocked"), Audit: r.AuditStamp()}
+				Party: domain.PartyID{UUID: r.UUID("party")}, TrackingURL: r.String("tracking_url"), Blocked: r.Bool("blocked"),
+				BlockReason: r.String("block_reason"), UnblockReason: r.String("unblock_reason"), Audit: r.AuditStamp()}
+			for _, c := range byNo(children.Of("blocks")) {
+				e := domain.BlockEvent{Blocked: c.Bool("blocked"), Reason: c.String("reason"), At: c.Time("changed_at"),
+					By: vocab.Actor{Name: c.String("changed_by_name")}}
+				if id := c.String("changed_by_id"); id != "" {
+					e.By.PartyID, _ = fw.ParseUUID(id)
+				}
+				if err := c.Err(); err != nil {
+					return nil, err
+				}
+				s.BlockEvents = append(s.BlockEvents, e)
+			}
 			if err := r.Err(); err != nil {
 				return nil, err
 			}
 			return domain.ReconstituteCarrier(domain.CarrierID{UUID: r.UUID("id")}, s)
 		},
+		Children: []sqlrepo.Child[*domain.Carrier]{{
+			Name: "blocks", Table: TableCarrierBlockEvents, ForeignKey: "carrier_id", OrderBy: []string{"line_no"},
+			Columns: []string{"line_no", "blocked", "reason", "changed_at", "changed_by_id", "changed_by_name"},
+			Dehydrate: func(c *domain.Carrier) ([]sqlrepo.Values, error) {
+				out := []sqlrepo.Values{}
+				for k, e := range c.State().BlockEvents {
+					out = append(out, sqlrepo.Values{"line_no": int64(k + 1), "blocked": e.Blocked, "reason": e.Reason, "changed_at": e.At,
+						"changed_by_id": opt(optID(e.By.PartyID)), "changed_by_name": opt(e.By.Name)})
+				}
+				return out, nil
+			},
+		}},
 	}
+}
+
+func optID(u fw.UUID) string {
+	if u.IsZero() {
+		return ""
+	}
+	return u.String()
+}
+
+// ApprovalRepositoryFactory construye el repositorio de las solicitudes de aprobación.
+func ApprovalRepositoryFactory(b hotswap.Backend) (approval.Repository, error) {
+	return repository(b, approvals.Mapping(TableApprovals))
 }
 
 func unsupported(b hotswap.Backend) error { return fmt.Errorf("shipments: unsupported backend %T", b) }

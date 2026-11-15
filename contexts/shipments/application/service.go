@@ -13,6 +13,7 @@ import (
 	"github.com/jhermoso/karpo-fw-go/contexts/shipments/contracts"
 	"github.com/jhermoso/karpo-fw-go/contexts/shipments/domain"
 	app "github.com/jhermoso/karpo-fw-go/pkg/application"
+	"github.com/jhermoso/karpo-fw-go/pkg/application/approval"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/messaging"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/orchestration"
@@ -34,6 +35,11 @@ type Deps struct {
 	Recorder  app.EventRecorder
 	Audit     app.AuditLog
 	Merged    app.MergedParties // opcional: las parties fusionadas, que los listados dejan fuera (D-100)
+	// Policy dice qué empresas exigen aprobación para bloquear o desbloquear un transportista (la
+	// de Parties en el anfitrión). Nil es approval.Never.
+	Policy approval.Policy
+	// Approvals guarda las solicitudes de aprobación (shp_approvals).
+	Approvals approval.Repository
 }
 
 // Service expone los casos de uso.
@@ -54,6 +60,17 @@ type Service struct {
 	// CarrierChangeable comprueba que quien llama puede cambiar un transportista (el permiso y el
 	// ámbito de escritura), aunque el cambio no vaya a cambiar nada.
 	CarrierChangeable app.QueryHandler[GetCarrier, bool]
+	// BlockCarrier y UnblockCarrier bloquean y desbloquean con motivo (D-156); con aprobación, la
+	// respuesta trae PendingApproval y el transportista no cambia.
+	BlockCarrier   app.CommandHandler[SetCarrierBlock, CarrierDTO]
+	UnblockCarrier app.CommandHandler[SetCarrierBlock, CarrierDTO]
+	// CarrierBlockHistory es el historial de bloqueos y desbloqueos.
+	CarrierBlockHistory app.QueryHandler[GetCarrier, []BlockEventDTO]
+
+	SearchApprovals app.QueryHandler[SearchApprovals, []ApprovalDTO]
+	ApproveApproval app.CommandHandler[ResolveApproval, ApprovalDTO]
+	RejectApproval  app.CommandHandler[ResolveApproval, ApprovalDTO]
+	CancelApproval  app.CommandHandler[ResolveApproval, ApprovalDTO]
 }
 
 type service struct {
@@ -184,6 +201,7 @@ func NewService(d Deps) *Service {
 	svc := &Service{}
 	s.wireShipments(svc)
 	s.wireCarriers(svc)
+	s.wireBlocks(svc)
 	return svc
 }
 

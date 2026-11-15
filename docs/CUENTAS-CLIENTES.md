@@ -119,11 +119,12 @@ pieza: se mantienen porque son producto planificado.
 - **Para otros contextos** (`contracts.Accounts`): qué cuentas tiene una persona en una entidad y
   si cada una puede operar.
 - **Permisos**: `Financial.Account.Read`, `Create` (abrir), `Update` (datos, titulares y usos),
-  `Block` (bloquear, apartar por abandono y liberar) y `Close`; `Financial.Product.Read` y
-  `Update`; `Financial.Agreement.Read` y `Update`.
+  `Block` (bloquear, desbloquear, apartar por abandono y liberar), `ApproveBlock` y
+  `ApproveUnblock` (D-156) y `Close`; `Financial.Product.Read` y `Update`; `Financial.Agreement.Read` y `Update`.
 - **Rutas:** `POST/GET /api/financial/accounts`, `GET /api/financial/accounts/stats`,
   `GET …/by-number/{number}`, `GET/PUT …/{id}`, `POST …/{id}/holders`, `…/holders/end`,
-  `…/holders/primary`, `…/uses`, `…/uses/end`, `…/block`, `…/abandon`, `…/release` y `…/close`.
+  `…/holders/primary`, `…/uses`, `…/uses/end`, `…/block`, `…/unblock`, `GET …/block-history`, `…/abandon`,
+  `…/release` y `…/close`; las solicitudes de aprobación, en `/api/financial/approvals` (D-156).
   Además `POST/GET /api/financial/products`, `GET/PUT …/products/{id}`, `…/discontinue`,
   `…/reinstate`; y `POST/GET /api/financial/agreements`, `GET/PUT …/agreements/{id}`,
   `…/terminate`.
@@ -208,9 +209,12 @@ cuenta es `FinancialAccount`, la capacidad se deriva del rol y basta con impedir
     se va 422, se pone a nombre de otro titular, la anterior se va, ya se había ido 422, el
     último titular se queda 422;
   - usos: desconocido 400, repetido 422, terminar, ya terminado 422, volver a asignar;
-  - bloqueo: mantener no es bloquear (403), sin motivo 422, dos veces 422, abandono desde
-    bloqueada, liberar (borra el motivo), liberar una activa 422; una bloqueada sigue pudiendo
-    cambiar sus datos;
+  - bloqueo: mantener no es bloquear (403), sin motivo 422, dos veces 422; desbloquear sin motivo
+    422 (también por `release`), con una versión vieja 409, con motivo 200 y el historial con las
+    dos filas; el cambio general que pide otro estado 422; abandono desde bloqueada, liberar una
+    abandonada sin motivo, liberar una activa 422; una bloqueada sigue pudiendo cambiar sus datos;
+  - aprobación (D-156): 202 sin tocar la cuenta, otra igual 409, rechazo con comentario, aprobar
+    bloquea con motivo e historial, el desbloqueo igual (`TestFinancial_Approvals_MemoryThenSQLite`);
   - lectura por identidad y por número (con espacios y minúsculas); búsquedas por empresa,
     persona (la que se fue ya no sale), estado, uso, divisa, nombre y pruebas; ajeno, lista vacía;
   - recuento: ajeno 404, sin empresa 400, pruebas aparte;
@@ -218,10 +222,48 @@ cuenta es `FinancialAccount`, la capacidad se deriva del rol y basta con impedir
   - cierre: bloquear no es cerrar (403), antes de la apertura 422; terminan titulares y usos;
     después no cambia nada (422) y su número sigue ocupado;
   - cuentas por producto y por acuerdo;
-  - once eventos publicados.
+  - catorce eventos publicados.
 - **Integración** en PostgreSQL, SQL Server, Oracle y MySQL: cuenta de ida y vuelta con
   titulares, usos, fechas y acentos; número único en su entidad y libre en otra; búsquedas por
   titulares y usos vigentes; recuento; directorio; cierre; bandeja de salida.
+
+## El bloqueo: motivo, historial y aprobación (D-156, añadido el 2026-11-15)
+
+**Qué es «bloqueada».** No es una marca aparte: es un estado del ciclo de vida de la cuenta
+(activa, bloqueada, abandonada, cerrada). La regla de D-156 se aplica a sus dos transiciones:
+**bloquear** (activa → bloqueada) y **desbloquear** (bloqueada → activa). Apartar por abandono y
+cerrar ya exigían su motivo y no son desbloqueos: no pasan por aprobación ni van al historial de
+bloqueos (sí a la auditoría y a `financial.account_status_changed`). De bloqueada sólo se sale
+desbloqueando o cerrando: apartarla como abandonada es 422 `financial.account_blocked` (si no,
+abandonar y liberar se saltaría el desbloqueo).
+
+- **Órdenes propias**, que ya lo eran: `POST /api/financial/accounts/{id}/block` y, nueva,
+  `…/unblock`, con `{"reason", "version"}`. El motivo es obligatorio (422
+  `financial.block_reason_required` / `financial.unblock_reason_required`) y la versión, la leída
+  (409 si ya no es la suya; sin ella no se comprueba). `…/release` sigue: libera sin motivo una
+  abandonada y, sobre una bloqueada, es desbloquear (con motivo). El cambio general (`PUT …/{id}`)
+  no toca el estado: si trae `status` y es otro, 422 `financial.block_change_requires_command`.
+- **Motivos vigentes:** `block_reason` (el del último bloqueo; se borra al desbloquear) y
+  `unblock_reason` (el del último desbloqueo; se borra al bloquear), además del `reason` de siempre
+  (el del estado actual: bloqueo, abandono o cierre).
+- **Historial:** `fin_account_block_events` (`account_id`, `line_no`, `blocked`, `reason`,
+  `changed_at`, `changed_by_id`, `changed_by_name`), hija de la cuenta: una fila por bloqueo o
+  desbloqueo efectivo, en la misma transacción. `GET /api/financial/accounts/{id}/block-history`.
+  (Comparte patrón con `GET …/by-number/{number}`: el enrutador de Go no admite los dos, así que
+  una sola ruta `GET …/accounts/{first}/{second}` atiende a ambas.)
+- **Aprobación:** acciones `financial.account.block` y `financial.account.unblock`; permisos
+  `Financial.Account.ApproveBlock` y `Financial.Account.ApproveUnblock`; pedirla exige
+  `Financial.Account.Block`. La empresa de la política es la entidad de la cuenta (la de Parties,
+  `financial.WithApprovalPolicy` en `host/host.go`; sin ella, ninguna). Con la acción en su lista, la
+  orden responde 202 con `pendingApproval`, deja la solicitud en `fin_approvals` y no guarda la
+  cuenta; otra igual pendiente es 409 `financial.approval_pending`. Bandeja: `GET
+  /api/financial/approvals?company&status` y `POST /api/financial/approvals/{id}/approve|reject|cancel`
+  (docs/APROBACIONES.md). Al aprobar se aplica en la misma transacción, idempotente, y en el historial
+  figura el aprobador. Si al aprobar ya no se puede aplicar (la cuenta está apartada o cerrada), 422
+  `financial.approval_not_applicable`: no se aprueba nada y la solicitud sigue pendiente, para que
+  el aprobador la rechace o el solicitante la cancele.
+- **Migraciones:** 4 (`block_reason`, `unblock_reason`, `fin_account_block_events`) y 5
+  (`fin_approvals`).
 
 ## Pendiente
 

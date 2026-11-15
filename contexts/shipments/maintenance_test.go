@@ -189,16 +189,46 @@ func (h *host) carrierMaintenance() {
 
 	// DELETE bloquea: exige el permiso y el ámbito de escritura, y se puede repetir sin versión nueva.
 	h.must(status("viewer", "DELETE", base+"/"+id, nil), 403, "delete without the permission")
-	h.must(status("planner", "DELETE", base+"/"+id, nil), 204, "delete")
+	// El cambio general no bloquea: 422 con su código.
+	code, p, _ := h.raw("PUT", base+"/"+id, "planner", map[string]any{"blocked": true, "version": v})
+	if code != 422 || p["code"] != "shipments.block_change_requires_command" {
+		t.Fatalf("a change that blocks: %d %v", code, p)
+	}
+	code, p, _ = h.raw("DELETE", base+"/"+id, "planner", nil)
+	if code != 422 || p["code"] != "shipments.block_reason_required" {
+		t.Fatalf("delete without a reason: %d %v", code, p)
+	}
+	h.must(status("planner", "DELETE", base+"/"+id+"?reason=Pierde%20paquetes", nil), 204, "delete")
 	_, blocked, _ := h.raw("GET", base+"/"+id, "planner", nil)
-	if blocked["blocked"] != true || blocked["version"] != v.(float64)+1 {
+	if blocked["blocked"] != true || blocked["blockReason"] != "Pierde paquetes" || blocked["version"] != v.(float64)+1 {
 		t.Fatalf("delete blocks: %v", blocked)
 	}
-	h.must(status("planner", "DELETE", base+"/"+id, nil), 204, "delete again")
+	h.must(status("planner", "DELETE", base+"/"+id, map[string]any{"reason": "otra"}), 204, "delete again")
 	if _, again, _ := h.raw("GET", base+"/"+id, "planner", nil); again["version"] != blocked["version"] {
 		t.Fatalf("delete again changes nothing: %v", again)
 	}
 	h.must(status("viewer", "DELETE", base+"/"+id, nil), 403, "delete again without the permission")
+	// Desbloquear: motivo obligatorio, la versión leída; el historial tiene las dos filas.
+	code, p, _ = h.raw("POST", base+"/"+id+"/unblock", "planner", map[string]any{"version": blocked["version"]})
+	if code != 422 || p["code"] != "shipments.unblock_reason_required" {
+		t.Fatalf("unblock without a reason: %d %v", code, p)
+	}
+	h.must(status("planner", "POST", base+"/"+id+"/unblock", map[string]any{"reason": "Ya entrega", "version": v}), 409, "unblock with an old version")
+	code, p, _ = h.raw("POST", base+"/"+id+"/unblock", "planner", map[string]any{"reason": "Ya entrega", "version": blocked["version"]})
+	if code != 200 || p["blocked"] != false || p["blockReason"] != "" || p["unblockReason"] != "Ya entrega" {
+		t.Fatalf("unblock: %d %v", code, p)
+	}
+	var hist []map[string]any
+	h.must(h.do("GET", base+"/"+id+"/block-history", "viewer", nil, &hist), 200, "history")
+	if len(hist) != 2 || hist[0]["blocked"] != true || hist[0]["reason"] != "Pierde paquetes" || hist[1]["reason"] != "Ya entrega" || hist[1]["byName"] != "planner" {
+		t.Fatalf("history: %v", hist)
+	}
+	h.must(status("outsider", "GET", base+"/"+id+"/block-history", nil), 404, "history in another organization")
+	code, p, _ = h.raw("POST", base+"/"+id+"/block", "planner", map[string]any{"reason": "Otra vez"})
+	if code != 200 || p["blocked"] != true {
+		t.Fatalf("block: %d %v", code, p)
+	}
+	blocked = p
 	if _, page, _ = h.raw("GET", base+"?isActive=true", "planner", nil); page["totalCount"] != float64(3) {
 		t.Fatalf("a blocked carrier is not active: %v", page)
 	}

@@ -241,10 +241,12 @@ func Compose(sw *hotswap.Switch, o Options) (*Host, error) {
 	h.Accounting = accounting.Compose(sw, accounting.WithToday(zones))
 	h.Assets = assets.Compose(sw)
 	h.Documents = documents.Compose(sw, documents.WithMergedParties(merged), documents.WithToday(zones))
-	h.Shipments = shipments.Compose(sw, shipments.WithMergedParties(merged), shipments.WithToday(zones))
+	h.Shipments = shipments.Compose(sw, shipments.WithMergedParties(merged), shipments.WithToday(zones),
+		shipments.WithApprovalPolicy(h.Parties.ApprovalPolicy))
 	h.Work = work.Compose(sw, work.WithMergedParties(merged), work.WithToday(zones))
 	institutions := FinancialInstitutions{Parties: h.Parties, system: func() context.Context { return h.system }}
-	h.Financial = financial.Compose(sw, institutions, financial.WithMergedParties(merged), financial.WithToday(zones))
+	h.Financial = financial.Compose(sw, institutions, financial.WithMergedParties(merged), financial.WithToday(zones),
+		financial.WithApprovalPolicy(h.Parties.ApprovalPolicy))
 	h.Exchange = exchange.Compose(sw, PromotionCodes{Collaborators: h.Parties.Collaborators}, exchange.WithMergedParties(merged), exchange.WithToday(zones))
 	h.Modules = modules.Compose(sw, modules.WithDerivation(SectorCapabilities{Institutions: institutions}))
 	h.Exports = exports.Compose(sw, o.Files).Offer(CustomerAccounts{Financial: h.Financial}).Offer(PartyLists(h.Parties, h.HR)...).

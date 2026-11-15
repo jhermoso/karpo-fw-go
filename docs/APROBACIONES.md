@@ -102,6 +102,22 @@ Como arriba, con estas concreciones (docs/COMPRAS.md, «Aprobación del bloqueo 
 - Si el mismo cambio trae otros campos, se aplican y sólo el bloqueo queda pendiente (202 con
   `pendingApproval`).
 
+## Paso 3 en Envíos y en Cuentas (hecho, 2026-11-15)
+
+D-156 ampliada: lo mismo que en Compras para el **transportista** (docs/ENVIOS.md, «El bloqueo») y
+la **cuenta financiera** (docs/CUENTAS-CLIENTES.md, «El bloqueo»), con dos diferencias: bloquear y
+desbloquear son órdenes propias (`POST …/{id}/block` y `…/unblock`, con motivo y versión), así que
+la orden con aprobación no aplica nada (202 con `pendingApproval` y el agregado sin guardar); y cada
+bloqueo y desbloqueo efectivo queda en una tabla de historial propia, en la misma transacción.
+
+| Contexto | Acciones | Solicitudes | Historial | Bandeja |
+|---|---|---|---|---|
+| Envíos | `shipments.carrier.block`, `.unblock` | `shp_approvals` | `shp_carrier_block_events` | `/api/shipments/approvals` |
+| Cuentas | `financial.account.block`, `.unblock` | `fin_approvals` | `fin_account_block_events` | `/api/financial/approvals` |
+
+La empresa de la política es la del transportista (cada transportista es de una empresa) y la
+entidad de la cuenta.
+
 ## Pendiente
 
 - **Paso 3 en Ventas**: bloquear y desbloquear clientes, igual que en Compras.

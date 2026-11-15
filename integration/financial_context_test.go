@@ -176,7 +176,15 @@ func TestFinancialContext(t *testing.T) {
 			}
 
 			_, err = svc.Release.Handle(actx, fapp.ChangeStatus{ID: id(acc)})
+			if err == nil {
+				t.Fatal("unblocking needs a reason")
+			}
+			unblocked, err := svc.Unblock.Handle(actx, fapp.ChangeStatus{ID: id(acc), Reason: "Levantada la orden"})
 			must(err)
+			if hist, err := svc.BlockHistory.Handle(actx, fapp.GetAccount{ID: id(acc)}); err != nil || len(hist) != 2 || !hist[0].Blocked ||
+				hist[1].Reason != "Levantada la orden" || unblocked.UnblockReason != "Levantada la orden" || unblocked.BlockReason != "" {
+				t.Fatalf("block history: %+v %+v %v", hist, unblocked, err)
+			}
 			closed, err := svc.Close.Handle(actx, fapp.ChangeStatus{ID: id(acc), Reason: "A petición del titular"})
 			must(err)
 			again, err := svc.Get.Handle(actx, fapp.GetAccount{ID: id(acc)})
