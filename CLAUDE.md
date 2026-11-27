@@ -15,7 +15,8 @@ CQRS. Para entender el diseño, empezar por `docs/ARQUITECTURA.md`.
 | `examples/parties/` | Ejemplo del framework y banco de pruebas de Theros |
 | `integration/` | Pruebas contra servidores reales (`integration/CLAUDE.md`) |
 | `e2e/`, `contracts/billing/` | Pruebas de extremo a extremo; casos de cálculo compartidos con Karpo C# |
-| `front/` | Configuración del motor de Angular de Karpo C# para los contextos de Go |
+| `front/angular/` | Configuración del motor de Angular de Karpo C# para los contextos de Go |
+| `front/react/` | Front React (`@karpo/react`, vitest con cobertura); su forma de trabajo es la de `docs/FORMA-DE-TRABAJO.md` |
 | `docs/` | Un documento por contexto y por tema (`docs/CLAUDE.md`); índice en `README.md` |
 
 El port de los contextos de Karpo C# está terminado. Lo que se hace ahora:
@@ -51,6 +52,23 @@ fusionada, si es de la sesión de orquestación).
 - Un cambio en la API pública de `pkg/` puede romper lo que genera Theros: se avisa a
   «Orquestador Theros».
 
+## Forma de trabajo: roles, jueces y asesor
+
+Una tarea **mediana o grande** se lleva con el arnés `.claude/workflows/cinco-roles.js`, en backend
+y en front: analista, planificador y constructor, cada uno en bucle con su juez, y un asesor
+(Fable 5.2, esfuerzo medio) al que consultan todos. Es mediana o grande si toca más de un
+contexto, cambia el esquema, abre una pantalla o una pieza de `pkg/`, o su diseño admite más de
+una salida. Una tarea **pequeña** va sólo con constructor y juez de construcción.
+
+Todo está en `docs/FORMA-DE-TRABAJO.md`:
+
+- las vueltas, el arbitraje y la devolución a un rol anterior, en §3;
+- los criterios de aprobación que fijó Javier, en §5. No se cambian sin él;
+- cómo se lanza, en §7.
+
+Los roles están en `.claude/agents/`. El juez de construcción es la revisión independiente de
+D-139.
+
 ## Reglas fijas
 
 ### Git
@@ -70,7 +88,8 @@ fusionada, si es de la sesión de orquestación).
   `gh pr create --head <rama>`. A `main` no se empuja nunca.
 - **Fusionar** es cosa de la sesión de orquestación y sólo de sus propias PR (D-139; Javier,
   2026-11-06): con la batería en verde, la integración incluida, y una revisión independiente sin
-  bloqueos (un subagente nuevo que lee el diff sin las conclusiones del autor), fusiona con
+  bloqueos (el juez de construcción, o un subagente nuevo que lee el diff sin las conclusiones
+  del autor), fusiona con
   `gh pr merge N --merge`, sin borrar la rama, y se lo cuenta a Javier.
 - Nunca se saltan los hooks (`--no-verify`). `--force` sólo si Javier lo pide.
 
