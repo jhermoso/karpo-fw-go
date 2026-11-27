@@ -22,7 +22,7 @@ toca varias pantallas o lo que ya consumen otros proyectos.
 | Q-5 | Revisión nativa del árabe de la demo | Encargarla antes de usarlo fuera de la demo | Árabe «de demostración, sin revisión» (D-R38) | Bajo (sólo textos) |
 | Q-6 | `lightningcss` (MPL-2.0) y transitivas ISC/BlueOak/CC0 | Aceptarlas | Se usan y se listan en el informe | Bajo |
 | Q-7 | Paleta de datos provisional | Esperar a PT-5 | Sigue la provisional | Bajo |
-| Q-8 | Geometría real (Natural Earth) | Aportar el fichero | Sigue la esquemática (Q-4) | Medio |
+| Q-8 | Geometría real | **Decidida (2026-11-27):** Natural Earth + OSM/Protomaps + IGN/CNIG | Sigue la esquemática (Q-4) hasta que se construya | Medio |
 | Q-9 | `polylabel` como dependencia | No | Cálculo propio | Bajo |
 | Q-10 | Nivel del mapa con un solo elemento | Saltarlo | Se salta (`skipSingle: true`) | Bajo |
 | Q-11 | Atribución de `@xyflow/react` | Oculta, con su aviso | Oculta | Bajo |
@@ -103,16 +103,29 @@ toca varias pantallas o lo que ya consumen otros proyectos.
 - **Si no se contesta.** Sigue la provisional.
 - **Coste de cambiar después.** Bajo: son variables `--kx-data-*`; al llegar PT-5 se borran de `karpo.ext`.
 
-## Q-8. Geometría real de la demo (Natural Earth)
+## Q-8. Geometría real del mapa
 
-- **Pregunta.** Para tener fronteras reales: Natural Earth (dominio público) convertida a un PMTiles propio. Hace
-  falta que Javier **aporte el fichero o autorice la descarga**; el paquete `world-atlas` (ISC) por npm sólo
-  entraría con su visto bueno.
-- **Estado.** Sin respuesta; mientras tanto, la geometría esquemática de Q-4.
-- **Recomendación.** Aportar el fichero (así no se descarga nada fuera de npm).
-- **Si no se contesta.** Sigue la esquemática.
-- **Coste de cambiar después.** Medio: generar el PMTiles, cambiar `manifest.map.sources` y revisar rótulos y
-  niveles con datos reales.
+- **Pregunta.** ¿De qué fuentes sale la geometría real del mapa, que hoy es esquemática (Q-4)?
+- **Decisión de Javier (2026-11-27).** Tres fuentes, servidas como PMTiles propio desde el despliegue:
+  - **Natural Earth** para el mundo y los países: dominio público; la atribución es opcional.
+  - **OpenStreetMap vía Protomaps** para regiones y ciudades: ODbL; atribución visible
+    «© OpenStreetMap contributors». Las teselas tal cual son una *obra producida* y no obligan a publicar nada;
+    si se filtran o corrigen los datos de OSM antes de generarlas, eso es una *base de datos derivada* que hay
+    que publicar bajo ODbL si se usa públicamente. Código y estilo de Protomaps: BSD-3 y CC0.
+  - **IGN/CNIG** para comunidades, provincias y municipios de España: CC BY 4.0; atribución obligatoria a pie
+    de mapa, «BDLJE CC-BY 4.0 ign.es» (si se modifican: «Obra derivada de BDLJE <fecha> CC-BY 4.0 ign.es»).
+- **Descartadas (licencias leídas en sus webs oficiales el 2026-11-27).** GADM y Eurostat GISCO (NUTS, LAU:
+  límites © EuroGeographics) prohíben el uso comercial sin licencia aparte. geoBoundaries lleva una licencia
+  por país (España ADM2: licencia de datos del INE), así que no se usa sin revisarla país a país.
+- **Consecuencias.**
+  - Los códigos de la demo son NUTS (`ES51`, `ES300`), que es justo la fuente descartada: pasan a ISO 3166-2
+    (`ES-CT`) para regiones y a los del INE para provincias y municipios. El mapa deja de enlazar por
+    `nutsCode` (hoy lo usan `src/map/` y `src/api/normalizers.ts`); el campo puede seguir en el modelo de Go.
+  - El mapa muestra las atribuciones de OSM y del IGN (control de atribución de MapLibre).
+  - Generar el PMTiles es trabajo del orquestador de Karpo Go (B-2 y B-26), con una herramienta externa.
+- **Estado.** Decidida; hasta que se construya, sigue la esquemática de Q-4.
+- **Coste de cambiar después.** Medio: regenerar el PMTiles, cambiar `manifest.map.sources` y los códigos, y
+  revisar rótulos y niveles con datos reales.
 
 ## Q-9. `polylabel` como dependencia
 

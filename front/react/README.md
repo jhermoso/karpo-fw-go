@@ -383,7 +383,7 @@ una, qué pasa si no se responde y lo que costaría cambiarla después están en
 | Q-4 | Geometrías reales: ¿de dónde? | Demo con geometría esquemática generada y origen configurable para un `.pmtiles` real (petición B-2) |
 | Q-5 | ¿Se encarga una revisión nativa del árabe de la demo? | Árabe de demostración **sin revisión nativa** (D-R38); la estructura admite más idiomas y `?dir=rtl` sigue disponible |
 | Q-6 | `lightningcss` (MPL-2.0) como transitiva de desarrollo de Vite (otras transitivas ISC/BlueOak/CC0 se listan en el informe) | Se usa **por defecto mientras Javier no decida**; no se distribuye. Alternativa: `cssMinify: 'esbuild'`. Ojo: sus `targets` cambian el CSS publicado (compila `:dir()` a `:lang()`; D-R22) |
-| Q-8 | Geometría real para la demo (M-5): Natural Earth (dominio público) convertida a un PMTiles propio. Hace falta que Javier aporte el fichero o autorice la descarga; `world-atlas` (ISC) por npm, sólo con su visto bueno | Geometría esquemática rotulada (Q-4) y origen configurable |
+| Q-8 | Geometría real para el mapa (M-5) | **Decidida por Javier el 2026-11-27:** Natural Earth (mundo y países), OSM vía Protomaps (regiones y ciudades) e IGN/CNIG (España), en un PMTiles propio; códigos ISO 3166-2 e INE en lugar de NUTS. Detalle y licencias en [`docs/CONSULTAS-JAVIER.md`](docs/CONSULTAS-JAVIER.md#q-8-geometría-real-del-mapa). Hasta que se construya, sigue la esquemática (Q-4) |
 | Q-9 | `polylabel` (ISC) para colocar los rótulos del mapa | No: cálculo propio del polo de inaccesibilidad (`src/map/polylabel.ts`) |
 | Q-10 | Un nivel del mapa con una sola delimitación: ¿saltarlo o conservarlo? | Saltarlo (`map.skipSingle: true` por omisión, configurable por entidad) |
 | Q-7 | Paleta de datos provisional mientras no llegue PT-5 | Provisional en `karpo.ext` |
@@ -402,4 +402,9 @@ línea en `src/tree/TreeDiagram.tsx` (`proOptions.hideAttribution`) si se prefie
 - [`docs/PETICIONES-BACKEND.md`](docs/PETICIONES-BACKEND.md) y [`docs/PETICIONES-THEROS-FRONT.md`](docs/PETICIONES-THEROS-FRONT.md).
 - [`docs/LICENCIAS.md`](docs/LICENCIAS.md), [`docs/capturas/`](docs/capturas/README.md) y [`docs/analisis/`](docs/analisis/).
 - [`docs/PLAN-RONDA-2.md`](docs/PLAN-RONDA-2.md) y [`docs/jurado/ronda-1.md`](docs/jurado/ronda-1.md): lo que pidió el jurado y cómo se resolvió.
+  **El jurado de [`docs/jurado/`](docs/jurado/) es histórico:** las rondas 1 a 3 (aprobado en la
+  3, con 8,6) se hicieron con el bucle de cuatro agentes con el que se construyó el front. Las
+  tareas nuevas siguen la forma de trabajo del repositorio
+  ([`docs/FORMA-DE-TRABAJO.md`](../../docs/FORMA-DE-TRABAJO.md)), con un juez por rol (juez-ux en
+  el front), y dejan su memoria en `docs/trabajo/<tarea>/` (en la raíz del repositorio).
 - [`docs/notas/`](docs/notas/): notas de cada tarea (T1 a T8 y R1 a R4 de la ronda 2), con lo comprobado y lo pendiente; [`INTEGRACION.md`](docs/notas/INTEGRACION.md) recoge el cierre de cada ronda.
