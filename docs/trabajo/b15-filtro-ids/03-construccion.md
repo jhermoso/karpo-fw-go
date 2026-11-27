@@ -1,55 +1,46 @@
-# B-15: construcción
+## B-15: filtro `ids`, vuelta 2
 
-Rama `feat/filtro-ids`. Vuelta 1: commit `eb8577d`. Vuelta 2: el commit siguiente.
+**Resultado:** los cinco hallazgos del juez están resueltos y no he cambiado código de producción. En `feat/filtro-ids` hay tres commits sin push: `eb8577d` (el filtro), `644bf21` (correcciones de la vuelta 2) y `832b6ee` (la consulta 3 en la memoria de trabajo). `.claude/agents/` y `docs/FORMA-DE-TRABAJO.md` siguen fuera del commit.
 
-## Qué se hizo (vuelta 1)
+### Hallazgos del juez
+1. **Orden entre el 403 y el 400** (`docs/CONTRATO-MANTENIMIENTO.md`): el documento ya describe el orden real.
+   - `type` (en `POST`) sale en distribución, antes del permiso.
+   - En países, `format` y `range` también salen antes del permiso, igual que `eu` o `eurozone`.
+   - En las demás listas, `format` y `range` salen en la aplicación, después del permiso.
+   - No he movido la comprobación.
+2. **Países sin permiso** (`contexts/geography/maintenance_test.go`, desde la línea 278): hay tres casos nuevos.
+   - `?ids=` sin permiso da 403.
+   - `?ids=ESP` sin permiso da 400 `ids/format`.
+   - `POST` con `{"ids":[1]}` sin permiso da 400 `ids/type`.
+3. **Cobertura:** `BACKLOG.md` tiene la entrada de testing con las cifras medidas contra `origin/main`: `hr/application` pasa de 72,9 a 73,0 % y `products/application` de 77,3 a 77,6 %. Ninguna de las dos baja.
+4. **Mutantes vivos en código anterior:** `BACKLOG.md` los lista uno a uno, por dominio, con fichero, línea y tipo de mutación.
+   - Los saqué con un mutador propio, porque gremlins v0.5.0 en Windows da todos los mutantes por tiempo agotado.
+   - Consta que el filtro `ids` no depende de ninguno.
+5. **Memoria de trabajo:** existe `docs/trabajo/b15-filtro-ids/` con `02-plan.md`, `03-construccion.md`, `consultas.md` y `veredictos.md`.
+   - `consultas.md` recoge las consultas 1 y 2 y ahora también la 3: no consta que Javier haya confirmado las lecturas, así que se siguen como provisionales.
+   - `veredictos.md` dice que las dos lecturas de §5 están pendientes de Javier.
 
-- `pkg/distribution/ids.go`: `IDsFromQuery` (`?ids=a,b` y la clave repetida; `?ids=` es «presente
-  y vacío») e `IDsFromFilter` (lee y borra `filter.ids`; array o cadena con comas; un elemento que
-  no es cadena da `ids/type`).
-- `pkg/application/ids.go`: `ParseIDs[T comparable]`: parte, recorta, interpreta, quita repetidos;
-  mal formado o identidad cero dan un solo `ids/format`; más de 1000 tras limpiar, `ids/range`.
-- Dominio: `AstFieldID`/`AssetsWithIDs`, `SupFieldID`/`SuppliersWithIDs`,
-  `CarFieldID`/`CarriersWithIDs`, `HolidayFieldID`/`HolidaysWithIDs`, `ProductsWithIDs`.
-- Aplicación: `IDs` y `ByIDs` en `SearchFacilities`, `SearchAssets`, `SearchWorkCenters`,
-  `SearchProducts`, `PageSuppliers`, `PageCarriers` y `PageHolidays`, detrás del ámbito. Suppliers:
-  con `ids` o `supplier=` salen también las fusionadas.
-- Distribución: las 7 listas por GET y `POST …/search`; países con `canonAlpha2` en memoria.
-- Pruebas: unitarias, en memoria por `XWithIDs`, `testkit.CheckIDsFilter` (seis listas con ámbito y
-  festivos, en memoria y SQLite), países, suppliers con fusionadas, e
-  `integration/ids_filter_test.go` (1000 ids pasan y 1001 fallan en postgres, supabase,
-  sqlserver, oracle y mysql; slot 61, después `docker compose -p integration-s61 down -v`).
-- Documentación: `docs/CONTRATO-MANTENIMIENTO.md`, las filas «Lista» de los siete documentos de
-  contexto, el enlace en `ARQUITECTURA.md` y la línea del directorio en `BACKLOG.md`.
+### Comprobado ahora
+- `go test -count=1 ./contexts/geography/...` → `ok` en todos los paquetes con pruebas.
+- En esta vuelta no he repetido la batería completa ni la integración. El código de producción no ha cambiado desde la vuelta en la que pasaron: 91 paquetes en verde, y el slot 61 en los cinco motores, que luego borré con `down -v`.
 
-Desviaciones: sin subagentes (no había herramienta Agent); `IDs []string` hace no comparables las
-consultas de lista (se cambió un mapa en una prueba de integración); `testkit.CheckIDsFilter` es
-pieza nueva; en países el 400 de `ids` va antes del 403; `ParseIDs` usa `comparable` con
-`var zero T`.
+### Comando para Javier
+`cd C:/Git/Paranoia/karpo-fw-go-ids; go test -count=1 ./contexts/geography/`
+Debería ver `ok`, ya con los casos de países sin permiso.
 
-## Vuelta 2: hallazgos del juez
+### Lo que no se ha ejecutado
+- La suite de integración entera.
+- Gremlins sobre las capas de aplicación y de distribución de cada contexto.
+- Los avisos al carril del front (para que marque B-15) y a la sesión de Theros.
+- La carpeta temporal bloqueada `C:/Users/Javier/AppData/Local/Temp/gremlins-4075944370` sigue ahí; se puede borrar a mano.
 
-1. **Orden 403/400.** `CONTRATO-MANTENIMIENTO.md` dice ahora el orden real: `type` (distribución)
-   y el `format`/`range` de países van antes del permiso; en las demás listas, `format` y `range`
-   van después. No se ha movido código.
-2. **Países sin permiso.** `contexts/geography/maintenance_test.go` (`idsFilter`): `?ids=` sin
-   permiso da 403; `?ids=ESP`, 400 `ids/format`; `POST` con `[1]`, 400 `ids/type`.
-3. **Cobertura.** Entrada de testing en `BACKLOG.md` con `hr/application` (72,9 → 73,0 %) y
-   `products/application` (77,3 → 77,6 %).
-4. **Mutantes anteriores.** Listados uno a uno en `BACKLOG.md`. Gremlins en Windows da todo por
-   tiempo agotado, así que se usó un mutador propio con `go test -overlay`:
+### Decisiones para Javier, antes de fusionar (las dos lecturas provisionales del asesor)
+1. **¿Vale el «trinquete»?** Es decir: ¿puede un paquete tocado quedar por debajo del 80 % si no baja respecto a `origin/main` y tiene su entrada de testing en `BACKLOG.md`? La alternativa es subirlo al 80 % en la misma rama.
+2. **¿Cuenta como «explicado» un mutante vivo en código anterior?** Las condiciones son tres: que esté listado uno a uno en `BACKLOG.md`, que se declare la herramienta (aquí, el mutador propio en lugar de gremlins) y que el cambio no dependa de él. La alternativa es matarlo en la misma rama.
 
-   | Dominio | Muertos | Vivos |
-   |---|---|---|
-   | assets | 73 | 16 |
-   | facilities | 31 | 13 |
-   | geography | 4 | 30 |
-   | hr | 66 | 23 |
-   | products | 129 | 44 |
-   | purchases | 59 | 27 |
-   | shipments | 12 | 153 |
+Si Javier confirma, la sesión de orquestación lleva las dos lecturas a §5 de `FORMA-DE-TRABAJO.md` en otro commit.
 
-   Ninguno está en líneas de B-15, que no tienen operadores; el filtro `ids` no depende de esas
-   condiciones.
-5. **Memoria de trabajo.** Esta carpeta: `02-plan.md`, `03-construccion.md`, `consultas.md`,
-   `veredictos.md`. El análisis no se guardó y no se reconstruye.
+### Decisiones técnicas ya tomadas (reversibles)
+- El tope queda en 1000, sin bajarlo a 900.
+- Los errorCodes son `type`, `format` y `range`; la identidad cero da `format`.
+- En suppliers, pedir por `ids` o por `supplier=` trae también las fusionadas.
