@@ -1,0 +1,313 @@
+{
+  "version": 1,
+  "schematic": true,
+  "notice": "Geometría esquemática de demostración: no es cartografía. Generada por scripts/gen-geo.mjs.",
+  "fileStem": "world | <nivel>-<código del padre>: country-ES, region-ES30, city-ES300",
+  "levels": [
+    "world",
+    "country",
+    "region",
+    "city"
+  ],
+  "files": [
+    {
+      "file": "world.geojson",
+      "level": "world",
+      "code": null,
+      "featureLevel": "country",
+      "features": 248,
+      "bbox": [
+        -178.075,
+        -55.142,
+        179.075,
+        78.291
+      ]
+    },
+    {
+      "file": "country-ES.geojson",
+      "level": "country",
+      "code": "ES",
+      "featureLevel": "2",
+      "features": 19,
+      "bbox": [
+        -9.75,
+        35.25,
+        3.65,
+        43.95
+      ]
+    },
+    {
+      "file": "region-ES11.geojson",
+      "level": "region",
+      "code": "ES11",
+      "featureLevel": "3",
+      "features": 4,
+      "bbox": [
+        -9.775,
+        41.825,
+        -8.325,
+        43.975
+      ]
+    },
+    {
+      "file": "region-ES12.geojson",
+      "level": "region",
+      "code": "ES12",
+      "featureLevel": "3",
+      "features": 1,
+      "bbox": [
+        -8.275,
+        42.925,
+        -6.825,
+        43.975
+      ]
+    },
+    {
+      "file": "region-ES13.geojson",
+      "level": "region",
+      "code": "ES13",
+      "featureLevel": "3",
+      "features": 1,
+      "bbox": [
+        -6.775,
+        42.925,
+        -5.325,
+        43.975
+      ]
+    },
+    {
+      "file": "region-ES21.geojson",
+      "level": "region",
+      "code": "ES21",
+      "featureLevel": "3",
+      "features": 3,
+      "bbox": [
+        -5.275,
+        42.925,
+        -3.825,
+        43.975
+      ]
+    },
+    {
+      "file": "region-ES22.geojson",
+      "level": "region",
+      "code": "ES22",
+      "featureLevel": "3",
+      "features": 1,
+      "bbox": [
+        -3.775,
+        42.925,
+        -2.325,
+        43.975
+      ]
+    },
+    {
+      "file": "region-ES23.geojson",
+      "level": "region",
+      "code": "ES23",
+      "featureLevel": "3",
+      "features": 1,
+      "bbox": [
+        -3.775,
+        41.825,
+        -2.325,
+        42.875
+      ]
+    },
+    {
+      "file": "region-ES24.geojson",
+      "level": "region",
+      "code": "ES24",
+      "featureLevel": "3",
+      "features": 3,
+      "bbox": [
+        -2.275,
+        41.825,
+        -0.825,
+        43.975
+      ]
+    },
+    {
+      "file": "region-ES30.geojson",
+      "level": "region",
+      "code": "ES30",
+      "featureLevel": "3",
+      "features": 1,
+      "bbox": [
+        -5.275,
+        39.625,
+        -3.825,
+        40.675
+      ]
+    },
+    {
+      "file": "region-ES41.geojson",
+      "level": "region",
+      "code": "ES41",
+      "featureLevel": "3",
+      "features": 9,
+      "bbox": [
+        -8.275,
+        40.725,
+        -3.825,
+        42.875
+      ]
+    },
+    {
+      "file": "region-ES42.geojson",
+      "level": "region",
+      "code": "ES42",
+      "featureLevel": "3",
+      "features": 5,
+      "bbox": [
+        -3.775,
+        39.625,
+        -0.825,
+        41.775
+      ]
+    },
+    {
+      "file": "region-ES43.geojson",
+      "level": "region",
+      "code": "ES43",
+      "featureLevel": "3",
+      "features": 2,
+      "bbox": [
+        -8.275,
+        38.525,
+        -5.325,
+        40.675
+      ]
+    },
+    {
+      "file": "region-ES51.geojson",
+      "level": "region",
+      "code": "ES51",
+      "featureLevel": "3",
+      "features": 4,
+      "bbox": [
+        -0.775,
+        41.825,
+        2.175,
+        43.975
+      ]
+    },
+    {
+      "file": "region-ES52.geojson",
+      "level": "region",
+      "code": "ES52",
+      "featureLevel": "3",
+      "features": 3,
+      "bbox": [
+        -0.775,
+        39.625,
+        2.175,
+        41.775
+      ]
+    },
+    {
+      "file": "region-ES53.geojson",
+      "level": "region",
+      "code": "ES53",
+      "featureLevel": "3",
+      "features": 3,
+      "bbox": [
+        2.225,
+        40.725,
+        3.675,
+        42.875
+      ]
+    },
+    {
+      "file": "region-ES61.geojson",
+      "level": "region",
+      "code": "ES61",
+      "featureLevel": "3",
+      "features": 8,
+      "bbox": [
+        -8.275,
+        37.425,
+        -0.825,
+        38.475
+      ]
+    },
+    {
+      "file": "region-ES62.geojson",
+      "level": "region",
+      "code": "ES62",
+      "featureLevel": "3",
+      "features": 1,
+      "bbox": [
+        -0.775,
+        38.525,
+        0.675,
+        39.575
+      ]
+    },
+    {
+      "file": "region-ES63.geojson",
+      "level": "region",
+      "code": "ES63",
+      "featureLevel": "3",
+      "features": 1,
+      "bbox": [
+        -8.275,
+        36.325,
+        -6.825,
+        37.375
+      ]
+    },
+    {
+      "file": "region-ES64.geojson",
+      "level": "region",
+      "code": "ES64",
+      "featureLevel": "3",
+      "features": 1,
+      "bbox": [
+        -5.275,
+        36.325,
+        -3.825,
+        37.375
+      ]
+    },
+    {
+      "file": "region-ES70.geojson",
+      "level": "region",
+      "code": "ES70",
+      "featureLevel": "3",
+      "features": 7,
+      "bbox": [
+        -9.775,
+        35.225,
+        -3.825,
+        36.275
+      ]
+    },
+    {
+      "file": "city-ES300.geojson",
+      "level": "city",
+      "code": "ES300",
+      "featureLevel": "local",
+      "features": 14,
+      "bbox": [
+        -5.288,
+        39.613,
+        -3.813,
+        40.688
+      ]
+    },
+    {
+      "file": "city-ES511.geojson",
+      "level": "city",
+      "code": "ES511",
+      "featureLevel": "local",
+      "features": 14,
+      "bbox": [
+        -0.788,
+        42.913,
+        0.687,
+        43.988
+      ]
+    }
+  ]
+}

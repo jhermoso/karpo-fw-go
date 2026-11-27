@@ -1,0 +1,48 @@
+{
+  "boolean": {
+    "true": "Yes",
+    "false": "No"
+  },
+  "select": {
+    "empty": "—",
+    "placeholder": "Choose an option"
+  },
+  "empty": {
+    "noValue": "No value"
+  },
+  "multiselect": {
+    "placeholder": "Choose options",
+    "count": "{{n}} selected",
+    "listLabel": "Options for {{label}}"
+  },
+  "lookup": {
+    "placeholder": "Search…",
+    "searchLabel": "Search {{label}}",
+    "loading": "Searching…",
+    "empty": "No results",
+    "error": "Search failed",
+    "clear": "Clear selection"
+  },
+  "placeholder": {
+    "date": "mm/dd/yyyy",
+    "datetime": "mm/dd/yyyy hh:mm AM",
+    "number": "0",
+    "decimal": "0.00",
+    "percentage": "0%",
+    "email": "name@domain.com",
+    "phone": "+1 555 000 0000",
+    "url": "https://"
+  },
+  "errors": {
+    "required": "This field is required.",
+    "maxLength": "At most {{max}} characters.",
+    "minLength": "At least {{min}} characters.",
+    "min": "Must be at least {{min}}.",
+    "max": "Must be at most {{max}}.",
+    "pattern": "The format is not valid.",
+    "format": "The value is not in a valid format."
+  },
+  "paste": {
+    "invalidCell": "Invalid value"
+  }
+}

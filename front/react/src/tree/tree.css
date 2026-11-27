@@ -1,0 +1,413 @@
+/*
+ * Organigrama (T7): barra de la vista, listado `role=tree` y diagrama @xyflow.
+ *
+ * Sólo var(--th-*) y var(--kx-*), color-mix() y calc(): ningún color, medida ni fuente literal. La
+ * hoja base de @xyflow (disposición del lienzo) entra DENTRO de una subcapa de karpo.components,
+ * de modo que lo que escribimos aquí la sobrescribe sin !important; sus colores por defecto
+ * (variables --xy-*) se sustituyen abajo por variables del tema. No se toca `outline`: el foco lo
+ * pone el tema (A3 §7.5). Separación con `gap`, no con márgenes (A3 §8.1).
+ */
+@layer karpo.components;
+
+@import url("@xyflow/react/dist/base.css") layer(karpo.components.xyflow);
+
+@layer karpo.components {
+  [data-kx-view="tree"] {
+    display: flex;
+    flex-direction: column;
+    gap: var(--th-space-3);
+    block-size: 100%;
+    min-block-size: 0;
+  }
+
+  /* --- Barra --------------------------------------------------------------------------------- */
+  [data-kx-view="tree"] > [data-th="toolbar"] {
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--th-space-3);
+    padding-inline: var(--th-space-2);
+  }
+
+  /* En un ancho estrecho la búsqueda parte línea (campo y botones, luego el estado) en vez de salirse. */
+  [data-kx-view="tree"] [data-kx-part="search"] {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--th-space-1);
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    color: var(--th-text-secondary);
+  }
+
+  [data-kx-view="tree"] [data-kx-part="search"] input[type="search"] {
+    flex: 1 1 calc(var(--th-space-8) * 4);
+    inline-size: calc(var(--th-space-8) * 7);
+    min-inline-size: 0;
+    max-inline-size: 100%;
+  }
+
+  /* El estado de la búsqueda no se pega al borde ni lo desborda con un texto largo (M-10). */
+  [data-kx-view="tree"] [data-kx-part="search-status"] {
+    min-inline-size: calc(var(--th-space-8) * 4);
+    padding-inline: var(--th-space-2);
+    overflow-wrap: anywhere;
+    font-size: var(--th-type-small);
+    color: var(--th-text-secondary);
+  }
+
+  [data-kx-view="tree"] [data-kx-part="folding"] {
+    display: inline-flex;
+    gap: var(--th-space-1);
+    margin-inline-start: auto;
+  }
+
+  [data-kx-view="tree"] [data-kx-part="body"] {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: var(--th-space-2);
+    min-block-size: 0;
+  }
+
+  [data-kx-view="tree"] [data-kx-part="more"] {
+    margin: 0;
+    font-size: var(--th-type-small);
+    color: var(--th-text-secondary);
+  }
+
+  /* --- Texto resaltado por la búsqueda ------------------------------------------------------- */
+  [data-kx-view="tree"] mark[data-kx-part="match"] {
+    background: var(--th-text-selection-bg);
+    color: var(--th-text-selection-fg);
+    border-radius: var(--th-edge-rounding-small);
+  }
+
+  /* --- Contador de descendientes ------------------------------------------------------------- */
+  [data-kx-view="tree"] [data-kx-part="count"] {
+    display: inline-flex;
+    align-items: center;
+    padding-inline: var(--th-space-2);
+    border-radius: var(--th-edge-rounding-large);
+    background: var(--th-semantic-neutral-bg);
+    color: var(--th-semantic-neutral-fg);
+    border: var(--th-edge-width) solid var(--th-semantic-neutral-border);
+    font-size: var(--th-type-small);
+    font-variant-numeric: tabular-nums;
+    line-height: var(--th-type-ui-line-height);
+
+    /* «≥14» no se reordena en RTL: es un número, no texto. */
+    direction: ltr;
+    unicode-bidi: isolate;
+  }
+
+  /* --- Listado role=tree --------------------------------------------------------------------- */
+  [data-kx-part="tree"] {
+    flex: 1 1 auto;
+    min-block-size: calc(var(--th-space-8) * 6);
+    overflow: auto;
+    position: relative;
+    background: var(--th-surface-content-bg);
+    color: var(--th-surface-content-fg);
+    border: var(--th-edge-width) solid var(--th-edge-subtle);
+    border-radius: var(--th-edge-rounding-medium);
+    padding: var(--th-space-1);
+  }
+
+  [data-kx-part="tree"] [data-kx-part="spacer"] {
+    position: relative;
+    inline-size: 100%;
+  }
+
+  [data-kx-part="tree"] [role="treeitem"] {
+    display: flex;
+    align-items: center;
+    gap: var(--th-space-2);
+    box-sizing: border-box;
+    min-block-size: var(--th-control-height-regular);
+    padding-block: var(--th-space-row);
+    padding-inline: calc(var(--th-space-1) + var(--th-space-5) * (var(--kx-level, 1) - 1)) var(--th-space-2);
+    border-radius: var(--th-edge-rounding-small);
+    border-inline-start: var(--th-space-1) solid transparent;
+    cursor: default;
+    user-select: none;
+    outline-offset: calc(var(--th-state-focus-width) * -1);
+  }
+
+  [data-kx-part="tree"][data-kx-virtual="true"] [role="treeitem"] {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline: 0;
+  }
+
+  [data-kx-part="tree"] [role="treeitem"]:hover {
+    background: var(--th-state-hover-bg);
+    color: var(--th-state-hover-fg);
+  }
+
+  [data-kx-part="tree"] [role="treeitem"][aria-selected="true"] {
+    background: var(--th-state-selected-bg);
+    color: var(--th-state-selected-fg);
+  }
+
+  [data-kx-part="tree"] [role="treeitem"][data-kx-match="true"] {
+    border-inline-start-color: var(--th-semantic-info-strong);
+  }
+
+  [data-kx-part="tree"] [data-kx-part="toggle"] {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    inline-size: var(--th-control-icon-size);
+    block-size: var(--th-control-icon-size);
+    color: var(--th-control-icon-color);
+    cursor: pointer;
+  }
+
+  [data-kx-part="tree"] [data-kx-part="toggle"][data-kx-leaf="true"] {
+    cursor: default;
+  }
+
+  [data-kx-part="tree"] [data-kx-part="label"] {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: var(--th-text-heading-weight);
+  }
+
+  /* El subtítulo cede antes que el título: en un ancho estrecho se recorta el nombre de la persona, no el puesto. */
+  [data-kx-part="tree"] [data-kx-part="subtitle"] {
+    flex-shrink: 6;
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--th-text-secondary);
+    font-size: var(--th-type-small);
+  }
+
+  [data-kx-part="tree"] [data-kx-part="badge"] {
+    flex: none;
+  }
+
+  /* El contador va justo detrás de lo que cuenta (R3-4, M-7.4): sin `margin-inline-start: auto` quedaba a ~1000 px de su etiqueta. */
+  [data-kx-part="tree"] [data-kx-part="count"] {
+    flex: none;
+  }
+
+  /* --- Diagrama ------------------------------------------------------------------------------ */
+  [data-kx-part="diagram"] {
+    position: relative;
+    flex: 1 1 auto;
+    min-block-size: calc(var(--th-space-8) * 14);
+    overflow: hidden;
+    background: var(--th-surface-canvas-bg);
+    border: var(--th-edge-width) solid var(--th-edge-subtle);
+    border-radius: var(--th-edge-rounding-medium);
+  }
+
+  [data-kx-part="diagram"] .react-flow {
+    position: absolute;
+    inset: 0;
+
+    /* Colores de @xyflow sustituidos por variables del tema (los de la hoja base son literales). */
+    --xy-edge-stroke: var(--th-edge-strong);
+    --xy-edge-stroke-selected: var(--th-semantic-info-strong);
+    --xy-edge-stroke-width: var(--th-edge-width);
+    --xy-background-color: var(--th-surface-canvas-bg);
+    --xy-node-color: var(--th-text-primary);
+    --xy-node-border: var(--th-edge-width) solid var(--th-edge-subtle);
+    --xy-node-border-selected: var(--th-edge-width) solid var(--th-state-focus-color);
+    --xy-handle-background-color: var(--th-edge-strong);
+    --xy-minimap-background-color: var(--th-surface-content-bg);
+    --xy-minimap-mask-background-color: color-mix(in srgb, var(--th-surface-canvas-bg) 70%, transparent);
+    --xy-minimap-mask-stroke-color: var(--th-state-focus-color);
+    --xy-minimap-mask-stroke-width: var(--th-edge-width);
+    --xy-minimap-node-background-color: var(--th-edge-strong);
+    --xy-minimap-node-stroke-color: transparent;
+    --xy-minimap-node-stroke-width: var(--th-edge-width);
+    --xy-selection-background-color: color-mix(in srgb, var(--th-state-selected-bg) 40%, transparent);
+    --xy-selection-border: var(--th-edge-width) dotted var(--th-edge-strong);
+  }
+
+  /* stylelint-disable selector-class-pattern -- clases de @xyflow (BEM con __) */
+  [data-kx-part="diagram"] .react-flow__minimap-node.kx-minimap-selected {
+    fill: var(--th-state-selected-bg);
+    stroke: var(--th-state-focus-color);
+  }
+
+  [data-kx-part="diagram"] .react-flow__minimap-node.kx-minimap-match {
+    fill: var(--th-semantic-info-strong);
+  }
+
+  /* Los asideros sólo sirven para que las aristas encuentren sus extremos. */
+  [data-kx-part="diagram"] .react-flow__handle {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* stylelint-enable selector-class-pattern */
+
+  [data-kx-part="diagram"] [data-kx-part="controls"] {
+    display: flex;
+    flex-direction: column;
+    gap: var(--th-space-1);
+  }
+
+  /* Tarjeta: la misma regla vale para el nodo y para la sonda con la que se mide. */
+  [data-kx-part="diagram"] [data-kx-part="card"] {
+    position: relative;
+    box-sizing: border-box;
+    inline-size: calc(var(--th-space-8) * 8);
+
+    /* Cuatro módulos: caben rótulo y subtítulo a dos líneas y la insignia (R3-4, M-7.3). Es el alto con el que se dispone el diagrama. */
+    block-size: calc(var(--th-space-8) * 4);
+    border-radius: var(--th-edge-rounding-medium);
+    background: var(--th-surface-layer-level1);
+    color: var(--th-text-primary);
+    border: var(--th-edge-width) solid var(--th-edge-subtle);
+    box-shadow: var(--th-depth-levels-raised);
+  }
+
+  [data-kx-part="diagram"] [data-kx-part="card"] > [data-kx-part="main"] {
+    display: grid;
+    grid-template-rows: auto auto auto;
+    align-content: center;
+    justify-items: start;
+    gap: var(--th-space-1);
+    box-sizing: border-box;
+    inline-size: 100%;
+    block-size: 100%;
+    padding: var(--th-space-2) var(--th-space-3);
+    margin: 0;
+    border: 0;
+    border-radius: inherit;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+    overflow: hidden;
+  }
+
+  /* Sitio para el plegado y el contador, sólo si la tarjeta tiene hijos: una hoja usa todo el ancho (R3-4, M-7.3). */
+  [data-kx-part="diagram"] [data-kx-part="card"][data-kx-expandable="true"] > [data-kx-part="main"] {
+    padding-inline-end: calc(var(--th-space-8) * 2);
+  }
+
+  /* Rótulo y subtítulo a dos líneas como mucho; el `title` de cada uno lleva el texto entero si aun así se recorta. */
+  [data-kx-part="diagram"] [data-kx-part="card"] [data-kx-part="label"],
+  [data-kx-part="diagram"] [data-kx-part="card"] [data-kx-part="subtitle"] {
+    display: -webkit-box;
+    max-inline-size: 100%;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    text-overflow: ellipsis;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+
+  [data-kx-part="diagram"] [data-kx-part="card"] [data-kx-part="label"] {
+    font-weight: var(--th-text-heading-weight);
+  }
+
+  [data-kx-part="diagram"] [data-kx-part="card"] [data-kx-part="subtitle"] {
+    color: var(--th-text-secondary);
+    font-size: var(--th-type-small);
+  }
+
+  [data-kx-part="diagram"] [data-kx-part="card"][data-kx-selected="true"] {
+    background: var(--th-state-selected-bg);
+    color: var(--th-state-selected-fg);
+    border-color: var(--th-state-focus-color);
+  }
+
+  [data-kx-part="diagram"] [data-kx-part="card"][data-kx-selected="true"] [data-kx-part="subtitle"] {
+    color: inherit;
+  }
+
+  [data-kx-part="diagram"] [data-kx-part="card"][data-kx-match="true"] {
+    border-color: var(--th-semantic-info-strong);
+    border-inline-start-width: var(--th-space-1);
+  }
+
+  /* Rama plegada: borde inferior grueso, como una pila de tarjetas. */
+  [data-kx-part="diagram"] [data-kx-part="card"][data-kx-folded="true"] {
+    border-block-end: var(--th-space-1) solid var(--th-edge-strong);
+  }
+
+  [data-kx-part="diagram"] [data-kx-part="fold"] {
+    position: absolute;
+    inset-block-end: var(--th-space-2);
+    inset-inline-end: var(--th-space-2);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--th-space-1);
+    padding: var(--th-space-1) var(--th-space-2);
+    border: var(--th-edge-width) solid var(--th-semantic-neutral-border);
+    border-radius: var(--th-edge-rounding-large);
+    background: var(--th-semantic-neutral-bg);
+    color: var(--th-semantic-neutral-fg);
+    font: inherit;
+    font-size: var(--th-type-small);
+    cursor: pointer;
+  }
+
+  [data-kx-part="diagram"] [data-kx-part="fold"] [data-kx-part="count"] {
+    border: 0;
+    padding: 0;
+    background: transparent;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* «Ver como lista»: la alternativa accesible al diagrama, siempre a mano y la primera en el orden del teclado. */
+  [data-kx-part="diagram"] [data-kx-part="list-link"] {
+    position: absolute;
+    inset-block-start: var(--th-space-2);
+    inset-inline-start: var(--th-space-2);
+    z-index: var(--kx-z-sticky);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--th-space-1);
+    text-decoration: none;
+  }
+
+  /*
+   * Zoom lejano (menos de 0,6): sólo el título y el contador. El tamaño de letra lo calcula el diagrama
+   * (`--kx-far-font`, variable de disposición) para que a ese zoom siga viéndose a 11 px como mínimo.
+   */
+  [data-kx-part="diagram"][data-kx-zoom="far"] [data-kx-part="card"] [data-kx-part="subtitle"],
+  [data-kx-part="diagram"][data-kx-zoom="far"] [data-kx-part="card"] [data-kx-part="badge"],
+  [data-kx-part="diagram"][data-kx-zoom="far"] [data-kx-part="fold"] svg {
+    display: none;
+  }
+
+  [data-kx-part="diagram"][data-kx-zoom="far"] [data-kx-part="card"] > [data-kx-part="main"] {
+    align-content: start;
+  }
+
+  [data-kx-part="diagram"][data-kx-zoom="far"] [data-kx-part="card"] [data-kx-part="label"] {
+    font-size: var(--kx-far-font);
+    line-height: var(--th-type-ui-line-height);
+  }
+
+  [data-kx-part="diagram"][data-kx-zoom="far"] [data-kx-part="fold"] {
+    inset-block-end: var(--th-space-1);
+    font-size: var(--kx-far-font);
+  }
+
+  /* Sonda de medida: fuera de la vista y sin interacción, pero con el mismo CSS que la tarjeta. */
+  [data-kx-part="diagram"] [data-kx-part="probe"] {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-start: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  [data-kx-part="tree"] [role="treeitem"][aria-selected="true"] [data-kx-part="subtitle"] {
+    color: inherit;
+  }
+}

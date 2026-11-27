@@ -1,0 +1,7 @@
+{"type":"FeatureCollection","features":[
+{"type":"Feature","properties":{"code":"ES421","name":"Albacete","level":"3","parentCode":"ES42","nutsCode":"ES421","ineCode":"02","hasChildren":false},"geometry":{"type":"Polygon","coordinates":[[[-3.775,40.725],[-2.825,40.725],[-2.825,41.775],[-3.775,41.775],[-3.775,40.725]]]}},
+{"type":"Feature","properties":{"code":"ES422","name":"Ciudad Real","level":"3","parentCode":"ES42","nutsCode":"ES422","ineCode":"13","hasChildren":false},"geometry":{"type":"Polygon","coordinates":[[[-2.775,40.725],[-1.825,40.725],[-1.825,41.775],[-2.775,41.775],[-2.775,40.725]]]}},
+{"type":"Feature","properties":{"code":"ES423","name":"Cuenca","level":"3","parentCode":"ES42","nutsCode":"ES423","ineCode":"16","hasChildren":false},"geometry":{"type":"Polygon","coordinates":[[[-1.775,40.725],[-0.825,40.725],[-0.825,41.775],[-1.775,41.775],[-1.775,40.725]]]}},
+{"type":"Feature","properties":{"code":"ES424","name":"Guadalajara","level":"3","parentCode":"ES42","nutsCode":"ES424","ineCode":"19","hasChildren":false},"geometry":{"type":"Polygon","coordinates":[[[-3.775,39.625],[-2.325,39.625],[-2.325,40.675],[-3.775,40.675],[-3.775,39.625]]]}},
+{"type":"Feature","properties":{"code":"ES425","name":"Toledo","level":"3","parentCode":"ES42","nutsCode":"ES425","ineCode":"45","hasChildren":false},"geometry":{"type":"Polygon","coordinates":[[[-2.275,39.625],[-0.825,39.625],[-0.825,40.675],[-2.275,40.675],[-2.275,39.625]]]}}
+]}

@@ -1,0 +1,296 @@
+@layer th.base {
+  :root,
+  [data-th-mode] {
+    background-color: var(--th-surface-canvas-bg);
+    color: var(--th-surface-canvas-fg);
+  }
+
+  :root,
+  [data-th-mode] {
+    font-family: var(--th-type-ui-family);
+    font-size: var(--th-type-ui-size);
+    line-height: var(--th-type-ui-line-height);
+    accent-color: var(--th-control-toggle-on-bg);
+    scrollbar-color: var(--th-control-scrollbar-thumb) var(--th-control-scrollbar-track);
+    scrollbar-width: auto;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    color: var(--th-text-heading-color);
+    font-weight: var(--th-text-heading-weight);
+  }
+
+  h1 {
+    font-size: var(--th-type-6);
+  }
+
+  h2 {
+    font-size: var(--th-type-5);
+  }
+
+  h3 {
+    font-size: var(--th-type-4);
+  }
+
+  h4 {
+    font-size: var(--th-type-3);
+  }
+
+  h5 {
+    font-size: var(--th-type-2);
+  }
+
+  h6 {
+    font-size: var(--th-type-1);
+  }
+
+  a {
+    color: var(--th-text-link);
+  }
+
+  a:visited {
+    color: var(--th-text-link-visited);
+  }
+
+  [role="banner"] a:not([data-th]),
+  [role="banner"] a:not([data-th]):visited {
+    color: inherit;
+    text-decoration: underline;
+  }
+
+  ::selection {
+    background-color: var(--th-text-selection-bg);
+    color: var(--th-text-selection-fg);
+  }
+
+  ::placeholder {
+    color: var(--th-text-placeholder);
+    opacity: 1;
+  }
+
+  strong,
+  b {
+    font-weight: 700;
+  }
+
+  :focus {
+    outline: var(--th-state-focus-width) dotted var(--th-state-focus-color);
+    outline-offset: var(--th-state-focus-offset);
+  }
+
+  :where([role="banner"] :is(a:not([data-th]), [data-th="brand"], [data-th="action"][data-th-kind="quiet"]:not([aria-pressed="true"], [aria-disabled="true"]))):focus {
+    outline-color: currentColor;
+  }
+
+  button,
+  input:where(:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"])),
+  select,
+  textarea {
+    font: inherit;
+    min-block-size: var(--th-control-height-regular);
+    padding-inline: var(--th-control-padding);
+    border-width: var(--th-edge-width);
+    border-style: solid;
+    border-radius: var(--th-edge-rounding-small);
+  }
+
+  textarea {
+    min-block-size: calc(var(--th-control-height-regular) * 2);
+    padding-block: var(--th-space-1);
+  }
+
+  button {
+    background-color: var(--th-control-button-bg);
+    color: var(--th-control-button-fg);
+    border-color: var(--th-control-button-border);
+  }
+
+  input:where(:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"])),
+  select,
+  textarea {
+    background-color: var(--th-control-field-bg);
+    color: var(--th-control-field-fg);
+    border-color: var(--th-control-field-border);
+  }
+
+  button,
+  input:where(:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"])),
+  select,
+  textarea {
+    border-style: none;
+  }
+
+  button {
+    box-shadow: inset -1px -1px var(--th-edge-relief-shadow-dark), inset 1px 1px var(--th-edge-relief-light), inset -2px -2px var(--th-edge-relief-shadow-mid);
+  }
+
+  input:where(:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"])),
+  select,
+  textarea,
+  button:active,
+  button[aria-pressed="true"] {
+    box-shadow: inset 1px 1px var(--th-edge-relief-shadow-mid), inset -1px -1px var(--th-edge-relief-light), inset 2px 2px var(--th-edge-relief-shadow-dark);
+  }
+
+  input:where(:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"])):focus,
+  select:focus,
+  textarea:focus {
+    background-color: var(--th-control-field-focused-bg);
+    color: var(--th-control-field-focused-fg);
+    border-color: var(--th-control-field-focused-border);
+  }
+
+  [readonly] {
+    background-color: var(--th-control-field-readonly-bg);
+    color: var(--th-control-field-readonly-fg);
+    border-color: var(--th-control-field-readonly-border);
+  }
+
+  [aria-invalid="true"] {
+    background-color: var(--th-control-field-invalid-bg);
+    color: var(--th-control-field-invalid-fg);
+    border-color: var(--th-control-field-invalid-border);
+  }
+
+  [aria-checked="true"],
+  [aria-pressed="true"] {
+    background-color: var(--th-control-toggle-on-bg);
+    color: var(--th-control-toggle-on-fg);
+  }
+
+  [aria-checked="mixed"] {
+    background-color: var(--th-control-toggle-mixed-bg);
+    color: var(--th-control-toggle-mixed-fg);
+  }
+
+  :disabled,
+  [aria-disabled="true"] {
+    border-color: var(--th-state-disabled-color);
+    cursor: not-allowed;
+  }
+
+  :disabled,
+  [aria-disabled="true"] {
+    color: var(--th-text-disabled-color);
+    text-shadow: 1px 1px 0 var(--th-edge-relief-light);
+  }
+
+  [aria-busy="true"] {
+    cursor: progress;
+  }
+
+  [data-th-elevation="raised"] {
+    box-shadow: inset -1px -1px var(--th-edge-relief-shadow-dark), inset 1px 1px var(--th-edge-relief-light), inset -2px -2px var(--th-edge-relief-shadow-mid);
+  }
+
+  [data-th-elevation="overlay"] {
+    box-shadow: inset -1px -1px var(--th-edge-relief-shadow-dark), inset 1px 1px var(--th-edge-relief-light), inset -2px -2px var(--th-edge-relief-shadow-mid);
+  }
+
+  [data-th-elevation="modal"] {
+    box-shadow: inset -1px -1px var(--th-edge-relief-shadow-dark), inset 1px 1px var(--th-edge-relief-light), inset -2px -2px var(--th-edge-relief-shadow-mid);
+  }
+
+  [role="dialog"],
+  dialog {
+    background-color: var(--th-surface-dialog-bg);
+    color: var(--th-surface-dialog-fg);
+    border-radius: var(--th-edge-rounding-medium);
+    padding: var(--th-space-margin);
+  }
+
+  [role="dialog"],
+  dialog {
+    box-shadow: inset -1px -1px var(--th-edge-relief-shadow-dark), inset 1px 1px var(--th-edge-relief-light), inset -2px -2px var(--th-edge-relief-shadow-mid);
+  }
+
+  dialog::backdrop {
+    background-color: var(--th-surface-scrim);
+  }
+
+  [role="tooltip"] {
+    background-color: var(--th-surface-tooltip-bg);
+    color: var(--th-surface-tooltip-fg);
+    border-radius: var(--th-edge-rounding-small);
+    padding-block: var(--th-space-1);
+    padding-inline: var(--th-space-2);
+    font-size: var(--th-type-small);
+  }
+
+  [role="menu"],
+  [role="listbox"] {
+    background-color: var(--th-surface-popover-bg);
+    color: var(--th-surface-popover-fg);
+    border: var(--th-edge-width) solid var(--th-surface-popover-border);
+    border-radius: var(--th-edge-rounding-medium);
+  }
+
+  [role="menu"],
+  [role="listbox"] {
+    box-shadow: inset -1px -1px var(--th-edge-relief-shadow-dark), inset 1px 1px var(--th-edge-relief-light), inset -2px -2px var(--th-edge-relief-shadow-mid);
+  }
+
+  [role="banner"] {
+    background-color: var(--th-surface-header-bg);
+    color: var(--th-surface-header-fg);
+    border-block-end: var(--th-edge-width) solid var(--th-edge-subtle);
+    padding-block: var(--th-space-2);
+    padding-inline: var(--th-space-margin);
+  }
+
+  hr {
+    border: 0;
+    border-block-start: var(--th-edge-width) solid var(--th-edge-relief-shadow-mid);
+    border-block-end: var(--th-edge-width) solid var(--th-edge-relief-light);
+  }
+
+  [data-th-layer="1"] {
+    background-color: var(--th-surface-layer-level1);
+    border: var(--th-edge-width) solid var(--th-edge-subtle);
+  }
+
+  [data-th-layer="2"] {
+    background-color: var(--th-surface-layer-level2);
+    border: var(--th-edge-width) solid var(--th-edge-subtle);
+  }
+
+  [data-th-layer="3"] {
+    background-color: var(--th-surface-layer-level3);
+    border: var(--th-edge-width) solid var(--th-edge-subtle);
+  }
+
+  [data-th-drop="over"] {
+    background-color: var(--th-state-drop-target-bg);
+    color: var(--th-state-drop-target-fg);
+    outline: var(--th-edge-width) dashed var(--th-state-drop-target-border);
+  }
+
+  svg[data-th-icon] {
+    inline-size: var(--th-control-icon-size);
+    block-size: var(--th-control-icon-size);
+    color: var(--th-control-icon-color);
+  }
+
+  svg[data-th-icon] {
+    fill: none;
+    stroke: currentColor;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    a,
+    button,
+    input,
+    select,
+    textarea,
+    [data-th] {
+      transition-property: background-color, border-color, color, box-shadow;
+      transition-duration: var(--th-motion-duration-short);
+      transition-timing-function: linear;
+    }
+  }
+}

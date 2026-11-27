@@ -1,0 +1,5 @@
+{"type":"FeatureCollection","features":[
+{"type":"Feature","properties":{"code":"ES241","name":"Huesca","level":"3","parentCode":"ES24","nutsCode":"ES241","ineCode":"22","hasChildren":false},"geometry":{"type":"Polygon","coordinates":[[[-2.275,42.925],[-1.575,42.925],[-1.575,43.975],[-2.275,43.975],[-2.275,42.925]]]}},
+{"type":"Feature","properties":{"code":"ES242","name":"Teruel","level":"3","parentCode":"ES24","nutsCode":"ES242","ineCode":"44","hasChildren":false},"geometry":{"type":"Polygon","coordinates":[[[-1.525,42.925],[-0.825,42.925],[-0.825,43.975],[-1.525,43.975],[-1.525,42.925]]]}},
+{"type":"Feature","properties":{"code":"ES243","name":"Zaragoza","level":"3","parentCode":"ES24","nutsCode":"ES243","ineCode":"50","hasChildren":false},"geometry":{"type":"Polygon","coordinates":[[[-2.275,41.825],[-0.825,41.825],[-0.825,42.875],[-2.275,42.875],[-2.275,41.825]]]}}
+]}

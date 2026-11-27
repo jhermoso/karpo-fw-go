@@ -1,0 +1,20 @@
+/*
+ * Estructura (PLAN §4.5): ÚNICO fichero de src/ con literales numéricos (stylelint lo exceptúa).
+ * Aquí vive la escala de apilado (PT-7), porque Theros Front no la exporta.
+ *
+ * El velo del recorrido guiado (driver.js) lleva un z-index en línea de 10000 que no se puede
+ * cambiar desde CSS sin !important; por eso la escala del resto de la aplicación queda por debajo
+ * y el popover del recorrido (--kx-z-tour) por encima del velo.
+ */
+@layer karpo.ext {
+  :root {
+    --kx-z-base: 0;
+    --kx-z-sticky: 10;
+    --kx-z-dropdown: 100;
+    --kx-z-overlay: 200;
+    --kx-z-modal: 300;
+    --kx-z-toast: 400;
+    --kx-z-tooltip: 500;
+    --kx-z-tour: 10001;
+  }
+}

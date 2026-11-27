@@ -1,0 +1,240 @@
+/*
+ * Ayuda guiada (driver.js) con el aspecto del tema (análisis 03 §7.4).
+ *
+ * NO se importa `driver.js/dist/driver.css`: sus colores, fuentes y medidas son fijos. Aquí van sólo
+ *  (1) la estructura mínima que driver.js necesita para funcionar (posición, inertidad de la página,
+ *      flecha) y
+ *  (2) el aspecto, sacado de las variables del tema.
+ * El popover lleva role="dialog" y data-th-elevation="modal", así que el tema ya le pone fondo, color,
+ * radio, relleno y sombra (con relieve en classic-1995); sus botones llevan data-th="action".
+ * Todo en la capa karpo.components; sin literales (lo comprueba stylelint).
+ */
+@layer karpo.components {
+  /* --- El botón de ayuda --- */
+
+  /* Punto de «recorrido sin ver» (HelpButton pone data-kx-help-unseen hasta que se completa). */
+  [data-kx-help="help.button"] {
+    position: relative;
+  }
+
+  [data-kx-help="help.button"][data-kx-help-unseen]::after {
+    content: "";
+    position: absolute;
+    inset-block-start: var(--th-space-1);
+    inset-inline-end: var(--th-space-1);
+    inline-size: var(--th-space-2);
+    block-size: var(--th-space-2);
+    border-radius: var(--th-edge-rounding-large);
+    background: var(--kx-accent-strong);
+  }
+
+  /* --- Estructura de driver.js --- */
+
+  /* Capa de popover manual que driver.js crea dentro de un <dialog> abierto. */
+  .driver-layer {
+    position: fixed;
+    inset: 0;
+    inline-size: auto;
+    block-size: auto;
+    max-inline-size: none;
+    max-block-size: none;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    overflow: visible;
+    color: inherit;
+    background: transparent;
+    pointer-events: none;
+  }
+
+  .driver-layer::backdrop {
+    display: none;
+  }
+
+  /* Mientras dura el recorrido, la página no recibe puntero salvo lo destacado y el popover. */
+  .driver-active :where(:not(
+    .driver-page-interactive *,
+    .driver-active-element,
+    .driver-active-element *,
+    .driver-allowed-element,
+    .driver-allowed-element *,
+    .driver-popover,
+    .driver-popover *
+  )) {
+    pointer-events: none;
+  }
+
+  .driver-active .driver-active-element,
+  .driver-active .driver-allowed-element,
+  .driver-popover {
+    pointer-events: auto;
+  }
+
+  .driver-active .driver-allowed-element {
+    z-index: var(--kx-z-tour);
+  }
+
+  .driver-page-interactive .driver-overlay path {
+    pointer-events: none;
+  }
+
+  .driver-active.driver-no-scroll,
+  .driver-active-element-parent-no-scroll {
+    overflow: hidden;
+  }
+
+  /* El elemento destacado se distingue aunque el velo del tema sea transparente (classic-1995). */
+  .driver-active .driver-active-element {
+    outline: var(--kx-tour-highlight-width) solid var(--kx-tour-highlight-color);
+    outline-offset: var(--kx-tour-highlight-offset);
+  }
+
+  .driver-active .driver-active-element-raised {
+    outline: var(--kx-tour-highlight-width) solid var(--kx-tour-highlight-color);
+    outline-offset: calc(var(--kx-tour-highlight-offset) * -1);
+  }
+
+  /* --- El popover --- */
+
+  .driver-popover {
+    position: fixed;
+    inset-block-start: 0;
+    inset-inline-start: 0;
+    z-index: var(--kx-z-tour);
+    box-sizing: border-box;
+    inline-size: max-content;
+    min-inline-size: calc(var(--th-space-8) * 7);
+    max-inline-size: min(calc(var(--th-space-8) * 11), calc(100% - var(--th-space-4) * 2));
+    margin: 0;
+    text-align: start;
+    overflow-wrap: anywhere;
+  }
+
+  .driver-popover-title {
+    margin: 0;
+    padding-inline-end: calc(var(--th-control-height-regular) + var(--th-space-2));
+    font-size: var(--th-type-2);
+    font-weight: var(--th-text-heading-weight);
+    line-height: var(--th-type-ui-line-height);
+    color: var(--th-text-heading-color);
+  }
+
+  .driver-popover-description {
+    margin-block: var(--th-space-2) 0;
+    color: var(--th-text-secondary);
+  }
+
+  /* El título es opcional: sin él, el texto no necesita hueco arriba. */
+  .driver-popover-title:where([style*="none"]) + .driver-popover-description {
+    margin-block-start: 0;
+  }
+
+  .driver-popover-footer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--th-space-control-gap);
+    align-items: center;
+    justify-content: space-between;
+    margin-block-start: var(--th-space-4);
+  }
+
+  .driver-popover-progress-text {
+    font-size: var(--th-type-small);
+    color: var(--th-text-secondary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .driver-popover-navigation-btns {
+    display: flex;
+    flex-grow: 1;
+    gap: var(--th-space-control-gap);
+    justify-content: flex-end;
+  }
+
+  /* Cierre: botón cuadrado de la altura de control regular (>= 24 px de WCAG 2.5.8) con el icono x del marco. */
+  .driver-popover-close-btn {
+    position: absolute;
+    inset-block-start: var(--th-space-2);
+    inset-inline-end: var(--th-space-2);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    inline-size: var(--th-control-height-regular);
+    block-size: var(--th-control-height-regular);
+    min-inline-size: var(--th-control-height-regular);
+    min-block-size: var(--th-control-height-regular);
+    padding: 0;
+  }
+
+  .driver-popover-close-btn > svg {
+    flex: none;
+    inline-size: var(--th-control-icon-size);
+    block-size: var(--th-control-icon-size);
+  }
+
+  .driver-popover-btn-disabled {
+    opacity: var(--th-state-disabled-opacity);
+    pointer-events: none;
+  }
+
+  /*
+   * Flecha: sus lados son FÍSICOS (driver.js coloca el popover a la izquierda, derecha, arriba o abajo
+   * del elemento, sin mirar el idioma), por eso aquí sí se usan left/right.
+   */
+  .driver-popover-arrow {
+    position: absolute;
+    border: var(--th-space-2) solid var(--th-surface-dialog-bg);
+  }
+
+  .driver-popover-arrow-side-left {
+    left: 100%;
+    border-top-color: transparent;
+    border-right-color: transparent;
+    border-bottom-color: transparent;
+  }
+
+  .driver-popover-arrow-side-right {
+    right: 100%;
+    border-top-color: transparent;
+    border-bottom-color: transparent;
+    border-left-color: transparent;
+  }
+
+  .driver-popover-arrow-side-top {
+    top: 100%;
+    border-right-color: transparent;
+    border-bottom-color: transparent;
+    border-left-color: transparent;
+  }
+
+  .driver-popover-arrow-side-bottom {
+    bottom: 100%;
+    border-top-color: transparent;
+    border-right-color: transparent;
+    border-left-color: transparent;
+  }
+
+  .driver-popover-arrow-side-over,
+  .driver-popover-arrow-side-center,
+  .driver-popover-arrow-none {
+    display: none;
+  }
+
+  /* --- Movimiento: sólo si el usuario no pidió reducirlo (driver.js añade .driver-fade al animar) --- */
+  @media (prefers-reduced-motion: no-preference) {
+    .driver-fade .driver-popover {
+      animation: kx-tour-fade var(--kx-duration-medium) var(--kx-easing);
+    }
+  }
+
+  @keyframes kx-tour-fade {
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
+  }
+}

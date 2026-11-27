@@ -1,0 +1,71 @@
+{
+  "missing": "This entity has no org chart view configured.",
+  "view": {
+    "label": "Org chart of {{name}}"
+  },
+  "loading": "Loading the org chart",
+  "loadingMore": "Loading more items…",
+  "empty": "There is nothing to show in the org chart.",
+  "error": {
+    "load": "The org chart could not be loaded.",
+    "retry": "Try again"
+  },
+  "search": {
+    "label": "Search the org chart",
+    "placeholder": "Search…",
+    "previous": "Previous match",
+    "next": "Next match",
+    "none": "No matches",
+    "count": "Match {{current}} of {{total}}"
+  },
+  "toolbar": {
+    "expandAll": "Expand all",
+    "collapseAll": "Collapse all"
+  },
+  "list": {
+    "label": "Org chart of {{name}}",
+    "loadingBranch": "Loading the branch",
+    "descendants_one": "{{count}} descendant",
+    "descendants_other": "{{count}} descendants",
+    "descendantsPartial_one": "at least {{count}} descendant; some branches are not loaded",
+    "descendantsPartial_other": "at least {{count}} descendants; some branches are not loaded"
+  },
+  "diagram": {
+    "label": "Diagram of {{name}}",
+    "roleDescription": "diagram",
+    "nodeRole": "org chart node",
+    "asList": "View as list",
+    "fitAll": "See the whole org chart",
+    "fitLegible": "Back to the legible size",
+    "nodeHint": "Arrow keys: up to the parent, down to the first child, left and right between siblings. Plus and minus expand and collapse the branch. Enter opens the record for editing.",
+    "fold": "Collapse the branch of {{name}}",
+    "unfold": "Expand the branch of {{name}}",
+    "controls": "Diagram controls",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "fit": "Fit to screen",
+    "minimap": "Diagram minimap"
+  },
+  "help": {
+    "listlink": {
+      "title": "View as list",
+      "body": "The diagram has its alternative in a tree list, which works with the keyboard and screen readers. Your selection and collapsed branches are kept."
+    },
+    "search": {
+      "title": "Search the org chart",
+      "body": "Type to expand the branches with matches and highlight them. Enter jumps to the next match and Shift+Enter to the previous one."
+    },
+    "node": {
+      "title": "Org chart items",
+      "body": "Click to select and double-click to open the record for editing. With the keyboard, arrow keys move between items, Enter opens and Space selects."
+    },
+    "zoom": {
+      "title": "Zoom and framing",
+      "body": "Zoom in, zoom out or fit the diagram to the screen; Fit switches between a legible size, centered on the root, and the whole org chart. You can also use the mouse wheel, or drag the background or the minimap."
+    },
+    "canvas": {
+      "title": "Org chart",
+      "body": "Each card is an item of the hierarchy. Collapse or expand a branch to see how many descendants it has."
+    }
+  }
+}

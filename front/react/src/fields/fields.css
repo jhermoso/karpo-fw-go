@@ -1,0 +1,169 @@
+/*
+ * Campos (T3): visores y editores. El tema viste input, select, textarea, [aria-invalid],
+ * [readonly], [data-th="badge"] y los flotantes; aquí sólo disposición y los estados propios.
+ * Sólo var(--th-*) y var(--kx-*); separación con `gap`, no con márgenes (A3 §8.1).
+ */
+@layer karpo.components {
+  /* --- Visores ----------------------------------------------------------------------------- */
+  [data-kx-ui="value"][data-kx-empty="true"] {
+    color: var(--th-text-secondary);
+  }
+
+  [data-kx-ui="value"][data-kx-kind="textarea"] {
+    white-space: pre-line;
+  }
+
+  /*
+   * Cifras (D-R35): dígitos de ancho fijo en la familia del cuerpo. Los visores numéricos ya no llevan
+   * `data-th-format="amount"`, que el tema viste en monoespaciada (Q-12).
+   */
+  [data-kx-ui="value"][data-kx-align="end"] {
+    font-variant-numeric: tabular-nums;
+    text-align: end;
+    white-space: nowrap;
+  }
+
+  [data-kx-ui="value"][data-kx-kind="boolean"] {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--th-space-1);
+  }
+
+  [data-kx-ui="value"][data-kx-kind="boolean"][data-kx-value="true"] {
+    color: var(--th-semantic-success-strong);
+  }
+
+  [data-kx-ui="value"][data-kx-kind="boolean"][data-kx-value="false"] {
+    color: var(--th-text-secondary);
+  }
+
+  [data-kx-ui="value-list"] {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--th-space-1);
+  }
+
+  a[data-kx-ui="value"] {
+    color: var(--th-text-link);
+  }
+
+  /* --- Editores ---------------------------------------------------------------------------- */
+  [data-kx-ui="input"] {
+    inline-size: 100%;
+    min-inline-size: 0;
+  }
+
+  [data-kx-ui="input"][data-kx-align="end"] {
+    font-variant-numeric: tabular-nums;
+    text-align: end;
+  }
+
+  input[type="checkbox"][data-kx-ui="input"] {
+    inline-size: auto;
+  }
+
+  textarea[data-kx-ui="input"] {
+    resize: vertical;
+  }
+
+  /* --- Combobox de clave ajena ------------------------------------------------------------- */
+  [data-kx-ui="lookup"] {
+    position: relative;
+    display: flex;
+    align-items: center;
+    inline-size: 100%;
+  }
+
+  [data-kx-ui="lookup"] > svg {
+    position: absolute;
+    inset-inline-end: var(--th-control-padding);
+    pointer-events: none;
+    color: var(--th-control-icon-color);
+  }
+
+  [data-kx-ui="lookup"] > [data-kx-ui="input"] {
+    padding-inline-end: calc(var(--th-control-padding) * 2 + var(--th-control-icon-size));
+
+    /* Un nombre largo se corta con «…» por el final; en un idioma RTL el texto latino conserva su orden
+       y no pierde el principio. */
+    text-overflow: ellipsis;
+    unicode-bidi: plaintext;
+  }
+
+  [data-kx-ui="lookup-popup"],
+  [data-kx-ui="multiselect-popup"] {
+    inline-size: max(var(--radix-popover-trigger-width), calc(var(--th-space-8) * 5));
+    max-block-size: min(var(--radix-popover-content-available-height), calc(var(--th-space-8) * 8));
+    overflow: auto;
+    z-index: var(--kx-z-popover);
+  }
+
+  [data-kx-ui="lookup-popup"] [cmdk-list] {
+    display: grid;
+  }
+
+  [data-kx-ui="lookup-popup"] [role="option"] {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--th-space-2);
+    padding-block: var(--th-space-2);
+    padding-inline: var(--th-control-padding);
+    cursor: pointer;
+  }
+
+  [data-kx-ui="lookup-popup"] [role="option"][data-selected="true"] {
+    background: var(--th-state-hover-bg);
+    color: var(--th-state-hover-fg);
+  }
+
+  [data-kx-ui="lookup-popup"] [role="option"][data-kx-chosen="true"] {
+    font-weight: var(--th-text-heading-weight);
+  }
+
+  [data-kx-ui="lookup-popup"] [data-kx-part="status"] {
+    padding: var(--th-space-2) var(--th-control-padding);
+    color: var(--th-text-secondary);
+  }
+
+  /* --- Selección múltiple ------------------------------------------------------------------ */
+  button[data-kx-ui="multiselect"] {
+    display: flex;
+    align-items: center;
+    inline-size: 100%;
+    min-block-size: var(--th-control-height-regular);
+    padding-inline: var(--th-control-padding);
+    background: var(--th-control-field-bg);
+    color: var(--th-control-field-fg);
+    border: var(--th-edge-width) solid var(--th-control-field-border);
+    border-radius: var(--th-edge-rounding-small);
+    text-align: start;
+  }
+
+  button[data-kx-ui="multiselect"] [data-kx-part="chips"] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--th-space-1);
+  }
+
+  button[data-kx-ui="multiselect"] [data-kx-part="placeholder"] {
+    color: var(--th-text-placeholder);
+  }
+
+  [data-kx-ui="multiselect-popup"] fieldset {
+    display: grid;
+    gap: var(--th-space-1);
+    min-inline-size: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  [data-kx-ui="multiselect-popup"] [data-kx-part="option"] {
+    display: flex;
+    align-items: center;
+    gap: var(--th-space-2);
+    padding-block: var(--th-space-1);
+    cursor: pointer;
+  }
+}

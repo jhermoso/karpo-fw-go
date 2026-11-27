@@ -1,0 +1,82 @@
+{
+    "id": "party",
+    "name": "Entidad",
+    "nameKey": "entities.party.name",
+    "namePlural": "Entidades",
+    "namePluralKey": "entities.party.namePlural",
+    "description": "Personas y organizaciones (Parties). Sólo se usa como origen de las claves ajenas: empresa, proveedor, titular de un puesto.",
+    "descriptionKey": "entities.party.description",
+    "icon": "address-book",
+    "apiEndpoint": "/parties",
+    "apiVersioned": false,
+    "editable": false,
+    "editType": "direct",
+    "primaryKey": "id",
+    "displayField": "name",
+    "dataSource": {
+        "type": "single",
+        "paginationStrategy": "server",
+        "listStyle": "number-size",
+        "serverFiltering": {
+            "enabled": true,
+            "clientOnlyFields": []
+        }
+    },
+
+    "grid": {
+        "columns": [
+            { "field": "name", "header": "Nombre", "headerKey": "entities.party.columns.name", "type": "text", "width": 320 },
+            { "field": "kind", "header": "Clase", "headerKey": "entities.party.columns.kind", "type": "text", "width": 140 },
+            { "field": "active", "header": "Activa", "headerKey": "entities.party.columns.active", "type": "boolean", "width": 100, "trueLabel": "Sí", "trueLabelKey": "values.yes", "falseLabel": "No", "falseLabelKey": "values.no" }
+        ],
+        "pageSize": 25,
+        "pageSizeOptions": [25, 50, 100],
+        "selectable": false,
+        "rowActions": []
+    },
+
+    "filters": [
+        {
+            "field": "_search",
+            "serverField": "q",
+            "label": "Buscar",
+            "labelKey": "entities.party.filters.search",
+            "type": "text",
+            "icon": "search",
+            "width": 4
+        }
+    ],
+
+    "detail": {
+        "showHistory": false,
+        "showRelations": false,
+        "showTags": false,
+        "sections": [
+            {
+                "id": "main",
+                "title": "Entidad",
+                "titleKey": "entities.party.sections.main",
+                "collapsible": false,
+                "columns": 2,
+                "fields": [
+                    { "field": "name", "label": "Nombre", "labelKey": "entities.party.columns.name", "type": "text", "editable": false },
+                    { "field": "kind", "label": "Clase", "labelKey": "entities.party.columns.kind", "type": "text", "editable": false }
+                ]
+            }
+        ],
+        "childGrids": []
+    },
+
+    "availableViews": ["grid", "detail"],
+    "defaultView": "grid",
+
+    "searchable": true,
+    "searchFields": ["name"],
+
+    "metadata": {
+        "version": "1.0.0",
+        "author": "Karpo React (demo)",
+        "lastModified": "2026-11-27",
+        "tags": ["parties", "lookup", "demo"]
+    }
+}

@@ -1,0 +1,405 @@
+{
+  "schemaVersion": 1,
+  "api": { "baseUrl": "/api", "apiVersion": "v1" },
+  "locales": ["es", "en", "ar"],
+  "defaultLocale": "es",
+  "i18n": { "es": "i18n/es.json", "en": "i18n/en.json", "ar": "i18n/ar.json" },
+  "theme": {
+    "origin": "/themes/",
+    "default": "modern-flat",
+    "available": ["modern-flat", "classic-1995", "glossy-2003", "souq"]
+  },
+  "map": {
+    "sources": {
+      "demo-geojson": { "type": "geojson", "url": "/geo/{level}.geojson", "schematic": true },
+      "demo-pmtiles": { "type": "pmtiles", "url": "/geo/karpo-demo.pmtiles", "layer": "boundaries", "schematic": true }
+    }
+  },
+  "entities": [
+    {
+      "id": "facility",
+      "path": "go/facilities/facility.config.json",
+      "overlayPath": "overlays/facility.i18n.json",
+      "permissions": { "read": "Facilities.Facility.Read", "write": "Facilities.Facility.Update" },
+      "overlay": {
+        "nameKey": "entities.facility.name",
+        "namePluralKey": "entities.facility.namePlural",
+        "descriptionKey": "entities.facility.description",
+        "serverSortFields": ["name"],
+        "views": [
+          {
+            "kind": "tree",
+            "labelKey": "views.tree.facility",
+            "parentField": "partOf",
+            "labelField": "name",
+            "subtitleField": "typeName",
+            "badgeField": "active",
+            "source": { "type": "flat" }
+          },
+          {
+            "kind": "map",
+            "labelKey": "views.map.facility",
+            "boundaryField": "location.geoBoundary",
+            "aggregate": "count",
+            "levels": [
+              { "id": "world", "labelKey": "map.levels.world", "boundaryLevel": "country", "codeProperty": "code", "source": "demo-geojson", "defaultCode": null },
+              { "id": "country", "labelKey": "map.levels.country", "boundaryLevel": "2", "codeProperty": "code", "source": "demo-geojson", "defaultCode": "ES" },
+              { "id": "region", "labelKey": "map.levels.region", "boundaryLevel": "3", "codeProperty": "code", "source": "demo-geojson", "defaultCode": "ES30" },
+              { "id": "city", "labelKey": "map.levels.city", "boundaryLevel": "local", "codeProperty": "code", "source": "demo-geojson", "defaultCode": "ES300" }
+            ]
+          }
+        ],
+        "availableViews": ["grid", "detail", "tree", "map"],
+        "form": {
+          "sections": [
+            {
+              "id": "main",
+              "fields": [
+                { "field": "type", "type": "lookup", "lookupEntity": "facility-type", "lookupValueField": "id", "lookupDisplayField": "name" },
+                { "field": "partOf", "type": "lookup", "lookupEntity": "facility", "lookupValueField": "id", "lookupDisplayField": "name" }
+              ]
+            }
+          ]
+        },
+        "detail": {
+          "sections": [
+            {
+              "id": "main",
+              "fields": [
+                { "field": "partOf", "type": "lookup", "lookupEntity": "facility", "lookupValueField": "id", "lookupDisplayField": "name" }
+              ]
+            }
+          ]
+        },
+        "help": {
+          "steps": [
+            { "target": "grid.filters", "titleKey": "help.facility.filters.title", "bodyKey": "help.facility.filters.body" },
+            { "target": "grid.table", "titleKey": "help.facility.table.title", "bodyKey": "help.facility.table.body" },
+            { "target": "core.view-switch", "titleKey": "help.facility.views.title", "bodyKey": "help.facility.views.body" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "country",
+      "path": "go/geography/country.config.json",
+      "overlayPath": "overlays/country.i18n.json",
+      "permissions": { "read": "Geography.Reference.Read" },
+      "overlay": {
+        "nameKey": "entities.country.name",
+        "namePluralKey": "entities.country.namePlural",
+        "descriptionKey": "entities.country.description",
+        "serverSortFields": ["alpha2", "alpha3", "name"]
+      }
+    },
+    {
+      "id": "holiday",
+      "path": "go/geography/holiday.config.json",
+      "overlayPath": "overlays/holiday.i18n.json",
+      "permissions": { "read": "Geography.Holiday.Read", "write": "Geography.Holiday.Update" },
+      "overlay": {
+        "nameKey": "entities.holiday.name",
+        "namePluralKey": "entities.holiday.namePlural",
+        "descriptionKey": "entities.holiday.description",
+        "serverSortFields": ["date", "name"],
+        "form": {
+          "sections": [
+            {
+              "id": "main",
+              "fields": [
+                { "field": "boundary", "type": "lookup", "lookupEntity": "boundary", "lookupValueField": "id", "lookupDisplayField": "name" }
+              ]
+            }
+          ]
+        },
+        "detail": {
+          "sections": [
+            {
+              "id": "main",
+              "fields": [
+                { "field": "boundary", "type": "lookup", "lookupEntity": "boundary", "lookupValueField": "id", "lookupDisplayField": "name" }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "work-center",
+      "path": "go/hr/work-center.config.json",
+      "overlayPath": "overlays/work-center.i18n.json",
+      "permissions": { "read": "HR.WorkCenter.Read", "write": "HR.WorkCenter.Update" },
+      "overlay": {
+        "nameKey": "entities.workCenter.name",
+        "namePluralKey": "entities.workCenter.namePlural",
+        "descriptionKey": "entities.workCenter.description",
+        "serverSortFields": ["code"],
+        "grid": {
+          "columns": [
+            { "field": "facility", "type": "lookup", "lookupEntity": "facility", "lookupValueField": "id", "lookupDisplayField": "name" }
+          ]
+        },
+        "form": {
+          "sections": [
+            {
+              "id": "main",
+              "fields": [
+                { "field": "employer", "type": "lookup", "lookupEntity": "party", "lookupValueField": "id", "lookupDisplayField": "name", "lookupFilter": { "role": "10000000-0000-0000-0001-000000000001" } },
+                { "field": "facility", "type": "lookup", "lookupEntity": "facility", "lookupValueField": "id", "lookupDisplayField": "name" }
+              ]
+            }
+          ]
+        },
+        "detail": {
+          "sections": [
+            {
+              "id": "main",
+              "fields": [
+                { "field": "employer", "type": "lookup", "lookupEntity": "party", "lookupValueField": "id", "lookupDisplayField": "name" },
+                { "field": "facility", "type": "lookup", "lookupEntity": "facility", "lookupValueField": "id", "lookupDisplayField": "name" }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "product",
+      "path": "go/products/product.config.json",
+      "overlayPath": "overlays/product.i18n.json",
+      "permissions": { "read": "Products.Product.Read", "write": "Products.Product.Update" },
+      "overlay": {
+        "nameKey": "entities.product.name",
+        "namePluralKey": "entities.product.namePlural",
+        "descriptionKey": "entities.product.description",
+        "saveMode": "batch",
+        "serverSortFields": ["sku", "name"],
+        "help": {
+          "steps": [
+            { "target": "grid.filters", "titleKey": "help.product.filters.title", "bodyKey": "help.product.filters.body" },
+            { "target": "grid.table", "titleKey": "help.product.table.title", "bodyKey": "help.product.table.body" },
+            { "target": "grid.batch-bar", "titleKey": "help.product.saveBar.title", "bodyKey": "help.product.saveBar.body" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "asset",
+      "path": "go/assets/asset.config.json",
+      "overlayPath": "overlays/asset.i18n.json",
+      "permissions": { "read": "Assets.Asset.Read", "write": "Assets.Asset.Update" },
+      "overlay": {
+        "nameKey": "entities.asset.name",
+        "namePluralKey": "entities.asset.namePlural",
+        "descriptionKey": "entities.asset.description",
+        "serverSortFields": ["code", "name"],
+        "form": {
+          "sections": [
+            {
+              "id": "main",
+              "fields": [
+                { "field": "location", "type": "lookup", "lookupEntity": "facility", "lookupValueField": "id", "lookupDisplayField": "name" },
+                { "field": "supplier", "label": "Proveedor", "labelKey": "entities.asset.lookups.supplier", "type": "lookup", "lookupEntity": "party", "lookupValueField": "id", "lookupDisplayField": "name", "lookupFilter": { "role": "10000000-0000-0000-0001-000000000003" } }
+              ]
+            }
+          ]
+        },
+        "detail": {
+          "sections": [
+            {
+              "id": "main",
+              "fields": [
+                { "field": "location", "type": "lookup", "lookupEntity": "facility", "lookupValueField": "id", "lookupDisplayField": "name" },
+                { "field": "supplier", "label": "Proveedor", "labelKey": "entities.asset.lookups.supplier", "type": "lookup", "lookupEntity": "party", "lookupValueField": "id", "lookupDisplayField": "name" }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "carrier",
+      "path": "go/shipments/carrier.config.json",
+      "overlayPath": "overlays/carrier.i18n.json",
+      "permissions": { "read": "Shipments.Carrier.Read", "write": "Shipments.Carrier.Update" },
+      "overlay": {
+        "nameKey": "entities.carrier.name",
+        "namePluralKey": "entities.carrier.namePlural",
+        "descriptionKey": "entities.carrier.description",
+        "serverSortFields": ["code", "name"],
+        "form": {
+          "sections": [
+            {
+              "id": "main",
+              "fields": [
+                { "field": "party", "type": "lookup", "lookupEntity": "party", "lookupValueField": "id", "lookupDisplayField": "name", "lookupFilter": { "role": "10000000-0000-0000-0001-000000000024" } }
+              ]
+            }
+          ]
+        },
+        "detail": {
+          "sections": [
+            {
+              "id": "main",
+              "fields": [
+                { "field": "party", "type": "lookup", "lookupEntity": "party", "lookupValueField": "id", "lookupDisplayField": "name" }
+              ]
+            }
+          ]
+        },
+        "commands": [
+          {
+            "id": "block",
+            "label": "Bloquear",
+            "labelKey": "commands.block",
+            "icon": "lock",
+            "tone": "error",
+            "surfaces": ["row", "detail-header"],
+            "visibleWhen": { "field": "blocked", "equals": false },
+            "method": "POST",
+            "endpoint": "/carriers/{id}/block",
+            "prompt": { "field": "reason", "labelKey": "commands.reason", "required": true, "maxLength": 200 },
+            "sendVersion": true,
+            "successMessageKey": "commands.blocked",
+            "acceptedMessageKey": "commands.pendingApproval"
+          },
+          {
+            "id": "unblock",
+            "label": "Desbloquear",
+            "labelKey": "commands.unblock",
+            "icon": "lock-open",
+            "surfaces": ["row", "detail-header"],
+            "visibleWhen": { "field": "blocked", "equals": true },
+            "method": "POST",
+            "endpoint": "/carriers/{id}/unblock",
+            "prompt": { "field": "reason", "labelKey": "commands.reason", "required": true, "maxLength": 200 },
+            "sendVersion": true,
+            "successMessageKey": "commands.unblocked",
+            "acceptedMessageKey": "commands.pendingApproval"
+          }
+        ]
+      }
+    },
+    {
+      "id": "supplier",
+      "path": "go/purchases/supplier.config.json",
+      "overlayPath": "overlays/supplier.i18n.json",
+      "permissions": { "read": "Purchases.Supplier.Read", "write": "Purchases.Supplier.Update" },
+      "overlay": {
+        "nameKey": "entities.supplier.name",
+        "namePluralKey": "entities.supplier.namePlural",
+        "descriptionKey": "entities.supplier.description",
+        "serverSortFields": ["paymentDays"],
+        "grid": {
+          "columns": [
+            { "field": "supplier", "type": "lookup", "lookupEntity": "party", "lookupValueField": "id", "lookupDisplayField": "name" }
+          ]
+        },
+        "form": {
+          "sections": [
+            {
+              "id": "main",
+              "fields": [
+                { "field": "supplier", "type": "lookup", "lookupEntity": "party", "lookupValueField": "id", "lookupDisplayField": "name", "lookupFilter": { "role": "10000000-0000-0000-0001-000000000003" } }
+              ]
+            }
+          ]
+        },
+        "detail": {
+          "sections": [
+            {
+              "id": "main",
+              "fields": [
+                { "field": "supplier", "type": "lookup", "lookupEntity": "party", "lookupValueField": "id", "lookupDisplayField": "name" }
+              ]
+            }
+          ]
+        },
+        "commands": [
+          {
+            "id": "block",
+            "label": "Bloquear",
+            "labelKey": "commands.block",
+            "icon": "lock",
+            "tone": "error",
+            "surfaces": ["row", "detail-header"],
+            "visibleWhen": { "field": "blocked", "equals": false },
+            "method": "POST",
+            "endpoint": "/suppliers/{id}/block",
+            "prompt": { "field": "reason", "labelKey": "commands.reason", "required": true, "maxLength": 200 },
+            "sendVersion": true,
+            "successMessageKey": "commands.blocked",
+            "acceptedMessageKey": "commands.pendingApproval"
+          },
+          {
+            "id": "unblock",
+            "label": "Desbloquear",
+            "labelKey": "commands.unblock",
+            "icon": "lock-open",
+            "surfaces": ["row", "detail-header"],
+            "visibleWhen": { "field": "blocked", "equals": true },
+            "method": "POST",
+            "endpoint": "/suppliers/{id}/unblock",
+            "prompt": { "field": "reason", "labelKey": "commands.reason", "required": true, "maxLength": 200 },
+            "sendVersion": true,
+            "successMessageKey": "commands.unblocked",
+            "acceptedMessageKey": "commands.pendingApproval"
+          }
+        ]
+      }
+    },
+    {
+      "id": "position",
+      "path": "entities/position.config.json",
+      "permissions": { "read": "HR.Position.Read" },
+      "overlay": {
+        "help": {
+          "steps": [
+            { "target": "core.view-switch", "titleKey": "help.position.views.title", "bodyKey": "help.position.views.body" },
+            { "target": "tree.node", "titleKey": "help.position.tree.title", "bodyKey": "help.position.tree.body" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "boundary",
+      "path": "entities/boundary.config.json",
+      "permissions": { "read": "Geography.Boundary.Read" }
+    },
+    { "id": "party", "path": "entities/party.config.json" },
+    { "id": "facility-type", "path": "entities/facility-type.config.json" }
+  ],
+  "menu": [
+    {
+      "id": "organization",
+      "labelKey": "menu.organization",
+      "icon": "buildings",
+      "children": [
+        { "id": "menu-facility", "entity": "facility", "labelKey": "menu.facility", "icon": "buildings" },
+        { "id": "menu-work-center", "entity": "work-center", "labelKey": "menu.workCenter", "icon": "briefcase" },
+        { "id": "menu-position", "entity": "position", "labelKey": "menu.position", "icon": "tree-structure" }
+      ]
+    },
+    {
+      "id": "commerce",
+      "labelKey": "menu.commerce",
+      "icon": "package",
+      "children": [
+        { "id": "menu-product", "entity": "product", "labelKey": "menu.product", "icon": "package" },
+        { "id": "menu-supplier", "entity": "supplier", "labelKey": "menu.supplier", "icon": "handshake" },
+        { "id": "menu-carrier", "entity": "carrier", "labelKey": "menu.carrier", "icon": "truck" },
+        { "id": "menu-asset", "entity": "asset", "labelKey": "menu.asset", "icon": "wrench" }
+      ]
+    },
+    {
+      "id": "geography",
+      "labelKey": "menu.geography",
+      "icon": "globe-hemisphere-west",
+      "children": [
+        { "id": "menu-country", "entity": "country", "labelKey": "menu.country", "icon": "globe-hemisphere-west" },
+        { "id": "menu-boundary", "entity": "boundary", "labelKey": "menu.boundary", "icon": "map-trifold" },
+        { "id": "menu-holiday", "entity": "holiday", "labelKey": "menu.holiday", "icon": "calendar-dots" }
+      ]
+    }
+  ]
+}

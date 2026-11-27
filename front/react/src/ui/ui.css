@@ -1,0 +1,298 @@
+/*
+ * Primitivas de interfaz (T3). Sólo lo que el tema de Theros Front no viste: disposición, estados
+ * propios (`data-kx-*`) y los componentes que no tienen gancho (esqueleto, spinner, kbd, aviso
+ * emergente). Todo con var(--th-*) y var(--kx-*): sin colores, tipografías ni medidas literales.
+ * Separación con `gap`, no con márgenes (A3 §8.1). Movimiento sólo con prefers-reduced-motion:
+ * no-preference (PT-8).
+ */
+@layer karpo.components {
+  /* --- Texto sólo para lectores de pantalla ------------------------------------------------ */
+  [data-kx-part="sr-only"] {
+    position: absolute;
+    inline-size: 0;
+    block-size: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    clip-path: inset(50%);
+  }
+
+  /* --- Icono ------------------------------------------------------------------------------- */
+
+  /*
+   * Espejo de los iconos direccionales en RTL. NO con la pseudoclase de dirección (D-R22): lightningcss la compila a una lista de :lang(ar,he,…)
+   * y no espeja nada con `?dir=rtl` en es o en. `<html dir>` lo pone I18nProvider.
+   */
+  [dir="rtl"] svg[data-th-icon][data-kx-mirror="true"] {
+    transform: scaleX(-1);
+  }
+
+  /* --- Acción ------------------------------------------------------------------------------ */
+  button[data-th="action"] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--th-space-control-gap);
+  }
+
+  button[data-th="action"][aria-busy="true"] {
+    opacity: var(--th-state-disabled-opacity);
+  }
+
+  /* --- Insignia y chip --------------------------------------------------------------------- */
+  [data-th="badge"] {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--th-space-1);
+    max-inline-size: 100%;
+  }
+
+  /* Tono marca (PT-4): `karpo.ext` define --kx-accent-*; mientras tanto, el tono informativo. */
+  [data-th="badge"][data-kx-tone="accent"],
+  [data-th="feedback"][data-kx-tone="accent"] {
+    background: var(--kx-accent-bg, var(--th-semantic-info-bg));
+    color: var(--kx-accent-fg, var(--th-semantic-info-fg));
+    border-color: var(--kx-accent-border, var(--th-semantic-info-border));
+  }
+
+  [data-kx-ui="chip"] [data-kx-part="label"] {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  [data-kx-ui="chip"] button[data-th="action"] {
+    inline-size: auto;
+    block-size: auto;
+    min-block-size: 0;
+    padding: 0;
+  }
+
+  /* --- Tecla ------------------------------------------------------------------------------- */
+  [data-kx-ui="kbd"] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding-inline: var(--th-space-2);
+    background: var(--th-surface-layer-level3);
+    color: var(--th-text-primary);
+    border: var(--th-edge-width) solid var(--th-edge-subtle);
+    border-radius: var(--th-edge-rounding-small);
+    font-size: var(--th-type-small);
+    line-height: var(--th-type-ui-line-height);
+    text-align: center;
+  }
+
+  /* Los rótulos de las teclas son del teclado, no del idioma: «Ctrl K» se lee igual en RTL (no «K Ctrl»). */
+  [data-kx-ui="shortcut-keys"] {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--th-space-1);
+    direction: ltr;
+    unicode-bidi: isolate;
+  }
+
+  [data-kx-ui="shortcut-scope"] {
+    display: contents;
+  }
+
+  /*
+   * Sin teclado físico (táctil) las teclas de atajo sólo ocupan sitio. Se ocultan las `kbd`; el atajo sigue
+   * en `aria-keyshortcuts` y los lectores de pantalla no pierden nada.
+   */
+  @media (hover: none), (pointer: coarse) {
+    [data-kx-ui="shortcut-keys"] {
+      display: none;
+    }
+  }
+
+  /* --- Esqueleto --------------------------------------------------------------------------- */
+  [data-kx-ui="skeleton"] {
+    display: grid;
+    gap: var(--th-space-2);
+    inline-size: 100%;
+  }
+
+  [data-kx-ui="skeleton"] [data-kx-part="line"] {
+    display: block;
+    block-size: var(--th-type-ui-size);
+    border-radius: var(--th-edge-rounding-small);
+    background: var(--kx-skeleton-bg, var(--th-surface-layer-level3));
+  }
+
+  [data-kx-ui="skeleton"] [data-kx-part="line"]:last-child:not(:first-child) {
+    inline-size: 60%;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    [data-kx-ui="skeleton"] [data-kx-part="line"] {
+      background-image: linear-gradient(
+        90deg,
+        transparent,
+        var(--kx-skeleton-shine, color-mix(in srgb, var(--th-surface-content-bg) 55%, transparent)),
+        transparent
+      );
+      background-repeat: no-repeat;
+      background-size: 50% 100%;
+      animation: kx-skeleton-shine var(--th-motion-duration-long) linear infinite alternate;
+    }
+  }
+
+  @keyframes kx-skeleton-shine {
+    from {
+      background-position: -100% 0;
+    }
+
+    to {
+      background-position: 200% 0;
+    }
+  }
+
+  /* --- Spinner ----------------------------------------------------------------------------- */
+  [data-kx-ui="spinner"] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--kx-spinner-color, var(--th-semantic-info-strong));
+  }
+
+  [data-kx-ui="spinner"] svg {
+    inline-size: var(--th-control-icon-size);
+    block-size: var(--th-control-icon-size);
+  }
+
+  [data-kx-ui="spinner"] [data-kx-part="track"] {
+    stroke: color-mix(in srgb, currentcolor 25%, transparent);
+  }
+
+  [data-kx-ui="spinner"] [data-kx-part="arc"] {
+    stroke: currentcolor;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    [data-kx-ui="spinner"] svg {
+      animation: kx-spin var(--th-motion-duration-long) linear infinite;
+    }
+  }
+
+  @keyframes kx-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  /* --- Diálogo ----------------------------------------------------------------------------- */
+  [data-kx-ui="dialog-overlay"] {
+    position: fixed;
+    inset: 0;
+    background: var(--th-surface-scrim);
+    z-index: var(--kx-z-modal);
+  }
+
+  [data-kx-ui="dialog"] {
+    position: fixed;
+    inset: 0;
+    margin: auto;
+    block-size: fit-content;
+    max-block-size: calc(100% - 2 * var(--th-space-6));
+    inline-size: calc(var(--th-space-8) * 10);
+    max-inline-size: calc(100% - 2 * var(--th-space-4));
+    overflow: auto;
+    display: grid;
+    gap: var(--th-space-4);
+    z-index: var(--kx-z-modal);
+  }
+
+  [data-kx-ui="dialog"][data-kx-size="small"] {
+    inline-size: calc(var(--th-space-8) * 7);
+  }
+
+  [data-kx-ui="dialog"][data-kx-size="large"] {
+    inline-size: calc(var(--th-space-8) * 14);
+  }
+
+  [data-kx-ui="dialog"] [data-kx-part="header"] {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--th-space-3);
+  }
+
+  [data-kx-ui="dialog"] [data-kx-part="header"] > :first-child {
+    flex: 1;
+  }
+
+  [data-kx-ui="dialog"] [data-kx-part="description"] {
+    color: var(--th-text-secondary);
+  }
+
+  [data-kx-ui="dialog"] [data-kx-part="body"],
+  [data-kx-ui="dialog"] [data-kx-part="form"] {
+    display: grid;
+    gap: var(--th-space-4);
+  }
+
+  [data-kx-ui="dialog"] [data-kx-part="body"]:empty {
+    display: none;
+  }
+
+  [data-kx-ui="dialog"] [data-kx-part="footer"] {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: var(--th-space-2);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    [data-kx-ui="dialog-overlay"] {
+      animation: kx-fade-in var(--th-motion-duration-short) ease-out;
+    }
+
+    [data-kx-ui="dialog"] {
+      animation: kx-rise-in var(--th-motion-duration-medium) ease-out;
+    }
+  }
+
+  /* --- Avisos emergentes ------------------------------------------------------------------- */
+  [data-kx-ui="toast-region"] {
+    position: fixed;
+    inset-block-end: var(--th-space-4);
+    inset-inline-end: var(--th-space-4);
+    display: grid;
+    gap: var(--th-space-2);
+    inline-size: calc(var(--th-space-8) * 9);
+    max-inline-size: calc(100% - 2 * var(--th-space-4));
+    z-index: var(--kx-z-toast);
+  }
+
+  [data-kx-ui="toast"] {
+    display: flex;
+    align-items: center;
+    gap: var(--th-space-2);
+  }
+
+  [data-kx-ui="toast"] [data-kx-part="text"] {
+    display: grid;
+    flex: 1;
+    gap: var(--th-space-1);
+    min-inline-size: 0;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    [data-kx-ui="toast"] {
+      animation: kx-rise-in var(--th-motion-duration-medium) ease-out;
+    }
+  }
+
+  @keyframes kx-fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes kx-rise-in {
+    from {
+      opacity: 0;
+      transform: translateY(var(--th-space-2));
+    }
+  }
+}

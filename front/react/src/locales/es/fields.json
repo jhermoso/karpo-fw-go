@@ -1,0 +1,48 @@
+{
+  "boolean": {
+    "true": "Sí",
+    "false": "No"
+  },
+  "select": {
+    "empty": "—",
+    "placeholder": "Elige una opción"
+  },
+  "empty": {
+    "noValue": "Sin valor"
+  },
+  "multiselect": {
+    "placeholder": "Elige opciones",
+    "count": "{{n}} seleccionadas",
+    "listLabel": "Opciones de {{label}}"
+  },
+  "lookup": {
+    "placeholder": "Buscar…",
+    "searchLabel": "Buscar {{label}}",
+    "loading": "Buscando…",
+    "empty": "Sin resultados",
+    "error": "No se pudo buscar",
+    "clear": "Quitar la selección"
+  },
+  "placeholder": {
+    "date": "dd/mm/aaaa",
+    "datetime": "dd/mm/aaaa hh:mm",
+    "number": "0",
+    "decimal": "0,00",
+    "percentage": "0 %",
+    "email": "nombre@dominio.com",
+    "phone": "+34 600 000 000",
+    "url": "https://"
+  },
+  "errors": {
+    "required": "Este campo es obligatorio.",
+    "maxLength": "Máximo {{max}} caracteres.",
+    "minLength": "Mínimo {{min}} caracteres.",
+    "min": "Debe ser como mínimo {{min}}.",
+    "max": "Debe ser como máximo {{max}}.",
+    "pattern": "El formato no es válido.",
+    "format": "El valor no tiene un formato válido."
+  },
+  "paste": {
+    "invalidCell": "Valor no válido"
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "dialog": {
+    "close": "Cerrar"
+  },
+  "confirm": {
+    "confirm": "Confirmar",
+    "cancel": "Cancelar"
+  },
+  "prompt": {
+    "submit": "Aceptar",
+    "cancel": "Cancelar",
+    "required": "Indica un motivo.",
+    "counter": "{{n}} de {{max}} caracteres"
+  },
+  "toast": {
+    "region": "Avisos",
+    "undo": "Deshacer",
+    "close": "Cerrar aviso"
+  },
+  "spinner": {
+    "loading": "Cargando"
+  },
+  "skeleton": {
+    "loading": "Cargando contenido"
+  },
+  "chip": {
+    "remove": "Quitar {{label}}",
+    "removeGeneric": "Quitar"
+  },
+  "action": {
+    "busy": "En curso"
+  },
+  "icon": {
+    "unknown": "Icono"
+  },
+  "shortcuts": {
+    "conflict": "Atajo duplicado {{keys}} en el ámbito {{scope}}: {{ids}}",
+    "shadow": "El atajo {{keys}} del ámbito {{scope}} tapa al global: {{ids}}"
+  }
+}

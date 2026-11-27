@@ -1,0 +1,73 @@
+{
+  "required": "This field is required.",
+  "format": "The format is not valid.",
+  "range": "The value is outside the allowed range.",
+  "enum": "Choose one of the allowed values.",
+  "immutable": "This value cannot be changed after creation.",
+  "unsupported": "This value is not supported.",
+  "maxLength": "The text is too long.",
+  "minLength": "The text is too short.",
+  "min": "The value is below the minimum allowed.",
+  "max": "The value is above the maximum allowed.",
+  "pattern": "The value does not match the expected format.",
+  "invalid": "Some data is not valid. Check the form.",
+  "duplicate": "A record with this value already exists.",
+  "conflict": "The record changed after you read it. Reload it to see the current version.",
+  "forbidden": "You do not have permission to do this.",
+  "unauthorized": "Your session has expired. Sign in again.",
+  "notfound": "The record was not found, or it is outside your scope.",
+  "network": "Cannot reach the server. Check your network and try again.",
+  "timeout": "The server is taking too long to respond. Try again.",
+  "server": "The server could not handle the request. Try again in a moment.",
+  "too-large": "The data sent is too large.",
+  "pending": "The request is pending approval.",
+  "business": "The operation cannot be completed because of a business rule.",
+  "command": {
+    "view": "View details",
+    "edit": "Edit",
+    "delete": "Delete"
+  },
+  "confirm": {
+    "default": "Confirm the operation?"
+  },
+  "hr": {
+    "reporting_cycle": "That reporting line would create a cycle in the org chart.",
+    "reporting_self": "A position cannot report to itself.",
+    "reporting_too_deep": "The org chart exceeds the maximum number of levels.",
+    "reporting_duplicate": "That reporting line already exists.",
+    "reporting_end_before_start": "The reporting line cannot end before it starts.",
+    "work_center_in_use": "The work center has contracts in force after that date.",
+    "work_center_closed": "The work center is already closed.",
+    "work_center_close_before_open": "The closing date cannot be earlier than the opening date.",
+    "duplicate_work_center_code": "A work center with that code already exists.",
+    "facility_already_work_center": "That facility is already a work center.",
+    "facility_inactive": "The facility is inactive."
+  },
+  "facilities": {
+    "hierarchy_cycle": "A facility cannot be part of itself or of its descendants.",
+    "hierarchy_too_deep": "The facility hierarchy exceeds the maximum number of levels.",
+    "inactive": "The facility is inactive.",
+    "other_organization": "The facility belongs to another organization.",
+    "type_mismatch": "The facility type is not compatible with its container.",
+    "contact_required": "This facility type requires a contact."
+  },
+  "products": {
+    "duplicate_sku": "A product with that SKU already exists.",
+    "duplicate_barcode": "A product with that barcode already exists.",
+    "discontinued": "The product is discontinued.",
+    "product_discontinued": "The product is discontinued."
+  },
+  "assets": {
+    "duplicate_code": "An asset with that code already exists.",
+    "disposed": "The asset has already been disposed of."
+  },
+  "geography": {
+    "unknown_place": "That place is not recognized."
+  },
+  "approval": {
+    "self_resolution": "You cannot resolve a request you made yourself.",
+    "already_resolved": "The request has already been resolved.",
+    "comment_required": "Enter a comment to resolve the request.",
+    "not_requester": "Only the requester can cancel the request."
+  }
+}

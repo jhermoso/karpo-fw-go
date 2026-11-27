@@ -1,0 +1,138 @@
+/*
+ * karpo.ext: lo que el contrato de Theros Front no cubre (análisis 03 §6, PLAN §4.5).
+ *
+ * Reglas de este fichero (las comprueba stylelint y theme.contract.test.ts):
+ *   - los valores salen SÓLO de var(--th-*), color-mix() y calc(); ningún color, medida ni fuente
+ *     literal (la escala de apilado vive en kx-structure.css);
+ *   - los nombres son los que Theros Front adoptaría (--kx-data-series-1 -> --th-data-series-1), de
+ *     modo que cuando llegue la petición se cambia una línea;
+ *   - se declaran en `:root, [data-th-mode]` como el propio tema: así un contenedor con otro modo
+ *     (vista previa oscura, contraste alto) vuelve a derivar sus valores de SUS variables --th-*.
+ *
+ * Peticiones a Theros Front que estas variables sustituirán: PT-2 (celdas), PT-3 (guardado),
+ * PT-4 (tono marca), PT-5 (datos), PT-6 (ocupado), PT-8 (movimiento).
+ */
+@layer karpo.ext {
+  :root,
+  [data-th-mode] {
+    /* Celdas de la cuadrícula (PT-2). El anillo de la celda activa sigue el foco del tema. */
+    --kx-cell-ring-color: var(--th-state-focus-color);
+    --kx-cell-ring-width: var(--th-state-focus-width);
+    --kx-cell-ring-offset: calc(var(--th-state-focus-width) * -1);
+    --kx-cell-editing-bg: var(--th-control-field-focused-bg);
+    --kx-cell-editing-fg: var(--th-control-field-focused-fg);
+    --kx-cell-editing-border: var(--th-control-field-focused-border);
+    --kx-cell-dirty-mark: var(--th-semantic-warning-strong);
+    --kx-cell-dirty-bg: var(--th-semantic-warning-bg);
+    --kx-cell-invalid-mark: var(--th-semantic-error-strong);
+    --kx-cell-invalid-bg: var(--th-control-field-invalid-bg);
+    --kx-cell-invalid-border: var(--th-control-field-invalid-border);
+    --kx-cell-readonly-bg: var(--th-control-field-readonly-bg);
+    --kx-cell-readonly-fg: var(--th-control-field-readonly-fg);
+    --kx-cell-range-bg: color-mix(in srgb, var(--th-state-selected-bg) 55%, transparent);
+
+    /* El relleno del rango es el de selección al 55 % sobre la superficie: su texto es el normal, no el de la selección sólida. */
+    --kx-cell-range-fg: var(--th-text-primary);
+
+    /* Estados de guardado de la fila (PT-3): color fuerte (texto, línea) y relleno por estado. */
+    --kx-save-saving: var(--th-semantic-info-strong);
+    --kx-save-saving-bg: var(--th-semantic-info-bg);
+    --kx-save-saved: var(--th-semantic-success-strong);
+    --kx-save-saved-bg: var(--th-semantic-success-bg);
+    --kx-save-error: var(--th-semantic-error-strong);
+    --kx-save-error-bg: var(--th-semantic-error-bg);
+    --kx-save-conflict: var(--th-semantic-warning-strong);
+    --kx-save-conflict-bg: var(--th-semantic-warning-bg);
+    --kx-save-pending: var(--th-semantic-info-strong);
+    --kx-save-pending-bg: var(--th-semantic-info-bg);
+    --kx-save-deleted: var(--th-text-disabled-color);
+    --kx-save-deleted-bg: var(--th-semantic-neutral-bg);
+    --kx-save-locked: var(--th-semantic-neutral-strong);
+    --kx-save-locked-bg: var(--th-semantic-neutral-bg);
+    --kx-save-dim: var(--th-state-disabled-opacity);
+
+    /*
+     * Tono marca (PT-4). Se deriva del color de enlace del tema, que Theros garantiza con
+     * contraste de texto sobre sus superficies; el relleno y el borde se mezclan con la superficie.
+     */
+    --kx-accent-strong: var(--th-text-link);
+    --kx-accent-fg: var(--th-text-primary);
+    --kx-accent-bg: color-mix(in srgb, var(--th-text-link) 12%, var(--th-surface-content-bg));
+    --kx-accent-border: color-mix(in srgb, var(--th-text-link) 45%, var(--th-surface-content-bg));
+
+    /*
+     * Paleta de datos PROVISIONAL (PT-5, decisión D-R13). Mapas coropléticos, organigramas por
+     * departamento y gráficos. La secuencial parte de la superficie y sube hacia el azul
+     * informativo del tema; la categórica mezcla los cuatro tonos semánticos entre sí (no se puede
+     * garantizar distinción para daltónicos sin la petición PT-5: se comprueba contraste y distancia
+     * en theme.contract.test.ts).
+     */
+    --kx-data-seq-1: color-mix(in oklab, var(--th-semantic-info-strong) 20%, var(--th-surface-content-bg));
+    --kx-data-seq-2: color-mix(in oklab, var(--th-semantic-info-strong) 26%, var(--th-surface-content-bg));
+    --kx-data-seq-3: color-mix(in oklab, var(--th-semantic-info-strong) 40%, var(--th-surface-content-bg));
+    --kx-data-seq-4: color-mix(in oklab, var(--th-semantic-info-strong) 54%, var(--th-surface-content-bg));
+    --kx-data-seq-5: color-mix(in oklab, var(--th-semantic-info-strong) 68%, var(--th-surface-content-bg));
+    --kx-data-seq-6: color-mix(in oklab, var(--th-semantic-info-strong) 82%, var(--th-surface-content-bg));
+    --kx-data-seq-7: var(--th-semantic-info-strong);
+    --kx-data-series-1: var(--th-semantic-info-strong);
+    --kx-data-series-2: var(--th-semantic-warning-strong);
+    --kx-data-series-3: var(--th-semantic-error-strong);
+    --kx-data-series-4: color-mix(in oklab, var(--th-semantic-success-strong) 65%, var(--th-semantic-warning-strong));
+    --kx-data-series-5: color-mix(in oklab, var(--th-semantic-info-strong) 50%, var(--th-semantic-error-strong));
+    --kx-data-series-6: var(--th-semantic-neutral-strong);
+    --kx-data-series-7: color-mix(in oklab, var(--th-semantic-error-strong) 50%, var(--th-semantic-warning-strong));
+    --kx-data-series-8: color-mix(in oklab, var(--th-semantic-neutral-strong) 55%, var(--th-semantic-error-strong));
+    --kx-data-series-9: color-mix(in oklab, var(--th-semantic-info-strong) 75%, var(--th-semantic-error-strong));
+    --kx-data-series-10: color-mix(in oklab, var(--th-semantic-warning-strong) 45%, var(--th-semantic-neutral-strong));
+
+    /*
+     * «Sin dato» (M-2): neutro y FUERA de la escala. La escala secuencial se aleja de la superficie hacia la
+     * tinta (en claro baja la luminosidad, en oscuro sube); «sin dato» va al lado contrario, mezclando la
+     * superficie con el texto inverso: en claro es la propia superficie y en oscuro es más profundo que ella.
+     * Nunca depende sólo del color: se pinta con trama (--kx-data-missing-hatch) y contorno.
+     */
+    --kx-data-missing: color-mix(in oklab, var(--th-surface-content-bg) 60%, var(--th-text-inverse));
+    --kx-data-missing-hatch: color-mix(in oklab, var(--th-text-secondary) 75%, var(--kx-data-missing));
+
+    /*
+     * Trama de «sin dato» DEL MAPA (R3-4, M-2): la de la leyenda (arriba) grita a propósito (3:1) y, sobre un
+     * país con dato de 248, ensuciaba el 99 % del lienzo. En el mapa se mezcla al 35 % con el relleno: se
+     * reconoce como trama (1,3:1 como mínimo, lo vigila contrast.contract.test.ts) sin dominar. Propuesto a
+     * Theros Front junto a los demás --kx-data-* (docs/notas/R3-R4.md).
+     */
+    --kx-data-missing-hatch-map: color-mix(in oklab, var(--kx-data-missing-hatch) 35%, var(--kx-data-missing));
+
+    /* Contorno de clases y de la leyenda: texto secundario atenuado, que mantiene 3:1 con la superficie en los cuatro temas (edge.strong de modern-flat y souq se queda en 2,8:1). */
+    --kx-data-border: color-mix(in oklab, var(--th-text-secondary) 80%, var(--th-surface-content-bg));
+
+    /* Esqueleto y rueda de carga (PT-6). Con duraciones a cero (classic-1995) no hay animación. */
+    --kx-skeleton-a: var(--th-surface-layer-level3);
+    --kx-skeleton-b: color-mix(in srgb, var(--th-surface-layer-level3) 45%, var(--th-surface-content-bg));
+    --kx-skeleton-duration: calc(var(--th-motion-duration-long) * 4);
+    --kx-spinner-color: var(--th-semantic-info-strong);
+    --kx-spinner-track: var(--th-surface-layer-level3);
+
+    /* Movimiento propio (PT-8): las duraciones del tema y una curva por palabra clave. */
+    --kx-duration-short: var(--th-motion-duration-short);
+    --kx-duration-medium: var(--th-motion-duration-medium);
+    --kx-duration-long: var(--th-motion-duration-long);
+    --kx-easing: ease-out;
+
+    /* Recorrido de ayuda: el velo y el contorno del elemento destacado. */
+    --kx-tour-scrim: var(--th-surface-scrim);
+    --kx-tour-highlight-color: var(--th-state-focus-color);
+    --kx-tour-highlight-width: calc(var(--th-state-focus-width) * 2);
+    --kx-tour-highlight-offset: var(--th-state-focus-width);
+  }
+
+  /* Con «reducir movimiento» toda duración propia vale cero: nadie tiene que acordarse de ello. */
+  @media (prefers-reduced-motion: reduce) {
+    :root,
+    [data-th-mode] {
+      --kx-skeleton-duration: calc(var(--th-motion-duration-long) * 0);
+      --kx-duration-short: calc(var(--th-motion-duration-short) * 0);
+      --kx-duration-medium: calc(var(--th-motion-duration-medium) * 0);
+      --kx-duration-long: calc(var(--th-motion-duration-long) * 0);
+    }
+  }
+}

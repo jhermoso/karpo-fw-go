@@ -1,0 +1,16 @@
+@layer th.modes {
+  :root {
+    color-scheme: light dark;
+  }
+
+  [data-th-mode~="light"] {
+    color-scheme: light;
+  }
+
+  [data-th-mode~="dark"] {
+    color-scheme: dark;
+  }
+
+  [data-th-mode~="high-contrast"] {
+  }
+}

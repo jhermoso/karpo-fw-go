@@ -1,0 +1,776 @@
+/*
+ * Marco de la aplicación (T6): menú lateral, barra superior, paleta, paneles y páginas del marco.
+ * Sólo variables del tema (--th-*) y de karpo.ext (--kx-*): sin colores, medidas ni fuentes literales.
+ * El aspecto de menú, cabecera, acciones, campos y avisos lo ponen los ganchos de Theros (data-th);
+ * aquí va la disposición y lo que el tema no viste. Separación con `gap`, no con márgenes.
+ */
+
+/* El orden de capas va el primero de cada hoja: así vale aunque otra hoja se cargue antes. */
+@layer th.tokens, th.modes, th.base, th.domain, th.a11y, karpo.ext, karpo.components;
+
+@layer karpo.components {
+  /* --- Iconos ------------------------------------------------------------------------------ */
+
+  /*
+   * El tema pinta svg[data-th-icon] con trazo (fill: none; stroke: currentColor), pensado para iconos de
+   * línea. Phosphor trae glifos rellenos: con esa regla salen como un contorno finísimo. Se invierte aquí
+   * hasta que Theros Front admita otro conjunto (PT-11 / T2-5).
+   */
+  svg[data-th-icon] {
+    fill: currentcolor;
+    stroke: none;
+  }
+
+  /* Un icono dentro de una acción, de un elemento de menú o de una insignia sigue el color de su texto:
+     un botón primario, seleccionado o destructivo tiene fondo de color y con el color neutro del icono
+     (--th-control-icon-color) no se vería. */
+  :is([data-th="action"], [role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"], [data-th="badge"]) svg[data-th-icon] {
+    color: currentcolor;
+  }
+
+  /* --- Estructura -------------------------------------------------------------------------- */
+
+  /*
+   * El marco ocupa la ventana y son los paneles los que se desplazan, no la página (M-8, M-9): así la lista y la
+   * ficha tienen una altura definida, el pie de acciones de la ficha queda fijo abajo y el pie de la lista
+   * («30 de 30 filas») siempre se ve.
+   */
+  [data-kx-shell] {
+    container: kx-shell / inline-size;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    block-size: 100dvh;
+    background: var(--th-surface-canvas-bg);
+    color: var(--th-surface-canvas-fg);
+  }
+
+  /* La columna principal va siempre en la segunda pista: en una pantalla estrecha el menú es un cajón fijo, no
+     ocupa la primera y ésta se queda vacía. */
+  [data-kx-shell] > [data-kx-part="column"] {
+    grid-column: 2;
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+    min-block-size: 0;
+    block-size: 100dvh;
+  }
+
+  [data-kx-part="skip"] {
+    position: absolute;
+    inset-block-start: var(--th-space-2);
+    inset-inline-start: var(--th-space-2);
+    z-index: var(--kx-z-tooltip);
+    transform: translateY(-300%);
+  }
+
+  [data-kx-part="skip"]:focus {
+    transform: none;
+  }
+
+  [data-kx-part="main"] {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-block-size: 0;
+    min-inline-size: 0;
+    overflow: auto;
+  }
+
+  /* --- Menú lateral ------------------------------------------------------------------------ */
+  [data-th="nav"][data-kx-part="sidebar"] {
+    position: sticky;
+    inset-block-start: 0;
+    inline-size: calc(var(--th-space-8) * 8);
+    block-size: 100dvh;
+    box-sizing: border-box;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    z-index: var(--kx-z-sticky);
+  }
+
+  [data-kx-part="nav-head"] {
+    display: flex;
+    align-items: center;
+    gap: var(--th-space-2);
+  }
+
+  [data-kx-part="brand"] {
+    display: inline-flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--th-space-2);
+    min-inline-size: 0;
+  }
+
+  /* Más específicos que `button[data-th="action"]` de las primitivas, que fija `display`. */
+  button[data-th="action"][data-kx-part="close"],
+  button[data-th="action"][data-kx-part="nav-toggle"] {
+    display: none;
+  }
+
+  [data-kx-part="nav-search"] {
+    flex-wrap: nowrap;
+    align-items: center;
+  }
+
+  [data-kx-part="nav-search"] input {
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  [data-kx-part="scope"] {
+    justify-content: flex-start;
+    inline-size: 100%;
+  }
+
+  [data-kx-part="scope-label"],
+  [data-kx-part="group-label"],
+  [data-kx-part="item-label"] {
+    flex: 1;
+    min-inline-size: 0;
+    overflow: hidden;
+    text-align: start;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  [data-kx-part="nav-body"] {
+    display: grid;
+    gap: var(--th-space-2);
+  }
+
+  [data-kx-part="nav-list"],
+  [data-kx-part="nav-results"] {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  [data-kx-part="nav-group"] {
+    display: grid;
+    gap: var(--th-space-1);
+  }
+
+  [data-kx-part="nav-status"] {
+    margin: 0;
+    color: var(--th-text-secondary);
+    font-size: var(--th-type-small);
+  }
+
+  [data-kx-part="group-toggle"] {
+    display: flex;
+    align-items: center;
+    gap: var(--th-space-2);
+    inline-size: 100%;
+    padding-block: var(--th-space-2);
+    padding-inline: var(--th-control-padding);
+    border: 0;
+    border-radius: var(--th-edge-rounding-small);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: var(--th-type-small);
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+
+  [data-kx-part="group-toggle"]:hover {
+    background: var(--th-state-hover-bg);
+    color: var(--th-state-hover-fg);
+  }
+
+  [data-th="nav-item"] {
+    display: flex;
+    align-items: center;
+    gap: var(--th-space-2);
+  }
+
+  [data-kx-part="item-group"] {
+    font-size: var(--th-type-small);
+    color: color-mix(in srgb, currentcolor 70%, transparent);
+  }
+
+  [data-kx-part="nav-scrim"] {
+    display: none;
+  }
+
+  /* El menú plegado (sólo iconos) sólo existe con ancho de escritorio: en pantallas estrechas el menú es un cajón. */
+  @container kx-shell (min-width: 64em) {
+    [data-th="nav"][data-kx-collapsed] {
+      inline-size: calc(var(--th-space-8) * 3);
+    }
+
+    [data-kx-collapsed] [data-kx-part="nav-search"],
+    [data-kx-collapsed] button[data-th="action"][data-kx-part="scope"] {
+      display: none;
+    }
+
+    [data-kx-collapsed] [data-kx-part="brand-name"],
+    [data-kx-collapsed] [data-kx-part="group-label"],
+    [data-kx-collapsed] [data-kx-part="item-label"],
+    [data-kx-collapsed] [data-kx-part="item-group"] {
+      position: absolute;
+      inline-size: 0;
+      block-size: 0;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+
+    [data-kx-collapsed] [data-th="nav-item"],
+    [data-kx-collapsed] [data-kx-part="group-toggle"] {
+      justify-content: center;
+    }
+
+    [data-kx-collapsed] [data-kx-part="group-toggle"] > svg:last-child {
+      display: none;
+    }
+  }
+
+  /* --- Barra superior ---------------------------------------------------------------------- */
+  [role="banner"][data-kx-part="topbar"] {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: var(--kx-z-sticky);
+    display: flex;
+    align-items: center;
+    gap: var(--th-space-2);
+  }
+
+  /* En la barra superior los botones discretos no se subrayan (el tema los subraya como enlaces de cabecera). */
+  [data-kx-part="topbar"] [data-th="action"][data-th-kind="quiet"] {
+    text-decoration: none;
+  }
+
+  /* Migas (M-1, D-R32): la barra no lleva encabezado. La miga nunca se comprime hasta desaparecer (B-5): mide como
+     mínimo unos seis caracteres y, si no cabe, se corta con puntos suspensivos. */
+  [data-kx-part="crumbs"] {
+    flex: 0 1 auto;
+    min-inline-size: calc(var(--th-space-8) * 2);
+    margin: 0;
+    overflow: hidden;
+    color: var(--th-text-secondary);
+    font-size: var(--th-type-small);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  nav[data-kx-part="crumbs"] > ol {
+    display: flex;
+    align-items: center;
+    gap: var(--th-space-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  [data-kx-part="crumbs"] li {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--th-space-1);
+    min-inline-size: 0;
+  }
+
+  [data-kx-part="crumbs"] li > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  [data-kx-part="spacer"] {
+    flex: 1;
+  }
+
+  [data-kx-part="user-name"] {
+    max-inline-size: calc(var(--th-space-8) * 5);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  [data-kx-part="context-error"] {
+    margin: var(--th-space-margin);
+  }
+
+  /* --- Menús desplegables y popovers ------------------------------------------------------- */
+  [data-kx-ui="menu"] {
+    display: grid;
+    gap: var(--th-space-1);
+    min-inline-size: calc(var(--th-space-8) * 6);
+    max-inline-size: var(--radix-dropdown-menu-content-available-width);
+    max-block-size: var(--radix-dropdown-menu-content-available-height);
+    padding: var(--th-space-1);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    z-index: var(--kx-z-dropdown);
+  }
+
+  [data-kx-ui="popover"] {
+    max-inline-size: calc(var(--th-space-8) * 12);
+    padding: var(--th-space-3);
+    z-index: var(--kx-z-dropdown);
+  }
+
+  [data-kx-ui="menu-item"] {
+    display: flex;
+    align-items: center;
+    gap: var(--th-space-2);
+    padding-block: var(--th-space-2);
+    padding-inline: var(--th-space-3);
+    border-radius: var(--th-edge-rounding-small);
+    cursor: pointer;
+    user-select: none;
+  }
+
+  [data-kx-ui="menu-item"][data-highlighted] {
+    background: var(--th-state-hover-bg);
+    color: var(--th-state-hover-fg);
+  }
+
+  [data-kx-ui="menu-item"][data-disabled] {
+    color: var(--th-state-disabled-color);
+    cursor: not-allowed;
+  }
+
+  [data-kx-part="menu-label"] {
+    padding-block: var(--th-space-1);
+    padding-inline: var(--th-space-3);
+    color: var(--th-text-secondary);
+    font-size: var(--th-type-small);
+  }
+
+  [data-kx-part="menu-separator"] {
+    block-size: var(--th-edge-width);
+    background: var(--th-edge-subtle);
+  }
+
+  [data-kx-part="check"] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: var(--th-control-icon-size);
+  }
+
+  /* --- Paleta de órdenes ------------------------------------------------------------------- */
+  [data-kx-ui="palette"] {
+    position: fixed;
+    inset-block-start: calc(var(--th-space-8) * 3);
+    inset-inline: 0;
+    margin-inline: auto;
+    inline-size: calc(var(--th-space-8) * 18);
+    max-inline-size: calc(100% - 2 * var(--th-space-4));
+    padding: 0;
+    overflow: hidden;
+    z-index: var(--kx-z-modal);
+  }
+
+  [data-kx-ui="palette"] [cmdk-root] {
+    display: grid;
+  }
+
+  [data-kx-part="palette-input"] {
+    display: flex;
+    align-items: center;
+    gap: var(--th-space-2);
+    padding-inline: var(--th-space-4);
+    border-block-end: var(--th-edge-width) solid var(--th-edge-subtle);
+  }
+
+  [data-kx-part="palette-input"] input {
+    flex: 1;
+    min-block-size: var(--th-control-height-large);
+    border: 0;
+    background: transparent;
+  }
+
+  [data-kx-ui="palette"] [cmdk-list] {
+    max-block-size: calc(var(--th-space-8) * 12);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: var(--th-space-2);
+  }
+
+  [data-kx-ui="palette"] [cmdk-group-heading] {
+    padding-block: var(--th-space-2) var(--th-space-1);
+    padding-inline: var(--th-space-3);
+    color: var(--th-text-secondary);
+    font-size: var(--th-type-small);
+  }
+
+  [data-kx-ui="palette"] [cmdk-item] {
+    display: flex;
+    align-items: center;
+    gap: var(--th-space-3);
+    padding-block: var(--th-space-2);
+    padding-inline: var(--th-space-3);
+    border-radius: var(--th-edge-rounding-small);
+    cursor: pointer;
+  }
+
+  [data-kx-ui="palette"] [cmdk-item][aria-selected="true"] {
+    background: var(--th-state-selected-bg);
+    color: var(--th-state-selected-fg);
+  }
+
+  [data-kx-ui="palette"] [cmdk-item][data-disabled="true"] {
+    color: var(--th-state-disabled-color);
+  }
+
+  [data-kx-ui="palette"] [data-kx-part="item-label"] {
+    flex: 1;
+  }
+
+  [data-kx-ui="palette"] [data-kx-part="item-hint"] {
+    color: var(--th-text-secondary);
+    font-size: var(--th-type-small);
+  }
+
+  [data-kx-ui="palette"] [data-kx-part="icon-space"] {
+    inline-size: var(--th-control-icon-size);
+  }
+
+  [data-kx-part="palette-empty"] {
+    padding: var(--th-space-4);
+    color: var(--th-text-secondary);
+    text-align: center;
+  }
+
+  /* --- Panel de atajos --------------------------------------------------------------------- */
+  [data-kx-part="shortcut-groups"] {
+    display: grid;
+    gap: var(--th-space-4);
+  }
+
+  [data-kx-part="shortcut-group"] h3 {
+    margin: 0 0 var(--th-space-2);
+    font-size: var(--th-type-1);
+  }
+
+  [data-kx-part="shortcut-group"] ul {
+    display: grid;
+    gap: var(--th-space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  [data-kx-part="shortcut-group"] li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--th-space-4);
+  }
+
+  /* --- Pantalla de una entidad ------------------------------------------------------------- */
+  [data-kx-screen="entity"] {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-block-size: 0;
+    min-inline-size: 0;
+  }
+
+  [data-kx-screen="entity"][data-kx-layout="page"] {
+    flex-direction: row;
+  }
+
+  [data-kx-part="panels-host"] {
+    display: flex;
+    flex: 1;
+    min-block-size: 0;
+    min-inline-size: 0;
+  }
+
+  [data-kx-part="panels"] {
+    flex: 1;
+    min-block-size: 0;
+  }
+
+  /* --- Cabecera de la entidad (M-6, M-7) --------------------------------------------------- */
+  [data-kx-part="entity-header"] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--th-space-3) var(--th-space-4);
+    padding-block: var(--th-space-3);
+    padding-inline: var(--th-space-margin);
+    border-block-end: var(--th-edge-width) solid var(--th-edge-subtle);
+  }
+
+  [data-kx-part="entity-titles"] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--th-space-1) var(--th-space-3);
+    min-inline-size: 0;
+  }
+
+  [data-kx-part="entity-title"] {
+    margin: 0;
+    font-size: var(--th-type-3);
+    font-weight: var(--th-text-heading-weight);
+    color: var(--th-text-heading-color);
+    overflow-wrap: anywhere;
+  }
+
+  [data-kx-part="entity-count"] {
+    margin: 0;
+    color: var(--th-text-secondary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  [data-kx-part="entity-count"]:empty {
+    display: none;
+  }
+
+  [data-kx-part="entity-actions"] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--th-space-3);
+    margin-inline-start: auto;
+  }
+
+  /* Control segmentado único: una opción por vista y disposición. El elegido se marca con los colores de selección del tema. */
+  [data-kx-ui="segmented"] {
+    display: inline-flex;
+    gap: var(--th-space-1);
+    padding: var(--th-space-1);
+    border: var(--th-edge-width) solid var(--th-edge-subtle);
+    border-radius: var(--th-edge-rounding-medium);
+    background: var(--th-surface-layer-level2);
+  }
+
+  [data-kx-ui="segmented"] > [role="radio"] {
+    border-radius: var(--th-edge-rounding-small);
+  }
+
+  [data-kx-ui="segmented"] > [role="radio"][aria-checked="true"] {
+    background: var(--th-state-selected-bg);
+    color: var(--th-state-selected-fg);
+  }
+
+  [data-kx-ui="segmented"][data-kx-icons-only] [data-kx-part="choice-label"] {
+    position: absolute;
+    inline-size: 0;
+    block-size: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  /* Con poco ancho la cabecera se parte en dos filas: título y recuento arriba, control y «Nuevo» debajo. */
+  @container kx-shell (max-width: 40em) {
+    [data-kx-part="entity-header"] {
+      padding-inline: var(--th-space-3);
+    }
+
+    [data-kx-part="entity-actions"] {
+      inline-size: 100%;
+      justify-content: space-between;
+      margin-inline-start: 0;
+    }
+  }
+
+  [data-kx-part="list"],
+  [data-kx-part="detail"] {
+    block-size: 100%;
+    min-inline-size: 0;
+    overflow: auto;
+  }
+
+  [data-kx-part="separator"] {
+    flex: none;
+    inline-size: calc(var(--th-edge-width) * 2);
+    background: var(--th-edge-subtle);
+  }
+
+  [data-kx-part="separator"]:hover,
+  [data-kx-part="separator"][data-separator="active"] {
+    background: var(--th-state-focus-color);
+  }
+
+  [data-kx-part="forbidden-notice"] {
+    padding: var(--th-space-margin);
+  }
+
+  [data-kx-layout="page"] > [data-th="sheet"],
+  [data-kx-layout="page"] > [data-kx-ui="shortcut-scope"] > [data-th="sheet"] {
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  /* --- Páginas del marco ------------------------------------------------------------------- */
+  [data-kx-page="home"],
+  [data-kx-page="forbidden"],
+  [data-kx-page="not-found"],
+  [data-kx-page="loading"] {
+    display: grid;
+    align-content: start;
+    gap: var(--th-space-group-gap);
+    padding: var(--th-space-6);
+  }
+
+  [data-kx-page="forbidden"],
+  [data-kx-page="not-found"] {
+    justify-items: start;
+    max-inline-size: calc(var(--th-space-8) * 16);
+    margin-inline: auto;
+    padding-block-start: calc(var(--th-space-8) * 3);
+  }
+
+  [data-kx-page] h1 {
+    margin: 0;
+    font-size: var(--th-type-4);
+    font-weight: var(--th-text-heading-weight);
+    color: var(--th-text-heading-color);
+  }
+
+  [data-kx-page] p {
+    margin: 0;
+    color: var(--th-text-secondary);
+  }
+
+  [data-kx-part="tiles"] {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(calc(var(--th-space-8) * 7), 1fr));
+    gap: var(--th-space-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  a[data-kx-part="tile"] {
+    display: flex;
+    align-items: center;
+    gap: var(--th-space-3);
+    padding: var(--th-space-4);
+    border: var(--th-edge-width) solid var(--th-edge-subtle);
+    border-radius: var(--th-edge-rounding-medium);
+    background: var(--th-surface-content-bg);
+    color: var(--th-surface-content-fg);
+    text-decoration: none;
+  }
+
+  a[data-kx-part="tile"]:hover {
+    background: var(--th-state-hover-bg);
+    color: var(--th-state-hover-fg);
+  }
+
+  /* Modo compacto (marco ≤ 40em, B-5): el título toma el sitio que sobra y los controles se reducen a iconos. */
+  [data-kx-part="topbar"][data-kx-compact] {
+    gap: var(--th-space-1);
+  }
+
+  /* En compacto la miga es el único título que se ve: toma el sitio que sobra y se lee como un título. */
+  [data-kx-part="topbar"][data-kx-compact] > [data-kx-part="crumbs"] {
+    flex: 1 1 auto;
+    color: var(--th-text-primary);
+    font-size: var(--th-type-3);
+    font-weight: var(--th-text-heading-weight);
+  }
+
+  [data-kx-part="topbar"][data-kx-compact] > [data-kx-part="spacer"] {
+    display: none;
+  }
+
+  [data-kx-part="topbar"][data-kx-compact] > :not([data-kx-part="crumbs"]) {
+    flex: none;
+  }
+
+  /* En un marco compacto no se pintan teclas en ningún sitio (no hay teclado): ni en la barra ni en las vistas. */
+  [data-kx-shell][data-kx-compact] :is(kbd, [data-kx-ui="shortcut-keys"]) {
+    display: none;
+  }
+
+  /* La barra superior ya lleva el título (la miga, oculta al lector): el `h1` de la cabecera de la entidad se
+     conserva sólo para lectores de pantalla, de modo que hay un único `h1` accesible en todos los marcos. */
+  [data-kx-shell][data-kx-compact] [data-kx-part="entity-title"] {
+    position: absolute;
+    inline-size: 0;
+    block-size: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  [data-kx-part="palette-button"] {
+    flex: none;
+    justify-content: space-between;
+    min-inline-size: calc(var(--th-space-8) * 6);
+  }
+
+  [data-kx-part="palette-label"] {
+    flex: 1;
+    text-align: start;
+  }
+
+  /* --- Pantallas estrechas: el menú pasa a cajón ------------------------------------------- */
+  @container kx-shell (max-width: 110em) {
+    [data-kx-part="user-name"] {
+      display: none;
+    }
+  }
+
+  /* Con poco ancho, la barra superior deja sólo los iconos (los nombres siguen en el nombre accesible). */
+  @container kx-shell (max-width: 80em) {
+    [data-kx-part="palette-label"] {
+      position: absolute;
+      inline-size: 0;
+      block-size: 0;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+
+    [data-kx-part="palette-button"] {
+      min-inline-size: 0;
+    }
+  }
+
+  @container kx-shell (max-width: 64em) {
+    [data-th="nav"][data-kx-part="sidebar"] {
+      position: fixed;
+      inset-block: 0;
+      inset-inline-start: 0;
+      inline-size: calc(var(--th-space-8) * 9);
+      max-inline-size: 85%;
+      transform: translateX(-100%);
+      z-index: calc(var(--kx-z-overlay) + 1);
+      visibility: hidden;
+    }
+
+    [dir="rtl"] [data-th="nav"][data-kx-part="sidebar"] {
+      transform: translateX(100%);
+    }
+
+    [data-th="nav"][data-kx-part="sidebar"][data-kx-open] {
+      transform: none;
+      visibility: visible;
+    }
+
+    [data-kx-part="nav-scrim"] {
+      position: fixed;
+      inset: 0;
+      display: block;
+      background: var(--th-surface-scrim);
+      z-index: var(--kx-z-overlay);
+    }
+
+    button[data-th="action"][data-kx-part="close"],
+    button[data-th="action"][data-kx-part="nav-toggle"] {
+      display: inline-flex;
+    }
+
+    button[data-th="action"][data-kx-part="collapse"] {
+      display: none;
+    }
+
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    [data-th="nav"][data-kx-part="sidebar"] {
+      transition: transform var(--kx-duration-medium) var(--kx-easing);
+    }
+  }
+}

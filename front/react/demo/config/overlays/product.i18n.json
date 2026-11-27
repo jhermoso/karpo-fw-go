@@ -1,0 +1,109 @@
+{
+  "form": {
+    "createTitleKey": "entities.product.form.createTitle",
+    "editTitleKey": "entities.product.form.editTitle",
+    "sections": [
+      {
+        "id": "main",
+        "titleKey": "entities.product.form.sections.main.title",
+        "fields": [
+          {
+            "field": "sku",
+            "labelKey": "entities.product.fields.sku.label",
+            "hintKey": "entities.product.fields.sku.hint"
+          },
+          { "field": "name", "labelKey": "entities.product.fields.name.label" },
+          { "field": "description", "labelKey": "entities.product.fields.description.label" },
+          {
+            "field": "kind",
+            "labelKey": "entities.product.fields.kind.label",
+            "options": [
+              { "value": "good", "labelKey": "entities.product.options.kind.good" },
+              { "value": "service", "labelKey": "entities.product.options.kind.service" }
+            ]
+          },
+          {
+            "field": "uom",
+            "labelKey": "entities.product.fields.uom.label",
+            "hintKey": "entities.product.fields.uom.hint"
+          },
+          { "field": "taxCode", "labelKey": "entities.product.fields.taxCode.label" },
+          { "field": "basePrice", "labelKey": "entities.product.fields.basePrice.label" },
+          { "field": "forSale", "labelKey": "entities.product.fields.forSale.label" },
+          { "field": "forPurchase", "labelKey": "entities.product.fields.forPurchase.label" }
+        ]
+      }
+    ]
+  },
+  "detail": {
+    "sections": [
+      {
+        "id": "main",
+        "titleKey": "entities.product.detail.sections.main.title",
+        "fields": [
+          { "field": "sku", "labelKey": "entities.product.fields.sku.label" },
+          { "field": "name", "labelKey": "entities.product.fields.name.label" },
+          { "field": "description", "labelKey": "entities.product.fields.description.label" },
+          {
+            "field": "kind",
+            "labelKey": "entities.product.fields.kind.label",
+            "options": [
+              { "value": "good", "labelKey": "entities.product.options.kind.good" },
+              { "value": "service", "labelKey": "entities.product.options.kind.service" }
+            ]
+          },
+          { "field": "uom", "labelKey": "entities.product.fields.uom.label" },
+          { "field": "taxCode", "labelKey": "entities.product.fields.taxCode.label" },
+          { "field": "basePrice", "labelKey": "entities.product.fields.basePrice.label" },
+          { "field": "forSale", "labelKey": "entities.product.fields.forSale.label" },
+          { "field": "forPurchase", "labelKey": "entities.product.fields.forPurchase.label" },
+          { "field": "standardCost", "labelKey": "entities.product.fields.standardCost.label" },
+          { "field": "blockedSales", "labelKey": "entities.product.fields.blockedSales.label" },
+          { "field": "discontinued", "labelKey": "entities.product.fields.discontinued.label" }
+        ]
+      }
+    ]
+  },
+  "grid": {
+    "columns": [
+      {
+        "field": "kind",
+        "badgeMap": {
+          "good": { "labelKey": "entities.product.options.kind.good" },
+          "service": { "labelKey": "entities.product.options.kind.service" }
+        },
+        "headerKey": "entities.product.columns.kind.header"
+      },
+      { "field": "sku", "headerKey": "entities.product.columns.sku.header" },
+      { "field": "name", "headerKey": "entities.product.columns.name.header" },
+      { "field": "uom", "headerKey": "entities.product.columns.uom.header" },
+      { "field": "basePrice", "headerKey": "entities.product.columns.basePrice.header" },
+      { "field": "discontinued", "headerKey": "entities.product.columns.discontinued.header" }
+    ],
+    "rowActions": [
+      { "action": "view", "labelKey": "entities.product.commands.view.label" },
+      { "action": "edit", "labelKey": "entities.product.commands.edit.label" },
+      {
+        "action": "delete",
+        "labelKey": "entities.product.commands.delete.label",
+        "confirmMessageKey": "entities.product.commands.delete.confirmMessage"
+      }
+    ]
+  },
+  "filters": [
+    {
+      "field": "kind",
+      "options": [
+        { "value": "good", "labelKey": "entities.product.options.kind.good" },
+        { "value": "service", "labelKey": "entities.product.options.kind.service" }
+      ],
+      "labelKey": "entities.product.filters.kind.label",
+      "placeholderKey": "entities.product.filters.kind.placeholder"
+    },
+    {
+      "field": "_search",
+      "labelKey": "entities.product.filters._search.label",
+      "placeholderKey": "entities.product.filters._search.placeholder"
+    }
+  ]
+}

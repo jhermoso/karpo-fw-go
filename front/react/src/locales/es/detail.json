@@ -1,0 +1,141 @@
+{
+  "header": {
+    "new": "Nuevo: {{name}}",
+    "creating": "Alta",
+    "unsaved": "Cambios sin guardar",
+    "actions": "Acciones de la ficha",
+    "neighbors": "Moverse por la lista",
+    "prev": "Registro anterior",
+    "next": "Registro siguiente",
+    "noPrev": "Es el primer registro de la lista.",
+    "noNext": "Es el último registro de la lista cargada.",
+    "position": "{{position}}",
+    "positionOf": "{{position}} de {{total}}"
+  },
+  "actions": {
+    "edit": "Editar",
+    "create": "Crear",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "saving": "Guardando…",
+    "toPanel": "Volver al panel",
+    "toPage": "Abrir a pantalla completa",
+    "close": "Cerrar el detalle",
+    "backToList": "Volver a la lista",
+    "noPermission": "No tienes permiso para modificar este registro."
+  },
+  "shortcuts": {
+    "save": "Guardar la ficha",
+    "cancel": "Cancelar la edición o cerrar la ficha",
+    "edit": "Editar la ficha",
+    "prev": "Ir al registro anterior",
+    "next": "Ir al registro siguiente"
+  },
+  "sheet": {
+    "empty": "Esta ficha no tiene datos que enseñar."
+  },
+  "tabs": {
+    "label": "Secciones de la ficha",
+    "errors": "Campos con errores: {{n}}"
+  },
+  "section": {
+    "expand": "Desplegar «{{title}}»",
+    "collapse": "Plegar «{{title}}»"
+  },
+  "record": {
+    "loading": "Cargando el registro…",
+    "retry": "Reintentar",
+    "notFound": "No se ha encontrado este registro de «{{name}}»: puede que se haya retirado o esté fuera de tu ámbito."
+  },
+  "childGrid": {
+    "loading": "Cargando «{{title}}»…",
+    "empty": "«{{title}}» no tiene filas.",
+    "truncated": "Se muestran {{shown}} de {{total}} filas."
+  },
+  "create": {
+    "notAllowed": "Esta pantalla no permite dar de alta registros."
+  },
+  "save": {
+    "saved": "Cambios guardados.",
+    "created": "«{{name}}» creado.",
+    "noChanges": "No había cambios que guardar.",
+    "fieldErrors": "Revisa los campos marcados: {{n}}."
+  },
+  "conflict": {
+    "title": "El registro ha cambiado",
+    "description": "Alguien lo modificó mientras lo editabas. Compara los valores y elige cómo seguir.",
+    "table": "Diferencias entre tus cambios y el servidor",
+    "field": "Campo",
+    "mine": "Tu valor",
+    "theirs": "Valor del servidor",
+    "both": "Conflicto",
+    "onlyServer": "Sólo en el servidor",
+    "noDifferences": "No se aprecian diferencias en los campos que se editan; recarga para tener la versión actual.",
+    "keepEditing": "Seguir editando",
+    "reload": "Recargar",
+    "reapply": "Reaplicar mis cambios",
+    "reloaded": "Se ha recargado la versión del servidor y se han descartado tus cambios.",
+    "reapplied": "Tus cambios se han puesto sobre la versión del servidor. Revísalos y guarda."
+  },
+  "discard": {
+    "title": "Cambios sin guardar",
+    "cancel": "Hay cambios sin guardar. ¿Quieres descartarlos?",
+    "leave": "Hay cambios sin guardar. Si te vas ahora, se perderán.",
+    "confirm": "Descartar los cambios",
+    "keep": "Seguir editando"
+  },
+  "commands": {
+    "pending": "La solicitud queda pendiente de aprobación.",
+    "done": "«{{name}}»: hecho."
+  },
+  "help": {
+    "header": {
+      "title": "Cabecera de la ficha",
+      "body": "Muestra el registro, su estado y las órdenes que admite. Con las flechas pasas al registro anterior o siguiente de la lista."
+    },
+    "tabs": {
+      "title": "Secciones",
+      "body": "Los datos están agrupados por secciones; las tablas relacionadas, como los historiales, tienen su propia pestaña."
+    },
+    "save": {
+      "title": "Editar y guardar",
+      "body": "Pulsa Editar (o la tecla E) para cambiar los datos. Ctrl+Intro guarda y Esc cancela; si alguien más lo modificó, verás las diferencias antes de decidir."
+    },
+    "child-grid": {
+      "title": "Tabla relacionada",
+      "body": "Aquí se ven las filas relacionadas con este registro. Son de sólo lectura."
+    },
+    "meta": {
+      "title": "Registro",
+      "body": "El identificador del registro, que puedes copiar, y su versión. Si el servidor los envía, también quién lo creó y lo modificó, y cuándo."
+    },
+    "relations": {
+      "title": "Relaciones",
+      "body": "Los registros con los que está vinculado: pulsa uno para abrir su ficha. Si hay jerarquía, también puedes verlo en el árbol."
+    }
+  },
+  "meta": {
+    "title": "Registro",
+    "id": "Identificador",
+    "copy": "Copiar el identificador",
+    "copied": "Identificador copiado.",
+    "copyFailed": "No se ha podido copiar el identificador.",
+    "version": "Versión",
+    "created": "Creado",
+    "updated": "Modificado",
+    "by": "Por {{name}}"
+  },
+  "relations": {
+    "title": "Relaciones",
+    "open": "Abrir {{entity}}: {{name}}",
+    "within": "Dentro de",
+    "contains": "Contiene",
+    "children_one": "{{count}} elemento",
+    "children_other": "{{count}} elementos",
+    "tree": "Ver en el árbol",
+    "treeLabel": "Ver «{{name}}» en el árbol"
+  },
+  "footer": {
+    "label": "Acciones del formulario"
+  }
+}

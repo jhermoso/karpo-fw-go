@@ -1,0 +1,138 @@
+{
+    "id": "position",
+    "name": "Puesto",
+    "nameKey": "entities.position.name",
+    "namePlural": "Puestos",
+    "namePluralKey": "entities.position.namePlural",
+    "description": "Puestos de trabajo de la organización y su cadena de dependencia (organigrama)",
+    "descriptionKey": "entities.position.description",
+    "icon": "tree-structure",
+    "apiEndpoint": "/hr/positions",
+    "apiVersioned": false,
+    "editable": false,
+    "editType": "direct",
+    "primaryKey": "id",
+    "displayField": "typeTitle",
+    "dataSource": {
+        "type": "single",
+        "paginationStrategy": "server",
+        "listStyle": "number-size",
+        "serverFiltering": {
+            "enabled": true,
+            "clientOnlyFields": []
+        }
+    },
+
+    "grid": {
+        "columns": [
+            { "field": "typeTitle", "header": "Puesto", "headerKey": "entities.position.columns.typeTitle", "type": "text", "width": 280 },
+            { "field": "unit", "header": "Unidad", "headerKey": "entities.position.columns.unit", "type": "lookup", "width": 200, "lookupEntity": "party", "lookupValueField": "id", "lookupDisplayField": "name" },
+            { "field": "holder", "header": "Titular", "headerKey": "entities.position.columns.holder", "type": "lookup", "width": 240, "emptyValue": "—", "lookupEntity": "party", "lookupValueField": "id", "lookupDisplayField": "name" },
+            {
+                "field": "statusName",
+                "header": "Estado",
+                "headerKey": "entities.position.columns.statusName",
+                "type": "badge",
+                "width": 130,
+                "badgeMap": {
+                    "Cubierto": { "label": "Cubierto", "labelKey": "entities.position.status.filled", "color": "green" },
+                    "Abierto": { "label": "Abierto", "labelKey": "entities.position.status.open", "color": "warning" },
+                    "Planificado": { "label": "Planificado", "labelKey": "entities.position.status.planned", "color": "blue" },
+                    "Cerrado": { "label": "Cerrado", "labelKey": "entities.position.status.closed", "color": "gray" }
+                }
+            },
+            { "field": "vacant", "header": "Vacante", "headerKey": "entities.position.columns.vacant", "type": "boolean", "width": 110, "trueLabel": "Sí", "trueLabelKey": "values.yes", "falseLabel": "No", "falseLabelKey": "values.no" },
+            { "field": "reportsTo", "header": "Depende de", "headerKey": "entities.position.columns.reportsTo", "type": "lookup", "width": 260, "emptyValue": "—", "lookupEntity": "position", "lookupValueField": "id", "lookupDisplayField": "typeTitle" }
+        ],
+        "pageSize": 50,
+        "pageSizeOptions": [25, 50, 100],
+        "selectable": true,
+        "selectionMode": "multiple",
+        "rowActions": [
+            { "action": "view", "label": "Ver detalle", "labelKey": "entities.position.actions.view", "icon": "view", "color": "primary" }
+        ]
+    },
+
+    "filters": [
+        {
+            "field": "vacant",
+            "serverField": "vacant",
+            "label": "Sólo vacantes",
+            "labelKey": "entities.position.filters.vacant",
+            "type": "checkbox",
+            "width": 3
+        },
+        {
+            "field": "status",
+            "serverField": "status",
+            "label": "Estado",
+            "labelKey": "entities.position.filters.status",
+            "type": "select",
+            "width": 3,
+            "options": [
+                { "value": "10000000-0000-0000-0011-000000000001", "label": "Planificado", "labelKey": "entities.position.status.planned" },
+                { "value": "10000000-0000-0000-0011-000000000002", "label": "Abierto", "labelKey": "entities.position.status.open" },
+                { "value": "10000000-0000-0000-0011-000000000003", "label": "Cubierto", "labelKey": "entities.position.status.filled" },
+                { "value": "10000000-0000-0000-0011-000000000004", "label": "Cerrado", "labelKey": "entities.position.status.closed" }
+            ]
+        }
+    ],
+
+    "detail": {
+        "showHistory": false,
+        "showRelations": false,
+        "showTags": false,
+        "sections": [
+            {
+                "id": "main",
+                "title": "Puesto",
+                "titleKey": "entities.position.sections.main",
+                "icon": "tree-structure",
+                "collapsible": true,
+                "collapsed": false,
+                "columns": 2,
+                "fields": [
+                    { "field": "typeTitle", "label": "Puesto", "labelKey": "entities.position.columns.typeTitle", "type": "text", "editable": false },
+                    { "field": "statusName", "label": "Estado", "labelKey": "entities.position.columns.statusName", "type": "text", "editable": false },
+                    { "field": "unit", "label": "Unidad", "labelKey": "entities.position.columns.unit", "type": "lookup", "editable": false, "lookupEntity": "party", "lookupValueField": "id", "lookupDisplayField": "name" },
+                    { "field": "holder", "label": "Titular", "labelKey": "entities.position.columns.holder", "type": "lookup", "editable": false, "lookupEntity": "party", "lookupValueField": "id", "lookupDisplayField": "name" },
+                    { "field": "reportsTo", "label": "Depende de", "labelKey": "entities.position.columns.reportsTo", "type": "lookup", "editable": false, "lookupEntity": "position", "lookupValueField": "id", "lookupDisplayField": "typeTitle" },
+                    { "field": "vacant", "label": "Vacante", "labelKey": "entities.position.columns.vacant", "type": "checkbox", "editable": false },
+                    { "field": "plannedFrom", "label": "Previsto desde", "labelKey": "entities.position.columns.plannedFrom", "type": "date", "editable": false }
+                ]
+            }
+        ],
+        "childGrids": []
+    },
+
+    "views": [
+        {
+            "kind": "tree",
+            "labelKey": "entities.position.views.tree",
+            "parentField": "reportsTo",
+            "labelField": "typeTitle",
+            "subtitleField": "holder",
+            "badgeField": "statusName",
+            "source": {
+                "type": "chart",
+                "endpoint": "/hr/positions/{id}/chart",
+                "rootsFrom": "list",
+                "depth": 3,
+                "childrenField": "reports",
+                "nodeField": "position"
+            }
+        }
+    ],
+
+    "availableViews": ["grid", "detail", "tree"],
+    "defaultView": "grid",
+
+    "searchable": false,
+
+    "metadata": {
+        "version": "1.0.0",
+        "author": "Karpo React (demo)",
+        "lastModified": "2026-11-27",
+        "tags": ["hr", "positions", "org-chart", "demo"]
+    }
+}

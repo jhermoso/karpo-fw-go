@@ -1,0 +1,335 @@
+/*
+ * Detalle (T6): cabecera, pestañas, rejilla de campos de 12 columnas y tabla de la rejilla hija.
+ * Sólo variables del tema (--th-*) y de karpo.ext (--kx-*). La ficha, sus secciones, los campos, las
+ * pistas y los errores los viste Theros por sus ganchos (data-th); aquí va la disposición.
+ */
+
+/* El orden de capas va el primero de cada hoja: así vale aunque otra hoja se cargue antes. */
+@layer th.tokens, th.modes, th.base, th.domain, th.a11y, karpo.ext, karpo.components;
+
+@layer karpo.components {
+  /*
+   * La ficha es una columna a la altura del panel: la cabecera y las alertas arriba, el cuerpo ocupa lo que
+   * sobra y el pie de acciones (en edición) queda fijo abajo (M-8: sin espacio muerto bajo el formulario).
+   */
+  [data-th="sheet"][data-kx-view="detail"] {
+    container: kx-sheet / inline-size;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    min-block-size: 100%;
+  }
+
+  /* El envoltorio del ámbito de atajos no debe interponerse entre el panel y la ficha: sin caja propia, la altura
+     del panel llega a la ficha. */
+  [data-kx-ui="shortcut-scope"]:has(> [data-th="sheet"][data-kx-view="detail"]) {
+    display: contents;
+  }
+
+  /* El cuerpo ocupa lo que sobra y apila arriba sus bloques (pestañas y tarjetas): no reparte el hueco entre ellos. */
+  [data-th="sheet"][data-kx-view="detail"] > [data-kx-part="body"] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    gap: var(--th-space-3);
+    flex: 1 1 auto;
+    min-block-size: 0;
+  }
+
+  /* Tarjetas «Relaciones» y «Registro» bajo la última sección (M-4): una columna y, con sitio, dos. */
+  [data-kx-part="cards"] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--th-space-3);
+    min-inline-size: 0;
+  }
+
+  @container kx-sheet (min-width: 44em) {
+    [data-kx-part="cards"] {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      align-items: start;
+    }
+  }
+
+  [data-kx-part="cards"] > [data-th="section"] {
+    min-inline-size: 0;
+  }
+
+  /* Pares «término · valor» de las tarjetas: el término arriba en secundario, el valor debajo. */
+  [data-kx-part="facts"] {
+    display: grid;
+    gap: var(--th-space-2);
+    margin: 0;
+  }
+
+  /* «Registro»: identificador, versión y sello en columnas que caben (con poco sitio, una bajo otra): ocupa poco alto. */
+  [data-kx-part="meta"] > [data-kx-part="facts"] {
+    grid-template-columns: repeat(auto-fit, minmax(calc(var(--th-space-8) * 4), 1fr));
+    gap: var(--th-space-2) var(--th-space-4);
+  }
+
+  [data-kx-part="fact"] {
+    display: grid;
+    gap: var(--th-space-1);
+    min-inline-size: 0;
+  }
+
+  [data-kx-part="fact"] > dt {
+    color: var(--th-text-secondary);
+    font-size: var(--th-type-small);
+  }
+
+  [data-kx-part="fact"] > dd {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--th-space-1);
+    margin: 0;
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+    font-variant-numeric: tabular-nums;
+  }
+
+  [data-kx-part="relation-link"] {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--th-space-1);
+  }
+
+  [data-kx-part="sheet-footer"] {
+    position: sticky;
+    inset-block-end: 0;
+    z-index: var(--kx-z-sticky);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--th-space-2);
+    margin-block-start: auto;
+    padding-block: var(--th-space-3);
+    background: var(--th-surface-content-bg);
+    border-block-start: var(--th-edge-width) solid var(--th-edge-subtle);
+  }
+
+  /* --- Cabecera ---------------------------------------------------------------------------- */
+  [data-kx-part="sheet-header"] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--th-space-3);
+  }
+
+  [data-kx-part="titles"] {
+    display: grid;
+    gap: var(--th-space-1);
+    min-inline-size: 0;
+  }
+
+  [data-kx-part="eyebrow"] {
+    margin: 0;
+    color: var(--th-text-secondary);
+    font-size: var(--th-type-small);
+  }
+
+  [data-kx-part="title-row"] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--th-space-2);
+    min-inline-size: 0;
+  }
+
+  [data-kx-part="title-row"] :is(h1, h2) {
+    font-size: var(--th-type-3);
+    overflow-wrap: anywhere;
+  }
+
+  [data-kx-part="dirty-mark"] {
+    padding-inline: var(--th-space-2);
+    border-inline-start: calc(var(--th-edge-width) * 3) solid var(--kx-cell-dirty-mark);
+    background: var(--kx-cell-dirty-bg);
+    color: var(--th-text-primary);
+    font-size: var(--th-type-small);
+  }
+
+  [data-kx-part="actions"] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--th-space-2);
+  }
+
+  [data-kx-part="neighbors"] {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--th-space-1);
+  }
+
+  [data-kx-part="position"] {
+    color: var(--th-text-secondary);
+    font-size: var(--th-type-small);
+    font-variant-numeric: tabular-nums;
+  }
+
+  [data-kx-part="alerts"] {
+    display: grid;
+    gap: var(--th-space-2);
+  }
+
+  [data-kx-part="alerts"]:empty {
+    display: none;
+  }
+
+  [data-kx-part="feedback-list"] {
+    margin: 0;
+    padding-inline-start: var(--th-space-4);
+  }
+
+  /* --- Pestañas ---------------------------------------------------------------------------- */
+  [data-kx-part="tabs-root"] {
+    display: grid;
+    gap: var(--th-space-3);
+    min-inline-size: 0;
+  }
+
+  [data-kx-part="tab-list"] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--th-space-1);
+    border-block-end: var(--th-edge-width) solid var(--th-edge-subtle);
+  }
+
+  [data-kx-part="tab"] {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--th-space-2);
+    min-block-size: var(--th-control-height-regular);
+    padding-inline: var(--th-control-padding);
+    border: 0;
+    border-block-end: calc(var(--th-edge-width) * 3) solid transparent;
+    background: transparent;
+    color: var(--th-text-secondary);
+    font: inherit;
+    cursor: pointer;
+  }
+
+  [data-kx-part="tab"]:hover {
+    background: var(--th-state-hover-bg);
+    color: var(--th-state-hover-fg);
+  }
+
+  [data-kx-part="tab"][data-state="active"] {
+    border-block-end-color: var(--th-nav-item-current-border);
+    color: var(--th-text-primary);
+  }
+
+  [data-kx-part="panel"][hidden] {
+    display: none;
+  }
+
+  /* --- Secciones y rejilla de campos ------------------------------------------------------- */
+  [data-kx-part="section-header"] h3 {
+    font-size: var(--th-type-2);
+  }
+
+  [data-kx-part="empty"] {
+    color: var(--th-text-secondary);
+  }
+
+  [data-kx-part="section-header"] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--th-space-2);
+  }
+
+  [data-kx-part="fields"] {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: var(--th-space-2) var(--th-space-4);
+  }
+
+  [data-kx-part="fields"][hidden] {
+    display: none;
+  }
+
+  /*
+   * Una columna por omisión; 2 columnas desde 28em de ficha y las que pide la sección (hasta 3 o más) desde
+   * 44em. `--kx-span` es lo que la configuración pide (de 12) y `--kx-span-mid` lo mismo con un mínimo de 6.
+   */
+  [data-kx-part="cell"] {
+    grid-column: 1 / -1;
+    min-inline-size: 0;
+  }
+
+  @container kx-sheet (min-width: 28em) {
+    [data-kx-part="cell"] {
+      grid-column: span var(--kx-span-mid, 12);
+    }
+  }
+
+  @container kx-sheet (min-width: 44em) {
+    [data-kx-part="cell"] {
+      grid-column: span var(--kx-span, 12);
+    }
+  }
+
+  [data-kx-part="cell"] [data-th="field"] {
+    margin-block-end: 0;
+  }
+
+  [data-kx-part="cell"] [data-th="field"] :is(input:not([type="checkbox"], [type="radio"]), select, textarea) {
+    inline-size: 100%;
+    box-sizing: border-box;
+  }
+
+  [data-kx-part="value"] {
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+  }
+
+  /* --- Rejilla hija y diferencias del conflicto -------------------------------------------- */
+  [data-kx-part="child-grid"] {
+    display: grid;
+    gap: var(--th-space-2);
+    min-inline-size: 0;
+    overflow-x: auto;
+  }
+
+  [data-kx-part="child-grid"] table,
+  [data-kx-part="conflict-table"] {
+    inline-size: 100%;
+    border-collapse: collapse;
+  }
+
+  [data-kx-part="child-grid"] th,
+  [data-kx-part="conflict-table"] th {
+    text-align: start;
+    background: var(--th-collection-header-bg);
+    color: var(--th-collection-header-fg);
+    font-weight: var(--th-collection-header-weight);
+  }
+
+  [data-kx-part="child-grid"] :is(th, td),
+  [data-kx-part="conflict-table"] :is(th, td) {
+    padding-block: var(--th-space-row);
+    vertical-align: top;
+  }
+
+  [data-kx-part="conflict-table"] th[scope="row"] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--th-space-2);
+  }
+
+  [data-kx-conflict] > [data-kx-part="mine"] {
+    box-shadow: inset calc(var(--th-edge-width) * 3) 0 0 var(--kx-cell-dirty-mark);
+  }
+
+  [data-kx-part="loading"] {
+    padding-block: var(--th-space-4);
+  }
+}

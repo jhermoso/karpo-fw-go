@@ -1,0 +1,23 @@
+{
+  "button": {
+    "label": "Help",
+    "tooltip": "Guided tour of this screen"
+  },
+  "tour": {
+    "next": "Next",
+    "prev": "Previous",
+    "done": "Finish",
+    "close": "Close the tour",
+    "progress": "Step {{current}} of {{total}}",
+    "empty": {
+      "title": "This screen has no tour yet",
+      "body": "Nothing is explained here yet. Once there is, this button will walk you through it one item at a time."
+    }
+  },
+  "help": {
+    "button": {
+      "title": "Guided help",
+      "body": "Press this button on any screen to take a tour of its elements. Move with the arrow keys and leave with Esc."
+    }
+  }
+}

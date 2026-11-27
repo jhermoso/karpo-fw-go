@@ -1,0 +1,18 @@
+@layer th.modes {
+  :root {
+    color-scheme: light;
+  }
+
+  [data-th-mode~="light"] {
+    color-scheme: light;
+  }
+
+  [data-th-mode~="high-contrast"] {
+    --th-control-field-border: #404040;
+    --th-control-scrollbar-thumb: #6e6e6e;
+    --th-control-toggle-mixed-bg: #404040;
+    --th-surface-header-inactive-bg: #404040;
+    --th-surface-header-inactive-fg: #ffffff;
+    --th-text-placeholder: #595959;
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "dialog": {
+    "close": "Close"
+  },
+  "confirm": {
+    "confirm": "Confirm",
+    "cancel": "Cancel"
+  },
+  "prompt": {
+    "submit": "OK",
+    "cancel": "Cancel",
+    "required": "Enter a reason.",
+    "counter": "{{n}} of {{max}} characters"
+  },
+  "toast": {
+    "region": "Notifications",
+    "undo": "Undo",
+    "close": "Dismiss notification"
+  },
+  "spinner": {
+    "loading": "Loading"
+  },
+  "skeleton": {
+    "loading": "Loading content"
+  },
+  "chip": {
+    "remove": "Remove {{label}}",
+    "removeGeneric": "Remove"
+  },
+  "action": {
+    "busy": "In progress"
+  },
+  "icon": {
+    "unknown": "Icon"
+  },
+  "shortcuts": {
+    "conflict": "Duplicate shortcut {{keys}} in scope {{scope}}: {{ids}}",
+    "shadow": "Shortcut {{keys}} in scope {{scope}} shadows the global one: {{ids}}"
+  }
+}

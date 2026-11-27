@@ -1,0 +1,136 @@
+{
+    "id": "boundary",
+    "name": "Delimitación",
+    "nameKey": "entities.boundary.name",
+    "namePlural": "Delimitaciones",
+    "namePluralKey": "entities.boundary.namePlural",
+    "description": "Delimitaciones geográficas: países, comunidades, provincias e islas y municipios (códigos NUTS y LAU)",
+    "descriptionKey": "entities.boundary.description",
+    "icon": "map-trifold",
+    "apiEndpoint": "/geography/boundaries",
+    "apiVersioned": false,
+    "editable": false,
+    "editType": "direct",
+    "primaryKey": "id",
+    "displayField": "name",
+    "dataSource": {
+        "type": "single",
+        "paginationStrategy": "server",
+        "listStyle": "number-size",
+        "serverFiltering": {
+            "enabled": true,
+            "clientOnlyFields": []
+        }
+    },
+
+    "grid": {
+        "columns": [
+            { "field": "name", "header": "Nombre", "headerKey": "entities.boundary.columns.name", "type": "text", "width": 280 },
+            { "field": "typeName", "header": "Tipo", "headerKey": "entities.boundary.columns.typeName", "type": "text", "width": 190 },
+            {
+                "field": "level",
+                "header": "Nivel",
+                "headerKey": "entities.boundary.columns.level",
+                "type": "badge",
+                "width": 130,
+                "badgeMap": {
+                    "country": { "label": "País", "labelKey": "entities.boundary.levels.country", "color": "blue" },
+                    "1": { "label": "Agrupación", "labelKey": "entities.boundary.levels.1", "color": "gray" },
+                    "2": { "label": "Comunidad", "labelKey": "entities.boundary.levels.2", "color": "green" },
+                    "3": { "label": "Provincia o isla", "labelKey": "entities.boundary.levels.3", "color": "warning" },
+                    "local": { "label": "Municipio", "labelKey": "entities.boundary.levels.local", "color": "primary" }
+                }
+            },
+            { "field": "nutsCode", "header": "NUTS", "headerKey": "entities.boundary.columns.nutsCode", "type": "text", "width": 100, "emptyValue": "—" },
+            { "field": "lauCode", "header": "LAU", "headerKey": "entities.boundary.columns.lauCode", "type": "text", "width": 100, "emptyValue": "—" },
+            { "field": "ineCode", "header": "INE", "headerKey": "entities.boundary.columns.ineCode", "type": "text", "width": 100, "emptyValue": "—" },
+            { "field": "country", "header": "País", "headerKey": "entities.boundary.columns.country", "type": "text", "width": 90 },
+            { "field": "parent", "header": "Dentro de", "headerKey": "entities.boundary.columns.parent", "type": "lookup", "width": 240, "emptyValue": "—", "lookupEntity": "boundary", "lookupValueField": "id", "lookupDisplayField": "name" }
+        ],
+        "pageSize": 50,
+        "pageSizeOptions": [25, 50, 100, 500],
+        "selectable": false,
+        "rowActions": [
+            { "action": "view", "label": "Ver detalle", "labelKey": "entities.boundary.actions.view", "icon": "view", "color": "primary" }
+        ]
+    },
+
+    "filters": [
+        {
+            "field": "_search",
+            "serverField": "q",
+            "label": "Buscar",
+            "labelKey": "entities.boundary.filters.search",
+            "type": "text",
+            "placeholder": "Nombre o código…",
+            "placeholderKey": "entities.boundary.filters.searchPlaceholder",
+            "icon": "search",
+            "width": 4
+        },
+        {
+            "field": "level",
+            "serverField": "level",
+            "label": "Nivel",
+            "labelKey": "entities.boundary.filters.level",
+            "type": "select",
+            "width": 3,
+            "options": [
+                { "value": "country", "label": "País", "labelKey": "entities.boundary.levels.country" },
+                { "value": "1", "label": "Agrupación", "labelKey": "entities.boundary.levels.1" },
+                { "value": "2", "label": "Comunidad", "labelKey": "entities.boundary.levels.2" },
+                { "value": "3", "label": "Provincia o isla", "labelKey": "entities.boundary.levels.3" },
+                { "value": "local", "label": "Municipio", "labelKey": "entities.boundary.levels.local" }
+            ]
+        },
+        {
+            "field": "country",
+            "serverField": "country",
+            "label": "País (alfa-2)",
+            "labelKey": "entities.boundary.filters.country",
+            "type": "text",
+            "width": 2
+        }
+    ],
+
+    "detail": {
+        "showHistory": false,
+        "showRelations": false,
+        "showTags": false,
+        "sections": [
+            {
+                "id": "main",
+                "title": "Delimitación",
+                "titleKey": "entities.boundary.sections.main",
+                "icon": "map-trifold",
+                "collapsible": true,
+                "collapsed": false,
+                "columns": 2,
+                "fields": [
+                    { "field": "name", "label": "Nombre", "labelKey": "entities.boundary.columns.name", "type": "text", "editable": false },
+                    { "field": "typeName", "label": "Tipo", "labelKey": "entities.boundary.columns.typeName", "type": "text", "editable": false },
+                    { "field": "level", "label": "Nivel", "labelKey": "entities.boundary.columns.level", "type": "text", "editable": false },
+                    { "field": "country", "label": "País", "labelKey": "entities.boundary.columns.country", "type": "text", "editable": false },
+                    { "field": "nutsCode", "label": "Código NUTS", "labelKey": "entities.boundary.columns.nutsCode", "type": "text", "editable": false },
+                    { "field": "lauCode", "label": "Código LAU", "labelKey": "entities.boundary.columns.lauCode", "type": "text", "editable": false },
+                    { "field": "ineCode", "label": "Código INE", "labelKey": "entities.boundary.columns.ineCode", "type": "text", "editable": false },
+                    { "field": "parent", "label": "Dentro de", "labelKey": "entities.boundary.columns.parent", "type": "lookup", "editable": false, "lookupEntity": "boundary", "lookupValueField": "id", "lookupDisplayField": "name" },
+                    { "field": "active", "label": "Activa", "labelKey": "entities.boundary.columns.active", "type": "checkbox", "editable": false }
+                ]
+            }
+        ],
+        "childGrids": []
+    },
+
+    "availableViews": ["grid", "detail"],
+    "defaultView": "grid",
+
+    "searchable": true,
+    "searchFields": ["name"],
+
+    "metadata": {
+        "version": "1.0.0",
+        "author": "Karpo React (demo)",
+        "lastModified": "2026-11-27",
+        "tags": ["geography", "boundaries", "nuts", "demo"]
+    }
+}

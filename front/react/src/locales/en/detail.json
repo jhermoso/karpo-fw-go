@@ -1,0 +1,141 @@
+{
+  "header": {
+    "new": "New: {{name}}",
+    "creating": "New record",
+    "unsaved": "Unsaved changes",
+    "actions": "Record actions",
+    "neighbors": "Move through the list",
+    "prev": "Previous record",
+    "next": "Next record",
+    "noPrev": "This is the first record in the list.",
+    "noNext": "This is the last record of the loaded list.",
+    "position": "{{position}}",
+    "positionOf": "{{position}} of {{total}}"
+  },
+  "actions": {
+    "edit": "Edit",
+    "create": "Create",
+    "save": "Save",
+    "cancel": "Cancel",
+    "saving": "Saving…",
+    "toPanel": "Back to the panel",
+    "toPage": "Open full screen",
+    "close": "Close the detail",
+    "backToList": "Back to the list",
+    "noPermission": "You are not allowed to change this record."
+  },
+  "shortcuts": {
+    "save": "Save the record",
+    "cancel": "Cancel editing or close the record",
+    "edit": "Edit the record",
+    "prev": "Go to the previous record",
+    "next": "Go to the next record"
+  },
+  "sheet": {
+    "empty": "This record has no data to show."
+  },
+  "tabs": {
+    "label": "Record sections",
+    "errors": "Fields with errors: {{n}}"
+  },
+  "section": {
+    "expand": "Expand “{{title}}”",
+    "collapse": "Collapse “{{title}}”"
+  },
+  "record": {
+    "loading": "Loading the record…",
+    "retry": "Try again",
+    "notFound": "This “{{name}}” record was not found: it may have been withdrawn or be outside your scope."
+  },
+  "childGrid": {
+    "loading": "Loading “{{title}}”…",
+    "empty": "“{{title}}” has no rows.",
+    "truncated": "Showing {{shown}} of {{total}} rows."
+  },
+  "create": {
+    "notAllowed": "This screen does not allow creating records."
+  },
+  "save": {
+    "saved": "Changes saved.",
+    "created": "“{{name}}” created.",
+    "noChanges": "There were no changes to save.",
+    "fieldErrors": "Check the marked fields: {{n}}."
+  },
+  "conflict": {
+    "title": "The record has changed",
+    "description": "Someone modified it while you were editing. Compare the values and choose how to go on.",
+    "table": "Differences between your changes and the server",
+    "field": "Field",
+    "mine": "Your value",
+    "theirs": "Server value",
+    "both": "Conflict",
+    "onlyServer": "Only on the server",
+    "noDifferences": "No differences show in the fields being edited; reload to get the current version.",
+    "keepEditing": "Keep editing",
+    "reload": "Reload",
+    "reapply": "Reapply my changes",
+    "reloaded": "The server version was reloaded and your changes were discarded.",
+    "reapplied": "Your changes were put on top of the server version. Review them and save."
+  },
+  "discard": {
+    "title": "Unsaved changes",
+    "cancel": "There are unsaved changes. Do you want to discard them?",
+    "leave": "There are unsaved changes. If you leave now, they will be lost.",
+    "confirm": "Discard the changes",
+    "keep": "Keep editing"
+  },
+  "commands": {
+    "pending": "The request is pending approval.",
+    "done": "“{{name}}”: done."
+  },
+  "help": {
+    "header": {
+      "title": "Record header",
+      "body": "It shows the record, its status and the commands it accepts. The arrows take you to the previous or next record of the list."
+    },
+    "tabs": {
+      "title": "Sections",
+      "body": "The data is grouped into sections; related tables, such as histories, have their own tab."
+    },
+    "save": {
+      "title": "Edit and save",
+      "body": "Press Edit (or the E key) to change the data. Ctrl+Enter saves and Esc cancels; if someone else changed it, you will see the differences before deciding."
+    },
+    "child-grid": {
+      "title": "Related table",
+      "body": "The rows related to this record are shown here. They are read-only."
+    },
+    "meta": {
+      "title": "Record",
+      "body": "The record identifier, which you can copy, and its version. When the server sends them, also who created and modified it, and when."
+    },
+    "relations": {
+      "title": "Relations",
+      "body": "The records it is linked to: press one to open its sheet. Where there is a hierarchy, you can also see it in the tree."
+    }
+  },
+  "meta": {
+    "title": "Record",
+    "id": "Identifier",
+    "copy": "Copy the identifier",
+    "copied": "Identifier copied.",
+    "copyFailed": "Could not copy the identifier.",
+    "version": "Version",
+    "created": "Created",
+    "updated": "Modified",
+    "by": "By {{name}}"
+  },
+  "relations": {
+    "title": "Relations",
+    "open": "Open {{entity}}: {{name}}",
+    "within": "Inside",
+    "contains": "Contains",
+    "children_one": "{{count}} item",
+    "children_other": "{{count}} items",
+    "tree": "View in the tree",
+    "treeLabel": "View “{{name}}” in the tree"
+  },
+  "footer": {
+    "label": "Form actions"
+  }
+}

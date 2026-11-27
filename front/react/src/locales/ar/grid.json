@@ -1,0 +1,300 @@
+{
+  "toolbar": {
+    "add": "صف جديد"
+  },
+  "search": {
+    "label": "بحث",
+    "placeholder": "بحث…"
+  },
+  "filters": {
+    "label": "عوامل التصفية",
+    "add": "عوامل التصفية",
+    "buttonActive": "عوامل التصفية ({{count}})",
+    "apply": "تطبيق",
+    "clear": "مسح",
+    "clearAll": "إزالة جميع عوامل التصفية",
+    "remove": "إزالة عامل التصفية {{label}}",
+    "chip": "{{label}}: {{value}}",
+    "all": "الكل",
+    "yes": "نعم",
+    "no": "لا",
+    "textPlaceholder": "يحتوي على…"
+  },
+  "columns": {
+    "button": "الأعمدة",
+    "title": "أعمدة القائمة",
+    "earlier": "نقل {{label}} قبل",
+    "later": "نقل {{label}} بعد",
+    "firstReason": "هو العمود الأول بالفعل",
+    "lastReason": "هو العمود الأخير بالفعل",
+    "pinStart": "تثبيت {{label}} في البداية",
+    "pinEnd": "تثبيت {{label}} في النهاية",
+    "pin": "تثبيت {{label}}",
+    "pinStartShort": "البداية",
+    "pinEndShort": "النهاية",
+    "reset": "إعادة ضبط الأعمدة",
+    "noRoom": "مخفي لضيق المساحة",
+    "autoFit": "ملاءمة الأعمدة للعرض المتاح"
+  },
+  "fit": {
+    "hidden_zero": "لا أعمدة مخفية لضيق المساحة",
+    "hidden_one": "عمود واحد مخفي لضيق المساحة",
+    "hidden_two": "عمودان مخفيان لضيق المساحة",
+    "hidden_few": "{{count}} أعمدة مخفية لضيق المساحة",
+    "hidden_many": "{{count}} عمودًا مخفيًا لضيق المساحة",
+    "hidden_other": "{{count}} عمود مخفي لضيق المساحة"
+  },
+  "header": {
+    "resize": "تغيير عرض {{label}}"
+  },
+  "select": {
+    "row": "تحديد الصف {{label}}",
+    "all": "تحديد جميع الصفوف المحمّلة",
+    "header": "التحديد"
+  },
+  "actions": {
+    "header": "الإجراءات",
+    "open": "إجراءات الصف {{label}}"
+  },
+  "history": {
+    "undoLabel": "تراجع",
+    "redoLabel": "إعادة",
+    "noUndo": "لا يوجد ما يمكن التراجع عنه",
+    "noRedo": "لا يوجد ما يمكن إعادته",
+    "edit": "تعديل",
+    "clear": "إفراغ",
+    "paste": "لصق",
+    "fill": "تعبئة",
+    "revert": "استعادة خلية",
+    "revertRow": "استعادة صف",
+    "revertAll": "تجاهل جميع التغييرات",
+    "label": "سجل التغييرات"
+  },
+  "batch": {
+    "count_zero": "لا تغييرات",
+    "count_one": "تغيير واحد",
+    "count_two": "تغييران",
+    "count_few": "{{count}} تغييرات",
+    "count_many": "{{count}} تغييرًا",
+    "count_other": "{{count}} تغيير",
+    "blocked_zero": "لا صفوف تتعذر الحفظ",
+    "blocked_one": "صف واحد لا يمكن حفظه",
+    "blocked_two": "صفان لا يمكن حفظهما",
+    "blocked_few": "{{count}} صفوف لا يمكن حفظها",
+    "blocked_many": "{{count}} صفًا لا يمكن حفظها",
+    "blocked_other": "{{count}} صف لا يمكن حفظها",
+    "save": "حفظ",
+    "discard": "تجاهل",
+    "report": "{{saved}} محفوظة، {{failed}} بها مشكلات",
+    "dismiss": "إغلاق التقرير"
+  },
+  "selection": {
+    "label": "الصفوف المحددة",
+    "count_zero": "لا صفوف محددة",
+    "count_one": "صف واحد محدد",
+    "count_two": "صفان محددان",
+    "count_few": "{{count}} صفوف محددة",
+    "count_many": "{{count}} صفًا محددًا",
+    "count_other": "{{count}} صف محدد",
+    "clear": "إزالة التحديد"
+  },
+  "conflict": {
+    "message": "تغيّر «{{label}}» على الخادم منذ أن قرأته.",
+    "reload": "إعادة التحميل وإعادة التطبيق",
+    "reloadFor": "إعادة التحميل وإعادة تطبيق تغييرات {{label}}",
+    "empty": "(فارغ)",
+    "dialog": {
+      "title": "غيّرتما الشيء نفسه",
+      "description": "عدّل شخص آخر «{{label}}» وقد عدّلت أنت البيانات نفسها. اختر القيم التي تحتفظ بها.",
+      "field": "البيان",
+      "mineColumn": "قيمتك",
+      "theirsColumn": "على الخادم",
+      "mine": "الاحتفاظ بقيمي",
+      "theirs": "استخدام قيم الخادم",
+      "cancel": "إلغاء"
+    }
+  },
+  "paste": {
+    "title": "اللصق من جدول بيانات",
+    "summary": "{{ok}} خلايا صحيحة، {{errors}} بها أخطاء، {{skipped}} غير قابلة للتعديل.",
+    "caption": "معاينة ما سيُلصق",
+    "apply_zero": "لا خلايا للصق",
+    "apply_one": "لصق خلية واحدة",
+    "apply_two": "لصق خليتين",
+    "apply_few": "لصق {{count}} خلايا",
+    "apply_many": "لصق {{count}} خلية",
+    "apply_other": "لصق {{count}} خلية",
+    "cancel": "إلغاء",
+    "nothing": "لا توجد أي خلية صحيحة للصق",
+    "readonly": "لا يمكن تعديل هذه الخلية",
+    "dropped": "لا تتسع {{rows}} صفوف ولا {{columns}} أعمدة من النص الملصوق: ستُهمل."
+  },
+  "empty": {
+    "none": "لا يوجد ما يُعرض بعد.",
+    "filtered": "لا يوجد سجل يطابق البحث وعوامل التصفية."
+  },
+  "error": {
+    "retry": "إعادة المحاولة"
+  },
+  "footer": {
+    "count": "{{loaded}} من {{total}} صفًا",
+    "loadingMore": "جارٍ تحميل مزيد من الصفوف"
+  },
+  "confirm": {
+    "default_zero": "هل تريد تطبيق «{{label}}» على الصفوف؟",
+    "default_one": "هل تريد تطبيق «{{label}}» على صف واحد؟",
+    "default_two": "هل تريد تطبيق «{{label}}» على صفين؟",
+    "default_few": "هل تريد تطبيق «{{label}}» على {{count}} صفوف؟",
+    "default_many": "هل تريد تطبيق «{{label}}» على {{count}} صفًا؟",
+    "default_other": "هل تريد تطبيق «{{label}}» على {{count}} صف؟"
+  },
+  "toast": {
+    "undo": "تراجع",
+    "conflict": "تغيّر «{{label}}» على الخادم: أعد تحميله لإعادة تطبيق تغييراتك.",
+    "invalid": "رفض الخادم بيانات «{{label}}»: راجع الخلايا المحددة.",
+    "failed": "تعذّر حفظ «{{label}}»: {{reason}}",
+    "failedReverted": "تعذّر حفظ «{{label}}» وعاد إلى قيمته السابقة: {{reason}}",
+    "savedMany_zero": "لم يُحفظ أي صف",
+    "savedMany_one": "تم حفظ صف واحد",
+    "savedMany_two": "تم حفظ صفين",
+    "savedMany_few": "تم حفظ {{count}} صفوف",
+    "savedMany_many": "تم حفظ {{count}} صفًا",
+    "savedMany_other": "تم حفظ {{count}} صف",
+    "commandDone_zero": "{{label}}: لم يُنفَّذ على أي صف.",
+    "commandDone_one": "{{label}}: تم على صف واحد.",
+    "commandDone_two": "{{label}}: تم على صفين.",
+    "commandDone_few": "{{label}}: تم على {{count}} صفوف.",
+    "commandDone_many": "{{label}}: تم على {{count}} صفًا.",
+    "commandDone_other": "{{label}}: تم على {{count}} صف.",
+    "pendingApproval_zero": "لا صفوف بانتظار الموافقة.",
+    "pendingApproval_one": "صف واحد بانتظار الموافقة.",
+    "pendingApproval_two": "صفان بانتظار الموافقة.",
+    "pendingApproval_few": "{{count}} صفوف بانتظار الموافقة.",
+    "pendingApproval_many": "{{count}} صفًا بانتظار الموافقة.",
+    "pendingApproval_other": "{{count}} صف بانتظار الموافقة.",
+    "commandFailed_zero": "{{label}}: لم يفشل في أي صف. {{reason}}",
+    "commandFailed_one": "{{label}}: فشل في صف واحد. {{reason}}",
+    "commandFailed_two": "{{label}}: فشل في صفين. {{reason}}",
+    "commandFailed_few": "{{label}}: فشل في {{count}} صفوف. {{reason}}",
+    "commandFailed_many": "{{label}}: فشل في {{count}} صفًا. {{reason}}",
+    "commandFailed_other": "{{label}}: فشل في {{count}} صف. {{reason}}",
+    "reapplied": "أُعيد تطبيق تغييراتك في «{{label}}» على النسخة الجديدة.",
+    "reloadFailed": "تعذّرت إعادة تحميل السجل: {{reason}}"
+  },
+  "live": {
+    "summary_zero": "لا تغييرات معلّقة، {{invalid}} بها أخطاء.",
+    "summary_one": "تغيير واحد معلّق، {{invalid}} بها أخطاء.",
+    "summary_two": "تغييران معلّقان، {{invalid}} بها أخطاء.",
+    "summary_few": "{{count}} تغييرات معلّقة، {{invalid}} بها أخطاء.",
+    "summary_many": "{{count}} تغييرًا معلّقًا، {{invalid}} بها أخطاء.",
+    "summary_other": "{{count}} تغيير معلّق، {{invalid}} بها أخطاء.",
+    "saved": "تم حفظ «{{label}}».",
+    "savedMany_zero": "لم يُحفظ أي صف.",
+    "savedMany_one": "تم حفظ صف واحد.",
+    "savedMany_two": "تم حفظ صفين.",
+    "savedMany_few": "تم حفظ {{count}} صفوف.",
+    "savedMany_many": "تم حفظ {{count}} صفًا.",
+    "savedMany_other": "تم حفظ {{count}} صف.",
+    "conflict": "تعارض في «{{label}}»: تغيّر على الخادم.",
+    "serverInvalid": "رفض الخادم بيانات «{{label}}».",
+    "failed": "تعذّر حفظ «{{label}}».",
+    "cannotSave": "«{{label}}» فيه خلايا غير صالحة ولن يُحفظ.",
+    "invalid": "{{label}}: {{message}}",
+    "nothingToUndo": "لا يوجد ما يمكن التراجع عنه.",
+    "nothingToRedo": "لا يوجد ما يمكن إعادته.",
+    "undone": "تم التراجع: {{what}}.",
+    "redone": "تمت الإعادة: {{what}}.",
+    "cleared_zero": "لم تُفرَّغ أي خلية.",
+    "cleared_one": "تم إفراغ خلية واحدة.",
+    "cleared_two": "تم إفراغ خليتين.",
+    "cleared_few": "تم إفراغ {{count}} خلايا.",
+    "cleared_many": "تم إفراغ {{count}} خلية.",
+    "cleared_other": "تم إفراغ {{count}} خلية.",
+    "filled_zero": "لم تُعبَّأ أي خلية.",
+    "filled_one": "تمت تعبئة خلية واحدة.",
+    "filled_two": "تمت تعبئة خليتين.",
+    "filled_few": "تمت تعبئة {{count}} خلايا.",
+    "filled_many": "تمت تعبئة {{count}} خلية.",
+    "filled_other": "تمت تعبئة {{count}} خلية.",
+    "copied_zero": "لم تُنسخ أي خلية.",
+    "copied_one": "تم نسخ خلية واحدة.",
+    "copied_two": "تم نسخ خليتين.",
+    "copied_few": "تم نسخ {{count}} خلايا.",
+    "copied_many": "تم نسخ {{count}} خلية.",
+    "copied_other": "تم نسخ {{count}} خلية.",
+    "pasted_zero": "لم تُلصق أي خلية.",
+    "pasted_one": "تم لصق خلية واحدة.",
+    "pasted_two": "تم لصق خليتين.",
+    "pasted_few": "تم لصق {{count}} خلايا.",
+    "pasted_many": "تم لصق {{count}} خلية.",
+    "pasted_other": "تم لصق {{count}} خلية.",
+    "cellReverted": "أُعيدت الخلية إلى قيمتها.",
+    "rowReverted": "أُعيد الصف إلى قيمه.",
+    "discarded": "تم تجاهل التغييرات.",
+    "reapplied": "أُعيد تطبيق تغييرات «{{label}}».",
+    "commandFailed": "فشل {{label}}."
+  },
+  "shortcuts": {
+    "move": "التنقل بين الخلايا",
+    "next": "الخروج من الجدول (عند التعديل: يؤكد وينتقل إلى الخلية التالية)",
+    "prev": "العودة إلى العنصر السابق (عند التعديل: يؤكد وينتقل إلى الخلية السابقة)",
+    "home": "أول خلية في الصف",
+    "end": "آخر خلية في الصف",
+    "first": "أول خلية في القائمة",
+    "last": "آخر خلية في القائمة",
+    "pageDown": "صفحة لأسفل",
+    "pageUp": "صفحة لأعلى",
+    "edit": "تعديل الخلية",
+    "editF2": "تعديل الخلية",
+    "cancel": "إلغاء التعديل (مرتين: الصف)",
+    "clear": "إفراغ الخلية أو النطاق",
+    "undo": "تراجع",
+    "redo": "إعادة",
+    "save": "حفظ التغييرات",
+    "copy": "نسخ",
+    "paste": "اللصق من جدول بيانات",
+    "fill": "التعبئة لأسفل",
+    "select": "تحديد الصف",
+    "range": "توسيع نطاق الخلايا",
+    "open": "فتح السجل في وضع التعديل",
+    "search": "الانتقال إلى البحث"
+  },
+  "help": {
+    "toolbar": {
+      "title": "شريط القائمة",
+      "body": "من هنا تبحث وتصفّي وتختار الأعمدة وتتراجع عن التغييرات أو تعيدها. كل ما تغيّره في القائمة يُحفظ بحسب إعداد الجهة."
+    },
+    "search": {
+      "title": "البحث السريع",
+      "body": "اكتب للبحث على الخادم. اضغط «/» من القائمة للوصول إلى هنا، وEsc لمسحه."
+    },
+    "filters": {
+      "title": "عوامل التصفية",
+      "body": "كل عامل تصفية نشط وسم يمكنك إزالته. وتبقى عوامل التصفية والترتيب والبحث في عنوان الصفحة: يمكنك نسخه أو مشاركته."
+    },
+    "columns": {
+      "title": "الأعمدة",
+      "body": "أظهر الأعمدة أو أخفها وغيّر ترتيبها وثبّتها في البداية أو النهاية. ويمكنك أيضًا سحب الترويسة أو تغيير عرضها من الحافة. ويُحفظ ذلك لك."
+    },
+    "table": {
+      "title": "القائمة",
+      "body": "تنقّل بالأسهم، وعدّل بـ Enter أو F2 (أو بالكتابة فوق الخلية)، وألغِ بـ Esc. يُخرجك Tab من القائمة، ويعيدك Shift+Tab إلى الخلية التي كنت فيها؛ وعند التعديل فقط يؤكد Tab وينتقل إلى الخلية التالية. النقر المزدوج على صف، أو Ctrl+Enter، يفتح السجل في وضع التعديل. يتراجع Ctrl+Z، وينسخ Ctrl+C ويلصق Ctrl+V الخلايا."
+    },
+    "row-actions": {
+      "title": "إجراءات الصف",
+      "body": "لكل صف قائمته بما يمكن فعله به. وإذا حددت عدة صفوف ظهر شريط لتنفيذ الإجراء عليها كلها دفعة واحدة."
+    },
+    "batch-bar": {
+      "title": "تغييرات معلّقة",
+      "body": "عندما توجد تغييرات غير محفوظة يعدّها هذا الشريط. احفظ بـ Ctrl+S أو تجاهلها؛ يُحفظ كل صف على حدة ويُبلَّغ عن الصفوف التي تفشل.",
+      "idle": {
+        "title": "شريط التغييرات",
+        "body": "يظهر عند التعديل: حين توجد تغييرات غير محفوظة يعدّها ويتيح لك حفظها أو تجاهلها دفعة واحدة بـ Ctrl+S."
+      }
+    },
+    "undo": {
+      "title": "التراجع والإعادة",
+      "body": "كل تغيير تجريه في القائمة يمكن التراجع عنه وإعادته، وكذلك بـ Ctrl+Z وCtrl+Shift+Z. تُفعَّل الأزرار فور وجود ما يمكن التراجع عنه."
+    }
+  }
+}

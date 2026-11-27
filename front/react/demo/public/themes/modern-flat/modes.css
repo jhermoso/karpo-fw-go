@@ -1,0 +1,37 @@
+@layer th.modes {
+  :root {
+    color-scheme: light dark;
+  }
+
+  [data-th-mode~="light"] {
+    color-scheme: light;
+  }
+
+  [data-th-mode~="dark"] {
+    color-scheme: dark;
+  }
+
+  [data-th-mode~="high-contrast"] {
+    --th-control-button-default-bg: light-dark(#0057a7, #5a9eef);
+    --th-control-button-default-border: light-dark(#0057a7, #5a9eef);
+    --th-control-button-destructive-bg: light-dark(#b30815, #ef7a7a);
+    --th-control-button-destructive-border: light-dark(#b30815, #ef7a7a);
+    --th-control-button-quiet-fg: light-dark(#0054a2, #83bbff);
+    --th-control-field-readonly-fg: light-dark(#4c5664, #b0b8c4);
+    --th-control-toggle-mixed-bg: light-dark(#505a67, #939ca9);
+    --th-control-toggle-on-bg: light-dark(#0057a7, #5a9eef);
+    --th-semantic-down-strong: light-dark(#b30815, #fa9595);
+    --th-semantic-error-strong: light-dark(#b30815, #fa9595);
+    --th-semantic-info-strong: light-dark(#0057a7, #83bbff);
+    --th-semantic-neutral-strong: light-dark(#505a67, #a9b2bf);
+    --th-semantic-required-color: light-dark(#b30815, #fa9595);
+    --th-semantic-success-strong: light-dark(#00645a, #4ec4b2);
+    --th-semantic-up-strong: light-dark(#00645a, #4ec4b2);
+    --th-semantic-warning-strong: light-dark(#824a00, #eaa53c);
+    --th-surface-header-inactive-fg: light-dark(#4c5664, #9ba4b1);
+    --th-text-link: light-dark(#00509b, #cee4ff);
+    --th-text-link-visited: light-dark(#663ab0, #bfa3f7);
+    --th-text-placeholder: light-dark(#505a67, #9ba4b1);
+    --th-text-secondary: light-dark(#48525f, #dae2ee);
+  }
+}

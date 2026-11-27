@@ -1,0 +1,3 @@
+{"type":"FeatureCollection","features":[
+{"type":"Feature","properties":{"code":"ES130","name":"Cantabria","level":"3","parentCode":"ES13","nutsCode":"ES130","ineCode":"39","hasChildren":false},"geometry":{"type":"Polygon","coordinates":[[[-6.775,42.925],[-5.325,42.925],[-5.325,43.975],[-6.775,43.975],[-6.775,42.925]]]}}
+]}

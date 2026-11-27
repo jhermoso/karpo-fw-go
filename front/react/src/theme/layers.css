@@ -1,0 +1,6 @@
+/*
+ * Orden de capas de @karpo/react (PLAN §4.5). Se declara antes que el tema: las capas th.* son las
+ * de Theros Front (su index.css repite la misma declaración) y las dos últimas son las nuestras, que
+ * por eso ganan al tema sin necesidad de !important ni de selectores más pesados.
+ */
+@layer th.tokens, th.modes, th.base, th.domain, th.a11y, karpo.ext, karpo.components;

@@ -1,0 +1,51 @@
+@layer th.modes {
+  :root {
+    color-scheme: light;
+  }
+
+  [data-th-mode~="light"] {
+    color-scheme: light;
+  }
+
+  [data-th-mode~="high-contrast"] {
+    --th-control-button-border: #404954;
+    --th-control-button-default-bg: #002259;
+    --th-control-button-default-border: #00153d;
+    --th-control-button-default-fg: #ffffff;
+    --th-control-button-destructive-fg: #aa0400;
+    --th-control-button-quiet-fg: #094aa8;
+    --th-control-field-border: #404954;
+    --th-control-field-focused-border: #002259;
+    --th-control-icon-color: #47505d;
+    --th-control-toggle-mixed-bg: #313942;
+    --th-control-toggle-on-bg: #002259;
+    --th-control-toggle-on-fg: #ffffff;
+    --th-edge-relief-light: #00000000;
+    --th-edge-relief-shadow-dark: #00000000;
+    --th-edge-relief-shadow-mid: #00000000;
+    --th-edge-subtle: #77818f;
+    --th-nav-item-current-bg: #0b4295;
+    --th-nav-item-current-border: #0b4295;
+    --th-semantic-down-fg: #a50300;
+    --th-semantic-down-strong: #a50300;
+    --th-semantic-error-fg: #a50300;
+    --th-semantic-error-strong: #a50300;
+    --th-semantic-info-fg: #1250af;
+    --th-semantic-info-strong: #1250af;
+    --th-semantic-required-color: #a50300;
+    --th-semantic-success-fg: #00601f;
+    --th-semantic-success-strong: #00601f;
+    --th-semantic-up-fg: #00601f;
+    --th-semantic-up-strong: #00601f;
+    --th-semantic-warning-fg: #6e4d00;
+    --th-semantic-warning-strong: #6e4d00;
+    --th-state-focus-color: #002259;
+    --th-state-selected-bg: #d1e3ff;
+    --th-state-selected-fg: #484848;
+    --th-surface-header-inactive-fg: #49525f;
+    --th-text-link: #094aa8;
+    --th-text-link-visited: #643898;
+    --th-text-placeholder: #4f5966;
+    --th-text-secondary: #47505d;
+  }
+}

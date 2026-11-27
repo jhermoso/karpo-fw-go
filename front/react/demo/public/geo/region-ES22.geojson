@@ -1,0 +1,3 @@
+{"type":"FeatureCollection","features":[
+{"type":"Feature","properties":{"code":"ES220","name":"Navarra","level":"3","parentCode":"ES22","nutsCode":"ES220","ineCode":"31","hasChildren":false},"geometry":{"type":"Polygon","coordinates":[[[-3.775,42.925],[-2.325,42.925],[-2.325,43.975],[-3.775,43.975],[-3.775,42.925]]]}}
+]}

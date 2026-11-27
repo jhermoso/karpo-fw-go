@@ -1,0 +1,5 @@
+{"type":"FeatureCollection","features":[
+{"type":"Feature","properties":{"code":"ES521","name":"Alicante/Alacant","shortName":"Alicante","level":"3","parentCode":"ES52","nutsCode":"ES521","ineCode":"03","hasChildren":false},"geometry":{"type":"Polygon","coordinates":[[[-0.775,39.625],[0.175,39.625],[0.175,41.775],[-0.775,41.775],[-0.775,39.625]]]}},
+{"type":"Feature","properties":{"code":"ES522","name":"Castellón/Castelló","shortName":"Castellón","level":"3","parentCode":"ES52","nutsCode":"ES522","ineCode":"12","hasChildren":false},"geometry":{"type":"Polygon","coordinates":[[[0.225,39.625],[1.175,39.625],[1.175,41.775],[0.225,41.775],[0.225,39.625]]]}},
+{"type":"Feature","properties":{"code":"ES523","name":"Valencia/València","shortName":"Valencia","level":"3","parentCode":"ES52","nutsCode":"ES523","ineCode":"46","hasChildren":false},"geometry":{"type":"Polygon","coordinates":[[[1.225,39.625],[2.175,39.625],[2.175,41.775],[1.225,41.775],[1.225,39.625]]]}}
+]}

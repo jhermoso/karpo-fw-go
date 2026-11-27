@@ -1,0 +1,4 @@
+{"type":"FeatureCollection","features":[
+{"type":"Feature","properties":{"code":"ES431","name":"Badajoz","level":"3","parentCode":"ES43","nutsCode":"ES431","ineCode":"06","hasChildren":false},"geometry":{"type":"Polygon","coordinates":[[[-8.275,38.525],[-6.825,38.525],[-6.825,40.675],[-8.275,40.675],[-8.275,38.525]]]}},
+{"type":"Feature","properties":{"code":"ES432","name":"Cáceres","level":"3","parentCode":"ES43","nutsCode":"ES432","ineCode":"10","hasChildren":false},"geometry":{"type":"Polygon","coordinates":[[[-6.775,38.525],[-5.325,38.525],[-5.325,40.675],[-6.775,40.675],[-6.775,38.525]]]}}
+]}
