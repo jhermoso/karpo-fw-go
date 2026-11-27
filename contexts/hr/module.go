@@ -177,7 +177,7 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/hr/positions", func(w http.ResponseWriter, r *http.Request) {
 		s, n := query(r)
 		page, err := svc.SearchPositions.Handle(r.Context(), happ.SearchPositions{Unit: s("unit"), Organization: s("organization"),
-			Type: s("type"), Status: s("status"), Holder: s("holder"), VacantOnly: s("vacant") == "true", Page: n("page"), Size: n("size")})
+			Type: s("type"), Status: s("status"), Holder: s("holder"), VacantOnly: s("vacant") == "true", RootsOnly: s("root") == "true", Page: n("page"), Size: n("size")})
 		distribution.Respond(w, r, page, err, http.StatusOK)
 	})
 	mux.HandleFunc("GET /api/hr/positions/{id}", get(pos, func(ctx context.Context, id domain.PositionID) (happ.PositionDTO, error) {

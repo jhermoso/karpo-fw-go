@@ -137,7 +137,7 @@ contexts/hr/
   - empleador ajeno: 404; lector sin escritura: 403;
   - el puesto de un departamento pertenece a la organización interna;
   - titular no contratado: 422; ciclo en la jerarquía: 422;
-  - organigrama de tres niveles, búsqueda de vacantes y de puestos de una persona;
+  - organigrama de tres niveles, búsqueda de vacantes, de puestos de una persona y de las raíces del organigrama (`GET /api/hr/positions?root=true`: los puestos sin línea principal vigente);
   - `Staff` con el contrato principal;
   - un centro con contratos vigentes no se cierra;
   - la baja cierra los contratos y deja el puesto vacante;

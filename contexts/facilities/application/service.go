@@ -124,6 +124,7 @@ type GetFacility struct{ ID domain.FacilityID }
 type SearchFacilities struct {
 	Text, Type, Organization, PartOf string
 	ActiveOnly                       bool
+	RootsOnly                        bool // sólo las que no forman parte de otra
 	Sort                             string
 	Desc                             bool
 	Page, Size                       int
@@ -531,6 +532,9 @@ func NewService(d Deps) *Service {
 			default:
 				parts = append(parts, domain.PartsOf(domain.FacilityID{UUID: u}))
 			}
+		}
+		if q.RootsOnly {
+			parts = append(parts, domain.FieldPartOf.IsNull())
 		}
 		if q.ActiveOnly {
 			parts = append(parts, domain.FieldActive.Eq(true))
