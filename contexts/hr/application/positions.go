@@ -72,6 +72,7 @@ type GetPosition struct{ ID domain.PositionID }
 type SearchPositions struct {
 	Unit, Organization, Type, Status, Holder string
 	VacantOnly                               bool
+	RootsOnly                                bool // sólo los que no dependen de nadie (raíces del organigrama)
 	Page, Size                               int
 }
 
@@ -407,6 +408,9 @@ func (s service) positionUseCases(svc *Service) {
 		}
 		if q.Holder != "" {
 			parts = append(parts, domain.HeldBy(domain.PersonID{UUID: parseID(&v, "holder", q.Holder)}, now))
+		}
+		if q.RootsOnly {
+			parts = append(parts, domain.Roots())
 		}
 		if q.VacantOnly {
 			parts = append(parts, domain.VacantAt(now))

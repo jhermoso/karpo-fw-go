@@ -326,6 +326,12 @@ func DirectReportsOf(supervisors ...PositionID) spec.Spec[*Position] {
 	return PosFieldReports.Any(spec.And(ReportFieldSup.In(supervisors...), ReportFieldPrimary.Eq(true), ReportFieldUntil.IsNull()))
 }
 
+// Roots selecciona los puestos que no dependen ahora de nadie por la línea principal: las raíces
+// del organigrama.
+func Roots() spec.Spec[*Position] {
+	return PosFieldReports.None(spec.And(ReportFieldPrimary.Eq(true), ReportFieldUntil.IsNull()))
+}
+
 // VacantAt selecciona los puestos activos sin titular en t.
 func VacantAt(t time.Time) spec.Spec[*Position] {
 	current := spec.And(HolderFieldFrom.AtOrBefore(t), HolderFieldUntil.IsNull().Or(HolderFieldUntil.After(t)))

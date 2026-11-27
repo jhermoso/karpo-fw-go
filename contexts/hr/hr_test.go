@@ -248,6 +248,15 @@ func (h *host) scenario(tag string) {
 	if vacant.Total != 1 || vacant.Items[0].ID != dev.ID {
 		t.Fatalf("vacant: %+v", vacant)
 	}
+	var roots fw.Page[happ.PositionDTO]
+	h.must(h.do("GET", "/api/hr/positions?root=true&size=100", "clerk", nil, &roots), 200, "roots")
+	rootSeen := map[string]bool{}
+	for _, p := range roots.Items {
+		rootSeen[p.ID] = true
+	}
+	if !rootSeen[ceo.ID] || rootSeen[cto.ID] || rootSeen[dev.ID] {
+		t.Fatalf("roots: %+v", roots)
+	}
 	var held fw.Page[happ.PositionDTO]
 	h.must(h.do("GET", "/api/hr/positions?holder="+ana.ID, "clerk", nil, &held), 200, "held by ana")
 	if held.Total != 1 || held.Items[0].ID != ceo.ID {

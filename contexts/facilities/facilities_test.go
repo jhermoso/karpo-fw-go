@@ -194,6 +194,15 @@ func (h *host) scenario(tag string) {
 	if parts.Total != 1 || parts.Items[0].ID != floor.ID {
 		t.Fatalf("parts: %+v", parts)
 	}
+	var roots fw.Page[fapp.FacilityDTO]
+	h.must(h.do("GET", "/api/facilities?root=true&size=100", "clerk", nil, &roots), 200, "roots")
+	seen := map[string]bool{}
+	for _, f := range roots.Items {
+		seen[f.ID] = true
+	}
+	if !seen[building.ID] || seen[floor.ID] || seen[room.ID] {
+		t.Fatalf("roots: %+v", roots)
+	}
 
 	// Alcance: el ajeno no ve nada de Acme.
 	h.must(h.do("GET", "/api/facilities/"+sol.ID, "outsider", nil, nil), 404, "outsider")

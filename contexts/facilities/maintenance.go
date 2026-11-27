@@ -153,13 +153,14 @@ func (q listQuery) search() (fapp.SearchFacilities, error) {
 		return fapp.SearchFacilities{}, err
 	}
 	// Los filtros de la lista; los demás se ignoran. La búsqueda global y el nombre buscan en el
-	// nombre; isActive=true deja sólo las activas (las que DELETE no ha dado de baja).
+	// nombre; isActive=true deja sólo las activas (las que DELETE no ha dado de baja); root=true, sólo
+	// las que no forman parte de otra.
 	text := q.filters["search"]
 	if text == "" {
 		text = q.filters["name"]
 	}
 	return fapp.SearchFacilities{Text: text, Type: q.filters["type"], Organization: q.filters["organization"], PartOf: q.filters["partOf"],
-		ActiveOnly: q.filters["isActive"] == "true", Sort: q.sortBy, Desc: q.order == "desc", Page: q.page, Size: q.size}, nil
+		ActiveOnly: q.filters["isActive"] == "true", RootsOnly: q.filters["root"] == "true", Sort: q.sortBy, Desc: q.order == "desc", Page: q.page, Size: q.size}, nil
 }
 
 // RegisterMaintenanceRoutes monta el contrato de mantenimiento de las instalaciones bajo MaintenanceBase.

@@ -111,7 +111,7 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 		q := r.URL.Query()
 		atoi := func(k string) int { n, _ := strconv.Atoi(q.Get(k)); return n }
 		page, err := svc.Search.Handle(r.Context(), fapp.SearchFacilities{Text: q.Get("q"), Type: q.Get("type"),
-			Organization: q.Get("organization"), PartOf: q.Get("partOf"), ActiveOnly: q.Get("active") == "true", Page: atoi("page"), Size: atoi("size")})
+			Organization: q.Get("organization"), PartOf: q.Get("partOf"), ActiveOnly: q.Get("active") == "true", RootsOnly: q.Get("root") == "true", Page: atoi("page"), Size: atoi("size")})
 		distribution.Respond(w, r, page, err, http.StatusOK)
 	})
 	mux.HandleFunc("GET /api/facilities/{id}", update(func(r *http.Request, id domain.FacilityID) (fapp.FacilityDTO, error) {
