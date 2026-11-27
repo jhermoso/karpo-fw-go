@@ -275,6 +275,17 @@ func (e *env) idsFilter(year int) {
 	if codes, _ := page["errorCodes"].(map[string]any); code != 400 || codes["ids"] == nil {
 		t.Fatalf("a boolean id: %d %v", code, page)
 	}
+	// Sin permiso de leer países: la lista vacía da 403; un alfa-2 mal formado o un elemento que
+	// no es cadena dan 400 antes del permiso, como page o eu (docs/CONTRATO-MANTENIMIENTO.md).
+	e.must(func() int { s, _, _ := e.raw("GET", cb+"?ids=", e.keeper, nil); return s }(), 403, "countries by no ids without the permission")
+	code, page, _ = e.raw("GET", cb+"?ids=ESP", e.keeper, nil)
+	if codes, _ := page["errorCodes"].(map[string]any); code != 400 || fmt.Sprint(codes["ids"]) != "[format]" {
+		t.Fatalf("a bad alpha-2 without the permission: %d %v", code, page)
+	}
+	code, page, _ = e.raw("POST", cb+"/search", e.keeper, map[string]any{"filter": map[string]any{"ids": []any{1}}})
+	if codes, _ := page["errorCodes"].(map[string]any); code != 400 || fmt.Sprint(codes["ids"]) != "[type]" {
+		t.Fatalf("a number as id without the permission: %d %v", code, page)
+	}
 	code, page, _ = e.raw("POST", cb+"/search", e.reader, map[string]any{"filter": map[string]any{"ids": strings.Repeat("ES,", 1001)}})
 	if got := alpha2("the same code 1001 times", code, page); got != "ES" {
 		t.Fatalf("repeated codes: %s", got)

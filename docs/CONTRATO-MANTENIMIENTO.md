@@ -37,7 +37,14 @@ proxies cortan la URL hacia los 8 KB.
 - **Y con lo demás.** `ids` se combina con AND con los otros filtros y con el ámbito de
   organización del usuario. Un id que no existe, o que es de otra organización, se omite sin
   error. Los festivos no tienen ámbito: basta el permiso de leerlos.
-- **El permiso, antes.** Sin permiso de leer la lista, 403, también con la lista vacía.
+- **El permiso y los 400.** Sin permiso de leer la lista, 403, también con la lista vacía. Pero
+  no todos los 400 van después del permiso:
+  - `type` (en `POST`) sale en la distribución, **antes** del permiso, como un `page` mal formado:
+    sin permiso y con `{"ids":[1]}` se recibe 400;
+  - en países, también `format` (y `range`) salen antes del permiso, como `eu` o `eurozone`, porque su
+    filtrado vive en el manejador;
+  - en las demás listas, `format` y `range` salen en la aplicación, **después** del permiso: sin
+    permiso, 403 aunque los ids estén mal.
 - **La página no cambia.** `ids` no toca `pageSize`: si se piden 50 con `pageSize=20`, llegan 20.
   Quien resuelve etiquetas pide un `pageSize` mayor o igual que el número de ids.
 - **Países.** Los ids son códigos alfa-2 (dos letras, sin distinguir mayúsculas). Un código bien
