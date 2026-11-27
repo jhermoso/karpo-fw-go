@@ -359,6 +359,8 @@ var (
 	AstFieldName     = spec.Text("name", func(a *Asset) string { return a.s.Name })
 	// AstFieldIDOrder ordena por la identidad: deshace los empates de una lista paginada.
 	AstFieldIDOrder = spec.Ordered("id", func(a *Asset) string { return a.ID().String() })
+	// AstFieldID filtra por la identidad.
+	AstFieldID = spec.Comparable("id", func(a *Asset) AssetID { return a.ID() })
 )
 
 // Eventos del contexto.
@@ -410,3 +412,6 @@ func ParseAssetID(s string) (AssetID, error) { u, err := fw.ParseUUID(s); return
 
 // AssetRepository guarda los activos.
 type AssetRepository = fw.Repository[AssetID, *Asset]
+
+// AssetsWithIDs selecciona los activos con las identidades dadas.
+func AssetsWithIDs(ids ...AssetID) spec.Spec[*Asset] { return AstFieldID.In(ids...) }

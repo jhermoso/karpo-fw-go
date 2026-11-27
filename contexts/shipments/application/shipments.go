@@ -346,6 +346,10 @@ type PageCarriers struct {
 	Sort       string // code (por omisión) o name; los empates, por la identidad
 	Desc       bool
 	Page, Size int
+	// IDs son las identidades pedidas, tal como llegan (docs/CONTRATO-MANTENIMIENTO.md); ByIDs dice
+	// que el filtro llegó, aunque esté vacío.
+	IDs   []string
+	ByIDs bool
 }
 
 // withoutMerged deja fuera de un listado los registros cuya party (cliente) es una party fusionada,
@@ -479,6 +483,9 @@ func (s service) wireCarriers(svc *Service) {
 	svc.PageCarriers = guard(PermCarrierRead, func(ctx context.Context, q PageCarriers) (fw.Page[CarrierDTO], error) {
 		var v fw.Validation
 		parts := []spec.Specification[*domain.Carrier]{within(scopeOf(ctx), domain.CarFieldCompany)}
+		if q.ByIDs {
+			parts = append(parts, domain.CarriersWithIDs(app.ParseIDs(&v, q.IDs, domain.ParseCarrierID)...))
+		}
 		if q.Company != "" {
 			parts = append(parts, domain.CarFieldCompany.Eq(domain.OrganizationID{UUID: parseID(&v, "company", q.Company)}))
 		}

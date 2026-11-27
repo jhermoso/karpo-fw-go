@@ -168,4 +168,9 @@ var (
 	SupFieldPaymentDays = spec.Ordered("payment_days", func(p *SupplierProfile) int { return p.s.PaymentDays })
 	// SupFieldIDOrder ordena por la identidad: deshace los empates de una lista paginada.
 	SupFieldIDOrder = spec.Ordered("id", func(p *SupplierProfile) string { return p.ID().String() })
+	// SupFieldID filtra por la identidad.
+	SupFieldID = spec.Comparable("id", func(p *SupplierProfile) SupplierID { return p.ID() })
 )
+
+// SuppliersWithIDs selecciona los proveedores con las identidades dadas.
+func SuppliersWithIDs(ids ...SupplierID) spec.Spec[*SupplierProfile] { return SupFieldID.In(ids...) }

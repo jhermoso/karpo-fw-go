@@ -46,6 +46,10 @@ type SearchWorkCenters struct {
 	// Desc ordena por código de mayor a menor (el único orden de la lista).
 	Desc       bool
 	Page, Size int
+	// IDs son las identidades pedidas, tal como llegan (docs/CONTRATO-MANTENIMIENTO.md); ByIDs dice
+	// que el filtro llegó, aunque esté vacío.
+	IDs   []string
+	ByIDs bool
 }
 
 // WorkCenterDTO es la forma de transporte de un centro de trabajo.
@@ -227,6 +231,9 @@ func (s service) workCenterUseCases(svc *Service) {
 	svc.SearchWorkCenters = guard(PermWorkCenterRead, func(ctx context.Context, q SearchWorkCenters) (fw.Page[WorkCenterDTO], error) {
 		var v fw.Validation
 		parts := []spec.Specification[*domain.WorkCenter]{within(scopeOf(ctx), domain.WCFieldEmployer)}
+		if q.ByIDs {
+			parts = append(parts, domain.WorkCentersWithIDs(app.ParseIDs(&v, q.IDs, domain.ParseWorkCenterID)...))
+		}
 		if q.Employer != "" {
 			parts = append(parts, domain.WCFieldEmployer.Eq(domain.OrganizationID{UUID: parseID(&v, "employer", q.Employer)}))
 		}

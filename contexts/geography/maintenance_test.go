@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/geography"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
+	"github.com/jhermoso/karpo-fw-go/pkg/testing/testkit"
 )
 
 // raw hace una petición y devuelve el estado, el cuerpo como JSON genérico y las cabeceras.
@@ -69,6 +72,53 @@ func (e *env) maintenance() {
 		"pagination": map[string]any{"pageSize": 0, "orderBy": "name"}})
 	if code != 200 || field(page, "id") != "ES" || page["pageSize"] != float64(fw.DefaultPageSize) {
 		t.Fatalf("countries by POST: %d %v", code, page)
+	}
+	// El orden por alpha3 y por name, en los dos sentidos. En un empate, alpha2 ascendente (en la
+	// semilla no hay dos nombres ni dos alfa-3 iguales, así que esa rama no llega a darse).
+	items := func(q string) []map[string]any {
+		code, page, _ := e.raw("GET", cb+q, e.reader, nil)
+		if code != 200 {
+			t.Fatalf("%s: %d %v", q, code, page)
+		}
+		var out []map[string]any
+		for _, it := range page["items"].([]any) {
+			out = append(out, it.(map[string]any))
+		}
+		if len(out) < 2 || page["totalCount"] != float64(len(out)) {
+			t.Fatalf("%s: %d items of %v", q, len(out), page["totalCount"])
+		}
+		return out
+	}
+	for _, c := range []struct{ by, order string }{{"alpha3", "asc"}, {"alpha3", "desc"}, {"name", "asc"}, {"name", "desc"}} {
+		q := "?pageSize=1000&sortBy=" + c.by + "&sortOrder=" + c.order
+		list := items(q)
+		for i := 1; i < len(list); i++ {
+			a, b := strings.ToLower(list[i-1][c.by].(string)), strings.ToLower(list[i][c.by].(string))
+			cmp := strings.Compare(a, b)
+			if c.order == "desc" {
+				cmp = -cmp
+			}
+			if cmp > 0 || cmp == 0 && list[i-1]["id"].(string) >= list[i]["id"].(string) {
+				t.Fatalf("%s: %v before %v", q, list[i-1], list[i])
+			}
+		}
+	}
+	// eu=true y sepa=true: sólo los que lo son, España dentro y Estados Unidos fuera.
+	for _, flag := range []string{"eu", "sepa"} {
+		list := items("?pageSize=1000&" + flag + "=true")
+		seen := map[string]bool{}
+		for _, it := range list {
+			if it[flag] != true {
+				t.Fatalf("%s=true: %v", flag, it)
+			}
+			seen[it["id"].(string)] = true
+		}
+		if !seen["ES"] || seen["US"] {
+			t.Fatalf("%s=true: %v", flag, seen)
+		}
+	}
+	if eu, sepa := len(items("?pageSize=1000&eu=true")), len(items("?pageSize=1000&sepa=true")); sepa <= eu {
+		t.Fatalf("SEPA (%d) should be wider than the EU (%d)", sepa, eu)
 	}
 	for _, bad := range []string{"?sortBy=numeric", "?sortOrder=up", "?page=0", "?pageSize=1001", "?eu=si"} {
 		e.must(func() int { s, _, _ := e.raw("GET", cb+bad, e.reader, nil); return s }(), 400, bad)
@@ -205,4 +255,85 @@ func (e *env) maintenance() {
 	e.must(func() int { s, _, _ := e.raw("GET", hb+"/"+id, e.keeper, nil); return s }(), 404, "deleted")
 	e.must(func() int { s, _, _ := e.raw("DELETE", hb+"/nada", e.keeper, nil); return s }(), 400, "delete not an id")
 	e.must(func() int { s, _, _ := e.raw("GET", hb, "", nil); return s }(), 401, "nobody")
+}
+
+// idsFilter: el filtro ids de las listas de festivos y de países (B-15,
+// docs/CONTRATO-MANTENIMIENTO.md). Los festivos no tienen ámbito: basta el permiso. Los países se
+// piden por su alfa-2; uno bien formado que no existe sólo no está.
+func (e *env) idsFilter(year int) {
+	t := e.t
+	es, err := e.mod.Ports.Country(context.Background(), "ES")
+	if err != nil {
+		t.Fatal(err)
+	}
+	hb := geography.HolidaysBase
+	create := func(day, name string) string {
+		code, out, _ := e.raw("POST", hb, e.keeper, map[string]any{"boundary": es.Boundary, "date": fmt.Sprintf("%d-%s", year, day), "name": name})
+		e.must(code, 201, "create "+name)
+		return out["id"].(string)
+	}
+	mine := [2]string{create("03-03", "Ids uno"), create("04-04", "Ids dos")}
+	testkit.CheckIDsFilter(t, testkit.IDsFilterCase{Base: hb,
+		Do: func(method, path string, body any) (int, map[string]any) {
+			code, out, _ := e.raw(method, path, e.keeper, body)
+			return code, out
+		},
+		Denied: func(method, path string, body any) int {
+			code, _, _ := e.raw(method, path, e.reader, body)
+			return code
+		},
+		Mine: mine, And: "search=uno",
+		Missing: fw.NewUUID().String(), Zero: fw.UUID{}.String(), Bad: "junk", Many: testkit.ManyUUIDs})
+
+	cb := geography.CountriesBase
+	alpha2 := func(what string, code int, page map[string]any) string {
+		t.Helper()
+		if code != 200 {
+			t.Fatalf("%s: %d %v", what, code, page)
+		}
+		var out []string
+		for _, it := range page["items"].([]any) {
+			out = append(out, it.(map[string]any)["id"].(string))
+		}
+		return strings.Join(out, ",")
+	}
+	code, page, _ := e.raw("GET", cb+"?ids=es,FR,XX,es", e.reader, nil)
+	if got := alpha2("countries by ids", code, page); got != "ES,FR" {
+		t.Fatalf("countries by ids: %s", got)
+	}
+	code, page, _ = e.raw("POST", cb+"/search", e.reader, map[string]any{"filter": map[string]any{"ids": []string{"pt", "es"}, "search": "spain"}})
+	if got := alpha2("countries by POST", code, page); got != "ES" {
+		t.Fatalf("countries by ids and search: %s", got)
+	}
+	for _, q := range []string{"?ids=XX", "?ids="} {
+		code, page, _ = e.raw("GET", cb+q, e.reader, nil)
+		if got := alpha2(q, code, page); got != "" || page["totalCount"] != float64(0) {
+			t.Fatalf("%s: %v", q, page)
+		}
+	}
+	for _, bad := range []string{"ESP", "1A", "e", "ñ"} {
+		code, page, _ = e.raw("GET", cb+"?ids=ES,"+url.QueryEscape(bad), e.reader, nil)
+		codes, _ := page["errorCodes"].(map[string]any)
+		if got, _ := codes["ids"].([]any); code != 400 || len(got) != 1 || got[0] != "format" {
+			t.Fatalf("%s: %d %v", bad, code, page)
+		}
+	}
+	code, page, _ = e.raw("POST", cb+"/search", e.reader, map[string]any{"filter": map[string]any{"ids": []any{"ES", true}}})
+	if codes, _ := page["errorCodes"].(map[string]any); code != 400 || codes["ids"] == nil {
+		t.Fatalf("a boolean id: %d %v", code, page)
+	}
+	// Sin permiso de leer países: 403, con la lista vacía, con un alfa-2 mal formado y con una
+	// bandera que no vale; la validación va en la aplicación, detrás del permiso. Un elemento que
+	// no es cadena sigue dando 400 en distribución (docs/CONTRATO-MANTENIMIENTO.md).
+	for _, q := range []string{"?ids=", "?ids=ESP", "?eu=x"} {
+		e.must(func() int { s, _, _ := e.raw("GET", cb+q, e.keeper, nil); return s }(), 403, "countries "+q+" without the permission")
+	}
+	code, page, _ = e.raw("POST", cb+"/search", e.keeper, map[string]any{"filter": map[string]any{"ids": []any{1}}})
+	if codes, _ := page["errorCodes"].(map[string]any); code != 400 || fmt.Sprint(codes["ids"]) != "[type]" {
+		t.Fatalf("a number as id without the permission: %d %v", code, page)
+	}
+	code, page, _ = e.raw("POST", cb+"/search", e.reader, map[string]any{"filter": map[string]any{"ids": strings.Repeat("ES,", 1001)}})
+	if got := alpha2("the same code 1001 times", code, page); got != "ES" {
+		t.Fatalf("repeated codes: %s", got)
+	}
 }

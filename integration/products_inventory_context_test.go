@@ -99,8 +99,14 @@ func TestProductsAndInventoryContexts(t *testing.T) {
 				len(got.Suppliers) != 1 || !got.Suppliers[0].Preferred || got.Suppliers[0].LeadDays != 7 {
 				t.Fatalf("product round trip: %+v %v", got, err)
 			}
-			for query, want := range map[dapp.SearchProducts]int{{Company: acme.ID, Barcode: "8412345678905"}: 1, {Company: acme.ID, Text: "ZINCADO"}: 1,
-				{Company: acme.ID, Text: "tue-m8"}: 1, {Company: acme.ID, Category: cat.ID}: 1, {Company: acme.ID, Kind: "good"}: 2, {Company: acme.ID, Barcode: "nope"}: 0} {
+			// Una lista y no un mapa: SearchProducts lleva IDs (B-15) y ya no es comparable.
+			for _, c := range []struct {
+				query dapp.SearchProducts
+				want  int
+			}{{dapp.SearchProducts{Company: acme.ID, Barcode: "8412345678905"}, 1}, {dapp.SearchProducts{Company: acme.ID, Text: "ZINCADO"}, 1},
+				{dapp.SearchProducts{Company: acme.ID, Text: "tue-m8"}, 1}, {dapp.SearchProducts{Company: acme.ID, Category: cat.ID}, 1},
+				{dapp.SearchProducts{Company: acme.ID, Kind: "good"}, 2}, {dapp.SearchProducts{Company: acme.ID, Barcode: "nope"}, 0}} {
+				query, want := c.query, c.want
 				page, err := ps.SearchProducts.Handle(actx, query)
 				if err != nil || len(page.Items) != want {
 					t.Fatalf("search %+v: %d %v", query, len(page.Items), err)

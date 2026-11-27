@@ -154,6 +154,9 @@ func (c *Country) CheckIBAN(i vocab.IBAN) error {
 var (
 	FieldAlpha2          = spec.Text("alpha2", (*Country).Alpha2)
 	FieldCountryBoundary = spec.Comparable("boundary", (*Country).Boundary)
+	FieldEU              = spec.Comparable("eu", func(c *Country) bool { return c.p.EU })
+	FieldEurozone        = spec.Comparable("eurozone", func(c *Country) bool { return c.p.Eurozone })
+	FieldSEPA            = spec.Comparable("sepa", func(c *Country) bool { return c.p.SEPA })
 )
 
 // CountryAlpha2 selecciona un país por su código ISO (la entrada no distingue mayúsculas).

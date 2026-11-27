@@ -136,6 +136,8 @@ type listQuery struct {
 	page, size    int
 	sortBy, order string
 	filters       map[string]string
+	ids           []string // el filtro ids, tal como llega (docs/CONTRATO-MANTENIMIENTO.md)
+	byIDs         bool
 }
 
 // check valida la página y el orden contra la lista blanca de campos.
@@ -164,6 +166,8 @@ func registerList(mux *http.ServeMux, base string, list func(w http.ResponseWrit
 		for k := range values {
 			q.filters[k] = values.Get(k)
 		}
+		q.ids, q.byIDs = distribution.IDsFromQuery(values)
+		delete(q.filters, "ids")
 		var err error
 		if s := values.Get("page"); s != "" {
 			if q.page, err = strconv.Atoi(s); err != nil {
@@ -202,6 +206,12 @@ func registerList(mux *http.ServeMux, base string, list func(w http.ResponseWrit
 		if body.Pagination.Ascending != nil && !*body.Pagination.Ascending {
 			q.order = "desc"
 		}
+		ids, byIDs, err := distribution.IDsFromFilter(body.Filter)
+		if err != nil {
+			writeMaintenanceError(w, r, err)
+			return
+		}
+		q.ids, q.byIDs = ids, byIDs
 		for k, v := range body.Filter {
 			switch x := v.(type) {
 			case nil:
@@ -232,66 +242,16 @@ func (m *Module) countryRoutes(mux *http.ServeMux) {
 			writeMaintenanceError(w, r, err)
 			return
 		}
-		var v fw.Validation
-		flags := map[string]func(contracts.CountryInfo) bool{
-			"eu":       func(c contracts.CountryInfo) bool { return c.EU },
-			"eurozone": func(c contracts.CountryInfo) bool { return c.Eurozone },
-			"sepa":     func(c contracts.CountryInfo) bool { return c.SEPA },
-		}
-		for f := range flags {
-			s := q.filters[f]
-			v.Require(s == "" || s == "true" || s == "false", f, "enum", "true or false")
-		}
-		if err := v.Err(); err != nil {
-			writeMaintenanceError(w, r, err)
-			return
-		}
-		// Los países son unos 250: se leen todos y se filtran, ordenan y paginan aquí.
-		all, err := svc.ListCountries.Handle(r.Context(), gapp.ListCountries{})
+		page, err := svc.SearchCountries.Handle(r.Context(), gapp.SearchCountries{IDs: q.ids, ByIDs: q.byIDs, Text: q.text(),
+			EU: q.filters["eu"], Eurozone: q.filters["eurozone"], SEPA: q.filters["sepa"], Sort: q.sortBy, Desc: q.order == "desc",
+			Page: q.page, Size: q.size})
 		if err != nil {
 			writeMaintenanceError(w, r, err)
 			return
 		}
-		text := strings.ToLower(strings.TrimSpace(q.text()))
-		var found []contracts.CountryInfo
-		for _, c := range all {
-			if text != "" && !strings.Contains(strings.ToLower(c.Name), text) && !strings.EqualFold(c.Alpha2, text) && !strings.EqualFold(c.Alpha3, text) {
-				continue
-			}
-			keep := true
-			for f, get := range flags {
-				if s := q.filters[f]; s != "" && get(c) != (s == "true") {
-					keep = false
-				}
-			}
-			if keep {
-				found = append(found, c)
-			}
-		}
-		key := func(c contracts.CountryInfo) string {
-			switch q.sortBy {
-			case "alpha3":
-				return c.Alpha3
-			case "name":
-				return strings.ToLower(c.Name)
-			}
-			return c.Alpha2
-		}
-		slices.SortStableFunc(found, func(a, b contracts.CountryInfo) int {
-			c := strings.Compare(key(a), key(b))
-			if q.order == "desc" {
-				c = -c
-			}
-			if c == 0 {
-				c = strings.Compare(a.Alpha2, b.Alpha2) // el desempate, por la identidad
-			}
-			return c
-		})
-		total := len(found)
-		from, to := min((q.page-1)*q.size, total), min(q.page*q.size, total)
-		out := maintenancePage[MaintainedCountry]{Items: make([]MaintainedCountry, 0, to-from), Total: int64(total), TotalCount: int64(total),
-			PageNumber: q.page, PageSize: q.size, TotalPages: (total + q.size - 1) / q.size}
-		for _, c := range found[from:to] {
+		out := maintenancePage[MaintainedCountry]{Items: make([]MaintainedCountry, 0, len(page.Items)), Total: page.Total, TotalCount: page.Total,
+			PageNumber: page.Number, PageSize: page.Size, TotalPages: page.TotalPages}
+		for _, c := range page.Items {
 			out.Items = append(out.Items, MaintainedCountry{ID: c.Alpha2, CountryInfo: c})
 		}
 		distribution.WriteJSON(w, http.StatusOK, out)
@@ -343,7 +303,7 @@ func (m *Module) holidayRoutes(mux *http.ServeMux) {
 				return
 			}
 		}
-		page, err := h.Page(r.Context(), gapp.PageHolidays{Boundary: q.filters["boundary"], Text: q.text(), Year: year,
+		page, err := h.Page(r.Context(), gapp.PageHolidays{IDs: q.ids, ByIDs: q.byIDs, Boundary: q.filters["boundary"], Text: q.text(), Year: year,
 			ByName: q.sortBy == "name", Desc: q.order == "desc", Page: q.page, Size: q.size})
 		if err != nil {
 			writeMaintenanceError(w, r, err)

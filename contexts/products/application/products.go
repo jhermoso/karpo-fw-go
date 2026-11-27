@@ -87,6 +87,10 @@ type SearchProducts struct {
 	Sort                                   string
 	Desc                                   bool
 	Page, Size                             int
+	// IDs son las identidades pedidas, tal como llegan (docs/CONTRATO-MANTENIMIENTO.md); ByIDs dice
+	// que el filtro llegó, aunque esté vacío.
+	IDs   []string
+	ByIDs bool
 }
 
 // ProductDTO es la forma de transporte de un producto.
@@ -297,6 +301,9 @@ func (s service) productUseCases(svc *Service) {
 	svc.SearchProducts = guard(PermProductRead, func(ctx context.Context, q SearchProducts) (fw.Page[ProductDTO], error) {
 		var v fw.Validation
 		parts := []spec.Specification[*domain.Product]{within(scopeOf(ctx), domain.ProdFieldCompany)}
+		if q.ByIDs {
+			parts = append(parts, domain.ProductsWithIDs(app.ParseIDs(&v, q.IDs, domain.ParseProductID)...))
+		}
 		if q.Company != "" {
 			parts = append(parts, domain.ProdFieldCompany.Eq(domain.OrganizationID{UUID: parseID(&v, "company", q.Company)}))
 		}
