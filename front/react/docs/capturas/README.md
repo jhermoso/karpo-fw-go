@@ -2,6 +2,8 @@
 
 Generadas por `npm run capturas` (`scripts/capturas.mjs`, PLAN §7). No se editan a mano: se regeneran.
 
+Sólo se versionan [`cuadricula-editable-claro.png`](cuadricula-editable-claro.png), [`mapa-pais-oscuro.png`](mapa-pais-oscuro.png), [`organigrama-diagrama-rtl.png`](organigrama-diagrama-rtl.png); las demás quedan fuera de git (`.gitignore`) y aparecen en esta carpeta al ejecutar `npm run capturas`.
+
 - **Fecha:** 2026-11-27
 - **Navegador:** Microsoft Edge 158.0.4370.33 (playwright-core, `channel`; WebGL por software con `--enable-unsafe-swiftshader`)
 - **Ventana:** 1440×900 (390×844 con pantalla táctil en la variante `movil`), escala 1, movimiento reducido (`prefers-reduced-motion: reduce`), fuentes del sistema
@@ -20,14 +22,14 @@ Generadas por `npm run capturas` (`scripts/capturas.mjs`, PLAN §7). No se edita
 
 | Escena | Qué enseña | Claro | Oscuro | RTL | Inglés | Móvil |
 |---|---|---|---|---|---|---|
-| Cuadrícula editable | Productos con tres celdas sucias, una inválida con su error, una en edición y la barra de cambios por lotes (en el móvil, sólo con las columnas que caben y sin la celda inválida) | [`cuadricula-editable-claro.png`](cuadricula-editable-claro.png) | [`cuadricula-editable-oscuro.png`](cuadricula-editable-oscuro.png) | [`cuadricula-editable-rtl.png`](cuadricula-editable-rtl.png) | [`cuadricula-editable-ingles.png`](cuadricula-editable-ingles.png) | [`cuadricula-editable-movil.png`](cuadricula-editable-movil.png) |
-| Detalle en edición | Instalación abierta con doble clic desde la lista: un campo cambiado y un error de campo | [`detalle-edicion-claro.png`](detalle-edicion-claro.png) | [`detalle-edicion-oscuro.png`](detalle-edicion-oscuro.png) | [`detalle-edicion-rtl.png`](detalle-edicion-rtl.png) | [`detalle-edicion-ingles.png`](detalle-edicion-ingles.png) | [`detalle-edicion-movil.png`](detalle-edicion-movil.png) |
-| Organigrama · listado | Árbol de puestos con dos ramas desplegadas, una plegada y una búsqueda activa | [`organigrama-listado-claro.png`](organigrama-listado-claro.png) | [`organigrama-listado-oscuro.png`](organigrama-listado-oscuro.png) | [`organigrama-listado-rtl.png`](organigrama-listado-rtl.png) | [`organigrama-listado-ingles.png`](organigrama-listado-ingles.png) | [`organigrama-listado-movil.png`](organigrama-listado-movil.png) |
-| Organigrama · diagrama | Diagrama a tamaño legible, centrado en la raíz, con una rama desplegada, contadores de descendientes y el minimapa | [`organigrama-diagrama-claro.png`](organigrama-diagrama-claro.png) | [`organigrama-diagrama-oscuro.png`](organigrama-diagrama-oscuro.png) | [`organigrama-diagrama-rtl.png`](organigrama-diagrama-rtl.png) | [`organigrama-diagrama-ingles.png`](organigrama-diagrama-ingles.png) | — |
-| Mapa · mundo | Instalaciones por país (coropletas) | [`mapa-mundo-claro.png`](mapa-mundo-claro.png) | [`mapa-mundo-oscuro.png`](mapa-mundo-oscuro.png) | [`mapa-mundo-rtl.png`](mapa-mundo-rtl.png) | [`mapa-mundo-ingles.png`](mapa-mundo-ingles.png) | [`mapa-mundo-movil.png`](mapa-mundo-movil.png) |
-| Mapa · país | Comunidades autónomas de España | [`mapa-pais-claro.png`](mapa-pais-claro.png) | [`mapa-pais-oscuro.png`](mapa-pais-oscuro.png) | [`mapa-pais-rtl.png`](mapa-pais-rtl.png) | [`mapa-pais-ingles.png`](mapa-pais-ingles.png) | — |
-| Mapa · región | Provincias de Cataluña (nivel región): cuatro delimitaciones, una con datos y tres sin dato | [`mapa-region-claro.png`](mapa-region-claro.png) | [`mapa-region-oscuro.png`](mapa-region-oscuro.png) | [`mapa-region-rtl.png`](mapa-region-rtl.png) | [`mapa-region-ingles.png`](mapa-region-ingles.png) | — |
-| Mapa · ciudad | Municipios de Madrid con las migas completas | [`mapa-ciudad-claro.png`](mapa-ciudad-claro.png) | [`mapa-ciudad-oscuro.png`](mapa-ciudad-oscuro.png) | [`mapa-ciudad-rtl.png`](mapa-ciudad-rtl.png) | [`mapa-ciudad-ingles.png`](mapa-ciudad-ingles.png) | — |
-| Ayuda guiada | Recorrido de la pantalla de productos con el segundo paso abierto | [`ayuda-recorrido-claro.png`](ayuda-recorrido-claro.png) | [`ayuda-recorrido-oscuro.png`](ayuda-recorrido-oscuro.png) | [`ayuda-recorrido-rtl.png`](ayuda-recorrido-rtl.png) | [`ayuda-recorrido-ingles.png`](ayuda-recorrido-ingles.png) | [`ayuda-recorrido-movil.png`](ayuda-recorrido-movil.png) |
+| Cuadrícula editable | Productos con tres celdas sucias, una inválida con su error, una en edición y la barra de cambios por lotes (en el móvil, sólo con las columnas que caben y sin la celda inválida) | [`cuadricula-editable-claro.png`](cuadricula-editable-claro.png) | `cuadricula-editable-oscuro.png` | `cuadricula-editable-rtl.png` | `cuadricula-editable-ingles.png` | `cuadricula-editable-movil.png` |
+| Detalle en edición | Instalación abierta con doble clic desde la lista: un campo cambiado y un error de campo | `detalle-edicion-claro.png` | `detalle-edicion-oscuro.png` | `detalle-edicion-rtl.png` | `detalle-edicion-ingles.png` | `detalle-edicion-movil.png` |
+| Organigrama · listado | Árbol de puestos con dos ramas desplegadas, una plegada y una búsqueda activa | `organigrama-listado-claro.png` | `organigrama-listado-oscuro.png` | `organigrama-listado-rtl.png` | `organigrama-listado-ingles.png` | `organigrama-listado-movil.png` |
+| Organigrama · diagrama | Diagrama a tamaño legible, centrado en la raíz, con una rama desplegada, contadores de descendientes y el minimapa | `organigrama-diagrama-claro.png` | `organigrama-diagrama-oscuro.png` | [`organigrama-diagrama-rtl.png`](organigrama-diagrama-rtl.png) | `organigrama-diagrama-ingles.png` | — |
+| Mapa · mundo | Instalaciones por país (coropletas) | `mapa-mundo-claro.png` | `mapa-mundo-oscuro.png` | `mapa-mundo-rtl.png` | `mapa-mundo-ingles.png` | `mapa-mundo-movil.png` |
+| Mapa · país | Comunidades autónomas de España | `mapa-pais-claro.png` | [`mapa-pais-oscuro.png`](mapa-pais-oscuro.png) | `mapa-pais-rtl.png` | `mapa-pais-ingles.png` | — |
+| Mapa · región | Provincias de Cataluña (nivel región): cuatro delimitaciones, una con datos y tres sin dato | `mapa-region-claro.png` | `mapa-region-oscuro.png` | `mapa-region-rtl.png` | `mapa-region-ingles.png` | — |
+| Mapa · ciudad | Municipios de Madrid con las migas completas | `mapa-ciudad-claro.png` | `mapa-ciudad-oscuro.png` | `mapa-ciudad-rtl.png` | `mapa-ciudad-ingles.png` | — |
+| Ayuda guiada | Recorrido de la pantalla de productos con el segundo paso abierto | `ayuda-recorrido-claro.png` | `ayuda-recorrido-oscuro.png` | `ayuda-recorrido-rtl.png` | `ayuda-recorrido-ingles.png` | `ayuda-recorrido-movil.png` |
 
 Total: 41 imágenes.

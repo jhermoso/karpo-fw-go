@@ -18,7 +18,7 @@ pantalla.
 - **Ayuda guiada** en todas las pantallas (driver.js): un botón lanza un recorrido por los elementos
   de la pantalla, con textos de la configuración, traducidos.
 - Se publica como paquete npm (`@karpo/react`, versión `0.1.0`). **No se publica todavía**:
-  `prepublishOnly` lo impide a propósito.
+  `"private": true` en `package.json` y `prepublishOnly` lo impiden a propósito.
 
 Plan y decisiones: [`docs/PLAN.md`](docs/PLAN.md). Peticiones a otros equipos:
 [`docs/PETICIONES-BACKEND.md`](docs/PETICIONES-BACKEND.md) y
@@ -327,12 +327,7 @@ cuadrícula, detalle, organigrama en listado, mapa del mundo y ayuda). Prepara c
 reales (doble clic, teclado) y falla si falta alguna imagen o si alguna petición salió del origen. Ventana
 1440×900 (390×844 en móvil), escala 1, movimiento reducido.
 
-| Escena | Claro | Oscuro | RTL | Inglés | Móvil |
-|---|---|---|---|---|---|
-| Detalle en edición | [`claro`](docs/capturas/detalle-edicion-claro.png) | [`oscuro`](docs/capturas/detalle-edicion-oscuro.png) | [`rtl`](docs/capturas/detalle-edicion-rtl.png) | [`inglés`](docs/capturas/detalle-edicion-ingles.png) | [`móvil`](docs/capturas/detalle-edicion-movil.png) |
-| Organigrama (diagrama) | [`claro`](docs/capturas/organigrama-diagrama-claro.png) | [`oscuro`](docs/capturas/organigrama-diagrama-oscuro.png) | [`rtl`](docs/capturas/organigrama-diagrama-rtl.png) | [`inglés`](docs/capturas/organigrama-diagrama-ingles.png) | — |
-| Mapa del mundo | [`claro`](docs/capturas/mapa-mundo-claro.png) | [`oscuro`](docs/capturas/mapa-mundo-oscuro.png) | [`rtl`](docs/capturas/mapa-mundo-rtl.png) | [`inglés`](docs/capturas/mapa-mundo-ingles.png) | [`móvil`](docs/capturas/mapa-mundo-movil.png) |
-| Mapa de ciudad | [`claro`](docs/capturas/mapa-ciudad-claro.png) | [`oscuro`](docs/capturas/mapa-ciudad-oscuro.png) | [`rtl`](docs/capturas/mapa-ciudad-rtl.png) | [`inglés`](docs/capturas/mapa-ciudad-ingles.png) | — |
+Sólo se versionan tres: [cuadrícula editable en claro](docs/capturas/cuadricula-editable-claro.png), [mapa de país en oscuro](docs/capturas/mapa-pais-oscuro.png) y [organigrama en diagrama en RTL](docs/capturas/organigrama-diagrama-rtl.png). Las otras 38 quedan fuera de git (`.gitignore`) y aparecen en la carpeta al ejecutar `npm run capturas`.
 
 ## Licencias
 
@@ -372,7 +367,7 @@ npm run pack:check   # npm pack --dry-run y comprobación del contenido
 El paquete expone `.` (el JavaScript y los tipos), `./karpo.css` y `./map.css` (la hoja de MapLibre, aparte).
 Es sólo `dist/` (con `dist/THIRD-PARTY-NOTICES.md`, ver [Licencias](#licencias)), `package.json`, `README.md` y `LICENSE`; `react` y `react-dom` son dependencias
 `peer` (`>=19.2.7`) y todo lo demás sale como dependencia externa. La versión es `0.1.0`. **No se publica**:
-`npm publish` falla a propósito (`scripts/no-publish.mjs`) hasta que Javier decida otra cosa.
+`npm publish` falla a propósito (`"private": true` y `scripts/no-publish.mjs`) hasta que Javier decida otra cosa; para publicar hay que quitar las dos cosas.
 
 ## Consultas abiertas
 

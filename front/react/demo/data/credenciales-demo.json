@@ -1,5 +1,5 @@
 {
-  "descripcion": "Usuarios de la demostración (valores de prueba propios de esta demo; no son credenciales reales). `demo` es administrador global; `lectura` sólo lee instalaciones, productos y geografía; `nuevo` debe cambiar la contraseña al entrar.",
+  "descripcion": "Credenciales FICTICIAS de la demostración. Sólo las usan los mocks de MSW del navegador (demo/mocks) y las pruebas; nunca se envían a un servidor ni a una base real, y no sirven contra Karpo Go: `npm run karpo:local` genera su propio usuario y una contraseña aleatoria en una base SQLite temporal. `demo` es administrador global; `lectura` sólo lee instalaciones, productos y geografía; `nuevo` debe cambiar la contraseña al entrar.",
   "users": [
     {
       "username": "demo",

@@ -4,3 +4,8 @@ coverage
 .karpo-local
 demo/dist
 *.tsbuildinfo
+# Capturas: sólo se versionan las de scripts/capturas.mjs (VERSIONED); el resto, npm run capturas
+docs/capturas/*.png
+!docs/capturas/cuadricula-editable-claro.png
+!docs/capturas/mapa-pais-oscuro.png
+!docs/capturas/organigrama-diagrama-rtl.png

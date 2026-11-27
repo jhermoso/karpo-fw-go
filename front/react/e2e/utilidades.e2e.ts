@@ -31,6 +31,7 @@ interface Variant {
 interface CapturasModule {
   SCENES: readonly Scene[];
   VARIANTS: readonly Variant[];
+  VERSIONED: readonly string[];
   fileName(scene: Scene, variant: Variant): string;
   scenesOf(variant: Variant): readonly Scene[];
   viewportOf(variant: Variant): { width: number; height: number };
@@ -190,13 +191,17 @@ describe('capturas (PLAN §7 y ronda 2)', () => {
     const readme = capturas.renderReadme({ date: '2026-11-27', browser: 'Microsoft Edge', version: '158.0.1' });
     expect(readme).toContain('**Fecha:** 2026-11-27');
     expect(readme).toContain('Microsoft Edge 158.0.1');
-    for (const { file } of capturas.expectedCaptures()) expect(readme).toContain(`(${file})`);
+    for (const { file } of capturas.expectedCaptures()) expect(readme).toContain(file);
+    for (const file of capturas.VERSIONED) expect(readme).toContain(`(${file})`);
     expect(readme).toContain('Total: 41 imágenes.');
   });
 
-  it('las 41 capturas versionadas existen, son PNG del tamaño de su variante y no están vacías', () => {
+  it('las capturas versionadas existen y todas las que hay son PNG del tamaño de su variante', () => {
+    for (const file of capturas.VERSIONED) expect(existsSync(path.join(OUT_DIR, file)), `falta ${file}`).toBe(true);
+    // Las demás sólo existen tras `npm run capturas` (están en .gitignore).
     for (const { variant, file } of capturas.expectedCaptures()) {
       const full = path.join(OUT_DIR, file);
+      if (!capturas.VERSIONED.includes(file) && !existsSync(full)) continue;
       expect(existsSync(full), `falta ${path.relative(ROOT, full)}`).toBe(true);
       expect(statSync(full).size, file).toBeGreaterThan(10_000);
       const header = readFileSync(full).subarray(0, 24);
@@ -206,7 +211,8 @@ describe('capturas (PLAN §7 y ronda 2)', () => {
     }
     // Ni una imagen de más: lo que hay en la carpeta es lo que genera el script.
     const onDisk = readdirSync(OUT_DIR).filter((name) => name.endsWith('.png'));
-    expect(onDisk.sort()).toEqual(capturas.expectedCaptures().map((capture) => capture.file).sort());
+    const expected = capturas.expectedCaptures().map((capture) => capture.file);
+    for (const name of onDisk) expect(expected, `sobra ${name}`).toContain(name);
   });
 
   it('el README de docs/capturas es el que genera el script (fecha, navegador, versión y todas las imágenes)', () => {

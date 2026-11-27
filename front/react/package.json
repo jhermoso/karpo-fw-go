@@ -1,6 +1,7 @@
 {
   "name": "@karpo/react",
   "version": "0.1.0",
+  "private": true,
   "description": "Front React de Karpo Go: ERP/CRM dirigido por configuración, con cuadrículas editables, organigramas y mapas por niveles.",
   "license": "GPL-2.0-only",
   "type": "module",

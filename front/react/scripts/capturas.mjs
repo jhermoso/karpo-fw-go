@@ -218,6 +218,12 @@ export const SCENES = Object.freeze([
 /** Nombre de fichero de una captura. */
 export const fileName = (scene, variant) => `${scene.id}-${variant.id}.png`;
 
+/**
+ * Las únicas capturas que se versionan (decisión de Javier, PR 114): la del README y las más
+ * representativas. Las demás las genera `npm run capturas` y git las ignora (`.gitignore`).
+ */
+export const VERSIONED = Object.freeze(['cuadricula-editable-claro.png', 'mapa-pais-oscuro.png', 'organigrama-diagrama-rtl.png']);
+
 /** Las escenas de una variante (todas, salvo que la variante las limite). */
 export const scenesOf = (variant, scenes = SCENES) =>
   variant.scenes ? scenes.filter((scene) => variant.scenes.includes(scene.id)) : scenes;
@@ -238,6 +244,8 @@ export function renderReadme({ date, browser, version, scenes = SCENES, variants
     '',
     'Generadas por `npm run capturas` (`scripts/capturas.mjs`, PLAN §7). No se editan a mano: se regeneran.',
     '',
+    `Sólo se versionan ${VERSIONED.map((file) => `[\`${file}\`](${file})`).join(', ')}; las demás quedan fuera de git (\`.gitignore\`) y aparecen en esta carpeta al ejecutar \`npm run capturas\`.`,
+    '',
     `- **Fecha:** ${date}`,
     `- **Navegador:** ${browser} ${version} (playwright-core, \`channel\`; WebGL por software con \`--enable-unsafe-swiftshader\`)`,
     '- **Ventana:** 1440×900 (390×844 con pantalla táctil en la variante `movil`), escala 1, movimiento reducido (`prefers-reduced-motion: reduce`), fuentes del sistema',
@@ -254,7 +262,11 @@ export function renderReadme({ date, browser, version, scenes = SCENES, variants
     `|---|---|${variants.map(() => '---').join('|')}|`,
     ...scenes.map((scene) => {
       const cells = variants.map((variant) =>
-        scenesOf(variant, scenes).includes(scene) ? `[\`${fileName(scene, variant)}\`](${fileName(scene, variant)})` : '—',
+        scenesOf(variant, scenes).includes(scene)
+          ? VERSIONED.includes(fileName(scene, variant))
+            ? `[\`${fileName(scene, variant)}\`](${fileName(scene, variant)})`
+            : `\`${fileName(scene, variant)}\``
+          : '—',
       );
       return `| ${scene.title} | ${scene.shows} | ${cells.join(' | ')} |`;
     }),

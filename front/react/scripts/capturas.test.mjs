@@ -68,7 +68,10 @@ describe('capturas', () => {
     expect(readme).toContain('`rtl` (1440×900, 9 escenas): modern-flat, modo claro, árabe');
     expect(readme).toContain('traducción de demostración **sin revisión nativa**');
     expect(readme).toContain('`movil` (390×844, 5 escenas)');
-    expect(readme).toContain('(mapa-mundo-movil.png)');
+    expect(readme).toContain('`mapa-mundo-movil.png`');
+    // Sólo se enlazan las capturas versionadas; las demás se nombran sin enlace.
+    expect(readme).toContain('(cuadricula-editable-claro.png)');
+    expect(readme).not.toContain('(mapa-mundo-movil.png)');
     const pais = readme.split('\n').find((line) => line.startsWith('| Mapa · país'));
     expect(pais).toMatch(/\| — \|$/);
     expect(pais).toContain('mapa-pais-ingles.png');
