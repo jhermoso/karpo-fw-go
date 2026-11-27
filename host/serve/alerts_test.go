@@ -88,3 +88,15 @@ func TestLoad_AlertWebhook(t *testing.T) {
 		}
 	}
 }
+
+func TestLoad_CORSOrigins(t *testing.T) {
+	t.Setenv("KARPO_JWT_SECRET", strings.Repeat("s", serve.MinSecret))
+	for list, want := range map[string]int{"": 0, "https://app.example.com": 1, " https://a.example, http://localhost:5173 ": 2,
+		"*": -1, "app.example.com": -1, "https://app.example.com/path": -1, "HTTPS://App.example.com": -1, "https://a.example?x": -1} {
+		t.Setenv("KARPO_CORS_ORIGINS", list)
+		cfg, err := serve.Load("exports")
+		if (err == nil) != (want >= 0) || (want >= 0 && len(cfg.CORSOrigins) != want) {
+			t.Fatalf("%q: %+v %v", list, cfg.CORSOrigins, err)
+		}
+	}
+}

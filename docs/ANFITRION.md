@@ -88,6 +88,7 @@ mismos dos mandatos.
 | `KARPO_JWT_SECRET` | secreto que firma las sesiones, 32 caracteres como mínimo | obligatoria |
 | `KARPO_ADDR` | dónde escucha | `:8080` |
 | `KARPO_EXPORTS_DIR` | dónde esperan los ficheros exportados | `exports` |
+| `KARPO_CORS_ORIGINS` | orígenes de otro dominio que pueden llamar a la API, separados por comas (`https://app.example.com`). Sólo esos reciben las cabeceras CORS, y su consulta previa (`OPTIONS`) se contesta sin pedir sesión. No admite `*` | — (sólo el mismo origen o un proxy inverso) |
 | `KARPO_ALERT_WEBHOOK` | dirección a la que se avisa cuando un mensaje se da por imposible | — (solo el registro) |
 | `KARPO_APISCORE_ENTITY` | nombre de la entidad financiera de la que son los ficheros de Apiscore | — (sin ella no se importa Apiscore) |
 | `KARPO_DELIVER_EVERY` | cada cuánto se llevan los mensajes | `2s` |
