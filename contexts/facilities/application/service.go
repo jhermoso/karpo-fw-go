@@ -125,9 +125,13 @@ type SearchFacilities struct {
 	Text, Type, Organization, PartOf string
 	ActiveOnly                       bool
 	RootsOnly                        bool // sólo las que no forman parte de otra
-	Sort                             string
-	Desc                             bool
-	Page, Size                       int
+	// IDs son las identidades pedidas, tal como llegan (docs/CONTRATO-MANTENIMIENTO.md); ByIDs dice
+	// que el filtro llegó, aunque esté vacío.
+	IDs        []string
+	ByIDs      bool
+	Sort       string
+	Desc       bool
+	Page, Size int
 }
 
 // ListFacilityTypes lista el catálogo de tipos de instalación.
@@ -511,6 +515,14 @@ func NewService(d Deps) *Service {
 			return fw.Page[FacilityDTO]{}, err
 		}
 		parts := []spec.Specification[*domain.Facility]{scopeOf(ctx).spec()}
+		if q.ByIDs {
+			var v fw.Validation
+			ids := app.ParseIDs(&v, q.IDs, domain.ParseFacilityID)
+			if err := v.Err(); err != nil {
+				return fw.Page[FacilityDTO]{}, err
+			}
+			parts = append(parts, domain.WithIDs(ids...))
+		}
 		if t := strings.TrimSpace(q.Text); t != "" {
 			parts = append(parts, domain.FieldName.ContainsFold(t))
 		}

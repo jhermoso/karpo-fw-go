@@ -21,6 +21,7 @@ import (
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlite"
+	"github.com/jhermoso/karpo-fw-go/pkg/testing/testkit"
 )
 
 // raw hace una petición y devuelve el estado, el cuerpo como JSON genérico y las cabeceras.
@@ -197,6 +198,7 @@ func (h *host) maintenance(tag string) {
 func TestFacilities_MaintenanceContract_MemoryThenSQLite(t *testing.T) {
 	h := compose(t)
 	h.maintenance("m")
+	h.idsFilter("m")
 	ctx := context.Background()
 	raw, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "front.db")+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)")
 	if err != nil {
@@ -216,4 +218,45 @@ func TestFacilities_MaintenanceContract_MemoryThenSQLite(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.maintenance("s")
+	h.idsFilter("s")
+}
+
+// denied hace una petición como outsider sin ningún permiso, y le devuelve los suyos después.
+func (h *host) denied(method, path string, body any) int {
+	s, _, _ := h.dir.Subject(context.Background(), h.ids["outsider"])
+	saved := s.Permissions
+	s.Permissions = nil
+	h.dir.Put(h.ids["outsider"], s)
+	defer func() { s.Permissions = saved; h.dir.Put(h.ids["outsider"], s) }()
+	code, _, _ := h.raw(method, path, "outsider", body)
+	return code
+}
+
+// idsFilter: el filtro ids de la lista (B-15, docs/CONTRATO-MANTENIMIENTO.md).
+func (h *host) idsFilter(tag string) {
+	t := h.t
+	org := func(name, user string) string {
+		o, err := h.parties.Service.RegisterOrganization.Handle(h.adminCtx, papp.RegisterOrganization{LegalName: name + " ids " + tag,
+			Roles: []string{pdomain.RoleInternalOrganization.String()}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		h.grant(user, o.ID)
+		return o.ID
+	}
+	acme, globex := org("Acme", "clerk"), org("Globex", "outsider")
+	create := func(user, org, name string) string {
+		code, f, _ := h.raw("POST", facilities.MaintenanceBase, user, map[string]any{"organization": org, "type": fdomain.TypeWarehouse.String(), "name": name})
+		h.must(code, 201, "create "+name)
+		return f["id"].(string)
+	}
+	uno, dos := create("clerk", acme, "Ids Uno "+tag), create("clerk", acme, "Ids Dos "+tag)
+	foreign := create("outsider", globex, "Ids Ajeno "+tag)
+	testkit.CheckIDsFilter(t, testkit.IDsFilterCase{Base: facilities.MaintenanceBase,
+		Do: func(method, path string, body any) (int, map[string]any) {
+			code, out, _ := h.raw(method, path, "clerk", body)
+			return code, out
+		},
+		Denied: h.denied, Mine: [2]string{uno, dos}, Foreign: foreign, And: "search=Uno",
+		Missing: fw.NewUUID().String(), Zero: fw.UUID{}.String(), Bad: "junk", Many: testkit.ManyUUIDs})
 }

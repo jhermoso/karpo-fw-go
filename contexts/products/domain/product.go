@@ -353,3 +353,6 @@ var (
 	ProdFieldBarcodes = spec.Collection("barcodes", func(p *Product) []Barcode { return p.s.Barcodes })
 	BarcodeFieldValue = spec.Comparable("code_value", func(b Barcode) string { return b.Value })
 )
+
+// ProductsWithIDs selecciona los productos con las identidades dadas.
+func ProductsWithIDs(ids ...ProductID) spec.Spec[*Product] { return ProdFieldID.In(ids...) }

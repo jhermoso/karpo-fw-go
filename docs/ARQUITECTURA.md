@@ -280,6 +280,9 @@ motor, CDC, o un proceso de backfill antes del `Swap`).
 
 ## 6. Capa de aplicación
 
+El contrato de mantenimiento que leen los motores de rejilla (`/api/v1/<entidad>`) tiene una
+parte común, el filtro `ids`: [CONTRATO-MANTENIMIENTO.md](CONTRATO-MANTENIMIENTO.md).
+
 ### Contratos e implementaciones separados
 Igual que en Karpo C# (`Fw.Domain.Contracts`, `Fw.Application.Contracts`), los contratos viven
 separados de las implementaciones, pero en Go la unidad de dependencia es el **paquete**

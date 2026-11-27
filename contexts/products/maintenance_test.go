@@ -17,8 +17,10 @@ import (
 	dapp "github.com/jhermoso/karpo-fw-go/contexts/products/application"
 	ddomain "github.com/jhermoso/karpo-fw-go/contexts/products/domain"
 	dinfra "github.com/jhermoso/karpo-fw-go/contexts/products/infrastructure"
+	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo"
 	"github.com/jhermoso/karpo-fw-go/pkg/persistence/sqlrepo/sqlite"
+	"github.com/jhermoso/karpo-fw-go/pkg/testing/testkit"
 )
 
 // raw hace una petición y devuelve el estado, el cuerpo como JSON genérico y las cabeceras.
@@ -169,6 +171,7 @@ func (h *host) maintenance(tag string) {
 func TestProducts_MaintenanceContract_MemoryThenSQLite(t *testing.T) {
 	h := compose(t)
 	h.maintenance("m")
+	h.idsFilter("1")
 	ctx := context.Background()
 	raw, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "front.db")+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)")
 	h.ok(err)
@@ -181,6 +184,7 @@ func TestProducts_MaintenanceContract_MemoryThenSQLite(t *testing.T) {
 	h.ok(err)
 	h.ok(h.sw.Swap(ctx, db))
 	h.maintenance("s")
+	h.idsFilter("2")
 }
 
 func getProduct(id string) dapp.GetProduct {
@@ -195,4 +199,46 @@ func changeWithBarcode(got map[string]any) dapp.ChangeProduct {
 	b := func(k string) bool { x, _ := got[k].(bool); return x }
 	return dapp.ChangeProduct{ID: pid, DetailsInput: dapp.DetailsInput{Name: s("name"), Kind: s("kind"), UoM: s("uom"), BasePrice: s("basePrice"),
 		ForSale: b("forSale"), Barcodes: []dapp.BarcodeInput{{Type: "ean-13", Value: "8412345678905"}}}}
+}
+
+// denied hace una petición como outsider sin ningún permiso, y le devuelve los suyos después.
+func (h *host) denied(method, path string, body any) int {
+	s, _, _ := h.dir.Subject(context.Background(), h.ids["outsider"])
+	saved := s.Permissions
+	s.Permissions = nil
+	h.dir.Put(h.ids["outsider"], s)
+	defer func() { s.Permissions = saved; h.dir.Put(h.ids["outsider"], s) }()
+	code, _, _ := h.raw(method, path, "outsider", body)
+	return code
+}
+
+// idsFilter: el filtro ids de la lista (B-15, docs/CONTRATO-MANTENIMIENTO.md). Las dos
+// identidades pedidas son de dos organizaciones del usuario; la tercera, de otra.
+func (h *host) idsFilter(tag string) {
+	t := h.t
+	_ = t
+	org := func(name, user string) string {
+		o, err := h.parties.Service.RegisterOrganization.Handle(h.adminCtx, papp.RegisterOrganization{LegalName: name + " ids " + tag,
+			Roles: []string{pdomain.RoleInternalOrganization.String()}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		h.grant(user, o.ID)
+		return o.ID
+	}
+	a, b, c := org("Uno", "cataloguer"), org("Dos", "cataloguer"), org("Ajena", "outsider")
+	create := func(user, org, n string) string {
+		code, out, _ := h.raw("POST", products.MaintenanceBase, user, map[string]any{"company": org, "sku": "IDS-" + n, "name": "Ids " + n, "kind": "good", "uom": "ea"})
+		h.must(code, 201, "create "+n)
+		return out["id"].(string)
+	}
+	mine := [2]string{create("cataloguer", a, "1"), create("cataloguer", b, "2")}
+	foreign := create("outsider", c, "3")
+	testkit.CheckIDsFilter(t, testkit.IDsFilterCase{Base: products.MaintenanceBase,
+		Do: func(method, path string, body any) (int, map[string]any) {
+			code, out, _ := h.raw(method, path, "cataloguer", body)
+			return code, out
+		},
+		Denied: h.denied, Mine: mine, Foreign: foreign, And: "company=" + a,
+		Missing: fw.NewUUID().String(), Zero: fw.UUID{}.String(), Bad: "junk", Many: testkit.ManyUUIDs})
 }

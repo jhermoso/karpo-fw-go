@@ -10,6 +10,7 @@ import (
 
 	"github.com/jhermoso/karpo-fw-go/contexts/geography/contracts"
 	"github.com/jhermoso/karpo-fw-go/contexts/geography/domain"
+	app "github.com/jhermoso/karpo-fw-go/pkg/application"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/orchestration"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
@@ -291,6 +292,10 @@ type (
 		Year           int
 		ByName, Desc   bool
 		Page, Size     int
+		// IDs son las identidades pedidas, tal como llegan (docs/CONTRATO-MANTENIMIENTO.md); ByIDs
+		// dice que el filtro llegó, aunque esté vacío. Los festivos no tienen ámbito: basta el permiso.
+		IDs   []string
+		ByIDs bool
 	}
 )
 
@@ -334,6 +339,9 @@ func (h *Holidays) Page(ctx context.Context, q PageHolidays) (fw.Page[HolidayDTO
 	}
 	var parts []spec.Specification[*domain.Holiday]
 	var v fw.Validation
+	if q.ByIDs {
+		parts = append(parts, domain.HolidaysWithIDs(app.ParseIDs(&v, q.IDs, domain.ParseHolidayID)...))
+	}
 	if q.Boundary != "" {
 		bid, err := domain.ParseBoundaryID(q.Boundary)
 		if v.Require(err == nil && !bid.IsZero(), "boundary", "format", "the identity of a boundary"); err == nil {

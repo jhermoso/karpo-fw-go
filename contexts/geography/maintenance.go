@@ -22,6 +22,7 @@ import (
 	gapp "github.com/jhermoso/karpo-fw-go/contexts/geography/application"
 	"github.com/jhermoso/karpo-fw-go/contexts/geography/contracts"
 	"github.com/jhermoso/karpo-fw-go/contexts/geography/domain"
+	app "github.com/jhermoso/karpo-fw-go/pkg/application"
 	"github.com/jhermoso/karpo-fw-go/pkg/application/authz"
 	"github.com/jhermoso/karpo-fw-go/pkg/distribution"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
@@ -136,6 +137,8 @@ type listQuery struct {
 	page, size    int
 	sortBy, order string
 	filters       map[string]string
+	ids           []string // el filtro ids, tal como llega (docs/CONTRATO-MANTENIMIENTO.md)
+	byIDs         bool
 }
 
 // check valida la página y el orden contra la lista blanca de campos.
@@ -164,6 +167,8 @@ func registerList(mux *http.ServeMux, base string, list func(w http.ResponseWrit
 		for k := range values {
 			q.filters[k] = values.Get(k)
 		}
+		q.ids, q.byIDs = distribution.IDsFromQuery(values)
+		delete(q.filters, "ids")
 		var err error
 		if s := values.Get("page"); s != "" {
 			if q.page, err = strconv.Atoi(s); err != nil {
@@ -202,6 +207,12 @@ func registerList(mux *http.ServeMux, base string, list func(w http.ResponseWrit
 		if body.Pagination.Ascending != nil && !*body.Pagination.Ascending {
 			q.order = "desc"
 		}
+		ids, byIDs, err := distribution.IDsFromFilter(body.Filter)
+		if err != nil {
+			writeMaintenanceError(w, r, err)
+			return
+		}
+		q.ids, q.byIDs = ids, byIDs
 		for k, v := range body.Filter {
 			switch x := v.(type) {
 			case nil:
@@ -242,6 +253,14 @@ func (m *Module) countryRoutes(mux *http.ServeMux) {
 			s := q.filters[f]
 			v.Require(s == "" || s == "true" || s == "false", f, "enum", "true or false")
 		}
+		// ids filtra por alfa-2: un código bien formado que no existe no es un error, sólo no está.
+		var wanted map[string]bool
+		if q.byIDs {
+			wanted = map[string]bool{}
+			for _, c := range app.ParseIDs(&v, q.ids, canonAlpha2) {
+				wanted[c] = true
+			}
+		}
 		if err := v.Err(); err != nil {
 			writeMaintenanceError(w, r, err)
 			return
@@ -255,6 +274,9 @@ func (m *Module) countryRoutes(mux *http.ServeMux) {
 		text := strings.ToLower(strings.TrimSpace(q.text()))
 		var found []contracts.CountryInfo
 		for _, c := range all {
+			if q.byIDs && !wanted[c.Alpha2] {
+				continue
+			}
 			if text != "" && !strings.Contains(strings.ToLower(c.Name), text) && !strings.EqualFold(c.Alpha2, text) && !strings.EqualFold(c.Alpha3, text) {
 				continue
 			}
@@ -315,6 +337,20 @@ func (m *Module) countryRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE "+CountriesBase+"/{id}", readOnly)
 }
 
+// canonAlpha2 acepta exactamente dos letras ASCII y las devuelve en mayúsculas.
+func canonAlpha2(s string) (string, error) {
+	if len(s) != 2 {
+		return "", errors.New("not an alpha-2 code")
+	}
+	b := []byte(strings.ToUpper(s))
+	for _, c := range b {
+		if c < 'A' || c > 'Z' {
+			return "", errors.New("not an alpha-2 code")
+		}
+	}
+	return string(b), nil
+}
+
 type stringID string
 
 func (s stringID) String() string { return string(s) }
@@ -343,7 +379,7 @@ func (m *Module) holidayRoutes(mux *http.ServeMux) {
 				return
 			}
 		}
-		page, err := h.Page(r.Context(), gapp.PageHolidays{Boundary: q.filters["boundary"], Text: q.text(), Year: year,
+		page, err := h.Page(r.Context(), gapp.PageHolidays{IDs: q.ids, ByIDs: q.byIDs, Boundary: q.filters["boundary"], Text: q.text(), Year: year,
 			ByName: q.sortBy == "name", Desc: q.order == "desc", Page: q.page, Size: q.size})
 		if err != nil {
 			writeMaintenanceError(w, r, err)

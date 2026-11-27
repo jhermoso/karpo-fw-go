@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/geography"
 	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
+	"github.com/jhermoso/karpo-fw-go/pkg/testing/testkit"
 )
 
 // raw hace una petición y devuelve el estado, el cuerpo como JSON genérico y las cabeceras.
@@ -205,4 +208,75 @@ func (e *env) maintenance() {
 	e.must(func() int { s, _, _ := e.raw("GET", hb+"/"+id, e.keeper, nil); return s }(), 404, "deleted")
 	e.must(func() int { s, _, _ := e.raw("DELETE", hb+"/nada", e.keeper, nil); return s }(), 400, "delete not an id")
 	e.must(func() int { s, _, _ := e.raw("GET", hb, "", nil); return s }(), 401, "nobody")
+}
+
+// idsFilter: el filtro ids de las listas de festivos y de países (B-15,
+// docs/CONTRATO-MANTENIMIENTO.md). Los festivos no tienen ámbito: basta el permiso. Los países se
+// piden por su alfa-2; uno bien formado que no existe sólo no está.
+func (e *env) idsFilter(year int) {
+	t := e.t
+	es, err := e.mod.Ports.Country(context.Background(), "ES")
+	if err != nil {
+		t.Fatal(err)
+	}
+	hb := geography.HolidaysBase
+	create := func(day, name string) string {
+		code, out, _ := e.raw("POST", hb, e.keeper, map[string]any{"boundary": es.Boundary, "date": fmt.Sprintf("%d-%s", year, day), "name": name})
+		e.must(code, 201, "create "+name)
+		return out["id"].(string)
+	}
+	mine := [2]string{create("03-03", "Ids uno"), create("04-04", "Ids dos")}
+	testkit.CheckIDsFilter(t, testkit.IDsFilterCase{Base: hb,
+		Do: func(method, path string, body any) (int, map[string]any) {
+			code, out, _ := e.raw(method, path, e.keeper, body)
+			return code, out
+		},
+		Denied: func(method, path string, body any) int {
+			code, _, _ := e.raw(method, path, e.reader, body)
+			return code
+		},
+		Mine: mine, And: "search=uno",
+		Missing: fw.NewUUID().String(), Zero: fw.UUID{}.String(), Bad: "junk", Many: testkit.ManyUUIDs})
+
+	cb := geography.CountriesBase
+	alpha2 := func(what string, code int, page map[string]any) string {
+		t.Helper()
+		if code != 200 {
+			t.Fatalf("%s: %d %v", what, code, page)
+		}
+		var out []string
+		for _, it := range page["items"].([]any) {
+			out = append(out, it.(map[string]any)["id"].(string))
+		}
+		return strings.Join(out, ",")
+	}
+	code, page, _ := e.raw("GET", cb+"?ids=es,FR,XX,es", e.reader, nil)
+	if got := alpha2("countries by ids", code, page); got != "ES,FR" {
+		t.Fatalf("countries by ids: %s", got)
+	}
+	code, page, _ = e.raw("POST", cb+"/search", e.reader, map[string]any{"filter": map[string]any{"ids": []string{"pt", "es"}, "search": "spain"}})
+	if got := alpha2("countries by POST", code, page); got != "ES" {
+		t.Fatalf("countries by ids and search: %s", got)
+	}
+	for _, q := range []string{"?ids=XX", "?ids="} {
+		code, page, _ = e.raw("GET", cb+q, e.reader, nil)
+		if got := alpha2(q, code, page); got != "" || page["totalCount"] != float64(0) {
+			t.Fatalf("%s: %v", q, page)
+		}
+	}
+	for _, bad := range []string{"ESP", "1A", "e", "ñ"} {
+		code, page, _ = e.raw("GET", cb+"?ids=ES,"+url.QueryEscape(bad), e.reader, nil)
+		codes, _ := page["errorCodes"].(map[string]any)
+		if got, _ := codes["ids"].([]any); code != 400 || len(got) != 1 || got[0] != "format" {
+			t.Fatalf("%s: %d %v", bad, code, page)
+		}
+	}
+	code, page, _ = e.raw("POST", cb+"/search", e.reader, map[string]any{"filter": map[string]any{"ids": []any{"ES", true}}})
+	if codes, _ := page["errorCodes"].(map[string]any); code != 400 || codes["ids"] == nil {
+		t.Fatalf("a boolean id: %d %v", code, page)
+	}
+	code, page, _ = e.raw("POST", cb+"/search", e.reader, map[string]any{"filter": map[string]any{"ids": strings.Repeat("ES,", 1001)}})
+	if got := alpha2("the same code 1001 times", code, page); got != "ES" {
+		t.Fatalf("repeated codes: %s", got)
+	}
 }

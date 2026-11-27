@@ -152,6 +152,10 @@ type PageSuppliers struct {
 	// IncludeMergedParties incluye los de parties fusionadas en otra (D-100).
 	IncludeMergedParties bool
 	Page, Size           int
+	// IDs son las identidades pedidas, tal como llegan (docs/CONTRATO-MANTENIMIENTO.md); ByIDs dice
+	// que el filtro llegó, aunque esté vacío.
+	IDs   []string
+	ByIDs bool
 }
 
 func (s service) supplierUseCases(svc *Service) {
@@ -332,6 +336,9 @@ func (s service) supplierUseCases(svc *Service) {
 	svc.PageSuppliers = guard(PermSupplierRead, func(ctx context.Context, q PageSuppliers) (fw.Page[SupplierDTO], error) {
 		var v fw.Validation
 		parts := []spec.Specification[*domain.SupplierProfile]{within(scopeOf(ctx), domain.SupFieldCompany)}
+		if q.ByIDs {
+			parts = append(parts, domain.SuppliersWithIDs(app.ParseIDs(&v, q.IDs, domain.ParseSupplierID)...))
+		}
 		if q.Company != "" {
 			parts = append(parts, domain.SupFieldCompany.Eq(domain.OrganizationID{UUID: parseID(&v, "company", q.Company)}))
 		}
@@ -354,7 +361,10 @@ func (s service) supplierUseCases(svc *Service) {
 		if err := v.Err(); err != nil {
 			return fw.Page[SupplierDTO]{}, err
 		}
-		merged, err := withoutMerged(ctx, s.Merged, q.IncludeMergedParties, domain.SupFieldSupplier)
+		// Pedir por identidad o por la party trae también los de parties fusionadas: ids equivale a
+		// pedirlos uno a uno, y una party se pide por sí misma (D-100, D-108).
+		includeMerged := q.IncludeMergedParties || q.ByIDs || q.Supplier != ""
+		merged, err := withoutMerged(ctx, s.Merged, includeMerged, domain.SupFieldSupplier)
 		if err != nil {
 			return fw.Page[SupplierDTO]{}, err
 		}

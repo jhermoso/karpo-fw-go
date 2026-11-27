@@ -170,6 +170,8 @@ type listQuery struct {
 	page, size    int
 	sortBy, order string
 	filters       map[string]string
+	ids           []string // el filtro ids, tal como llega (docs/CONTRATO-MANTENIMIENTO.md)
+	byIDs         bool
 }
 
 func (q listQuery) search() (papp.SearchProducts, error) {
@@ -189,7 +191,7 @@ func (q listQuery) search() (papp.SearchProducts, error) {
 			text = q.filters[k]
 		}
 	}
-	return papp.SearchProducts{Company: q.filters["company"], Text: text, Kind: q.filters["kind"], Category: q.filters["category"],
+	return papp.SearchProducts{IDs: q.ids, ByIDs: q.byIDs, Company: q.filters["company"], Text: text, Kind: q.filters["kind"], Category: q.filters["category"],
 		Sort: q.sortBy, Desc: q.order == "desc", Page: q.page, Size: q.size}, nil
 }
 
@@ -220,6 +222,8 @@ func (m *Module) RegisterMaintenanceRoutes(mux *http.ServeMux) {
 		for k := range values {
 			q.filters[k] = values.Get(k)
 		}
+		q.ids, q.byIDs = distribution.IDsFromQuery(values)
+		delete(q.filters, "ids")
 		var err error
 		if s := values.Get("page"); s != "" {
 			if q.page, err = strconv.Atoi(s); err != nil {
@@ -259,6 +263,12 @@ func (m *Module) RegisterMaintenanceRoutes(mux *http.ServeMux) {
 		if body.Pagination.Ascending != nil && !*body.Pagination.Ascending {
 			q.order = "desc"
 		}
+		ids, byIDs, err := distribution.IDsFromFilter(body.Filter)
+		if err != nil {
+			writeMaintenanceError(w, r, err)
+			return
+		}
+		q.ids, q.byIDs = ids, byIDs
 		for k, v := range body.Filter {
 			switch x := v.(type) {
 			case nil:

@@ -77,6 +77,10 @@ tiempo de prueba, participación en el capital) y edición de persona.
 - **Herramienta de backfill/dual-write** para acompañar a `hotswap.Swap` cuando haya que mover
   datos entre motores.
 - **Filtros HTTP → especificaciones** (lista blanca de campos) para búsquedas genéricas.
+- **errorCode en el límite de lote de los directorios** (parties, facilities, hr, geography,
+  security). Prioridad baja. El filtro `ids` del contrato de mantenimiento da 400 `ids/format` con
+  un id mal formado; los directorios entre contextos lo descartan en silencio
+  ([CONTRATO-MANTENIMIENTO.md](docs/CONTRATO-MANTENIMIENTO.md)). Alinearlos pide una D-n y avisar a C#.
 - ~~**CI en Linux** con `go test -race`~~ ✅ `.github/workflows/ci.yml` (unitarias con `-race`,
   publicadoras de humo e integración en cinco motores, Supabase incluido desde el 2026-11-14). **No corre desde el 2026-10-21** (cuenta
   de GitHub bloqueada): la puerta es local.

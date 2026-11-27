@@ -82,10 +82,15 @@ func (h *Holiday) Rename(name string) error {
 var (
 	HolidayFieldName = spec.Text("name", func(h *Holiday) string { return h.s.Name })
 	// HolidayFieldIDOrder ordena por la identidad: deshace los empates de una lista paginada.
-	HolidayFieldIDOrder  = spec.Ordered("id", func(h *Holiday) string { return h.ID().String() })
+	HolidayFieldIDOrder = spec.Ordered("id", func(h *Holiday) string { return h.ID().String() })
+	// HolidayFieldID filtra por la identidad.
+	HolidayFieldID       = spec.Comparable("id", func(h *Holiday) HolidayID { return h.ID() })
 	HolidayFieldBoundary = spec.Comparable("boundary", func(h *Holiday) BoundaryID { return h.s.Boundary })
 	HolidayFieldDate     = spec.OrderedBy("holiday_date", func(h *Holiday) vocab.Date { return h.s.Date }, vocab.CompareDates)
 )
 
 // HolidayRepository guarda los festivos.
 type HolidayRepository = fw.Repository[HolidayID, *Holiday]
+
+// HolidaysWithIDs selecciona los festivos con las identidades dadas.
+func HolidaysWithIDs(ids ...HolidayID) spec.Spec[*Holiday] { return HolidayFieldID.In(ids...) }

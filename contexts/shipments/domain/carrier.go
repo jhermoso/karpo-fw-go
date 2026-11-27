@@ -200,6 +200,8 @@ var (
 	CarFieldBlocked = spec.Comparable("blocked", func(c *Carrier) bool { return c.s.Blocked })
 	// CarFieldIDOrder ordena por la identidad: deshace los empates de una lista paginada.
 	CarFieldIDOrder = spec.Ordered("id", func(c *Carrier) string { return c.ID().String() })
+	// CarFieldID filtra por la identidad.
+	CarFieldID = spec.Comparable("id", func(c *Carrier) CarrierID { return c.ID() })
 )
 
 // NewCarrierID devuelve una identidad nueva.
@@ -210,3 +212,6 @@ func ParseCarrierID(s string) (CarrierID, error) { u, err := fw.ParseUUID(s); re
 
 // CarrierRepository guarda transportistas.
 type CarrierRepository = fw.Repository[CarrierID, *Carrier]
+
+// CarriersWithIDs selecciona los transportistas con las identidades dadas.
+func CarriersWithIDs(ids ...CarrierID) spec.Spec[*Carrier] { return CarFieldID.In(ids...) }

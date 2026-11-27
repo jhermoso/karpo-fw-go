@@ -77,3 +77,41 @@ func TestListingsLeaveOutMergedParties(t *testing.T) {
 		t.Fatalf("suppliers with includeMergedParties: %+v", profiles)
 	}
 }
+
+// En la lista del contrato de mantenimiento, el perfil de un proveedor fusionado no sale sin
+// filtro, pero sí pedido por su identidad (ids) o por la party (supplier=): las dos son pedirlo por
+// sí mismo (D-100, D-108, B-15).
+func TestSupplierList_MergedComeWhenAskedByIDsOrSupplier(t *testing.T) {
+	merged := &mergedParties{}
+	h := compose(t, purchases.WithMergedParties(merged))
+	acme := fw.NewUUID().String()
+	h.grant("clerk", acme)
+	ana, bea := fw.NewUUID().String(), fw.NewUUID().String()
+	merged.ids = []string{bea}
+	profile := map[string]string{}
+	for _, s := range []string{ana, bea} {
+		p, err := h.pur.Service.SetSupplier.Handle(h.adminCtx, uapp.SetSupplier{Company: acme, Supplier: s, Category: "goods", PaymentDays: 30})
+		h.ok(err)
+		profile[s] = p.ID
+	}
+	base := purchases.MaintenanceBase
+	suppliers := func(path string) []string {
+		t.Helper()
+		code, page, _ := h.raw("GET", path, "clerk", nil)
+		h.must(code, 200, path)
+		out := []string{}
+		for _, it := range page["items"].([]any) {
+			out = append(out, it.(map[string]any)["supplier"].(string))
+		}
+		return out
+	}
+	if got := suppliers(base + "?company=" + acme); len(got) != 1 || got[0] != ana {
+		t.Fatalf("without a filter: %v", got)
+	}
+	if got := suppliers(base + "?ids=" + profile[ana] + "," + profile[bea]); len(got) != 2 {
+		t.Fatalf("by ids: %v", got)
+	}
+	if got := suppliers(base + "?supplier=" + bea); len(got) != 1 || got[0] != bea {
+		t.Fatalf("by supplier: %v", got)
+	}
+}

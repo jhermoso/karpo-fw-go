@@ -204,6 +204,10 @@ type SearchAssets struct {
 	Sort           string // code (por omisión) o name; los empates, por la identidad
 	Desc           bool
 	Page, Size     int
+	// IDs son las identidades pedidas, tal como llegan (docs/CONTRATO-MANTENIMIENTO.md); ByIDs dice
+	// que el filtro llegó, aunque esté vacío.
+	IDs   []string
+	ByIDs bool
 }
 
 // GetBook devuelve el registro de una empresa con sus totales.
@@ -440,6 +444,9 @@ func NewService(d Deps) *Service {
 	svc.SearchAssets = guard(PermAssetRead, func(ctx context.Context, q SearchAssets) (fw.Page[AssetDTO], error) {
 		var v fw.Validation
 		parts := []spec.Specification[*domain.Asset]{within(scopeOf(ctx), domain.AstFieldCompany)}
+		if q.ByIDs {
+			parts = append(parts, domain.AssetsWithIDs(app.ParseIDs(&v, q.IDs, domain.ParseAssetID)...))
+		}
 		if q.Company != "" {
 			parts = append(parts, domain.AstFieldCompany.Eq(domain.OrganizationID{UUID: parseID(&v, "company", q.Company)}))
 		}
