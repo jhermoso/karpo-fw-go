@@ -247,3 +247,46 @@ func TestHealthRegistry(t *testing.T) {
 		t.Fatalf("expected 503 for readiness with failing probe, got %d", recFailed.Code)
 	}
 }
+
+func TestCORSOrigins(t *testing.T) {
+	reached := false
+	handler := distribution.CORSOrigins([]string{"https://app.example"})(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		reached = true
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	call := func(method, origin string, preflight bool) *httptest.ResponseRecorder {
+		reached = false
+		req := httptest.NewRequest(method, "/api/data", nil)
+		if origin != "" {
+			req.Header.Set("Origin", origin)
+		}
+		if preflight {
+			req.Header.Set("Access-Control-Request-Method", "PUT")
+		}
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		return rec
+	}
+
+	// La consulta previa de un origen admitido no llega a la autenticación.
+	rec := call(http.MethodOptions, "https://app.example", true)
+	if rec.Code != http.StatusNoContent || reached || rec.Header().Get("Access-Control-Allow-Origin") != "https://app.example" {
+		t.Fatalf("preflight: code %d, reached %v, headers %v", rec.Code, reached, rec.Header())
+	}
+	// Una llamada normal de un origen admitido sigue su camino con la cabecera.
+	rec = call(http.MethodGet, "https://app.example", false)
+	if !reached || rec.Header().Get("Access-Control-Allow-Origin") != "https://app.example" {
+		t.Fatalf("get: reached %v, headers %v", reached, rec.Header())
+	}
+	// Otro origen no recibe cabeceras y su consulta previa no se contesta.
+	rec = call(http.MethodOptions, "https://evil.example", true)
+	if !reached || rec.Header().Get("Access-Control-Allow-Origin") != "" {
+		t.Fatalf("other origin: reached %v, headers %v", reached, rec.Header())
+	}
+	// Sin lista, el middleware no hace nada.
+	rec = httptest.NewRecorder()
+	distribution.CORSOrigins(nil)(http.NotFoundHandler()).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	if rec.Header().Get("Vary") != "" {
+		t.Fatalf("empty list added headers: %v", rec.Header())
+	}
+}

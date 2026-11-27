@@ -11,6 +11,8 @@
 //	KARPO_CHORES_EVERY             cada cuánto se ejecutan las tareas ("1m")
 //	KARPO_BOOTSTRAP_ADMIN_USER     primer administrador, creado sólo mientras nadie administra
 //	KARPO_BOOTSTRAP_ADMIN_PASSWORD su contraseña, que se cambia en la primera sesión
+//	KARPO_CORS_ORIGINS             orígenes de otro dominio que pueden llamar a la API, separados por comas
+//	                               ("https://app.example.com"); vacío: sólo el mismo origen o un proxy
 package serve
 
 import (
@@ -20,6 +22,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	expinfra "github.com/jhermoso/karpo-fw-go/contexts/exports/infrastructure"
@@ -48,6 +51,8 @@ type Config struct {
 	Chores  time.Duration
 	// AlertWebhook es donde se avisa de lo que necesita a una persona (KARPO_ALERT_WEBHOOK); vacío: sólo el log.
 	AlertWebhook string
+	// CORSOrigins son los orígenes de otro dominio admitidos (KARPO_CORS_ORIGINS); vacío: ninguno.
+	CORSOrigins []string
 }
 
 // Env devuelve una variable del entorno, o un valor de reserva.
@@ -77,12 +82,23 @@ func Load(exports string) (Config, error) {
 			err4 = errors.New("KARPO_ALERT_WEBHOOK: an http or https address")
 		}
 	}
+	var err5 error
+	for _, o := range strings.Split(os.Getenv("KARPO_CORS_ORIGINS"), ",") {
+		if o = strings.TrimSpace(o); o == "" {
+			continue
+		}
+		if u, err := url.Parse(o); err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.Path != "" || u.RawQuery != "" || u.Fragment != "" || o != strings.ToLower(o) {
+			err5 = fmt.Errorf("KARPO_CORS_ORIGINS: %q is not an origin like https://app.example.com (lowercase, no path)", o)
+			continue
+		}
+		c.CORSOrigins = append(c.CORSOrigins, o)
+	}
 	c.Deliver, err1 = every("KARPO_DELIVER_EVERY", "2s")
 	c.Chores, err2 = every("KARPO_CHORES_EVERY", "1m")
 	if len(c.Secret) < MinSecret {
 		err3 = fmt.Errorf("KARPO_JWT_SECRET: a secret of %d characters at least is required", MinSecret)
 	}
-	return c, errors.Join(err3, err1, err2, err4)
+	return c, errors.Join(err3, err1, err2, err4, err5)
 }
 
 // Command devuelve el comando que piden los argumentos de un programa: serve cuando no piden ninguno.
@@ -136,7 +152,7 @@ func Run(ctx context.Context, command string, db *sqlrepo.DB, ping func(context.
 	mux := http.NewServeMux()
 	health.Mount(mux)
 	mux.Handle("/", h.Handler())
-	server := distribution.NewServer(cfg.Addr, mux)
+	server := distribution.NewServer(cfg.Addr, distribution.CORSOrigins(cfg.CORSOrigins)(mux))
 	failed := server.Start()
 	logger.Info("listening", "addr", cfg.Addr)
 

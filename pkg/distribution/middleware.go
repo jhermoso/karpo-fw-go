@@ -183,3 +183,38 @@ func CORS() Middleware {
 		})
 	}
 }
+
+// CORSOrigins admite llamadas desde los orígenes de la lista y sólo desde ellos: devuelve el
+// origen que llama en Access-Control-Allow-Origin y responde a la consulta previa del navegador
+// (OPTIONS con Access-Control-Request-Method) antes de la autenticación, que no la lleva. Una
+// lista vacía no añade nada: el front se sirve desde el mismo origen o tras un proxy.
+func CORSOrigins(origins []string) Middleware {
+	allowed := make(map[string]bool, len(origins))
+	for _, o := range origins {
+		allowed[o] = true
+	}
+	return func(next http.Handler) http.Handler {
+		if len(allowed) == 0 {
+			return next
+		}
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			origin := r.Header.Get("Origin")
+			w.Header().Add("Vary", "Origin")
+			if !allowed[origin] {
+				next.ServeHTTP(w, r)
+				return
+			}
+			h := w.Header()
+			h.Set("Access-Control-Allow-Origin", origin)
+			h.Set("Access-Control-Expose-Headers", "ETag, Location, Retry-After, Content-Disposition, Content-Range, X-Correlation-ID")
+			if r.Method == http.MethodOptions && r.Header.Get("Access-Control-Request-Method") != "" {
+				h.Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS")
+				h.Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept-Language, X-Client, Range, If-Match, X-Organization-ID, X-Organization-Scope, X-Correlation-ID, Idempotency-Key")
+				h.Set("Access-Control-Max-Age", "600")
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
