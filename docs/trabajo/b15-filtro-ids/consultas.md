@@ -26,3 +26,11 @@ sobreviven mutantes de código anterior. ¿Cuentan como «sin explicar»?
 3. consta que el filtro `ids` no depende de ninguna de esas condiciones.
 
 Las dos lecturas están pendientes de que Javier las confirme (ver `veredictos.md`).
+
+## 3. ¿Confirma Javier las dos lecturas? (constructor, vuelta 2)
+
+**Respuesta del asesor.** No consta confirmación; el asesor no puede darla. Se sigue con las
+lecturas como provisionales y se elevan a Javier en el informe final, antes de fusionar. Si las
+confirma, la sesión de orquestación las lleva a §5 de `docs/FORMA-DE-TRABAJO.md` en otro commit.
+La medida de mutación usa un mutador propio en lugar de gremlins (que en Windows da todo por
+tiempo agotado); consta como dato de la segunda pregunta.
