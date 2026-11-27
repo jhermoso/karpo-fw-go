@@ -402,4 +402,9 @@ línea en `src/tree/TreeDiagram.tsx` (`proOptions.hideAttribution`) si se prefie
 - [`docs/PETICIONES-BACKEND.md`](docs/PETICIONES-BACKEND.md) y [`docs/PETICIONES-THEROS-FRONT.md`](docs/PETICIONES-THEROS-FRONT.md).
 - [`docs/LICENCIAS.md`](docs/LICENCIAS.md), [`docs/capturas/`](docs/capturas/README.md) y [`docs/analisis/`](docs/analisis/).
 - [`docs/PLAN-RONDA-2.md`](docs/PLAN-RONDA-2.md) y [`docs/jurado/ronda-1.md`](docs/jurado/ronda-1.md): lo que pidió el jurado y cómo se resolvió.
+  **El jurado de [`docs/jurado/`](docs/jurado/) es histórico:** las rondas 1 a 3 (aprobado en la
+  3, con 8,6) se hicieron con el bucle de cuatro agentes con el que se construyó el front. Las
+  tareas nuevas siguen la forma de trabajo del repositorio
+  ([`docs/FORMA-DE-TRABAJO.md`](../../docs/FORMA-DE-TRABAJO.md)), con un juez por rol (juez-ux en
+  el front), y dejan su memoria en `docs/trabajo/<tarea>/` (en la raíz del repositorio).
 - [`docs/notas/`](docs/notas/): notas de cada tarea (T1 a T8 y R1 a R4 de la ronda 2), con lo comprobado y lo pendiente; [`INTEGRACION.md`](docs/notas/INTEGRACION.md) recoge el cierre de cada ronda.
