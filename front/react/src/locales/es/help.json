@@ -1,0 +1,23 @@
+{
+  "button": {
+    "label": "Ayuda",
+    "tooltip": "Recorrido guiado de esta pantalla"
+  },
+  "tour": {
+    "next": "Siguiente",
+    "prev": "Anterior",
+    "done": "Terminar",
+    "close": "Cerrar el recorrido",
+    "progress": "Paso {{current}} de {{total}}",
+    "empty": {
+      "title": "Esta pantalla aún no tiene recorrido",
+      "body": "Todavía no hay elementos explicados aquí. Cuando los haya, este botón los recorrerá uno a uno."
+    }
+  },
+  "help": {
+    "button": {
+      "title": "Ayuda guiada",
+      "body": "Pulsa este botón en cualquier pantalla para ver un recorrido por sus elementos. Muévete con las flechas y sal con Esc."
+    }
+  }
+}

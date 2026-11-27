@@ -1,0 +1,6 @@
+{"type":"FeatureCollection","features":[
+{"type":"Feature","properties":{"code":"ES511","name":"Barcelona","level":"3","parentCode":"ES51","nutsCode":"ES511","ineCode":"08","hasChildren":true},"geometry":{"type":"Polygon","coordinates":[[[-0.775,42.925],[0.675,42.925],[0.675,43.975],[-0.775,43.975],[-0.775,42.925]]]}},
+{"type":"Feature","properties":{"code":"ES512","name":"Girona","level":"3","parentCode":"ES51","nutsCode":"ES512","ineCode":"17","hasChildren":false},"geometry":{"type":"Polygon","coordinates":[[[0.725,42.925],[2.175,42.925],[2.175,43.975],[0.725,43.975],[0.725,42.925]]]}},
+{"type":"Feature","properties":{"code":"ES513","name":"Lleida","level":"3","parentCode":"ES51","nutsCode":"ES513","ineCode":"25","hasChildren":false},"geometry":{"type":"Polygon","coordinates":[[[-0.775,41.825],[0.675,41.825],[0.675,42.875],[-0.775,42.875],[-0.775,41.825]]]}},
+{"type":"Feature","properties":{"code":"ES514","name":"Tarragona","level":"3","parentCode":"ES51","nutsCode":"ES514","ineCode":"43","hasChildren":false},"geometry":{"type":"Polygon","coordinates":[[[0.725,41.825],[2.175,41.825],[2.175,42.875],[0.725,42.875],[0.725,41.825]]]}}
+]}

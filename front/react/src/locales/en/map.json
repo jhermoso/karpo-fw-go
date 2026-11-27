@@ -1,0 +1,78 @@
+{
+  "missing": "This entity has no map view configured.",
+  "view": {
+    "label": "Map of {{name}}"
+  },
+  "loading": "Loading the map",
+  "error": {
+    "load": "The map could not be loaded.",
+    "engine": "The map engine could not be loaded.",
+    "source": "The map source is not available: {{id}}.",
+    "retry": "Try again"
+  },
+  "layout": {
+    "toTable": "View as table",
+    "toMap": "View as map"
+  },
+  "breadcrumbs": {
+    "label": "Map path"
+  },
+  "up": {
+    "label": "Up one level",
+    "none": "You are already at the top level"
+  },
+  "status": {
+    "level_one": "{{level}}: {{count}} boundary.",
+    "level_other": "{{level}}: {{count}} boundaries.",
+    "loading": "Loading {{level}}…",
+    "noDetail": "{{name}} has no detail on the map.",
+    "noGeometry": "There is no geometry for {{name}}.",
+    "entered": "Entering {{name}}."
+  },
+  "unplaced_one": "{{count}} record without a known boundary is not counted.",
+  "unplaced_other": "{{count}} records without a known boundary are not counted.",
+  "schematic": {
+    "notice": "Schematic demonstration geometry",
+    "source": "Source: {{source}}"
+  },
+  "canvas": {
+    "label": "Map of {{name}}: {{level}}",
+    "hint": "The map is explored with the mouse. With the keyboard or a screen reader use the table of the same level.",
+    "noDetail": "No detail",
+    "value": "{{value}}"
+  },
+  "legend": {
+    "label": "Map legend",
+    "count": "{{name}} by boundary",
+    "sum": "Sum of {{field}} per boundary",
+    "range": "{{from}} to {{to}}",
+    "single": "{{value}}",
+    "noData": "No data"
+  },
+  "table": {
+    "caption": "{{level}}",
+    "name": "Boundary",
+    "value": "Value",
+    "open": "Enter {{name}}",
+    "noDetail": "No detail",
+    "empty": "There are no boundaries at this level."
+  },
+  "help": {
+    "layout": {
+      "title": "Map or table",
+      "body": "Switch between the map and the table of the same level. The table is the alternative for the keyboard and screen readers, and it also lets you enter each boundary."
+    },
+    "breadcrumbs": {
+      "title": "Map path",
+      "body": "Shows where you are: world, country, region and city. Press a level to go back to it; Esc goes up one level. A level with a single element is skipped and appears without a link."
+    },
+    "legend": {
+      "title": "Legend",
+      "body": "Explains the colors: the darker, the higher the value of the boundary. Those without data are striped, so they are not mistaken for the lowest value."
+    },
+    "canvas": {
+      "title": "The map",
+      "body": "Click a boundary to enter its lower level. Those without detail do not open. Esc goes up one level."
+    }
+  }
+}

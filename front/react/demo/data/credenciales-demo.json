@@ -1,0 +1,38 @@
+{
+  "descripcion": "Usuarios de la demostración (valores de prueba propios de esta demo; no son credenciales reales). `demo` es administrador global; `lectura` sólo lee instalaciones, productos y geografía; `nuevo` debe cambiar la contraseña al entrar.",
+  "users": [
+    {
+      "username": "demo",
+      "password": "Demo-Karpo-2026!",
+      "displayName": "Usuario de demostración",
+      "userId": "0192a000-0000-7000-9000-000000000001",
+      "mustChangePassword": false,
+      "isGlobalAdmin": true,
+      "permissions": ["*.*.*"]
+    },
+    {
+      "username": "lectura",
+      "password": "Lectura-Karpo-2026!",
+      "displayName": "Usuario de lectura",
+      "userId": "0192a000-0000-7000-9000-000000000002",
+      "mustChangePassword": false,
+      "isGlobalAdmin": false,
+      "permissions": [
+        "Facilities.Facility.Read",
+        "Products.Product.Read",
+        "Geography.Reference.Read",
+        "Geography.Boundary.Read",
+        "Geography.Holiday.Read"
+      ]
+    },
+    {
+      "username": "nuevo",
+      "password": "Nuevo-Karpo-2026!",
+      "displayName": "Usuario nuevo",
+      "userId": "0192a000-0000-7000-9000-000000000003",
+      "mustChangePassword": true,
+      "isGlobalAdmin": false,
+      "permissions": ["Facilities.Facility.Read"]
+    }
+  ]
+}

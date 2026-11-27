@@ -1,0 +1,65 @@
+{
+  "grid": {
+    "columns": [
+      { "field": "alpha2", "headerKey": "entities.country.columns.alpha2.header" },
+      { "field": "alpha3", "headerKey": "entities.country.columns.alpha3.header" },
+      { "field": "name", "headerKey": "entities.country.columns.name.header" },
+      { "field": "callingCode", "headerKey": "entities.country.columns.callingCode.header" },
+      {
+        "field": "eu",
+        "headerKey": "entities.country.columns.eu.header",
+        "badgeMap": {
+          "true": { "labelKey": "entities.country.options.eu.true" },
+          "false": { "labelKey": "entities.country.options.eu.false" }
+        }
+      },
+      {
+        "field": "eurozone",
+        "headerKey": "entities.country.columns.eurozone.header",
+        "badgeMap": {
+          "true": { "labelKey": "entities.country.options.eurozone.true" },
+          "false": { "labelKey": "entities.country.options.eurozone.false" }
+        }
+      }
+    ],
+    "rowActions": [
+      { "action": "view", "labelKey": "entities.country.commands.view.label" }
+    ]
+  },
+  "filters": [
+    {
+      "field": "_search",
+      "labelKey": "entities.country.filters._search.label",
+      "placeholderKey": "entities.country.filters._search.placeholder"
+    }
+  ],
+  "detail": {
+    "sections": [
+      {
+        "id": "main",
+        "titleKey": "entities.country.sections.main.title",
+        "fields": [
+          { "field": "name", "labelKey": "entities.country.fields.name.label" },
+          { "field": "alpha2", "labelKey": "entities.country.fields.alpha2.label" },
+          { "field": "alpha3", "labelKey": "entities.country.fields.alpha3.label" },
+          { "field": "numeric", "labelKey": "entities.country.fields.numeric.label" },
+          { "field": "callingCode", "labelKey": "entities.country.fields.callingCode.label" },
+          { "field": "defaultLocale", "labelKey": "entities.country.fields.defaultLocale.label" },
+          { "field": "eu", "labelKey": "entities.country.fields.eu.label" },
+          { "field": "eea", "labelKey": "entities.country.fields.eea.label" },
+          { "field": "eurozone", "labelKey": "entities.country.fields.eurozone.label" },
+          { "field": "sepa", "labelKey": "entities.country.fields.sepa.label" },
+          { "field": "ibanLength", "labelKey": "entities.country.fields.ibanLength.label" },
+          {
+            "field": "postalCodePattern",
+            "labelKey": "entities.country.fields.postalCodePattern.label"
+          },
+          {
+            "field": "postalCodeRequired",
+            "labelKey": "entities.country.fields.postalCodeRequired.label"
+          }
+        ]
+      }
+    ]
+  }
+}

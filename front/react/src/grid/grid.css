@@ -1,0 +1,710 @@
+/*
+ * Cuadrícula (T5). El tema viste `[data-th=collection]`, `[data-th=record]`, las cabeceras, las acciones,
+ * los avisos y los flotantes; aquí sólo hay disposición y los estados propios (celda, guardado).
+ * Sólo var(--th-*) y var(--kx-*) (PLAN §4.5): sin colores ni medidas literales. La disposición dinámica
+ * entra por variables que pone el código con CSSOM (D-R12): --kx-cols, --kx-width, --kx-row-y,
+ * --kx-row-height, --kx-pin. Separación con `gap`, no con márgenes (A3 §8.1). Nunca `outline: none`.
+ */
+@layer karpo.components {
+  /* --- Raíz y barras ----------------------------------------------------------------------- */
+  [data-kx-ui="grid"] {
+    --kx-select-width: calc(var(--th-control-height-regular) + var(--th-space-1));
+    --kx-actions-width: calc(var(--th-control-height-regular) + var(--th-space-1));
+
+    display: flex;
+    flex-direction: column;
+    gap: var(--th-space-control-gap);
+    block-size: 100%;
+    min-block-size: 0;
+  }
+
+  [data-kx-ui="grid"] > [data-th="toolbar"] {
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--th-space-control-gap);
+  }
+
+  [data-kx-ui="grid"] [data-kx-part="spacer"] {
+    flex: 1 1 auto;
+  }
+
+  [data-kx-part="search"] {
+    position: relative;
+    display: flex;
+    align-items: center;
+    min-inline-size: calc(var(--th-space-8) * 6);
+  }
+
+  [data-kx-part="search"] > svg {
+    position: absolute;
+    inset-inline-start: var(--th-control-padding);
+    color: var(--th-control-icon-color);
+    pointer-events: none;
+  }
+
+  [data-kx-part="search"] > input {
+    inline-size: 100%;
+    padding-inline-start: calc(var(--th-control-padding) * 2 + var(--th-control-icon-size));
+  }
+
+  [data-kx-part="filters"] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--th-space-2);
+  }
+
+  [data-kx-ui="batch-bar"],
+  [data-kx-ui="selection-bar"] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--th-space-control-gap);
+    padding: var(--th-space-2) var(--th-control-padding);
+    background-color: var(--th-surface-layer-level2);
+    border: var(--th-edge-width) solid var(--th-edge-subtle);
+    border-radius: var(--th-edge-rounding-medium);
+  }
+
+  /*
+   * Barra de cambios (M-9): flotante y compacta sobre el borde inferior de la lista, con el fondo, el radio y
+   * la elevación del tema; el color «sucio» sólo es el punto. `--kx-batch-height` (alto de la barra, lo publica
+   * GridView) hace sitio al pie de la lista y tira de la barra hacia arriba: la última fila no queda tapada.
+   */
+  [data-kx-ui="batch-bar"] {
+    position: sticky;
+    inset-block-end: var(--th-space-4);
+    z-index: var(--kx-z-sticky);
+    align-self: center;
+    inline-size: fit-content;
+    max-inline-size: calc(100% - var(--th-space-4) * 2);
+    margin-block-start: calc((var(--kx-batch-height, calc(var(--th-space-1) * 0)) + var(--th-space-4)) * -1);
+    box-sizing: border-box;
+    background-color: var(--th-surface-popover-bg);
+    color: var(--th-surface-popover-fg);
+    border-radius: var(--th-edge-rounding-large);
+    box-shadow: var(--th-depth-levels-overlay);
+  }
+
+  [data-kx-ui="batch-bar"][hidden] {
+    display: none;
+  }
+
+  [data-kx-ui="batch-bar"] [data-kx-part="dirty-dot"] {
+    flex: none;
+    inline-size: var(--th-space-2);
+    block-size: var(--th-space-2);
+    border-radius: 50%;
+    background-color: var(--kx-cell-dirty-mark);
+  }
+
+  [data-kx-part="history"] {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--th-space-1);
+  }
+
+  [data-kx-ui="batch-bar"] [data-kx-part="count"],
+  [data-kx-ui="selection-bar"] [data-kx-part="count"] {
+    font-weight: var(--th-text-heading-weight);
+  }
+
+  [data-kx-ui="batch-bar"] [data-kx-part="blocked"] {
+    color: var(--th-semantic-warning-fg);
+  }
+
+  [data-kx-ui="batch-bar"] [data-kx-part="report"] {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--th-space-1);
+  }
+
+  [data-kx-ui="conflicts"] {
+    display: grid;
+    gap: var(--th-space-2);
+  }
+
+  [data-kx-ui="conflicts"] [data-th="feedback"] {
+    display: flex;
+    align-items: center;
+    gap: var(--th-space-control-gap);
+  }
+
+  /* --- Viewport y disposición -------------------------------------------------------------- */
+  [data-kx-part="viewport"] {
+    --kx-lead: ;
+    --kx-trail: ;
+    --kx-lead-width: calc(var(--th-space-1) * 0);
+    --kx-trail-width: calc(var(--th-space-1) * 0);
+
+    position: relative;
+    flex: 1 1 auto;
+    overflow: auto;
+    min-block-size: calc(var(--kx-row-height, var(--th-control-height-regular)) * 6);
+    max-block-size: calc(var(--kx-row-height, var(--th-control-height-regular)) * 40);
+    scroll-padding-block-start: var(--kx-row-height, var(--th-control-height-regular));
+    scroll-padding-inline: calc(var(--kx-lead-width) + var(--th-space-8)) calc(var(--kx-trail-width) + var(--th-space-8));
+    border: var(--th-edge-width) solid var(--th-collection-grid-color);
+    border-radius: var(--th-edge-rounding-small);
+
+    /* Sin relleno horizontal: las columnas fijadas se pegan al borde del área de desplazamiento descontando
+       su relleno, y con el del tema las celdas del final asomarían entre la columna fijada y el borde. */
+    padding-inline: 0;
+
+    /* Sin relleno arriba: la cabecera pegajosa se queda en el borde superior y las filas que se desplazan no
+       asoman por encima de ella (el relleno del tema dejaba una franja de filas a la vista). */
+    padding-block-start: 0;
+  }
+
+  [data-kx-part="viewport"][data-kx-has-select="true"] {
+    --kx-lead: var(--kx-select-width);
+    --kx-lead-width: var(--kx-select-width);
+  }
+
+  [data-kx-part="viewport"][data-kx-has-actions="true"] {
+    --kx-trail: var(--kx-actions-width);
+    --kx-trail-width: var(--kx-actions-width);
+  }
+
+  /* Con la barra de cambios flotando sobre su borde inferior, la lista deja ese hueco al final (M-9). */
+  [data-kx-ui="grid"][data-kx-batch] [data-kx-part="viewport"] {
+    padding-block-end: calc(var(--kx-batch-height, calc(var(--th-space-1) * 0)) + var(--th-space-4) * 2);
+  }
+
+  [data-kx-part="head"] {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: var(--kx-z-sticky);
+    inline-size: max(100%, calc(var(--kx-lead-width) + var(--kx-width, calc(var(--th-space-1) * 0)) + var(--kx-trail-width)));
+  }
+
+  [data-kx-part="body"] {
+    position: relative;
+    inline-size: max(100%, calc(var(--kx-lead-width) + var(--kx-width, calc(var(--th-space-1) * 0)) + var(--kx-trail-width)));
+  }
+
+  [data-kx-part="header-row"],
+  [data-kx-part="viewport"] [data-th="record"] {
+    display: grid;
+    grid-template-columns: var(--kx-lead) var(--kx-cols) var(--kx-trail);
+    align-items: stretch;
+    box-sizing: border-box;
+  }
+
+  [data-kx-part="body"] > [data-th="record"][data-kx-row] {
+    position: absolute;
+    inset-inline: 0;
+    inset-block-start: 0;
+    block-size: var(--kx-row-height);
+    transform: translateY(var(--kx-row-y));
+  }
+
+  /* La fila sonda sólo sirve para medir: ocupa su sitio sin verse ni recibir nada. */
+  [data-kx-part="probe"] {
+    position: absolute;
+    inset-inline: 0;
+    inset-block-start: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  [data-kx-part="skeleton-row"] {
+    position: static;
+  }
+
+  /*
+   * Fondo de la fila en una sola variable: lo usan la propia fila y las celdas fijadas (que necesitan un fondo
+   * opaco para tapar lo que pasa por debajo al desplazar). Refleja las reglas del tema para hover, elegida,
+   * inactiva y nueva, y añade la cebra por índice de datos (A3 §7.7: `nth-child` cambiaría de color al
+   * desplazarse con filas virtualizadas) y los estados de guardado (PT-3).
+   */
+  [data-kx-part="viewport"] [data-th="record"] {
+    --kx-row-bg: var(--th-surface-content-bg);
+
+    background-color: var(--kx-row-bg);
+  }
+
+  [data-kx-part="viewport"] [data-th="record"][data-kx-even="true"] {
+    --kx-row-bg: var(--th-collection-zebra-color);
+  }
+
+  [data-kx-part="viewport"] [data-th="record"][data-th-state~="inactive"] {
+    --kx-row-bg: var(--th-semantic-neutral-bg);
+  }
+
+  [data-kx-part="viewport"] [data-th="record"][data-th-state~="new"] {
+    --kx-row-bg: var(--th-semantic-info-bg);
+  }
+
+  [data-kx-part="viewport"] [data-th="record"][data-kx-state="saving"] {
+    --kx-row-bg: var(--kx-save-saving-bg);
+  }
+
+  [data-kx-part="viewport"] [data-th="record"][data-kx-state="saved"] {
+    --kx-row-bg: var(--kx-save-saved-bg);
+  }
+
+  [data-kx-part="viewport"] [data-th="record"][data-kx-state="error"] {
+    --kx-row-bg: var(--kx-save-error-bg);
+  }
+
+  [data-kx-part="viewport"] [data-th="record"][data-kx-state="conflict"] {
+    --kx-row-bg: var(--kx-save-conflict-bg);
+  }
+
+  [data-kx-part="viewport"] [data-th="record"][data-kx-state="pending"] {
+    --kx-row-bg: var(--kx-save-pending-bg);
+  }
+
+  [data-kx-part="viewport"] [data-th="record"]:hover {
+    --kx-row-bg: var(--th-state-hover-bg);
+  }
+
+  [data-kx-part="viewport"] [data-th="record"][aria-selected="true"] {
+    --kx-row-bg: var(--th-state-selected-bg);
+  }
+
+  [data-kx-part="viewport"]:not(:focus-within) [data-th="record"][aria-selected="true"] {
+    --kx-row-bg: var(--th-state-selected-inactive-bg);
+  }
+
+  /* La fila con el foco o el ratón encima va por delante de las demás: así un editor, el mensaje de error de
+     una celda o un menú que sobresalen de su fila no los tapa la fila siguiente (cada fila es su propia capa). */
+  [data-kx-part="body"] > [data-th="record"]:is(:hover, :focus-within) {
+    z-index: calc(var(--kx-z-sticky) - 2);
+  }
+
+  /* --- Celdas ------------------------------------------------------------------------------ */
+  [data-kx-part="viewport"] :is([role="gridcell"], [role="columnheader"]) {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--th-space-1);
+    box-sizing: border-box;
+    min-inline-size: 0;
+    white-space: nowrap;
+  }
+
+  [data-kx-part="viewport"] [role="gridcell"] > :is([data-kx-ui="value"], [data-kx-ui="value-list"], a) {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  [data-kx-part="viewport"] [role="gridcell"][data-kx-align="end"],
+  [data-kx-part="viewport"] [role="columnheader"][data-kx-align="end"] {
+    justify-content: flex-end;
+    text-align: end;
+  }
+
+  /*
+   * Cifras (D-R35): dígitos de ancho fijo para que los decimales y los miles se alineen en columna, en la misma
+   * familia que el resto del cuerpo. No se usa `data-th-format="amount"`: el tema lo viste en monoespaciada.
+   */
+  [data-kx-part="viewport"] [role="gridcell"][data-kx-align="end"] {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  /* Casilla y botón de acciones miden como un control, más que una línea de texto: sin el relleno vertical de
+     la fila no alargan la fila (la altura de fila la fija la fila sonda). */
+  [data-kx-part="viewport"] :is([data-kx-col="__select"], [data-kx-col="__actions"]) {
+    justify-content: center;
+    padding-block: 0;
+  }
+
+  [data-kx-part="viewport"] [role="gridcell"] [data-th="badge"] {
+    flex: none;
+  }
+
+  /*
+   * Casilla de selección (M-9): del tamaño de un icono del tema (la nativa mide 13 px) y con el color de
+   * «activado» del tema. En táctil (`pointer: coarse`) la casilla crece a la altura de un control pequeño y la
+   * celda entera es el objetivo del toque (GridRow/GridTable alternan la selección al pulsar la celda).
+   */
+  [data-kx-part="viewport"] [data-kx-col="__select"] input[type="checkbox"] {
+    flex: none;
+    inline-size: var(--th-control-icon-size);
+    block-size: var(--th-control-icon-size);
+    margin: 0;
+    accent-color: var(--th-control-toggle-on-bg);
+    cursor: pointer;
+  }
+
+  @media (pointer: coarse) {
+    [data-kx-part="viewport"] [data-kx-col="__select"] {
+      cursor: pointer;
+    }
+
+    [data-kx-part="viewport"] [data-kx-col="__select"] input[type="checkbox"] {
+      inline-size: var(--th-control-height-small);
+      block-size: var(--th-control-height-small);
+    }
+  }
+
+  /* El anillo del foco es el del tema (:focus-visible); dentro de la celda va hacia dentro, para que
+     no lo recorten las celdas vecinas ni el borde de la lista. */
+  [data-kx-part="viewport"] :is([role="gridcell"], [role="columnheader"]):focus-visible {
+    outline-offset: var(--kx-cell-ring-offset);
+  }
+
+  /* La celda activa sin el foco dentro (se ha ido a otra parte de la página) sigue señalada. */
+  [data-kx-part="viewport"] [role="gridcell"][data-kx-active="true"]:not(:focus-visible) {
+    outline: var(--kx-cell-ring-width) solid color-mix(in srgb, var(--kx-cell-ring-color) 45%, transparent);
+    outline-offset: var(--kx-cell-ring-offset);
+  }
+
+  [data-kx-part="viewport"] [role="gridcell"][data-kx-range="true"] {
+    background-color: var(--kx-cell-range-bg);
+    color: var(--kx-cell-range-fg);
+  }
+
+  /* --- Estados de celda (PT-2) ------------------------------------------------------------- */
+  [data-kx-cell="readonly"] {
+    color: var(--th-text-secondary);
+    cursor: default;
+  }
+
+  /* La marca de celda sucia es un triángulo en la esquina del inicio (PT-2). */
+  [data-kx-cell="dirty"]::before {
+    content: "";
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-start: 0;
+    inline-size: var(--th-space-2);
+    block-size: var(--th-space-2);
+    pointer-events: none;
+    background: linear-gradient(135deg, var(--kx-cell-dirty-mark) 50%, transparent 50%);
+  }
+
+  [dir="rtl"] [data-kx-cell="dirty"]::before {
+    background: linear-gradient(225deg, var(--kx-cell-dirty-mark) 50%, transparent 50%);
+  }
+
+  [data-kx-cell="invalid"] {
+    background-color: var(--kx-cell-invalid-bg);
+    box-shadow: inset 0 calc(var(--th-edge-width) * -2) 0 var(--kx-cell-invalid-mark);
+  }
+
+  [data-kx-cell="error"] {
+    background-color: var(--kx-save-error-bg);
+    box-shadow: inset 0 calc(var(--th-edge-width) * -2) 0 var(--kx-save-error);
+  }
+
+  [data-kx-cell="saving"] {
+    background-color: var(--kx-save-saving-bg);
+    cursor: progress;
+  }
+
+  [data-kx-cell="editing"] {
+    z-index: var(--kx-z-dropdown);
+    padding-block: 0;
+    background-color: var(--kx-cell-editing-bg);
+    color: var(--kx-cell-editing-fg);
+  }
+
+  [data-kx-cell="editing"] > :is(input, select, textarea, [data-kx-ui="lookup"]),
+  [data-kx-cell="editing"] > button {
+    inline-size: 100%;
+    block-size: 100%;
+    min-block-size: 0;
+    box-sizing: border-box;
+  }
+
+  /* El mensaje de error cuelga bajo la celda con el foco o el ratón encima (la fila sube de capa para que no la
+     tape la siguiente); siempre está en el árbol y enlazado con aria-describedby para lectores de pantalla. */
+  [data-kx-part="issue"] {
+    position: absolute;
+    inset-inline-start: 0;
+    inset-block-start: 100%;
+    z-index: var(--kx-z-dropdown);
+    display: none;
+    inline-size: max-content;
+    max-inline-size: calc(var(--th-space-8) * 10);
+    padding: var(--th-space-1) var(--th-space-2);
+    white-space: normal;
+    color: var(--th-semantic-error-fg);
+    background-color: var(--th-surface-popover-bg);
+    border: var(--th-edge-width) solid var(--kx-cell-invalid-border);
+    border-radius: var(--th-edge-rounding-small);
+  }
+
+  [data-kx-paste] [data-kx-part="issue"] {
+    position: static;
+    display: block;
+  }
+
+  [data-kx-part="viewport"] [role="gridcell"]:is(:hover, :focus-within) > [data-kx-part="issue"] {
+    display: block;
+  }
+
+  /* --- Estados de guardado de la fila (PT-3): el fondo está en --kx-row-bg; aquí, la marca del borde --- */
+  [data-th="record"][data-kx-state] > :first-child {
+    border-inline-start: calc(var(--th-edge-width) * 3) solid var(--kx-save-pending);
+  }
+
+  [data-th="record"][data-kx-state="saved"] > :first-child {
+    border-inline-start-color: var(--kx-save-saved);
+  }
+
+  [data-th="record"][data-kx-state="error"] > :first-child {
+    border-inline-start-color: var(--kx-save-error);
+  }
+
+  [data-th="record"][data-kx-state="conflict"] > :first-child {
+    border-inline-start-color: var(--kx-save-conflict);
+  }
+
+  /* --- Cabeceras --------------------------------------------------------------------------- */
+  [data-kx-part="header-row"] {
+    min-block-size: var(--kx-row-height, var(--th-control-height-regular));
+  }
+
+  [data-kx-part="header-row"] [role="columnheader"] {
+    user-select: none;
+  }
+
+  [data-kx-part="header-row"] [role="columnheader"][data-kx-sortable="true"] {
+    cursor: pointer;
+  }
+
+  [data-kx-part="header-row"] [data-kx-part="label"] {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  [data-kx-part="resizer"] {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-end: 0;
+    inline-size: var(--th-space-2);
+    cursor: col-resize;
+    touch-action: none;
+  }
+
+  [data-kx-part="resizer"]:hover {
+    background-color: var(--th-state-pressed-bg);
+  }
+
+  /* Columnas fijadas: se quedan al borde al desplazar en horizontal (lógico: inicio y final). */
+  [data-kx-part="viewport"] [data-kx-pin="start"] {
+    position: sticky;
+    inset-inline-start: calc(var(--kx-lead-width) + var(--kx-pin, calc(var(--th-space-1) * 0)));
+    z-index: calc(var(--kx-z-sticky) - 1);
+    background-color: var(--kx-row-bg);
+  }
+
+  [data-kx-part="viewport"] [data-kx-pin="end"] {
+    position: sticky;
+    inset-inline-end: calc(var(--kx-trail-width) + var(--kx-pin, calc(var(--th-space-1) * 0)));
+    z-index: calc(var(--kx-z-sticky) - 1);
+    background-color: var(--kx-row-bg);
+  }
+
+  [data-kx-part="viewport"] [data-kx-col="__select"] {
+    inset-inline-start: 0;
+  }
+
+  [data-kx-part="viewport"] [data-kx-col="__actions"] {
+    inset-inline-end: 0;
+  }
+
+  /*
+   * Sombra de borde de las columnas de selección y de acciones (M-8): sólo aparece cuando hay más columnas
+   * detrás (GridTable marca `data-kx-more-start`/`data-kx-more-end` al desplazar). Así se ve que la columna
+   * fijada tapa algo y que la lista se puede desplazar, sin recortar la última columna de datos a escondidas.
+   */
+  [data-kx-part="viewport"] :is([data-kx-col="__select"], [data-kx-col="__actions"])::after {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    inline-size: var(--th-space-2);
+    pointer-events: none;
+    opacity: 0;
+  }
+
+  [data-kx-part="viewport"] [data-kx-col="__actions"]::after {
+    inset-inline-end: 100%;
+    background: linear-gradient(to right, transparent, color-mix(in srgb, var(--th-text-primary) 16%, transparent));
+  }
+
+  [data-kx-part="viewport"] [data-kx-col="__select"]::after {
+    inset-inline-start: 100%;
+    background: linear-gradient(to left, transparent, color-mix(in srgb, var(--th-text-primary) 16%, transparent));
+  }
+
+  [dir="rtl"] [data-kx-part="viewport"] [data-kx-col="__actions"]::after {
+    background: linear-gradient(to left, transparent, color-mix(in srgb, var(--th-text-primary) 16%, transparent));
+  }
+
+  [dir="rtl"] [data-kx-part="viewport"] [data-kx-col="__select"]::after {
+    background: linear-gradient(to right, transparent, color-mix(in srgb, var(--th-text-primary) 16%, transparent));
+  }
+
+  [data-kx-part="viewport"][data-kx-more-end] [data-kx-col="__actions"]::after,
+  [data-kx-part="viewport"][data-kx-more-start] [data-kx-col="__select"]::after {
+    opacity: 1;
+  }
+
+  [data-kx-part="head"] [data-kx-pin] {
+    z-index: var(--kx-z-sticky);
+    background-color: var(--th-collection-header-bg);
+  }
+
+  /* Los iconos de una acción siguen el color de su texto (un botón primario o destructivo tiene fondo de
+     color: con el color neutro del icono no se verían). */
+  :is([data-kx-ui="grid"], [data-kx-ui="columns-panel"], [data-kx-ui="filters-panel"], [data-kx-ui="row-menu"]) :is([data-th="action"], [role="menuitem"]) > svg[data-th-icon] {
+    color: currentcolor;
+  }
+
+  /* --- Pie, región viva, vacío ------------------------------------------------------------- */
+
+  /*
+   * Pie de la lista (M-7.5): «50 de 120 filas» y, a su lado, el contador `+n` de las columnas que el ajuste al
+   * ancho ha ocultado (D-R34). Una sola barra, con relleno y un filete superior sutil.
+   */
+  [data-kx-ui="grid"] > footer[data-kx-part="footer"] {
+    display: flex;
+    align-items: center;
+    gap: var(--th-space-2);
+    padding-block: var(--th-space-2);
+    padding-inline: var(--th-space-margin);
+    color: var(--th-text-secondary);
+    border-block-start: var(--th-edge-width) solid var(--th-edge-subtle);
+    font-variant-numeric: tabular-nums;
+  }
+
+  [data-kx-part="fit-count"] {
+    margin-inline-start: auto;
+  }
+
+  [data-kx-part="fit-badge"] {
+    padding-block: calc(var(--th-space-1) / 2);
+    padding-inline: var(--th-space-2);
+    color: var(--th-semantic-neutral-fg);
+    background-color: var(--th-semantic-neutral-bg);
+    border: var(--th-edge-width) solid var(--th-semantic-neutral-border);
+    border-radius: var(--th-edge-rounding-large);
+    font-weight: var(--th-text-heading-weight);
+    cursor: help;
+  }
+
+  [data-kx-ui="grid"] > [data-kx-part="live"] {
+    position: relative;
+  }
+
+  /* --- Paneles flotantes ------------------------------------------------------------------- */
+  [data-kx-ui="filters-panel"],
+  [data-kx-ui="columns-panel"] {
+    z-index: var(--kx-z-dropdown);
+    padding: var(--th-space-margin);
+    min-inline-size: calc(var(--th-space-8) * 8);
+    max-block-size: min(var(--radix-popover-content-available-height), calc(var(--th-space-8) * 16));
+    overflow: auto;
+  }
+
+  [data-kx-part="filters-form"] {
+    display: grid;
+    gap: var(--th-space-control-gap);
+  }
+
+  [data-kx-part="filter-option"] {
+    display: flex;
+    align-items: center;
+    gap: var(--th-space-2);
+  }
+
+  [data-kx-part="filters-footer"],
+  [data-kx-part="columns-footer"] {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--th-space-2);
+  }
+
+  [data-kx-part="columns-list"] {
+    display: grid;
+    gap: var(--th-space-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  [data-kx-part="columns-item"] {
+    display: flex;
+    align-items: center;
+    gap: var(--th-space-1);
+  }
+
+  [data-kx-part="pin-group"] {
+    display: inline-flex;
+    gap: var(--th-space-1);
+  }
+
+  [data-kx-part="columns-item"] > label {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: var(--th-space-2);
+  }
+
+  /* Columna que el ajuste al ancho ha dejado fuera: sigue marcada (es lo que eligió el usuario) pero con su nota. */
+  [data-kx-part="fit-note"] {
+    color: var(--th-text-secondary);
+    font-size: var(--th-type-small);
+  }
+
+  [data-kx-part="columns-autofit"] {
+    display: flex;
+    align-items: center;
+    gap: var(--th-space-2);
+    padding-block-start: var(--th-space-2);
+  }
+
+  [data-kx-ui="row-menu"] {
+    z-index: var(--kx-z-dropdown);
+    display: grid;
+    min-inline-size: calc(var(--th-space-8) * 5);
+    padding: var(--th-space-1);
+  }
+
+  [data-kx-ui="row-menu"] [role="menuitem"] {
+    display: flex;
+    align-items: center;
+    gap: var(--th-space-2);
+    padding: var(--th-space-2) var(--th-control-padding);
+    cursor: pointer;
+  }
+
+  [data-kx-ui="row-menu"] [role="menuitem"][data-highlighted] {
+    background-color: var(--th-state-hover-bg);
+    color: var(--th-state-hover-fg);
+  }
+
+  [data-kx-ui="row-menu"] [role="menuitem"][data-kx-tone="error"] {
+    color: var(--th-semantic-error-fg);
+  }
+
+  /* --- Vista previa del pegado y conflicto ------------------------------------------------- */
+  [data-kx-part="paste-scroll"] {
+    overflow: auto;
+    max-block-size: calc(var(--th-space-8) * 12);
+  }
+
+  [data-kx-part="paste-table"] td,
+  [data-kx-part="conflict-table"] :is(td, th) {
+    padding-block: var(--th-space-1);
+    vertical-align: top;
+  }
+
+  [data-kx-paste="error"] {
+    background-color: var(--kx-cell-invalid-bg);
+    box-shadow: inset 0 calc(var(--th-edge-width) * -2) 0 var(--kx-cell-invalid-mark);
+  }
+
+  [data-kx-paste="skipped"] {
+    color: var(--th-text-secondary);
+    background-color: var(--kx-cell-readonly-bg);
+  }
+}

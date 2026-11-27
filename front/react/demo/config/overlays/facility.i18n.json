@@ -1,0 +1,73 @@
+{
+  "form": {
+    "createTitleKey": "entities.facility.form.createTitle",
+    "editTitleKey": "entities.facility.form.editTitle",
+    "sections": [
+      {
+        "id": "main",
+        "titleKey": "entities.facility.form.sections.main.title",
+        "fields": [
+          { "field": "name", "labelKey": "entities.facility.fields.name.label" },
+          {
+            "field": "type",
+            "labelKey": "entities.facility.fields.type.label",
+            "hintKey": "entities.facility.fields.type.hint"
+          },
+          {
+            "field": "partOf",
+            "labelKey": "entities.facility.fields.partOf.label",
+            "hintKey": "entities.facility.fields.partOf.hint"
+          },
+          { "field": "active", "labelKey": "entities.facility.fields.active.label" }
+        ]
+      }
+    ]
+  },
+  "detail": {
+    "sections": [
+      {
+        "id": "main",
+        "titleKey": "entities.facility.detail.sections.main.title",
+        "fields": [
+          { "field": "name", "labelKey": "entities.facility.fields.name.label" },
+          { "field": "partOf", "labelKey": "entities.facility.fields.partOf.label" },
+          { "field": "active", "labelKey": "entities.facility.fields.active.label" },
+          { "field": "typeName", "labelKey": "entities.facility.fields.typeName.label" },
+          { "field": "description", "labelKey": "entities.facility.fields.description.label" },
+          { "field": "areaM2", "labelKey": "entities.facility.fields.areaM2.label" }
+        ]
+      }
+    ]
+  },
+  "grid": {
+    "columns": [
+      { "field": "name", "headerKey": "entities.facility.columns.name.header" },
+      { "field": "typeName", "headerKey": "entities.facility.columns.typeName.header" },
+      { "field": "areaM2", "headerKey": "entities.facility.columns.areaM2.header" },
+      {
+        "field": "active",
+        "headerKey": "entities.facility.columns.active.header",
+        "badgeMap": {
+          "true": { "labelKey": "entities.facility.options.active.true" },
+          "false": { "labelKey": "entities.facility.options.active.false" }
+        }
+      }
+    ],
+    "rowActions": [
+      { "action": "view", "labelKey": "entities.facility.commands.view.label" },
+      { "action": "edit", "labelKey": "entities.facility.commands.edit.label" },
+      {
+        "action": "delete",
+        "labelKey": "entities.facility.commands.delete.label",
+        "confirmMessageKey": "entities.facility.commands.delete.confirmMessage"
+      }
+    ]
+  },
+  "filters": [
+    {
+      "field": "_search",
+      "labelKey": "entities.facility.filters._search.label",
+      "placeholderKey": "entities.facility.filters._search.placeholder"
+    }
+  ]
+}

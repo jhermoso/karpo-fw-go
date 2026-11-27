@@ -1,0 +1,144 @@
+{
+  "form": {
+    "createTitleKey": "entities.supplier.form.createTitle",
+    "editTitleKey": "entities.supplier.form.editTitle",
+    "sections": [
+      {
+        "id": "main",
+        "titleKey": "entities.supplier.form.sections.main.title",
+        "fields": [
+          {
+            "field": "supplier",
+            "labelKey": "entities.supplier.fields.supplier.label",
+            "hintKey": "entities.supplier.fields.supplier.hint"
+          },
+          {
+            "field": "category",
+            "labelKey": "entities.supplier.fields.category.label",
+            "options": [
+              { "value": "goods", "labelKey": "entities.supplier.options.category.goods" },
+              { "value": "rent", "labelKey": "entities.supplier.options.category.rent" },
+              { "value": "repairs", "labelKey": "entities.supplier.options.category.repairs" },
+              {
+                "value": "professional-services",
+                "labelKey": "entities.supplier.options.category.professional-services"
+              },
+              { "value": "transport", "labelKey": "entities.supplier.options.category.transport" },
+              { "value": "insurance", "labelKey": "entities.supplier.options.category.insurance" },
+              {
+                "value": "advertising",
+                "labelKey": "entities.supplier.options.category.advertising"
+              },
+              { "value": "supplies", "labelKey": "entities.supplier.options.category.supplies" },
+              {
+                "value": "other-services",
+                "labelKey": "entities.supplier.options.category.other-services"
+              },
+              {
+                "value": "fixed-asset",
+                "labelKey": "entities.supplier.options.category.fixed-asset"
+              }
+            ]
+          },
+          {
+            "field": "withholdingRate",
+            "labelKey": "entities.supplier.fields.withholdingRate.label",
+            "hintKey": "entities.supplier.fields.withholdingRate.hint"
+          },
+          {
+            "field": "paymentDays",
+            "labelKey": "entities.supplier.fields.paymentDays.label",
+            "hintKey": "entities.supplier.fields.paymentDays.hint"
+          },
+          { "field": "iban", "labelKey": "entities.supplier.fields.iban.label" }
+        ]
+      }
+    ]
+  },
+  "detail": {
+    "sections": [
+      {
+        "id": "main",
+        "titleKey": "entities.supplier.detail.sections.main.title",
+        "fields": [
+          { "field": "supplier", "labelKey": "entities.supplier.fields.supplier.label" },
+          { "field": "category", "labelKey": "entities.supplier.fields.category.label" },
+          {
+            "field": "withholdingRate",
+            "labelKey": "entities.supplier.fields.withholdingRate.label"
+          },
+          { "field": "paymentDays", "labelKey": "entities.supplier.fields.paymentDays.label" },
+          { "field": "iban", "labelKey": "entities.supplier.fields.iban.label" },
+          {
+            "field": "blocked",
+            "labelKey": "entities.supplier.fields.blocked.label",
+            "hintKey": "entities.supplier.fields.blocked.hint"
+          },
+          {
+            "field": "blockReason",
+            "labelKey": "entities.supplier.fields.blockReason.label",
+            "hintKey": "entities.supplier.fields.blockReason.hint"
+          },
+          {
+            "field": "unblockReason",
+            "labelKey": "entities.supplier.fields.unblockReason.label",
+            "hintKey": "entities.supplier.fields.unblockReason.hint"
+          }
+        ]
+      }
+    ],
+    "childGrids": [
+      {
+        "id": "block-history",
+        "titleKey": "entities.supplier.childGrids.block-history.title",
+        "emptyMessageKey": "entities.supplier.childGrids.block-history.emptyMessage",
+        "columns": [
+          {
+            "field": "at",
+            "headerKey": "entities.supplier.childGrids.block-history.columns.at.header"
+          },
+          {
+            "field": "blocked",
+            "headerKey": "entities.supplier.childGrids.block-history.columns.blocked.header",
+            "trueLabelKey": "entities.supplier.childGrids.block-history.columns.blocked.trueLabel",
+            "falseLabelKey": "entities.supplier.childGrids.block-history.columns.blocked.falseLabel"
+          },
+          {
+            "field": "reason",
+            "headerKey": "entities.supplier.childGrids.block-history.columns.reason.header"
+          },
+          {
+            "field": "userName",
+            "headerKey": "entities.supplier.childGrids.block-history.columns.userName.header"
+          }
+        ]
+      }
+    ]
+  },
+  "grid": {
+    "columns": [
+      { "field": "supplier", "headerKey": "entities.supplier.columns.supplier.header" },
+      { "field": "category", "headerKey": "entities.supplier.columns.category.header" },
+      {
+        "field": "withholdingRate",
+        "headerKey": "entities.supplier.columns.withholdingRate.header"
+      },
+      { "field": "paymentDays", "headerKey": "entities.supplier.columns.paymentDays.header" },
+      {
+        "field": "blocked",
+        "headerKey": "entities.supplier.columns.blocked.header",
+        "badgeMap": {
+          "false": { "labelKey": "entities.supplier.options.blocked.false" },
+          "true": { "labelKey": "entities.supplier.options.blocked.true" }
+        }
+      }
+    ],
+    "rowActions": [
+      { "action": "view", "labelKey": "entities.supplier.commands.view.label" },
+      { "action": "edit", "labelKey": "entities.supplier.commands.edit.label" }
+    ]
+  },
+  "filters": [
+    { "field": "isActive", "labelKey": "entities.supplier.filters.isActive.label" }
+  ]
+}

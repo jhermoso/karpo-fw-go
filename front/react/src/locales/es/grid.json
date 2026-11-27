@@ -1,0 +1,236 @@
+{
+  "toolbar": {
+    "add": "Nueva fila"
+  },
+  "search": {
+    "label": "Buscar",
+    "placeholder": "Buscar…"
+  },
+  "filters": {
+    "label": "Filtros",
+    "add": "Filtros",
+    "buttonActive": "Filtros ({{count}})",
+    "apply": "Aplicar",
+    "clear": "Vaciar",
+    "clearAll": "Quitar todos los filtros",
+    "remove": "Quitar el filtro {{label}}",
+    "chip": "{{label}}: {{value}}",
+    "all": "Todos",
+    "yes": "Sí",
+    "no": "No",
+    "textPlaceholder": "Contiene…"
+  },
+  "columns": {
+    "button": "Columnas",
+    "title": "Columnas de la lista",
+    "earlier": "Mover {{label}} antes",
+    "later": "Mover {{label}} después",
+    "firstReason": "Ya es la primera columna",
+    "lastReason": "Ya es la última columna",
+    "pinStart": "Fijar {{label}} al inicio",
+    "pinEnd": "Fijar {{label}} al final",
+    "pin": "Fijar {{label}}",
+    "pinStartShort": "Inicio",
+    "pinEndShort": "Final",
+    "reset": "Restablecer columnas",
+    "noRoom": "oculta por falta de espacio",
+    "autoFit": "Ajustar las columnas al ancho disponible"
+  },
+  "fit": {
+    "hidden_one": "{{count}} columna oculta por falta de espacio",
+    "hidden_other": "{{count}} columnas ocultas por falta de espacio"
+  },
+  "header": {
+    "resize": "Cambiar el ancho de {{label}}"
+  },
+  "select": {
+    "row": "Seleccionar la fila {{label}}",
+    "all": "Seleccionar todas las filas cargadas",
+    "header": "Selección"
+  },
+  "actions": {
+    "header": "Acciones",
+    "open": "Acciones de la fila {{label}}"
+  },
+  "history": {
+    "undoLabel": "Deshacer",
+    "redoLabel": "Rehacer",
+    "noUndo": "No hay nada que deshacer",
+    "noRedo": "No hay nada que rehacer",
+    "edit": "edición",
+    "clear": "vaciado",
+    "paste": "pegado",
+    "fill": "relleno",
+    "revert": "reversión de una celda",
+    "revertRow": "reversión de una fila",
+    "revertAll": "descarte de todos los cambios",
+    "label": "Historial de cambios"
+  },
+  "batch": {
+    "count_one": "{{count}} cambio",
+    "count_other": "{{count}} cambios",
+    "blocked_one": "{{count}} fila no se puede guardar",
+    "blocked_other": "{{count}} filas no se pueden guardar",
+    "save": "Guardar",
+    "discard": "Descartar",
+    "report": "{{saved}} guardadas, {{failed}} con problemas",
+    "dismiss": "Cerrar el informe"
+  },
+  "selection": {
+    "label": "Filas seleccionadas",
+    "count_one": "{{count}} fila seleccionada",
+    "count_other": "{{count}} filas seleccionadas",
+    "clear": "Quitar la selección"
+  },
+  "conflict": {
+    "message": "«{{label}}» ha cambiado en el servidor desde que lo leíste.",
+    "reload": "Recargar y reaplicar",
+    "reloadFor": "Recargar y reaplicar los cambios de {{label}}",
+    "empty": "(vacío)",
+    "dialog": {
+      "title": "Los dos habéis cambiado lo mismo",
+      "description": "Otra persona ha modificado «{{label}}» y tú has tocado los mismos datos. Elige con qué valores te quedas.",
+      "field": "Dato",
+      "mineColumn": "Tu valor",
+      "theirsColumn": "En el servidor",
+      "mine": "Conservar los míos",
+      "theirs": "Usar los del servidor",
+      "cancel": "Cancelar"
+    }
+  },
+  "paste": {
+    "title": "Pegar desde una hoja de cálculo",
+    "summary": "{{ok}} celdas correctas, {{errors}} con error, {{skipped}} no editables.",
+    "caption": "Vista previa de lo que se va a pegar",
+    "apply_one": "Pegar {{count}} celda",
+    "apply_other": "Pegar {{count}} celdas",
+    "cancel": "Cancelar",
+    "nothing": "No hay ninguna celda correcta que pegar",
+    "readonly": "Esta celda no se puede editar",
+    "dropped": "No caben {{rows}} filas ni {{columns}} columnas del texto pegado: se descartan."
+  },
+  "empty": {
+    "none": "Todavía no hay nada que mostrar.",
+    "filtered": "Ningún registro cumple la búsqueda y los filtros."
+  },
+  "error": {
+    "retry": "Reintentar"
+  },
+  "footer": {
+    "count": "{{loaded}} de {{total}} filas",
+    "loadingMore": "Cargando más filas"
+  },
+  "confirm": {
+    "default_one": "¿Aplicar «{{label}}» a {{count}} fila?",
+    "default_other": "¿Aplicar «{{label}}» a {{count}} filas?"
+  },
+  "toast": {
+    "undo": "Deshacer",
+    "conflict": "«{{label}}» ha cambiado en el servidor: recárgalo para reaplicar tus cambios.",
+    "invalid": "El servidor ha rechazado datos de «{{label}}»: revisa las celdas marcadas.",
+    "failed": "No se ha podido guardar «{{label}}»: {{reason}}",
+    "failedReverted": "No se ha podido guardar «{{label}}» y vuelve a su valor anterior: {{reason}}",
+    "savedMany_one": "{{count}} fila guardada",
+    "savedMany_other": "{{count}} filas guardadas",
+    "commandDone_one": "{{label}}: hecho en {{count}} fila.",
+    "commandDone_other": "{{label}}: hecho en {{count}} filas.",
+    "pendingApproval_one": "{{count}} fila queda pendiente de aprobación.",
+    "pendingApproval_other": "{{count}} filas quedan pendientes de aprobación.",
+    "commandFailed_one": "{{label}}: ha fallado en {{count}} fila. {{reason}}",
+    "commandFailed_other": "{{label}}: ha fallado en {{count}} filas. {{reason}}",
+    "reapplied": "Tus cambios en «{{label}}» se han reaplicado sobre la versión nueva.",
+    "reloadFailed": "No se ha podido recargar el registro: {{reason}}"
+  },
+  "live": {
+    "summary_one": "{{count}} cambio pendiente, {{invalid}} con error.",
+    "summary_other": "{{count}} cambios pendientes, {{invalid}} con error.",
+    "saved": "Guardado «{{label}}».",
+    "savedMany_one": "{{count}} fila guardada.",
+    "savedMany_other": "{{count}} filas guardadas.",
+    "conflict": "Conflicto en «{{label}}»: ha cambiado en el servidor.",
+    "serverInvalid": "El servidor ha rechazado datos de «{{label}}».",
+    "failed": "No se ha podido guardar «{{label}}».",
+    "cannotSave": "«{{label}}» tiene celdas no válidas y no se guarda.",
+    "invalid": "{{label}}: {{message}}",
+    "nothingToUndo": "No hay nada que deshacer.",
+    "nothingToRedo": "No hay nada que rehacer.",
+    "undone": "Deshecho: {{what}}.",
+    "redone": "Rehecho: {{what}}.",
+    "cleared_one": "{{count}} celda vaciada.",
+    "cleared_other": "{{count}} celdas vaciadas.",
+    "filled_one": "{{count}} celda rellenada.",
+    "filled_other": "{{count}} celdas rellenadas.",
+    "copied_one": "{{count}} celda copiada.",
+    "copied_other": "{{count}} celdas copiadas.",
+    "pasted_one": "{{count}} celda pegada.",
+    "pasted_other": "{{count}} celdas pegadas.",
+    "cellReverted": "Celda devuelta a su valor.",
+    "rowReverted": "Fila devuelta a sus valores.",
+    "discarded": "Cambios descartados.",
+    "reapplied": "Cambios de «{{label}}» reaplicados.",
+    "commandFailed": "{{label}} ha fallado."
+  },
+  "shortcuts": {
+    "move": "Moverse por las celdas",
+    "next": "Salir de la cuadrícula (al editar, confirma y pasa a la celda siguiente)",
+    "prev": "Volver al elemento anterior (al editar, confirma y pasa a la celda anterior)",
+    "home": "Primera celda de la fila",
+    "end": "Última celda de la fila",
+    "first": "Primera celda de la lista",
+    "last": "Última celda de la lista",
+    "pageDown": "Bajar una página",
+    "pageUp": "Subir una página",
+    "edit": "Editar la celda",
+    "editF2": "Editar la celda",
+    "cancel": "Cancelar la edición (dos veces, la fila)",
+    "clear": "Vaciar la celda o el rango",
+    "undo": "Deshacer",
+    "redo": "Rehacer",
+    "save": "Guardar los cambios",
+    "copy": "Copiar",
+    "paste": "Pegar desde una hoja de cálculo",
+    "fill": "Rellenar hacia abajo",
+    "select": "Seleccionar la fila",
+    "range": "Ampliar el rango de celdas",
+    "open": "Abrir el registro en edición",
+    "search": "Ir a la búsqueda"
+  },
+  "help": {
+    "toolbar": {
+      "title": "Barra de la lista",
+      "body": "Aquí buscas, filtras, eliges las columnas y deshaces o rehaces cambios. Todo lo que cambies en la lista se guarda según la configuración de la entidad."
+    },
+    "search": {
+      "title": "Búsqueda rápida",
+      "body": "Escribe para buscar en el servidor. Pulsa «/» desde la lista para llegar aquí y Esc para vaciarla."
+    },
+    "filters": {
+      "title": "Filtros",
+      "body": "Cada filtro activo es una etiqueta que puedes quitar. Los filtros, el orden y la búsqueda quedan en la dirección de la página: puedes copiarla o compartirla."
+    },
+    "columns": {
+      "title": "Columnas",
+      "body": "Muestra u oculta columnas, cambia su orden y fíjalas al inicio o al final. También puedes arrastrar una cabecera o cambiar su ancho desde el borde. Se recuerda para ti."
+    },
+    "table": {
+      "title": "La lista",
+      "body": "Muévete con las flechas, edita con Enter o F2 (o escribiendo encima) y cancela con Esc. Tab te saca de la lista, y Mayús+Tab te devuelve a la celda en la que estabas; sólo al editar, Tab confirma y pasa a la celda siguiente. Doble clic en una fila, o Ctrl+Enter, abre el registro en edición. Ctrl+Z deshace y Ctrl+C y Ctrl+V copian y pegan celdas."
+    },
+    "row-actions": {
+      "title": "Acciones de la fila",
+      "body": "Cada fila tiene su menú con lo que se puede hacer con ella. Si seleccionas varias filas aparece una barra para hacerlo con todas a la vez."
+    },
+    "batch-bar": {
+      "title": "Cambios pendientes",
+      "body": "Cuando hay cambios sin guardar, esta barra los cuenta. Guarda con Ctrl+S o descártalos; cada fila se guarda por separado y se informa de las que fallan.",
+      "idle": {
+        "title": "Barra de cambios",
+        "body": "Aparece al editar: cuando haya cambios sin guardar te los cuenta y te deja guardarlos o descartarlos de golpe con Ctrl+S."
+      }
+    },
+    "undo": {
+      "title": "Deshacer y rehacer",
+      "body": "Cada cambio que haces en la lista se puede deshacer y rehacer, también con Ctrl+Z y Ctrl+Mayús+Z. Los botones se activan en cuanto hay algo que deshacer."
+    }
+  }
+}

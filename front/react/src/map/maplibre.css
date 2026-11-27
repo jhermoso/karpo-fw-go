@@ -1,0 +1,18 @@
+/*
+ * Hoja de MapLibre de @karpo/react: se publica aparte como `dist/karpo-map.css`
+ * (`@karpo/react/map.css`, D-R24) y la carga quien use la vista de mapa. La construye
+ * `vite.map-css.config.ts`; `dist/karpo.css` ya no la trae.
+ *
+ * La hoja de MapLibre (posición del lienzo, de los marcadores y de los controles) entra DENTRO de
+ * una subcapa de karpo.components, así que lo que escribe `map.css` la sobrescribe sin `!important`.
+ * `font: inherit` (B-3) hace que los rótulos y los controles del mapa usen la tipografía del tema
+ * y no la de MapLibre (Helvetica Neue, Arial).
+ */
+@import url("../theme/layers.css");
+@import url("maplibre-gl/dist/maplibre-gl.css") layer(karpo.components.maplibre);
+
+@layer karpo.components {
+  .maplibregl-map {
+    font: inherit;
+  }
+}

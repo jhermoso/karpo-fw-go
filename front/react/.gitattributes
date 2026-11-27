@@ -1,0 +1,5 @@
+# Los ficheros del front se guardan siempre con LF: los hashes de los temas y las pruebas de bytes dependen de ello.
+* text=auto eol=lf
+*.png binary
+*.pmtiles binary
+*.woff2 binary

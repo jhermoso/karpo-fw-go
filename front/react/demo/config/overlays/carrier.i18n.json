@@ -1,0 +1,105 @@
+{
+  "form": {
+    "createTitleKey": "entities.carrier.form.createTitle",
+    "editTitleKey": "entities.carrier.form.editTitle",
+    "sections": [
+      {
+        "id": "main",
+        "titleKey": "entities.carrier.form.sections.main.title",
+        "fields": [
+          {
+            "field": "code",
+            "labelKey": "entities.carrier.fields.code.label",
+            "hintKey": "entities.carrier.fields.code.hint"
+          },
+          { "field": "name", "labelKey": "entities.carrier.fields.name.label" },
+          {
+            "field": "party",
+            "labelKey": "entities.carrier.fields.party.label",
+            "hintKey": "entities.carrier.fields.party.hint"
+          },
+          {
+            "field": "trackingUrl",
+            "labelKey": "entities.carrier.fields.trackingUrl.label",
+            "hintKey": "entities.carrier.fields.trackingUrl.hint"
+          }
+        ]
+      }
+    ]
+  },
+  "detail": {
+    "sections": [
+      {
+        "id": "main",
+        "titleKey": "entities.carrier.detail.sections.main.title",
+        "fields": [
+          { "field": "code", "labelKey": "entities.carrier.fields.code.label" },
+          { "field": "name", "labelKey": "entities.carrier.fields.name.label" },
+          { "field": "party", "labelKey": "entities.carrier.fields.party.label" },
+          { "field": "trackingUrl", "labelKey": "entities.carrier.fields.trackingUrl.label" },
+          {
+            "field": "blocked",
+            "labelKey": "entities.carrier.fields.blocked.label",
+            "hintKey": "entities.carrier.fields.blocked.hint"
+          },
+          { "field": "blockReason", "labelKey": "entities.carrier.fields.blockReason.label" },
+          { "field": "unblockReason", "labelKey": "entities.carrier.fields.unblockReason.label" }
+        ]
+      }
+    ],
+    "childGrids": [
+      {
+        "id": "block-history",
+        "titleKey": "entities.carrier.childGrids.block-history.title",
+        "emptyMessageKey": "entities.carrier.childGrids.block-history.emptyMessage",
+        "columns": [
+          {
+            "field": "at",
+            "headerKey": "entities.carrier.childGrids.block-history.columns.at.header"
+          },
+          {
+            "field": "blocked",
+            "headerKey": "entities.carrier.childGrids.block-history.columns.blocked.header",
+            "trueLabelKey": "entities.carrier.childGrids.block-history.columns.blocked.trueLabel",
+            "falseLabelKey": "entities.carrier.childGrids.block-history.columns.blocked.falseLabel"
+          },
+          {
+            "field": "reason",
+            "headerKey": "entities.carrier.childGrids.block-history.columns.reason.header"
+          },
+          {
+            "field": "byName",
+            "headerKey": "entities.carrier.childGrids.block-history.columns.byName.header"
+          }
+        ]
+      }
+    ]
+  },
+  "grid": {
+    "columns": [
+      { "field": "code", "headerKey": "entities.carrier.columns.code.header" },
+      { "field": "name", "headerKey": "entities.carrier.columns.name.header" },
+      { "field": "trackingUrl", "headerKey": "entities.carrier.columns.trackingUrl.header" },
+      {
+        "field": "blocked",
+        "headerKey": "entities.carrier.columns.blocked.header",
+        "badgeMap": {
+          "false": { "labelKey": "entities.carrier.options.blocked.false" },
+          "true": { "labelKey": "entities.carrier.options.blocked.true" }
+        }
+      }
+    ],
+    "rowActions": [
+      { "action": "view", "labelKey": "entities.carrier.commands.view.label" },
+      { "action": "edit", "labelKey": "entities.carrier.commands.edit.label" }
+    ]
+  },
+  "filters": [
+    {
+      "field": "_search",
+      "labelKey": "entities.carrier.filters._search.label",
+      "placeholderKey": "entities.carrier.filters._search.placeholder"
+    },
+    { "field": "isActive", "labelKey": "entities.carrier.filters.isActive.label" }
+  ]
+}

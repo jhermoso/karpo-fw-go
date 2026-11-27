@@ -1,0 +1,382 @@
+/*
+ * Mapa por niveles (T7): barra de la vista, migas, lienzo de MapLibre, leyenda y tabla del nivel.
+ *
+ * Sólo var(--th-*) y var(--kx-*), color-mix() y calc(): ningún color, medida ni fuente literal. La
+ * hoja de MapLibre (posición del lienzo y de los marcadores) NO se importa aquí (M-16): la carga
+ * `engine.ts` con la vista (`maplibre.css`) y el paquete la publica aparte (`@karpo/react/map.css`).
+ * Entra DENTRO de una subcapa de karpo.components, así que lo que se escribe aquí la sobrescribe sin
+ * !important. No se toca `outline` (el foco lo pone el tema, A3 §7.5). El relleno coroplético del mapa
+ * NO sale de este fichero: lo pinta WebGL con los colores que `resolveThemeColor` lee de las mismas
+ * variables.
+ */
+@layer karpo.components;
+
+@layer karpo.components {
+  [data-kx-view="map"] {
+    display: flex;
+    flex-direction: column;
+    gap: var(--th-space-3);
+    block-size: 100%;
+    min-block-size: 0;
+  }
+
+  [data-kx-view="map"] > [data-th="toolbar"] {
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--th-space-3);
+    padding-inline: var(--th-space-2);
+  }
+
+  /* --- Migas ------------------------------------------------------------------------------- */
+  [data-kx-part="breadcrumbs"] ol {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--th-space-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  [data-kx-part="breadcrumbs"] li {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--th-space-1);
+    color: var(--th-text-secondary);
+  }
+
+  [data-kx-part="breadcrumbs"] button {
+    margin: 0;
+    padding: var(--th-space-1) var(--th-space-2);
+    border: 0;
+    border-radius: var(--th-edge-rounding-small);
+    background: transparent;
+    color: var(--th-text-link);
+    font: inherit;
+    cursor: pointer;
+  }
+
+  [data-kx-part="breadcrumbs"] button:hover {
+    background: var(--th-state-hover-bg);
+    color: var(--th-state-hover-fg);
+  }
+
+  [data-kx-part="breadcrumbs"] [aria-current="page"] {
+    padding: var(--th-space-1) var(--th-space-2);
+    color: var(--th-text-primary);
+    font-weight: var(--th-text-heading-weight);
+  }
+
+  /* Un eslabón cuyo nivel se salta por tener un solo elemento nombra el lugar, pero no es un botón. */
+  [data-kx-part="breadcrumbs"] [data-kx-part="skipped"] {
+    padding: var(--th-space-1) var(--th-space-2);
+    color: var(--th-text-secondary);
+  }
+
+  /* «Ver como tabla» y «Subir un nivel» van juntos al final de la barra (en RTL, al principio). */
+  [data-kx-view="map"] [data-kx-part="actions"] {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--th-space-2);
+    margin-inline-start: auto;
+  }
+
+  /* Los textos de estado no se pegan al borde ni lo desbordan con un nombre largo (M-10). */
+  [data-kx-view="map"] [data-kx-part="status"],
+  [data-kx-view="map"] [data-kx-part="unplaced"],
+  [data-kx-view="map"] [data-kx-part="notice"],
+  [data-kx-view="map"] [data-kx-part="hint"],
+  [data-kx-view="map"] [data-kx-part="empty"] {
+    margin: 0;
+    padding-inline: var(--th-space-3);
+    overflow-wrap: anywhere;
+    font-size: var(--th-type-small);
+    color: var(--th-text-secondary);
+  }
+
+  [data-kx-view="map"] [data-kx-part="body"] {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: var(--th-space-2);
+    min-block-size: 0;
+  }
+
+  /* --- Lienzo ------------------------------------------------------------------------------ */
+  [data-kx-view="map"] [data-kx-part="stage"] {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: var(--th-space-1);
+    min-block-size: 0;
+  }
+
+  [data-kx-view="map"] [data-kx-part="viewport"] {
+    position: relative;
+    flex: 1 1 auto;
+    min-block-size: calc(var(--th-space-8) * 14);
+    overflow: hidden;
+    background: var(--th-surface-canvas-bg);
+    border: var(--th-edge-width) solid var(--th-edge-subtle);
+    border-radius: var(--th-edge-rounding-medium);
+  }
+
+  [data-kx-view="map"] [data-kx-part="canvas"] {
+    position: absolute;
+    inset: 0;
+  }
+
+  [data-kx-view="map"] [data-kx-part="map"] {
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
+  [data-kx-view="map"] [data-kx-part="stage"][aria-busy="true"] [data-kx-part="canvas"] {
+    opacity: var(--th-state-disabled-opacity);
+  }
+
+  /*
+   * Rótulos: marcadores HTML (sin glifos). No interceptan el ratón: el clic llega al mapa. Se miden con
+   * canvas con ESTA tipografía y el nombre ya viene partido en líneas con `
+` (`white-space: pre`), así
+   * que lo medido y lo pintado coinciden. El relleno y el ancho máximo los lee el medidor de aquí.
+   */
+  [data-kx-part="map"] .kx-map-label {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    box-sizing: border-box;
+    max-inline-size: calc(var(--th-space-8) * 3.5);
+    padding: var(--th-space-1);
+    text-align: center;
+    white-space: pre;
+    pointer-events: none;
+    font-size: var(--th-type-small);
+    line-height: var(--th-type-ui-line-height);
+    color: var(--th-text-primary);
+
+    /* Contorno de un píxel y un halo: legible sobre cualquier color del relleno coroplético. */
+    text-shadow:
+      var(--th-edge-width) 0 0 var(--th-surface-content-bg),
+      calc(var(--th-edge-width) * -1) 0 0 var(--th-surface-content-bg),
+      0 var(--th-edge-width) 0 var(--th-surface-content-bg),
+      0 calc(var(--th-edge-width) * -1) 0 var(--th-surface-content-bg),
+      0 0 var(--th-space-1) var(--th-surface-content-bg);
+  }
+
+  /* Sobre los pasos altos de la paleta (el relleno se parece al color informativo del tema) el texto es el inverso. */
+  [data-kx-part="map"] .kx-map-label[data-kx-step="5"],
+  [data-kx-part="map"] .kx-map-label[data-kx-step="6"],
+  [data-kx-part="map"] .kx-map-label[data-kx-step="7"] {
+    color: var(--th-text-inverse);
+    text-shadow: none;
+  }
+
+  [data-kx-part="map"] .kx-map-label[hidden] {
+    display: none;
+  }
+
+  [data-kx-part="map"] .kx-map-label [data-kx-part="name"] {
+    font-weight: var(--th-text-heading-weight);
+  }
+
+  [data-kx-part="map"] .kx-map-label [data-kx-part="value"] {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Capa de información sobre el mapa: no recoge eventos. */
+  [data-kx-view="map"] [data-kx-part="overlay"] {
+    position: absolute;
+    inset: var(--th-space-3);
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--th-space-2);
+    pointer-events: none;
+  }
+
+  [data-kx-view="map"] [data-kx-part="viewport"] > [data-kx-part="notice"] {
+    position: absolute;
+    inset-block-end: var(--th-space-2);
+    inset-inline-end: var(--th-space-3);
+    padding: var(--th-space-1) var(--th-space-2);
+    background: color-mix(in srgb, var(--th-surface-popover-bg) 85%, transparent);
+    border-radius: var(--th-edge-rounding-small);
+  }
+
+  /* En un marco compacto la leyenda y el aviso no caben a la vez abajo: el aviso sube y ocupa todo el ancho (R5). */
+  [data-kx-shell][data-kx-compact] [data-kx-view="map"] [data-kx-part="viewport"] > [data-kx-part="notice"] {
+    inset-block: var(--th-space-2) auto;
+    inset-inline: var(--th-space-3);
+  }
+
+  [data-kx-view="map"] [data-kx-part="hover"] {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--th-space-2);
+    margin: 0;
+    padding: var(--th-space-1) var(--th-space-3);
+    background: var(--th-surface-popover-bg);
+    color: var(--th-surface-popover-fg);
+    border: var(--th-edge-width) solid var(--th-surface-popover-border);
+    border-radius: var(--th-edge-rounding-medium);
+    box-shadow: var(--th-depth-levels-overlay);
+  }
+
+  [data-kx-view="map"] [data-kx-part="hover"] em {
+    color: var(--th-text-secondary);
+    font-size: var(--th-type-small);
+  }
+
+  /* --- Leyenda ----------------------------------------------------------------------------- */
+  [data-kx-part="legend"] {
+    margin: 0;
+    padding: var(--th-space-2) var(--th-space-3);
+    background: var(--th-surface-popover-bg);
+    color: var(--th-surface-popover-fg);
+    border: var(--th-edge-width) solid var(--th-surface-popover-border);
+    border-radius: var(--th-edge-rounding-medium);
+    box-shadow: var(--th-depth-levels-overlay);
+    font-size: var(--th-type-small);
+  }
+
+  [data-kx-part="legend"] figcaption {
+    margin-block-end: var(--th-space-1);
+    font-weight: var(--th-text-heading-weight);
+  }
+
+  [data-kx-part="legend"] ul {
+    display: grid;
+    gap: var(--th-space-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  [data-kx-part="legend"] li {
+    display: flex;
+    align-items: center;
+    gap: var(--th-space-2);
+    font-variant-numeric: tabular-nums;
+  }
+
+  [data-kx-part="legend"] [data-kx-part="swatch"] {
+    flex: none;
+    inline-size: var(--th-space-4);
+    block-size: var(--th-space-4);
+    border: var(--th-edge-width) solid var(--kx-data-border);
+    border-radius: var(--th-edge-rounding-small);
+    background: var(--kx-data-missing);
+  }
+
+  /* «Sin dato»: rayas diagonales con los colores del tema, las mismas que se pintan en el mapa (M-2). */
+  [data-kx-part="swatch"][data-kx-step="none"] {
+    background:
+      repeating-linear-gradient(
+        135deg,
+        var(--kx-data-missing) 0 var(--th-space-1),
+        var(--kx-data-missing-hatch, var(--kx-data-missing)) var(--th-space-1) calc(var(--th-space-1) + var(--th-edge-width))
+      );
+  }
+
+  [data-kx-part="swatch"][data-kx-step="1"] {
+    background: var(--kx-data-seq-1);
+  }
+
+  [data-kx-part="swatch"][data-kx-step="2"] {
+    background: var(--kx-data-seq-2);
+  }
+
+  [data-kx-part="swatch"][data-kx-step="3"] {
+    background: var(--kx-data-seq-3);
+  }
+
+  [data-kx-part="swatch"][data-kx-step="4"] {
+    background: var(--kx-data-seq-4);
+  }
+
+  [data-kx-part="swatch"][data-kx-step="5"] {
+    background: var(--kx-data-seq-5);
+  }
+
+  [data-kx-part="swatch"][data-kx-step="6"] {
+    background: var(--kx-data-seq-6);
+  }
+
+  [data-kx-part="swatch"][data-kx-step="7"] {
+    background: var(--kx-data-seq-7);
+  }
+
+  /* La leyenda va abajo; lo que señala el ratón, arriba. */
+  [data-kx-view="map"] [data-kx-part="overlay"] > [data-kx-part="legend"] {
+    margin-block-start: auto;
+  }
+
+  /* --- Tabla del nivel --------------------------------------------------------------------- */
+  [data-kx-part="table-wrap"] {
+    flex: 1 1 auto;
+    min-block-size: 0;
+    overflow: auto;
+    border: var(--th-edge-width) solid var(--th-edge-subtle);
+    border-radius: var(--th-edge-rounding-medium);
+    background: var(--th-surface-content-bg);
+  }
+
+  [data-kx-part="table"] {
+    inline-size: 100%;
+    border-collapse: collapse;
+    color: var(--th-surface-content-fg);
+  }
+
+  [data-kx-part="table"] caption {
+    padding: var(--th-space-2) var(--th-space-3);
+    text-align: start;
+    font-weight: var(--th-text-heading-weight);
+    color: var(--th-text-heading-color);
+  }
+
+  [data-kx-part="table"] thead th {
+    padding: var(--th-space-2) var(--th-space-3);
+    background: var(--th-collection-header-bg);
+    color: var(--th-collection-header-fg);
+    border-block: var(--th-edge-width) solid var(--th-collection-header-border);
+    font-weight: var(--th-collection-header-weight);
+    text-align: start;
+  }
+
+  [data-kx-part="table"] tbody th,
+  [data-kx-part="table"] tbody td {
+    padding: var(--th-space-row) var(--th-space-3);
+    border-block-end: var(--th-edge-width) solid var(--th-collection-grid-color);
+    font-weight: normal;
+    text-align: start;
+  }
+
+  /* Cifras (D-R35): en la familia del cuerpo, con dígitos de ancho fijo; sin `data-th-format="amount"`, que fuerza la monoespaciada. */
+  [data-kx-part="table"] [data-kx-align="end"] {
+    text-align: end;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  [data-kx-part="table"] tbody tr:hover {
+    background: var(--th-state-hover-bg);
+  }
+
+  [data-kx-part="table"] tbody tr[data-kx-active="true"] {
+    background: var(--th-state-selected-inactive-bg);
+    color: var(--th-state-selected-inactive-fg);
+  }
+
+  [data-kx-part="table"] [data-kx-part="note"] {
+    margin-inline-start: var(--th-space-2);
+    color: var(--th-text-secondary);
+    font-size: var(--th-type-small);
+  }
+
+  [data-kx-view="map"] [data-kx-part="empty"] {
+    padding-block: var(--th-space-4);
+  }
+}

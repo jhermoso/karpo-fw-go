@@ -1,0 +1,68 @@
+{
+  "form": {
+    "createTitleKey": "entities.holiday.form.createTitle",
+    "editTitleKey": "entities.holiday.form.editTitle",
+    "sections": [
+      {
+        "id": "main",
+        "titleKey": "entities.holiday.sections.main.title",
+        "fields": [
+          { "field": "name", "labelKey": "entities.holiday.fields.name.label" },
+          {
+            "field": "date",
+            "labelKey": "entities.holiday.fields.date.label",
+            "hintKey": "entities.holiday.fields.date.hint"
+          },
+          {
+            "field": "boundary",
+            "labelKey": "entities.holiday.form.fields.boundary.label",
+            "hintKey": "entities.holiday.fields.boundary.hint"
+          }
+        ]
+      }
+    ]
+  },
+  "detail": {
+    "sections": [
+      {
+        "id": "main",
+        "titleKey": "entities.holiday.sections.main.title",
+        "fields": [
+          { "field": "name", "labelKey": "entities.holiday.fields.name.label" },
+          { "field": "date", "labelKey": "entities.holiday.fields.date.label" },
+          { "field": "boundary", "labelKey": "entities.holiday.detail.fields.boundary.label" },
+          { "field": "boundaryName", "labelKey": "entities.holiday.fields.boundaryName.label" }
+        ]
+      }
+    ]
+  },
+  "grid": {
+    "columns": [
+      { "field": "date", "headerKey": "entities.holiday.columns.date.header" },
+      { "field": "name", "headerKey": "entities.holiday.columns.name.header" },
+      { "field": "boundaryName", "headerKey": "entities.holiday.columns.boundaryName.header" }
+    ],
+    "rowActions": [
+      { "action": "view", "labelKey": "entities.holiday.commands.view.label" },
+      { "action": "edit", "labelKey": "entities.holiday.commands.edit.label" },
+      {
+        "action": "delete",
+        "labelKey": "entities.holiday.commands.delete.label",
+        "confirmMessageKey": "entities.holiday.commands.delete.confirmMessage"
+      }
+    ]
+  },
+  "filters": [
+    {
+      "field": "_search",
+      "labelKey": "entities.holiday.filters._search.label",
+      "placeholderKey": "entities.holiday.filters._search.placeholder"
+    },
+    { "field": "year", "labelKey": "entities.holiday.filters.year.label" },
+    {
+      "field": "boundary",
+      "labelKey": "entities.holiday.filters.boundary.label",
+      "placeholderKey": "entities.holiday.filters.boundary.placeholder"
+    }
+  ]
+}

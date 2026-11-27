@@ -1,0 +1,78 @@
+{
+  "missing": "Esta entidad no tiene configurada una vista de mapa.",
+  "view": {
+    "label": "Mapa de {{name}}"
+  },
+  "loading": "Cargando el mapa",
+  "error": {
+    "load": "No se pudo cargar el mapa.",
+    "engine": "No se pudo cargar el motor del mapa.",
+    "source": "La fuente del mapa no está disponible: {{id}}.",
+    "retry": "Reintentar"
+  },
+  "layout": {
+    "toTable": "Ver como tabla",
+    "toMap": "Ver como mapa"
+  },
+  "breadcrumbs": {
+    "label": "Ruta del mapa"
+  },
+  "up": {
+    "label": "Subir un nivel",
+    "none": "Ya estás en el nivel más alto"
+  },
+  "status": {
+    "level_one": "{{level}}: {{count}} delimitación.",
+    "level_other": "{{level}}: {{count}} delimitaciones.",
+    "loading": "Cargando {{level}}…",
+    "noDetail": "{{name}} no tiene detalle en el mapa.",
+    "noGeometry": "No hay geometría para {{name}}.",
+    "entered": "Entrando en {{name}}."
+  },
+  "unplaced_one": "{{count}} registro sin delimitación conocida no se cuenta.",
+  "unplaced_other": "{{count}} registros sin delimitación conocida no se cuentan.",
+  "schematic": {
+    "notice": "Geometría esquemática de demostración",
+    "source": "Fuente: {{source}}"
+  },
+  "canvas": {
+    "label": "Mapa de {{name}}: {{level}}",
+    "hint": "El mapa se explora con el ratón. Con el teclado o un lector de pantalla usa la tabla del mismo nivel.",
+    "noDetail": "Sin detalle",
+    "value": "{{value}}"
+  },
+  "legend": {
+    "label": "Leyenda del mapa",
+    "count": "{{name}} por delimitación",
+    "sum": "Suma de {{field}} por delimitación",
+    "range": "{{from}} a {{to}}",
+    "single": "{{value}}",
+    "noData": "Sin dato"
+  },
+  "table": {
+    "caption": "{{level}}",
+    "name": "Delimitación",
+    "value": "Valor",
+    "open": "Entrar en {{name}}",
+    "noDetail": "Sin detalle",
+    "empty": "No hay delimitaciones en este nivel."
+  },
+  "help": {
+    "layout": {
+      "title": "Mapa o tabla",
+      "body": "Cambia entre el mapa y la tabla del mismo nivel. La tabla es la alternativa para el teclado y los lectores de pantalla, y también permite entrar en cada delimitación."
+    },
+    "breadcrumbs": {
+      "title": "Ruta del mapa",
+      "body": "Muestra dónde estás: mundo, país, región y ciudad. Pulsa un nivel para volver a él; Esc sube un nivel. Un nivel con un solo elemento se salta y aparece sin enlace."
+    },
+    "legend": {
+      "title": "Leyenda",
+      "body": "Explica los colores: cuanto más oscuro, mayor es el valor de la delimitación. Las que no tienen dato llevan rayas, para que no se confundan con las de valor más bajo."
+    },
+    "canvas": {
+      "title": "El mapa",
+      "body": "Haz clic en una delimitación para entrar en su nivel inferior. Las que no tienen detalle no se abren. Esc sube un nivel."
+    }
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "required": "Este dato es obligatorio.",
+  "format": "El formato no es válido.",
+  "range": "El valor está fuera del rango permitido.",
+  "enum": "Elige uno de los valores permitidos.",
+  "immutable": "Este dato no se puede cambiar después del alta.",
+  "unsupported": "Este valor no está admitido.",
+  "maxLength": "El texto es demasiado largo.",
+  "minLength": "El texto es demasiado corto.",
+  "min": "El valor es menor que el mínimo permitido.",
+  "max": "El valor es mayor que el máximo permitido.",
+  "pattern": "El valor no cumple el formato esperado.",
+  "invalid": "Hay datos que no son válidos. Revisa el formulario.",
+  "duplicate": "Ya existe un registro con este valor.",
+  "conflict": "El registro ha cambiado desde que lo leíste. Recárgalo para ver la versión actual.",
+  "forbidden": "No tienes permiso para hacer esto.",
+  "unauthorized": "Tu sesión ha caducado. Vuelve a entrar.",
+  "notfound": "No se ha encontrado el registro, o está fuera de tu ámbito.",
+  "network": "No hay conexión con el servidor. Comprueba tu red e inténtalo de nuevo.",
+  "timeout": "El servidor tarda demasiado en responder. Inténtalo de nuevo.",
+  "server": "El servidor no ha podido atender la petición. Inténtalo de nuevo en un momento.",
+  "too-large": "Los datos enviados son demasiado grandes.",
+  "pending": "La solicitud queda pendiente de aprobación.",
+  "business": "La operación no se puede completar por una regla de negocio.",
+  "command": {
+    "view": "Ver detalle",
+    "edit": "Editar",
+    "delete": "Eliminar"
+  },
+  "confirm": {
+    "default": "¿Confirmar la operación?"
+  },
+  "hr": {
+    "reporting_cycle": "Esa dependencia crearía un ciclo en el organigrama.",
+    "reporting_self": "Un puesto no puede depender de sí mismo.",
+    "reporting_too_deep": "El organigrama supera el máximo de niveles.",
+    "reporting_duplicate": "Esa dependencia ya existe.",
+    "reporting_end_before_start": "El fin de la dependencia no puede ser anterior a su inicio.",
+    "work_center_in_use": "El centro de trabajo tiene contratos en vigor después de esa fecha.",
+    "work_center_closed": "El centro de trabajo ya está cerrado.",
+    "work_center_close_before_open": "El cierre no puede ser anterior a la apertura.",
+    "duplicate_work_center_code": "Ya existe un centro de trabajo con ese código.",
+    "facility_already_work_center": "Esa instalación ya es un centro de trabajo.",
+    "facility_inactive": "La instalación está inactiva."
+  },
+  "facilities": {
+    "hierarchy_cycle": "Esa instalación no puede formar parte de sí misma ni de sus descendientes.",
+    "hierarchy_too_deep": "La jerarquía de instalaciones supera el máximo de niveles.",
+    "inactive": "La instalación está inactiva.",
+    "other_organization": "La instalación pertenece a otra organización.",
+    "type_mismatch": "El tipo de instalación no es compatible con su contenedor.",
+    "contact_required": "Este tipo de instalación exige un contacto."
+  },
+  "products": {
+    "duplicate_sku": "Ya existe un producto con ese SKU.",
+    "duplicate_barcode": "Ya existe un producto con ese código de barras.",
+    "discontinued": "El producto está retirado.",
+    "product_discontinued": "El producto está retirado."
+  },
+  "assets": {
+    "duplicate_code": "Ya existe un activo con ese código.",
+    "disposed": "El activo ya está dado de baja."
+  },
+  "geography": {
+    "unknown_place": "No se reconoce ese lugar."
+  },
+  "approval": {
+    "self_resolution": "No puedes resolver una solicitud que hiciste tú.",
+    "already_resolved": "La solicitud ya está resuelta.",
+    "comment_required": "Indica un comentario para resolver la solicitud.",
+    "not_requester": "Sólo quien hizo la solicitud puede cancelarla."
+  }
+}

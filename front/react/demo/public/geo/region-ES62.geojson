@@ -1,0 +1,3 @@
+{"type":"FeatureCollection","features":[
+{"type":"Feature","properties":{"code":"ES620","name":"Murcia","level":"3","parentCode":"ES62","nutsCode":"ES620","ineCode":"30","hasChildren":false},"geometry":{"type":"Polygon","coordinates":[[[-0.775,38.525],[0.675,38.525],[0.675,39.575],[-0.775,39.575],[-0.775,38.525]]]}}
+]}

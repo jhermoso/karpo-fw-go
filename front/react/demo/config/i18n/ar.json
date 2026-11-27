@@ -1,0 +1,223 @@
+{
+  "menu": {
+    "organization": "المؤسسة",
+    "facility": "المنشآت",
+    "workCenter": "مراكز العمل",
+    "position": "المناصب والهيكل التنظيمي",
+    "commerce": "التجارة",
+    "product": "المنتجات",
+    "supplier": "الموردون",
+    "carrier": "شركات الشحن",
+    "asset": "الأصول",
+    "geography": "الجغرافيا",
+    "country": "الدول",
+    "boundary": "الحدود الإدارية",
+    "holiday": "العطلات"
+  },
+  "entities": {
+    "facility": {
+      "name": "منشأة",
+      "namePlural": "المنشآت",
+      "description": "منشآت المؤسسات الداخلية: المباني والطوابق والغرف",
+      "form": {
+        "createTitle": "منشأة جديدة",
+        "editTitle": "تعديل المنشأة",
+        "sections": {
+          "main": { "title": "بيانات المنشأة" }
+        }
+      },
+      "detail": {
+        "sections": {
+          "main": { "title": "المنشأة" }
+        }
+      },
+      "fields": {
+        "name": { "label": "الاسم" },
+        "type": { "label": "النوع", "hint": "معرّف نوع المنشأة؛ لا يتغير بعد الإنشاء." },
+        "partOf": { "label": "جزء من", "hint": "معرّف المنشأة التي تحتويها." },
+        "active": { "label": "نشطة" },
+        "typeName": { "label": "النوع" },
+        "description": { "label": "الوصف" },
+        "areaM2": { "label": "المساحة (م²)" }
+      },
+      "columns": {
+        "name": { "header": "الاسم" },
+        "typeName": { "header": "النوع" },
+        "areaM2": { "header": "المساحة (م²)" },
+        "active": { "header": "الحالة" }
+      },
+      "options": {
+        "active": { "true": "نشطة", "false": "غير نشطة" }
+      },
+      "commands": {
+        "view": { "label": "عرض التفاصيل" },
+        "edit": { "label": "تعديل" },
+        "delete": {
+          "label": "تعطيل",
+          "confirmMessage": "هل تريد تعطيل هذه المنشأة؟ لن تُحذف: يمكن تفعيلها من جديد."
+        }
+      },
+      "filters": {
+        "_search": { "label": "بحث", "placeholder": "الاسم…" }
+      }
+    },
+    "country": {
+      "name": "دولة",
+      "namePlural": "الدول",
+      "description": "دول المعيار ISO 3166 مع بياناتها المرجعية (للقراءة فقط)"
+    },
+    "holiday": {
+      "name": "عطلة",
+      "namePlural": "العطلات",
+      "description": "تقويم العطلات بحسب الحدود الجغرافية"
+    },
+    "workCenter": {
+      "name": "مركز عمل",
+      "namePlural": "مراكز العمل",
+      "description": "مراكز العمل في الشركات الموظِّفة"
+    },
+    "product": {
+      "name": "منتج",
+      "namePlural": "المنتجات",
+      "description": "كتالوج السلع والخدمات",
+      "form": {
+        "createTitle": "منتج جديد",
+        "editTitle": "تعديل المنتج",
+        "sections": {
+          "main": { "title": "بيانات المنتج" }
+        }
+      },
+      "detail": {
+        "sections": {
+          "main": { "title": "المنتج" }
+        }
+      },
+      "fields": {
+        "sku": { "label": "المرجع", "hint": "فريد داخل الشركة؛ لا يتغير بعد الإنشاء." },
+        "name": { "label": "الاسم" },
+        "description": { "label": "الوصف" },
+        "kind": { "label": "الطبيعة" },
+        "uom": { "label": "الوحدة", "hint": "رمز الوحدة: ea أو kg أو h…" },
+        "taxCode": { "label": "رمز ضريبة القيمة المضافة" },
+        "basePrice": { "label": "السعر الأساسي" },
+        "forSale": { "label": "للبيع" },
+        "forPurchase": { "label": "للشراء" },
+        "standardCost": { "label": "التكلفة المعيارية" },
+        "blockedSales": { "label": "المبيعات موقوفة" },
+        "discontinued": { "label": "متوقف منذ" }
+      },
+      "options": {
+        "kind": { "good": "سلعة", "service": "خدمة" }
+      },
+      "columns": {
+        "sku": { "header": "المرجع" },
+        "name": { "header": "الاسم" },
+        "kind": { "header": "الطبيعة" },
+        "uom": { "header": "الوحدة" },
+        "basePrice": { "header": "السعر الأساسي" },
+        "discontinued": { "header": "متوقف منذ" }
+      },
+      "commands": {
+        "view": { "label": "عرض التفاصيل" },
+        "edit": { "label": "تعديل" },
+        "delete": {
+          "label": "إيقاف",
+          "confirmMessage": "هل تريد إيقاف هذا المنتج اعتبارًا من اليوم؟ سيبقى في الطلبات والفواتير التي تذكره."
+        }
+      },
+      "filters": {
+        "_search": { "label": "بحث", "placeholder": "الاسم أو المرجع…" },
+        "kind": { "label": "الطبيعة", "placeholder": "الكل" }
+      }
+    },
+    "asset": {
+      "name": "أصل",
+      "namePlural": "الأصول",
+      "description": "سجل الأصول الثابتة مع إهلاكها",
+      "lookups": { "supplier": "المورّد" }
+    },
+    "carrier": { "name": "شركة شحن", "namePlural": "شركات الشحن", "description": "شركات الشحن وسجل حظرها" },
+    "supplier": {
+      "name": "مورّد",
+      "namePlural": "الموردون",
+      "description": "ملف المشتريات للموردين وسجل حظرهم"
+    },
+    "position": {
+      "name": "منصب",
+      "namePlural": "المناصب",
+      "description": "مناصب المؤسسة وسلسلة تبعيتها (الهيكل التنظيمي)",
+      "status": { "planned": "مخطَّط", "open": "شاغر", "filled": "مشغول", "closed": "مغلق" },
+      "actions": { "view": "عرض التفاصيل" },
+      "views": { "tree": "الهيكل التنظيمي" }
+    },
+    "boundary": {
+      "name": "حدّ إداري",
+      "namePlural": "الحدود الإدارية",
+      "description": "الحدود الجغرافية: الدول والمجتمعات والمقاطعات والجزر والبلديات (رموز NUTS وLAU)",
+      "levels": { "1": "مجموعة", "2": "مجتمع", "3": "مقاطعة أو جزيرة", "country": "دولة", "local": "بلدية" },
+      "actions": { "view": "عرض التفاصيل" }
+    },
+    "party": {
+      "name": "طرف",
+      "namePlural": "الأطراف",
+      "description": "الأشخاص والمنظمات؛ مصدر المفاتيح الخارجية (الشركة والمورّد والحائز)"
+    },
+    "facilityType": { "name": "نوع منشأة", "namePlural": "أنواع المنشآت", "description": "كتالوج أنواع المنشآت" }
+  },
+  "views": {
+    "tree": { "facility": "شجرة المنشآت" },
+    "map": { "facility": "خريطة المنشآت" }
+  },
+  "map": {
+    "levels": { "world": "العالم", "country": "الدولة", "region": "المنطقة", "city": "المدينة" }
+  },
+  "commands": {
+    "block": "حظر",
+    "unblock": "رفع الحظر",
+    "reason": "السبب",
+    "blocked": "محظور",
+    "unblocked": "مرفوع عنه الحظر",
+    "pendingApproval": "أُرسل الطلب: بانتظار الموافقة"
+  },
+  "help": {
+    "facility": {
+      "filters": {
+        "title": "البحث والتصفية",
+        "body": "اكتب جزءًا من الاسم لتضييق القائمة. تجري التصفية على الخادم."
+      },
+      "table": {
+        "title": "الجدول",
+        "body": "انقر نقرًا مزدوجًا على صف لفتح تفاصيله في وضع التعديل مباشرة. اضغط Enter أو F2 لتعديل الخلية النشطة."
+      },
+      "views": {
+        "title": "عروض أخرى",
+        "body": "بدّل بين القائمة وشجرة المباني والطوابق والغرف والخريطة بحسب المستويات."
+      }
+    },
+    "product": {
+      "filters": {
+        "title": "البحث والتصفية",
+        "body": "ابحث بالمرجع أو الاسم وصفِّ بحسب الطبيعة: سلعة أو خدمة."
+      },
+      "table": {
+        "title": "التعديل داخل الجدول",
+        "body": "عدّل عدة خلايا؛ يُتحقق من كل تغيير عند تأكيده ويمكنك التراجع عنه بـ Ctrl+Z."
+      },
+      "saveBar": {
+        "title": "الحفظ على دفعات",
+        "body": "تُحفظ المنتجات على دفعات: راجع التغييرات المعلّقة واضغط حفظ."
+      }
+    },
+    "position": {
+      "views": {
+        "title": "القائمة والهيكل التنظيمي",
+        "body": "بدّل بين قائمة المناصب والهيكل التنظيمي القابل للتصفح."
+      },
+      "tree": {
+        "title": "الهيكل التنظيمي",
+        "body": "وسّع كل فرع أو اطوِه، وكبّر بالعجلة، وابحث عن منصب بالاسم."
+      }
+    }
+  },
+  "values": { "yes": "نعم", "no": "لا" }
+}

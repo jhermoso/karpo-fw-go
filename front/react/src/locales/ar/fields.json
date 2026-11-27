@@ -1,0 +1,48 @@
+{
+  "boolean": {
+    "true": "نعم",
+    "false": "لا"
+  },
+  "select": {
+    "empty": "—",
+    "placeholder": "اختر خيارًا"
+  },
+  "empty": {
+    "noValue": "بلا قيمة"
+  },
+  "multiselect": {
+    "placeholder": "اختر خيارات",
+    "count": "{{n}} محددة",
+    "listLabel": "خيارات {{label}}"
+  },
+  "lookup": {
+    "placeholder": "بحث…",
+    "searchLabel": "بحث في {{label}}",
+    "loading": "جارٍ البحث…",
+    "empty": "لا توجد نتائج",
+    "error": "تعذّر البحث",
+    "clear": "إزالة التحديد"
+  },
+  "placeholder": {
+    "date": "يوم/شهر/سنة",
+    "datetime": "يوم/شهر/سنة ساعة:دقيقة",
+    "number": "0",
+    "decimal": "0.00",
+    "percentage": "0 %",
+    "email": "name@domain.com",
+    "phone": "+966 500 000 000",
+    "url": "https://"
+  },
+  "errors": {
+    "required": "هذا الحقل مطلوب.",
+    "maxLength": "الحد الأقصى {{max}} حرفًا.",
+    "minLength": "الحد الأدنى {{min}} حرفًا.",
+    "min": "يجب ألا تقل القيمة عن {{min}}.",
+    "max": "يجب ألا تزيد القيمة عن {{max}}.",
+    "pattern": "الصيغة غير صالحة.",
+    "format": "القيمة ليست بصيغة صالحة."
+  },
+  "paste": {
+    "invalidCell": "قيمة غير صالحة"
+  }
+}

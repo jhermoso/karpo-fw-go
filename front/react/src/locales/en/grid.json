@@ -1,0 +1,236 @@
+{
+  "toolbar": {
+    "add": "New row"
+  },
+  "search": {
+    "label": "Search",
+    "placeholder": "Search…"
+  },
+  "filters": {
+    "label": "Filters",
+    "add": "Filters",
+    "buttonActive": "Filters ({{count}})",
+    "apply": "Apply",
+    "clear": "Clear",
+    "clearAll": "Remove all filters",
+    "remove": "Remove the {{label}} filter",
+    "chip": "{{label}}: {{value}}",
+    "all": "All",
+    "yes": "Yes",
+    "no": "No",
+    "textPlaceholder": "Contains…"
+  },
+  "columns": {
+    "button": "Columns",
+    "title": "List columns",
+    "earlier": "Move {{label}} earlier",
+    "later": "Move {{label}} later",
+    "firstReason": "It is already the first column",
+    "lastReason": "It is already the last column",
+    "pinStart": "Pin {{label}} to the start",
+    "pinEnd": "Pin {{label}} to the end",
+    "pin": "Pin {{label}}",
+    "pinStartShort": "Start",
+    "pinEndShort": "End",
+    "reset": "Reset columns",
+    "noRoom": "hidden: not enough room",
+    "autoFit": "Fit the columns to the available width"
+  },
+  "fit": {
+    "hidden_one": "{{count}} column hidden for lack of space",
+    "hidden_other": "{{count}} columns hidden for lack of space"
+  },
+  "header": {
+    "resize": "Resize {{label}}"
+  },
+  "select": {
+    "row": "Select the row {{label}}",
+    "all": "Select all loaded rows",
+    "header": "Selection"
+  },
+  "actions": {
+    "header": "Actions",
+    "open": "Actions for the row {{label}}"
+  },
+  "history": {
+    "undoLabel": "Undo",
+    "redoLabel": "Redo",
+    "noUndo": "Nothing to undo",
+    "noRedo": "Nothing to redo",
+    "edit": "edit",
+    "clear": "clear",
+    "paste": "paste",
+    "fill": "fill",
+    "revert": "cell reversion",
+    "revertRow": "row reversion",
+    "revertAll": "discarding all changes",
+    "label": "Change history"
+  },
+  "batch": {
+    "count_one": "{{count}} change",
+    "count_other": "{{count}} changes",
+    "blocked_one": "{{count}} row cannot be saved",
+    "blocked_other": "{{count}} rows cannot be saved",
+    "save": "Save",
+    "discard": "Discard",
+    "report": "{{saved}} saved, {{failed}} with problems",
+    "dismiss": "Close the report"
+  },
+  "selection": {
+    "label": "Selected rows",
+    "count_one": "{{count}} row selected",
+    "count_other": "{{count}} rows selected",
+    "clear": "Clear the selection"
+  },
+  "conflict": {
+    "message": "“{{label}}” has changed on the server since you read it.",
+    "reload": "Reload and reapply",
+    "reloadFor": "Reload and reapply the changes to {{label}}",
+    "empty": "(empty)",
+    "dialog": {
+      "title": "You both changed the same data",
+      "description": "Someone else modified “{{label}}” and you touched the same data. Choose which values to keep.",
+      "field": "Field",
+      "mineColumn": "Your value",
+      "theirsColumn": "On the server",
+      "mine": "Keep mine",
+      "theirs": "Use the server's",
+      "cancel": "Cancel"
+    }
+  },
+  "paste": {
+    "title": "Paste from a spreadsheet",
+    "summary": "{{ok}} valid cells, {{errors}} with errors, {{skipped}} not editable.",
+    "caption": "Preview of what will be pasted",
+    "apply_one": "Paste {{count}} cell",
+    "apply_other": "Paste {{count}} cells",
+    "cancel": "Cancel",
+    "nothing": "There are no valid cells to paste",
+    "readonly": "This cell cannot be edited",
+    "dropped": "{{rows}} rows and {{columns}} columns of the pasted text do not fit and are dropped."
+  },
+  "empty": {
+    "none": "There is nothing to show yet.",
+    "filtered": "No record matches the search and filters."
+  },
+  "error": {
+    "retry": "Try again"
+  },
+  "footer": {
+    "count": "{{loaded}} of {{total}} rows",
+    "loadingMore": "Loading more rows"
+  },
+  "confirm": {
+    "default_one": "Apply “{{label}}” to {{count}} row?",
+    "default_other": "Apply “{{label}}” to {{count}} rows?"
+  },
+  "toast": {
+    "undo": "Undo",
+    "conflict": "“{{label}}” has changed on the server: reload it to reapply your changes.",
+    "invalid": "The server rejected data in “{{label}}”: check the marked cells.",
+    "failed": "“{{label}}” could not be saved: {{reason}}",
+    "failedReverted": "“{{label}}” could not be saved and goes back to its previous value: {{reason}}",
+    "savedMany_one": "{{count}} row saved",
+    "savedMany_other": "{{count}} rows saved",
+    "commandDone_one": "{{label}}: done on {{count}} row.",
+    "commandDone_other": "{{label}}: done on {{count}} rows.",
+    "pendingApproval_one": "{{count}} row is pending approval.",
+    "pendingApproval_other": "{{count}} rows are pending approval.",
+    "commandFailed_one": "{{label}}: failed on {{count}} row. {{reason}}",
+    "commandFailed_other": "{{label}}: failed on {{count}} rows. {{reason}}",
+    "reapplied": "Your changes to “{{label}}” were reapplied on top of the new version.",
+    "reloadFailed": "The record could not be reloaded: {{reason}}"
+  },
+  "live": {
+    "summary_one": "{{count}} pending change, {{invalid}} with errors.",
+    "summary_other": "{{count}} pending changes, {{invalid}} with errors.",
+    "saved": "Saved “{{label}}”.",
+    "savedMany_one": "{{count}} row saved.",
+    "savedMany_other": "{{count}} rows saved.",
+    "conflict": "Conflict on “{{label}}”: it has changed on the server.",
+    "serverInvalid": "The server rejected data in “{{label}}”.",
+    "failed": "“{{label}}” could not be saved.",
+    "cannotSave": "“{{label}}” has invalid cells and is not saved.",
+    "invalid": "{{label}}: {{message}}",
+    "nothingToUndo": "Nothing to undo.",
+    "nothingToRedo": "Nothing to redo.",
+    "undone": "Undone: {{what}}.",
+    "redone": "Redone: {{what}}.",
+    "cleared_one": "{{count}} cell cleared.",
+    "cleared_other": "{{count}} cells cleared.",
+    "filled_one": "{{count}} cell filled.",
+    "filled_other": "{{count}} cells filled.",
+    "copied_one": "{{count}} cell copied.",
+    "copied_other": "{{count}} cells copied.",
+    "pasted_one": "{{count}} cell pasted.",
+    "pasted_other": "{{count}} cells pasted.",
+    "cellReverted": "Cell restored to its value.",
+    "rowReverted": "Row restored to its values.",
+    "discarded": "Changes discarded.",
+    "reapplied": "Changes to “{{label}}” reapplied.",
+    "commandFailed": "{{label}} failed."
+  },
+  "shortcuts": {
+    "move": "Move between cells",
+    "next": "Leave the grid (while editing, confirms and moves to the next cell)",
+    "prev": "Go back to the previous element (while editing, confirms and moves to the previous cell)",
+    "home": "First cell of the row",
+    "end": "Last cell of the row",
+    "first": "First cell of the list",
+    "last": "Last cell of the list",
+    "pageDown": "Page down",
+    "pageUp": "Page up",
+    "edit": "Edit the cell",
+    "editF2": "Edit the cell",
+    "cancel": "Cancel the edit (twice, the row)",
+    "clear": "Clear the cell or range",
+    "undo": "Undo",
+    "redo": "Redo",
+    "save": "Save the changes",
+    "copy": "Copy",
+    "paste": "Paste from a spreadsheet",
+    "fill": "Fill down",
+    "select": "Select the row",
+    "range": "Extend the cell range",
+    "open": "Open the record in edit mode",
+    "search": "Go to the search"
+  },
+  "help": {
+    "toolbar": {
+      "title": "List toolbar",
+      "body": "Search, filter, choose the columns and undo or redo changes here. Whatever you change in the list is saved according to the entity's configuration."
+    },
+    "search": {
+      "title": "Quick search",
+      "body": "Type to search on the server. Press “/” from the list to jump here and Esc to clear it."
+    },
+    "filters": {
+      "title": "Filters",
+      "body": "Each active filter is a tag you can remove. Filters, sort order and search are kept in the page address: you can copy or share it."
+    },
+    "columns": {
+      "title": "Columns",
+      "body": "Show or hide columns, change their order and pin them to the start or the end. You can also drag a header or resize it from its edge. It is remembered for you."
+    },
+    "table": {
+      "title": "The list",
+      "body": "Move with the arrow keys, edit with Enter or F2 (or by typing over the cell) and cancel with Esc. Tab takes you out of the list and Shift+Tab brings you back to the cell you were on; only while editing, Tab confirms and moves to the next cell. Double-click on a row, or Ctrl+Enter, opens the record in edit mode. Ctrl+Z undoes and Ctrl+C and Ctrl+V copy and paste cells."
+    },
+    "row-actions": {
+      "title": "Row actions",
+      "body": "Each row has its own menu with what can be done to it. If you select several rows a bar appears to do it on all of them at once."
+    },
+    "batch-bar": {
+      "title": "Pending changes",
+      "body": "When there are unsaved changes, this bar counts them. Save with Ctrl+S or discard them; each row is saved separately and the ones that fail are reported.",
+      "idle": {
+        "title": "Changes bar",
+        "body": "It appears when you edit: once there are unsaved changes it counts them and lets you save or discard them all at once with Ctrl+S."
+      }
+    },
+    "undo": {
+      "title": "Undo and redo",
+      "body": "Every change you make in the list can be undone and redone, also with Ctrl+Z and Ctrl+Shift+Z. The buttons turn on as soon as there is something to undo."
+    }
+  }
+}

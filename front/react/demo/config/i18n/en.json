@@ -1,0 +1,614 @@
+{
+  "menu": {
+    "organization": "Organization",
+    "facility": "Facilities",
+    "workCenter": "Work centers",
+    "position": "Positions and org chart",
+    "commerce": "Commercial",
+    "product": "Products",
+    "supplier": "Suppliers",
+    "carrier": "Carriers",
+    "asset": "Assets",
+    "geography": "Geography",
+    "country": "Countries",
+    "boundary": "Boundaries",
+    "holiday": "Holidays"
+  },
+  "entities": {
+    "facility": {
+      "name": "Facility",
+      "namePlural": "Facilities",
+      "description": "Facilities of the internal organizations: buildings, floors and rooms",
+      "form": {
+        "createTitle": "New facility",
+        "editTitle": "Edit facility",
+        "sections": {
+          "main": { "title": "Facility details" }
+        }
+      },
+      "detail": {
+        "sections": {
+          "main": { "title": "Facility" }
+        }
+      },
+      "fields": {
+        "name": { "label": "Name" },
+        "type": {
+          "label": "Type",
+          "hint": "Identity of the facility type; it does not change after creation."
+        },
+        "partOf": { "label": "Part of", "hint": "Identity of the facility that contains it." },
+        "active": { "label": "Active" },
+        "typeName": { "label": "Type" },
+        "description": { "label": "Description" },
+        "areaM2": { "label": "Area (m²)" }
+      },
+      "columns": {
+        "name": { "header": "Name" },
+        "typeName": { "header": "Type" },
+        "areaM2": { "header": "Area (m²)" },
+        "active": { "header": "Status" }
+      },
+      "options": {
+        "active": { "true": "Active", "false": "Inactive" }
+      },
+      "commands": {
+        "view": { "label": "View details" },
+        "edit": { "label": "Edit" },
+        "delete": {
+          "label": "Deactivate",
+          "confirmMessage": "Deactivate this facility? It is not deleted: it can be activated again."
+        }
+      },
+      "filters": {
+        "_search": { "label": "Search", "placeholder": "Name…" }
+      }
+    },
+    "country": {
+      "name": "Country",
+      "namePlural": "Countries",
+      "description": "ISO 3166 countries with their reference data (read only)",
+      "columns": {
+        "alpha2": { "header": "ISO" },
+        "alpha3": { "header": "ISO-3" },
+        "name": { "header": "Name" },
+        "callingCode": { "header": "Dial code" },
+        "eu": { "header": "EU" },
+        "eurozone": { "header": "Euro" }
+      },
+      "options": {
+        "eu": { "true": "Yes", "false": "No" },
+        "eurozone": { "true": "Yes", "false": "No" }
+      },
+      "commands": {
+        "view": { "label": "View details" }
+      },
+      "filters": {
+        "_search": { "label": "Search", "placeholder": "Name or ISO code…" }
+      },
+      "sections": {
+        "main": { "title": "Country" }
+      },
+      "fields": {
+        "name": { "label": "Name" },
+        "alpha2": { "label": "ISO alpha-2" },
+        "alpha3": { "label": "ISO alpha-3" },
+        "numeric": { "label": "ISO numeric" },
+        "callingCode": { "label": "Calling code" },
+        "defaultLocale": { "label": "Default language" },
+        "eu": { "label": "European Union" },
+        "eea": { "label": "European Economic Area" },
+        "eurozone": { "label": "Eurozone" },
+        "sepa": { "label": "SEPA" },
+        "ibanLength": { "label": "IBAN length" },
+        "postalCodePattern": { "label": "Postal code format" },
+        "postalCodeRequired": { "label": "Postal code required" }
+      }
+    },
+    "holiday": {
+      "name": "Holiday",
+      "namePlural": "Holidays",
+      "description": "Holiday calendar by geographic boundary",
+      "form": {
+        "createTitle": "New holiday",
+        "editTitle": "Edit holiday",
+        "fields": {
+          "boundary": { "label": "Place" }
+        }
+      },
+      "sections": {
+        "main": { "title": "Holiday" }
+      },
+      "fields": {
+        "name": { "label": "Name" },
+        "date": {
+          "label": "Day",
+          "hint": "It does not change after creation: for another day, remove it and declare it again."
+        },
+        "boundary": {
+          "hint": "Identity of the boundary (country, region, province or municipality); it does not change after creation."
+        },
+        "boundaryName": { "label": "Place" }
+      },
+      "detail": {
+        "fields": {
+          "boundary": { "label": "Place identity" }
+        }
+      },
+      "columns": {
+        "date": { "header": "Day" },
+        "name": { "header": "Name" },
+        "boundaryName": { "header": "Place" }
+      },
+      "commands": {
+        "view": { "label": "View details" },
+        "edit": { "label": "Edit" },
+        "delete": {
+          "label": "Remove",
+          "confirmMessage": "Remove this holiday from the calendar? It is deleted."
+        }
+      },
+      "filters": {
+        "_search": { "label": "Search", "placeholder": "Name…" },
+        "year": { "label": "Year" },
+        "boundary": { "label": "Place", "placeholder": "Boundary identity" }
+      }
+    },
+    "workCenter": {
+      "name": "Work center",
+      "namePlural": "Work centers",
+      "description": "Work centers of the employing companies",
+      "form": {
+        "createTitle": "New work center",
+        "editTitle": "Edit work center",
+        "fields": {
+          "headquarters": {
+            "hint": "Only one open headquarters per employer: marking this one removes it from the other."
+          }
+        }
+      },
+      "sections": {
+        "main": { "title": "Work center" }
+      },
+      "fields": {
+        "employer": {
+          "label": "Employer (organization)",
+          "hint": "Identity of the internal organization; it does not change after creation."
+        },
+        "facility": {
+          "label": "Facility",
+          "hint": "Identity of an active facility of the employer; it does not change after creation."
+        },
+        "code": {
+          "label": "Code",
+          "hint": "Code issued by the labor authority; it is stored in capitals and does not change."
+        },
+        "opened": { "label": "Opening" },
+        "headquarters": { "label": "Headquarters" },
+        "closed": {
+          "label": "Closing",
+          "hint": "Closing cannot be undone. It fails if there are contracts in force after the date."
+        }
+      },
+      "detail": {
+        "fields": {
+          "headquarters": {
+            "hint": "It can be made the headquarters; it stops being one when another center becomes the headquarters."
+          }
+        }
+      },
+      "columns": {
+        "code": { "header": "Code" },
+        "facility": { "header": "Facility" },
+        "opened": { "header": "Opening" },
+        "headquarters": { "header": "Headquarters" },
+        "active": { "header": "Status" }
+      },
+      "options": {
+        "active": { "true": "Open", "false": "Closed" }
+      },
+      "commands": {
+        "view": { "label": "View details" },
+        "edit": { "label": "Edit" },
+        "delete": { "label": "Close" }
+      },
+      "filters": {
+        "isActive": { "label": "Open only" }
+      }
+    },
+    "product": {
+      "name": "Product",
+      "namePlural": "Products",
+      "description": "Catalog of goods and services",
+      "form": {
+        "createTitle": "New product",
+        "editTitle": "Edit product",
+        "sections": {
+          "main": { "title": "Product details" }
+        }
+      },
+      "detail": {
+        "sections": {
+          "main": { "title": "Product" }
+        }
+      },
+      "fields": {
+        "sku": {
+          "label": "Reference",
+          "hint": "Unique within the company; it does not change after creation."
+        },
+        "name": { "label": "Name" },
+        "description": { "label": "Description" },
+        "kind": { "label": "Kind" },
+        "uom": { "label": "Unit", "hint": "Unit code: ea, kg, h…" },
+        "taxCode": { "label": "VAT code" },
+        "basePrice": { "label": "Base price" },
+        "forSale": { "label": "For sale" },
+        "forPurchase": { "label": "For purchase" },
+        "standardCost": { "label": "Standard cost" },
+        "blockedSales": { "label": "Sales blocked" },
+        "discontinued": { "label": "Discontinued since" }
+      },
+      "options": {
+        "kind": { "good": "Good", "service": "Service" }
+      },
+      "columns": {
+        "sku": { "header": "Reference" },
+        "name": { "header": "Name" },
+        "kind": { "header": "Kind" },
+        "uom": { "header": "Unit" },
+        "basePrice": { "header": "Base price" },
+        "discontinued": { "header": "Discontinued since" }
+      },
+      "commands": {
+        "view": { "label": "View details" },
+        "edit": { "label": "Edit" },
+        "delete": {
+          "label": "Discontinue",
+          "confirmMessage": "Discontinue this product from today? It stays on the orders and invoices that mention it."
+        }
+      },
+      "filters": {
+        "_search": { "label": "Search", "placeholder": "Name or reference…" },
+        "kind": { "label": "Kind", "placeholder": "All" }
+      }
+    },
+    "asset": {
+      "name": "Asset",
+      "namePlural": "Assets",
+      "description": "Fixed asset register with its depreciation",
+      "lookups": { "supplier": "Supplier" },
+      "form": {
+        "createTitle": "New asset",
+        "editTitle": "Edit asset",
+        "sections": {
+          "main": { "title": "Asset details" }
+        }
+      },
+      "detail": {
+        "sections": {
+          "main": { "title": "Asset" }
+        }
+      },
+      "fields": {
+        "code": { "label": "Code", "hint": "It does not change after creation." },
+        "name": { "label": "Name" },
+        "class": { "label": "Class", "hint": "It does not change after creation." },
+        "serial": { "label": "Serial number" },
+        "location": { "label": "Location", "hint": "Identity of the facility where it is." },
+        "acquired": { "label": "Acquisition", "hint": "It does not change after creation." },
+        "inService": {
+          "label": "In service since",
+          "hint": "By default, the acquisition date; it does not change afterwards."
+        },
+        "cost": { "label": "Cost", "hint": "It does not change after creation." },
+        "residual": { "label": "Residual value", "hint": "It does not change after creation." },
+        "lifeMonths": {
+          "label": "Useful life (months)",
+          "hint": "Zero for land; it does not change after creation."
+        },
+        "monthly": { "label": "Monthly charge" },
+        "accumulated": { "label": "Accumulated depreciation" },
+        "netBookValue": { "label": "Net book value" },
+        "status": { "label": "Status" },
+        "disposed": {
+          "label": "Disposal date",
+          "hint": "Together with the type and the proceeds, it retires the asset; this cannot be undone."
+        },
+        "disposal": { "label": "Disposal type" },
+        "proceeds": { "label": "Proceeds" }
+      },
+      "options": {
+        "class": {
+          "land": "Land",
+          "buildings": "Buildings",
+          "machinery": "Machinery",
+          "tooling": "Tooling",
+          "furniture": "Furniture",
+          "computers": "Computer equipment",
+          "vehicles": "Vehicles",
+          "software": "Software",
+          "other": "Other"
+        },
+        "status": { "in-service": "In service", "depreciated": "Depreciated", "disposed": "Disposed" },
+        "disposal": { "sale": "Sale", "scrap": "Scrap" }
+      },
+      "columns": {
+        "code": { "header": "Code" },
+        "name": { "header": "Name" },
+        "class": { "header": "Class" },
+        "cost": { "header": "Cost" },
+        "netBookValue": { "header": "Net value" },
+        "status": { "header": "Status" }
+      },
+      "commands": {
+        "view": { "label": "View details" },
+        "edit": { "label": "Edit" }
+      },
+      "filters": {
+        "_search": { "label": "Search", "placeholder": "Name…" }
+      }
+    },
+    "carrier": {
+      "name": "Carrier",
+      "namePlural": "Carriers",
+      "description": "Shipping carriers and their block history",
+      "form": {
+        "createTitle": "New carrier",
+        "editTitle": "Edit carrier",
+        "sections": {
+          "main": { "title": "Carrier details" }
+        }
+      },
+      "detail": {
+        "sections": {
+          "main": { "title": "Carrier" }
+        }
+      },
+      "fields": {
+        "code": {
+          "label": "Code",
+          "hint": "Letters, digits and hyphens; it does not change after creation."
+        },
+        "name": { "label": "Name" },
+        "party": { "label": "Party", "hint": "Identity of the carrier as a party, if it is one." },
+        "trackingUrl": { "label": "Tracking link", "hint": "https, with {tracking} where the number goes." },
+        "blocked": {
+          "label": "Blocked",
+          "hint": "A blocked carrier cannot be chosen for new shipments. It is blocked and unblocked with a reason (POST …/block and …/unblock)."
+        },
+        "blockReason": { "label": "Block reason" },
+        "unblockReason": { "label": "Last unblock reason" }
+      },
+      "columns": {
+        "code": { "header": "Code" },
+        "name": { "header": "Name" },
+        "trackingUrl": { "header": "Tracking" },
+        "blocked": { "header": "Status" }
+      },
+      "options": {
+        "blocked": { "false": "Active", "true": "Blocked" }
+      },
+      "commands": {
+        "view": { "label": "View details" },
+        "edit": { "label": "Edit" }
+      },
+      "filters": {
+        "_search": { "label": "Search", "placeholder": "Name…" },
+        "isActive": { "label": "Active only" }
+      },
+      "childGrids": {
+        "block-history": {
+          "title": "Block history",
+          "emptyMessage": "No blocks or unblocks recorded.",
+          "columns": {
+            "at": { "header": "Date" },
+            "blocked": { "header": "Operation", "trueLabel": "Block", "falseLabel": "Unblock" },
+            "reason": { "header": "Reason" },
+            "byName": { "header": "User" }
+          }
+        }
+      }
+    },
+    "supplier": {
+      "name": "Supplier",
+      "namePlural": "Suppliers",
+      "description": "Purchasing profile of the suppliers and their block history",
+      "form": {
+        "createTitle": "New supplier",
+        "editTitle": "Edit supplier",
+        "sections": {
+          "main": { "title": "Purchasing details" }
+        }
+      },
+      "detail": {
+        "sections": {
+          "main": { "title": "Supplier" }
+        }
+      },
+      "fields": {
+        "supplier": {
+          "label": "Supplier (party)",
+          "hint": "Identity of the supplier as a party; it does not change after creation."
+        },
+        "category": { "label": "Expense category" },
+        "withholdingRate": { "label": "Withholding (%)", "hint": "From 0 to 50, with two decimals." },
+        "paymentDays": { "label": "Payment days", "hint": "From 0 to 365." },
+        "iban": { "label": "IBAN" },
+        "blocked": {
+          "label": "Blocked",
+          "hint": "No new invoices are registered for a blocked supplier. It is blocked with POST /api/v1/suppliers/{id}/block and unblocked with POST /api/v1/suppliers/{id}/unblock, with {version, reason}; the history is at GET /api/v1/suppliers/{id}/block-history."
+        },
+        "blockReason": {
+          "label": "Block reason",
+          "hint": "Required to block. The command sets it, not the editing of the record."
+        },
+        "unblockReason": {
+          "label": "Unblock reason",
+          "hint": "Required to unblock. The command sets it, not the editing of the record."
+        }
+      },
+      "options": {
+        "category": {
+          "goods": "Goods (600)",
+          "rent": "Leases (621)",
+          "repairs": "Repairs (622)",
+          "professional-services": "Professional services (623)",
+          "transport": "Transport (624)",
+          "insurance": "Insurance (625)",
+          "advertising": "Advertising (627)",
+          "supplies": "Utilities (628)",
+          "other-services": "Other services (629)",
+          "fixed-asset": "Fixed assets (21x)"
+        },
+        "blocked": { "false": "Active", "true": "Blocked" }
+      },
+      "columns": {
+        "supplier": { "header": "Supplier" },
+        "category": { "header": "Category" },
+        "withholdingRate": { "header": "Withholding" },
+        "paymentDays": { "header": "Payment days" },
+        "blocked": { "header": "Status" }
+      },
+      "commands": {
+        "view": { "label": "View details" },
+        "edit": { "label": "Edit" }
+      },
+      "filters": {
+        "isActive": { "label": "Active only" }
+      },
+      "childGrids": {
+        "block-history": {
+          "title": "Block history",
+          "emptyMessage": "No blocks or unblocks recorded.",
+          "columns": {
+            "at": { "header": "Date" },
+            "blocked": { "header": "Operation", "trueLabel": "Block", "falseLabel": "Unblock" },
+            "reason": { "header": "Reason" },
+            "userName": { "header": "User" }
+          }
+        }
+      }
+    },
+    "position": {
+      "name": "Position",
+      "namePlural": "Positions",
+      "description": "Positions of the organization and their reporting lines (org chart)",
+      "columns": {
+        "typeTitle": "Position",
+        "unit": "Unit",
+        "holder": "Holder",
+        "statusName": "Status",
+        "vacant": "Vacant",
+        "reportsTo": "Reports to",
+        "plannedFrom": "Planned from"
+      },
+      "status": { "planned": "Planned", "open": "Open", "filled": "Filled", "closed": "Closed" },
+      "filters": { "vacant": "Vacant only", "status": "Status" },
+      "sections": { "main": "Position" },
+      "actions": { "view": "View details" },
+      "views": { "tree": "Org chart" }
+    },
+    "boundary": {
+      "name": "Boundary",
+      "namePlural": "Boundaries",
+      "description": "Geographic boundaries: countries, communities, provinces and islands, and municipalities (NUTS and LAU codes)",
+      "columns": {
+        "name": "Name",
+        "typeName": "Type",
+        "level": "Level",
+        "nutsCode": "NUTS",
+        "lauCode": "LAU",
+        "ineCode": "INE",
+        "country": "Country",
+        "parent": "Within",
+        "active": "Active"
+      },
+      "levels": {
+        "1": "Grouping",
+        "2": "Community",
+        "3": "Province or island",
+        "country": "Country",
+        "local": "Municipality"
+      },
+      "filters": {
+        "search": "Search",
+        "searchPlaceholder": "Name or code…",
+        "level": "Level",
+        "country": "Country (alpha-2)"
+      },
+      "sections": { "main": "Boundary" },
+      "actions": { "view": "View details" }
+    },
+    "party": {
+      "name": "Party",
+      "namePlural": "Parties",
+      "description": "People and organizations; source of the foreign keys (company, supplier, holder)",
+      "columns": { "name": "Name", "kind": "Kind", "active": "Active" },
+      "filters": { "search": "Search" },
+      "sections": { "main": "Party" }
+    },
+    "facilityType": {
+      "name": "Facility type",
+      "namePlural": "Facility types",
+      "description": "Catalog of facility types",
+      "columns": { "name": "Name", "description": "Description", "active": "Active" }
+    }
+  },
+  "views": {
+    "tree": { "facility": "Facility tree" },
+    "map": { "facility": "Facility map" }
+  },
+  "map": {
+    "levels": { "world": "World", "country": "Country", "region": "Region", "city": "City" }
+  },
+  "commands": {
+    "block": "Block",
+    "unblock": "Unblock",
+    "reason": "Reason",
+    "blocked": "Blocked",
+    "unblocked": "Unblocked",
+    "pendingApproval": "Request sent: it is pending approval"
+  },
+  "help": {
+    "facility": {
+      "filters": {
+        "title": "Search and filter",
+        "body": "Type part of the name to narrow the list. The filter runs on the server."
+      },
+      "table": {
+        "title": "The grid",
+        "body": "Double-click a row to open its detail already in edit mode. Press Enter or F2 to edit the active cell."
+      },
+      "views": {
+        "title": "Other views",
+        "body": "Switch between the list, the building, floor and room tree, and the map by levels."
+      }
+    },
+    "product": {
+      "filters": {
+        "title": "Search and filter",
+        "body": "Search by SKU or name and filter by kind: good or service."
+      },
+      "table": {
+        "title": "Inline editing",
+        "body": "Edit several cells; each change is validated when confirmed and you can undo it with Ctrl+Z."
+      },
+      "saveBar": {
+        "title": "Batch save",
+        "body": "Products are saved in batches: review the pending changes and press Save."
+      }
+    },
+    "position": {
+      "views": {
+        "title": "List and org chart",
+        "body": "Switch between the list of positions and the navigable org chart."
+      },
+      "tree": {
+        "title": "The org chart",
+        "body": "Expand or collapse each branch, zoom with the wheel and find a position by name."
+      }
+    }
+  },
+  "values": { "yes": "Yes", "no": "No" }
+}

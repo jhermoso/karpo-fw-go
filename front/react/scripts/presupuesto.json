@@ -1,0 +1,5 @@
+{
+  "limitKb": 215,
+  "targetKb": 200,
+  "enforce": true
+}

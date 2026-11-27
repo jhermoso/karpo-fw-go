@@ -1,0 +1,5 @@
+{"type":"FeatureCollection","features":[
+{"type":"Feature","properties":{"code":"ES531","name":"Eivissa y Formentera","shortName":"Eivissa","level":"3","parentCode":"ES53","nutsCode":"ES531","ineCode":"07","hasChildren":false},"geometry":{"type":"Polygon","coordinates":[[[2.225,41.825],[2.925,41.825],[2.925,42.875],[2.225,42.875],[2.225,41.825]]]}},
+{"type":"Feature","properties":{"code":"ES532","name":"Mallorca","level":"3","parentCode":"ES53","nutsCode":"ES532","ineCode":"07","hasChildren":false},"geometry":{"type":"Polygon","coordinates":[[[2.975,41.825],[3.675,41.825],[3.675,42.875],[2.975,42.875],[2.975,41.825]]]}},
+{"type":"Feature","properties":{"code":"ES533","name":"Menorca","level":"3","parentCode":"ES53","nutsCode":"ES533","ineCode":"07","hasChildren":false},"geometry":{"type":"Polygon","coordinates":[[[2.225,40.725],[3.675,40.725],[3.675,41.775],[2.225,41.775],[2.225,40.725]]]}}
+]}

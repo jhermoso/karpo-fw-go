@@ -1,0 +1,134 @@
+{
+  "form": {
+    "createTitleKey": "entities.asset.form.createTitle",
+    "editTitleKey": "entities.asset.form.editTitle",
+    "sections": [
+      {
+        "id": "main",
+        "titleKey": "entities.asset.form.sections.main.title",
+        "fields": [
+          {
+            "field": "code",
+            "labelKey": "entities.asset.fields.code.label",
+            "hintKey": "entities.asset.fields.code.hint"
+          },
+          { "field": "name", "labelKey": "entities.asset.fields.name.label" },
+          {
+            "field": "class",
+            "labelKey": "entities.asset.fields.class.label",
+            "hintKey": "entities.asset.fields.class.hint",
+            "options": [
+              { "value": "land", "labelKey": "entities.asset.options.class.land" },
+              { "value": "buildings", "labelKey": "entities.asset.options.class.buildings" },
+              { "value": "machinery", "labelKey": "entities.asset.options.class.machinery" },
+              { "value": "tooling", "labelKey": "entities.asset.options.class.tooling" },
+              { "value": "furniture", "labelKey": "entities.asset.options.class.furniture" },
+              { "value": "computers", "labelKey": "entities.asset.options.class.computers" },
+              { "value": "vehicles", "labelKey": "entities.asset.options.class.vehicles" },
+              { "value": "software", "labelKey": "entities.asset.options.class.software" },
+              { "value": "other", "labelKey": "entities.asset.options.class.other" }
+            ]
+          },
+          { "field": "serial", "labelKey": "entities.asset.fields.serial.label" },
+          {
+            "field": "location",
+            "labelKey": "entities.asset.fields.location.label",
+            "hintKey": "entities.asset.fields.location.hint"
+          },
+          {
+            "field": "acquired",
+            "labelKey": "entities.asset.fields.acquired.label",
+            "hintKey": "entities.asset.fields.acquired.hint"
+          },
+          {
+            "field": "inService",
+            "labelKey": "entities.asset.fields.inService.label",
+            "hintKey": "entities.asset.fields.inService.hint"
+          },
+          {
+            "field": "cost",
+            "labelKey": "entities.asset.fields.cost.label",
+            "hintKey": "entities.asset.fields.cost.hint"
+          },
+          {
+            "field": "residual",
+            "labelKey": "entities.asset.fields.residual.label",
+            "hintKey": "entities.asset.fields.residual.hint"
+          },
+          {
+            "field": "lifeMonths",
+            "labelKey": "entities.asset.fields.lifeMonths.label",
+            "hintKey": "entities.asset.fields.lifeMonths.hint"
+          }
+        ]
+      }
+    ]
+  },
+  "detail": {
+    "sections": [
+      {
+        "id": "main",
+        "titleKey": "entities.asset.detail.sections.main.title",
+        "fields": [
+          { "field": "code", "labelKey": "entities.asset.fields.code.label" },
+          { "field": "name", "labelKey": "entities.asset.fields.name.label" },
+          { "field": "class", "labelKey": "entities.asset.fields.class.label" },
+          { "field": "serial", "labelKey": "entities.asset.fields.serial.label" },
+          { "field": "location", "labelKey": "entities.asset.fields.location.label" },
+          { "field": "acquired", "labelKey": "entities.asset.fields.acquired.label" },
+          { "field": "inService", "labelKey": "entities.asset.fields.inService.label" },
+          { "field": "cost", "labelKey": "entities.asset.fields.cost.label" },
+          { "field": "residual", "labelKey": "entities.asset.fields.residual.label" },
+          { "field": "lifeMonths", "labelKey": "entities.asset.fields.lifeMonths.label" },
+          { "field": "monthly", "labelKey": "entities.asset.fields.monthly.label" },
+          { "field": "accumulated", "labelKey": "entities.asset.fields.accumulated.label" },
+          { "field": "netBookValue", "labelKey": "entities.asset.fields.netBookValue.label" },
+          { "field": "status", "labelKey": "entities.asset.fields.status.label" },
+          {
+            "field": "disposed",
+            "labelKey": "entities.asset.fields.disposed.label",
+            "hintKey": "entities.asset.fields.disposed.hint"
+          },
+          {
+            "field": "disposal",
+            "labelKey": "entities.asset.fields.disposal.label",
+            "options": [
+              { "value": "sale", "labelKey": "entities.asset.options.disposal.sale" },
+              { "value": "scrap", "labelKey": "entities.asset.options.disposal.scrap" }
+            ]
+          },
+          { "field": "proceeds", "labelKey": "entities.asset.fields.proceeds.label" }
+        ]
+      }
+    ]
+  },
+  "grid": {
+    "columns": [
+      { "field": "code", "headerKey": "entities.asset.columns.code.header" },
+      { "field": "name", "headerKey": "entities.asset.columns.name.header" },
+      { "field": "class", "headerKey": "entities.asset.columns.class.header" },
+      { "field": "cost", "headerKey": "entities.asset.columns.cost.header" },
+      { "field": "netBookValue", "headerKey": "entities.asset.columns.netBookValue.header" },
+      {
+        "field": "status",
+        "headerKey": "entities.asset.columns.status.header",
+        "badgeMap": {
+          "in-service": { "labelKey": "entities.asset.options.status.in-service" },
+          "depreciated": { "labelKey": "entities.asset.options.status.depreciated" },
+          "disposed": { "labelKey": "entities.asset.options.status.disposed" }
+        }
+      }
+    ],
+    "rowActions": [
+      { "action": "view", "labelKey": "entities.asset.commands.view.label" },
+      { "action": "edit", "labelKey": "entities.asset.commands.edit.label" }
+    ]
+  },
+  "filters": [
+    {
+      "field": "_search",
+      "labelKey": "entities.asset.filters._search.label",
+      "placeholderKey": "entities.asset.filters._search.placeholder"
+    }
+  ]
+}

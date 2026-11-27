@@ -1,0 +1,40 @@
+{
+  "dialog": {
+    "close": "إغلاق"
+  },
+  "confirm": {
+    "confirm": "تأكيد",
+    "cancel": "إلغاء"
+  },
+  "prompt": {
+    "submit": "موافق",
+    "cancel": "إلغاء",
+    "required": "اذكر السبب.",
+    "counter": "{{n}} من {{max}} حرفًا"
+  },
+  "toast": {
+    "region": "الإشعارات",
+    "undo": "تراجع",
+    "close": "إغلاق الإشعار"
+  },
+  "spinner": {
+    "loading": "جارٍ التحميل"
+  },
+  "skeleton": {
+    "loading": "جارٍ تحميل المحتوى"
+  },
+  "chip": {
+    "remove": "إزالة {{label}}",
+    "removeGeneric": "إزالة"
+  },
+  "action": {
+    "busy": "قيد التنفيذ"
+  },
+  "icon": {
+    "unknown": "أيقونة"
+  },
+  "shortcuts": {
+    "conflict": "اختصار مكرر {{keys}} في النطاق {{scope}}: {{ids}}",
+    "shadow": "الاختصار {{keys}} في النطاق {{scope}} يحجب الاختصار العام: {{ids}}"
+  }
+}

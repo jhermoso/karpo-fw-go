@@ -1,0 +1,83 @@
+{
+  "form": {
+    "createTitleKey": "entities.workCenter.form.createTitle",
+    "editTitleKey": "entities.workCenter.form.editTitle",
+    "sections": [
+      {
+        "id": "main",
+        "titleKey": "entities.workCenter.sections.main.title",
+        "fields": [
+          {
+            "field": "employer",
+            "labelKey": "entities.workCenter.fields.employer.label",
+            "hintKey": "entities.workCenter.fields.employer.hint"
+          },
+          {
+            "field": "facility",
+            "labelKey": "entities.workCenter.fields.facility.label",
+            "hintKey": "entities.workCenter.fields.facility.hint"
+          },
+          {
+            "field": "code",
+            "labelKey": "entities.workCenter.fields.code.label",
+            "hintKey": "entities.workCenter.fields.code.hint"
+          },
+          { "field": "opened", "labelKey": "entities.workCenter.fields.opened.label" },
+          {
+            "field": "headquarters",
+            "labelKey": "entities.workCenter.fields.headquarters.label",
+            "hintKey": "entities.workCenter.form.fields.headquarters.hint"
+          }
+        ]
+      }
+    ]
+  },
+  "detail": {
+    "sections": [
+      {
+        "id": "main",
+        "titleKey": "entities.workCenter.sections.main.title",
+        "fields": [
+          { "field": "employer", "labelKey": "entities.workCenter.fields.employer.label" },
+          { "field": "facility", "labelKey": "entities.workCenter.fields.facility.label" },
+          { "field": "code", "labelKey": "entities.workCenter.fields.code.label" },
+          { "field": "opened", "labelKey": "entities.workCenter.fields.opened.label" },
+          {
+            "field": "headquarters",
+            "labelKey": "entities.workCenter.fields.headquarters.label",
+            "hintKey": "entities.workCenter.detail.fields.headquarters.hint"
+          },
+          {
+            "field": "closed",
+            "labelKey": "entities.workCenter.fields.closed.label",
+            "hintKey": "entities.workCenter.fields.closed.hint"
+          }
+        ]
+      }
+    ]
+  },
+  "grid": {
+    "columns": [
+      { "field": "code", "headerKey": "entities.workCenter.columns.code.header" },
+      { "field": "facility", "headerKey": "entities.workCenter.columns.facility.header" },
+      { "field": "opened", "headerKey": "entities.workCenter.columns.opened.header" },
+      { "field": "headquarters", "headerKey": "entities.workCenter.columns.headquarters.header" },
+      {
+        "field": "active",
+        "headerKey": "entities.workCenter.columns.active.header",
+        "badgeMap": {
+          "true": { "labelKey": "entities.workCenter.options.active.true" },
+          "false": { "labelKey": "entities.workCenter.options.active.false" }
+        }
+      }
+    ],
+    "rowActions": [
+      { "action": "view", "labelKey": "entities.workCenter.commands.view.label" },
+      { "action": "edit", "labelKey": "entities.workCenter.commands.edit.label" },
+      { "action": "delete", "labelKey": "entities.workCenter.commands.delete.label" }
+    ]
+  },
+  "filters": [
+    { "field": "isActive", "labelKey": "entities.workCenter.filters.isActive.label" }
+  ]
+}

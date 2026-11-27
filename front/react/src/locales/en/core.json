@@ -1,0 +1,169 @@
+{
+  "app": {
+    "name": "Karpo",
+    "loading": "Loading the application…",
+    "loadingView": "Loading the view…",
+    "loadError": "The application configuration could not be loaded.",
+    "contextError": "Your permissions could not be loaded: something may be missing from the menu.",
+    "retry": "Try again",
+    "skip": "Skip to content"
+  },
+  "crumbs": {
+    "label": "Breadcrumb"
+  },
+  "nav": {
+    "label": "Main menu",
+    "open": "Open the menu",
+    "close": "Close the menu",
+    "collapse": "Collapse the menu",
+    "expand": "Expand the menu",
+    "search": {
+      "label": "Search the menu",
+      "placeholder": "Search the menu…",
+      "empty": "Nothing in the menu matches “{{query}}”.",
+      "results": "Results: {{n}}"
+    },
+    "scope": {
+      "title": "Organizations",
+      "all": "All",
+      "some": "Selected: {{n}}"
+    }
+  },
+  "home": {
+    "title": "Home",
+    "body": "Pick an option from the menu or press Ctrl+K to jump straight to what you need.",
+    "entities": "Available screens",
+    "empty": "You have no screens available yet. Ask your administrator for permissions."
+  },
+  "forbidden": {
+    "title": "You do not have access",
+    "body": "Your user is not allowed to see this screen.",
+    "entity": "Your user is not allowed to see “{{name}}”.",
+    "home": "Back to home"
+  },
+  "notFound": {
+    "title": "Page not found",
+    "body": "The address does not exist or is no longer available.",
+    "home": "Back to home"
+  },
+  "listForbidden": {
+    "title": "You are not allowed to see this list.",
+    "body": "If you think this is a mistake, ask your administrator for access.",
+    "retry": "Try again"
+  },
+  "panel": {
+    "resize": "Resize the detail panel"
+  },
+  "view": {
+    "label": "View",
+    "grid": "Table",
+    "tree": "Tree",
+    "map": "Map",
+    "table": "Table",
+    "diagram": "Diagram"
+  },
+  "theme": {
+    "label": "Theme",
+    "error": "Could not switch to the “{{name}}” theme.",
+    "names": {
+      "modern-flat": "Modern",
+      "classic-1995": "Classic 1995",
+      "glossy-2003": "Glossy 2003",
+      "souq": "Souq"
+    }
+  },
+  "mode": {
+    "label": "Colour mode",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "Follow the system"
+  },
+  "locale": {
+    "label": "Language"
+  },
+  "user": {
+    "menu": "{{name}} menu",
+    "anonymous": "User",
+    "changePassword": "Change password",
+    "shortcuts": "Keyboard shortcuts",
+    "signOut": "Sign out"
+  },
+  "palette": {
+    "title": "Command palette",
+    "button": "Search or go to…",
+    "placeholder": "Type a command or the name of a screen…",
+    "empty": "No command matches “{{query}}”.",
+    "go": "Go to {{name}}",
+    "create": "New: {{name}}",
+    "help": "Guided tour of this screen",
+    "shortcuts": "Show keyboard shortcuts",
+    "home": "Go to home",
+    "theme": "Theme: {{name}}",
+    "mode": "Mode: {{name}}",
+    "locale": "Language: {{name}}",
+    "selected": "Selected rows: {{n}}",
+    "groups": {
+      "selection": "On the selection",
+      "go": "Go to",
+      "create": "Create",
+      "general": "General",
+      "theme": "Theme",
+      "mode": "Colour mode",
+      "locale": "Language"
+    }
+  },
+  "shortcuts": {
+    "title": "Keyboard shortcuts",
+    "intro": "Each screen's shortcuts appear while it is open.",
+    "empty": "No shortcuts are registered.",
+    "palette": "Open the command palette",
+    "panel": "Show the keyboard shortcuts",
+    "sidebar": "Collapse or expand the menu",
+    "scopes": {
+      "global": "Everywhere in the application",
+      "detail": "In the record sheet",
+      "grid": "In the grid",
+      "tree": "In the org chart",
+      "map": "On the map"
+    },
+    "new": "New record on this screen"
+  },
+  "help": {
+    "menu": {
+      "title": "Menu",
+      "body": "These are the screens you can reach. Collapse the groups and, if needed, type in the search box to find one."
+    },
+    "search": {
+      "title": "Menu search",
+      "body": "Type part of a screen's name; Enter opens the first match and the down arrow walks through the rest."
+    },
+    "view-switch": {
+      "title": "Switch view",
+      "body": "One control to see the same data as a table, tree, diagram or map, depending on what the screen supports. Your choice is kept in the address, so it can be shared."
+    },
+    "palette": {
+      "title": "Command palette",
+      "body": "Press Ctrl+K (⌘K on a Mac) to find screens, create records, run commands on what is selected or change theme, mode and language."
+    },
+    "user": {
+      "title": "Your user",
+      "body": "Change your password, look up the keyboard shortcuts or sign out."
+    },
+    "new": {
+      "title": "New record",
+      "body": "Creates a new record on this screen. You can also press N at any time outside a text field."
+    },
+    "more": {
+      "title": "More options",
+      "body": "On narrow screens this is where the theme, colour mode, language, shortcuts, password change and sign out live."
+    }
+  },
+  "header": {
+    "count": "{{n}} {{name}}",
+    "countOf": "{{matched}} of {{total}} {{name}}",
+    "new": "New"
+  },
+  "more": {
+    "label": "More"
+  }
+}

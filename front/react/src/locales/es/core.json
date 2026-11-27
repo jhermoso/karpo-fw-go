@@ -1,0 +1,169 @@
+{
+  "app": {
+    "name": "Karpo",
+    "loading": "Cargando la aplicación…",
+    "loadingView": "Cargando la vista…",
+    "loadError": "No se ha podido cargar la configuración de la aplicación.",
+    "contextError": "No se han podido cargar tus permisos: puede que falte algo en el menú.",
+    "retry": "Reintentar",
+    "skip": "Saltar al contenido"
+  },
+  "crumbs": {
+    "label": "Ruta"
+  },
+  "nav": {
+    "label": "Menú principal",
+    "open": "Abrir el menú",
+    "close": "Cerrar el menú",
+    "collapse": "Plegar el menú",
+    "expand": "Desplegar el menú",
+    "search": {
+      "label": "Buscar en el menú",
+      "placeholder": "Buscar en el menú…",
+      "empty": "Nada en el menú coincide con «{{query}}».",
+      "results": "Resultados: {{n}}"
+    },
+    "scope": {
+      "title": "Organizaciones",
+      "all": "Todas",
+      "some": "Elegidas: {{n}}"
+    }
+  },
+  "home": {
+    "title": "Inicio",
+    "body": "Elige una opción del menú o pulsa Ctrl+K para ir directo a lo que buscas.",
+    "entities": "Pantallas disponibles",
+    "empty": "Todavía no tienes pantallas disponibles. Pide a tu administrador que te dé permisos."
+  },
+  "forbidden": {
+    "title": "No tienes acceso",
+    "body": "Tu usuario no tiene permiso para ver esta pantalla.",
+    "entity": "Tu usuario no tiene permiso para ver «{{name}}».",
+    "home": "Volver al inicio"
+  },
+  "notFound": {
+    "title": "No se encuentra la página",
+    "body": "La dirección no existe o ya no está disponible.",
+    "home": "Volver al inicio"
+  },
+  "listForbidden": {
+    "title": "No tienes permiso para ver esta lista.",
+    "body": "Si crees que es un error, pide acceso a tu administrador.",
+    "retry": "Reintentar"
+  },
+  "panel": {
+    "resize": "Cambiar el ancho del detalle"
+  },
+  "view": {
+    "label": "Vista",
+    "grid": "Tabla",
+    "tree": "Árbol",
+    "map": "Mapa",
+    "table": "Tabla",
+    "diagram": "Diagrama"
+  },
+  "theme": {
+    "label": "Tema",
+    "error": "No se ha podido cambiar al tema «{{name}}».",
+    "names": {
+      "modern-flat": "Moderno",
+      "classic-1995": "Clásico 1995",
+      "glossy-2003": "Brillante 2003",
+      "souq": "Zoco"
+    }
+  },
+  "mode": {
+    "label": "Modo de color",
+    "light": "Claro",
+    "dark": "Oscuro",
+    "system": "Según el sistema"
+  },
+  "locale": {
+    "label": "Idioma"
+  },
+  "user": {
+    "menu": "Menú de {{name}}",
+    "anonymous": "Usuario",
+    "changePassword": "Cambiar la contraseña",
+    "shortcuts": "Atajos de teclado",
+    "signOut": "Cerrar sesión"
+  },
+  "palette": {
+    "title": "Paleta de órdenes",
+    "button": "Buscar o ir a…",
+    "placeholder": "Escribe una orden o el nombre de una pantalla…",
+    "empty": "Ninguna orden coincide con «{{query}}».",
+    "go": "Ir a {{name}}",
+    "create": "Nuevo: {{name}}",
+    "help": "Recorrido guiado de esta pantalla",
+    "shortcuts": "Ver los atajos de teclado",
+    "home": "Ir al inicio",
+    "theme": "Tema: {{name}}",
+    "mode": "Modo: {{name}}",
+    "locale": "Idioma: {{name}}",
+    "selected": "Filas elegidas: {{n}}",
+    "groups": {
+      "selection": "Sobre la selección",
+      "go": "Ir a",
+      "create": "Crear",
+      "general": "General",
+      "theme": "Tema",
+      "mode": "Modo de color",
+      "locale": "Idioma"
+    }
+  },
+  "shortcuts": {
+    "title": "Atajos de teclado",
+    "intro": "Los atajos de cada pantalla aparecen cuando está abierta.",
+    "empty": "No hay atajos registrados.",
+    "palette": "Abrir la paleta de órdenes",
+    "panel": "Mostrar los atajos de teclado",
+    "sidebar": "Plegar o desplegar el menú",
+    "scopes": {
+      "global": "En toda la aplicación",
+      "detail": "En la ficha",
+      "grid": "En la cuadrícula",
+      "tree": "En el organigrama",
+      "map": "En el mapa"
+    },
+    "new": "Nuevo registro de la pantalla"
+  },
+  "help": {
+    "menu": {
+      "title": "Menú",
+      "body": "Aquí están las pantallas a las que tienes acceso. Pliega los grupos y, si hace falta, escribe en el buscador para encontrar una."
+    },
+    "search": {
+      "title": "Buscador del menú",
+      "body": "Escribe parte del nombre de una pantalla; Intro abre la primera coincidencia y la flecha abajo recorre el resto."
+    },
+    "view-switch": {
+      "title": "Cambiar de vista",
+      "body": "Un solo control para ver los mismos datos como tabla, árbol, diagrama o mapa, según lo que admita la pantalla. La elección queda en la dirección, así que se puede compartir."
+    },
+    "palette": {
+      "title": "Paleta de órdenes",
+      "body": "Pulsa Ctrl+K (⌘K en Mac) para buscar pantallas, crear registros, lanzar órdenes sobre lo elegido o cambiar de tema, modo e idioma."
+    },
+    "user": {
+      "title": "Tu usuario",
+      "body": "Cambia tu contraseña, consulta los atajos de teclado o cierra la sesión."
+    },
+    "new": {
+      "title": "Nuevo registro",
+      "body": "Crea un registro nuevo de esta pantalla. También puedes pulsar N en cualquier momento fuera de un campo de texto."
+    },
+    "more": {
+      "title": "Más opciones",
+      "body": "En pantallas estrechas aquí están el tema, el modo de color, el idioma, los atajos, el cambio de contraseña y cerrar la sesión."
+    }
+  },
+  "header": {
+    "count": "{{n}} {{name}}",
+    "countOf": "{{matched}} de {{total}} {{name}}",
+    "new": "Nuevo"
+  },
+  "more": {
+    "label": "Más"
+  }
+}

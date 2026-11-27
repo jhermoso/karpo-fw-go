@@ -1,0 +1,71 @@
+{
+  "missing": "Esta entidad no tiene configurada una vista de organigrama.",
+  "view": {
+    "label": "Organigrama de {{name}}"
+  },
+  "loading": "Cargando el organigrama",
+  "loadingMore": "Cargando más elementos…",
+  "empty": "No hay elementos que mostrar en el organigrama.",
+  "error": {
+    "load": "No se pudo cargar el organigrama.",
+    "retry": "Reintentar"
+  },
+  "search": {
+    "label": "Buscar en el organigrama",
+    "placeholder": "Buscar…",
+    "previous": "Coincidencia anterior",
+    "next": "Coincidencia siguiente",
+    "none": "Sin coincidencias",
+    "count": "Coincidencia {{current}} de {{total}}"
+  },
+  "toolbar": {
+    "expandAll": "Desplegar todo",
+    "collapseAll": "Plegar todo"
+  },
+  "list": {
+    "label": "Organigrama de {{name}}",
+    "loadingBranch": "Cargando la rama",
+    "descendants_one": "{{count}} descendiente",
+    "descendants_other": "{{count}} descendientes",
+    "descendantsPartial_one": "al menos {{count}} descendiente; hay ramas sin cargar",
+    "descendantsPartial_other": "al menos {{count}} descendientes; hay ramas sin cargar"
+  },
+  "diagram": {
+    "label": "Diagrama de {{name}}",
+    "roleDescription": "diagrama",
+    "nodeRole": "nodo del organigrama",
+    "asList": "Ver como lista",
+    "fitAll": "Ver todo el organigrama",
+    "fitLegible": "Volver al tamaño legible",
+    "nodeHint": "Flechas: arriba al superior, abajo al primer subordinado, izquierda y derecha entre hermanos. Más y menos despliegan y pliegan la rama. Intro abre el registro en edición.",
+    "fold": "Plegar la rama de {{name}}",
+    "unfold": "Desplegar la rama de {{name}}",
+    "controls": "Controles del diagrama",
+    "zoomIn": "Acercar",
+    "zoomOut": "Alejar",
+    "fit": "Ajustar a la pantalla",
+    "minimap": "Minimapa del diagrama"
+  },
+  "help": {
+    "listlink": {
+      "title": "Ver como lista",
+      "body": "El diagrama tiene su alternativa en un listado en árbol, que se maneja con el teclado y los lectores de pantalla. La selección y las ramas plegadas se conservan."
+    },
+    "search": {
+      "title": "Buscar en el organigrama",
+      "body": "Escribe para desplegar las ramas con coincidencias y resaltarlas. Intro salta a la siguiente coincidencia y Mayús+Intro a la anterior."
+    },
+    "node": {
+      "title": "Elementos del organigrama",
+      "body": "Haz clic para seleccionar y doble clic para abrir el registro en edición. Con el teclado, las flechas se mueven entre elementos, Intro abre y Espacio selecciona."
+    },
+    "zoom": {
+      "title": "Zoom y encuadre",
+      "body": "Acerca, aleja o ajusta el diagrama a la pantalla; «Ajustar» alterna entre un tamaño legible, centrado en la raíz, y todo el organigrama. También puedes usar la rueda del ratón, arrastrar el fondo o el minimapa."
+    },
+    "canvas": {
+      "title": "Organigrama",
+      "body": "Cada tarjeta es un elemento de la jerarquía. Pliega o despliega una rama para ver cuántos descendientes tiene."
+    }
+  }
+}

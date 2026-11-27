@@ -1,0 +1,79 @@
+/* Páginas de entrada y selector de ámbito. Sólo variables del tema (`--th-*`) y calc(); el aspecto de
+   campos, acciones y avisos lo pone Theros a través de sus ganchos (data-th). */
+@layer karpo.components {
+  [data-kx-page='auth'] {
+    display: grid;
+    place-items: center;
+    min-block-size: 100dvh;
+    padding: var(--th-space-margin);
+    background: var(--th-surface-canvas-bg);
+    color: var(--th-surface-canvas-fg);
+  }
+
+  [data-kx-page='auth'] > [data-th='sheet'] {
+    display: grid;
+    gap: var(--th-space-group-gap);
+    inline-size: 100%;
+    max-inline-size: calc(var(--th-space-8) * 14);
+    padding: var(--th-space-6);
+  }
+
+  [data-kx-page='auth'] h1 {
+    margin: 0;
+    font-size: var(--th-type-4);
+    color: var(--th-text-heading-color);
+    font-weight: var(--th-text-heading-weight);
+  }
+
+  [data-kx-page='auth'] p {
+    margin: 0;
+  }
+
+  [data-kx-page='auth'] form {
+    display: grid;
+    gap: var(--th-space-control-gap);
+  }
+
+  [data-kx-page='auth'] [data-th='field'] {
+    display: grid;
+    gap: var(--th-space-2);
+  }
+
+  [data-kx-page='auth'] [data-th='field'] input {
+    inline-size: 100%;
+    box-sizing: border-box;
+  }
+
+  [data-kx-page='auth'] [data-kx-actions] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--th-space-control-gap);
+    justify-content: flex-end;
+    padding-block-start: var(--th-space-2);
+  }
+
+  [data-kx-scope] {
+    display: grid;
+    gap: var(--th-space-control-gap);
+    margin: 0;
+    padding: var(--th-space-3);
+    border: var(--th-edge-width) solid var(--th-edge-subtle);
+    border-radius: var(--th-edge-rounding-medium);
+    min-inline-size: 0;
+  }
+
+  [data-kx-scope] legend {
+    padding-inline: var(--th-space-2);
+    font-weight: var(--th-text-heading-weight);
+  }
+
+  [data-kx-scope] label {
+    display: flex;
+    align-items: center;
+    gap: var(--th-space-2);
+  }
+
+  [data-kx-scope] [data-th='hint'] {
+    margin: 0;
+  }
+}

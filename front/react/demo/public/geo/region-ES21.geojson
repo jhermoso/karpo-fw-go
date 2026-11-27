@@ -1,0 +1,5 @@
+{"type":"FeatureCollection","features":[
+{"type":"Feature","properties":{"code":"ES211","name":"Araba/Álava","shortName":"Álava","level":"3","parentCode":"ES21","nutsCode":"ES211","ineCode":"01","hasChildren":false},"geometry":{"type":"Polygon","coordinates":[[[-5.275,42.925],[-4.825,42.925],[-4.825,43.975],[-5.275,43.975],[-5.275,42.925]]]}},
+{"type":"Feature","properties":{"code":"ES212","name":"Gipuzkoa","level":"3","parentCode":"ES21","nutsCode":"ES212","ineCode":"20","hasChildren":false},"geometry":{"type":"Polygon","coordinates":[[[-4.775,42.925],[-4.325,42.925],[-4.325,43.975],[-4.775,43.975],[-4.775,42.925]]]}},
+{"type":"Feature","properties":{"code":"ES213","name":"Bizkaia","level":"3","parentCode":"ES21","nutsCode":"ES213","ineCode":"48","hasChildren":false},"geometry":{"type":"Polygon","coordinates":[[[-4.275,42.925],[-3.825,42.925],[-3.825,43.975],[-4.275,43.975],[-4.275,42.925]]]}}
+]}

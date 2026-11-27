@@ -1,0 +1,601 @@
+{
+  "menu": {
+    "organization": "Organización",
+    "facility": "Instalaciones",
+    "workCenter": "Centros de trabajo",
+    "position": "Puestos y organigrama",
+    "commerce": "Comercial",
+    "product": "Productos",
+    "supplier": "Proveedores",
+    "carrier": "Transportistas",
+    "asset": "Activos",
+    "geography": "Geografía",
+    "country": "Países",
+    "boundary": "Delimitaciones",
+    "holiday": "Festivos"
+  },
+  "entities": {
+    "facility": {
+      "name": "Instalación",
+      "namePlural": "Instalaciones",
+      "description": "Instalaciones de las organizaciones internas: edificios, plantas y salas",
+      "form": {
+        "createTitle": "Nueva instalación",
+        "editTitle": "Editar instalación",
+        "sections": {
+          "main": { "title": "Datos de la instalación" }
+        }
+      },
+      "detail": {
+        "sections": {
+          "main": { "title": "Instalación" }
+        }
+      },
+      "fields": {
+        "name": { "label": "Nombre" },
+        "type": {
+          "label": "Tipo",
+          "hint": "Identidad del tipo de instalación; no cambia después del alta."
+        },
+        "partOf": { "label": "Forma parte de", "hint": "Identidad de la instalación que la contiene." },
+        "active": { "label": "Activa" },
+        "typeName": { "label": "Tipo" },
+        "description": { "label": "Descripción" },
+        "areaM2": { "label": "Superficie (m²)" }
+      },
+      "columns": {
+        "name": { "header": "Nombre" },
+        "typeName": { "header": "Tipo" },
+        "areaM2": { "header": "Superficie (m²)" },
+        "active": { "header": "Estado" }
+      },
+      "options": {
+        "active": { "true": "Activa", "false": "Inactiva" }
+      },
+      "commands": {
+        "view": { "label": "Ver detalle" },
+        "edit": { "label": "Editar" },
+        "delete": {
+          "label": "Desactivar",
+          "confirmMessage": "¿Desactivar esta instalación? No se borra: se puede volver a activar."
+        }
+      },
+      "filters": {
+        "_search": { "label": "Buscar", "placeholder": "Nombre…" }
+      }
+    },
+    "country": {
+      "name": "País",
+      "namePlural": "Países",
+      "description": "Países ISO 3166 con sus datos de referencia (sólo lectura)",
+      "columns": {
+        "alpha2": { "header": "ISO" },
+        "alpha3": { "header": "ISO-3" },
+        "name": { "header": "Nombre" },
+        "callingCode": { "header": "Prefijo" },
+        "eu": { "header": "UE" },
+        "eurozone": { "header": "Euro" }
+      },
+      "options": {
+        "eu": { "true": "Sí", "false": "No" },
+        "eurozone": { "true": "Sí", "false": "No" }
+      },
+      "commands": {
+        "view": { "label": "Ver detalle" }
+      },
+      "filters": {
+        "_search": { "label": "Buscar", "placeholder": "Nombre o código ISO…" }
+      },
+      "sections": {
+        "main": { "title": "País" }
+      },
+      "fields": {
+        "name": { "label": "Nombre" },
+        "alpha2": { "label": "ISO alfa-2" },
+        "alpha3": { "label": "ISO alfa-3" },
+        "numeric": { "label": "ISO numérico" },
+        "callingCode": { "label": "Prefijo telefónico" },
+        "defaultLocale": { "label": "Idioma por omisión" },
+        "eu": { "label": "Unión Europea" },
+        "eea": { "label": "Espacio Económico Europeo" },
+        "eurozone": { "label": "Zona euro" },
+        "sepa": { "label": "SEPA" },
+        "ibanLength": { "label": "Longitud del IBAN" },
+        "postalCodePattern": { "label": "Formato del código postal" },
+        "postalCodeRequired": { "label": "Código postal obligatorio" }
+      }
+    },
+    "holiday": {
+      "name": "Festivo",
+      "namePlural": "Festivos",
+      "description": "Calendario de festivos por delimitación geográfica",
+      "form": {
+        "createTitle": "Nuevo festivo",
+        "editTitle": "Editar festivo",
+        "fields": {
+          "boundary": { "label": "Lugar" }
+        }
+      },
+      "sections": {
+        "main": { "title": "Festivo" }
+      },
+      "fields": {
+        "name": { "label": "Nombre" },
+        "date": {
+          "label": "Día",
+          "hint": "No cambia después del alta: para otro día, se quita y se declara de nuevo."
+        },
+        "boundary": {
+          "hint": "Identidad de la delimitación (país, región, provincia o municipio); no cambia después del alta."
+        },
+        "boundaryName": { "label": "Lugar" }
+      },
+      "detail": {
+        "fields": {
+          "boundary": { "label": "Identidad del lugar" }
+        }
+      },
+      "columns": {
+        "date": { "header": "Día" },
+        "name": { "header": "Nombre" },
+        "boundaryName": { "header": "Lugar" }
+      },
+      "commands": {
+        "view": { "label": "Ver detalle" },
+        "edit": { "label": "Editar" },
+        "delete": { "label": "Quitar", "confirmMessage": "¿Quitar este festivo del calendario? Se borra." }
+      },
+      "filters": {
+        "_search": { "label": "Buscar", "placeholder": "Nombre…" },
+        "year": { "label": "Año" },
+        "boundary": { "label": "Lugar", "placeholder": "Identidad de la delimitación" }
+      }
+    },
+    "workCenter": {
+      "name": "Centro de trabajo",
+      "namePlural": "Centros de trabajo",
+      "description": "Centros de trabajo de las empresas empleadoras",
+      "form": {
+        "createTitle": "Nuevo centro de trabajo",
+        "editTitle": "Editar centro de trabajo",
+        "fields": {
+          "headquarters": { "hint": "Una sola sede abierta por empleador: marcar ésta la quita a la otra." }
+        }
+      },
+      "sections": {
+        "main": { "title": "Centro de trabajo" }
+      },
+      "fields": {
+        "employer": {
+          "label": "Empleador (organización)",
+          "hint": "Identidad de la organización interna; no cambia después del alta."
+        },
+        "facility": {
+          "label": "Instalación",
+          "hint": "Identidad de una instalación activa del empleador; no cambia después del alta."
+        },
+        "code": {
+          "label": "Código",
+          "hint": "Código de la autoridad laboral; se guarda en mayúsculas y no cambia."
+        },
+        "opened": { "label": "Apertura" },
+        "headquarters": { "label": "Sede" },
+        "closed": {
+          "label": "Cierre",
+          "hint": "Cerrar no se deshace. Falla si hay contratos en vigor después de la fecha."
+        }
+      },
+      "detail": {
+        "fields": {
+          "headquarters": { "hint": "Se puede hacer sede; deja de serlo cuando otro centro pasa a ser la sede." }
+        }
+      },
+      "columns": {
+        "code": { "header": "Código" },
+        "facility": { "header": "Instalación" },
+        "opened": { "header": "Apertura" },
+        "headquarters": { "header": "Sede" },
+        "active": { "header": "Estado" }
+      },
+      "options": {
+        "active": { "true": "Abierto", "false": "Cerrado" }
+      },
+      "commands": {
+        "view": { "label": "Ver detalle" },
+        "edit": { "label": "Editar" },
+        "delete": { "label": "Cerrar" }
+      },
+      "filters": {
+        "isActive": { "label": "Sólo abiertos" }
+      }
+    },
+    "product": {
+      "name": "Producto",
+      "namePlural": "Productos",
+      "description": "Catálogo de bienes y servicios",
+      "form": {
+        "createTitle": "Nuevo producto",
+        "editTitle": "Editar producto",
+        "sections": {
+          "main": { "title": "Datos del producto" }
+        }
+      },
+      "detail": {
+        "sections": {
+          "main": { "title": "Producto" }
+        }
+      },
+      "fields": {
+        "sku": { "label": "Referencia", "hint": "Única en la empresa; no cambia después del alta." },
+        "name": { "label": "Nombre" },
+        "description": { "label": "Descripción" },
+        "kind": { "label": "Naturaleza" },
+        "uom": { "label": "Unidad", "hint": "Código de unidad: ea, kg, h…" },
+        "taxCode": { "label": "Código de IVA" },
+        "basePrice": { "label": "Precio base" },
+        "forSale": { "label": "A la venta" },
+        "forPurchase": { "label": "De compra" },
+        "standardCost": { "label": "Coste estándar" },
+        "blockedSales": { "label": "Ventas bloqueadas" },
+        "discontinued": { "label": "Retirado desde" }
+      },
+      "options": {
+        "kind": { "good": "Bien", "service": "Servicio" }
+      },
+      "columns": {
+        "sku": { "header": "Referencia" },
+        "name": { "header": "Nombre" },
+        "kind": { "header": "Naturaleza" },
+        "uom": { "header": "Unidad" },
+        "basePrice": { "header": "Precio base" },
+        "discontinued": { "header": "Retirado desde" }
+      },
+      "commands": {
+        "view": { "label": "Ver detalle" },
+        "edit": { "label": "Editar" },
+        "delete": {
+          "label": "Retirar",
+          "confirmMessage": "¿Retirar este producto desde hoy? Seguirá en los pedidos y facturas que lo citan."
+        }
+      },
+      "filters": {
+        "_search": { "label": "Buscar", "placeholder": "Nombre o referencia…" },
+        "kind": { "label": "Naturaleza", "placeholder": "Todas" }
+      }
+    },
+    "asset": {
+      "name": "Activo",
+      "namePlural": "Activos",
+      "description": "Registro de inmovilizado con su amortización",
+      "lookups": { "supplier": "Proveedor" },
+      "form": {
+        "createTitle": "Nuevo activo",
+        "editTitle": "Editar activo",
+        "sections": {
+          "main": { "title": "Datos del activo" }
+        }
+      },
+      "detail": {
+        "sections": {
+          "main": { "title": "Activo" }
+        }
+      },
+      "fields": {
+        "code": { "label": "Código", "hint": "No cambia después del alta." },
+        "name": { "label": "Nombre" },
+        "class": { "label": "Clase", "hint": "No cambia después del alta." },
+        "serial": { "label": "Número de serie" },
+        "location": { "label": "Ubicación", "hint": "Identidad de la instalación donde está." },
+        "acquired": { "label": "Adquisición", "hint": "No cambia después del alta." },
+        "inService": {
+          "label": "Puesta en servicio",
+          "hint": "Por omisión, la de adquisición; no cambia después."
+        },
+        "cost": { "label": "Coste", "hint": "No cambia después del alta." },
+        "residual": { "label": "Valor residual", "hint": "No cambia después del alta." },
+        "lifeMonths": {
+          "label": "Vida útil (meses)",
+          "hint": "Cero para los terrenos; no cambia después del alta."
+        },
+        "monthly": { "label": "Cuota mensual" },
+        "accumulated": { "label": "Amortización acumulada" },
+        "netBookValue": { "label": "Valor neto contable" },
+        "status": { "label": "Estado" },
+        "disposed": {
+          "label": "Fecha de baja",
+          "hint": "Con el tipo y lo obtenido, da de baja el activo; no se deshace."
+        },
+        "disposal": { "label": "Tipo de baja" },
+        "proceeds": { "label": "Importe obtenido" }
+      },
+      "options": {
+        "class": {
+          "land": "Terrenos",
+          "buildings": "Construcciones",
+          "machinery": "Maquinaria",
+          "tooling": "Utillaje",
+          "furniture": "Mobiliario",
+          "computers": "Equipos informáticos",
+          "vehicles": "Vehículos",
+          "software": "Aplicaciones informáticas",
+          "other": "Otro"
+        },
+        "status": { "in-service": "En servicio", "depreciated": "Amortizado", "disposed": "De baja" },
+        "disposal": { "sale": "Venta", "scrap": "Desecho" }
+      },
+      "columns": {
+        "code": { "header": "Código" },
+        "name": { "header": "Nombre" },
+        "class": { "header": "Clase" },
+        "cost": { "header": "Coste" },
+        "netBookValue": { "header": "Valor neto" },
+        "status": { "header": "Estado" }
+      },
+      "commands": {
+        "view": { "label": "Ver detalle" },
+        "edit": { "label": "Editar" }
+      },
+      "filters": {
+        "_search": { "label": "Buscar", "placeholder": "Nombre…" }
+      }
+    },
+    "carrier": {
+      "name": "Transportista",
+      "namePlural": "Transportistas",
+      "description": "Transportistas de envíos y su historial de bloqueos",
+      "form": {
+        "createTitle": "Nuevo transportista",
+        "editTitle": "Editar transportista",
+        "sections": {
+          "main": { "title": "Datos del transportista" }
+        }
+      },
+      "detail": {
+        "sections": {
+          "main": { "title": "Transportista" }
+        }
+      },
+      "fields": {
+        "code": { "label": "Código", "hint": "Letras, cifras, guiones; no cambia después del alta." },
+        "name": { "label": "Nombre" },
+        "party": { "label": "Party", "hint": "Identidad del transportista como party, si lo es." },
+        "trackingUrl": { "label": "Enlace de seguimiento", "hint": "https, con {tracking} donde va el número." },
+        "blocked": {
+          "label": "Bloqueado",
+          "hint": "Un transportista bloqueado no se elige en envíos nuevos. Se bloquea y desbloquea con motivo (POST …/block y …/unblock)."
+        },
+        "blockReason": { "label": "Motivo del bloqueo" },
+        "unblockReason": { "label": "Motivo del último desbloqueo" }
+      },
+      "columns": {
+        "code": { "header": "Código" },
+        "name": { "header": "Nombre" },
+        "trackingUrl": { "header": "Seguimiento" },
+        "blocked": { "header": "Estado" }
+      },
+      "options": {
+        "blocked": { "false": "Activo", "true": "Bloqueado" }
+      },
+      "commands": {
+        "view": { "label": "Ver detalle" },
+        "edit": { "label": "Editar" }
+      },
+      "filters": {
+        "_search": { "label": "Buscar", "placeholder": "Nombre…" },
+        "isActive": { "label": "Sólo activos" }
+      },
+      "childGrids": {
+        "block-history": {
+          "title": "Historial de bloqueos",
+          "emptyMessage": "Sin bloqueos ni desbloqueos registrados.",
+          "columns": {
+            "at": { "header": "Fecha" },
+            "blocked": { "header": "Operación", "trueLabel": "Bloqueo", "falseLabel": "Desbloqueo" },
+            "reason": { "header": "Motivo" },
+            "byName": { "header": "Usuario" }
+          }
+        }
+      }
+    },
+    "supplier": {
+      "name": "Proveedor",
+      "namePlural": "Proveedores",
+      "description": "Perfil de compra de los proveedores y su historial de bloqueos",
+      "form": {
+        "createTitle": "Nuevo proveedor",
+        "editTitle": "Editar proveedor",
+        "sections": {
+          "main": { "title": "Datos de compra" }
+        }
+      },
+      "detail": {
+        "sections": {
+          "main": { "title": "Proveedor" }
+        }
+      },
+      "fields": {
+        "supplier": {
+          "label": "Proveedor (party)",
+          "hint": "Identidad del proveedor como party; no cambia después del alta."
+        },
+        "category": { "label": "Categoría de gasto" },
+        "withholdingRate": { "label": "Retención (%)", "hint": "De 0 a 50, con dos decimales." },
+        "paymentDays": { "label": "Días de pago", "hint": "De 0 a 365." },
+        "iban": { "label": "IBAN" },
+        "blocked": {
+          "label": "Bloqueado",
+          "hint": "A un proveedor bloqueado no se le registran facturas nuevas. Se bloquea con POST /api/v1/suppliers/{id}/block y se desbloquea con POST /api/v1/suppliers/{id}/unblock, con {version, reason}; el historial, en GET /api/v1/suppliers/{id}/block-history."
+        },
+        "blockReason": {
+          "label": "Motivo del bloqueo",
+          "hint": "Obligatorio para bloquear. Lo pone la orden, no la edición de la ficha."
+        },
+        "unblockReason": {
+          "label": "Motivo del desbloqueo",
+          "hint": "Obligatorio para desbloquear. Lo pone la orden, no la edición de la ficha."
+        }
+      },
+      "options": {
+        "category": {
+          "goods": "Mercaderías (600)",
+          "rent": "Arrendamientos (621)",
+          "repairs": "Reparaciones (622)",
+          "professional-services": "Servicios profesionales (623)",
+          "transport": "Transportes (624)",
+          "insurance": "Seguros (625)",
+          "advertising": "Publicidad (627)",
+          "supplies": "Suministros (628)",
+          "other-services": "Otros servicios (629)",
+          "fixed-asset": "Inmovilizado (21x)"
+        },
+        "blocked": { "false": "Activo", "true": "Bloqueado" }
+      },
+      "columns": {
+        "supplier": { "header": "Proveedor" },
+        "category": { "header": "Categoría" },
+        "withholdingRate": { "header": "Retención" },
+        "paymentDays": { "header": "Días de pago" },
+        "blocked": { "header": "Estado" }
+      },
+      "commands": {
+        "view": { "label": "Ver detalle" },
+        "edit": { "label": "Editar" }
+      },
+      "filters": {
+        "isActive": { "label": "Sólo activos" }
+      },
+      "childGrids": {
+        "block-history": {
+          "title": "Historial de bloqueos",
+          "emptyMessage": "Sin bloqueos ni desbloqueos registrados.",
+          "columns": {
+            "at": { "header": "Fecha" },
+            "blocked": { "header": "Operación", "trueLabel": "Bloqueo", "falseLabel": "Desbloqueo" },
+            "reason": { "header": "Motivo" },
+            "userName": { "header": "Usuario" }
+          }
+        }
+      }
+    },
+    "position": {
+      "name": "Puesto",
+      "namePlural": "Puestos",
+      "description": "Puestos de trabajo de la organización y su cadena de dependencia (organigrama)",
+      "columns": {
+        "typeTitle": "Puesto",
+        "unit": "Unidad",
+        "holder": "Titular",
+        "statusName": "Estado",
+        "vacant": "Vacante",
+        "reportsTo": "Depende de",
+        "plannedFrom": "Previsto desde"
+      },
+      "status": { "planned": "Planificado", "open": "Abierto", "filled": "Cubierto", "closed": "Cerrado" },
+      "filters": { "vacant": "Sólo vacantes", "status": "Estado" },
+      "sections": { "main": "Puesto" },
+      "actions": { "view": "Ver detalle" },
+      "views": { "tree": "Organigrama" }
+    },
+    "boundary": {
+      "name": "Delimitación",
+      "namePlural": "Delimitaciones",
+      "description": "Delimitaciones geográficas: países, comunidades, provincias e islas y municipios (códigos NUTS y LAU)",
+      "columns": {
+        "name": "Nombre",
+        "typeName": "Tipo",
+        "level": "Nivel",
+        "nutsCode": "NUTS",
+        "lauCode": "LAU",
+        "ineCode": "INE",
+        "country": "País",
+        "parent": "Dentro de",
+        "active": "Activa"
+      },
+      "levels": {
+        "1": "Agrupación",
+        "2": "Comunidad",
+        "3": "Provincia o isla",
+        "country": "País",
+        "local": "Municipio"
+      },
+      "filters": {
+        "search": "Buscar",
+        "searchPlaceholder": "Nombre o código…",
+        "level": "Nivel",
+        "country": "País (alfa-2)"
+      },
+      "sections": { "main": "Delimitación" },
+      "actions": { "view": "Ver detalle" }
+    },
+    "party": {
+      "name": "Entidad",
+      "namePlural": "Entidades",
+      "description": "Personas y organizaciones; origen de las claves ajenas (empresa, proveedor, titular)",
+      "columns": { "name": "Nombre", "kind": "Clase", "active": "Activa" },
+      "filters": { "search": "Buscar" },
+      "sections": { "main": "Entidad" }
+    },
+    "facilityType": {
+      "name": "Tipo de instalación",
+      "namePlural": "Tipos de instalación",
+      "description": "Catálogo de tipos de instalación",
+      "columns": { "name": "Nombre", "description": "Descripción", "active": "Activo" }
+    }
+  },
+  "views": {
+    "tree": { "facility": "Árbol de instalaciones" },
+    "map": { "facility": "Mapa de instalaciones" }
+  },
+  "map": {
+    "levels": { "world": "Mundo", "country": "País", "region": "Región", "city": "Ciudad" }
+  },
+  "commands": {
+    "block": "Bloquear",
+    "unblock": "Desbloquear",
+    "reason": "Motivo",
+    "blocked": "Bloqueado",
+    "unblocked": "Desbloqueado",
+    "pendingApproval": "Solicitud enviada: queda pendiente de aprobación"
+  },
+  "help": {
+    "facility": {
+      "filters": {
+        "title": "Buscar y filtrar",
+        "body": "Escribe parte del nombre para acotar la lista. El filtro se aplica en el servidor."
+      },
+      "table": {
+        "title": "La cuadrícula",
+        "body": "Pulsa dos veces una fila para abrir su detalle ya en edición. Con Intro o F2 editas la celda activa."
+      },
+      "views": {
+        "title": "Otras vistas",
+        "body": "Cambia entre el listado, el árbol edificio, planta y sala, y el mapa por niveles."
+      }
+    },
+    "product": {
+      "filters": {
+        "title": "Buscar y filtrar",
+        "body": "Busca por SKU o nombre y filtra por tipo: bien o servicio."
+      },
+      "table": {
+        "title": "Edición en línea",
+        "body": "Edita varias celdas; cada cambio se valida al confirmarlo y puedes deshacerlo con Ctrl+Z."
+      },
+      "saveBar": {
+        "title": "Guardar por lotes",
+        "body": "Los productos se guardan por lotes: revisa los cambios pendientes y pulsa Guardar."
+      }
+    },
+    "position": {
+      "views": {
+        "title": "Listado y organigrama",
+        "body": "Alterna entre la lista de puestos y el organigrama navegable."
+      },
+      "tree": {
+        "title": "El organigrama",
+        "body": "Despliega o pliega cada rama, acerca con la rueda y busca un puesto por su nombre."
+      }
+    }
+  },
+  "values": { "yes": "Sí", "no": "No" }
+}

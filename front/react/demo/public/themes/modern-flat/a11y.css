@@ -1,0 +1,173 @@
+@layer th.a11y {
+  @media (forced-colors: active) {
+    :root,
+    [data-th-mode] {
+      --th-collection-grid-color: CanvasText;
+      --th-collection-header-bg: Canvas;
+      --th-collection-header-border: CanvasText;
+      --th-collection-header-fg: CanvasText;
+      --th-collection-sort-bg: Canvas;
+      --th-collection-sort-fg: CanvasText;
+      --th-collection-zebra-color: Canvas;
+      --th-control-button-bg: ButtonFace;
+      --th-control-button-border: ButtonBorder;
+      --th-control-button-default-bg: ButtonFace;
+      --th-control-button-default-border: ButtonBorder;
+      --th-control-button-default-fg: ButtonText;
+      --th-control-button-destructive-bg: ButtonFace;
+      --th-control-button-destructive-border: ButtonBorder;
+      --th-control-button-destructive-fg: ButtonText;
+      --th-control-button-fg: ButtonText;
+      --th-control-button-quiet-bg: ButtonFace;
+      --th-control-button-quiet-border: ButtonBorder;
+      --th-control-button-quiet-fg: ButtonText;
+      --th-control-field-bg: Field;
+      --th-control-field-border: FieldText;
+      --th-control-field-fg: FieldText;
+      --th-control-field-focused-bg: Field;
+      --th-control-field-focused-border: FieldText;
+      --th-control-field-focused-fg: FieldText;
+      --th-control-field-invalid-bg: Field;
+      --th-control-field-invalid-border: FieldText;
+      --th-control-field-invalid-fg: FieldText;
+      --th-control-field-readonly-bg: Field;
+      --th-control-field-readonly-border: FieldText;
+      --th-control-field-readonly-fg: FieldText;
+      --th-control-icon-color: CanvasText;
+      --th-control-scrollbar-thumb: CanvasText;
+      --th-control-scrollbar-track: Canvas;
+      --th-control-toggle-mixed-bg: Highlight;
+      --th-control-toggle-mixed-fg: HighlightText;
+      --th-control-toggle-on-bg: Highlight;
+      --th-control-toggle-on-fg: HighlightText;
+      --th-depth-levels-modal: none;
+      --th-depth-levels-overlay: none;
+      --th-depth-levels-raised: none;
+      --th-edge-relief-light: CanvasText;
+      --th-edge-relief-shadow-dark: CanvasText;
+      --th-edge-relief-shadow-mid: CanvasText;
+      --th-edge-strong: CanvasText;
+      --th-edge-subtle: CanvasText;
+      --th-nav-item-bg: Canvas;
+      --th-nav-item-current-bg: Highlight;
+      --th-nav-item-current-border: Highlight;
+      --th-nav-item-current-fg: HighlightText;
+      --th-nav-item-fg: CanvasText;
+      --th-semantic-down-bg: Canvas;
+      --th-semantic-down-border: CanvasText;
+      --th-semantic-down-fg: CanvasText;
+      --th-semantic-down-strong: CanvasText;
+      --th-semantic-error-bg: Canvas;
+      --th-semantic-error-border: CanvasText;
+      --th-semantic-error-fg: CanvasText;
+      --th-semantic-error-strong: CanvasText;
+      --th-semantic-info-bg: Canvas;
+      --th-semantic-info-border: CanvasText;
+      --th-semantic-info-fg: CanvasText;
+      --th-semantic-info-strong: CanvasText;
+      --th-semantic-neutral-bg: Canvas;
+      --th-semantic-neutral-border: CanvasText;
+      --th-semantic-neutral-fg: CanvasText;
+      --th-semantic-neutral-strong: CanvasText;
+      --th-semantic-required-color: CanvasText;
+      --th-semantic-success-bg: Canvas;
+      --th-semantic-success-border: CanvasText;
+      --th-semantic-success-fg: CanvasText;
+      --th-semantic-success-strong: CanvasText;
+      --th-semantic-up-bg: Canvas;
+      --th-semantic-up-border: CanvasText;
+      --th-semantic-up-fg: CanvasText;
+      --th-semantic-up-strong: CanvasText;
+      --th-semantic-warning-bg: Canvas;
+      --th-semantic-warning-border: CanvasText;
+      --th-semantic-warning-fg: CanvasText;
+      --th-semantic-warning-strong: CanvasText;
+      --th-state-disabled-color: GrayText;
+      --th-state-drop-target-bg: Highlight;
+      --th-state-drop-target-border: Highlight;
+      --th-state-drop-target-fg: HighlightText;
+      --th-state-focus-color: CanvasText;
+      --th-state-hover-bg: Canvas;
+      --th-state-hover-fg: CanvasText;
+      --th-state-pressed-bg: Canvas;
+      --th-state-pressed-fg: CanvasText;
+      --th-state-selected-bg: Highlight;
+      --th-state-selected-fg: HighlightText;
+      --th-state-selected-inactive-bg: Highlight;
+      --th-state-selected-inactive-fg: HighlightText;
+      --th-surface-canvas-bg: Canvas;
+      --th-surface-canvas-fg: CanvasText;
+      --th-surface-content-bg: Canvas;
+      --th-surface-content-fg: CanvasText;
+      --th-surface-dialog-bg: Canvas;
+      --th-surface-dialog-fg: CanvasText;
+      --th-surface-header-bg: Canvas;
+      --th-surface-header-fg: CanvasText;
+      --th-surface-header-inactive-bg: Canvas;
+      --th-surface-header-inactive-fg: CanvasText;
+      --th-surface-layer-level1: Canvas;
+      --th-surface-layer-level2: Canvas;
+      --th-surface-layer-level3: Canvas;
+      --th-surface-popover-bg: Canvas;
+      --th-surface-popover-border: CanvasText;
+      --th-surface-popover-fg: CanvasText;
+      --th-surface-scrim: transparent;
+      --th-surface-sidebar-bg: Canvas;
+      --th-surface-sidebar-fg: CanvasText;
+      --th-surface-tooltip-bg: Canvas;
+      --th-surface-tooltip-fg: CanvasText;
+      --th-text-disabled-color: GrayText;
+      --th-text-heading-color: CanvasText;
+      --th-text-inverse: CanvasText;
+      --th-text-link: LinkText;
+      --th-text-link-visited: VisitedText;
+      --th-text-placeholder: GrayText;
+      --th-text-primary: CanvasText;
+      --th-text-secondary: CanvasText;
+      --th-text-selection-bg: Highlight;
+      --th-text-selection-fg: HighlightText;
+    }
+  }
+
+  @media (forced-colors: active) {
+    [data-th="record"][aria-selected="true"],
+    [data-th="nav-item"][aria-current="page"],
+    [aria-checked="true"],
+    [aria-pressed="true"],
+    [aria-checked="mixed"],
+    [data-th-drop="over"] {
+      forced-color-adjust: none;
+    }
+  }
+
+  @media (prefers-contrast: more) and (not (forced-colors: active)) {
+    :root,
+    [data-th-mode] {
+      --th-control-button-default-bg: light-dark(#0057a7, #5a9eef);
+      --th-control-button-default-border: light-dark(#0057a7, #5a9eef);
+      --th-control-button-destructive-bg: light-dark(#b30815, #ef7a7a);
+      --th-control-button-destructive-border: light-dark(#b30815, #ef7a7a);
+      --th-control-button-quiet-fg: light-dark(#0054a2, #83bbff);
+      --th-control-field-readonly-fg: light-dark(#4c5664, #b0b8c4);
+      --th-control-toggle-mixed-bg: light-dark(#505a67, #939ca9);
+      --th-control-toggle-on-bg: light-dark(#0057a7, #5a9eef);
+      --th-semantic-down-strong: light-dark(#b30815, #fa9595);
+      --th-semantic-error-strong: light-dark(#b30815, #fa9595);
+      --th-semantic-info-strong: light-dark(#0057a7, #83bbff);
+      --th-semantic-neutral-strong: light-dark(#505a67, #a9b2bf);
+      --th-semantic-required-color: light-dark(#b30815, #fa9595);
+      --th-semantic-success-strong: light-dark(#00645a, #4ec4b2);
+      --th-semantic-up-strong: light-dark(#00645a, #4ec4b2);
+      --th-semantic-warning-strong: light-dark(#824a00, #eaa53c);
+      --th-surface-header-inactive-fg: light-dark(#4c5664, #9ba4b1);
+      --th-text-link: light-dark(#00509b, #cee4ff);
+      --th-text-link-visited: light-dark(#663ab0, #bfa3f7);
+      --th-text-placeholder: light-dark(#505a67, #9ba4b1);
+      --th-text-secondary: light-dark(#48525f, #dae2ee);
+    }
+  }
+
+  [hidden]:not([hidden="until-found"]) {
+    display: none;
+  }
+}

@@ -1,0 +1,67 @@
+{
+    "id": "facility-type",
+    "name": "Tipo de instalación",
+    "nameKey": "entities.facilityType.name",
+    "namePlural": "Tipos de instalación",
+    "namePluralKey": "entities.facilityType.namePlural",
+    "description": "Catálogo de tipos de instalación. Sólo se usa como origen de la clave ajena `type` de las instalaciones. Go lo sirve en PascalCase (ID, Name, Description).",
+    "descriptionKey": "entities.facilityType.description",
+    "icon": "buildings",
+    "apiEndpoint": "/catalogs/facility-types",
+    "apiVersioned": false,
+    "editable": false,
+    "editType": "direct",
+    "primaryKey": "id",
+    "displayField": "name",
+    "dataSource": {
+        "type": "single",
+        "paginationStrategy": "client",
+        "serverFiltering": {
+            "enabled": false,
+            "clientOnlyFields": ["name"]
+        }
+    },
+
+    "grid": {
+        "columns": [
+            { "field": "name", "header": "Nombre", "headerKey": "entities.facilityType.columns.name", "type": "text", "width": 240 },
+            { "field": "description", "header": "Descripción", "headerKey": "entities.facilityType.columns.description", "type": "text", "width": 360 },
+            { "field": "active", "header": "Activo", "headerKey": "entities.facilityType.columns.active", "type": "boolean", "width": 100, "trueLabel": "Sí", "trueLabelKey": "values.yes", "falseLabel": "No", "falseLabelKey": "values.no" }
+        ],
+        "pageSize": 25,
+        "selectable": false,
+        "rowActions": []
+    },
+
+    "filters": [],
+
+    "detail": {
+        "showHistory": false,
+        "showRelations": false,
+        "showTags": false,
+        "sections": [
+            {
+                "id": "main",
+                "title": "Tipo de instalación",
+                "titleKey": "entities.facilityType.name",
+                "collapsible": false,
+                "columns": 2,
+                "fields": [
+                    { "field": "name", "label": "Nombre", "labelKey": "entities.facilityType.columns.name", "type": "text", "editable": false },
+                    { "field": "description", "label": "Descripción", "labelKey": "entities.facilityType.columns.description", "type": "text", "editable": false }
+                ]
+            }
+        ],
+        "childGrids": []
+    },
+
+    "availableViews": ["grid", "detail"],
+    "defaultView": "grid",
+
+    "metadata": {
+        "version": "1.0.0",
+        "author": "Karpo React (demo)",
+        "lastModified": "2026-11-27",
+        "tags": ["facilities", "catalog", "lookup", "demo"]
+    }
+}
