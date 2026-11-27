@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"strings"
 
@@ -43,6 +44,20 @@ type CheckPostalAddress = contracts.PostalAddressQuery
 
 // ListCountries lista los perfiles de país.
 type ListCountries struct{}
+
+// SearchCountries busca países. IDs son códigos alfa-2 (sin distinguir mayúsculas; uno bien
+// formado que no existe sólo no está). Text busca en el nombre o es un alfa-2 o alfa-3 exacto. EU,
+// Eurozone y SEPA valen "", "true" o "false". Sort es alpha2 (por omisión), alpha3 o name, con
+// alpha2 para deshacer empates.
+type SearchCountries struct {
+	IDs                []string
+	ByIDs              bool
+	Text               string
+	EU, Eurozone, SEPA string
+	Sort               string
+	Desc               bool
+	Page, Size         int
+}
 
 // GetCountry carga un país por su código ISO.
 type GetCountry struct{ Alpha2 string }
@@ -123,6 +138,7 @@ type Service struct {
 	LookupPostalCode   app.QueryHandler[LookupPostalCode, []PostalCodeDTO]
 	CheckPostalAddress app.QueryHandler[CheckPostalAddress, contracts.PostalAddressResult]
 	ListCountries      app.QueryHandler[ListCountries, []contracts.CountryInfo]
+	SearchCountries    app.QueryHandler[SearchCountries, fw.Page[contracts.CountryInfo]]
 	GetCountry         app.QueryHandler[GetCountry, CountryDTO]
 	ListCatalog        app.QueryHandler[ListCatalog, any]
 }
@@ -274,30 +290,11 @@ func NewService(p Ports) *Service {
 		CheckPostalAddress: guard(PermBoundaryRead, p.CheckPostalAddress),
 
 		ListCountries: guard(PermReferenceRead, func(ctx context.Context, _ ListCountries) ([]contracts.CountryInfo, error) {
-			cs, err := p.Countries.Find(ctx, nil, domain.FieldAlpha2.Asc())
-			if err != nil {
-				return nil, err
-			}
-			ids := make([]domain.BoundaryID, len(cs))
-			for i, c := range cs {
-				ids[i] = c.Boundary()
-			}
-			bs, err := p.boundaries(ctx, ids)
-			if err != nil {
-				return nil, err
-			}
-			names := map[domain.BoundaryID]string{}
-			for _, b := range bs {
-				names[b.ID()] = b.Name()
-			}
-			out := make([]contracts.CountryInfo, len(cs))
-			for i, c := range cs {
-				pr := c.Profile()
-				out[i] = contracts.CountryInfo{Alpha2: pr.Alpha2.String(), Alpha3: pr.Alpha3, Name: names[pr.Boundary],
-					Boundary: pr.Boundary.String(), CallingCode: pr.CallingCode, DefaultLocale: pr.DefaultLocale, EU: pr.EU,
-					Eurozone: pr.Eurozone, SEPA: pr.SEPA}
-			}
-			return out, nil
+			return countryInfos(ctx, p, nil)
+		}),
+
+		SearchCountries: guard(PermReferenceRead, func(ctx context.Context, q SearchCountries) (fw.Page[contracts.CountryInfo], error) {
+			return searchCountries(ctx, p, q)
 		}),
 
 		GetCountry: guard(PermReferenceRead, func(ctx context.Context, q GetCountry) (CountryDTO, error) {
@@ -348,6 +345,116 @@ func NewService(p Ports) *Service {
 			return nil, fw.NotFound("geography.catalog", stringer(q.Name))
 		}),
 	}
+}
+
+// countryInfos lee los países que cumplen where, por alfa-2, con el nombre de su límite.
+func countryInfos(ctx context.Context, p Ports, where spec.Specification[*domain.Country]) ([]contracts.CountryInfo, error) {
+	cs, err := p.Countries.Find(ctx, where, domain.FieldAlpha2.Asc())
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]domain.BoundaryID, len(cs))
+	for i, c := range cs {
+		ids[i] = c.Boundary()
+	}
+	bs, err := p.boundaries(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	names := map[domain.BoundaryID]string{}
+	for _, b := range bs {
+		names[b.ID()] = b.Name()
+	}
+	out := make([]contracts.CountryInfo, len(cs))
+	for i, c := range cs {
+		pr := c.Profile()
+		out[i] = contracts.CountryInfo{Alpha2: pr.Alpha2.String(), Alpha3: pr.Alpha3, Name: names[pr.Boundary],
+			Boundary: pr.Boundary.String(), CallingCode: pr.CallingCode, DefaultLocale: pr.DefaultLocale, EU: pr.EU,
+			Eurozone: pr.Eurozone, SEPA: pr.SEPA}
+	}
+	return out, nil
+}
+
+// searchCountries valida la búsqueda, filtra los ids y las banderas con una especificación sobre
+// geo_countries, y el texto, el orden y la página aquí: el nombre está en el límite (geo_boundaries),
+// no en el país, y los países son unos 250.
+func searchCountries(ctx context.Context, p Ports, q SearchCountries) (fw.Page[contracts.CountryInfo], error) {
+	var v fw.Validation
+	v.Require(q.Sort == "" || q.Sort == "alpha2" || q.Sort == "alpha3" || q.Sort == "name", "sortBy", "enum", "alpha2, alpha3, name")
+	parts := []spec.Specification[*domain.Country]{}
+	for _, f := range []struct {
+		name, value string
+		field       spec.Field[*domain.Country, bool]
+	}{{"eu", q.EU, domain.FieldEU}, {"eurozone", q.Eurozone, domain.FieldEurozone}, {"sepa", q.SEPA, domain.FieldSEPA}} {
+		v.Require(f.value == "" || f.value == "true" || f.value == "false", f.name, "enum", "true or false")
+		if f.value != "" {
+			parts = append(parts, f.field.Eq(f.value == "true"))
+		}
+	}
+	var ids []string
+	if q.ByIDs {
+		ids = app.ParseIDs(&v, q.IDs, canonAlpha2)
+	}
+	if err := v.Err(); err != nil {
+		return fw.Page[contracts.CountryInfo]{}, err
+	}
+	var found []contracts.CountryInfo
+	if !q.ByIDs || len(ids) > 0 {
+		if q.ByIDs {
+			parts = append(parts, domain.FieldAlpha2.In(ids...))
+		}
+		all, err := countryInfos(ctx, p, spec.And(parts...))
+		if err != nil {
+			return fw.Page[contracts.CountryInfo]{}, err
+		}
+		text := strings.ToLower(strings.TrimSpace(q.Text))
+		for _, c := range all {
+			if text == "" || strings.Contains(strings.ToLower(c.Name), text) || strings.EqualFold(c.Alpha2, text) || strings.EqualFold(c.Alpha3, text) {
+				found = append(found, c)
+			}
+		}
+	}
+	key := func(c contracts.CountryInfo) string {
+		switch q.Sort {
+		case "alpha3":
+			return c.Alpha3
+		case "name":
+			return strings.ToLower(c.Name)
+		}
+		return c.Alpha2
+	}
+	slices.SortStableFunc(found, func(a, b contracts.CountryInfo) int {
+		c := strings.Compare(key(a), key(b))
+		if q.Desc {
+			c = -c
+		}
+		if c == 0 {
+			c = strings.Compare(a.Alpha2, b.Alpha2) // el desempate, por la identidad
+		}
+		return c
+	})
+	size := q.Size
+	if size <= 0 {
+		size = fw.DefaultPageSize
+	}
+	page := max(q.Page, 1)
+	total := len(found)
+	from, to := min((page-1)*size, total), min(page*size, total)
+	return fw.NewPage(found[from:to:to], int64(total), page, size), nil
+}
+
+// canonAlpha2 acepta exactamente dos letras ASCII y las devuelve en mayúsculas.
+func canonAlpha2(s string) (string, error) {
+	if len(s) != 2 {
+		return "", errors.New("not an alpha-2 code")
+	}
+	b := []byte(strings.ToUpper(s))
+	for _, c := range b {
+		if c < 'A' || c > 'Z' {
+			return "", errors.New("not an alpha-2 code")
+		}
+	}
+	return string(b), nil
 }
 
 type stringer string

@@ -275,12 +275,11 @@ func (e *env) idsFilter(year int) {
 	if codes, _ := page["errorCodes"].(map[string]any); code != 400 || codes["ids"] == nil {
 		t.Fatalf("a boolean id: %d %v", code, page)
 	}
-	// Sin permiso de leer países: la lista vacía da 403; un alfa-2 mal formado o un elemento que
-	// no es cadena dan 400 antes del permiso, como page o eu (docs/CONTRATO-MANTENIMIENTO.md).
-	e.must(func() int { s, _, _ := e.raw("GET", cb+"?ids=", e.keeper, nil); return s }(), 403, "countries by no ids without the permission")
-	code, page, _ = e.raw("GET", cb+"?ids=ESP", e.keeper, nil)
-	if codes, _ := page["errorCodes"].(map[string]any); code != 400 || fmt.Sprint(codes["ids"]) != "[format]" {
-		t.Fatalf("a bad alpha-2 without the permission: %d %v", code, page)
+	// Sin permiso de leer países: 403, con la lista vacía, con un alfa-2 mal formado y con una
+	// bandera que no vale; la validación va en la aplicación, detrás del permiso. Un elemento que
+	// no es cadena sigue dando 400 en distribución (docs/CONTRATO-MANTENIMIENTO.md).
+	for _, q := range []string{"?ids=", "?ids=ESP", "?eu=x"} {
+		e.must(func() int { s, _, _ := e.raw("GET", cb+q, e.keeper, nil); return s }(), 403, "countries "+q+" without the permission")
 	}
 	code, page, _ = e.raw("POST", cb+"/search", e.keeper, map[string]any{"filter": map[string]any{"ids": []any{1}}})
 	if codes, _ := page["errorCodes"].(map[string]any); code != 400 || fmt.Sprint(codes["ids"]) != "[type]" {
