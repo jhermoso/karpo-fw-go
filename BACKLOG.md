@@ -173,6 +173,26 @@ Ver [docs/FACTURACION.md](docs/FACTURACION.md), «Varios albaranes en una factur
   empresa cierra el mes anterior en su zona horaria (docs/FACTURACION.md).
 - ~~**Documentos enlaza sólo el primer albarán**~~ ✅ enlaza todos los de `sources` (docs/DOCUMENTOS.md).
 
+### 2f. Nombres traducibles de delimitaciones y catálogos (B-24 del front)
+
+Hoy cada delimitación (los países también) y cada valor de catálogo tienen un solo nombre, en el
+idioma de la semilla: `geo_boundaries.name`, los tipos de delimitación y de instalación, las
+monedas, los tipos de vía y los títulos de puesto. Con la interfaz en español salen textos en
+inglés («Building», «Warehouse»), y hoy el front lo apaña en sus datos simulados (B-24 de
+`front/react/docs/PETICIONES-BACKEND.md`).
+
+- **Opciones:**
+  1. Una clave estable y un diccionario en el front. Sirve para los catálogos cerrados, no para
+     los miles de nombres geográficos.
+  2. Una tabla de traducciones por entidad, con el nombre de la semilla como base, elegida por
+     `Accept-Language`.
+  3. Además de lo anterior, el nombre oficial y el nombre en las lenguas cooficiales de cada país.
+- **Antes de decidir:** qué hacen Karpo C# y Trench. Las fuentes del mapa (Q-8: Natural Earth,
+  OSM e IGN) traen los nombres en varios idiomas.
+- **Cómo se lleva:** como tarea mediana con la forma de trabajo de `docs/FORMA-DE-TRABAJO.md`. Es
+  una decisión de modelo común a los tres proyectos: el plan llega a Javier con la decisión.
+- Javier lo pidió al backlog el 2026-11-27.
+
 ### 3. PoC Frontend: Evaluación de Stack Ligero (Svelte 5 / SolidJS)
 - Prototipar la interfaz de listado y ficha de `Parties`.
 - Comparar tamaño de bundle (< 100 KB objetivo vs ~9.4 MB de Angular 20) y velocidad de carga/hidratación.
