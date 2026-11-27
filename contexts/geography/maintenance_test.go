@@ -73,6 +73,53 @@ func (e *env) maintenance() {
 	if code != 200 || field(page, "id") != "ES" || page["pageSize"] != float64(fw.DefaultPageSize) {
 		t.Fatalf("countries by POST: %d %v", code, page)
 	}
+	// El orden por alpha3 y por name, en los dos sentidos. En un empate, alpha2 ascendente (en la
+	// semilla no hay dos nombres ni dos alfa-3 iguales, así que esa rama no llega a darse).
+	items := func(q string) []map[string]any {
+		code, page, _ := e.raw("GET", cb+q, e.reader, nil)
+		if code != 200 {
+			t.Fatalf("%s: %d %v", q, code, page)
+		}
+		var out []map[string]any
+		for _, it := range page["items"].([]any) {
+			out = append(out, it.(map[string]any))
+		}
+		if len(out) < 2 || page["totalCount"] != float64(len(out)) {
+			t.Fatalf("%s: %d items of %v", q, len(out), page["totalCount"])
+		}
+		return out
+	}
+	for _, c := range []struct{ by, order string }{{"alpha3", "asc"}, {"alpha3", "desc"}, {"name", "asc"}, {"name", "desc"}} {
+		q := "?pageSize=1000&sortBy=" + c.by + "&sortOrder=" + c.order
+		list := items(q)
+		for i := 1; i < len(list); i++ {
+			a, b := strings.ToLower(list[i-1][c.by].(string)), strings.ToLower(list[i][c.by].(string))
+			cmp := strings.Compare(a, b)
+			if c.order == "desc" {
+				cmp = -cmp
+			}
+			if cmp > 0 || cmp == 0 && list[i-1]["id"].(string) >= list[i]["id"].(string) {
+				t.Fatalf("%s: %v before %v", q, list[i-1], list[i])
+			}
+		}
+	}
+	// eu=true y sepa=true: sólo los que lo son, España dentro y Estados Unidos fuera.
+	for _, flag := range []string{"eu", "sepa"} {
+		list := items("?pageSize=1000&" + flag + "=true")
+		seen := map[string]bool{}
+		for _, it := range list {
+			if it[flag] != true {
+				t.Fatalf("%s=true: %v", flag, it)
+			}
+			seen[it["id"].(string)] = true
+		}
+		if !seen["ES"] || seen["US"] {
+			t.Fatalf("%s=true: %v", flag, seen)
+		}
+	}
+	if eu, sepa := len(items("?pageSize=1000&eu=true")), len(items("?pageSize=1000&sepa=true")); sepa <= eu {
+		t.Fatalf("SEPA (%d) should be wider than the EU (%d)", sepa, eu)
+	}
 	for _, bad := range []string{"?sortBy=numeric", "?sortOrder=up", "?page=0", "?pageSize=1001", "?eu=si"} {
 		e.must(func() int { s, _, _ := e.raw("GET", cb+bad, e.reader, nil); return s }(), 400, bad)
 	}
