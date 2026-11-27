@@ -100,11 +100,15 @@ Los fijó Javier el 2026-11-27.
 - La batería de «Comprobar» de `CLAUDE.md` está en verde. La integración en los motores se
   exige como dice `CLAUDE.md`, en «Comprobar», apartado «Integración».
 - **Cobertura mínima del 80 %** en los paquetes tocados (`go test -cover`; en el front, la de
-  vitest).
+  vitest). Si un paquete tocado ya estaba por debajo antes de la tarea, basta con que el código
+  nuevo esté cubierto y la cifra del paquete no baje; el déficit anterior se anota en `BACKLOG.md`
+  (Javier, 2026-11-27).
 - **Pruebas de mutación** sobre el dominio tocado. Una prueba de mutación cambia el código a
   propósito, por ejemplo un `<` por un `<=`, y comprueba que alguna prueba falla. Se miden con
   gremlins en Go y con StrykerJS en el front, con los comandos de §8. Un mutante que ninguna
-  prueba alcanza («NOT COVERED») también cuenta como superviviente. Un mutante superviviente sin explicar impide
+  prueba alcanza («NOT COVERED») también cuenta como superviviente. Un mutante vivo en código anterior a la
+  tarea, del que el cambio no depende, cuenta como explicado si se lista en `BACKLOG.md` con su
+  fichero, su línea y su tipo, y se dice con qué herramienta se midió (Javier, 2026-11-27). Un mutante superviviente sin explicar impide
   aprobar.
 - **La implementación usa los contratos y patrones de DDD del framework**, como en el juez de
   plan. Cada desviación se justifica por complejidad innecesaria y se informa a Javier, para que
