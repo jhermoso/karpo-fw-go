@@ -552,3 +552,109 @@ Recomiendo ponerla en `contexts/geography/domain/mapcode.go`:
 - `C:/Git/Paranoia/karpo-fw-go-pmtiles/front/react/src/map/aggregate.ts`, `nav.ts`, `sources.ts`
 - `C:/Git/Paranoia/karpo-fw-go-pmtiles/front/react/demo/config/manifest.json`
 - `C:/Git/Paranoia/karpo-fw-go-pmtiles/pkg/distribution/server.go`, `middleware.go`
+
+## constructor
+
+- La generación hasta z12 con la geometría completa de la BDDAE tarda horas (se paró al 78 % tras unos 80 min). ¿Se acepta un zoom máximo menor para el artefacto de despliegue (z10, por ejemplo), simplificar antes con GDAL o mapshaper, o se deja la generación a z12 como tarea larga fuera de la sesión?
+- La BDDAE se lee del WFS INSPIRE del IGN en vez de los shapefiles del CNIG, cuyo servidor cortó las conexiones. ¿Basta con registrar su huella en cada ejecución (out/ign.sha256), dado que no se puede fijar porque el servicio se actualiza cada trimestre?
+
+# Respuesta del asesor — b2-mapas-pmtiles (consulta de constructor)
+
+## 1. Zoom máximo del artefacto
+
+**Recomendación: el artefacto de despliegue se genera a z8 (lo que ya hace `MAXZOOM=8`, 21 min, 15,2 MB). No se genera a z12, ni en la sesión ni como tarea larga, y no se añade simplificación previa con GDAL o mapshaper.** Conviene cambiar el valor por defecto de `build.sh` de 12 a 8 y anotarlo como desviación del plan (el plan decía `-Z0 -z12`).
+
+Hechos comprobados en el repositorio:
+- El front fija `maxzoom: 8` en la fuente vectorial (`front/react/src/map/use-map-level.ts:92`; lo confirman `style.test.ts:96` y `pmtiles-file.test.ts:144`). MapLibre no pide teselas por encima del `maxzoom` de la fuente: amplía las de z8. Las teselas z9–z12 no las leería nadie.
+- La cámara no pasa de z10 al encuadrar (`FIT_MAX_ZOOM = 10` en `MapCanvas.tsx:63`), es decir, dos niveles de ampliación sobre z8.
+- El generador de demostración del front también escribe un único `MAX_ZOOM` en la cabecera (`front/react/scripts/build-pmtiles.mjs`); el contrato no exige z12 en ningún sitio (B-2 y B-26 piden «cada nivel ya presente en los zooms bajos», no un zoom alto).
+- Ya existe `../geo-downloads/out/karpo.pmtiles` de 15.217.066 B generado a z8.
+
+Hechos generales (tippecanoe / MapLibre):
+- Una tesela vectorial tiene 4096 unidades de lado. A z8 y 40° N mide unos 120 km, o sea unos 29 m por unidad; a z10 un píxel de pantalla son unos 58 m. La precisión de z8 queda por debajo del píxel hasta el zoom máximo del front.
+- El coste por zoom se multiplica por 4, y `--detect-shared-borders` es de las opciones más lentas de tippecanoe.
+
+Opinión (no medido):
+- La mayor parte de las horas de z12 se va probablemente en teselar los países de Natural Earth sobre todo el planeta (millones de teselas de relleno), no en la BDDAE. Simplificar la BDDAE antes no lo arreglaría, y mapshaper añadiría una herramienta y un paso más sin beneficio visible. La decisión del plan «sólo tippecanoe; mapshaper sólo si aparecen huecos» sigue valiendo.
+- Si algún día el front sube `maxzoom` o `FIT_MAX_ZOOM` (callejero, zoom de barrio), z10 es el siguiente escalón razonable (unos 7 m por unidad, la precisión nominal de la BDDAE). Hasta entonces es coste sin uso. Es reversible: `MAXZOOM=10 tools/geo/build.sh`.
+
+Qué debe dejar escrito el constructor:
+- `docs/GEOGRAFIA.md` y `tools/geo/SOURCES.md`: zoom 0–8, por qué (el front fija 8 y amplía), tiempo y tamaño medidos, y que el `maxzoom` de la cabecera del fichero y el del front deben coincidir (si el fichero tuviera menos que 8, el front pediría teselas que no existen).
+- Una comprobación en la verificación (paso 8 o `pmtiles_geo_test.go`): que la cabecera diga `maxzoom = 8` y que a z0 estén los municipios (D-b i), con el tamaño de z0 anotado (`z0.pmtiles` pesa 357.894 B: es el dato que D-b pedía medir).
+- No es una decisión para Javier: es técnica y reversible. Se le cuenta.
+
+## 2. BDDAE por WFS: ¿basta con registrar la huella?
+
+**Recomendación: sí, registrar en vez de fijar es lo correcto para una fuente que cambia cada trimestre, pero la huella sola no basta. Lo que protege de verdad ya existe (la lista cerrada de `expected-unmatched.txt` y el error por «clave española sin geometría» en `tools/geo/join/main.go:251-268`). Faltan cuatro cosas pequeñas.**
+
+Hechos comprobados en `tools/geo/build.sh`:
+1. **La fecha de la atribución puede ser falsa.** El script no vuelve a descargar si ya hay `ign/au-*.json`, pero escribe la atribución con `date +%Y-%m` del día de la generación. Una generación en febrero con páginas de noviembre diría «BDDAE 2027-02». La licencia CC-BY 4.0 y Q-8 piden la fecha de los datos. Hay que guardar la fecha de descarga junto a las páginas (un fichero de fecha en `ign/` escrito al descargar) y usar esa en `--attribution` y en `ign.sha256`.
+2. **Un fallo del servicio se confunde con el final de la paginación.** El bucle termina cuando una página no contiene `"Feature"`. Una respuesta 200 con un informe de excepción del WFS, o una página cortada, también corta el bucle sin error. Hoy lo acabaría detectando `join` (faltarían claves), pero con un mensaje que no dice la causa. Conviene comprobar el número de unidades: el total descargado contra `numberMatched` de la primera página (hoy 8.294) y fallar si no coincide.
+3. **Una descarga interrumpida deja páginas a medias que la siguiente ejecución da por buenas** (la condición es «existe algún `au-*.json`»). Descargar a una carpeta temporal y renombrarla al terminar bien lo evita.
+4. **La huella debe viajar con el artefacto, no quedarse sólo en `out/`.** Propongo que la verificación escriba junto a `karpo.pmtiles` un registro de procedencia (fecha de descarga, número de unidades, huella de cada página, huella del `.pmtiles`, versiones de las imágenes) y que `SOURCES.md` recoja el de la generación que se despliega. Así se puede decir de qué datos sale el fichero servido en `/geo/karpo.pmtiles`.
+
+Opinión:
+- Reproducibilidad exacta no se puede prometer con un WFS vivo, y tampoco la da tippecanoe byte a byte (ya se dijo en `consultas.md`). Lo reproducible es el **artefacto**: el `.pmtiles` generado es lo que se despliega y se conserva. Si se quiere poder regenerar exactamente, CC-BY 4.0 permite guardar la instantánea de las 9 páginas (752 MB, mucho menos comprimida) fuera del repositorio; lo veo opcional y lo dejaría en `BACKLOG.md`, no en esta tarea.
+- El cambio de fuente (WFS INSPIRE del IGN en lugar de los shapefiles del CNIG) es la misma base, misma licencia y mismo organismo: es una desviación técnica bien documentada en `SOURCES.md`, no una decisión de producto. Se le cuenta a Javier, no se le pregunta.
+- Cuando el IGN publique un trimestre nuevo y cambien municipios (fusiones, segregaciones), `join` fallará por la lista cerrada. Es el comportamiento deseado: obliga a revisar la semilla y `expected-unmatched.txt`. Merece una frase en `docs/GEOGRAFIA.md` («qué hacer si falla tras una actualización del IGN»).
+
+## Referencias
+- `C:/Git/Paranoia/karpo-fw-go-pmtiles/tools/geo/build.sh` (pasos 2, 7 y 8)
+- `C:/Git/Paranoia/karpo-fw-go-pmtiles/tools/geo/SOURCES.md`
+- `C:/Git/Paranoia/karpo-fw-go-pmtiles/tools/geo/join/main.go` (líneas 95-111 y 251-268)
+- `C:/Git/Paranoia/karpo-fw-go-pmtiles/front/react/src/map/use-map-level.ts` (línea 92), `MapCanvas.tsx` (línea 63), `style.ts` (línea 151)
+- `C:/Git/Paranoia/karpo-fw-go-pmtiles/docs/trabajo/b2-mapas-pmtiles/01-analisis.md` (D-b) y `02-plan-parado.md` (paso 7)
+- Documentación de tippecanoe (github.com/felt/tippecanoe, opciones `-z`, `--detect-shared-borders`) y de MapLibre GL JS (`maxzoom` de una fuente vectorial: las teselas se amplían por encima).
+
+No he ejecutado nada: sólo he leído el repositorio y la carpeta `../geo-downloads/out`. Los tiempos (21 min a z8, parada al 78 % a z12) son los que da el constructor.
+
+## constructor
+
+- ¿Vale documentar que la API da code a un límite inactivo, en vez de filtrarlo como la tesela?
+
+## Consulta: ¿vale documentar que la API da `code` a un límite inactivo, en vez de filtrarlo como la tesela?
+
+**Recomendación: sí, vale documentarlo y no filtrar en la API.** Con dos condiciones para que no sea una frase sin respaldo: una prueba que fije cada mitad de la regla y una comprobación en la tubería para el caso «hijo activo con padre inactivo».
+
+### Lo que sé con seguridad (leído en el repositorio)
+
+- **Hoy es un caso hipotético.** La semilla (`contexts/geography/infrastructure/seed/boundaries.csv.gz`) tiene 8.507 límites y ninguno inactivo. En `contexts/geography` no hay ningún caso de uso que desactive un límite (no existe `Deactivate` ni nada parecido). Sólo se llega a un inactivo cambiando la semilla o la base.
+- **La asimetría ya está escrita y es coherente con el código:**
+  - `docs/GEOGRAFIA.md:206-208` lo dice.
+  - `boundaryDTO` (`application/service.go:162-175`) no mira `IsActive()` para dar `code`.
+  - `infrastructure.MapKeys` (`mapkeys.go:56`) sí lo filtra.
+- **El DTO ya lleva `active`** (`service.go:83`), así que el cliente puede distinguir sin pedir nada más.
+- **`domain.MapParents` no mira `IsActive()`** (`domain/mapcode.go:71-115`), y la tesela usa esa misma función. Si un límite activo cuelga de un padre inactivo, `keys.csv` saldría con un `parentCode` que no está en la tabla. Hoy no ocurre. `TestMapKeys_LadderIsComplete` lo detectaría, pero sólo sobre la semilla empaquetada, no al generar.
+- **La rama `!b.IsActive()` de `MapKeys` no la ejerce ninguna prueba**, porque la semilla no trae inactivos. Tampoco hay prueba que fije que la API da `code` a un inactivo. La frase del documento no tiene hoy ninguna prueba detrás.
+
+### Por qué no filtrar en la API (opinión, razonada)
+
+- **`code` es identidad, no presencia en el mapa.** `MapCode()` es una función pura del dominio sobre tipo, nivel y códigos. Meterle `active` mezcla dos preguntas distintas: «qué clave tiene» y «se pinta».
+- **Los datos antiguos siguen apuntando a límites inactivos** (direcciones, festivos). Sin `code`, el front no podría agregarlos ni subirlos por `parentCode`, y un inactivo sería indistinguible de un NUTS 1 (ambos sin `code`).
+- **Es coherente con el resto de la API:** `GET /boundaries` devuelve inactivos con `active:false`; no los oculta.
+- **Filtrar en la tesela es lo correcto:** la tesela es lo que se pinta y se regenera; la API es el registro.
+
+### Condiciones que pondría al constructor
+
+1. **Fijar las dos mitades con prueba:**
+   - En `contexts/geography/domain` (`mapcode_test.go`): un límite reconstituido con `active=false` da el mismo `MapCode()` que activo. Es la que da respaldo a la frase y cuenta para la mutación exigida.
+   - En `infrastructure` (`mapkeys_test.go`): un `Seed` sintético con un municipio inactivo; `MapKeys` no lo incluye. Sin esto, quitar `|| !b.IsActive()` no rompe ninguna prueba.
+2. **Padre inactivo en la tesela: fallar, no subir.** Que `MapKeys` devuelva error si un `parentCode` no vacío no está entre las claves emitidas. Es una comprobación de tres líneas, sin lógica de subida nueva. Subir al siguiente antecesor activo sería más código para un caso que no existe (regla de sencillez de `CLAUDE.md`). Con el error, quien desactive una provincia con municipios activos se entera al regenerar.
+3. **Completar el párrafo de `docs/GEOGRAFIA.md` con dos frases:**
+   - el cliente distingue por `active`, y un `code` de un inactivo no tiene geometría en la tesela;
+   - `parentCode` puede apuntar a un inactivo en la API, y en la tesela eso hace fallar la generación.
+
+### Lo que no he verificado
+
+- **Qué hace el front con un dato cuyo `code` no está en la tesela** (si lo cuenta como «sin colocar» o lo pierde en silencio). `front/react/src/map/aggregate.ts` agrega por `keyOf(level, code)` y no mira `active`. Si la tarea toca el front, conviene una prueba de vitest de ese caso; si no, anotarlo como límite conocido.
+- **Unicidad de `code` entre un inactivo y su sustituto activo.** Si algún día se desactiva un límite y se crea otro con el mismo INE, la API daría dos límites con la misma clave. La tesela no se ve afectada (sólo lleva el activo). No pediría código para esto; basta una línea en el documento: «la clave es única entre los activos».
+
+### Rutas consultadas
+
+- `C:/Git/Paranoia/karpo-fw-go-pmtiles/docs/GEOGRAFIA.md` (líneas 198-222)
+- `C:/Git/Paranoia/karpo-fw-go-pmtiles/contexts/geography/domain/mapcode.go`
+- `C:/Git/Paranoia/karpo-fw-go-pmtiles/contexts/geography/application/service.go`
+- `C:/Git/Paranoia/karpo-fw-go-pmtiles/contexts/geography/infrastructure/mapkeys.go`
+- `C:/Git/Paranoia/karpo-fw-go-pmtiles/contexts/geography/infrastructure/mapkeys_test.go`
+- `C:/Git/Paranoia/karpo-fw-go-pmtiles/contexts/geography/infrastructure/seed/boundaries.csv.gz`
+- `C:/Git/Paranoia/karpo-fw-go-pmtiles/front/react/src/map/aggregate.ts`
