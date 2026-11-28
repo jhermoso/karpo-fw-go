@@ -69,6 +69,10 @@ sesión «Orquestador Karpo Go» (el repositorio es suyo) · **Leído de**: `jhe
   (`measure.FrameworkCommit` se desdobla).
 - El CI de Theros saca el framework de un repositorio público sin secretos; el ERP privado
   necesitará credenciales en el CI (hoy desactivado) o medirse sólo en local.
+- **Decisión de Javier (2026-11-28): Theros recibe una clave de sólo lectura** sobre `karpo-erp-go`,
+  también para su CI. Ningún contexto pasa al framework (`host` arrastra los 25). La clave se crea
+  en el paso irreversible, cuando exista el repositorio, y la guarda Theros como secreto, nunca en
+  ficheros.
 - Mover las copias fijadas es una tarea explícita de Theros que vuelve a medir; no la hace el
   orquestador de Karpo Go.
 
