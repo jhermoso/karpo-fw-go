@@ -323,13 +323,13 @@ func (e *env) idsFilter(year int) {
 		t.Fatalf("a boolean id: %d %v", code, page)
 	}
 	// Sin permiso de leer países: 403, con la lista vacía, con un alfa-2 mal formado y con una
-	// bandera que no vale; la validación va en la aplicación, detrás del permiso. Un elemento que
-	// no es cadena sigue dando 400 en distribución (docs/CONTRATO-MANTENIMIENTO.md).
-	for _, q := range []string{"?ids=", "?ids=ESP", "?eu=x"} {
+	// bandera que no vale, y en POST con un id que no es cadena: el permiso va antes de leer o
+	// validar nada (docs/CONTRATO-MANTENIMIENTO.md).
+	for _, q := range []string{"?ids=", "?ids=ESP", "?eu=x", "?pageSize=0"} {
 		e.must(func() int { s, _, _ := e.raw("GET", cb+q, e.keeper, nil); return s }(), 403, "countries "+q+" without the permission")
 	}
 	code, page, _ = e.raw("POST", cb+"/search", e.keeper, map[string]any{"filter": map[string]any{"ids": []any{1}}})
-	if codes, _ := page["errorCodes"].(map[string]any); code != 400 || fmt.Sprint(codes["ids"]) != "[type]" {
+	if code != 403 {
 		t.Fatalf("a number as id without the permission: %d %v", code, page)
 	}
 	code, page, _ = e.raw("POST", cb+"/search", e.reader, map[string]any{"filter": map[string]any{"ids": strings.Repeat("ES,", 1001)}})

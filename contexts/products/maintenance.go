@@ -216,7 +216,7 @@ func (m *Module) RegisterMaintenanceRoutes(mux *http.ServeMux) {
 		}
 		distribution.WriteJSON(w, http.StatusOK, out)
 	}
-	mux.HandleFunc("GET "+MaintenanceBase, func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("GET "+MaintenanceBase, distribution.RequirePermission(papp.PermProductRead, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		values := r.URL.Query()
 		q := listQuery{page: 1, size: fw.DefaultPageSize, sortBy: values.Get("sortBy"), order: values.Get("sortOrder"), filters: map[string]string{}}
 		for k := range values {
@@ -236,8 +236,8 @@ func (m *Module) RegisterMaintenanceRoutes(mux *http.ServeMux) {
 			}
 		}
 		list(w, r, q)
-	})
-	mux.HandleFunc("POST "+MaintenanceBase+"/search", func(w http.ResponseWriter, r *http.Request) {
+	})))
+	mux.Handle("POST "+MaintenanceBase+"/search", distribution.RequirePermission(papp.PermProductRead, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
 			Filter     map[string]any `json:"filter"`
 			Pagination struct {
@@ -282,7 +282,7 @@ func (m *Module) RegisterMaintenanceRoutes(mux *http.ServeMux) {
 			}
 		}
 		list(w, r, q)
-	})
+	})))
 	mux.HandleFunc("GET "+MaintenanceBase+"/{id}", func(w http.ResponseWriter, r *http.Request) {
 		id, err := domain.ParseProductID(r.PathValue("id"))
 		if err != nil {
