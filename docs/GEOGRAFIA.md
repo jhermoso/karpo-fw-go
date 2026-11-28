@@ -195,6 +195,40 @@ sin cuerpo, no.
   más de 1 MiB, 413.
 - **Prueba:** `TestGeography_MemoryThenSQLite` (escenario `maintenance`, en memoria y en SQLite).
 
+## El mapa: claves y teselas (B-2 y B-26; añadido el 2026-11-28)
+
+**Regla única:** el nivel de la tesela es el `level` de la semilla. Está en el mapa todo límite
+activo con nivel `country`, `2`, `3` o `local` cuyo tipo tenga regla de clave
+(`(*Boundary).MapCode()`, en `domain/mapcode.go`). La API (`code`, `parentCode`) y la tesela
+(`cmd/geokeys` → `keys.csv` → `tools/geo`) salen de esa misma función, así que casan por
+construcción.
+
+| Tipo | Nº | `level` | `kind` | `code` | `parentCode` | Geometría |
+|---|---|---|---|---|---|---|
+| País | 248 | `country` | `country` | alfa-2 (`ES`) | — | Natural Earth 10m |
+| Agrupación NUTS 1 | 7 | `1` | — | fuera del mapa | — | — |
+| Comunidad o ciudad autónoma | 19 | `2` | `region` | ISO 3166-2 (`ES-MD`) | `ES` | BDDAE (IGN) |
+| Provincia con nivel | 49 | `3` | `province` | INE (`28`) | su comunidad | BDDAE |
+| Provincia insular (07, 35, 38) | 3 | — | — | fuera del mapa | — | — (la cubren sus islas) |
+| Isla | 10 | `3` | `island` | **NUTS 3** (`ES532`) | `ES-IB` o `ES-CN` | sus municipios, disueltos |
+| Municipio | 8.132 | `local` | `municipality` | INE (`28079`, = `lauCode`) | su provincia o su isla | BDDAE |
+
+- `parentCode` es la clave del primer antecesor que está en el mapa: 07040 → `ES532` → `ES-IB` →
+  `ES`. Se calcula por rondas (`domain.MapParents`), una consulta por ronda y por tramos de 500,
+  nunca una por límite. Un país no sube.
+- **Excepción documentada (D-c, provisional):** la isla se nombra por su NUTS 3 porque no tiene
+  código ISO ni INE. La alternativa (las 52 provincias INE, sin islas) exige cambiar la semilla.
+- **Defecto conocido:** Navarra sale `ES-NA` (ISO dice `ES-NC`) en la API, en la tesela y en los
+  festivos. Se corrige en la semilla en una tarea aparte, común con Trench y Karpo C#.
+- Una prueba de ida y vuelta comprueba que `Locate` (festivos) resuelve cada clave del mapa salvo
+  las islas, que `Locate` no conoce.
+
+**La tesela** (`karpo.pmtiles`, artefacto de despliegue, fuera del repositorio): capa `boundaries`
+(polígonos) y capa `labels` (un punto dentro de cada polígono), con `code`, `name`, `level`,
+`kind`, `hasChildren`, `parentCode` (salvo países) y `lauCode` (municipios). Se genera con
+`tools/geo/build.sh` (fuentes y licencias en `tools/geo/SOURCES.md`) y la sirve el anfitrión con
+`KARPO_PMTILES` (ver `docs/ANFITRION.md`), público, con rangos y ETag.
+
 ## Aportaciones al framework
 
 - `vocab.IBAN`.

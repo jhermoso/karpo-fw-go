@@ -53,6 +53,9 @@ type Config struct {
 	AlertWebhook string
 	// CORSOrigins son los orígenes de otro dominio admitidos (KARPO_CORS_ORIGINS); vacío: ninguno.
 	CORSOrigins []string
+	// PMTiles es el fichero de delimitaciones que se sirve, público, en /geo/karpo.pmtiles
+	// (KARPO_PMTILES); vacío: la ruta no existe y el front usa su mapa esquemático.
+	PMTiles string
 }
 
 // Env devuelve una variable del entorno, o un valor de reserva.
@@ -75,7 +78,7 @@ func every(name, fallback string) (time.Duration, error) {
 // lo dice.
 func Load(exports string) (Config, error) {
 	c := Config{Secret: os.Getenv("KARPO_JWT_SECRET"), Addr: Env("KARPO_ADDR", ":8080"), Exports: Env("KARPO_EXPORTS_DIR", exports),
-		AlertWebhook: os.Getenv("KARPO_ALERT_WEBHOOK")}
+		AlertWebhook: os.Getenv("KARPO_ALERT_WEBHOOK"), PMTiles: os.Getenv("KARPO_PMTILES")}
 	var err1, err2, err3, err4 error
 	if c.AlertWebhook != "" {
 		if u, err := url.Parse(c.AlertWebhook); err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
@@ -151,6 +154,9 @@ func Run(ctx context.Context, command string, db *sqlrepo.DB, ping func(context.
 	health.RegisterReadinessProbe("database", ping)
 	mux := http.NewServeMux()
 	health.Mount(mux)
+	if err := MountPMTiles(mux, cfg.PMTiles); err != nil {
+		return err
+	}
 	mux.Handle("/", h.Handler())
 	server := distribution.NewServer(cfg.Addr, distribution.CORSOrigins(cfg.CORSOrigins)(mux))
 	failed := server.Start()
@@ -167,4 +173,21 @@ func Run(ctx context.Context, command string, db *sqlrepo.DB, ping func(context.
 	stop, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	return server.Shutdown(stop)
+}
+
+// PMTilesPath es la ruta pública del fichero de delimitaciones.
+const PMTilesPath = "/geo/karpo.pmtiles"
+
+// MountPMTiles monta el fichero de delimitaciones fuera de la autenticación, como /healthz; sin
+// fichero no monta nada.
+func MountPMTiles(mux *http.ServeMux, path string) error {
+	if path == "" {
+		return nil
+	}
+	f, err := distribution.NewStaticFile(path, "application/vnd.pmtiles")
+	if err != nil {
+		return fmt.Errorf("KARPO_PMTILES: %w", err)
+	}
+	mux.Handle(PMTilesPath, f)
+	return nil
 }

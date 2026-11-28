@@ -233,6 +233,24 @@ inglés («Building», «Warehouse»), y hoy el front lo apaña en sus datos sim
   una decisión de modelo común a los tres proyectos: el plan llega a Javier con la decisión.
 - Javier lo pidió al backlog el 2026-11-27.
 
+### 2g. Mapa de delimitaciones (B-2 y B-26): lo que queda
+
+La tesela `karpo.pmtiles` y la API con `code` y `parentCode` están hechas (rama
+`feat/mapas-pmtiles`, ver `docs/GEOGRAFIA.md`). Queda:
+
+- **Navarra:** la comunidad sale `ES-NA` y la ISO 3166-2 es `ES-NC`. Se corrige en la semilla con
+  una migración de datos; cambia también la ruta pública de festivos. El dato es común con Trench
+  y Karpo C#: se propone como decisión común. Tarea aparte.
+- **OSM (D-a):** el mundo sale de Natural Earth y España del IGN. Las regiones de otros países
+  (Geofabrik y osmium) llegan cuando haya clientes fuera de España.
+- **Islas (D-c, provisional):** la clave de la isla es su NUTS 3 (`ES532`), como excepción. La
+  alternativa, las 52 provincias INE sin islas, exige cambiar la semilla.
+- **`shortName`:** no se emite; pasa a §2f (B-24).
+- **Países sin geometría propia en Natural Earth 10m** (BQ, BV, CC, CX, GF, GP, MQ, RE, SJ, TK y
+  YT): si hacen falta, salen de OSM.
+- **Las migas del front desde la URL con el `.pmtiles` real** son trabajo del front (su sesión).
+- **Supervivientes de mutación** de esta rama: ver la entrega de `b2-mapas-pmtiles`.
+
 ### 3. PoC Frontend: Evaluación de Stack Ligero (Svelte 5 / SolidJS)
 - Prototipar la interfaz de listado y ficha de `Parties`.
 - Comparar tamaño de bundle (< 100 KB objetivo vs ~9.4 MB de Angular 20) y velocidad de carga/hidratación.
