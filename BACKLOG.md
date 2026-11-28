@@ -262,7 +262,8 @@ La tesela `karpo.pmtiles` y la API con `code` y `parentCode` están hechas (rama
 - **Cobertura por debajo del 80 % anterior a esta rama** (no baja; el código nuevo está cubierto:
   `MountPMTiles` 100 %, `Load` 94,4 %, `MapKeys` 96,8 %):
   - `host/serve`: 39,6 % en `origin/main`, 46,2 % en la rama.
-  - `contexts/geography/infrastructure`: 60,5 % → 63,5 %.
+  - `contexts/geography/infrastructure`: 60,5 % → 63,8 %.
+  - `cmd/geokeys`: 66,7 %; `run` al 83,3 %, lo que falta es `main` (capa fina sobre `MapKeys`).
 - **`GetBoundary` repite la subida de `parentCode`:** `mapParents` hace hasta 3 consultas aunque
   ya se han cargado los `Ancestors`. Se pueden reutilizar; hoy es una ficha, sin coste apreciable.
 
