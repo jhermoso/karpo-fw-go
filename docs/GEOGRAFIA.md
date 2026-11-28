@@ -229,6 +229,21 @@ construcción.
 `tools/geo/build.sh` (fuentes y licencias en `tools/geo/SOURCES.md`) y la sirve el anfitrión con
 `KARPO_PMTILES` (ver `docs/ANFITRION.md`), público, con rangos y ETag.
 
+- **Zoom 0–8.** El front fija `maxzoom: 8` en la fuente y amplía las teselas por encima (su
+  cámara no pasa de z10); a z8 una unidad de tesela mide unos 29 m. El `maxzoom` de la cabecera
+  del fichero y el del front deben coincidir: con menos, el front pediría teselas que no existen.
+  Lo comprueba `pmtiles_geo_test.go`. Generarla tarda unos 16 minutos (z12 tardaba horas).
+- **D-b:** a z0 están los 8.132 municipios como rótulo (`--drop-rate=1`); su polígono aparece en
+  cuanto tiene área a ese zoom (a z0 una unidad mide unos 10 km). El tamaño medido de z0 está en
+  `tools/geo/SOURCES.md`.
+- **Procedencia:** `build.sh` escribe `karpo.provenance.txt` junto al fichero: huella y tamaño del
+  `.pmtiles`, fecha de descarga y número de unidades de la BDDAE, huella de cada página y de
+  Natural Earth, e imágenes usadas. La atribución lleva la fecha de descarga, no la de generación.
+- **Si falla tras una actualización del IGN:** `join` se detiene cuando la BDDAE trae un municipio
+  nuevo (fusión, segregación) o pierde uno de la semilla, porque lo que no enlaza es una lista
+  cerrada (`tools/geo/expected-unmatched.txt`). Es lo deseado: se revisa la semilla y la lista, y
+  se vuelve a generar. Para descargar otra vez, borra `ign/` en `GEO_WORK`.
+
 ## Aportaciones al framework
 
 - `vocab.IBAN`.

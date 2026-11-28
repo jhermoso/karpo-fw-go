@@ -249,6 +249,11 @@ La tesela `karpo.pmtiles` y la API con `code` y `parentCode` están hechas (rama
 - **Países sin geometría propia en Natural Earth 10m** (BQ, BV, CC, CX, GF, GP, MQ, RE, SJ, TK y
   YT): si hacen falta, salen de OSM.
 - **Las migas del front desde la URL con el `.pmtiles` real** son trabajo del front (su sesión).
+- **Instantánea de la BDDAE (opcional):** el WFS cambia cada trimestre, así que regenerar idéntico
+  exige guardar las 9 páginas descargadas (752 MB, CC-BY 4.0 lo permite) fuera del repositorio.
+  Hoy lo que se conserva es el artefacto y su procedencia (`karpo.provenance.txt`).
+- **Zoom máximo:** la tesela llega a z8 porque el front fija `maxzoom: 8`. Si el front sube su
+  zoom (callejero), el siguiente escalón es z10: `MAXZOOM=10 tools/geo/build.sh`.
 - **Supervivientes de mutación** de esta rama: ver la entrega de `b2-mapas-pmtiles`.
 
 ### 3. PoC Frontend: Evaluación de Stack Ligero (Svelte 5 / SolidJS)
