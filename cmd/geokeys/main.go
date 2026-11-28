@@ -8,6 +8,7 @@ package main
 import (
 	"encoding/csv"
 	"fmt"
+	"io"
 	"os"
 
 	gapp "github.com/jhermoso/karpo-fw-go/contexts/geography/application"
@@ -15,13 +16,13 @@ import (
 )
 
 func main() {
-	if err := run(); err != nil {
+	if err := run(os.Stdout); err != nil {
 		fmt.Fprintln(os.Stderr, "geokeys:", err)
 		os.Exit(1)
 	}
 }
 
-func run() error {
+func run(out io.Writer) error {
 	s, err := infrastructure.LoadSeed()
 	if err != nil {
 		return err
@@ -30,7 +31,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	w := csv.NewWriter(os.Stdout)
+	w := csv.NewWriter(out)
 	_ = w.Write(infrastructure.MapKeyHeader)
 	for _, k := range keys {
 		_ = w.Write(k.Row())

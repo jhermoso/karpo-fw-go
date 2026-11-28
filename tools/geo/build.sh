@@ -6,7 +6,7 @@
 #   tools/geo/build.sh            # desde la raíz del repositorio
 #
 # GEO_WORK es la carpeta de trabajo, fuera del repositorio (datos descargados: no fiables).
-# MAXZOOM es el zoom máximo: 8 por defecto, el maxzoom que fija el front (con 8 tarda ~21 min; con
+# MAXZOOM es el zoom máximo: 8 por defecto, el maxzoom que fija el front (con 8 tarda ~16 min; con
 # 12, horas). El front amplía por encima; si cambia el suyo, cambia éste. Necesita Go y Docker. El resultado queda en $GEO_WORK/out/karpo.pmtiles.
 set -euo pipefail
 

@@ -203,6 +203,10 @@ activo con nivel `country`, `2`, `3` o `local` cuyo tipo tenga regla de clave
 (`cmd/geokeys` → `keys.csv` → `tools/geo`) salen de esa misma función, así que casan por
 construcción.
 
+**Límites inactivos:** la API da `code` y `parentCode` también a un límite inactivo (la clave es
+su identidad y sirve para leer datos antiguos); la tesela sólo lleva los activos
+(`infrastructure.MapKeys`). El front sólo pinta lo que hay en la tesela.
+
 | Tipo | Nº | `level` | `kind` | `code` | `parentCode` | Geometría |
 |---|---|---|---|---|---|---|
 | País | 248 | `country` | `country` | alfa-2 (`ES`) | — | Natural Earth 10m |

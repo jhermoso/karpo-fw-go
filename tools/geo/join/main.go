@@ -163,14 +163,17 @@ func levelName(p map[string]any) string {
 	return s
 }
 
-func run() error {
-	keysPath := flag.String("keys", "keys.csv", "tabla de claves (cmd/geokeys)")
-	nePath := flag.String("ne", "", "países de Natural Earth en GeoJSON")
-	ignGlob := flag.String("ign", "", "páginas GeoJSON de la BDDAE (patrón)")
-	expectedPath := flag.String("expected", "tools/geo/expected-unmatched.txt", "lista cerrada de lo que no enlaza")
-	outPath := flag.String("out", "boundaries.geojsonl", "salida: entidades con geometría propia")
-	islandsPath := flag.String("islands", "island-municipalities.geojsonl", "salida: municipios insulares, para disolver por isla")
-	flag.Parse()
+func run(args []string, stderr io.Writer) error {
+	fl := flag.NewFlagSet("join", flag.ContinueOnError)
+	keysPath := fl.String("keys", "keys.csv", "tabla de claves (cmd/geokeys)")
+	nePath := fl.String("ne", "", "países de Natural Earth en GeoJSON")
+	ignGlob := fl.String("ign", "", "páginas GeoJSON de la BDDAE (patrón)")
+	expectedPath := fl.String("expected", "tools/geo/expected-unmatched.txt", "lista cerrada de lo que no enlaza")
+	outPath := fl.String("out", "boundaries.geojsonl", "salida: entidades con geometría propia")
+	islandsPath := fl.String("islands", "island-municipalities.geojsonl", "salida: municipios insulares, para disolver por isla")
+	if err := fl.Parse(args); err != nil {
+		return err
+	}
 
 	keys, err := readKeys(*keysPath)
 	if err != nil {
@@ -260,7 +263,7 @@ func run() error {
 	}
 	slices.Sort(missingCountries)
 	slices.Sort(missingSpain)
-	fmt.Fprintf(os.Stderr, "join: %d entities; countries without Natural Earth geometry (%d): %s\n", len(done), len(missingCountries),
+	fmt.Fprintf(stderr, "join: %d entities; countries without Natural Earth geometry (%d): %s\n", len(done), len(missingCountries),
 		strings.Join(missingCountries, " "))
 	if len(missingSpain) > 0 {
 		return fmt.Errorf("keys without BDDAE geometry: %v", missingSpain)
@@ -269,7 +272,7 @@ func run() error {
 }
 
 func main() {
-	if err := run(); err != nil {
+	if err := run(os.Args[1:], os.Stderr); err != nil {
 		fmt.Fprintln(os.Stderr, "join:", err)
 		os.Exit(1)
 	}

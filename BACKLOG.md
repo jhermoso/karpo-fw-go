@@ -254,7 +254,17 @@ La tesela `karpo.pmtiles` y la API con `code` y `parentCode` están hechas (rama
   Hoy lo que se conserva es el artefacto y su procedencia (`karpo.provenance.txt`).
 - **Zoom máximo:** la tesela llega a z8 porque el front fija `maxzoom: 8`. Si el front sube su
   zoom (callejero), el siguiente escalón es z10: `MAXZOOM=10 tools/geo/build.sh`.
-- **Supervivientes de mutación** de esta rama: ver la entrega de `b2-mapas-pmtiles`.
+- **Supervivientes de mutación** (gremlins v0.6.0 sobre `./contexts/geography/domain`, medido
+  el 2026-11-28: 28 muertos, 3 vivos, 22 sin cubrir; `mapcode.go`, 17 muertos y ninguno vivo).
+  Anteriores a esta rama y que la lista de B-15 no recoge:
+  - `country.go:130:95`, `135:101`, `144:81`, `145:112`, `148:98`: ARITHMETIC_BASE, sin cubrir.
+  - `geography.go:161:15`: INCREMENT_DECREMENT, vivo.
+- **Cobertura por debajo del 80 % anterior a esta rama** (no baja; el código nuevo está cubierto:
+  `MountPMTiles` 100 %, `Load` 94,4 %, `MapKeys` 96,8 %):
+  - `host/serve`: 39,6 % en `origin/main`, 46,2 % en la rama.
+  - `contexts/geography/infrastructure`: 60,5 % → 63,5 %.
+- **`GetBoundary` repite la subida de `parentCode`:** `mapParents` hace hasta 3 consultas aunque
+  ya se han cargado los `Ancestors`. Se pueden reutilizar; hoy es una ficha, sin coste apreciable.
 
 ### 3. PoC Frontend: Evaluación de Stack Ligero (Svelte 5 / SolidJS)
 - Prototipar la interfaz de listado y ficha de `Parties`.
