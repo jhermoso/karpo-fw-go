@@ -233,6 +233,40 @@ inglés («Building», «Warehouse»), y hoy el front lo apaña en sus datos sim
   una decisión de modelo común a los tres proyectos: el plan llega a Javier con la decisión.
 - Javier lo pidió al backlog el 2026-11-27.
 
+### 2g. Mapa de delimitaciones (B-2 y B-26): lo que queda
+
+La tesela `karpo.pmtiles` y la API con `code` y `parentCode` están hechas (rama
+`feat/mapas-pmtiles`, ver `docs/GEOGRAFIA.md`). Queda:
+
+- **Navarra:** la comunidad sale `ES-NA` y la ISO 3166-2 es `ES-NC`. Se corrige en la semilla con
+  una migración de datos; cambia también la ruta pública de festivos. El dato es común con Trench
+  y Karpo C#: se propone como decisión común. Tarea aparte.
+- **OSM (D-a):** el mundo sale de Natural Earth y España del IGN. Las regiones de otros países
+  (Geofabrik y osmium) llegan cuando haya clientes fuera de España.
+- **Islas (D-c, provisional):** la clave de la isla es su NUTS 3 (`ES532`), como excepción. La
+  alternativa, las 52 provincias INE sin islas, exige cambiar la semilla.
+- **`shortName`:** no se emite; pasa a §2f (B-24).
+- **Países sin geometría propia en Natural Earth 10m** (BQ, BV, CC, CX, GF, GP, MQ, RE, SJ, TK y
+  YT): si hacen falta, salen de OSM.
+- **Las migas del front desde la URL con el `.pmtiles` real** son trabajo del front (su sesión).
+- **Instantánea de la BDDAE (opcional):** el WFS cambia cada trimestre, así que regenerar idéntico
+  exige guardar las 9 páginas descargadas (752 MB, CC-BY 4.0 lo permite) fuera del repositorio.
+  Hoy lo que se conserva es el artefacto y su procedencia (`karpo.provenance.txt`).
+- **Zoom máximo:** la tesela llega a z8 porque el front fija `maxzoom: 8`. Si el front sube su
+  zoom (callejero), el siguiente escalón es z10: `MAXZOOM=10 tools/geo/build.sh`.
+- **Supervivientes de mutación** (gremlins v0.6.0 sobre `./contexts/geography/domain`, medido
+  el 2026-11-28: 28 muertos, 3 vivos, 22 sin cubrir; `mapcode.go`, 17 muertos y ninguno vivo).
+  Anteriores a esta rama y que la lista de B-15 no recoge:
+  - `country.go:130:95`, `135:101`, `144:81`, `145:112`, `148:98`: ARITHMETIC_BASE, sin cubrir.
+  - `geography.go:161:15`: INCREMENT_DECREMENT, vivo.
+- **Cobertura por debajo del 80 % anterior a esta rama** (no baja; el código nuevo está cubierto:
+  `MountPMTiles` 100 %, `Load` 94,4 %, `MapKeys` 96,8 %):
+  - `host/serve`: 39,6 % en `origin/main`, 46,2 % en la rama.
+  - `contexts/geography/infrastructure`: 60,5 % → 63,8 %.
+  - `cmd/geokeys`: 66,7 %; `run` al 83,3 %, lo que falta es `main` (capa fina sobre `MapKeys`).
+- **`GetBoundary` repite la subida de `parentCode`:** `mapParents` hace hasta 3 consultas aunque
+  ya se han cargado los `Ancestors`. Se pueden reutilizar; hoy es una ficha, sin coste apreciable.
+
 ### 3. PoC Frontend: Evaluación de Stack Ligero (Svelte 5 / SolidJS)
 - Prototipar la interfaz de listado y ficha de `Parties`.
 - Comparar tamaño de bundle (< 100 KB objetivo vs ~9.4 MB de Angular 20) y velocidad de carga/hidratación.

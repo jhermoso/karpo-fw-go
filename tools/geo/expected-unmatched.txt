@@ -1,0 +1,96 @@
+# Unidades de la BDDAE (código nacional) que no enlazan con keys.csv, con su motivo.
+# Lista cerrada: tools/geo/join falla si sobra o falta una. Revisar al cambiar la semilla o la BDDAE.
+34000000000  España: España: su geometría sale de Natural Earth, como la de los demás países
+34012353050  Cuarto del Madroño: condominio (territorio compartido entre municipios); no está en la semilla
+34022253049  Comunero de Ansó y Hecho: condominio (territorio compartido entre municipios); no está en la semilla
+34024453076  Comunidad de la Pardina del Mercadal: condominio (territorio compartido entre municipios); no está en la semilla
+34024453077  El Franco: condominio (territorio compartido entre municipios); no está en la semilla
+34040700000  Illes Balears: provincia insular sin nivel en la semilla: la cubren sus islas
+34053500000  Las Palmas: provincia insular sin nivel en la semilla: la cubren sus islas
+34053800000  Santa Cruz de Tenerife: provincia insular sin nivel en la semilla: la cubren sus islas
+34063953072  Comunidad de Campoo y Cabuérniga: condominio (territorio compartido entre municipios); no está en la semilla
+34070953004  Comunidad de Arauzo de Miel y Huerta del Rey: condominio (territorio compartido entre municipios); no está en la semilla
+34070953005  Comunidad de Los Ausines y Revilla del Campo: condominio (territorio compartido entre municipios); no está en la semilla
+34070953006  Comunidad de Barbadillo de Herreros y Vallejimeno (E.L.M.): condominio (territorio compartido entre municipios); no está en la semilla
+34070953007  Comunidad de 09076, 09290, 09578, 09606 y 09822: condominio (territorio compartido entre municipios); no está en la semilla
+34070953008  Comunidad de 09076, 09290, 09578 y 09822: condominio (territorio compartido entre municipios); no está en la semilla
+34070953009  Cabeza Alta: condominio (territorio compartido entre municipios); no está en la semilla
+34070953010  Comunidad de 09076, 09150 y 09578: condominio (territorio compartido entre municipios); no está en la semilla
+34070953011  Comunidad de 09076, 09498 y 09578: condominio (territorio compartido entre municipios); no está en la semilla
+34070953012  Comunidad de 09076, 09578, 09606 y 09822: condominio (territorio compartido entre municipios); no está en la semilla
+34070953013  Comunidad de Barbadillo del Pez y Jaramillo de la Fuente: condominio (territorio compartido entre municipios); no está en la semilla
+34070953014  Comunidad de Barbadillo del Pez y Riocavado de la Sierra: condominio (territorio compartido entre municipios); no está en la semilla
+34070953015  Comunidad de Bascuñana y Viloria de Rioja: condominio (territorio compartido entre municipios); no está en la semilla
+34070953016  Monte Revenga: condominio (territorio compartido entre municipios); no está en la semilla
+34070953017  Comunidad de Canicosa de la Sierra y Vilviestre del Pinar: condominio (territorio compartido entre municipios); no está en la semilla
+34070953018  Comunidad de Canicosa de la Sierra y Casarejos: condominio (territorio compartido entre municipios); no está en la semilla
+34070953019  Soncarazo: condominio (territorio compartido entre municipios); no está en la semilla
+34070953020  Comunidad de Fuente Carazo: condominio (territorio compartido entre municipios); no está en la semilla
+34070953021  Ledanía de 09162, 09290, 09412 y 09606: condominio (territorio compartido entre municipios); no está en la semilla
+34070953022  Dehesa de San Felices: condominio (territorio compartido entre municipios); no está en la semilla
+34070953023  Comunidad de Cilleruelo de Arriba y Pineda Trasmonte: condominio (territorio compartido entre municipios); no está en la semilla
+34070953024  Comunidad de Covarrubias, Quintanilla del Coco y Retuerta: condominio (territorio compartido entre municipios); no está en la semilla
+34070953025  Comunidad de Cubillo del Campo y Hontoria de la Cantera: condominio (territorio compartido entre municipios); no está en la semilla
+34070953026  Comunidad de Gete y Hacinas: condominio (territorio compartido entre municipios); no está en la semilla
+34070953027  Ledanía de Hacinas y Salas de los Infantes: condominio (territorio compartido entre municipios); no está en la semilla
+34070953028  Ledanía de Hacinas, Salas de los Infantes y Villanueva de Carazo: condominio (territorio compartido entre municipios); no está en la semilla
+34070953029  Comunidad de 09314, 09374, 09356 y 09126: condominio (territorio compartido entre municipios); no está en la semilla
+34070953031  Valle de las Venadas: condominio (territorio compartido entre municipios); no está en la semilla
+34070953032  Comunidad de Palacios de la Sierra, Vilviestre del Pinar y San Leonardo de Yagüe: condominio (territorio compartido entre municipios); no está en la semilla
+34070953033  Comunidad de Quintanaortuño y Merindad de Río Ubierna: condominio (territorio compartido entre municipios); no está en la semilla
+34070953034  Comunidad de Quintanar de la Sierra y Vilviestre del Pinar: condominio (territorio compartido entre municipios); no está en la semilla
+34070953035  Comunidad de Revilla del Campo y Torrelara: condominio (territorio compartido entre municipios); no está en la semilla
+34070953036  Ledanía de Castrillo de la Reina, Hacinas y Salas de los Infantes: condominio (territorio compartido entre municipios); no está en la semilla
+34070953037  Comunidad de la Aynosa: condominio (territorio compartido entre municipios); no está en la semilla
+34070953038  Comunidad de Villagalijo y San Vicente del Valle: condominio (territorio compartido entre municipios); no está en la semilla
+34070953039  Comunidad de Tardajos y Las Quintanillas: condominio (territorio compartido entre municipios); no está en la semilla
+34070953040  Comunidad de Tardajos y Rabé de las Calzadas: condominio (territorio compartido entre municipios); no está en la semilla
+34070953041  Comunidad de Tinieblas de la Sierra y San Millán de Lara: condominio (territorio compartido entre municipios); no está en la semilla
+34070953042  Comunidad de Vilviestre del Pinar y Palacios de la Sierra: condominio (territorio compartido entre municipios); no está en la semilla
+34070953043  Comunidad de Villoruebo y Torrelara: condominio (territorio compartido entre municipios); no está en la semilla
+34070953044  Comunidad de Vizcaínos y Jaramillo de la Fuente: condominio (territorio compartido entre municipios); no está en la semilla
+34070953045  Comunidad de Quintanilla del Agua y Tordueles y Puentedura: condominio (territorio compartido entre municipios); no está en la semilla
+34070953046  Comunidad de Merindad de Río Ubierna, Quintanilla Vivar y Sotragero: condominio (territorio compartido entre municipios); no está en la semilla
+34070953073  Monte de la Mata: condominio (territorio compartido entre municipios); no está en la semilla
+34072453051  Comunidad de Castrotierra de la Valduerna: condominio (territorio compartido entre municipios); no está en la semilla
+34072453052  Foncabada: condominio (territorio compartido entre municipios); no está en la semilla
+34072453053  Comunidad de Soto de la Vega y Villazala: condominio (territorio compartido entre municipios); no está en la semilla
+34072453054  Mancomunidad de Villagatón y Quintana del Castillo: condominio (territorio compartido entre municipios); no está en la semilla
+34073753071  Coto Mancomunado: condominio (territorio compartido entre municipios); no está en la semilla
+34074053074  Comunidad de Sepúlveda y Riaza: condominio (territorio compartido entre municipios); no está en la semilla
+34074253075  San Bartolomé: condominio (territorio compartido entre municipios); no está en la semilla
+34080253003  Dehesa de Santiago: condominio (territorio compartido entre municipios); no está en la semilla
+34081953047  Aldovera: condominio (territorio compartido entre municipios); no está en la semilla
+34092553055  Comunidad de El Pont de Bar y Cava: condominio (territorio compartido entre municipios); no está en la semilla
+34132853057  Los Baldios: condominio (territorio compartido entre municipios); no está en la semilla
+34132853058  El Redegüelo: condominio (territorio compartido entre municipios); no está en la semilla
+34153153059  Facero de Uzamalarre: condominio (territorio compartido entre municipios); no está en la semilla
+34153153060  Facería de Arambelza: condominio (territorio compartido entre municipios); no está en la semilla
+34153153061  Mancomunidad de Beunza y Juarbe: condominio (territorio compartido entre municipios); no está en la semilla
+34153153062  Comunidad de Barbarín y Olejúa: condominio (territorio compartido entre municipios); no está en la semilla
+34153153063  Monte Comunal de las Limitaciones de las Améscoas: condominio (territorio compartido entre municipios); no está en la semilla
+34153153064  Facería de Ezcabarte y otros: condominio (territorio compartido entre municipios); no está en la semilla
+34153153065  Facería de Aldape: condominio (territorio compartido entre municipios); no está en la semilla
+34153153066  Facería de Montejurra: condominio (territorio compartido entre municipios); no está en la semilla
+34153153067  Comunidad del Valle de Salazar: condominio (territorio compartido entre municipios); no está en la semilla
+34153153068  Facero de Aristregui: condominio (territorio compartido entre municipios); no está en la semilla
+34153153069  Facero de Ujué y Lerga: condominio (territorio compartido entre municipios); no está en la semilla
+34153153070  Facería de Ayarza: condominio (territorio compartido entre municipios); no está en la semilla
+34153153078  Bardenas Reales: condominio (territorio compartido entre municipios); no está en la semilla
+34153153080  Sierra de Aralar: condominio (territorio compartido entre municipios); no está en la semilla
+34153153081  Sierra de Lokiz: condominio (territorio compartido entre municipios); no está en la semilla
+34153153083  Facería de Cogullo Alto, Cogullo Bajo, Sarmindieta y Chandivar: condominio (territorio compartido entre municipios); no está en la semilla
+34160153001  Comunidad de la Sierra Brava de Badaya: condominio (territorio compartido entre municipios); no está en la semilla
+34160153002  Parzoneria de Entzia: condominio (territorio compartido entre municipios); no está en la semilla
+34162053000  Parzonería general de Guipuzkoa y Araba/Álava: condominio (territorio compartido entre municipios); no está en la semilla
+34162053048  Mancomunidad de Amezketa y Ordizia: condominio (territorio compartido entre municipios); no está en la semilla
+34172653056  Mancomunidad de Nalda, Sorzano y Viguera: condominio (territorio compartido entre municipios); no está en la semilla
+34200000000  Territorios no asociados a ninguna autonomía: territorio no asociado a ninguna comunidad ni provincia; no está en la semilla
+34205400000  Territorios no asociados a ninguna provincia: territorio no asociado a ninguna comunidad ni provincia; no está en la semilla
+34205454001  Isla del Perejil: territorio no asociado a ninguna comunidad ni provincia; no está en la semilla
+34205454002  Peñón de Vélez de la Gomera: territorio no asociado a ninguna comunidad ni provincia; no está en la semilla
+34205454003  Islas Chafarinas: territorio no asociado a ninguna comunidad ni provincia; no está en la semilla
+34205454004  Islas Alhucemas: territorio no asociado a ninguna comunidad ni provincia; no está en la semilla
+34205454005  Peñón de Alhucemas: territorio no asociado a ninguna comunidad ni provincia; no está en la semilla
+34205454006  Gibraltar: territorio no asociado a ninguna comunidad ni provincia; no está en la semilla
+34205454007  Isla de los Faisanes: territorio no asociado a ninguna comunidad ni provincia; no está en la semilla

@@ -195,6 +195,63 @@ sin cuerpo, no.
   más de 1 MiB, 413.
 - **Prueba:** `TestGeography_MemoryThenSQLite` (escenario `maintenance`, en memoria y en SQLite).
 
+## El mapa: claves y teselas (B-2 y B-26; añadido el 2026-11-28)
+
+**Regla única:** el nivel de la tesela es el `level` de la semilla. Está en el mapa todo límite
+activo con nivel `country`, `2`, `3` o `local` cuyo tipo tenga regla de clave
+(`(*Boundary).MapCode()`, en `domain/mapcode.go`). La API (`code`, `parentCode`) y la tesela
+(`cmd/geokeys` → `keys.csv` → `tools/geo`) salen de esa misma función, así que casan por
+construcción.
+
+**Límites inactivos:** la API da `code` y `parentCode` también a un límite inactivo (la clave es
+su identidad y sirve para leer datos antiguos); la tesela sólo lleva los activos
+(`infrastructure.MapKeys`). El front sólo pinta lo que hay en la tesela. El cliente distingue por
+`active`, y el `code` de un inactivo no tiene geometría en la tesela. En la API, `parentCode` puede
+apuntar a un inactivo; en la tesela eso hace fallar la generación (`MapKeys` da error), y quien
+desactive una provincia con municipios activos se entera al regenerar. La clave es única entre los
+activos.
+
+| Tipo | Nº | `level` | `kind` | `code` | `parentCode` | Geometría |
+|---|---|---|---|---|---|---|
+| País | 248 | `country` | `country` | alfa-2 (`ES`) | — | Natural Earth 10m |
+| Agrupación NUTS 1 | 7 | `1` | — | fuera del mapa | — | — |
+| Comunidad o ciudad autónoma | 19 | `2` | `region` | ISO 3166-2 (`ES-MD`) | `ES` | BDDAE (IGN) |
+| Provincia con nivel | 49 | `3` | `province` | INE (`28`) | su comunidad | BDDAE |
+| Provincia insular (07, 35, 38) | 3 | — | — | fuera del mapa | — | — (la cubren sus islas) |
+| Isla | 10 | `3` | `island` | **NUTS 3** (`ES532`) | `ES-IB` o `ES-CN` | sus municipios, disueltos |
+| Municipio | 8.132 | `local` | `municipality` | INE (`28079`, = `lauCode`) | su provincia o su isla | BDDAE |
+
+- `parentCode` es la clave del primer antecesor que está en el mapa: 07040 → `ES532` → `ES-IB` →
+  `ES`. Se calcula por rondas (`domain.MapParents`), una consulta por ronda y por tramos de 500,
+  nunca una por límite. Un país no sube.
+- **Excepción documentada (D-c, provisional):** la isla se nombra por su NUTS 3 porque no tiene
+  código ISO ni INE. La alternativa (las 52 provincias INE, sin islas) exige cambiar la semilla.
+- **Defecto conocido:** Navarra sale `ES-NA` (ISO dice `ES-NC`) en la API, en la tesela y en los
+  festivos. Se corrige en la semilla en una tarea aparte, común con Trench y Karpo C#.
+- Una prueba de ida y vuelta comprueba que `Locate` (festivos) resuelve cada clave del mapa salvo
+  las islas, que `Locate` no conoce.
+
+**La tesela** (`karpo.pmtiles`, artefacto de despliegue, fuera del repositorio): capa `boundaries`
+(polígonos) y capa `labels` (un punto dentro de cada polígono), con `code`, `name`, `level`,
+`kind`, `hasChildren`, `parentCode` (salvo países) y `lauCode` (municipios). Se genera con
+`tools/geo/build.sh` (fuentes y licencias en `tools/geo/SOURCES.md`) y la sirve el anfitrión con
+`KARPO_PMTILES` (ver `docs/ANFITRION.md`), público, con rangos y ETag.
+
+- **Zoom 0–8.** El front fija `maxzoom: 8` en la fuente y amplía las teselas por encima (su
+  cámara no pasa de z10); a z8 una unidad de tesela mide unos 29 m. El `maxzoom` de la cabecera
+  del fichero y el del front deben coincidir: con menos, el front pediría teselas que no existen.
+  Lo comprueba `pmtiles_geo_test.go`. Generarla tarda unos 16 minutos (z12 tardaba horas).
+- **D-b:** a z0 están los 8.132 municipios como rótulo (`--drop-rate=1`); su polígono aparece en
+  cuanto tiene área a ese zoom (a z0 una unidad mide unos 10 km). El tamaño medido de z0 está en
+  `tools/geo/SOURCES.md`.
+- **Procedencia:** `build.sh` escribe `karpo.provenance.txt` junto al fichero: huella y tamaño del
+  `.pmtiles`, fecha de descarga y número de unidades de la BDDAE, huella de cada página y de
+  Natural Earth, e imágenes usadas. La atribución lleva la fecha de descarga, no la de generación.
+- **Si falla tras una actualización del IGN:** `join` se detiene cuando la BDDAE trae un municipio
+  nuevo (fusión, segregación) o pierde uno de la semilla, porque lo que no enlaza es una lista
+  cerrada (`tools/geo/expected-unmatched.txt`). Es lo deseado: se revisa la semilla y la lista, y
+  se vuelve a generar. Para descargar otra vez, borra `ign/` en `GEO_WORK`.
+
 ## Aportaciones al framework
 
 - `vocab.IBAN`.

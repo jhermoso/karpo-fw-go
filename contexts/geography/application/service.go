@@ -81,6 +81,10 @@ type BoundaryDTO struct {
 	Level        string `json:"level,omitempty"`
 	Parent       string `json:"parent,omitempty"`
 	Active       bool   `json:"active"`
+	// Code es la clave pública del límite en el mapa (ISO 3166 o INE; la isla, su NUTS) y
+	// ParentCode la de su primer antecesor en el mapa. Vacíos si el límite no está en el mapa.
+	Code       string `json:"code,omitempty"`
+	ParentCode string `json:"parentCode,omitempty"`
 }
 
 // BoundaryLevelDTO da nombre a un nivel de la escalera en un país. Classification dice qué
@@ -155,13 +159,16 @@ func typeNames(ctx context.Context, c domain.Catalogs) (map[domain.BoundaryTypeI
 	return out, nil
 }
 
-func boundaryDTO(b *domain.Boundary, names map[domain.BoundaryTypeID]string) BoundaryDTO {
+func boundaryDTO(b *domain.Boundary, names map[domain.BoundaryTypeID]string, parents map[domain.BoundaryID]string) BoundaryDTO {
 	c := b.Codes()
 	d := BoundaryDTO{ID: b.ID().String(), Name: b.Name(), Type: b.Type().String(), TypeName: names[b.Type()], GeoCode: c.Geo,
 		Abbreviation: c.Abbreviation, INE: c.INE, NUTS: c.NUTS, LAU: c.LAU, Country: b.Position().Country,
 		Level: string(b.Position().Level), Active: b.IsActive()}
 	if p, ok := b.Parent(); ok {
 		d.Parent = p.String()
+	}
+	if code, _, ok := b.MapCode(); ok {
+		d.Code, d.ParentCode = code, parents[b.ID()]
 	}
 	return d
 }
@@ -223,7 +230,11 @@ func NewService(p Ports) *Service {
 			if err != nil {
 				return fw.Page[BoundaryDTO]{}, err
 			}
-			return fw.MapPage(page, func(b *domain.Boundary) BoundaryDTO { return boundaryDTO(b, names) }), nil
+			parents, err := mapParents(ctx, p, page.Items)
+			if err != nil {
+				return fw.Page[BoundaryDTO]{}, err
+			}
+			return fw.MapPage(page, func(b *domain.Boundary) BoundaryDTO { return boundaryDTO(b, names, parents) }), nil
 		}),
 
 		GetBoundary: guard(PermBoundaryRead, func(ctx context.Context, q GetBoundary) (BoundaryDetailDTO, error) {
@@ -253,7 +264,11 @@ func NewService(p Ports) *Service {
 					groupings = append(groupings, ref(g))
 				}
 			}
-			return BoundaryDetailDTO{BoundaryDTO: boundaryDTO(b, names), Ancestors: ancestors, Groupings: groupings}, nil
+			parents, err := mapParents(ctx, p, []*domain.Boundary{b})
+			if err != nil {
+				return BoundaryDetailDTO{}, err
+			}
+			return BoundaryDetailDTO{BoundaryDTO: boundaryDTO(b, names, parents), Ancestors: ancestors, Groupings: groupings}, nil
 		}),
 
 		LookupPostalCode: guard(PermBoundaryRead, func(ctx context.Context, q LookupPostalCode) ([]PostalCodeDTO, error) {
