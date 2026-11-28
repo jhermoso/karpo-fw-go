@@ -98,6 +98,12 @@ mismos dos mandatos.
 
 Sirven además `/healthz` y `/readyz` (este comprueba la base de datos).
 
+**Ficheros estáticos públicos (patrón, decisión de Javier del 2026-11-28).** Un artefacto de
+despliegue público y de sólo lectura (hoy `/geo/karpo.pmtiles`) se sirve con
+`distribution.StaticFile`: GET y HEAD, Range, ETag y caché larga, sin autenticación ni
+`pkg/application` (sin CQRS, cadena de permiso ni transacción), como `/healthz`. Sólo vale para datos
+públicos: un fichero con datos de una organización va por la API con permiso.
+
 **En Supabase**, conectar por la conexión directa o por el *pooler* de sesión (puerto 5432). El
 *pooler* de transacción (puerto 6543) da a cada sentencia una conexión distinta, y tanto el
 bloqueo que impide dos migraciones a la vez como las transacciones de los casos de uso necesitan
