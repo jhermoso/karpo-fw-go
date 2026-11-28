@@ -1,10 +1,12 @@
 package infrastructure_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/jhermoso/karpo-fw-go/contexts/geography/domain"
 	"github.com/jhermoso/karpo-fw-go/contexts/geography/infrastructure"
+	fw "github.com/jhermoso/karpo-fw-go/pkg/domain"
 )
 
 func TestMapKeys_LadderIsComplete(t *testing.T) {
@@ -97,5 +99,50 @@ func TestMapKey_RowFollowsTheHeader(t *testing.T) {
 	}
 	if (infrastructure.MapKey{HasChildren: true}).Row()[5] != "true" {
 		t.Fatal("hasChildren")
+	}
+}
+
+// ladder construye España > Madrid (comunidad) > 28 > 28079 y 28005, con la actividad indicada.
+func ladder(t *testing.T, provinceActive, municipalityActive bool) *infrastructure.Seed {
+	t.Helper()
+	var all []*domain.Boundary
+	mk := func(name string, typ domain.BoundaryTypeID, codes domain.Codes, level domain.Level, active bool, parent *domain.Boundary) *domain.Boundary {
+		var links []domain.Link
+		if parent != nil {
+			links = []domain.Link{{ID: fw.NewUUID(), Parent: parent.ID(), Kind: domain.Containment}}
+		}
+		b, err := domain.ReconstituteBoundary(domain.BoundaryID{UUID: fw.NewUUID()}, name, typ, codes,
+			domain.Position{Country: "ES", Level: level}, active, links)
+		if err != nil {
+			t.Fatal(err)
+		}
+		all = append(all, b)
+		return b
+	}
+	spain := mk("España", domain.TypeCountry, domain.Codes{Geo: "ES"}, domain.LevelCountry, true, nil)
+	madrid := mk("Madrid", domain.TypeAutonomous, domain.Codes{Abbreviation: "MD"}, domain.Level2, true, spain)
+	province := mk("Madrid", domain.TypeProvince, domain.Codes{INE: "28"}, domain.Level3, provinceActive, madrid)
+	mk("Madrid", domain.TypeMunicipality, domain.Codes{INE: "28079"}, domain.LevelLocal, true, province)
+	mk("Alcalá", domain.TypeMunicipality, domain.Codes{INE: "28005"}, domain.LevelLocal, municipalityActive, province)
+	return &infrastructure.Seed{Boundaries: all}
+}
+
+func TestMapKeys_LeavesOutInactive(t *testing.T) {
+	keys, err := infrastructure.MapKeys(ladder(t, true, false), 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var codes []string
+	for _, k := range keys {
+		codes = append(codes, k.Code)
+	}
+	if got := strings.Join(codes, " "); got != "28 28079 ES ES-MD" {
+		t.Errorf("claves = %s", got)
+	}
+}
+
+func TestMapKeys_FailsOnInactiveParent(t *testing.T) {
+	if _, err := infrastructure.MapKeys(ladder(t, false, true), 10); err == nil || !strings.Contains(err.Error(), "parent 28") {
+		t.Errorf("err = %v; quería el padre 28 fuera del mapa", err)
 	}
 }

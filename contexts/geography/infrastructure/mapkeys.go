@@ -1,6 +1,7 @@
 package infrastructure
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 
@@ -63,6 +64,12 @@ func MapKeys(s *Seed, maxDepth int) ([]MapKey, error) {
 	children := map[string]bool{}
 	for _, k := range keys {
 		children[k.ParentCode] = true
+	}
+	// Un padre inactivo con hijos activos dejaría un parentCode sin entidad en la tesela.
+	for _, k := range keys {
+		if _, ok := kindOf[k.ParentCode]; k.ParentCode != "" && !ok {
+			return nil, fmt.Errorf("map key %s: parent %s is not on the map (inactive?)", k.Code, k.ParentCode)
+		}
 	}
 	for i := range keys {
 		keys[i].HasChildren = children[keys[i].Code]

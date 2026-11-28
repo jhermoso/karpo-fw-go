@@ -205,7 +205,11 @@ construcción.
 
 **Límites inactivos:** la API da `code` y `parentCode` también a un límite inactivo (la clave es
 su identidad y sirve para leer datos antiguos); la tesela sólo lleva los activos
-(`infrastructure.MapKeys`). El front sólo pinta lo que hay en la tesela.
+(`infrastructure.MapKeys`). El front sólo pinta lo que hay en la tesela. El cliente distingue por
+`active`, y el `code` de un inactivo no tiene geometría en la tesela. En la API, `parentCode` puede
+apuntar a un inactivo; en la tesela eso hace fallar la generación (`MapKeys` da error), y quien
+desactive una provincia con municipios activos se entera al regenerar. La clave es única entre los
+activos.
 
 | Tipo | Nº | `level` | `kind` | `code` | `parentCode` | Geometría |
 |---|---|---|---|---|---|---|

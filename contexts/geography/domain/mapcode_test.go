@@ -126,3 +126,16 @@ func TestMapParents_ClimbsToTheFirstAncestorOnTheMap(t *testing.T) {
 		t.Error("el error de la carga se pierde")
 	}
 }
+
+func TestMapCode_DoesNotDependOnActive(t *testing.T) {
+	for _, active := range []bool{true, false} {
+		b, err := domain.ReconstituteBoundary(domain.BoundaryID{UUID: fw.NewUUID()}, "Madrid", domain.TypeMunicipality,
+			domain.Codes{INE: "28079"}, domain.Position{Country: "ES", Level: domain.LevelLocal}, active, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if code, kind, ok := b.MapCode(); code != "28079" || kind != "municipality" || !ok {
+			t.Errorf("active=%v: MapCode() = %q, %q, %v", active, code, kind, ok)
+		}
+	}
+}
