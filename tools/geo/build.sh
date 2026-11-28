@@ -6,7 +6,7 @@
 #   tools/geo/build.sh            # desde la raíz del repositorio
 #
 # GEO_WORK es la carpeta de trabajo, fuera del repositorio (datos descargados: no fiables).
-# Necesita Go y Docker. El resultado queda en $GEO_WORK/out/karpo.pmtiles.
+# MAXZOOM es el zoom máximo (12 por defecto; con 12 tarda horas). Necesita Go y Docker. El resultado queda en $GEO_WORK/out/karpo.pmtiles.
 set -euo pipefail
 
 REPO=$(cd "$(dirname "$0")/../.." && pwd)
@@ -68,7 +68,7 @@ docker_run "$GDAL" ogr2ogr -f GeoJSONSeq /w/out/labels.geojsonl /w/out/all.geojs
   -sql "SELECT code, name, level, kind, parentCode, hasChildren, lauCode, ST_PointOnSurface(geometry) AS geometry FROM \"all\""
 
 echo "7. Teselado"
-docker_run "$TIPPECANOE" -o /w/out/karpo.pmtiles --force --quiet -Z0 -z12 \
+docker_run "$TIPPECANOE" -o /w/out/karpo.pmtiles --force --quiet -Z0 -z"${MAXZOOM:-12}" \
   -L boundaries:/w/out/all.geojsonl -L labels:/w/out/labels.geojsonl \
   --detect-shared-borders --no-feature-limit --no-tile-size-limit --no-tiny-polygon-reduction \
   --attribution "Natural Earth (dominio público); Obra derivada de BDDAE $(date +%Y-%m) CC-BY 4.0 ign.es"
