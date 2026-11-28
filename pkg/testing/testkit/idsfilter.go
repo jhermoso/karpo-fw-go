@@ -152,15 +152,26 @@ func CheckIDsFilter(t *testing.T, c IDsFilterCase) {
 		}
 	}
 
-	// Sin permiso, 403, también con la lista vacía.
+	// Sin permiso, 403, también con la lista vacía y con una petición mal formada: el permiso va
+	// antes de leer o validar nada, para no dar información a quien no puede leer.
 	if c.Denied != nil {
-		for _, path := range []string{c.Base + "?ids=", c.Base + "?ids=" + c.Mine[0]} {
+		for _, path := range []string{c.Base + "?ids=", c.Base + "?ids=" + c.Mine[0], c.Base + "?ids=" + c.Bad, c.Base + "?pageSize=0"} {
 			if code := c.Denied("GET", path, nil); code != 403 {
 				t.Fatalf("GET %s without permission: %d", path, code)
 			}
 		}
 		if code := c.Denied("POST", c.Base+"/search", map[string]any{"filter": map[string]any{"ids": []string{}}}); code != 403 {
 			t.Fatalf("POST without permission: %d", code)
+		}
+		for what, body := range map[string]any{
+			"ids mistyped":      map[string]any{"filter": map[string]any{"ids": []any{c.Mine[0], 7}}},
+			"ids malformed":     map[string]any{"filter": map[string]any{"ids": []string{c.Bad}}},
+			"filter mistyped":   map[string]any{"filter": map[string]any{"name": []any{"x"}}},
+			"page out of range": map[string]any{"pagination": map[string]any{"pageSize": 1001}},
+		} {
+			if code := c.Denied("POST", c.Base+"/search", body); code != 403 {
+				t.Fatalf("POST %s without permission: %d", what, code)
+			}
 		}
 	}
 }

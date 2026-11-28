@@ -37,13 +37,13 @@ proxies cortan la URL hacia los 8 KB.
 - **Y con lo demás.** `ids` se combina con AND con los otros filtros y con el ámbito de
   organización del usuario. Un id que no existe, o que es de otra organización, se omite sin
   error. Los festivos no tienen ámbito: basta el permiso de leerlos.
-- **El permiso y los 400.** Sin permiso de leer la lista, 403, también con la lista vacía. Pero
-  no todos los 400 van después del permiso:
-  - `type` (en `POST`) sale en la distribución, **antes** del permiso, como un `page` mal formado:
-    sin permiso y con `{"ids":[1]}` se recibe 400;
-  - `format` y `range` salen en la aplicación, **después** del permiso, en todas las listas
-    (también en países, con `eu`, `eurozone` y `sepa`): sin permiso, 403 aunque los ids o las
-    banderas estén mal.
+- **El permiso va primero.** Sin permiso de leer la lista, 403, también con la lista vacía. El
+  permiso se comprueba **antes** de leer o validar nada, para no dar información a quien no puede
+  leer: sin permiso, 403 aunque el cuerpo no sea JSON, un id no sea cadena (`{"ids":[1]}`), los
+  ids estén mal formados, la página esté fuera de rango o una bandera de países (`eu`,
+  `eurozone`, `sepa`) no valga. En la distribución, `GET` y `POST …/search` van envueltos en
+  `distribution.RequirePermission` con el permiso de lectura de la lista; la aplicación lo vuelve
+  a comprobar.
 - **La página no cambia.** `ids` no toca `pageSize`: si se piden 50 con `pageSize=20`, llegan 20.
   Quien resuelve etiquetas pide un `pageSize` mayor o igual que el número de ids.
 - **Países.** Los ids son códigos alfa-2 (dos letras, sin distinguir mayúsculas). Un código bien

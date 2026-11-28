@@ -158,9 +158,10 @@ func (q listQuery) text() string {
 	return q.filters["name"]
 }
 
-// registerList monta la lista por GET y por POST …/search.
-func registerList(mux *http.ServeMux, base string, list func(w http.ResponseWriter, r *http.Request, q listQuery)) {
-	mux.HandleFunc("GET "+base, func(w http.ResponseWriter, r *http.Request) {
+// registerList monta la lista por GET y por POST …/search. El permiso de leerla se comprueba
+// antes de leer o validar nada: quien no puede leer recibe 403, no un error de su petición.
+func registerList(mux *http.ServeMux, base string, perm authz.Permission, list func(w http.ResponseWriter, r *http.Request, q listQuery)) {
+	mux.Handle("GET "+base, distribution.RequirePermission(perm, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		values := r.URL.Query()
 		q := listQuery{page: 1, size: fw.DefaultPageSize, sortBy: values.Get("sortBy"), order: values.Get("sortOrder"), filters: map[string]string{}}
 		for k := range values {
@@ -180,8 +181,8 @@ func registerList(mux *http.ServeMux, base string, list func(w http.ResponseWrit
 			}
 		}
 		list(w, r, q)
-	})
-	mux.HandleFunc("POST "+base+"/search", func(w http.ResponseWriter, r *http.Request) {
+	})))
+	mux.Handle("POST "+base+"/search", distribution.RequirePermission(perm, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
 			Filter     map[string]any `json:"filter"`
 			Pagination struct {
@@ -225,7 +226,7 @@ func registerList(mux *http.ServeMux, base string, list func(w http.ResponseWrit
 			}
 		}
 		list(w, r, q)
-	})
+	})))
 }
 
 // RegisterMaintenanceRoutes monta el contrato de mantenimiento de los países y los festivos.
@@ -237,7 +238,7 @@ func (m *Module) RegisterMaintenanceRoutes(mux *http.ServeMux) {
 // countryRoutes: los países se leen; no se dan de alta, ni se cambian, ni se borran por aquí.
 func (m *Module) countryRoutes(mux *http.ServeMux) {
 	svc := m.Service
-	registerList(mux, CountriesBase, func(w http.ResponseWriter, r *http.Request, q listQuery) {
+	registerList(mux, CountriesBase, gapp.PermReferenceRead, func(w http.ResponseWriter, r *http.Request, q listQuery) {
 		if err := q.check("alpha2", "alpha3", "name"); err != nil {
 			writeMaintenanceError(w, r, err)
 			return
@@ -290,7 +291,7 @@ func (m *Module) holidayRoutes(mux *http.ServeMux) {
 		}
 		return id, true
 	}
-	registerList(mux, HolidaysBase, func(w http.ResponseWriter, r *http.Request, q listQuery) {
+	registerList(mux, HolidaysBase, gapp.PermHolidayRead, func(w http.ResponseWriter, r *http.Request, q listQuery) {
 		if err := q.check("date", "name"); err != nil {
 			writeMaintenanceError(w, r, err)
 			return
